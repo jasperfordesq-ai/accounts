@@ -166,10 +166,11 @@ export default function NewCompanyPage() {
       {/* Step Indicators */}
       <div className="flex items-center gap-2 mb-6">
         {STEP_LABELS.map((label, i) => (
-          <button
+          <Button
             key={label}
-            type="button"
-            onClick={() => { if (i < step) setStep(i); }}
+            variant="ghost"
+            size="sm"
+            onPress={() => { if (i < step) setStep(i); }}
             className="flex items-center gap-2"
           >
             <Chip
@@ -179,7 +180,7 @@ export default function NewCompanyPage() {
             >
               {i + 1}. {label}
             </Chip>
-          </button>
+          </Button>
         ))}
       </div>
 
@@ -245,7 +246,7 @@ export default function NewCompanyPage() {
                   <select
                     value={companyType}
                     onChange={(e) => setCompanyType(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                   >
                     {COMPANY_TYPES.map((ct) => (
                       <option key={ct.value} value={ct.value}>
@@ -369,7 +370,7 @@ export default function NewCompanyPage() {
                   <select
                     value={county}
                     onChange={(e) => setCounty(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                   >
                     <option value="">Select county</option>
                     {IRISH_COUNTIES.map((c) => (
@@ -398,7 +399,7 @@ export default function NewCompanyPage() {
                     <select
                       value={financialYearStartMonth}
                       onChange={(e) => setFinancialYearStartMonth(Number(e.target.value))}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                     >
                       {MONTHS.map((m, i) => (
                         <option key={m} value={i + 1}>{m}</option>
@@ -413,7 +414,7 @@ export default function NewCompanyPage() {
                     <select
                       value={ardMonth}
                       onChange={(e) => setArdMonth(Number(e.target.value))}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                     >
                       {MONTHS.map((m, i) => (
                         <option key={m} value={i + 1}>{m}</option>
@@ -442,7 +443,7 @@ export default function NewCompanyPage() {
                         value={officer.name}
                         onChange={(e) => updateOfficer(index, "name", e.target.value)}
                         placeholder="Full name"
-                        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+                        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                       />
                     </div>
                     <div>
@@ -450,7 +451,7 @@ export default function NewCompanyPage() {
                       <select
                         value={officer.role}
                         onChange={(e) => updateOfficer(index, "role", e.target.value)}
-                        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+                        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                       >
                         <option value="Director">Director</option>
                         <option value="Secretary">Secretary</option>

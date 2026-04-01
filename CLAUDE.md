@@ -5,11 +5,11 @@ Multi-company web application that replaces the traditional year-end accountant 
 ## Tech Stack
 
 - **Backend**: ASP.NET Core (.NET 10) Minimal API + EF Core 9 + PostgreSQL 16.4
-- **Frontend**: React 18 + Vite + TypeScript + Tailwind CSS 4
+- **Frontend**: Next.js 16 (App Router) + HeroUI v3 + Tailwind CSS 4
 - **PDF Generation**: QuestPDF (server-side)
 - **iXBRL**: Custom XHTML generator with FRC Irish FRS taxonomy
 - **CSV Import**: CsvHelper (bank statement parsing)
-- **Container**: Docker Compose (api + db)
+- **Container**: Docker Compose (api + db + frontend)
 
 ## Project Structure
 
@@ -29,13 +29,24 @@ accounts/
 │       ├── Rules/                  # Configurable legal threshold config
 │       └── Endpoints/              # 7 endpoint group files + registration
 ├── frontend/
-│   ├── src/
-│   │   ├── pages/                  # Dashboard, CompanyOnboarding, CompanyDetail, PeriodWorkspace
-│   │   ├── components/             # Layout
-│   │   └── api/                    # Axios client + companies API
-│   └── vite.config.ts
-├── compose.yml                     # Docker: api (5090) + postgres (5433)
+│   ├── next.config.ts
+│   └── src/
+│       ├── app/                    # Next.js App Router pages
+│       │   ├── page.tsx            # Dashboard — company listing
+│       │   ├── layout.tsx          # Root layout with HeroUI providers
+│       │   ├── providers.tsx       # HeroUI RouterProvider
+│       │   ├── companies/
+│       │   │   ├── new/page.tsx    # 4-step onboarding wizard
+│       │   │   └── [id]/page.tsx   # Company detail + period management
+│       │   └── companies/[companyId]/periods/[periodId]/
+│       │       └── page.tsx        # Period workspace (6 tabs)
+│       ├── components/
+│       │   └── AppNavbar.tsx       # HeroUI navbar
+│       └── lib/
+│           └── api.ts              # Typed API layer (native fetch, 18 functions)
+├── compose.yml                     # Docker: api (5090) + postgres (5433) + frontend (3000)
 ├── Dockerfile.backend
+├── Dockerfile.frontend
 ├── REQUIREMENTS.md                 # Full product requirements
 └── CLAUDE.md
 ```
@@ -64,7 +75,7 @@ dotnet ef migrations add <Name> --output-dir Data/Migrations
 
 # API: port 5090 (Docker) or 5080 (dotnet run)
 # Swagger: http://localhost:5090/swagger (dev only)
-# Frontend: http://localhost:5173 (proxies /api to backend)
+# Frontend: http://localhost:3000 (Next.js)
 ```
 
 ## Database
@@ -158,12 +169,13 @@ Full CRUD for: debtors, creditors, fixed assets, inventory, loans, director loan
 
 ## Architecture Patterns
 
-- Minimal API with endpoint groups in Endpoints/ files
-- EF Core with primary constructor DbContext
-- Service + DI pattern (all 10 services registered as scoped)
-- Design-time factory for migrations (WDAC blocks QuestPDF.dll)
-- JSON: camelCase (ASP.NET Core default), enums as text in DB
-- CORS configured for frontend dev server (localhost:5173)
+- **Frontend**: Next.js 16 App Router with HeroUI v3 components (Button, Card, Chip, Tabs, TextField, Checkbox, ProgressBar, Spinner)
+- **Backend**: Minimal API with endpoint groups in Endpoints/ files
+- **ORM**: EF Core with primary constructor DbContext
+- **DI**: Service + DI pattern (all 10 services registered as scoped)
+- **Migrations**: Design-time factory (WDAC blocks QuestPDF.dll at design time)
+- **Serialization**: JSON camelCase (ASP.NET Core default), enums as text in DB
+- **CORS**: Configured for frontend dev server
 
 ## Seed Data (3 companies)
 
@@ -187,4 +199,3 @@ Full CRUD for: debtors, creditors, fixed assets, inventory, loans, director loan
 
 - Windows WDAC blocks QuestPDF.dll — use DesignTimeDbContextFactory for migrations
 - NuGet SSL intermittent failures — add packages to .csproj directly and restore
-- PeriodWorkspace frontend tabs are placeholder stubs — backend endpoints are fully functional

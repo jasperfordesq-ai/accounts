@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState, useEffect, useCallback } from "react";
+import { use, useState, useEffect, useCallback, useRef } from "react";
 import {
   Button,
   Card,
@@ -34,12 +34,20 @@ import {
   getAccountsPackageUrl,
   getIxbrlUrl,
   getBankAccounts,
+  getTransactions,
+  getAdjustments,
+  getAdjustmentSummary,
   generateAdjustments,
+  approveAdjustment,
+  uploadBankCsv,
   type Company,
   type AccountingPeriod,
   type YearEndSummary,
   type ReadinessScore,
   type BankAccount,
+  type ImportedTransaction,
+  type Adjustment,
+  type AdjustmentSummary,
 } from "@/lib/api";
 
 function formatCurrency(amount: number): string {
@@ -67,6 +75,28 @@ export default function PeriodWorkspacePage({
   const [error, setError] = useState<string | null>(null);
   const [generatingAdj, setGeneratingAdj] = useState(false);
 
+  // Import tab state
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [selectedBankAccountId, setSelectedBankAccountId] = useState<number | "">("");
+  const [uploading, setUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState<{
+    rowsImported: number;
+    duplicatesSkipped: number;
+    autoCategorised: number;
+  } | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  // Categorise tab state
+  const [transactions, setTransactions] = useState<ImportedTransaction[]>([]);
+  const [transactionTotal, setTransactionTotal] = useState(0);
+  const [loadingTransactions, setLoadingTransactions] = useState(false);
+
+  // Adjustments tab state
+  const [adjustments, setAdjustments] = useState<Adjustment[]>([]);
+  const [adjSummary, setAdjSummary] = useState<AdjustmentSummary | null>(null);
+  const [loadingAdjustments, setLoadingAdjustments] = useState(false);
+  const [approvingId, setApprovingId] = useState<number | null>(null);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -79,6 +109,11 @@ export default function PeriodWorkspacePage({
       setCompany(companyData);
       setPeriod(periodData);
       setBankAccounts(bankData);
+
+      // Auto-select first bank account if available
+      if (bankData.length > 0 && selectedBankAccountId === "") {
+        setSelectedBankAccountId(bankData[0].id);
+      }
 
       // Load year-end and readiness separately (may not exist yet)
       try {
@@ -98,21 +133,123 @@ export default function PeriodWorkspacePage({
     } finally {
       setLoading(false);
     }
+  }, [cId, pId, selectedBankAccountId]);
+
+  const loadTransactions = useCallback(async () => {
+    setLoadingTransactions(true);
+    try {
+      const data = await getTransactions(cId, pId);
+      setTransactions(data.items);
+      setTransactionTotal(data.total);
+    } catch {
+      // Transactions may not exist yet
+      setTransactions([]);
+      setTransactionTotal(0);
+    } finally {
+      setLoadingTransactions(false);
+    }
+  }, [cId, pId]);
+
+  const loadAdjustments = useCallback(async () => {
+    setLoadingAdjustments(true);
+    try {
+      const [adjData, summaryData] = await Promise.all([
+        getAdjustments(cId, pId),
+        getAdjustmentSummary(cId, pId),
+      ]);
+      setAdjustments(adjData);
+      setAdjSummary(summaryData);
+    } catch {
+      // Adjustments may not exist yet
+      setAdjustments([]);
+      setAdjSummary(null);
+    } finally {
+      setLoadingAdjustments(false);
+    }
   }, [cId, pId]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
 
+  useEffect(() => {
+    if (!loading) {
+      loadTransactions();
+      loadAdjustments();
+    }
+  }, [loading, loadTransactions, loadAdjustments]);
+
+  async function handleFileUpload(file: File) {
+    if (!selectedBankAccountId) {
+      setUploadError("Please select a bank account before uploading.");
+      return;
+    }
+    setUploading(true);
+    setUploadError(null);
+    setUploadResult(null);
+    try {
+      const result = await uploadBankCsv(cId, Number(selectedBankAccountId), pId, file);
+      setUploadResult({
+        rowsImported: result.rowsImported ?? result.imported ?? 0,
+        duplicatesSkipped: result.duplicatesSkipped ?? result.duplicates ?? 0,
+        autoCategorised: result.autoCategorised ?? result.categorised ?? 0,
+      });
+      // Reload transactions after import
+      await loadTransactions();
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function handleFileInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleFileUpload(file);
+    }
+    // Reset the input so the same file can be re-uploaded
+    e.target.value = "";
+  }
+
+  function handleDropzoneDrop(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    e.stopPropagation();
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      handleFileUpload(file);
+    }
+  }
+
+  function handleDropzoneDragOver(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
   async function handleGenerateAdjustments() {
     setGeneratingAdj(true);
     try {
-      await generateAdjustments(cId, pId);
+      const summary = await generateAdjustments(cId, pId);
+      setAdjSummary(summary);
+      // Reload adjustments list
+      await loadAdjustments();
       await loadData();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to generate adjustments");
     } finally {
       setGeneratingAdj(false);
+    }
+  }
+
+  async function handleApproveAdjustment(id: number) {
+    setApprovingId(id);
+    try {
+      await approveAdjustment(cId, pId, id, "Current User");
+      await loadAdjustments();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to approve adjustment");
+    } finally {
+      setApprovingId(null);
     }
   }
 
@@ -143,6 +280,9 @@ export default function PeriodWorkspacePage({
 
   const pdfUrl = getAccountsPackageUrl(cId, pId);
   const ixbrlUrl = getIxbrlUrl(cId, pId);
+
+  const categorisedCount = transactions.filter((t) => t.categoryId != null).length;
+  const uncategorisedCount = transactionTotal - categorisedCount;
 
   return (
     <div>
@@ -248,31 +388,114 @@ export default function PeriodWorkspacePage({
             <Card className="shadow-sm border border-gray-200">
               <Card.Header>
                 <Card.Title>Import Transactions</Card.Title>
-                <Card.Description>Upload bank statements in CSV or OFX format</Card.Description>
+                <Card.Description>Upload bank statements in CSV format</Card.Description>
               </Card.Header>
               <Card.Content>
-                <div className="border-2 border-dashed border-gray-300 rounded-xl p-10 text-center hover:border-emerald-400 transition-colors">
-                  <Upload className="w-10 h-10 text-gray-400 mx-auto mb-3" />
-                  <p className="text-sm font-medium text-gray-700">
-                    Drag and drop files here, or click to browse
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Supports CSV, OFX, QIF formats
-                  </p>
+                {/* Bank Account Selector */}
+                <div className="mb-4">
+                  <label htmlFor="bank-account-select" className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Import into bank account
+                  </label>
+                  <select
+                    id="bank-account-select"
+                    value={selectedBankAccountId}
+                    onChange={(e) => setSelectedBankAccountId(e.target.value ? Number(e.target.value) : "")}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  >
+                    <option value="">Select a bank account...</option>
+                    {bankAccounts.map((ba) => (
+                      <option key={ba.id} value={ba.id}>
+                        {ba.name}{ba.iban ? ` (${ba.iban})` : ""} - {ba.currency}
+                      </option>
+                    ))}
+                  </select>
                 </div>
+
+                {/* Hidden file input */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv"
+                  className="hidden"
+                  onChange={handleFileInputChange}
+                />
+
+                {/* Dropzone */}
+                <div
+                  className="border-2 border-dashed border-gray-300 rounded-xl p-10 text-center hover:border-emerald-400 transition-colors cursor-pointer"
+                  onClick={() => fileInputRef.current?.click()}
+                  onDrop={handleDropzoneDrop}
+                  onDragOver={handleDropzoneDragOver}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      fileInputRef.current?.click();
+                    }
+                  }}
+                >
+                  {uploading ? (
+                    <>
+                      <Spinner size="sm" className="mx-auto mb-3" />
+                      <p className="text-sm font-medium text-gray-700">
+                        Uploading and processing...
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-10 h-10 text-gray-400 mx-auto mb-3" />
+                      <p className="text-sm font-medium text-gray-700">
+                        Drag and drop a CSV file here, or click to browse
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Supports CSV format
+                      </p>
+                    </>
+                  )}
+                </div>
+
+                {/* Upload Error */}
+                {uploadError && (
+                  <div className="mt-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+                    {uploadError}
+                  </div>
+                )}
               </Card.Content>
             </Card>
 
-            {/* Import Status */}
+            {/* Import Result / Status */}
             <Card className="shadow-sm border border-gray-200">
               <Card.Header>
                 <Card.Title>Import Status</Card.Title>
               </Card.Header>
               <Card.Content>
-                <div className="flex items-center gap-3 text-sm text-gray-500">
-                  <HelpCircle className="w-5 h-5" />
-                  <span>No imports have been processed for this period yet.</span>
-                </div>
+                {uploadResult ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3 text-sm text-emerald-700">
+                      <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                      <span className="font-medium">Import completed successfully</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="rounded-lg bg-emerald-50 p-4 text-center">
+                        <p className="text-2xl font-bold text-emerald-700">{uploadResult.rowsImported}</p>
+                        <p className="text-xs text-gray-500 mt-1">Rows Imported</p>
+                      </div>
+                      <div className="rounded-lg bg-gray-50 p-4 text-center">
+                        <p className="text-2xl font-bold text-gray-700">{uploadResult.duplicatesSkipped}</p>
+                        <p className="text-xs text-gray-500 mt-1">Duplicates Skipped</p>
+                      </div>
+                      <div className="rounded-lg bg-blue-50 p-4 text-center">
+                        <p className="text-2xl font-bold text-blue-700">{uploadResult.autoCategorised}</p>
+                        <p className="text-xs text-gray-500 mt-1">Auto-Categorised</p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3 text-sm text-gray-500">
+                    <HelpCircle className="w-5 h-5" />
+                    <span>No imports have been processed for this period yet.</span>
+                  </div>
+                )}
               </Card.Content>
             </Card>
           </div>
@@ -283,44 +506,102 @@ export default function PeriodWorkspacePage({
           <div className="space-y-6">
             <Card className="shadow-sm border border-gray-200">
               <Card.Header>
-                <Card.Title>Categorisation Overview</Card.Title>
-                <Card.Description>Review and categorise imported transactions</Card.Description>
+                <div className="flex items-center justify-between w-full">
+                  <div>
+                    <Card.Title>Categorisation Overview</Card.Title>
+                    <Card.Description>Review and categorise imported transactions</Card.Description>
+                  </div>
+                  <Button variant="ghost" size="sm" onPress={loadTransactions} isDisabled={loadingTransactions}>
+                    <RefreshCw className={`w-4 h-4 mr-1 ${loadingTransactions ? "animate-spin" : ""}`} />
+                    Refresh
+                  </Button>
+                </div>
               </Card.Header>
               <Card.Content>
                 <div className="grid grid-cols-3 gap-4 mb-6">
                   <div className="rounded-lg bg-gray-50 p-4 text-center">
-                    <p className="text-2xl font-bold text-gray-900">0</p>
+                    <p className="text-2xl font-bold text-gray-900">{transactionTotal}</p>
                     <p className="text-xs text-gray-500 mt-1">Total Transactions</p>
                   </div>
                   <div className="rounded-lg bg-emerald-50 p-4 text-center">
-                    <p className="text-2xl font-bold text-emerald-700">0</p>
+                    <p className="text-2xl font-bold text-emerald-700">{categorisedCount}</p>
                     <p className="text-xs text-gray-500 mt-1">Categorised</p>
                   </div>
                   <div className="rounded-lg bg-amber-50 p-4 text-center">
-                    <p className="text-2xl font-bold text-amber-700">0</p>
+                    <p className="text-2xl font-bold text-amber-700">{uncategorisedCount}</p>
                     <p className="text-xs text-gray-500 mt-1">Uncategorised</p>
                   </div>
                 </div>
 
-                <div className="border border-gray-200 rounded-lg overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="bg-gray-50 border-b border-gray-200">
-                        <th className="text-left px-4 py-2.5 font-medium text-gray-600">Date</th>
-                        <th className="text-left px-4 py-2.5 font-medium text-gray-600">Description</th>
-                        <th className="text-right px-4 py-2.5 font-medium text-gray-600">Amount</th>
-                        <th className="text-left px-4 py-2.5 font-medium text-gray-600">Category</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <td colSpan={4} className="px-4 py-8 text-center text-gray-400 italic">
-                          Import transactions to begin categorisation
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
+                {loadingTransactions ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Spinner size="sm" />
+                  </div>
+                ) : transactions.length === 0 ? (
+                  <Card className="border border-gray-100">
+                    <Card.Content className="text-center py-8">
+                      <p className="text-sm text-gray-400 italic">
+                        Import transactions to begin categorisation
+                      </p>
+                    </Card.Content>
+                  </Card>
+                ) : (
+                  <div className="border border-gray-200 rounded-lg overflow-hidden">
+                    {/* Header row */}
+                    <div className="grid grid-cols-12 gap-2 bg-gray-50 border-b border-gray-200 px-4 py-2.5 text-xs font-medium text-gray-600 uppercase tracking-wide">
+                      <div className="col-span-2">Date</div>
+                      <div className="col-span-4">Description</div>
+                      <div className="col-span-2 text-right">Amount</div>
+                      <div className="col-span-3">Category</div>
+                      <div className="col-span-1 text-center">Conf.</div>
+                    </div>
+                    {/* Transaction rows */}
+                    <div className="divide-y divide-gray-100">
+                      {transactions.map((tx) => (
+                        <div
+                          key={tx.id}
+                          className="grid grid-cols-12 gap-2 px-4 py-3 text-sm hover:bg-gray-50/50 items-center"
+                        >
+                          <div className="col-span-2 text-gray-600">
+                            {new Date(tx.date).toLocaleDateString("en-IE")}
+                          </div>
+                          <div className="col-span-4 text-gray-900 truncate" title={tx.description}>
+                            {tx.description}
+                          </div>
+                          <div className={`col-span-2 text-right font-medium ${tx.amount >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                            {formatCurrency(tx.amount)}
+                          </div>
+                          <div className="col-span-3">
+                            {tx.category ? (
+                              <Chip
+                                color={tx.manualOverride ? "accent" : "success"}
+                                variant="soft"
+                                size="sm"
+                              >
+                                {tx.category.name}
+                              </Chip>
+                            ) : (
+                              <Chip color="warning" variant="soft" size="sm">
+                                Uncategorised
+                              </Chip>
+                            )}
+                          </div>
+                          <div className="col-span-1 text-center text-xs text-gray-400">
+                            {tx.confidenceScore != null
+                              ? `${Math.round(tx.confidenceScore * 100)}%`
+                              : "--"}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {/* Footer with total */}
+                    {transactionTotal > transactions.length && (
+                      <div className="bg-gray-50 border-t border-gray-200 px-4 py-2.5 text-xs text-gray-500 text-center">
+                        Showing {transactions.length} of {transactionTotal} transactions
+                      </div>
+                    )}
+                  </div>
+                )}
               </Card.Content>
             </Card>
           </div>
@@ -467,33 +748,178 @@ export default function PeriodWorkspacePage({
                       </>
                     )}
                   </Button>
+                  <Button variant="ghost" size="sm" onPress={loadAdjustments} isDisabled={loadingAdjustments}>
+                    <RefreshCw className={`w-4 h-4 mr-1 ${loadingAdjustments ? "animate-spin" : ""}`} />
+                    Refresh
+                  </Button>
                 </div>
               </Card.Content>
             </Card>
 
+            {/* Adjustment Summary */}
             <Card className="shadow-sm border border-gray-200">
               <Card.Header>
                 <Card.Title>Adjustment Summary</Card.Title>
               </Card.Header>
               <Card.Content>
-                <div className="grid grid-cols-4 gap-4">
-                  <div className="rounded-lg bg-gray-50 p-4 text-center">
-                    <p className="text-2xl font-bold text-gray-900">0</p>
-                    <p className="text-xs text-gray-500 mt-1">Total Adjustments</p>
+                {adjSummary ? (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-4 gap-4">
+                      <div className="rounded-lg bg-blue-50 p-4 text-center">
+                        <p className="text-2xl font-bold text-blue-700">{adjSummary.autoGenerated}</p>
+                        <p className="text-xs text-gray-500 mt-1">Auto-Generated</p>
+                      </div>
+                      <div className="rounded-lg bg-purple-50 p-4 text-center">
+                        <p className="text-2xl font-bold text-purple-700">{adjSummary.manual}</p>
+                        <p className="text-xs text-gray-500 mt-1">Manual</p>
+                      </div>
+                      <div className="rounded-lg bg-amber-50 p-4 text-center">
+                        <p className="text-2xl font-bold text-amber-700">{adjSummary.pendingApproval}</p>
+                        <p className="text-xs text-gray-500 mt-1">Pending Approval</p>
+                      </div>
+                      <div className="rounded-lg bg-emerald-50 p-4 text-center">
+                        <p className="text-2xl font-bold text-emerald-700">{adjSummary.approved}</p>
+                        <p className="text-xs text-gray-500 mt-1">Approved</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="rounded-lg bg-gray-50 p-4">
+                        <p className="text-xs text-gray-500">Total Impact on Profit</p>
+                        <p className={`text-lg font-bold mt-1 ${adjSummary.totalImpactOnProfit >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                          {formatCurrency(adjSummary.totalImpactOnProfit)}
+                        </p>
+                      </div>
+                      <div className="rounded-lg bg-gray-50 p-4">
+                        <p className="text-xs text-gray-500">Total Impact on Assets</p>
+                        <p className={`text-lg font-bold mt-1 ${adjSummary.totalImpactOnAssets >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                          {formatCurrency(adjSummary.totalImpactOnAssets)}
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                  <div className="rounded-lg bg-blue-50 p-4 text-center">
-                    <p className="text-2xl font-bold text-blue-700">0</p>
-                    <p className="text-xs text-gray-500 mt-1">Depreciation</p>
+                ) : (
+                  <div className="grid grid-cols-4 gap-4">
+                    <div className="rounded-lg bg-gray-50 p-4 text-center">
+                      <p className="text-2xl font-bold text-gray-900">0</p>
+                      <p className="text-xs text-gray-500 mt-1">Auto-Generated</p>
+                    </div>
+                    <div className="rounded-lg bg-gray-50 p-4 text-center">
+                      <p className="text-2xl font-bold text-gray-900">0</p>
+                      <p className="text-xs text-gray-500 mt-1">Manual</p>
+                    </div>
+                    <div className="rounded-lg bg-gray-50 p-4 text-center">
+                      <p className="text-2xl font-bold text-gray-900">0</p>
+                      <p className="text-xs text-gray-500 mt-1">Pending Approval</p>
+                    </div>
+                    <div className="rounded-lg bg-gray-50 p-4 text-center">
+                      <p className="text-2xl font-bold text-gray-900">0</p>
+                      <p className="text-xs text-gray-500 mt-1">Approved</p>
+                    </div>
                   </div>
-                  <div className="rounded-lg bg-purple-50 p-4 text-center">
-                    <p className="text-2xl font-bold text-purple-700">0</p>
-                    <p className="text-xs text-gray-500 mt-1">Prepayments</p>
+                )}
+              </Card.Content>
+            </Card>
+
+            {/* Adjustments List */}
+            <Card className="shadow-sm border border-gray-200">
+              <Card.Header>
+                <Card.Title>Adjustment Details</Card.Title>
+                <Card.Description>
+                  {adjustments.length} adjustment{adjustments.length !== 1 ? "s" : ""} found
+                </Card.Description>
+              </Card.Header>
+              <Card.Content>
+                {loadingAdjustments ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Spinner size="sm" />
                   </div>
-                  <div className="rounded-lg bg-orange-50 p-4 text-center">
-                    <p className="text-2xl font-bold text-orange-700">0</p>
-                    <p className="text-xs text-gray-500 mt-1">Accruals</p>
+                ) : adjustments.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Calculator className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                    <p className="text-sm text-gray-500">
+                      No adjustments yet. Click &ldquo;Generate Adjustments&rdquo; to create them.
+                    </p>
                   </div>
-                </div>
+                ) : (
+                  <div className="space-y-3">
+                    {adjustments.map((adj) => (
+                      <Card key={adj.id} className="border border-gray-100">
+                        <Card.Content className="p-4">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <p className="text-sm font-medium text-gray-900 truncate">
+                                  {adj.description}
+                                </p>
+                                <Chip
+                                  color={adj.isAuto ? "default" : "accent"}
+                                  variant="soft"
+                                  size="sm"
+                                >
+                                  {adj.isAuto ? "Auto" : "Manual"}
+                                </Chip>
+                                {adj.approvedBy ? (
+                                  <Chip color="success" variant="soft" size="sm">
+                                    Approved
+                                  </Chip>
+                                ) : (
+                                  <Chip color="warning" variant="soft" size="sm">
+                                    Pending
+                                  </Chip>
+                                )}
+                              </div>
+                              {adj.reason && (
+                                <p className="text-xs text-gray-500 mb-1">{adj.reason}</p>
+                              )}
+                              <div className="flex items-center gap-4 text-xs text-gray-500">
+                                <span>
+                                  Amount: <span className="font-medium text-gray-700">{formatCurrency(adj.amount)}</span>
+                                </span>
+                                <span>
+                                  Profit impact:{" "}
+                                  <span className={`font-medium ${adj.impactOnProfit >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                                    {formatCurrency(adj.impactOnProfit)}
+                                  </span>
+                                </span>
+                                <span>
+                                  Asset impact:{" "}
+                                  <span className={`font-medium ${adj.impactOnAssets >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                                    {formatCurrency(adj.impactOnAssets)}
+                                  </span>
+                                </span>
+                              </div>
+                              {adj.approvedBy && (
+                                <p className="text-xs text-gray-400 mt-1">
+                                  Approved by {adj.approvedBy}
+                                  {adj.approvedAt && ` on ${new Date(adj.approvedAt).toLocaleDateString("en-IE")}`}
+                                </p>
+                              )}
+                            </div>
+                            <div className="shrink-0">
+                              {!adj.approvedBy && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onPress={() => handleApproveAdjustment(adj.id)}
+                                  isDisabled={approvingId === adj.id}
+                                >
+                                  {approvingId === adj.id ? (
+                                    <Spinner size="sm" />
+                                  ) : (
+                                    <>
+                                      <CheckCircle2 className="w-4 h-4 mr-1" />
+                                      Approve
+                                    </>
+                                  )}
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        </Card.Content>
+                      </Card>
+                    ))}
+                  </div>
+                )}
               </Card.Content>
             </Card>
           </div>
@@ -669,11 +1095,11 @@ export default function PeriodWorkspacePage({
                 <div className="space-y-3">
                   <ChecklistItem
                     label="All transactions imported and categorised"
-                    done={false}
+                    done={transactionTotal > 0 && uncategorisedCount === 0}
                   />
                   <ChecklistItem
                     label="Year-end adjustments generated and reviewed"
-                    done={false}
+                    done={adjSummary != null && adjSummary.pendingApproval === 0 && (adjSummary.autoGenerated + adjSummary.manual) > 0}
                   />
                   <ChecklistItem
                     label="Balance sheet balances"

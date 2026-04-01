@@ -32,5 +32,17 @@ services:
       db:
         condition: service_healthy
 
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: accounts-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: "http://api:8080"
+    depends_on:
+      - api
+
 volumes:
   accounts_data:
