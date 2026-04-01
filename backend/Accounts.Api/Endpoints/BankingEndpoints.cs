@@ -1,0 +1,158 @@
+using Accounts.Api.Data;
+using Accounts.Api.Entities;
+using Accounts.Api.Services;
+using Microsoft.EntityFrameworkCore;
+
+namespace Accounts.Api.Endpoints;
+
+public static class BankingEndpoints
+{
+    public static void MapBankingEndpoints(this WebApplication app)
+    {
+        // Bank Accounts
+        var banks = app.MapGroup("/api/companies/{companyId:int}/bank-accounts").WithTags("Bank Accounts");
+
+        banks.MapGet("/", async (int companyId, AccountsDbContext db) =>
+            await db.BankAccounts.Where(b => b.CompanyId == companyId).ToListAsync());
+
+        banks.MapPost("/", async (int companyId, BankAccount input, AccountsDbContext db) =>
+        {
+            input.CompanyId = companyId;
+            db.BankAccounts.Add(input);
+            await db.SaveChangesAsync();
+            return Results.Created($"/api/companies/{companyId}/bank-accounts/{input.Id}", input);
+        });
+
+        banks.MapPut("/{id:int}", async (int companyId, int id, BankAccount input, AccountsDbContext db) =>
+        {
+            var bank = await db.BankAccounts.FirstOrDefaultAsync(b => b.Id == id && b.CompanyId == companyId);
+            if (bank == null) return Results.NotFound();
+            bank.Name = input.Name;
+            bank.Iban = input.Iban;
+            bank.Currency = input.Currency;
+            bank.OpeningBalance = input.OpeningBalance;
+            bank.OpeningBalanceDate = input.OpeningBalanceDate;
+            await db.SaveChangesAsync();
+            return Results.Ok(bank);
+        });
+
+        banks.MapDelete("/{id:int}", async (int companyId, int id, AccountsDbContext db) =>
+        {
+            var bank = await db.BankAccounts.FirstOrDefaultAsync(b => b.Id == id && b.CompanyId == companyId);
+            if (bank == null) return Results.NotFound();
+            db.BankAccounts.Remove(bank);
+            await db.SaveChangesAsync();
+            return Results.NoContent();
+        });
+
+        // CSV Import
+        banks.MapPost("/{bankAccountId:int}/import", async (int companyId, int bankAccountId, int periodId, HttpRequest request, ImportService importService) =>
+        {
+            if (!request.HasFormContentType) return Results.BadRequest(new { error = "Expected multipart form data" });
+            var form = await request.ReadFormAsync();
+            var file = form.Files.FirstOrDefault();
+            if (file == null) return Results.BadRequest(new { error = "No file uploaded" });
+
+            using var stream = file.OpenReadStream();
+            var result = await importService.ImportCsvAsync(bankAccountId, periodId, stream, file.FileName);
+            return Results.Ok(result);
+        }).DisableAntiforgery();
+
+        // Transactions
+        var transactions = app.MapGroup("/api/companies/{companyId:int}/periods/{periodId:int}/transactions").WithTags("Transactions");
+
+        transactions.MapGet("/", async (int companyId, int periodId, AccountsDbContext db, int? page, int? pageSize, bool? uncategorised) =>
+        {
+            var query = db.ImportedTransactions
+                .Include(t => t.Category)
+                .Where(t => t.PeriodId == periodId && t.BankAccount.CompanyId == companyId && !t.IsDuplicate);
+
+            if (uncategorised == true)
+                query = query.Where(t => t.CategoryId == null);
+
+            var total = await query.CountAsync();
+            var items = await query
+                .OrderByDescending(t => t.Date)
+                .Skip(((page ?? 1) - 1) * (pageSize ?? 50))
+                .Take(pageSize ?? 50)
+                .ToListAsync();
+
+            return Results.Ok(new { total, items });
+        });
+
+        transactions.MapPut("/{id:int}/categorise", async (int companyId, int periodId, int id, CategoriseInput input, AccountsDbContext db) =>
+        {
+            var txn = await db.ImportedTransactions.FirstOrDefaultAsync(t => t.Id == id && t.PeriodId == periodId);
+            if (txn == null) return Results.NotFound();
+            txn.CategoryId = input.CategoryId;
+            txn.ManualOverride = true;
+            txn.ConfidenceScore = 1.0m;
+            await db.SaveChangesAsync();
+            return Results.Ok(txn);
+        });
+
+        transactions.MapPost("/bulk-categorise", async (int companyId, int periodId, BulkCategoriseInput input, AccountsDbContext db) =>
+        {
+            var txns = await db.ImportedTransactions
+                .Where(t => input.TransactionIds.Contains(t.Id) && t.PeriodId == periodId)
+                .ToListAsync();
+            foreach (var txn in txns)
+            {
+                txn.CategoryId = input.CategoryId;
+                txn.ManualOverride = true;
+                txn.ConfidenceScore = 1.0m;
+            }
+            await db.SaveChangesAsync();
+            return Results.Ok(new { updated = txns.Count });
+        });
+
+        // Categories
+        var categories = app.MapGroup("/api/companies/{companyId:int}/categories").WithTags("Categories");
+
+        categories.MapGet("/", async (int companyId, AccountsDbContext db) =>
+            await db.AccountCategories
+                .Where(c => c.CompanyId == companyId || (c.IsSystem && c.CompanyId == null))
+                .OrderBy(c => c.Code)
+                .ToListAsync());
+
+        categories.MapPost("/seed", async (int companyId, CategoryService service) =>
+        {
+            var cats = await service.SeedDefaultCategoriesAsync(companyId);
+            return Results.Ok(cats);
+        });
+
+        categories.MapPost("/", async (int companyId, AccountCategory input, AccountsDbContext db) =>
+        {
+            input.CompanyId = companyId;
+            db.AccountCategories.Add(input);
+            await db.SaveChangesAsync();
+            return Results.Created($"/api/companies/{companyId}/categories/{input.Id}", input);
+        });
+
+        // Transaction Rules
+        var rules = app.MapGroup("/api/companies/{companyId:int}/transaction-rules").WithTags("Transaction Rules");
+
+        rules.MapGet("/", async (int companyId, AccountsDbContext db) =>
+            await db.TransactionRules.Include(r => r.Category).Where(r => r.CompanyId == companyId).OrderBy(r => r.Priority).ToListAsync());
+
+        rules.MapPost("/", async (int companyId, TransactionRule input, AccountsDbContext db) =>
+        {
+            input.CompanyId = companyId;
+            db.TransactionRules.Add(input);
+            await db.SaveChangesAsync();
+            return Results.Created($"/api/companies/{companyId}/transaction-rules/{input.Id}", input);
+        });
+
+        rules.MapDelete("/{id:int}", async (int companyId, int id, AccountsDbContext db) =>
+        {
+            var rule = await db.TransactionRules.FirstOrDefaultAsync(r => r.Id == id && r.CompanyId == companyId);
+            if (rule == null) return Results.NotFound();
+            db.TransactionRules.Remove(rule);
+            await db.SaveChangesAsync();
+            return Results.NoContent();
+        });
+    }
+}
+
+public record CategoriseInput(int CategoryId);
+public record BulkCategoriseInput(List<int> TransactionIds, int CategoryId);
