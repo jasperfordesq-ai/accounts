@@ -284,3 +284,20 @@ export const setFilingRegime = (cId: number, pId: number, electedRegime?: string
 export interface NotesDisclosure { id?: number; periodId?: number; noteNumber: number; title: string; content?: string; isRequired: boolean; isIncluded: boolean; }
 export const getNotes = (cId: number, pId: number) => apiFetch<NotesDisclosure[]>(`/api/companies/${cId}/periods/${pId}/notes`);
 export const generateNotes = (cId: number, pId: number) => apiFetch<NotesDisclosure[]>(`/api/companies/${cId}/periods/${pId}/notes/generate`, { method: "POST" });
+export const updateNote = (cId: number, pId: number, id: number, data: Partial<NotesDisclosure>) =>
+  apiFetch<NotesDisclosure>(`/api/companies/${cId}/periods/${pId}/notes/${id}`, { method: "PUT", body: JSON.stringify(data) });
+export const createNote = (cId: number, pId: number, data: Partial<NotesDisclosure>) =>
+  apiFetch<NotesDisclosure>(`/api/companies/${cId}/periods/${pId}/notes`, { method: "POST", body: JSON.stringify(data) });
+export const deleteNote = (cId: number, pId: number, id: number) =>
+  apiFetch<void>(`/api/companies/${cId}/periods/${pId}/notes/${id}`, { method: "DELETE" });
+
+// Statements
+export interface TrialBalanceLine { code: string; name: string; type: string; debit: number; credit: number; }
+export interface ProfitAndLoss { turnover: number; costOfSales: number; grossProfit: number; overheads: { code: string; name: string; amount: number }[]; totalOverheads: number; operatingProfit: number; interestPayable: number; profitBeforeTax: number; taxCharge: number; profitAfterTax: number; }
+export interface BalanceSheet { fixedAssets: { categories: { category: string; cost: number; depreciation: number; nbv: number }[]; total: number }; currentAssets: { stock: number; debtors: number; prepayments: number; cash: number; total: number }; creditorsWithinYear: { tradeCreditors: number; accruals: number; taxCreditors: number; otherCreditors: number; total: number }; netCurrentAssets: number; totalAssetsLessCurrentLiabilities: number; creditorsAfterYear: { loans: number; other: number; total: number }; netAssets: number; capitalAndReserves: { shareCapital: number; retainedEarnings: number; total: number }; balances: boolean; }
+export interface TaxComputation { accountingProfit: number; adjustments: { description: string; amount: number; basis: string }[]; taxableProfit: number; corporationTaxAt125: number; corporationTaxAt25: number; totalCorporationTax: number; preliminaryTaxPaid: number; balanceDue: number; notes: string; }
+
+export const getTrialBalance = (cId: number, pId: number) => apiFetch<TrialBalanceLine[]>(`/api/companies/${cId}/periods/${pId}/statements/trial-balance`);
+export const getProfitAndLoss = (cId: number, pId: number) => apiFetch<ProfitAndLoss>(`/api/companies/${cId}/periods/${pId}/statements/profit-and-loss`);
+export const getBalanceSheet = (cId: number, pId: number) => apiFetch<BalanceSheet>(`/api/companies/${cId}/periods/${pId}/statements/balance-sheet`);
+export const getTaxComputation = (cId: number, pId: number) => apiFetch<TaxComputation>(`/api/companies/${cId}/periods/${pId}/revenue/tax-computation`);

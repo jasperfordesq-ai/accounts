@@ -28,6 +28,8 @@ import {
   BarChart3,
   ArrowRight,
   Scale,
+  ClipboardList,
+  Eye,
 } from "lucide-react";
 import {
   getCompany,
@@ -1081,6 +1083,52 @@ export default function PeriodWorkspacePage({
                 )}
               </Card.Content>
             </Card>
+
+            {/* View Financial Statements Link */}
+            <Card className="shadow-sm border border-blue-200 bg-blue-50/30">
+              <Card.Content className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Eye className="w-5 h-5 text-blue-600" />
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-900">View Financial Statements</h3>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        Preview trial balance, P&amp;L, balance sheet, and tax computation in the browser.
+                      </p>
+                    </div>
+                  </div>
+                  <Link href={`/companies/${companyId}/periods/${periodId}/statements`}>
+                    <Button variant="outline" size="sm">
+                      View Financial Statements
+                      <ArrowRight className="w-4 h-4 ml-1.5" />
+                    </Button>
+                  </Link>
+                </div>
+              </Card.Content>
+            </Card>
+
+            {/* Manage Notes Link */}
+            <Card className="shadow-sm border border-purple-200 bg-purple-50/30">
+              <Card.Content className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <ClipboardList className="w-5 h-5 text-purple-600" />
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-900">Manage Notes</h3>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        Generate, edit, and manage notes to the financial statements.
+                      </p>
+                    </div>
+                  </div>
+                  <Link href={`/companies/${companyId}/periods/${periodId}/notes`}>
+                    <Button variant="outline" size="sm">
+                      Manage Notes
+                      <ArrowRight className="w-4 h-4 ml-1.5" />
+                    </Button>
+                  </Link>
+                </div>
+              </Card.Content>
+            </Card>
           </div>
         </TabPanel>
 
@@ -1159,6 +1207,29 @@ export default function PeriodWorkspacePage({
                     label="Accounts package downloaded and reviewed"
                     done={false}
                   />
+                </div>
+              </Card.Content>
+            </Card>
+
+            {/* Review Notes Link */}
+            <Card className="shadow-sm border border-purple-200 bg-purple-50/30">
+              <Card.Content className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <ClipboardList className="w-5 h-5 text-purple-600" />
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-900">Review Notes</h3>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        Review and finalise notes to the financial statements before filing.
+                      </p>
+                    </div>
+                  </div>
+                  <Link href={`/companies/${companyId}/periods/${periodId}/notes`}>
+                    <Button variant="outline" size="sm">
+                      Review Notes
+                      <ArrowRight className="w-4 h-4 ml-1.5" />
+                    </Button>
+                  </Link>
                 </div>
               </Card.Content>
             </Card>
