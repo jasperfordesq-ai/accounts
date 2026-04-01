@@ -19,13 +19,14 @@ accounts/
 │   ├── Accounts.sln
 │   └── Accounts.Api/
 │       ├── Program.cs              # Minimal API setup + core endpoint mappings
-│       ├── Entities/               # 26 entity classes + Enums.cs
+│       ├── Entities/               # 27 entity classes + Enums.cs
 │       ├── Data/
-│       │   ├── AccountsDbContext.cs       # 25 DbSets, full OnModelCreating config
+│       │   ├── AccountsDbContext.cs       # 26 DbSets, full OnModelCreating config
 │       │   ├── SeedData.cs                # 3 sample companies (micro/small/medium)
 │       │   ├── DesignTimeDbContextFactory.cs
 │       │   └── Migrations/
-│       ├── Services/               # 10 business logic services
+│       ├── Services/               # 11 business logic services
+│       ├── Middleware/              # Global exception handler
 │       ├── Rules/                  # Configurable legal threshold config
 │       └── Endpoints/              # 7 endpoint group files + registration
 ├── frontend/
@@ -39,11 +40,15 @@ accounts/
 │       │   │   ├── new/page.tsx    # 4-step onboarding wizard
 │       │   │   └── [id]/page.tsx   # Company detail + period management
 │       │   └── companies/[companyId]/periods/[periodId]/
-│       │       └── page.tsx        # Period workspace (6 tabs)
+│       │       ├── page.tsx        # Period workspace (6 tabs)
+│       │       ├── year-end/       # Year-end questionnaire (9 sections)
+│       │       ├── classify/       # Size classification interview
+│       │       ├── statements/     # Financial statements preview (TB, P&L, BS, Tax)
+│       │       └── notes/          # Notes disclosure management
 │       ├── components/
 │       │   └── AppNavbar.tsx       # HeroUI navbar
 │       └── lib/
-│           └── api.ts              # Typed API layer (native fetch, 18 functions)
+│           └── api.ts              # Typed API layer (native fetch, 70+ functions)
 ├── compose.yml                     # Docker: api (5090) + postgres (5433) + frontend (3000)
 ├── Dockerfile.backend
 ├── Dockerfile.frontend
@@ -86,7 +91,7 @@ dotnet ef migrations add <Name> --output-dir Data/Migrations
 - All enums stored as text (not int) for readability
 - snake_case table names, decimal(18,2) for money
 
-## Entities (26 classes, 28 tables)
+## Entities (27 classes, 29 tables)
 
 | Group | Tables |
 |-------|--------|
@@ -97,9 +102,10 @@ dotnet ef migrations add <Name> --output-dir Data/Migrations
 | Year-End | debtors, creditors, fixed_assets, depreciation_entries, inventories, loans, director_loans, payroll_summaries, tax_balances, dividends |
 | Adjustments | adjustments |
 | Reports | reports, notes_disclosures |
+| Equity | share_capitals |
 | Audit | audit_logs |
 
-## Services (10)
+## Services (11)
 
 | Service | Purpose |
 |---------|---------|
@@ -113,8 +119,9 @@ dotnet ef migrations add <Name> --output-dir Data/Migrations
 | DocumentGeneratorService | QuestPDF — cover, directors' report, balance sheet, P&L, statutory statement, notes |
 | TaxComputationService | Corporation tax bridge (12.5% trading), capital allowances, CT1 support |
 | IxbrlService | Inline XBRL financial statements (FRC Irish FRS-102 taxonomy) |
+| NotesDisclosureService | Auto-generates regime-aware notes (policies, assets, debtors, creditors, share capital, staff, directors) |
 
-## API Endpoints (80 total)
+## API Endpoints (~90 total)
 
 ### Core (14 — Program.cs)
 | Method | Path | Description |
@@ -143,8 +150,8 @@ dotnet ef migrations add <Name> --output-dir Data/Migrations
 | POST | .../categories/seed | Seed default chart of accounts |
 | GET/POST/DELETE | .../transaction-rules | Transaction rule CRUD |
 
-### Year-End (32)
-Full CRUD for: debtors, creditors, fixed assets, inventory, loans, director loans, payroll (upsert), tax balances (upsert by type), dividends. Plus year-end summary endpoint.
+### Year-End (42)
+Full CRUD for: debtors, creditors, fixed assets, inventory, loans, director loans, payroll (upsert), tax balances (upsert by type), dividends, share capital. Plus year-end summary, notes CRUD (list, generate, update, add, delete).
 
 ### Adjustments & Audit (8)
 | GET/POST | .../adjustments | List / Create manual adjustment |
@@ -167,12 +174,26 @@ Full CRUD for: debtors, creditors, fixed assets, inventory, loans, director loan
 | GET | .../revenue/ct1-support | CT1 form support data |
 | GET | .../revenue/ixbrl | Download iXBRL financial statements |
 
+## Frontend Pages (9 routes)
+
+| Route | Purpose |
+|-------|---------|
+| `/` | Dashboard — company cards with filing status + quick stats |
+| `/companies/new` | 4-step onboarding wizard (legal, structure, address, officers) |
+| `/companies/[id]` | Company detail with officers, info cards, period management |
+| `/companies/.../periods/[periodId]` | Period workspace (6 tabs: Import, Categorise, Year-End, Adjustments, Statements, Filing) |
+| `.../year-end` | Year-end questionnaire — 9 sections of plain-English questions with live CRUD |
+| `.../classify` | Size classification interview — input figures, run 2-of-3 test, select regime |
+| `.../statements` | Financial statements preview — TB, P&L, BS, Tax Computation in browser |
+| `.../notes` | Notes disclosure management — auto-generate, edit, toggle, add custom |
+
 ## Architecture Patterns
 
 - **Frontend**: Next.js 16 App Router with HeroUI v3 components (Button, Card, Chip, Tabs, TextField, Checkbox, ProgressBar, Spinner)
 - **Backend**: Minimal API with endpoint groups in Endpoints/ files
 - **ORM**: EF Core with primary constructor DbContext
-- **DI**: Service + DI pattern (all 10 services registered as scoped)
+- **DI**: Service + DI pattern (all 11 services registered as scoped)
+- **Error handling**: Global ExceptionMiddleware (400 for business rules, 500 for server errors)
 - **Migrations**: Design-time factory (WDAC blocks QuestPDF.dll at design time)
 - **Serialization**: JSON camelCase (ASP.NET Core default), enums as text in DB
 - **CORS**: Configured for frontend dev server
@@ -199,3 +220,18 @@ Full CRUD for: debtors, creditors, fixed assets, inventory, loans, director loan
 
 - Windows WDAC blocks QuestPDF.dll — use DesignTimeDbContextFactory for migrations
 - NuGet SSL intermittent failures — add packages to .csproj directly and restore
+
+## Project Stats
+
+| Metric | Count |
+|--------|-------|
+| Backend .cs files | 58 |
+| Entity classes | 27 (+Enums) |
+| Services | 11 |
+| API endpoints | ~90 |
+| Frontend routes | 9 |
+| Frontend .tsx/.ts files | 12 |
+| API client functions | 70+ |
+| Seed companies | 3 (micro/small/medium) |
+| EF migrations | 2 |
+| Docker services | 3 (api + db + frontend) |
