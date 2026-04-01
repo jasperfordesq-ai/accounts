@@ -14,6 +14,7 @@ import {
   ProgressBarTrack,
   ProgressBarFill,
 } from "@heroui/react";
+import Link from "next/link";
 import {
   Upload,
   Settings,
@@ -25,6 +26,8 @@ import {
   CheckCircle2,
   AlertTriangle,
   BarChart3,
+  ArrowRight,
+  Scale,
 } from "lucide-react";
 import {
   getCompany,
@@ -347,6 +350,29 @@ export default function PeriodWorkspacePage({
         {/* Import Tab */}
         <TabPanel id="import">
           <div className="space-y-6">
+            {/* Classify Company Size Link */}
+            <Card className="shadow-sm border border-blue-200 bg-blue-50/30">
+              <Card.Content className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Scale className="w-5 h-5 text-blue-600" />
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-900">Company Size Classification</h3>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        Determine micro/small/medium/large status and filing regime.
+                      </p>
+                    </div>
+                  </div>
+                  <Link href={`/companies/${companyId}/periods/${periodId}/classify`}>
+                    <Button variant="outline" size="sm">
+                      Classify Company Size
+                      <ArrowRight className="w-4 h-4 ml-1.5" />
+                    </Button>
+                  </Link>
+                </div>
+              </Card.Content>
+            </Card>
+
             {/* Bank Accounts */}
             <Card className="shadow-sm border border-gray-200">
               <Card.Header>
@@ -610,6 +636,26 @@ export default function PeriodWorkspacePage({
         {/* Year-End Tab */}
         <TabPanel id="yearend">
           <div className="space-y-6">
+            {/* Year-End Questionnaire Link */}
+            <Card className="shadow-sm border border-emerald-200 bg-emerald-50/30">
+              <Card.Content className="p-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-900">Year-End Questionnaire</h3>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Walk through all 9 sections to capture debtors, creditors, assets, payroll, tax, and more.
+                    </p>
+                  </div>
+                  <Link href={`/companies/${companyId}/periods/${periodId}/year-end`}>
+                    <Button variant="primary">
+                      Open Year-End Questionnaire
+                      <ArrowRight className="w-4 h-4 ml-1.5" />
+                    </Button>
+                  </Link>
+                </div>
+              </Card.Content>
+            </Card>
+
             {/* Completeness Score */}
             {yearEnd && (
               <Card className="shadow-sm border border-gray-200">

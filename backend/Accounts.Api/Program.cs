@@ -30,6 +30,7 @@ builder.Services.AddScoped<FinancialStatementsService>();
 builder.Services.AddScoped<DocumentGeneratorService>();
 builder.Services.AddScoped<TaxComputationService>();
 builder.Services.AddScoped<IxbrlService>();
+builder.Services.AddScoped<NotesDisclosureService>();
 
 // CORS
 builder.Services.AddCors(options =>
@@ -63,6 +64,7 @@ using (var scope = app.Services.CreateScope())
 
 // Middleware
 app.UseCors();
+app.UseMiddleware<Accounts.Api.Middleware.ExceptionMiddleware>();
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();

@@ -231,3 +231,56 @@ export const getAccountsPackageUrl = (companyId: number, periodId: number) =>
   `${API_BASE}/api/companies/${companyId}/periods/${periodId}/documents/accounts-package`;
 export const getIxbrlUrl = (companyId: number, periodId: number) =>
   `${API_BASE}/api/companies/${companyId}/periods/${periodId}/revenue/ixbrl`;
+
+// Debtors
+export interface Debtor { id?: number; periodId?: number; name: string; amount: number; type: string; notes?: string; }
+export const getDebtors = (cId: number, pId: number) => apiFetch<Debtor[]>(`/api/companies/${cId}/periods/${pId}/debtors`);
+export const createDebtor = (cId: number, pId: number, d: Debtor) => apiFetch<Debtor>(`/api/companies/${cId}/periods/${pId}/debtors`, { method: "POST", body: JSON.stringify(d) });
+export const deleteDebtor = (cId: number, pId: number, id: number) => apiFetch<void>(`/api/companies/${cId}/periods/${pId}/debtors/${id}`, { method: "DELETE" });
+
+// Creditors
+export interface Creditor { id?: number; periodId?: number; name: string; amount: number; type: string; dueWithinYear: boolean; notes?: string; }
+export const getCreditors = (cId: number, pId: number) => apiFetch<Creditor[]>(`/api/companies/${cId}/periods/${pId}/creditors`);
+export const createCreditor = (cId: number, pId: number, c: Creditor) => apiFetch<Creditor>(`/api/companies/${cId}/periods/${pId}/creditors`, { method: "POST", body: JSON.stringify(c) });
+export const deleteCreditor = (cId: number, pId: number, id: number) => apiFetch<void>(`/api/companies/${cId}/periods/${pId}/creditors/${id}`, { method: "DELETE" });
+
+// Fixed Assets
+export interface FixedAsset { id?: number; companyId?: number; name: string; category: string; cost: number; acquisitionDate: string; disposalDate?: string; disposalProceeds?: number; usefulLifeYears: number; depreciationMethod: string; }
+export const getFixedAssets = (cId: number) => apiFetch<FixedAsset[]>(`/api/companies/${cId}/fixed-assets`);
+export const createFixedAsset = (cId: number, a: FixedAsset) => apiFetch<FixedAsset>(`/api/companies/${cId}/fixed-assets`, { method: "POST", body: JSON.stringify(a) });
+export const deleteFixedAsset = (cId: number, id: number) => apiFetch<void>(`/api/companies/${cId}/fixed-assets/${id}`, { method: "DELETE" });
+
+// Payroll
+export interface PayrollSummary { id?: number; periodId?: number; grossWages: number; employerPrsi: number; pensionContributions: number; staffCount: number; }
+export const getPayroll = (cId: number, pId: number) => apiFetch<PayrollSummary>(`/api/companies/${cId}/periods/${pId}/payroll`).catch(() => null);
+export const savePayroll = (cId: number, pId: number, p: PayrollSummary) => apiFetch<PayrollSummary>(`/api/companies/${cId}/periods/${pId}/payroll`, { method: "PUT", body: JSON.stringify(p) });
+
+// Tax Balances
+export interface TaxBalance { id?: number; periodId?: number; taxType: string; liability: number; paid: number; balance: number; }
+export const getTaxBalances = (cId: number, pId: number) => apiFetch<TaxBalance[]>(`/api/companies/${cId}/periods/${pId}/tax-balances`);
+export const saveTaxBalance = (cId: number, pId: number, taxType: string, t: TaxBalance) => apiFetch<TaxBalance>(`/api/companies/${cId}/periods/${pId}/tax-balances/${taxType}`, { method: "PUT", body: JSON.stringify(t) });
+
+// Dividends
+export interface Dividend { id?: number; periodId?: number; amount: number; dateDeclared?: string; datePaid?: string; }
+export const getDividends = (cId: number, pId: number) => apiFetch<Dividend[]>(`/api/companies/${cId}/periods/${pId}/dividends`);
+export const createDividend = (cId: number, pId: number, d: Dividend) => apiFetch<Dividend>(`/api/companies/${cId}/periods/${pId}/dividends`, { method: "POST", body: JSON.stringify(d) });
+export const deleteDividend = (cId: number, pId: number, id: number) => apiFetch<void>(`/api/companies/${cId}/periods/${pId}/dividends/${id}`, { method: "DELETE" });
+
+// Inventory
+export interface InventoryItem { id?: number; periodId?: number; description: string; value: number; valuationMethod: string; }
+export const getInventory = (cId: number, pId: number) => apiFetch<InventoryItem[]>(`/api/companies/${cId}/periods/${pId}/inventory`);
+export const createInventory = (cId: number, pId: number, i: InventoryItem) => apiFetch<InventoryItem>(`/api/companies/${cId}/periods/${pId}/inventory`, { method: "POST", body: JSON.stringify(i) });
+export const deleteInventory = (cId: number, pId: number, id: number) => apiFetch<void>(`/api/companies/${cId}/periods/${pId}/inventory/${id}`, { method: "DELETE" });
+
+// Size Classification
+export const saveSizeClassification = (cId: number, pId: number, data: { turnover: number; balanceSheetTotal: number; avgEmployees: number; priorYearClass?: string }) =>
+  apiFetch<unknown>(`/api/companies/${cId}/periods/${pId}/size-classification`, { method: "PUT", body: JSON.stringify(data) });
+export const runClassification = (cId: number, pId: number) =>
+  apiFetch<{ calculatedClass: string; qualificationNotes: string; canUseMicro: boolean; canFileAbridged: boolean; auditExempt: boolean; availableRegimes: string[] }>(`/api/companies/${cId}/periods/${pId}/classify`, { method: "POST" });
+export const setFilingRegime = (cId: number, pId: number, electedRegime?: string) =>
+  apiFetch<unknown>(`/api/companies/${cId}/periods/${pId}/filing-regime`, { method: "POST", body: JSON.stringify({ electedRegime }) });
+
+// Notes
+export interface NotesDisclosure { id?: number; periodId?: number; noteNumber: number; title: string; content?: string; isRequired: boolean; isIncluded: boolean; }
+export const getNotes = (cId: number, pId: number) => apiFetch<NotesDisclosure[]>(`/api/companies/${cId}/periods/${pId}/notes`);
+export const generateNotes = (cId: number, pId: number) => apiFetch<NotesDisclosure[]>(`/api/companies/${cId}/periods/${pId}/notes/generate`, { method: "POST" });

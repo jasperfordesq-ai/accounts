@@ -229,7 +229,8 @@ public class FinancialStatementsService(AccountsDbContext db)
         // Capital and Reserves
         // Share capital - placeholder (from equity categories or manual entry)
         // For now, derive retained earnings as the balancing figure
-        var shareCapital = 1m; // Default 1 euro share capital for typical Irish company
+        var shareCapitals = await db.ShareCapitals.Where(s => s.CompanyId == companyId).ToListAsync();
+        var shareCapital = shareCapitals.Count > 0 ? shareCapitals.Sum(s => s.TotalValue) : 1m;
         var dividendsPaid = await db.Dividends.Where(d => d.PeriodId == periodId).SumAsync(d => d.Amount);
         var retainedEarnings = netAssets - shareCapital;
         var totalCapital = shareCapital + retainedEarnings;

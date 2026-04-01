@@ -1,5 +1,6 @@
 using Accounts.Api.Data;
 using Accounts.Api.Entities;
+using Accounts.Api.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace Accounts.Api.Endpoints;
@@ -345,5 +346,84 @@ public static class YearEndEndpoints
                 completeness = new { score = (int)Math.Round((double)completedSections / totalSections * 100), completed = completedSections, total = totalSections, incomplete }
             });
         }).WithTags("Year-End Summary");
+
+        // ===== NOTES DISCLOSURES =====
+        var notesGroup = app.MapGroup($"{basePath}/notes").WithTags("Notes");
+
+        notesGroup.MapGet("/", async (int companyId, int periodId, AccountsDbContext db) =>
+            await db.NotesDisclosures.Where(n => n.PeriodId == periodId).OrderBy(n => n.NoteNumber).ToListAsync());
+
+        notesGroup.MapPost("/generate", async (int companyId, int periodId, NotesDisclosureService service) =>
+        {
+            var notes = await service.GenerateNotesAsync(periodId);
+            return Results.Ok(notes);
+        });
+
+        notesGroup.MapPut("/{id:int}", async (int companyId, int periodId, int id, NotesDisclosure input, AccountsDbContext db) =>
+        {
+            var note = await db.NotesDisclosures.FirstOrDefaultAsync(n => n.Id == id && n.PeriodId == periodId);
+            if (note == null) return Results.NotFound();
+            note.Title = input.Title;
+            note.Content = input.Content;
+            note.IsIncluded = input.IsIncluded;
+            await db.SaveChangesAsync();
+            return Results.Ok(note);
+        });
+
+        notesGroup.MapPost("/", async (int companyId, int periodId, NotesDisclosure input, AccountsDbContext db) =>
+        {
+            input.PeriodId = periodId;
+            var maxNum = await db.NotesDisclosures.Where(n => n.PeriodId == periodId).MaxAsync(n => (int?)n.NoteNumber) ?? 0;
+            input.NoteNumber = maxNum + 1;
+            db.NotesDisclosures.Add(input);
+            await db.SaveChangesAsync();
+            return Results.Created($"notes/{input.Id}", input);
+        });
+
+        notesGroup.MapDelete("/{id:int}", async (int companyId, int periodId, int id, AccountsDbContext db) =>
+        {
+            var note = await db.NotesDisclosures.FirstOrDefaultAsync(n => n.Id == id && n.PeriodId == periodId);
+            if (note == null) return Results.NotFound();
+            db.NotesDisclosures.Remove(note);
+            await db.SaveChangesAsync();
+            return Results.NoContent();
+        });
+
+        // ===== SHARE CAPITAL =====
+        var shares = app.MapGroup("/api/companies/{companyId:int}/share-capital").WithTags("Share Capital");
+
+        shares.MapGet("/", async (int companyId, AccountsDbContext db) =>
+            await db.ShareCapitals.Where(s => s.CompanyId == companyId).ToListAsync());
+
+        shares.MapPost("/", async (int companyId, ShareCapital input, AccountsDbContext db) =>
+        {
+            input.CompanyId = companyId;
+            input.TotalValue = input.NominalValue * input.NumberIssued;
+            db.ShareCapitals.Add(input);
+            await db.SaveChangesAsync();
+            return Results.Created($"/api/companies/{companyId}/share-capital/{input.Id}", input);
+        });
+
+        shares.MapPut("/{id:int}", async (int companyId, int id, ShareCapital input, AccountsDbContext db) =>
+        {
+            var item = await db.ShareCapitals.FirstOrDefaultAsync(s => s.Id == id && s.CompanyId == companyId);
+            if (item == null) return Results.NotFound();
+            item.ShareClass = input.ShareClass;
+            item.NominalValue = input.NominalValue;
+            item.NumberIssued = input.NumberIssued;
+            item.TotalValue = input.NominalValue * input.NumberIssued;
+            item.IsFullyPaid = input.IsFullyPaid;
+            await db.SaveChangesAsync();
+            return Results.Ok(item);
+        });
+
+        shares.MapDelete("/{id:int}", async (int companyId, int id, AccountsDbContext db) =>
+        {
+            var item = await db.ShareCapitals.FirstOrDefaultAsync(s => s.Id == id && s.CompanyId == companyId);
+            if (item == null) return Results.NotFound();
+            db.ShareCapitals.Remove(item);
+            await db.SaveChangesAsync();
+            return Results.NoContent();
+        });
     }
 }

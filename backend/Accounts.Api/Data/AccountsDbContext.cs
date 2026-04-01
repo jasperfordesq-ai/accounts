@@ -44,6 +44,9 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
     public DbSet<Report> Reports => Set<Report>();
     public DbSet<NotesDisclosure> NotesDisclosures => Set<NotesDisclosure>();
 
+    // Share Capital
+    public DbSet<ShareCapital> ShareCapitals => Set<ShareCapital>();
+
     // Audit
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
@@ -318,6 +321,17 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
             e.Property(n => n.Title).HasMaxLength(300).IsRequired();
             e.HasOne(n => n.Period).WithMany(p => p.NotesDisclosures).HasForeignKey(n => n.PeriodId).OnDelete(DeleteBehavior.Cascade);
             e.HasIndex(n => new { n.PeriodId, n.NoteNumber }).IsUnique();
+        });
+
+        // ShareCapital
+        modelBuilder.Entity<ShareCapital>(e =>
+        {
+            e.ToTable("share_capitals");
+            e.HasKey(s => s.Id);
+            e.Property(s => s.ShareClass).HasMaxLength(100).IsRequired();
+            e.Property(s => s.NominalValue).HasColumnType("decimal(18,2)");
+            e.Property(s => s.TotalValue).HasColumnType("decimal(18,2)");
+            e.HasOne(s => s.Company).WithMany(c => c.ShareCapitals).HasForeignKey(s => s.CompanyId).OnDelete(DeleteBehavior.Cascade);
         });
 
         // AuditLog (no foreign keys — records may outlive referenced entities)

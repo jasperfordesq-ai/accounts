@@ -50,6 +50,8 @@ public static class SeedData
         db.Companies.Add(micro);
         await db.SaveChangesAsync();
 
+        db.ShareCapitals.Add(new ShareCapital { CompanyId = micro.Id, ShareClass = "Guarantee", NominalValue = 1m, NumberIssued = 1, TotalValue = 1m, IsFullyPaid = true });
+
         var microPeriod = new AccountingPeriod
         {
             CompanyId = micro.Id,
@@ -138,6 +140,8 @@ public static class SeedData
         };
         db.Companies.Add(small);
         await db.SaveChangesAsync();
+
+        db.ShareCapitals.Add(new ShareCapital { CompanyId = small.Id, ShareClass = "Ordinary", NominalValue = 1m, NumberIssued = 100, TotalValue = 100m, IsFullyPaid = true });
 
         var smallPeriod = new AccountingPeriod
         {
@@ -255,6 +259,8 @@ public static class SeedData
         };
         db.Companies.Add(medium);
         await db.SaveChangesAsync();
+
+        db.ShareCapitals.Add(new ShareCapital { CompanyId = medium.Id, ShareClass = "Ordinary", NominalValue = 1m, NumberIssued = 1000, TotalValue = 1000m, IsFullyPaid = true });
 
         var mediumPeriod = new AccountingPeriod
         {

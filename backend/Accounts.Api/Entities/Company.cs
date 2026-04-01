@@ -44,4 +44,5 @@ public class Company
     public List<Loan> Loans { get; set; } = [];
     public List<AccountCategory> Categories { get; set; } = [];
     public List<TransactionRule> TransactionRules { get; set; } = [];
+    public List<ShareCapital> ShareCapitals { get; set; } = [];
 }
