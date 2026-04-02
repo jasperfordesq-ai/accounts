@@ -37,11 +37,16 @@ builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
     {
-        var origins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>()
-            ?? ["http://localhost:5173", "http://localhost:5174"];
-        policy.WithOrigins(origins)
-              .AllowAnyMethod()
-              .AllowAnyHeader();
+        if (builder.Environment.IsDevelopment())
+        {
+            policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader();
+        }
+        else
+        {
+            var origins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>()
+                ?? ["http://localhost:3000"];
+            policy.WithOrigins(origins).AllowAnyMethod().AllowAnyHeader();
+        }
     });
 });
 
