@@ -12,8 +12,8 @@ import {
 } from "lucide-react";
 import { getCompany, deleteCompany, createPeriod, type Company } from "@/lib/api";
 
-export default function CompanyDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export default function CompanyDetailPage({ params }: { params: Promise<{ companyId: string }> }) {
+  const { companyId: id } = use(params);
   const router = useRouter();
   const [company, setCompany] = useState<Company | null>(null);
   const [loading, setLoading] = useState(true);
