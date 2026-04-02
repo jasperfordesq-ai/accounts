@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Accounts.Api.Entities;
 
 public class NotesDisclosure
@@ -11,5 +13,6 @@ public class NotesDisclosure
     public bool IsIncluded { get; set; } = true;
 
     // Navigation
+    [JsonIgnore]
     public AccountingPeriod Period { get; set; } = null!;
 }

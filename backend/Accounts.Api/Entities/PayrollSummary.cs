@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Accounts.Api.Entities;
 
 public class PayrollSummary
@@ -10,5 +12,6 @@ public class PayrollSummary
     public int StaffCount { get; set; }
 
     // Navigation
+    [JsonIgnore]
     public AccountingPeriod Period { get; set; } = null!;
 }

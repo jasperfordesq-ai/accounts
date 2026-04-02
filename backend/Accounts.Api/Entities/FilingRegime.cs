@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Accounts.Api.Entities;
 
 public class FilingRegime
@@ -13,5 +15,6 @@ public class FilingRegime
     public DateTime DeterminedAt { get; set; } = DateTime.UtcNow;
 
     // Navigation
+    [JsonIgnore]
     public AccountingPeriod Period { get; set; } = null!;
 }

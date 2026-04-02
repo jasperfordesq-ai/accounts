@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Accounts.Api.Entities;
 
 public class AccountCategory
@@ -12,7 +14,9 @@ public class AccountCategory
     public int? ParentId { get; set; }
 
     // Navigation
+    [JsonIgnore]
     public Company? Company { get; set; }
+    [JsonIgnore]
     public AccountCategory? Parent { get; set; }
     public List<AccountCategory> Children { get; set; } = [];
     public List<ImportedTransaction> Transactions { get; set; } = [];

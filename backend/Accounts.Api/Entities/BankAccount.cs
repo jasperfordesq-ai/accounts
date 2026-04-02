@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Accounts.Api.Entities;
 
 public class BankAccount
@@ -11,6 +13,7 @@ public class BankAccount
     public DateOnly? OpeningBalanceDate { get; set; }
 
     // Navigation
+    [JsonIgnore]
     public Company Company { get; set; } = null!;
     public List<ImportedTransaction> Transactions { get; set; } = [];
     public List<ImportBatch> ImportBatches { get; set; } = [];

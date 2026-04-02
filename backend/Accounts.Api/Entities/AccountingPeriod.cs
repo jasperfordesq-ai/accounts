@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Accounts.Api.Entities;
 
 public class AccountingPeriod
@@ -13,6 +15,7 @@ public class AccountingPeriod
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     // Navigation
+    [JsonIgnore]
     public Company Company { get; set; } = null!;
     public SizeClassification? SizeClassification { get; set; }
     public FilingRegime? FilingRegime { get; set; }

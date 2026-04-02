@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Accounts.Api.Entities;
 
 public class Dividend
@@ -9,5 +11,6 @@ public class Dividend
     public DateOnly? DatePaid { get; set; }
 
     // Navigation
+    [JsonIgnore]
     public AccountingPeriod Period { get; set; } = null!;
 }

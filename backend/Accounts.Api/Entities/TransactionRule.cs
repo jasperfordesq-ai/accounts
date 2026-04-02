@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Accounts.Api.Entities;
 
 public class TransactionRule
@@ -9,6 +11,8 @@ public class TransactionRule
     public int Priority { get; set; }
 
     // Navigation
+    [JsonIgnore]
     public Company Company { get; set; } = null!;
+    [JsonIgnore]
     public AccountCategory Category { get; set; } = null!;
 }

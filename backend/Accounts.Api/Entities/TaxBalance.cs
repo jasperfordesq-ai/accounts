@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Accounts.Api.Entities;
 
 public class TaxBalance
@@ -10,5 +12,6 @@ public class TaxBalance
     public decimal Balance { get; set; }
 
     // Navigation
+    [JsonIgnore]
     public AccountingPeriod Period { get; set; } = null!;
 }

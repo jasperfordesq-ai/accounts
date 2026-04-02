@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Accounts.Api.Entities;
 
 public class FixedAsset
@@ -14,6 +16,7 @@ public class FixedAsset
     public DepreciationMethod DepreciationMethod { get; set; } = DepreciationMethod.StraightLine;
 
     // Navigation
+    [JsonIgnore]
     public Company Company { get; set; } = null!;
     public List<DepreciationEntry> DepreciationEntries { get; set; } = [];
 }

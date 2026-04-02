@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Accounts.Api.Entities;
 
 public class DirectorLoan
@@ -11,6 +13,8 @@ public class DirectorLoan
     public decimal ClosingBalance { get; set; }
 
     // Navigation
+    [JsonIgnore]
     public AccountingPeriod Period { get; set; } = null!;
+    [JsonIgnore]
     public CompanyOfficer Director { get; set; } = null!;
 }

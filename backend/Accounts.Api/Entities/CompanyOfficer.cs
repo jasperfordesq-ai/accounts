@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Accounts.Api.Entities;
 
 public class CompanyOfficer
@@ -11,5 +13,6 @@ public class CompanyOfficer
     public string? Address { get; set; }
 
     // Navigation
+    [JsonIgnore]
     public Company Company { get; set; } = null!;
 }

@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Accounts.Api.Entities;
 
 public class DepreciationEntry
@@ -10,6 +12,8 @@ public class DepreciationEntry
     public decimal ClosingNbv { get; set; }
 
     // Navigation
+    [JsonIgnore]
     public FixedAsset Asset { get; set; } = null!;
+    [JsonIgnore]
     public AccountingPeriod Period { get; set; } = null!;
 }

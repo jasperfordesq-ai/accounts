@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Accounts.Api.Entities;
 
 public class Loan
@@ -13,5 +15,6 @@ public class Loan
     public decimal DueAfterYear { get; set; }
 
     // Navigation
+    [JsonIgnore]
     public Company Company { get; set; } = null!;
 }

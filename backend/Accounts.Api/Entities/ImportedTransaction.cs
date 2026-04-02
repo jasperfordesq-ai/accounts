@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Accounts.Api.Entities;
 
 public class ImportedTransaction
@@ -17,8 +19,11 @@ public class ImportedTransaction
     public bool ManualOverride { get; set; }
 
     // Navigation
+    [JsonIgnore]
     public BankAccount BankAccount { get; set; } = null!;
+    [JsonIgnore]
     public AccountingPeriod? Period { get; set; }
+    [JsonIgnore]
     public ImportBatch? ImportBatch { get; set; }
     public AccountCategory? Category { get; set; }
 }

@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Accounts.Api.Entities;
 
 public class Inventory
@@ -9,5 +11,6 @@ public class Inventory
     public ValuationMethod ValuationMethod { get; set; } = ValuationMethod.LowerOfCostAndNrv;
 
     // Navigation
+    [JsonIgnore]
     public AccountingPeriod Period { get; set; } = null!;
 }

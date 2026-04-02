@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Accounts.Api.Entities;
 
 public class ShareCapital
@@ -10,5 +12,6 @@ public class ShareCapital
     public decimal TotalValue { get; set; } = 1m;
     public bool IsFullyPaid { get; set; } = true;
 
+    [JsonIgnore]
     public Company Company { get; set; } = null!;
 }

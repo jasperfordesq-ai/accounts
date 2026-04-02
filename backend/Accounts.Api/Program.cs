@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 using Accounts.Api.Data;
 using Accounts.Api.Endpoints;
@@ -6,6 +7,13 @@ using Accounts.Api.Services;
 using QuestPDF.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// JSON: handle circular references from EF navigation properties
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
+    options.SerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
+});
 
 // QuestPDF Community License
 QuestPDF.Settings.License = LicenseType.Community;

@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Accounts.Api.Entities;
 
 public class Adjustment
@@ -20,6 +22,7 @@ public class Adjustment
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     // Navigation
+    [JsonIgnore]
     public AccountingPeriod Period { get; set; } = null!;
     public AccountCategory? DebitCategory { get; set; }
     public AccountCategory? CreditCategory { get; set; }

@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Accounts.Api.Entities;
 
 public class CroFilingPackage
@@ -9,5 +11,6 @@ public class CroFilingPackage
     public FilingPackageStatus Status { get; set; } = FilingPackageStatus.Draft;
 
     // Navigation
+    [JsonIgnore]
     public AccountingPeriod Period { get; set; } = null!;
 }
