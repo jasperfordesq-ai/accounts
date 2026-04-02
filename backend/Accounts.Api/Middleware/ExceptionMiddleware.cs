@@ -22,7 +22,9 @@ public class ExceptionMiddleware(RequestDelegate next, ILogger<ExceptionMiddlewa
             logger.LogError(ex, "Unhandled exception");
             context.Response.StatusCode = 500;
             context.Response.ContentType = "application/json";
-            await context.Response.WriteAsync(JsonSerializer.Serialize(new { error = "An internal error occurred. Please try again." }));
+            var env = context.RequestServices.GetService<IHostEnvironment>();
+            var message = env?.IsDevelopment() == true ? ex.Message : "An internal error occurred. Please try again.";
+            await context.Response.WriteAsync(JsonSerializer.Serialize(new { error = message }));
         }
     }
 }
