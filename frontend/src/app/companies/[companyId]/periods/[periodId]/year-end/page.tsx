@@ -24,6 +24,9 @@ import {
   PiggyBank,
   CreditCard,
   UserCheck,
+  CalendarCheck,
+  ShieldAlert,
+  HeartPulse,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
@@ -59,6 +62,22 @@ import {
   type PayrollSummary,
   type TaxBalance,
   type Dividend,
+  getPostBalanceSheetEvents,
+  createPostBalanceSheetEvent,
+  deletePostBalanceSheetEvent,
+  getRelatedPartyTransactions,
+  createRelatedPartyTransaction,
+  deleteRelatedPartyTransaction,
+  getContingentLiabilities,
+  createContingentLiability,
+  deleteContingentLiability,
+  getGoingConcern,
+  saveGoingConcern,
+  getDirectorLoanCompliance,
+  type PostBalanceSheetEvent,
+  type RelatedPartyTransaction,
+  type ContingentLiability,
+  type DirectorLoanCompliance,
 } from "@/lib/api";
 
 const inputClass =
@@ -169,6 +188,27 @@ export default function YearEndQuestionnairePage({
     "PAYE_PRSI": { taxType: "PAYE_PRSI", liability: 0, paid: 0, balance: 0 },
   });
 
+  // Phase 2: Interrogation data
+  const [postBsEvents, setPostBsEvents] = useState<PostBalanceSheetEvent[]>([]);
+  const [relatedParties, setRelatedParties] = useState<RelatedPartyTransaction[]>([]);
+  const [contingencies, setContingencies] = useState<ContingentLiability[]>([]);
+  const [goingConcernConfirmed, setGoingConcernConfirmed] = useState(true);
+  const [goingConcernNote, setGoingConcernNote] = useState("");
+  const [directorLoanCompliance, setDirectorLoanCompliance] = useState<DirectorLoanCompliance | null>(null);
+
+  const [newPbseDesc, setNewPbseDesc] = useState("");
+  const [newPbseDate, setNewPbseDate] = useState("");
+  const [newPbseAdjusting, setNewPbseAdjusting] = useState(false);
+  const [newPbseImpact, setNewPbseImpact] = useState<number>(0);
+  const [newRptName, setNewRptName] = useState("");
+  const [newRptRelationship, setNewRptRelationship] = useState("Director");
+  const [newRptType, setNewRptType] = useState("Sale");
+  const [newRptAmount, setNewRptAmount] = useState<number>(0);
+  const [newClDesc, setNewClDesc] = useState("");
+  const [newClNature, setNewClNature] = useState("Guarantee");
+  const [newClAmount, setNewClAmount] = useState<number>(0);
+  const [newClLikelihood, setNewClLikelihood] = useState("Possible");
+
   // Saving indicators
   const [savingSection, setSavingSection] = useState<string | null>(null);
 
@@ -207,6 +247,13 @@ export default function YearEndQuestionnairePage({
       setInventory(inventoryData);
       setPayroll(payrollData);
       setDividends(dividendsData);
+
+      // Phase 2: Interrogation data
+      try { const pbse = await getPostBalanceSheetEvents(cId, pId); setPostBsEvents(pbse); } catch {}
+      try { const rpt = await getRelatedPartyTransactions(cId, pId); setRelatedParties(rpt); } catch {}
+      try { const cl = await getContingentLiabilities(cId, pId); setContingencies(cl); } catch {}
+      try { const gc = await getGoingConcern(cId, pId); setGoingConcernConfirmed(gc.goingConcernConfirmed); setGoingConcernNote(gc.goingConcernNote ?? ""); } catch {}
+      try { const dlc = await getDirectorLoanCompliance(cId, pId); setDirectorLoanCompliance(dlc); } catch {}
 
       if (payrollData) {
         setPayrollForm(payrollData);
@@ -402,6 +449,128 @@ export default function YearEndQuestionnairePage({
     setSavingSection(null);
   }
 
+  /* ---- Post-Balance Sheet Event handlers ---- */
+  async function handleAddPbse() {
+    if (!newPbseDesc || !newPbseDate) return;
+    setSavingSection("pbse");
+    try {
+      const created = await createPostBalanceSheetEvent(cId, pId, {
+        description: newPbseDesc,
+        eventDate: newPbseDate,
+        isAdjusting: newPbseAdjusting,
+        financialImpact: newPbseImpact || undefined,
+      });
+      setPostBsEvents((prev) => [...prev, created]);
+      setNewPbseDesc("");
+      setNewPbseDate("");
+      setNewPbseAdjusting(false);
+      setNewPbseImpact(0);
+      toast.success("Post-balance sheet event added");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to add event");
+    }
+    setSavingSection(null);
+  }
+
+  async function handleDeletePbse(id: number) {
+    setSavingSection("pbse");
+    try {
+      await deletePostBalanceSheetEvent(cId, pId, id);
+      setPostBsEvents((prev) => prev.filter((e) => e.id !== id));
+      toast.success("Event removed");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete event");
+    }
+    setSavingSection(null);
+  }
+
+  /* ---- Related Party Transaction handlers ---- */
+  async function handleAddRpt() {
+    if (!newRptName || newRptAmount <= 0) return;
+    setSavingSection("rpt");
+    try {
+      const created = await createRelatedPartyTransaction(cId, pId, {
+        partyName: newRptName,
+        relationship: newRptRelationship,
+        transactionType: newRptType,
+        amount: newRptAmount,
+      });
+      setRelatedParties((prev) => [...prev, created]);
+      setNewRptName("");
+      setNewRptRelationship("Director");
+      setNewRptType("Sale");
+      setNewRptAmount(0);
+      toast.success("Related party transaction added");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to add transaction");
+    }
+    setSavingSection(null);
+  }
+
+  async function handleDeleteRpt(id: number) {
+    setSavingSection("rpt");
+    try {
+      await deleteRelatedPartyTransaction(cId, pId, id);
+      setRelatedParties((prev) => prev.filter((r) => r.id !== id));
+      toast.success("Transaction removed");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete transaction");
+    }
+    setSavingSection(null);
+  }
+
+  /* ---- Contingent Liability handlers ---- */
+  async function handleAddContingency() {
+    if (!newClDesc) return;
+    setSavingSection("contingency");
+    try {
+      const created = await createContingentLiability(cId, pId, {
+        description: newClDesc,
+        nature: newClNature,
+        estimatedAmount: newClAmount || undefined,
+        likelihood: newClLikelihood,
+      });
+      setContingencies((prev) => [...prev, created]);
+      setNewClDesc("");
+      setNewClNature("Guarantee");
+      setNewClAmount(0);
+      setNewClLikelihood("Possible");
+      toast.success("Contingent liability added");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to add contingency");
+    }
+    setSavingSection(null);
+  }
+
+  async function handleDeleteContingency(id: number) {
+    setSavingSection("contingency");
+    try {
+      await deleteContingentLiability(cId, pId, id);
+      setContingencies((prev) => prev.filter((c) => c.id !== id));
+      toast.success("Contingency removed");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete contingency");
+    }
+    setSavingSection(null);
+  }
+
+  /* ---- Going Concern handler ---- */
+  async function handleSaveGoingConcern() {
+    setSavingSection("goingConcern");
+    try {
+      const result = await saveGoingConcern(cId, pId, {
+        confirmed: goingConcernConfirmed,
+        note: goingConcernNote || undefined,
+      });
+      setGoingConcernConfirmed(result.goingConcernConfirmed);
+      setGoingConcernNote(result.goingConcernNote ?? "");
+      toast.success("Going concern status saved");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save going concern");
+    }
+    setSavingSection(null);
+  }
+
   /* ---- Completeness tracking ---- */
   const sectionCompleteness = [
     debtors.length > 0,
@@ -412,8 +581,13 @@ export default function YearEndQuestionnairePage({
     payroll !== null,
     taxBalances.length > 0,
     dividends.length > 0,
-    true, // director loans placeholder
+    directorLoanCompliance !== null, // director loans
+    postBsEvents.length > 0 || true, // post-BS events (optional — always counts)
+    relatedParties.length > 0 || true, // related parties (optional — always counts)
+    contingencies.length > 0 || true, // contingencies (optional — always counts)
+    true, // going concern (always answered)
   ];
+  const totalSections = sectionCompleteness.length;
   const completedCount = sectionCompleteness.filter(Boolean).length;
 
   const periodLabel = period
@@ -466,17 +640,17 @@ export default function YearEndQuestionnairePage({
                 Progress
               </span>
               <Chip
-                color={completedCount >= 7 ? "success" : completedCount >= 4 ? "warning" : "default"}
+                color={completedCount >= totalSections - 2 ? "success" : completedCount >= Math.floor(totalSections / 2) ? "warning" : "default"}
                 variant="soft"
                 size="sm"
               >
-                {completedCount} of 9 sections completed
+                {completedCount} of {totalSections} sections completed
               </Chip>
             </div>
             <div className="w-full bg-gray-200 dark:bg-neutral-700 rounded-full h-2.5">
               <div
                 className="bg-emerald-500 h-2.5 rounded-full transition-all"
-                style={{ width: `${Math.round((completedCount / 9) * 100)}%` }}
+                style={{ width: `${Math.round((completedCount / totalSections) * 100)}%` }}
               />
             </div>
           </Card.Content>
@@ -1159,12 +1333,472 @@ export default function YearEndQuestionnairePage({
           title="Director Loans"
           subtitle="Are there any loans between directors and the company?"
           icon={UserCheck}
+          completed={directorLoanCompliance !== null}
+        >
+          {directorLoanCompliance ? (
+            <div className="space-y-4">
+              {/* Warning banner */}
+              {directorLoanCompliance.warning && (
+                <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 p-3">
+                  <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+                    {directorLoanCompliance.warning}
+                  </p>
+                </div>
+              )}
+
+              {/* Summary cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="rounded-lg border border-gray-200 dark:border-neutral-700 p-3 dark:bg-neutral-800/50">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Total Loans</p>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(directorLoanCompliance.totalDirectorLoans)}</p>
+                </div>
+                <div className="rounded-lg border border-gray-200 dark:border-neutral-700 p-3 dark:bg-neutral-800/50">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Net Assets</p>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(directorLoanCompliance.netAssets)}</p>
+                </div>
+                <div className="rounded-lg border border-gray-200 dark:border-neutral-700 p-3 dark:bg-neutral-800/50">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">10% Threshold</p>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(directorLoanCompliance.thresholdAmount)}</p>
+                </div>
+                <div className="rounded-lg border border-gray-200 dark:border-neutral-700 p-3 dark:bg-neutral-800/50">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Status</p>
+                  <Chip variant="soft" size="sm" color={directorLoanCompliance.exceedsThreshold ? "danger" : "success"}>
+                    {directorLoanCompliance.exceedsThreshold ? "Exceeds Threshold" : "Within Limits"}
+                  </Chip>
+                </div>
+              </div>
+
+              {directorLoanCompliance.sapRequired && (
+                <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 p-3">
+                  <p className="text-sm font-medium text-red-800 dark:text-red-300">
+                    Shareholder Approval Process (SAP) required under s.239 Companies Act 2014
+                  </p>
+                </div>
+              )}
+
+              {/* Loans table */}
+              {directorLoanCompliance.loans.length > 0 && (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-200 dark:border-neutral-700">
+                        <th className="text-left py-2 px-2 text-xs font-medium text-gray-500 dark:text-gray-400">Director</th>
+                        <th className="text-right py-2 px-2 text-xs font-medium text-gray-500 dark:text-gray-400">Opening</th>
+                        <th className="text-right py-2 px-2 text-xs font-medium text-gray-500 dark:text-gray-400">Max During Year</th>
+                        <th className="text-right py-2 px-2 text-xs font-medium text-gray-500 dark:text-gray-400">Closing</th>
+                        <th className="text-right py-2 px-2 text-xs font-medium text-gray-500 dark:text-gray-400">Interest</th>
+                        <th className="text-center py-2 px-2 text-xs font-medium text-gray-500 dark:text-gray-400">Documented</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {directorLoanCompliance.loans.map((loan) => (
+                        <tr key={loan.id} className="border-b border-gray-100 dark:border-neutral-800">
+                          <td className="py-2 px-2 text-gray-900 dark:text-gray-100">{loan.directorName}</td>
+                          <td className="py-2 px-2 text-right text-gray-900 dark:text-gray-100">{formatCurrency(loan.openingBalance)}</td>
+                          <td className="py-2 px-2 text-right text-gray-900 dark:text-gray-100">{formatCurrency(loan.maxDuringYear)}</td>
+                          <td className="py-2 px-2 text-right text-gray-900 dark:text-gray-100">{formatCurrency(loan.closingBalance)}</td>
+                          <td className="py-2 px-2 text-right text-gray-900 dark:text-gray-100">{formatCurrency(loan.interestCharged)}</td>
+                          <td className="py-2 px-2 text-center">
+                            <Chip variant="soft" size="sm" color={loan.isDocumented ? "success" : "warning"}>
+                              {loan.isDocumented ? "Yes" : "No"}
+                            </Chip>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="rounded-lg bg-gray-50 dark:bg-neutral-800 p-4 text-center">
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                No director loan compliance data available. Add director loans in Company Setup first.
+              </p>
+            </div>
+          )}
+        </Section>
+
+        {/* 10. Post-Balance Sheet Events */}
+        <Section
+          title="Post-Balance Sheet Events"
+          subtitle="Has anything significant happened between year-end and today?"
+          icon={CalendarCheck}
+          completed={postBsEvents.length > 0}
+        >
+          {postBsEvents.length > 0 && (
+            <div className="space-y-2 mb-4">
+              {postBsEvents.map((evt) => (
+                <div
+                  key={evt.id}
+                  className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-neutral-700 px-4 py-3 dark:bg-neutral-800/50"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{evt.description}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-xs text-gray-400 dark:text-gray-500">
+                        {new Date(evt.eventDate).toLocaleDateString("en-IE")}
+                      </span>
+                      <Chip variant="soft" size="sm" color={evt.isAdjusting ? "warning" : "default"}>
+                        {evt.isAdjusting ? "Adjusting" : "Non-adjusting"}
+                      </Chip>
+                      {evt.financialImpact != null && evt.financialImpact !== 0 && (
+                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                          Impact: {formatCurrency(evt.financialImpact)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => evt.id && handleDeletePbse(evt.id)}
+                    className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400"
+                    aria-label={`Delete event ${evt.description}`}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="grid grid-cols-12 gap-3 items-end">
+            <div className="col-span-4">
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Description</label>
+              <input
+                type="text"
+                className={inputClass}
+                placeholder="e.g. Major contract signed"
+                value={newPbseDesc}
+                onChange={(e) => setNewPbseDesc(e.target.value)}
+                aria-label="Event description"
+              />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Date</label>
+              <input
+                type="date"
+                className={inputClass}
+                value={newPbseDate}
+                onChange={(e) => setNewPbseDate(e.target.value)}
+                aria-label="Event date"
+              />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Financial Impact</label>
+              <input
+                type="number"
+                className={inputClass}
+                placeholder="0.00"
+                value={newPbseImpact || ""}
+                onChange={(e) => setNewPbseImpact(Number(e.target.value))}
+                aria-label="Financial impact"
+              />
+            </div>
+            <div className="col-span-2 flex items-center gap-2 pb-2">
+              <input
+                type="checkbox"
+                id="pbse-adjusting"
+                checked={newPbseAdjusting}
+                onChange={(e) => setNewPbseAdjusting(e.target.checked)}
+                className="rounded border-gray-300 dark:border-neutral-600 text-emerald-600 focus:ring-emerald-500"
+              />
+              <label htmlFor="pbse-adjusting" className="text-xs font-medium text-gray-600 dark:text-gray-400">Adjusting</label>
+            </div>
+            <div className="col-span-2">
+              <Button
+                variant="primary"
+                size="sm"
+                onPress={handleAddPbse}
+                isDisabled={savingSection === "pbse"}
+                className="w-full"
+              >
+                {savingSection === "pbse" ? <Spinner size="sm" /> : <><Plus className="w-4 h-4 mr-1" /> Add</>}
+              </Button>
+            </div>
+          </div>
+        </Section>
+
+        {/* 11. Related Party Transactions */}
+        <Section
+          title="Related Party Transactions"
+          subtitle="Were there any transactions with directors, connected persons, or group companies?"
+          icon={Users}
+          completed={relatedParties.length > 0}
+        >
+          {relatedParties.length > 0 && (
+            <div className="space-y-2 mb-4">
+              {relatedParties.map((rpt) => (
+                <div
+                  key={rpt.id}
+                  className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-neutral-700 px-4 py-3 dark:bg-neutral-800/50"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{rpt.partyName}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <Chip variant="soft" size="sm" color="default">{rpt.relationship}</Chip>
+                      <Chip variant="soft" size="sm" color="default">{rpt.transactionType}</Chip>
+                      {rpt.balanceOwed != null && rpt.balanceOwed !== 0 && (
+                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                          Balance owed: {formatCurrency(rpt.balanceOwed)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                      {formatCurrency(rpt.amount)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => rpt.id && handleDeleteRpt(rpt.id)}
+                      className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400"
+                      aria-label={`Delete transaction with ${rpt.partyName}`}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="grid grid-cols-12 gap-3 items-end">
+            <div className="col-span-3">
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Party Name</label>
+              <input
+                type="text"
+                className={inputClass}
+                placeholder="e.g. John Smith"
+                value={newRptName}
+                onChange={(e) => setNewRptName(e.target.value)}
+                aria-label="Party name"
+              />
+            </div>
+            <div className="col-span-3">
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Relationship</label>
+              <select
+                className={selectClass}
+                value={newRptRelationship}
+                onChange={(e) => setNewRptRelationship(e.target.value)}
+                title="Relationship"
+                aria-label="Relationship"
+              >
+                <option value="Director">Director</option>
+                <option value="Connected Person">Connected Person</option>
+                <option value="Group Company">Group Company</option>
+                <option value="Key Management">Key Management</option>
+              </select>
+            </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Type</label>
+              <select
+                className={selectClass}
+                value={newRptType}
+                onChange={(e) => setNewRptType(e.target.value)}
+                title="Transaction type"
+                aria-label="Transaction type"
+              >
+                <option value="Sale">Sale</option>
+                <option value="Purchase">Purchase</option>
+                <option value="Loan">Loan</option>
+                <option value="Management Fee">Management Fee</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Amount</label>
+              <input
+                type="number"
+                className={inputClass}
+                placeholder="0.00"
+                value={newRptAmount || ""}
+                onChange={(e) => setNewRptAmount(Number(e.target.value))}
+                aria-label="Transaction amount"
+              />
+            </div>
+            <div className="col-span-2">
+              <Button
+                variant="primary"
+                size="sm"
+                onPress={handleAddRpt}
+                isDisabled={savingSection === "rpt"}
+                className="w-full"
+              >
+                {savingSection === "rpt" ? <Spinner size="sm" /> : <><Plus className="w-4 h-4 mr-1" /> Add</>}
+              </Button>
+            </div>
+          </div>
+        </Section>
+
+        {/* 12. Contingent Liabilities */}
+        <Section
+          title="Contingent Liabilities"
+          subtitle="Are there any potential liabilities that depend on the outcome of uncertain future events?"
+          icon={ShieldAlert}
+          completed={contingencies.length > 0}
+        >
+          {contingencies.length > 0 && (
+            <div className="space-y-2 mb-4">
+              {contingencies.map((cl) => (
+                <div
+                  key={cl.id}
+                  className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-neutral-700 px-4 py-3 dark:bg-neutral-800/50"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{cl.description}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <Chip variant="soft" size="sm" color="default">{cl.nature}</Chip>
+                      <Chip
+                        variant="soft"
+                        size="sm"
+                        color={cl.likelihood === "Probable" ? "danger" : cl.likelihood === "Possible" ? "warning" : "success"}
+                      >
+                        {cl.likelihood}
+                      </Chip>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {cl.estimatedAmount != null && cl.estimatedAmount !== 0 && (
+                      <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                        {formatCurrency(cl.estimatedAmount)}
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => cl.id && handleDeleteContingency(cl.id)}
+                      className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400"
+                      aria-label={`Delete contingency ${cl.description}`}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="grid grid-cols-12 gap-3 items-end">
+            <div className="col-span-4">
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Description</label>
+              <input
+                type="text"
+                className={inputClass}
+                placeholder="e.g. Pending legal claim"
+                value={newClDesc}
+                onChange={(e) => setNewClDesc(e.target.value)}
+                aria-label="Contingency description"
+              />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Nature</label>
+              <select
+                className={selectClass}
+                value={newClNature}
+                onChange={(e) => setNewClNature(e.target.value)}
+                title="Nature"
+                aria-label="Contingency nature"
+              >
+                <option value="Guarantee">Guarantee</option>
+                <option value="Legal Claim">Legal Claim</option>
+                <option value="Warranty">Warranty</option>
+                <option value="Environmental">Environmental</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Est. Amount</label>
+              <input
+                type="number"
+                className={inputClass}
+                placeholder="0.00"
+                value={newClAmount || ""}
+                onChange={(e) => setNewClAmount(Number(e.target.value))}
+                aria-label="Estimated amount"
+              />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Likelihood</label>
+              <select
+                className={selectClass}
+                value={newClLikelihood}
+                onChange={(e) => setNewClLikelihood(e.target.value)}
+                title="Likelihood"
+                aria-label="Contingency likelihood"
+              >
+                <option value="Probable">Probable</option>
+                <option value="Possible">Possible</option>
+                <option value="Remote">Remote</option>
+              </select>
+            </div>
+            <div className="col-span-2">
+              <Button
+                variant="primary"
+                size="sm"
+                onPress={handleAddContingency}
+                isDisabled={savingSection === "contingency"}
+                className="w-full"
+              >
+                {savingSection === "contingency" ? <Spinner size="sm" /> : <><Plus className="w-4 h-4 mr-1" /> Add</>}
+              </Button>
+            </div>
+          </div>
+        </Section>
+
+        {/* 13. Going Concern */}
+        <Section
+          title="Going Concern"
+          subtitle="Do the directors confirm the company will continue in business for at least 12 months?"
+          icon={HeartPulse}
           completed={true}
         >
-          <div className="rounded-lg bg-gray-50 dark:bg-neutral-800 p-4 text-center">
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              Director loan balances are managed in Company Setup. Any existing director loans will be reflected in the year-end summary automatically.
-            </p>
+          <div className="space-y-4">
+            {!goingConcernConfirmed && (
+              <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 p-3">
+                <p className="text-sm font-medium text-red-800 dark:text-red-300">
+                  Warning: Going concern is not confirmed. Material uncertainty disclosures will be required in the financial statements.
+                </p>
+              </div>
+            )}
+
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                id="going-concern-confirmed"
+                checked={goingConcernConfirmed}
+                onChange={(e) => setGoingConcernConfirmed(e.target.checked)}
+                className="rounded border-gray-300 dark:border-neutral-600 text-emerald-600 focus:ring-emerald-500 w-5 h-5"
+              />
+              <label htmlFor="going-concern-confirmed" className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                The directors confirm the company is a going concern
+              </label>
+            </div>
+
+            {!goingConcernConfirmed && (
+              <div>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                  Material uncertainty / going concern note
+                </label>
+                <textarea
+                  className={inputClass + " min-h-[100px]"}
+                  placeholder="Describe the material uncertainties that cast significant doubt on the company's ability to continue as a going concern..."
+                  value={goingConcernNote}
+                  onChange={(e) => setGoingConcernNote(e.target.value)}
+                  aria-label="Going concern note"
+                />
+              </div>
+            )}
+
+            <div className="flex justify-end">
+              <Button
+                variant="primary"
+                size="sm"
+                onPress={handleSaveGoingConcern}
+                isDisabled={savingSection === "goingConcern"}
+              >
+                {savingSection === "goingConcern" ? <Spinner size="sm" /> : "Save Going Concern"}
+              </Button>
+            </div>
           </div>
         </Section>
       </div>

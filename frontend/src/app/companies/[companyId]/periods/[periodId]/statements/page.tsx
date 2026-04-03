@@ -22,6 +22,9 @@ import {
   BarChart3,
   Scale,
   Printer,
+  DollarSign,
+  TrendingUp,
+  Users,
 } from "lucide-react";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { PeriodWorkspaceSkeleton } from "@/components/Skeleton";
@@ -32,12 +35,18 @@ import {
   getProfitAndLoss,
   getBalanceSheet,
   getTaxComputation,
+  getCashFlowStatement,
+  getEquityChanges,
+  getDirectorsReportData,
   type Company,
   type AccountingPeriod,
   type TrialBalanceLine,
   type ProfitAndLoss,
   type BalanceSheet,
   type TaxComputation,
+  type CashFlowStatement,
+  type EquityChanges,
+  type DirectorsReportData,
 } from "@/lib/api";
 
 /** Format a number as EUR accounting style: negative in parentheses */
@@ -66,6 +75,9 @@ export default function StatementsPage({
   const [pnl, setPnl] = useState<ProfitAndLoss | null>(null);
   const [bs, setBs] = useState<BalanceSheet | null>(null);
   const [tax, setTax] = useState<TaxComputation | null>(null);
+  const [cashFlow, setCashFlow] = useState<CashFlowStatement | null>(null);
+  const [equity, setEquity] = useState<EquityChanges | null>(null);
+  const [directorsReport, setDirectorsReport] = useState<DirectorsReportData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -86,12 +98,18 @@ export default function StatementsPage({
         getProfitAndLoss(cId, pId),
         getBalanceSheet(cId, pId),
         getTaxComputation(cId, pId),
+        getCashFlowStatement(cId, pId),
+        getEquityChanges(cId, pId),
+        getDirectorsReportData(cId, pId),
       ]);
 
       if (results[0].status === "fulfilled") setTrialBalance(results[0].value);
       if (results[1].status === "fulfilled") setPnl(results[1].value);
       if (results[2].status === "fulfilled") setBs(results[2].value);
       if (results[3].status === "fulfilled") setTax(results[3].value);
+      if (results[4].status === "fulfilled") setCashFlow(results[4].value);
+      if (results[5].status === "fulfilled") setEquity(results[5].value);
+      if (results[6].status === "fulfilled") setDirectorsReport(results[6].value);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load data");
     } finally {
@@ -171,7 +189,7 @@ export default function StatementsPage({
       <TabsRoot>
         <TabList
           aria-label="Financial statements tabs"
-          className="flex gap-1 border-b border-gray-200 dark:border-neutral-700 mb-6 no-print"
+          className="flex gap-1 border-b border-gray-200 dark:border-neutral-700 mb-6 no-print overflow-x-auto"
         >
           <Tab
             id="trial-balance"
@@ -200,6 +218,27 @@ export default function StatementsPage({
           >
             <Calculator className="w-4 h-4 inline mr-1.5 -mt-0.5" />
             Tax Computation
+          </Tab>
+          <Tab
+            id="cash-flow"
+            className="px-4 py-2.5 text-sm font-medium text-gray-600 dark:text-gray-400 border-b-2 border-transparent data-[selected]:border-emerald-600 data-[selected]:text-emerald-700 dark:data-[selected]:text-emerald-400 cursor-pointer outline-none"
+          >
+            <DollarSign className="w-4 h-4 inline mr-1.5 -mt-0.5" />
+            Cash Flow
+          </Tab>
+          <Tab
+            id="equity-changes"
+            className="px-4 py-2.5 text-sm font-medium text-gray-600 dark:text-gray-400 border-b-2 border-transparent data-[selected]:border-emerald-600 data-[selected]:text-emerald-700 dark:data-[selected]:text-emerald-400 cursor-pointer outline-none"
+          >
+            <TrendingUp className="w-4 h-4 inline mr-1.5 -mt-0.5" />
+            Equity Changes
+          </Tab>
+          <Tab
+            id="directors-report"
+            className="px-4 py-2.5 text-sm font-medium text-gray-600 dark:text-gray-400 border-b-2 border-transparent data-[selected]:border-emerald-600 data-[selected]:text-emerald-700 dark:data-[selected]:text-emerald-400 cursor-pointer outline-none"
+          >
+            <Users className="w-4 h-4 inline mr-1.5 -mt-0.5" />
+            Directors&apos; Report
           </Tab>
         </TabList>
 
@@ -670,6 +709,238 @@ export default function StatementsPage({
                 </div>
               ) : (
                 <EmptyState message="Tax computation data is not available yet." />
+              )}
+            </Card.Content>
+          </Card>
+        </TabPanel>
+
+        {/* Cash Flow Tab */}
+        <TabPanel id="cash-flow">
+          <Card className="shadow-sm border border-gray-200 dark:border-neutral-700">
+            <Card.Header>
+              <Card.Title>Cash Flow Statement</Card.Title>
+              <Card.Description>
+                Cash flows for the period
+              </Card.Description>
+            </Card.Header>
+            <Card.Content>
+              {cashFlow ? (
+                <div className="max-w-lg mx-auto space-y-1">
+                  <StatementRow label="Operating Profit" amount={cashFlow.operatingProfit} bold />
+                  {cashFlow.operatingAdjustments.map((adj, idx) => (
+                    <StatementRow key={idx} label={`  ${adj.description}`} amount={adj.amount} indent />
+                  ))}
+                  <Divider />
+                  <StatementRow label="Cash Generated from Operations" amount={cashFlow.cashFromOperations} bold highlight />
+                  <StatementRow label="Tax Paid" amount={-Math.abs(cashFlow.taxPaid)} />
+                  <Divider />
+                  <StatementRow label="Net Cash from Operating Activities" amount={cashFlow.netCashFromOperating} bold highlight />
+
+                  <Divider />
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide pt-2 pb-1">
+                    Investing Activities
+                  </p>
+                  <StatementRow label="Capital Expenditure (Purchases)" amount={-Math.abs(cashFlow.capitalExpenditurePurchases)} indent />
+                  <StatementRow label="Disposal Proceeds" amount={cashFlow.capitalExpenditureDisposals} indent />
+                  <Divider />
+                  <StatementRow label="Net Cash from Investing Activities" amount={cashFlow.netCashFromInvesting} bold />
+
+                  <Divider />
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide pt-2 pb-1">
+                    Financing Activities
+                  </p>
+                  <StatementRow label="Loan Repayments" amount={-Math.abs(cashFlow.loanRepayments)} indent />
+                  <StatementRow label="Loan Drawdowns" amount={cashFlow.loanDrawdowns} indent />
+                  <StatementRow label="Dividends Paid" amount={-Math.abs(cashFlow.dividendsPaid)} indent />
+                  <Divider />
+                  <StatementRow label="Net Cash from Financing Activities" amount={cashFlow.netCashFromFinancing} bold />
+
+                  <Divider double />
+                  <StatementRow label="Net Increase / (Decrease) in Cash" amount={cashFlow.netIncreaseInCash} bold highlight />
+                  <StatementRow label="Opening Cash" amount={cashFlow.openingCash} />
+                  <Divider double />
+                  <StatementRow label="Closing Cash" amount={cashFlow.closingCash} bold highlight />
+                </div>
+              ) : (
+                <EmptyState message="Cash flow data is not available yet." />
+              )}
+            </Card.Content>
+          </Card>
+        </TabPanel>
+
+        {/* Equity Changes Tab */}
+        <TabPanel id="equity-changes">
+          <Card className="shadow-sm border border-gray-200 dark:border-neutral-700">
+            <Card.Header>
+              <Card.Title>Statement of Changes in Equity</Card.Title>
+              <Card.Description>
+                Movements in shareholders&apos; funds for the period
+              </Card.Description>
+            </Card.Header>
+            <Card.Content>
+              {equity ? (
+                <div className="overflow-x-auto -mx-1">
+                  <table className="w-full text-sm border border-gray-200 dark:border-neutral-700 rounded-lg overflow-hidden" role="table">
+                    <caption className="sr-only">Statement of Changes in Equity</caption>
+                    <thead>
+                      <tr className="bg-gray-50 dark:bg-neutral-800 border-b border-gray-200 dark:border-neutral-700 text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                        <th scope="col" className="text-left px-4 py-2.5 w-[40%]"></th>
+                        <th scope="col" className="text-right px-4 py-2.5 w-[20%]">Share Capital</th>
+                        <th scope="col" className="text-right px-4 py-2.5 w-[20%]">Retained Earnings</th>
+                        <th scope="col" className="text-right px-4 py-2.5 w-[20%]">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="border-b border-gray-100 dark:border-neutral-800">
+                        <td className="px-4 py-2.5 font-semibold text-gray-900 dark:text-gray-100">Opening Balance</td>
+                        <td className="px-4 py-2.5 text-right font-mono text-gray-900 dark:text-gray-100">{eur(equity.openingShareCapital)}</td>
+                        <td className="px-4 py-2.5 text-right font-mono text-gray-900 dark:text-gray-100">{eur(equity.openingRetainedEarnings)}</td>
+                        <td className="px-4 py-2.5 text-right font-mono font-semibold text-gray-900 dark:text-gray-100">{eur(equity.openingTotal)}</td>
+                      </tr>
+                      <tr className="border-b border-gray-100 dark:border-neutral-800">
+                        <td className="px-4 py-2.5 text-gray-700 dark:text-gray-300">Profit for the Year</td>
+                        <td className="px-4 py-2.5 text-right font-mono text-gray-400 dark:text-gray-500">&mdash;</td>
+                        <td className="px-4 py-2.5 text-right font-mono text-gray-900 dark:text-gray-100">{eur(equity.profitForYear)}</td>
+                        <td className="px-4 py-2.5 text-right font-mono text-gray-900 dark:text-gray-100">{eur(equity.profitForYear)}</td>
+                      </tr>
+                      <tr className="border-b border-gray-100 dark:border-neutral-800">
+                        <td className="px-4 py-2.5 text-gray-700 dark:text-gray-300">Dividends Paid</td>
+                        <td className="px-4 py-2.5 text-right font-mono text-gray-400 dark:text-gray-500">&mdash;</td>
+                        <td className="px-4 py-2.5 text-right font-mono text-red-700 dark:text-red-400">{equity.dividendsPaid !== 0 ? eur(-Math.abs(equity.dividendsPaid)) : eur(0)}</td>
+                        <td className="px-4 py-2.5 text-right font-mono text-red-700 dark:text-red-400">{equity.dividendsPaid !== 0 ? eur(-Math.abs(equity.dividendsPaid)) : eur(0)}</td>
+                      </tr>
+                      {equity.sharesIssued !== 0 && (
+                        <tr className="border-b border-gray-100 dark:border-neutral-800">
+                          <td className="px-4 py-2.5 text-gray-700 dark:text-gray-300">Shares Issued</td>
+                          <td className="px-4 py-2.5 text-right font-mono text-gray-900 dark:text-gray-100">{eur(equity.sharesIssued)}</td>
+                          <td className="px-4 py-2.5 text-right font-mono text-gray-400 dark:text-gray-500">&mdash;</td>
+                          <td className="px-4 py-2.5 text-right font-mono text-gray-900 dark:text-gray-100">{eur(equity.sharesIssued)}</td>
+                        </tr>
+                      )}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-gray-100 dark:bg-neutral-800 border-t-2 border-gray-300 dark:border-neutral-600 font-bold">
+                        <td className="px-4 py-3 text-gray-900 dark:text-gray-100">Closing Balance</td>
+                        <td className="px-4 py-3 text-right font-mono text-gray-900 dark:text-gray-100">{eur(equity.closingShareCapital)}</td>
+                        <td className="px-4 py-3 text-right font-mono text-gray-900 dark:text-gray-100">{eur(equity.closingRetainedEarnings)}</td>
+                        <td className="px-4 py-3 text-right font-mono text-gray-900 dark:text-gray-100">{eur(equity.closingTotal)}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              ) : (
+                <EmptyState message="Equity changes data is not available yet." />
+              )}
+            </Card.Content>
+          </Card>
+        </TabPanel>
+
+        {/* Directors' Report Tab */}
+        <TabPanel id="directors-report">
+          <Card className="shadow-sm border border-gray-200 dark:border-neutral-700">
+            <Card.Header>
+              <Card.Title>Directors&apos; Report</Card.Title>
+              <Card.Description>
+                Report of the directors for the period
+              </Card.Description>
+            </Card.Header>
+            <Card.Content>
+              {directorsReport ? (
+                <div className="max-w-2xl mx-auto space-y-6">
+                  {/* Header */}
+                  <div className="text-center pb-4 border-b border-gray-200 dark:border-neutral-700">
+                    <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                      {directorsReport.companyName}
+                    </h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                      Directors&apos; Report for the period{" "}
+                      {new Date(directorsReport.periodStart).toLocaleDateString("en-IE")} to{" "}
+                      {new Date(directorsReport.periodEnd).toLocaleDateString("en-IE")}
+                    </p>
+                  </div>
+
+                  {/* Regime indicators */}
+                  <div className="flex flex-wrap gap-2">
+                    <Chip size="sm" variant="soft" color="default">{directorsReport.electedRegime}</Chip>
+                    {directorsReport.isMicroExempt && (
+                      <Chip size="sm" variant="soft" color="success">Micro Exempt (s.280D)</Chip>
+                    )}
+                    {directorsReport.isSmallExemptFromBusinessReview && (
+                      <Chip size="sm" variant="soft" color="success">Small Company Exempt from Business Review</Chip>
+                    )}
+                  </div>
+
+                  {/* Directors */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">Directors</h3>
+                    <ul className="list-disc list-inside space-y-1">
+                      {directorsReport.directorNames.map((name, idx) => (
+                        <li key={idx} className="text-sm text-gray-700 dark:text-gray-300">{name}</li>
+                      ))}
+                    </ul>
+                    {directorsReport.secretaryName && (
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+                        Company Secretary: {directorsReport.secretaryName}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Principal Activities */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">Principal Activities</h3>
+                    <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                      {directorsReport.principalActivities}
+                    </p>
+                  </div>
+
+                  {/* Results and Dividends */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">Results and Dividends</h3>
+                    <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                      {directorsReport.resultsAndDividends}
+                    </p>
+                  </div>
+
+                  {/* Accounting Records */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">Accounting Records</h3>
+                    <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                      {directorsReport.accountingRecordsStatement}
+                    </p>
+                  </div>
+
+                  {/* Post Balance Sheet Events */}
+                  {directorsReport.postBalanceSheetEvents && (
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">Post Balance Sheet Events</h3>
+                      <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                        {directorsReport.postBalanceSheetEvents}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Going Concern */}
+                  {directorsReport.goingConcernStatement && (
+                    <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-4 py-3">
+                      <h3 className="text-sm font-semibold text-amber-800 dark:text-amber-300 mb-1">Going Concern</h3>
+                      <p className="text-sm text-amber-700 dark:text-amber-400 whitespace-pre-wrap">
+                        {directorsReport.goingConcernStatement}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Audit Information */}
+                  {directorsReport.auditInformationStatement && (
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">Audit Information</h3>
+                      <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                        {directorsReport.auditInformationStatement}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <EmptyState message="Directors' report data is not available yet." />
               )}
             </Card.Content>
           </Card>

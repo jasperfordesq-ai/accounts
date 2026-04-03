@@ -22,18 +22,34 @@ import {
   Search,
   X,
 } from "lucide-react";
-import { getCompanies, type Company } from "@/lib/api";
+import { getCompanies, getUpcomingDeadline, type Company, type FilingDeadline } from "@/lib/api";
 import { DashboardSkeleton } from "@/components/Skeleton";
 
 export default function Dashboard() {
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [deadlines, setDeadlines] = useState<Record<number, FilingDeadline | null>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
   useEffect(() => {
     getCompanies()
-      .then(setCompanies)
+      .then(async (data) => {
+        setCompanies(data);
+        // Fetch upcoming deadlines for each company
+        const deadlineMap: Record<number, FilingDeadline | null> = {};
+        await Promise.all(
+          data.map(async (c) => {
+            try {
+              const d = await getUpcomingDeadline(c.id);
+              deadlineMap[c.id] = d && "dueDate" in d ? (d as FilingDeadline) : null;
+            } catch {
+              deadlineMap[c.id] = null;
+            }
+          })
+        );
+        setDeadlines(deadlineMap);
+      })
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load companies"))
       .finally(() => setLoading(false));
   }, []);
@@ -268,6 +284,23 @@ export default function Dashboard() {
                       <Chip size="sm" variant="soft" color="accent">
                         <FileText className="w-3 h-3" />
                         {company.periodCount} period{company.periodCount !== 1 ? "s" : ""}
+                      </Chip>
+                    )}
+                    {deadlines[company.id] && (
+                      <Chip
+                        size="sm"
+                        variant="soft"
+                        color={
+                          new Date(deadlines[company.id]!.dueDate) < new Date()
+                            ? "danger"
+                            : new Date(deadlines[company.id]!.dueDate) < new Date(Date.now() + 30 * 86400000)
+                              ? "warning"
+                              : "default"
+                        }
+                      >
+                        <Clock className="w-3 h-3" />
+                        {deadlines[company.id]!.deadlineType} due{" "}
+                        {new Date(deadlines[company.id]!.dueDate).toLocaleDateString("en-IE")}
                       </Chip>
                     )}
                   </div>

@@ -30,6 +30,7 @@ import {
   Scale,
   ClipboardList,
   Eye,
+  Shield,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -49,6 +50,9 @@ import {
   generateAdjustments,
   approveAdjustment,
   uploadBankCsv,
+  getFilingWorkflowStatus,
+  validateIxbrl,
+  calculateDeadlines,
   type Company,
   type AccountingPeriod,
   type YearEndSummary,
@@ -57,6 +61,7 @@ import {
   type ImportedTransaction,
   type Adjustment,
   type AdjustmentSummary,
+  type FilingWorkflowStatus,
 } from "@/lib/api";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { PeriodWorkspaceSkeleton } from "@/components/Skeleton";
@@ -82,9 +87,11 @@ export default function PeriodWorkspacePage({
   const [yearEnd, setYearEnd] = useState<YearEndSummary | null>(null);
   const [readiness, setReadiness] = useState<ReadinessScore | null>(null);
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
+  const [filingStatus, setFilingStatus] = useState<FilingWorkflowStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [generatingAdj, setGeneratingAdj] = useState(false);
+  const [validatingIxbrl, setValidatingIxbrl] = useState(false);
 
   // Import tab state
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -137,6 +144,17 @@ export default function PeriodWorkspacePage({
         setReadiness(readinessData);
       } catch {
         // Readiness data may not be available yet
+      }
+      try {
+        const fs = await getFilingWorkflowStatus(cId, pId);
+        setFilingStatus(fs);
+      } catch {
+        // Filing status may not be available yet
+      }
+      try {
+        await calculateDeadlines(cId, pId);
+      } catch {
+        // Deadline calculation may not be available yet
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load data");
@@ -1026,6 +1044,112 @@ export default function PeriodWorkspacePage({
         {/* Filing Tab */}
         <TabPanel id="filing">
           <div className="space-y-6">
+            {/* Filing Workflow Status */}
+            <Card className="shadow-sm border border-gray-200 dark:border-neutral-700">
+              <Card.Header>
+                <Card.Title className="text-gray-900 dark:text-gray-100">
+                  <Shield className="w-4 h-4 inline mr-1.5 -mt-0.5" />
+                  Filing Workflow Status
+                </Card.Title>
+                <Card.Description>CRO and Revenue filing readiness</Card.Description>
+              </Card.Header>
+              <Card.Content>
+                {filingStatus ? (
+                  <div className="space-y-4">
+                    {/* Ready / Not Ready Banner */}
+                    {filingStatus.readyToFile ? (
+                      <div className="rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 px-4 py-3 flex items-center gap-2">
+                        <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                        <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Ready to File</span>
+                      </div>
+                    ) : (
+                      <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-4 py-3 flex items-center gap-2">
+                        <AlertTriangle className="w-5 h-5 text-red-500" />
+                        <span className="text-sm font-medium text-red-700 dark:text-red-400">Not Ready to File</span>
+                      </div>
+                    )}
+
+                    {/* Status Badges */}
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">CRO:</span>
+                        <Chip size="sm" variant="soft" color={
+                          filingStatus.cro.status === "Filed" ? "success" :
+                          filingStatus.cro.status === "Rejected" ? "danger" :
+                          filingStatus.cro.status === "Submitted" ? "accent" : "warning"
+                        }>
+                          {filingStatus.cro.status}
+                        </Chip>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Revenue:</span>
+                        <Chip size="sm" variant="soft" color={
+                          filingStatus.revenue.status === "Filed" ? "success" :
+                          filingStatus.revenue.status === "Rejected" ? "danger" :
+                          filingStatus.revenue.status === "Submitted" ? "accent" : "warning"
+                        }>
+                          {filingStatus.revenue.status}
+                        </Chip>
+                      </div>
+                    </div>
+
+                    {/* Blocking Issues */}
+                    {filingStatus.blockingIssues.length > 0 && (
+                      <div>
+                        <h4 className="text-sm font-medium text-red-700 dark:text-red-400 mb-2">Blocking Issues</h4>
+                        <ul className="space-y-1.5">
+                          {filingStatus.blockingIssues.map((issue, i) => (
+                            <li key={i} className="flex items-start gap-2 text-sm text-red-700 dark:text-red-400">
+                              <span className="w-1.5 h-1.5 rounded-full bg-red-400 mt-1.5 shrink-0" />{issue}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Validate iXBRL Button */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      isDisabled={validatingIxbrl}
+                      onPress={async () => {
+                        setValidatingIxbrl(true);
+                        try {
+                          const result = await validateIxbrl(cId, pId);
+                          if (result.ixbrlValid) {
+                            toast.success("iXBRL validation passed");
+                          } else {
+                            toast.error(result.validationErrors || "iXBRL validation failed");
+                          }
+                          // Refresh filing status
+                          try {
+                            const fs = await getFilingWorkflowStatus(cId, pId);
+                            setFilingStatus(fs);
+                          } catch {}
+                        } catch (err) {
+                          toast.error(err instanceof Error ? err.message : "iXBRL validation failed");
+                        } finally {
+                          setValidatingIxbrl(false);
+                        }
+                      }}
+                    >
+                      {validatingIxbrl ? (
+                        <><Spinner size="sm" className="mr-2" />Validating...</>
+                      ) : (
+                        <><FileText className="w-4 h-4 mr-1" />Validate iXBRL</>
+                      )}
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <Shield className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Filing status is not available yet.</p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Complete the statements and generate documents first.</p>
+                  </div>
+                )}
+              </Card.Content>
+            </Card>
+
             <Card className="shadow-sm border border-gray-200 dark:border-neutral-700">
               <Card.Header>
                 <Card.Title className="text-gray-900 dark:text-gray-100">Download Documents</Card.Title>
