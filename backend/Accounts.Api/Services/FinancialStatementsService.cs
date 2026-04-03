@@ -45,6 +45,40 @@ public class FinancialStatementsService(AccountsDbContext db)
     public record CreditorsAfterYearSection(decimal Loans, decimal Other, decimal Total);
     public record CapitalSection(decimal ShareCapital, decimal RetainedEarnings, decimal Total);
 
+    // Cash Flow Statement
+    public record CashFlowStatement(
+        decimal OperatingProfit,
+        List<CashFlowAdjustment> OperatingAdjustments,
+        decimal CashFromOperations,
+        decimal TaxPaid,
+        decimal NetCashFromOperating,
+        decimal CapitalExpenditurePurchases,
+        decimal CapitalExpenditureDisposals,
+        decimal NetCashFromInvesting,
+        decimal LoanRepayments,
+        decimal LoanDrawdowns,
+        decimal DividendsPaid,
+        decimal NetCashFromFinancing,
+        decimal NetIncreaseInCash,
+        decimal OpeningCash,
+        decimal ClosingCash
+    );
+
+    public record CashFlowAdjustment(string Description, decimal Amount);
+
+    // Statement of Changes in Equity
+    public record EquityChanges(
+        decimal OpeningShareCapital,
+        decimal OpeningRetainedEarnings,
+        decimal OpeningTotal,
+        decimal ProfitForYear,
+        decimal DividendsPaid,
+        decimal SharesIssued,
+        decimal ClosingShareCapital,
+        decimal ClosingRetainedEarnings,
+        decimal ClosingTotal
+    );
+
     // Scoring
     public record ReadinessScore(
         int CompletenessPercent,
@@ -329,5 +363,174 @@ public class FinancialStatementsService(AccountsDbContext db)
         var filingReady = missing.Count == 0 && warnings.Count == 0 ? completeness : Math.Max(0, completeness - missing.Count * 10);
 
         return new ReadinessScore(completeness, filingReady, missing.Count == 0, missing, warnings);
+    }
+
+    public async Task<CashFlowStatement> GetCashFlowStatementAsync(int periodId)
+    {
+        var period = await db.AccountingPeriods.Include(p => p.Company).FirstAsync(p => p.Id == periodId);
+        var companyId = period.CompanyId;
+
+        // Operating profit from P&L
+        var pl = await GetProfitAndLossAsync(periodId);
+        var operatingProfit = pl.OperatingProfit;
+
+        var adjustments = new List<CashFlowAdjustment>();
+
+        // Add back depreciation
+        var depreciation = await db.DepreciationEntries
+            .Where(d => d.PeriodId == periodId)
+            .SumAsync(d => d.Charge);
+        if (depreciation != 0)
+            adjustments.Add(new CashFlowAdjustment("Depreciation", depreciation));
+
+        // Working capital: change in debtors (increase = cash outflow, so negate)
+        var debtors = await db.Debtors.Where(d => d.PeriodId == periodId).SumAsync(d => d.Amount);
+        // Try to get prior period debtors
+        var priorPeriod = await db.AccountingPeriods
+            .Where(p => p.CompanyId == companyId && p.PeriodEnd < period.PeriodStart)
+            .OrderByDescending(p => p.PeriodEnd)
+            .FirstOrDefaultAsync();
+        decimal priorDebtors = 0, priorCreditors = 0, priorStock = 0;
+        if (priorPeriod != null)
+        {
+            priorDebtors = await db.Debtors.Where(d => d.PeriodId == priorPeriod.Id).SumAsync(d => d.Amount);
+            priorCreditors = await db.Creditors.Where(c => c.PeriodId == priorPeriod.Id).SumAsync(c => c.Amount);
+            priorStock = await db.Inventories.Where(i => i.PeriodId == priorPeriod.Id).SumAsync(i => i.Value);
+        }
+
+        var debtorChange = debtors - priorDebtors;
+        if (debtorChange != 0)
+            adjustments.Add(new CashFlowAdjustment("(Increase)/decrease in debtors", -debtorChange));
+
+        // Working capital: change in creditors (increase = cash inflow)
+        var creditors = await db.Creditors.Where(c => c.PeriodId == periodId).SumAsync(c => c.Amount);
+        var creditorChange = creditors - priorCreditors;
+        if (creditorChange != 0)
+            adjustments.Add(new CashFlowAdjustment("Increase/(decrease) in creditors", creditorChange));
+
+        // Working capital: change in stock (increase = cash outflow, so negate)
+        var stock = await db.Inventories.Where(i => i.PeriodId == periodId).SumAsync(i => i.Value);
+        var stockChange = stock - priorStock;
+        if (stockChange != 0)
+            adjustments.Add(new CashFlowAdjustment("(Increase)/decrease in stock", -stockChange));
+
+        var totalAdjustments = adjustments.Sum(a => a.Amount);
+        var cashFromOperations = operatingProfit + totalAdjustments;
+
+        // Tax paid
+        var taxPaid = await db.TaxBalances
+            .Where(t => t.PeriodId == periodId && t.TaxType == TaxType.CorporationTax)
+            .Select(t => t.Paid)
+            .FirstOrDefaultAsync();
+        var netCashFromOperating = cashFromOperations - taxPaid;
+
+        // Investing: asset purchases in this period
+        var capexPurchases = await db.FixedAssets
+            .Where(a => a.CompanyId == companyId
+                && a.AcquisitionDate >= period.PeriodStart
+                && a.AcquisitionDate <= period.PeriodEnd)
+            .SumAsync(a => a.Cost);
+
+        // Investing: disposal proceeds in this period
+        var capexDisposals = await db.FixedAssets
+            .Where(a => a.CompanyId == companyId
+                && a.DisposalDate != null
+                && a.DisposalDate >= period.PeriodStart
+                && a.DisposalDate <= period.PeriodEnd)
+            .SumAsync(a => a.DisposalProceeds ?? 0);
+
+        var netCashFromInvesting = capexDisposals - capexPurchases;
+
+        // Financing: loans
+        var loanDrawdowns = await db.Loans.Where(l => l.CompanyId == companyId).SumAsync(l => l.OriginalAmount);
+        var loanRepayments = await db.Loans.Where(l => l.CompanyId == companyId).SumAsync(l => l.OriginalAmount - l.Balance);
+
+        // Financing: dividends paid
+        var dividendsPaid = await db.Dividends
+            .Where(d => d.PeriodId == periodId && d.DatePaid != null)
+            .SumAsync(d => d.Amount);
+
+        var netCashFromFinancing = loanDrawdowns - loanRepayments - dividendsPaid;
+
+        var netIncreaseInCash = netCashFromOperating + netCashFromInvesting + netCashFromFinancing;
+
+        // Opening cash = sum of bank opening balances
+        var bankAccounts = await db.BankAccounts.Where(b => b.CompanyId == companyId).ToListAsync();
+        var openingCash = bankAccounts.Sum(b => b.OpeningBalance);
+        var closingCash = openingCash + netIncreaseInCash;
+
+        return new CashFlowStatement(
+            operatingProfit, adjustments, cashFromOperations, taxPaid, netCashFromOperating,
+            capexPurchases, capexDisposals, netCashFromInvesting,
+            loanRepayments, loanDrawdowns, dividendsPaid, netCashFromFinancing,
+            netIncreaseInCash, openingCash, closingCash
+        );
+    }
+
+    public async Task<EquityChanges> GetEquityChangesAsync(int periodId)
+    {
+        var period = await db.AccountingPeriods.Include(p => p.Company).FirstAsync(p => p.Id == periodId);
+        var companyId = period.CompanyId;
+
+        // Current share capital
+        var closingShareCapital = await db.ShareCapitals
+            .Where(s => s.CompanyId == companyId)
+            .SumAsync(s => s.TotalValue);
+        if (closingShareCapital == 0) closingShareCapital = 1m; // Default nominal
+
+        // Prior period for opening balances
+        var priorPeriod = await db.AccountingPeriods
+            .Where(p => p.CompanyId == companyId && p.PeriodEnd < period.PeriodStart)
+            .OrderByDescending(p => p.PeriodEnd)
+            .FirstOrDefaultAsync();
+
+        decimal openingShareCapital = 0;
+        decimal openingRetainedEarnings = 0;
+        if (priorPeriod != null)
+        {
+            openingShareCapital = await db.ShareCapitals
+                .Where(s => s.CompanyId == companyId)
+                .SumAsync(s => s.TotalValue);
+            if (openingShareCapital == 0) openingShareCapital = 1m;
+
+            // Get prior period balance sheet to extract retained earnings
+            try
+            {
+                var priorBs = await GetBalanceSheetAsync(priorPeriod.Id);
+                openingRetainedEarnings = priorBs.CapitalAndReserves.RetainedEarnings;
+            }
+            catch
+            {
+                openingRetainedEarnings = 0;
+            }
+        }
+        else
+        {
+            // First year — opening share capital is the current capital (issued at incorporation)
+            openingShareCapital = closingShareCapital;
+        }
+
+        var openingTotal = openingShareCapital + openingRetainedEarnings;
+
+        // Profit for the year from P&L
+        var pl = await GetProfitAndLossAsync(periodId);
+        var profitForYear = pl.ProfitAfterTax;
+
+        // Dividends paid in period
+        var dividendsPaid = await db.Dividends
+            .Where(d => d.PeriodId == periodId)
+            .SumAsync(d => d.Amount);
+
+        // Shares issued = difference in share capital
+        var sharesIssued = closingShareCapital - openingShareCapital;
+
+        var closingRetainedEarnings = openingRetainedEarnings + profitForYear - dividendsPaid;
+        var closingTotal = closingShareCapital + closingRetainedEarnings;
+
+        return new EquityChanges(
+            openingShareCapital, openingRetainedEarnings, openingTotal,
+            profitForYear, dividendsPaid, sharesIssued,
+            closingShareCapital, closingRetainedEarnings, closingTotal
+        );
     }
 }

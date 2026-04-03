@@ -810,3 +810,120 @@ export const getCroFilingPackUrl = (companyId: number, periodId: number) =>
   `${API_BASE}/api/companies/${companyId}/periods/${periodId}/documents/cro-filing-pack`;
 export const getSignaturePageUrl = (companyId: number, periodId: number) =>
   `${API_BASE}/api/companies/${companyId}/periods/${periodId}/documents/signature-page`;
+
+// === Phase 2: Interrogation Engine ===
+
+export interface PostBalanceSheetEvent {
+  id?: number;
+  periodId?: number;
+  description: string;
+  eventDate: string;
+  isAdjusting: boolean;
+  financialImpact?: number;
+  actionRequired?: string;
+}
+
+export interface RelatedPartyTransaction {
+  id?: number;
+  periodId?: number;
+  partyName: string;
+  relationship: string;
+  transactionType: string;
+  amount: number;
+  balanceOwed?: number;
+  terms?: string;
+}
+
+export interface ContingentLiability {
+  id?: number;
+  periodId?: number;
+  description: string;
+  nature: string;
+  estimatedAmount?: number;
+  likelihood: string;
+}
+
+export const getPostBalanceSheetEvents = (companyId: number, periodId: number) =>
+  apiFetch<PostBalanceSheetEvent[]>(`/api/companies/${companyId}/periods/${periodId}/post-balance-sheet-events`);
+export const createPostBalanceSheetEvent = (companyId: number, periodId: number, data: PostBalanceSheetEvent) =>
+  apiFetch<PostBalanceSheetEvent>(`/api/companies/${companyId}/periods/${periodId}/post-balance-sheet-events`, { method: "POST", body: JSON.stringify(data) });
+export const deletePostBalanceSheetEvent = (companyId: number, periodId: number, id: number) =>
+  apiFetch<void>(`/api/companies/${companyId}/periods/${periodId}/post-balance-sheet-events/${id}`, { method: "DELETE" });
+
+export const getRelatedPartyTransactions = (companyId: number, periodId: number) =>
+  apiFetch<RelatedPartyTransaction[]>(`/api/companies/${companyId}/periods/${periodId}/related-party-transactions`);
+export const createRelatedPartyTransaction = (companyId: number, periodId: number, data: RelatedPartyTransaction) =>
+  apiFetch<RelatedPartyTransaction>(`/api/companies/${companyId}/periods/${periodId}/related-party-transactions`, { method: "POST", body: JSON.stringify(data) });
+export const deleteRelatedPartyTransaction = (companyId: number, periodId: number, id: number) =>
+  apiFetch<void>(`/api/companies/${companyId}/periods/${periodId}/related-party-transactions/${id}`, { method: "DELETE" });
+
+export const getContingentLiabilities = (companyId: number, periodId: number) =>
+  apiFetch<ContingentLiability[]>(`/api/companies/${companyId}/periods/${periodId}/contingent-liabilities`);
+export const createContingentLiability = (companyId: number, periodId: number, data: ContingentLiability) =>
+  apiFetch<ContingentLiability>(`/api/companies/${companyId}/periods/${periodId}/contingent-liabilities`, { method: "POST", body: JSON.stringify(data) });
+export const deleteContingentLiability = (companyId: number, periodId: number, id: number) =>
+  apiFetch<void>(`/api/companies/${companyId}/periods/${periodId}/contingent-liabilities/${id}`, { method: "DELETE" });
+
+export const getGoingConcern = (companyId: number, periodId: number) =>
+  apiFetch<{ goingConcernConfirmed: boolean; goingConcernNote?: string }>(`/api/companies/${companyId}/periods/${periodId}/going-concern`);
+export const saveGoingConcern = (companyId: number, periodId: number, data: { confirmed: boolean; note?: string }) =>
+  apiFetch<{ goingConcernConfirmed: boolean; goingConcernNote?: string }>(`/api/companies/${companyId}/periods/${periodId}/going-concern`, { method: "PUT", body: JSON.stringify(data) });
+
+// === Phase 3: Cash Flow & Equity Changes ===
+
+export interface CashFlowStatement {
+  operatingProfit: number;
+  operatingAdjustments: { description: string; amount: number }[];
+  cashFromOperations: number;
+  taxPaid: number;
+  netCashFromOperating: number;
+  capitalExpenditurePurchases: number;
+  capitalExpenditureDisposals: number;
+  netCashFromInvesting: number;
+  loanRepayments: number;
+  loanDrawdowns: number;
+  dividendsPaid: number;
+  netCashFromFinancing: number;
+  netIncreaseInCash: number;
+  openingCash: number;
+  closingCash: number;
+}
+
+export interface EquityChanges {
+  openingShareCapital: number;
+  openingRetainedEarnings: number;
+  openingTotal: number;
+  profitForYear: number;
+  dividendsPaid: number;
+  sharesIssued: number;
+  closingShareCapital: number;
+  closingRetainedEarnings: number;
+  closingTotal: number;
+}
+
+export const getCashFlowStatement = (companyId: number, periodId: number) =>
+  apiFetch<CashFlowStatement>(`/api/companies/${companyId}/periods/${periodId}/statements/cash-flow`);
+export const getEquityChanges = (companyId: number, periodId: number) =>
+  apiFetch<EquityChanges>(`/api/companies/${companyId}/periods/${periodId}/statements/equity-changes`);
+
+// === Phase 4: Directors' Report ===
+
+export interface DirectorsReportData {
+  companyName: string;
+  periodStart: string;
+  periodEnd: string;
+  directorNames: string[];
+  secretaryName?: string;
+  principalActivities: string;
+  resultsAndDividends: string;
+  accountingRecordsStatement: string;
+  postBalanceSheetEvents?: string;
+  goingConcernStatement?: string;
+  auditInformationStatement?: string;
+  isMicroExempt: boolean;
+  isSmallExemptFromBusinessReview: boolean;
+  electedRegime: string;
+}
+
+export const getDirectorsReportData = (companyId: number, periodId: number) =>
+  apiFetch<DirectorsReportData>(`/api/companies/${companyId}/periods/${periodId}/documents/directors-report-data`);

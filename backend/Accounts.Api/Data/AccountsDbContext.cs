@@ -51,6 +51,11 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
     public DbSet<FilingDeadline> FilingDeadlines => Set<FilingDeadline>();
     public DbSet<FilingHistory> FilingHistories => Set<FilingHistory>();
 
+    // Interrogation Engine (Phase 2)
+    public DbSet<PostBalanceSheetEvent> PostBalanceSheetEvents => Set<PostBalanceSheetEvent>();
+    public DbSet<RelatedPartyTransaction> RelatedPartyTransactions => Set<RelatedPartyTransaction>();
+    public DbSet<ContingentLiability> ContingentLiabilities => Set<ContingentLiability>();
+
     // Audit
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
@@ -363,6 +368,37 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
             e.HasOne(f => f.Company).WithMany(c => c.FilingHistories).HasForeignKey(f => f.CompanyId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(f => f.Period).WithMany().HasForeignKey(f => f.PeriodId).OnDelete(DeleteBehavior.SetNull);
             e.HasIndex(f => new { f.CompanyId, f.DueDate });
+        });
+
+        // PostBalanceSheetEvent
+        modelBuilder.Entity<PostBalanceSheetEvent>(e =>
+        {
+            e.ToTable("post_balance_sheet_events");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Description).HasMaxLength(1000).IsRequired();
+            e.Property(x => x.FinancialImpact).HasColumnType("decimal(18,2)");
+            e.HasOne(x => x.Period).WithMany(p => p.PostBalanceSheetEvents).HasForeignKey(x => x.PeriodId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // RelatedPartyTransaction
+        modelBuilder.Entity<RelatedPartyTransaction>(e =>
+        {
+            e.ToTable("related_party_transactions");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.PartyName).HasMaxLength(300).IsRequired();
+            e.Property(x => x.Amount).HasColumnType("decimal(18,2)");
+            e.Property(x => x.BalanceOwed).HasColumnType("decimal(18,2)");
+            e.HasOne(x => x.Period).WithMany(p => p.RelatedPartyTransactions).HasForeignKey(x => x.PeriodId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ContingentLiability
+        modelBuilder.Entity<ContingentLiability>(e =>
+        {
+            e.ToTable("contingent_liabilities");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Description).HasMaxLength(1000).IsRequired();
+            e.Property(x => x.EstimatedAmount).HasColumnType("decimal(18,2)");
+            e.HasOne(x => x.Period).WithMany(p => p.ContingentLiabilities).HasForeignKey(x => x.PeriodId).OnDelete(DeleteBehavior.Cascade);
         });
 
         // AuditLog (no foreign keys — records may outlive referenced entities)

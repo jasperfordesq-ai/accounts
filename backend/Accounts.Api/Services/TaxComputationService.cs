@@ -75,12 +75,26 @@ public class TaxComputationService(AccountsDbContext db, FinancialStatementsServ
             adjustments.Add(new TaxAdjustment("Add back: Non-deductible expenses", nonDeductible, "Entertainment and other disallowable expenses per Schedule D Case I"));
         }
 
-        // 3. Deduct capital allowances (simplified: 12.5% of qualifying assets per year)
+        // 3. Deduct capital allowances (12.5% per year over 8 years, tracking prior claims)
         var qualifyingAssets = await db.FixedAssets
             .Where(a => a.CompanyId == period.CompanyId && a.DisposalDate == null)
             .ToListAsync();
 
-        var capitalAllowances = qualifyingAssets.Sum(a => a.Cost * 0.125m); // Standard 12.5% over 8 years
+        var capitalAllowances = 0m;
+        foreach (var asset in qualifyingAssets)
+        {
+            // Count how many prior periods have depreciation entries for this asset
+            // (each entry represents one year of capital allowances claimed)
+            var priorYearsClaimed = await db.DepreciationEntries
+                .Where(d => d.AssetId == asset.Id && d.PeriodId != periodId)
+                .CountAsync();
+
+            // Only claim 12.5% if fewer than 8 years of allowances have been claimed
+            if (priorYearsClaimed < 8)
+            {
+                capitalAllowances += asset.Cost * 0.125m;
+            }
+        }
         capitalAllowances = Math.Round(capitalAllowances, 2);
 
         if (capitalAllowances > 0)
@@ -128,8 +142,17 @@ public class TaxComputationService(AccountsDbContext db, FinancialStatementsServ
 
         var payroll = await db.PayrollSummaries.FirstOrDefaultAsync(p => p.PeriodId == periodId);
         var depCharged = await db.DepreciationEntries.Where(d => d.PeriodId == periodId).SumAsync(d => d.Charge);
-        var qualifyingAssets = await db.FixedAssets.Where(a => a.CompanyId == period.CompanyId && a.DisposalDate == null).ToListAsync();
-        var capitalAllowances = qualifyingAssets.Sum(a => a.Cost * 0.125m);
+        var ct1QualifyingAssets = await db.FixedAssets.Where(a => a.CompanyId == period.CompanyId && a.DisposalDate == null).ToListAsync();
+        var capitalAllowances = 0m;
+        foreach (var asset in ct1QualifyingAssets)
+        {
+            var priorYearsClaimed = await db.DepreciationEntries
+                .Where(d => d.AssetId == asset.Id && d.PeriodId != periodId)
+                .CountAsync();
+            if (priorYearsClaimed < 8)
+                capitalAllowances += asset.Cost * 0.125m;
+        }
+        capitalAllowances = Math.Round(capitalAllowances, 2);
 
         return new Ct1SupportData(
             period.Company.LegalName,

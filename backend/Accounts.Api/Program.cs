@@ -42,6 +42,7 @@ builder.Services.AddScoped<IxbrlService>();
 builder.Services.AddScoped<NotesDisclosureService>();
 builder.Services.AddScoped<DeadlineService>();
 builder.Services.AddScoped<DirectorLoanComplianceService>();
+builder.Services.AddScoped<DirectorsReportService>();
 
 // CORS
 builder.Services.AddCors(options =>

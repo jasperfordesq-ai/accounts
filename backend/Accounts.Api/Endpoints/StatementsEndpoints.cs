@@ -31,5 +31,17 @@ public static class StatementsEndpoints
             var result = await service.GetReadinessScoreAsync(periodId);
             return Results.Ok(result);
         });
+
+        group.MapGet("/cash-flow", async (int companyId, int periodId, FinancialStatementsService service) =>
+        {
+            var result = await service.GetCashFlowStatementAsync(periodId);
+            return Results.Ok(result);
+        });
+
+        group.MapGet("/equity-changes", async (int companyId, int periodId, FinancialStatementsService service) =>
+        {
+            var result = await service.GetEquityChangesAsync(periodId);
+            return Results.Ok(result);
+        });
     }
 }

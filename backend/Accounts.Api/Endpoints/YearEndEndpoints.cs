@@ -426,6 +426,84 @@ public static class YearEndEndpoints
             return Results.NoContent();
         });
 
+        // ===== POST BALANCE SHEET EVENTS =====
+        var pbse = app.MapGroup($"{basePath}/post-balance-sheet-events").WithTags("Post Balance Sheet Events");
+        pbse.MapGet("/", async (int companyId, int periodId, AccountsDbContext db) =>
+            await db.PostBalanceSheetEvents.Where(x => x.PeriodId == periodId).OrderBy(x => x.EventDate).ToListAsync());
+        pbse.MapPost("/", async (int companyId, int periodId, PostBalanceSheetEvent input, AccountsDbContext db) =>
+        {
+            input.PeriodId = periodId;
+            db.PostBalanceSheetEvents.Add(input);
+            await db.SaveChangesAsync();
+            return Results.Created($"{basePath}/post-balance-sheet-events/{input.Id}", input);
+        });
+        pbse.MapDelete("/{id:int}", async (int companyId, int periodId, int id, AccountsDbContext db) =>
+        {
+            var item = await db.PostBalanceSheetEvents.FirstOrDefaultAsync(x => x.Id == id && x.PeriodId == periodId);
+            if (item == null) return Results.NotFound();
+            db.PostBalanceSheetEvents.Remove(item);
+            await db.SaveChangesAsync();
+            return Results.NoContent();
+        });
+
+        // ===== RELATED PARTY TRANSACTIONS =====
+        var rpt = app.MapGroup($"{basePath}/related-party-transactions").WithTags("Related Party Transactions");
+        rpt.MapGet("/", async (int companyId, int periodId, AccountsDbContext db) =>
+            await db.RelatedPartyTransactions.Where(x => x.PeriodId == periodId).OrderBy(x => x.PartyName).ToListAsync());
+        rpt.MapPost("/", async (int companyId, int periodId, RelatedPartyTransaction input, AccountsDbContext db) =>
+        {
+            input.PeriodId = periodId;
+            db.RelatedPartyTransactions.Add(input);
+            await db.SaveChangesAsync();
+            return Results.Created($"{basePath}/related-party-transactions/{input.Id}", input);
+        });
+        rpt.MapDelete("/{id:int}", async (int companyId, int periodId, int id, AccountsDbContext db) =>
+        {
+            var item = await db.RelatedPartyTransactions.FirstOrDefaultAsync(x => x.Id == id && x.PeriodId == periodId);
+            if (item == null) return Results.NotFound();
+            db.RelatedPartyTransactions.Remove(item);
+            await db.SaveChangesAsync();
+            return Results.NoContent();
+        });
+
+        // ===== CONTINGENT LIABILITIES =====
+        var cl = app.MapGroup($"{basePath}/contingent-liabilities").WithTags("Contingent Liabilities");
+        cl.MapGet("/", async (int companyId, int periodId, AccountsDbContext db) =>
+            await db.ContingentLiabilities.Where(x => x.PeriodId == periodId).OrderBy(x => x.Description).ToListAsync());
+        cl.MapPost("/", async (int companyId, int periodId, ContingentLiability input, AccountsDbContext db) =>
+        {
+            input.PeriodId = periodId;
+            db.ContingentLiabilities.Add(input);
+            await db.SaveChangesAsync();
+            return Results.Created($"{basePath}/contingent-liabilities/{input.Id}", input);
+        });
+        cl.MapDelete("/{id:int}", async (int companyId, int periodId, int id, AccountsDbContext db) =>
+        {
+            var item = await db.ContingentLiabilities.FirstOrDefaultAsync(x => x.Id == id && x.PeriodId == periodId);
+            if (item == null) return Results.NotFound();
+            db.ContingentLiabilities.Remove(item);
+            await db.SaveChangesAsync();
+            return Results.NoContent();
+        });
+
+        // ===== GOING CONCERN =====
+        var gc = app.MapGroup($"{basePath}/going-concern").WithTags("Going Concern");
+        gc.MapGet("/", async (int companyId, int periodId, AccountsDbContext db) =>
+        {
+            var period = await db.AccountingPeriods.FirstOrDefaultAsync(p => p.Id == periodId && p.CompanyId == companyId);
+            if (period == null) return Results.NotFound();
+            return Results.Ok(new { period.GoingConcernConfirmed, period.GoingConcernNote });
+        });
+        gc.MapPut("/", async (int companyId, int periodId, GoingConcernInput input, AccountsDbContext db) =>
+        {
+            var period = await db.AccountingPeriods.FirstOrDefaultAsync(p => p.Id == periodId && p.CompanyId == companyId);
+            if (period == null) return Results.NotFound();
+            period.GoingConcernConfirmed = input.Confirmed;
+            period.GoingConcernNote = input.Note;
+            await db.SaveChangesAsync();
+            return Results.Ok(new { period.GoingConcernConfirmed, period.GoingConcernNote });
+        });
+
         // ===== DIRECTOR LOAN COMPLIANCE (s.239 / s.307) =====
         var dlCompliance = app.MapGroup($"{basePath}/director-loans").WithTags("Director Loans");
 
@@ -456,3 +534,5 @@ public static class YearEndEndpoints
         });
     }
 }
+
+public record GoingConcernInput(bool Confirmed, string? Note);

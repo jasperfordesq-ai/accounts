@@ -182,6 +182,75 @@ public class NotesDisclosureService(AccountsDbContext db)
             notes.Add(new NotesDisclosure { PeriodId = periodId, NoteNumber = num++, Title = "Directors' Loans and Transactions", Content = dlContent, IsRequired = true, IsIncluded = true });
         }
 
+        // Note: Post Balance Sheet Events
+        var pbsEvents = await db.PostBalanceSheetEvents.Where(e => e.PeriodId == periodId).OrderBy(e => e.EventDate).ToListAsync();
+        if (pbsEvents.Count > 0)
+        {
+            var pbsContent = "The following events have occurred after the balance sheet date:\n\n";
+            foreach (var evt in pbsEvents)
+            {
+                var eventType = evt.IsAdjusting ? "Adjusting" : "Non-adjusting";
+                pbsContent += $"{evt.EventDate:dd MMMM yyyy} ({eventType}): {evt.Description}";
+                if (evt.FinancialImpact.HasValue)
+                    pbsContent += $" — Estimated financial impact: \u20ac{evt.FinancialImpact.Value:N0}";
+                pbsContent += "\n";
+            }
+
+            var adjustingEvents = pbsEvents.Where(e => e.IsAdjusting).ToList();
+            if (adjustingEvents.Count > 0)
+                pbsContent += "\nAdjusting events have been reflected in the financial statements.";
+
+            notes.Add(new NotesDisclosure { PeriodId = periodId, NoteNumber = num++, Title = "Post Balance Sheet Events", Content = pbsContent.TrimEnd(), IsRequired = true, IsIncluded = true });
+        }
+
+        // Note: Related Party Transactions
+        var rptItems = await db.RelatedPartyTransactions.Where(r => r.PeriodId == periodId).OrderBy(r => r.PartyName).ToListAsync();
+        if (rptItems.Count > 0)
+        {
+            var rptContent = "The following transactions with related parties took place during the financial year:\n\n";
+            foreach (var rp in rptItems)
+            {
+                rptContent += $"{rp.PartyName} ({rp.Relationship}) — {rp.TransactionType}: \u20ac{rp.Amount:N0}";
+                if (rp.BalanceOwed.HasValue && rp.BalanceOwed.Value != 0)
+                    rptContent += $", Balance owed at year end: \u20ac{rp.BalanceOwed.Value:N0}";
+                if (!string.IsNullOrWhiteSpace(rp.Terms))
+                    rptContent += $" ({rp.Terms})";
+                rptContent += "\n";
+            }
+
+            notes.Add(new NotesDisclosure { PeriodId = periodId, NoteNumber = num++, Title = "Related Party Transactions", Content = rptContent.TrimEnd(), IsRequired = true, IsIncluded = true });
+        }
+
+        // Note: Contingent Liabilities
+        var clItems = await db.ContingentLiabilities.Where(c => c.PeriodId == periodId).OrderBy(c => c.Description).ToListAsync();
+        if (clItems.Count > 0)
+        {
+            var clContent = "The following contingent liabilities existed at the balance sheet date:\n\n";
+            foreach (var item in clItems)
+            {
+                clContent += $"{item.Description} ({item.Nature}) — Likelihood: {item.Likelihood}";
+                if (item.EstimatedAmount.HasValue)
+                    clContent += $", Estimated amount: \u20ac{item.EstimatedAmount.Value:N0}";
+                clContent += "\n";
+            }
+
+            notes.Add(new NotesDisclosure { PeriodId = periodId, NoteNumber = num++, Title = "Contingent Liabilities", Content = clContent.TrimEnd(), IsRequired = true, IsIncluded = true });
+        }
+
+        // Note: Going Concern
+        if (!period.GoingConcernConfirmed)
+        {
+            var gcContent = "Material uncertainty relating to going concern\n\n";
+            gcContent += !string.IsNullOrWhiteSpace(period.GoingConcernNote)
+                ? period.GoingConcernNote
+                : "The directors have identified material uncertainties related to events or conditions that may cast significant doubt on the company's ability to continue as a going concern.";
+            notes.Add(new NotesDisclosure { PeriodId = periodId, NoteNumber = num++, Title = "Going Concern", Content = gcContent, IsRequired = true, IsIncluded = true });
+        }
+        else
+        {
+            notes.Add(new NotesDisclosure { PeriodId = periodId, NoteNumber = num++, Title = "Going Concern", Content = "The directors have a reasonable expectation that the company has adequate resources to continue in operational existence for the foreseeable future. The financial statements have been prepared on the going concern basis.", IsRequired = true, IsIncluded = true });
+        }
+
         // Note: Approval
         notes.Add(new NotesDisclosure { PeriodId = periodId, NoteNumber = num++, Title = "Approval of Financial Statements", Content = $"The financial statements were approved and authorised for issue by the Board of Directors on {DateTime.Now:dd MMMM yyyy}.", IsRequired = true, IsIncluded = true });
 

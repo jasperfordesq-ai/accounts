@@ -17,6 +17,9 @@ public class AccountingPeriod
     public bool MemberAuditNoticeReceived { get; set; }
     public DateOnly? MemberAuditNoticeDate { get; set; }
 
+    public bool GoingConcernConfirmed { get; set; } = true;
+    public string? GoingConcernNote { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     // Navigation
@@ -39,4 +42,7 @@ public class AccountingPeriod
     public CroFilingPackage? CroFilingPackage { get; set; }
     public RevenueFilingPackage? RevenueFilingPackage { get; set; }
     public List<FilingDeadline> FilingDeadlines { get; set; } = [];
+    public List<PostBalanceSheetEvent> PostBalanceSheetEvents { get; set; } = [];
+    public List<RelatedPartyTransaction> RelatedPartyTransactions { get; set; } = [];
+    public List<ContingentLiability> ContingentLiabilities { get; set; } = [];
 }

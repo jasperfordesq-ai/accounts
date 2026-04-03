@@ -63,5 +63,19 @@ public static class DocumentEndpoints
                 return Results.BadRequest(new { error = ex.Message });
             }
         });
+
+        // Directors' report data (JSON for frontend preview)
+        group.MapGet("/directors-report-data", async (int companyId, int periodId, DirectorsReportService service) =>
+        {
+            try
+            {
+                var result = await service.GenerateAsync(periodId);
+                return Results.Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+        });
     }
 }
