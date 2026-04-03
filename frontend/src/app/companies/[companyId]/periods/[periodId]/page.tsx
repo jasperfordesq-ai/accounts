@@ -54,6 +54,8 @@ import {
   getFilingWorkflowStatus,
   validateIxbrl,
   calculateDeadlines,
+  updateCroFilingStatus,
+  markDocumentGenerated,
   getDeadlines,
   markFiled,
   getAuditExemptionJeopardy,
@@ -1104,9 +1106,12 @@ export default function PeriodWorkspacePage({
                       <Heart className="w-5 h-5 text-green-600 dark:text-green-400" />
                       <div>
                         <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Charity Reporting (SoFA)</h3>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Statement of Financial Activities and fund accounting.</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Statement of Financial Activities, fund accounting, and Trustees&apos; Annual Report.</p>
                       </div>
                     </div>
+                    <Link href={`/companies/${companyId}/periods/${periodId}/charity`}>
+                      <Button variant="outline" size="sm">Open Charity Reporting<ArrowRight className="w-4 h-4 ml-1.5" /></Button>
+                    </Link>
                   </div>
                 </Card.Content>
               </Card>
@@ -1212,6 +1217,35 @@ export default function PeriodWorkspacePage({
                         <><FileText className="w-4 h-4 mr-1" />Validate iXBRL</>
                       )}
                     </Button>
+
+                    {/* Filing Action Buttons */}
+                    <div className="flex items-center gap-3 pt-2 border-t border-gray-200 dark:border-neutral-700">
+                      {filingStatus.cro.status === "NotStarted" || filingStatus.cro.status === "InProgress" || filingStatus.cro.status === "PackageGenerated" ? (
+                        <Button variant="primary" size="sm" onPress={async () => {
+                          try {
+                            await updateCroFilingStatus(cId, pId, { status: "Approved", by: "Current User" });
+                            toast.success("Filing approved");
+                            const fs = await getFilingWorkflowStatus(cId, pId); setFilingStatus(fs);
+                          } catch { toast.error("Failed to approve"); }
+                        }}>
+                          <CheckCircle2 className="w-4 h-4 mr-1" /> Approve for Filing
+                        </Button>
+                      ) : filingStatus.cro.status === "Approved" ? (
+                        <Button variant="primary" size="sm" onPress={async () => {
+                          try {
+                            await updateCroFilingStatus(cId, pId, { status: "Submitted", by: "Current User" });
+                            toast.success("Marked as submitted to CRO");
+                            const fs = await getFilingWorkflowStatus(cId, pId); setFilingStatus(fs);
+                          } catch { toast.error("Failed to update status"); }
+                        }}>
+                          <Upload className="w-4 h-4 mr-1" /> Mark as Submitted
+                        </Button>
+                      ) : filingStatus.cro.status === "Submitted" ? (
+                        <Chip size="sm" variant="soft" color="accent">Submitted — awaiting CRO acceptance</Chip>
+                      ) : filingStatus.cro.status === "Accepted" ? (
+                        <Chip size="sm" variant="soft" color="success">Filing accepted by CRO</Chip>
+                      ) : null}
+                    </div>
                   </div>
                 ) : (
                   <div className="text-center py-8">
@@ -1295,7 +1329,7 @@ export default function PeriodWorkspacePage({
                     </div>
                     <Button variant="outline" size="sm"><Download className="w-4 h-4 mr-1" />Download PDF</Button>
                   </a>
-                  <a href={croPackUrl} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center gap-3 rounded-xl border-2 border-gray-200 dark:border-neutral-700 p-8 hover:border-emerald-400 dark:hover:border-emerald-600 hover:bg-emerald-50/30 dark:hover:bg-emerald-900/10 transition-all group">
+                  <a href={croPackUrl} target="_blank" rel="noopener noreferrer" onClick={() => { markDocumentGenerated(cId, pId, "accounts").catch(() => {}); }} className="flex flex-col items-center gap-3 rounded-xl border-2 border-gray-200 dark:border-neutral-700 p-8 hover:border-emerald-400 dark:hover:border-emerald-600 hover:bg-emerald-50/30 dark:hover:bg-emerald-900/10 transition-all group">
                     <FileText className="w-12 h-12 text-gray-400 dark:text-gray-500 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors" />
                     <div className="text-center">
                       <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">CRO Filing Pack</p>
@@ -1303,7 +1337,7 @@ export default function PeriodWorkspacePage({
                     </div>
                     <Button variant="outline" size="sm"><Download className="w-4 h-4 mr-1" />Download PDF</Button>
                   </a>
-                  <a href={sigPageUrl} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center gap-3 rounded-xl border-2 border-gray-200 dark:border-neutral-700 p-8 hover:border-emerald-400 dark:hover:border-emerald-600 hover:bg-emerald-50/30 dark:hover:bg-emerald-900/10 transition-all group">
+                  <a href={sigPageUrl} target="_blank" rel="noopener noreferrer" onClick={() => { markDocumentGenerated(cId, pId, "signature").catch(() => {}); }} className="flex flex-col items-center gap-3 rounded-xl border-2 border-gray-200 dark:border-neutral-700 p-8 hover:border-emerald-400 dark:hover:border-emerald-600 hover:bg-emerald-50/30 dark:hover:bg-emerald-900/10 transition-all group">
                     <FileText className="w-12 h-12 text-gray-400 dark:text-gray-500 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors" />
                     <div className="text-center">
                       <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Signature Page</p>
