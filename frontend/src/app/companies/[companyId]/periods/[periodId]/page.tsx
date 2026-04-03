@@ -284,7 +284,7 @@ export default function PeriodWorkspacePage({
   if (error && !company) {
     return (
       <div className="max-w-2xl mx-auto animate-fade-in">
-        <Card className="border border-red-200 dark:border-red-800">
+        <Card className="border border-red-200 dark:border-red-800 bg-white dark:bg-neutral-900">
           <Card.Content className="text-center py-8">
             <AlertTriangle className="w-10 h-10 text-red-500 mx-auto mb-3" />
             <p className="text-red-700 dark:text-red-400 font-medium">{error}</p>
@@ -407,7 +407,7 @@ export default function PeriodWorkspacePage({
             </Card>
 
             {/* Bank Accounts */}
-            <Card className="shadow-sm border border-gray-200 dark:border-neutral-700">
+            <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
               <Card.Header>
                 <Card.Title className="text-gray-900 dark:text-gray-100">Bank Accounts</Card.Title>
                 <Card.Description>
@@ -442,7 +442,7 @@ export default function PeriodWorkspacePage({
             </Card>
 
             {/* Upload Area */}
-            <Card className="shadow-sm border border-gray-200 dark:border-neutral-700">
+            <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
               <Card.Header>
                 <Card.Title className="text-gray-900 dark:text-gray-100">Import Transactions</Card.Title>
                 <Card.Description>Upload bank statements in CSV format (AIB, BOI, Revolut, Stripe)</Card.Description>
@@ -533,7 +533,7 @@ export default function PeriodWorkspacePage({
             </Card>
 
             {/* Import Result */}
-            <Card className="shadow-sm border border-gray-200 dark:border-neutral-700">
+            <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
               <Card.Header>
                 <Card.Title className="text-gray-900 dark:text-gray-100">Import Status</Card.Title>
               </Card.Header>
@@ -573,7 +573,7 @@ export default function PeriodWorkspacePage({
         {/* Categorise Tab */}
         <TabPanel id="categorise">
           <div className="space-y-6">
-            <Card className="shadow-sm border border-gray-200 dark:border-neutral-700">
+            <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
               <Card.Header>
                 <div className="flex items-center justify-between w-full">
                   <div>
@@ -715,7 +715,7 @@ export default function PeriodWorkspacePage({
             </Card>
 
             {yearEnd && (
-              <Card className="shadow-sm border border-gray-200 dark:border-neutral-700">
+              <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
                 <Card.Header>
                   <Card.Title className="text-gray-900 dark:text-gray-100">Year-End Completeness</Card.Title>
                   <Card.Description>
@@ -764,7 +764,7 @@ export default function PeriodWorkspacePage({
             </div>
 
             {!yearEnd && (
-              <Card className="shadow-sm border border-gray-200 dark:border-neutral-700">
+              <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
                 <Card.Content className="text-center py-8">
                   <BarChart3 className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
                   <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -782,7 +782,7 @@ export default function PeriodWorkspacePage({
         {/* Adjustments Tab */}
         <TabPanel id="adjustments">
           <div className="space-y-6">
-            <Card className="shadow-sm border border-gray-200 dark:border-neutral-700">
+            <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
               <Card.Header>
                 <Card.Title className="text-gray-900 dark:text-gray-100">Period Adjustments</Card.Title>
                 <Card.Description>
@@ -807,7 +807,7 @@ export default function PeriodWorkspacePage({
             </Card>
 
             {/* Adjustment Summary */}
-            <Card className="shadow-sm border border-gray-200 dark:border-neutral-700">
+            <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
               <Card.Header>
                 <Card.Title className="text-gray-900 dark:text-gray-100">Adjustment Summary</Card.Title>
               </Card.Header>
@@ -861,7 +861,7 @@ export default function PeriodWorkspacePage({
             </Card>
 
             {/* Adjustments List */}
-            <Card className="shadow-sm border border-gray-200 dark:border-neutral-700">
+            <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
               <Card.Header>
                 <Card.Title className="text-gray-900 dark:text-gray-100">Adjustment Details</Card.Title>
                 <Card.Description>
@@ -881,7 +881,7 @@ export default function PeriodWorkspacePage({
                 ) : (
                   <div className="space-y-3">
                     {adjustments.map((adj) => (
-                      <Card key={adj.id} className="border border-gray-100 dark:border-neutral-700">
+                      <Card key={adj.id} className="border border-gray-100 dark:border-neutral-700 bg-white dark:bg-neutral-900">
                         <Card.Content className="p-4">
                           <div className="flex items-start justify-between gap-4">
                             <div className="flex-1 min-w-0">
@@ -932,7 +932,7 @@ export default function PeriodWorkspacePage({
         {/* Statements Tab */}
         <TabPanel id="statements">
           <div className="space-y-6">
-            <Card className="shadow-sm border border-gray-200 dark:border-neutral-700">
+            <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
               <Card.Header>
                 <Card.Title className="text-gray-900 dark:text-gray-100">Filing Readiness</Card.Title>
                 <Card.Description>Assessment of whether the accounts are ready for filing</Card.Description>
@@ -1045,7 +1045,7 @@ export default function PeriodWorkspacePage({
         <TabPanel id="filing">
           <div className="space-y-6">
             {/* Filing Workflow Status */}
-            <Card className="shadow-sm border border-gray-200 dark:border-neutral-700">
+            <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
               <Card.Header>
                 <Card.Title className="text-gray-900 dark:text-gray-100">
                   <Shield className="w-4 h-4 inline mr-1.5 -mt-0.5" />
@@ -1150,7 +1150,7 @@ export default function PeriodWorkspacePage({
               </Card.Content>
             </Card>
 
-            <Card className="shadow-sm border border-gray-200 dark:border-neutral-700">
+            <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
               <Card.Header>
                 <Card.Title className="text-gray-900 dark:text-gray-100">Download Documents</Card.Title>
                 <Card.Description>Download the final accounts package and iXBRL filing documents</Card.Description>
@@ -1193,7 +1193,7 @@ export default function PeriodWorkspacePage({
               </Card.Content>
             </Card>
 
-            <Card className="shadow-sm border border-gray-200 dark:border-neutral-700">
+            <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
               <Card.Header>
                 <Card.Title className="text-gray-900 dark:text-gray-100">Filing Checklist</Card.Title>
               </Card.Header>
@@ -1236,7 +1236,7 @@ export default function PeriodWorkspacePage({
 
 function SummaryCard({ title, value, subtitle }: { title: string; value: string; subtitle: string }) {
   return (
-    <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 card-hover">
+    <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 card-hover">
       <Card.Content className="p-5">
         <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">{title}</p>
         <p className="text-xl font-bold text-gray-900 dark:text-gray-100 mt-1">{value}</p>

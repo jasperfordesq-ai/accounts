@@ -113,7 +113,7 @@ function Section({
   const [open, setOpen] = useState(defaultOpen);
 
   return (
-    <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 dark:bg-neutral-900">
+    <Card className="bg-white dark:bg-neutral-900 shadow-sm border border-gray-200 dark:border-neutral-700">
       <button
         type="button"
         className="w-full text-left px-6 py-4 flex items-center gap-4 hover:bg-gray-50/50 dark:hover:bg-neutral-800/50 transition-colors"
@@ -633,7 +633,7 @@ export default function YearEndQuestionnairePage({
 
       {/* Progress */}
       <div className="mb-6">
-        <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 dark:bg-neutral-900">
+        <Card className="bg-white dark:bg-neutral-900 shadow-sm border border-gray-200 dark:border-neutral-700">
           <Card.Content className="p-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium text-gray-700 dark:text-gray-300">

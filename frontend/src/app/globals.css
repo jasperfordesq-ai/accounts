@@ -165,3 +165,73 @@ html {
   --normal-text: var(--foreground);
   --normal-border: var(--border);
 }
+
+/* ===== HeroUI Component Overrides for Dark Mode ===== */
+
+/* Card backgrounds - HeroUI Cards don't respect dark mode by default */
+.dark [data-slot="base"],
+.dark [class*="Card"] > div,
+.dark .heroui-card {
+  background-color: var(--card);
+  color: var(--card-foreground);
+}
+
+/* Force all Card-like containers to pick up dark background */
+.dark [class*="shadow-sm"][class*="border"] {
+  background-color: var(--card);
+}
+
+/* Ensure all text in dark mode has readable contrast */
+.dark h1, .dark h2, .dark h3, .dark h4, .dark h5, .dark h6 {
+  color: var(--foreground);
+}
+
+.dark p, .dark span, .dark div, .dark td, .dark th, .dark li {
+  color: inherit;
+}
+
+/* Force select/input elements dark mode */
+.dark select, .dark input, .dark textarea {
+  background-color: #262626;
+  color: #fafafa;
+  border-color: #404040;
+}
+
+.dark select option {
+  background-color: #262626;
+  color: #fafafa;
+}
+
+/* HeroUI Chip readability in dark mode */
+.dark [data-slot="chip"] {
+  opacity: 0.95;
+}
+
+/* HeroUI Button text contrast */
+.dark [data-slot="button"][class*="ghost"],
+.dark [data-slot="button"][class*="outline"] {
+  color: var(--foreground);
+}
+
+/* Tab styling in dark mode */
+.dark [role="tablist"] [role="tab"] {
+  color: #a3a3a3;
+}
+.dark [role="tablist"] [role="tab"][data-selected] {
+  color: #34d399;
+}
+
+/* Table header backgrounds in dark mode */
+.dark thead tr, .dark .bg-gray-50 {
+  background-color: #1a1a1a !important;
+}
+
+/* Ensure label readability */
+.dark label {
+  color: #d4d4d4;
+}
+
+/* Progress bar track */
+.dark [data-slot="track"] {
+  background-color: #262626;
+}

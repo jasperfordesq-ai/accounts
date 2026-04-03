@@ -244,7 +244,7 @@ export default function NewCompanyPage() {
       </div>
 
       {/* Form Card */}
-      <Card className="shadow-sm border border-gray-200 dark:border-neutral-700">
+      <Card className="bg-white dark:bg-neutral-900 shadow-sm border border-gray-200 dark:border-neutral-700">
         <Card.Header>
           <Card.Title className="text-gray-900 dark:text-gray-100">{STEP_LABELS[step]}</Card.Title>
           <Card.Description className="text-gray-500 dark:text-gray-400">

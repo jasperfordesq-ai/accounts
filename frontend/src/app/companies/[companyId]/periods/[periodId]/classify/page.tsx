@@ -195,7 +195,7 @@ export default function ClassifyPage({
       </div>
 
       {/* Input Form */}
-      <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 mb-6">
+      <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 mb-6">
         <Card.Header>
           <Card.Title className="flex items-center gap-2">
             <Scale className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
@@ -292,7 +292,7 @@ export default function ClassifyPage({
       </Card>
 
       {/* Member Audit Notice (s.334) */}
-      <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 mb-6">
+      <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 mb-6">
         <Card.Header>
           <Card.Title className="text-gray-900 dark:text-gray-100">Member Audit Notice</Card.Title>
           <Card.Description>
@@ -334,7 +334,7 @@ export default function ClassifyPage({
       {/* Results */}
       {result && (
         <>
-          <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 mb-6">
+          <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 mb-6">
             <Card.Header>
               <Card.Title>Classification Result</Card.Title>
             </Card.Header>
@@ -420,7 +420,7 @@ export default function ClassifyPage({
 
           {/* Filing Regime Selection */}
           {result.availableRegimes.length > 0 && (
-            <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 mb-6">
+            <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 mb-6">
               <Card.Header>
                 <Card.Title>Select Filing Regime</Card.Title>
                 <Card.Description>
@@ -481,7 +481,7 @@ export default function ClassifyPage({
 
       {/* Pre-existing classification display (when loaded from period data) */}
       {!result && period?.sizeClassification && (
-        <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 mb-6">
+        <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 mb-6">
           <Card.Header>
             <Card.Title>Current Classification</Card.Title>
           </Card.Header>

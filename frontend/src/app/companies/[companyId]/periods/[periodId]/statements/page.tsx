@@ -128,7 +128,7 @@ export default function StatementsPage({
   if (error && !company) {
     return (
       <div className="max-w-2xl mx-auto">
-        <Card className="border border-red-200 dark:border-red-800">
+        <Card className="border border-red-200 dark:border-red-800 bg-white dark:bg-neutral-900">
           <Card.Content className="text-center py-8">
             <AlertTriangle className="w-10 h-10 text-red-500 mx-auto mb-3" />
             <p className="text-red-700 dark:text-red-400 font-medium">{error}</p>
@@ -244,7 +244,7 @@ export default function StatementsPage({
 
         {/* Trial Balance Tab */}
         <TabPanel id="trial-balance">
-          <Card className="shadow-sm border border-gray-200 dark:border-neutral-700">
+          <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
             <Card.Header>
               <Card.Title>Trial Balance</Card.Title>
               <Card.Description>
@@ -343,7 +343,7 @@ export default function StatementsPage({
 
         {/* P&L Tab */}
         <TabPanel id="pnl">
-          <Card className="shadow-sm border border-gray-200 dark:border-neutral-700">
+          <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
             <Card.Header>
               <Card.Title>Profit &amp; Loss Account</Card.Title>
               <Card.Description>
@@ -422,7 +422,7 @@ export default function StatementsPage({
 
         {/* Balance Sheet Tab */}
         <TabPanel id="balance-sheet">
-          <Card className="shadow-sm border border-gray-200 dark:border-neutral-700">
+          <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
             <Card.Header>
               <Card.Title>Balance Sheet</Card.Title>
               <Card.Description>
@@ -616,7 +616,7 @@ export default function StatementsPage({
 
         {/* Tax Computation Tab */}
         <TabPanel id="tax-computation">
-          <Card className="shadow-sm border border-gray-200 dark:border-neutral-700">
+          <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
             <Card.Header>
               <Card.Title>Corporation Tax Computation</Card.Title>
               <Card.Description>
@@ -716,7 +716,7 @@ export default function StatementsPage({
 
         {/* Cash Flow Tab */}
         <TabPanel id="cash-flow">
-          <Card className="shadow-sm border border-gray-200 dark:border-neutral-700">
+          <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
             <Card.Header>
               <Card.Title>Cash Flow Statement</Card.Title>
               <Card.Description>
@@ -770,7 +770,7 @@ export default function StatementsPage({
 
         {/* Equity Changes Tab */}
         <TabPanel id="equity-changes">
-          <Card className="shadow-sm border border-gray-200 dark:border-neutral-700">
+          <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
             <Card.Header>
               <Card.Title>Statement of Changes in Equity</Card.Title>
               <Card.Description>
@@ -837,7 +837,7 @@ export default function StatementsPage({
 
         {/* Directors' Report Tab */}
         <TabPanel id="directors-report">
-          <Card className="shadow-sm border border-gray-200 dark:border-neutral-700">
+          <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
             <Card.Header>
               <Card.Title>Directors&apos; Report</Card.Title>
               <Card.Description>

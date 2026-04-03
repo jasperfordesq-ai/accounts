@@ -223,7 +223,7 @@ export default function NotesPage({
   if (!company) {
     return (
       <div className="max-w-2xl mx-auto">
-        <Card className="border border-red-200 dark:border-red-800">
+        <Card className="border border-red-200 dark:border-red-800 bg-white dark:bg-neutral-900">
           <Card.Content className="text-center py-8">
             <AlertTriangle className="w-10 h-10 text-red-500 mx-auto mb-3" />
             <p className="text-red-700 dark:text-red-400 font-medium">Failed to load company data</p>
@@ -275,7 +275,7 @@ export default function NotesPage({
       </div>
 
       {/* Actions Bar */}
-      <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 mb-6">
+      <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 mb-6">
         <Card.Content className="p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -403,7 +403,7 @@ export default function NotesPage({
 
       {/* Notes List */}
       {sortedNotes.length === 0 ? (
-        <Card className="shadow-sm border border-gray-200 dark:border-neutral-700">
+        <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
           <Card.Content className="text-center py-12">
             <FileText className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
             <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -428,7 +428,7 @@ export default function NotesPage({
             return (
               <Card
                 key={noteId}
-                className={`shadow-sm border animate-fade-in ${
+                className={`shadow-sm border animate-fade-in bg-white dark:bg-neutral-900 ${
                   note.isIncluded
                     ? "border-gray-200 dark:border-neutral-700"
                     : "border-gray-200 dark:border-neutral-700 opacity-60"

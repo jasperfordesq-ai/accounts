@@ -8,11 +8,11 @@ import {
   Button, Chip, TextField, Input, Label, Checkbox
 } from "@heroui/react";
 import {
-  Building2, Users, Calendar, Plus, Trash2, ArrowRight, MapPin
+  Building2, Users, Calendar, Plus, Trash2, ArrowRight, MapPin, Heart
 } from "lucide-react";
 import { toast } from "sonner";
 import { Pencil, Save, X } from "lucide-react";
-import { getCompany, deleteCompany, createPeriod, deleteOfficer, updateOfficer, createOfficer, type Company, type Officer } from "@/lib/api";
+import { getCompany, updateCompany, deleteCompany, createPeriod, deleteOfficer, updateOfficer, createOfficer, getCharityInfo, saveCharityInfo, type Company, type Officer, type CharityInfo } from "@/lib/api";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { CompanyDetailSkeleton } from "@/components/Skeleton";
@@ -41,9 +41,109 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ compan
   const [newOfficerName, setNewOfficerName] = useState("");
   const [newOfficerRole, setNewOfficerRole] = useState("Director");
 
+  // Edit company state
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState({
+    legalName: "",
+    tradingName: "",
+    croNumber: "",
+    taxReference: "",
+    companyType: "LTD",
+    isTrading: true,
+    isDormant: false,
+  });
+  const [savingCompany, setSavingCompany] = useState(false);
+
+  // Charity info
+  const [charityInfo, setCharityInfo] = useState<CharityInfo | null>(null);
+  const [editingCharity, setEditingCharity] = useState(false);
+  const [charityForm, setCharityForm] = useState<CharityInfo>({
+    charityNumber: "",
+    grossIncome: 0,
+    sorpTier: 1,
+    charitableObjectives: "",
+    principalActivities: "",
+    governanceCodeCompliant: false,
+    hasInternationalTransfers: false,
+    trusteeRemunerationPaid: false,
+    trusteeRemunerationAmount: 0,
+  });
+  const [savingCharity, setSavingCharity] = useState(false);
+
+  const startEditingCharity = () => {
+    if (charityInfo) {
+      setCharityForm({ ...charityInfo });
+    }
+    setEditingCharity(true);
+  };
+
+  const handleSaveCharity = async () => {
+    setSavingCharity(true);
+    try {
+      const saved = await saveCharityInfo(Number(id), charityForm);
+      setCharityInfo(saved);
+      setEditingCharity(false);
+      toast.success("Charity info saved");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save charity info");
+    } finally {
+      setSavingCharity(false);
+    }
+  };
+
+  const startEditing = () => {
+    if (!company) return;
+    setEditForm({
+      legalName: company.legalName || "",
+      tradingName: company.tradingName || "",
+      croNumber: company.croNumber || "",
+      taxReference: company.taxReference || "",
+      companyType: company.companyType || "LTD",
+      isTrading: company.isTrading ?? true,
+      isDormant: company.isDormant ?? false,
+    });
+    setEditing(true);
+  };
+
+  const handleSaveCompany = async () => {
+    if (!editForm.legalName.trim()) {
+      toast.error("Legal name is required");
+      return;
+    }
+    setSavingCompany(true);
+    try {
+      await updateCompany(Number(id), {
+        ...company,
+        legalName: editForm.legalName.trim(),
+        tradingName: editForm.tradingName.trim() || undefined,
+        croNumber: editForm.croNumber.trim() || undefined,
+        taxReference: editForm.taxReference.trim() || undefined,
+        companyType: editForm.companyType,
+        isTrading: editForm.isTrading,
+        isDormant: editForm.isDormant,
+      });
+      toast.success("Company updated successfully");
+      setEditing(false);
+      load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update company");
+    } finally {
+      setSavingCompany(false);
+    }
+  };
+
   const load = () => {
     getCompany(Number(id))
-      .then(setCompany)
+      .then((companyData) => {
+        setCompany(companyData);
+        if (companyData.isCharitableOrganisation) {
+          getCharityInfo(Number(id))
+            .then((ci) => {
+              if (ci && 'charityNumber' in ci) setCharityInfo(ci as CharityInfo);
+            })
+            .catch(() => {});
+        }
+      })
       .catch((err) => toast.error(err instanceof Error ? err.message : "Failed to load company"))
       .finally(() => setLoading(false));
   };
@@ -178,20 +278,89 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ compan
             )}
           </div>
         </div>
-        <Button
-          variant="danger"
-          size="sm"
-          onPress={() => setShowDeleteModal(true)}
-          aria-label="Delete company"
-        >
-          <Trash2 className="w-3.5 h-3.5" />
-          Delete
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onPress={startEditing}
+            aria-label="Edit company"
+          >
+            <Pencil className="w-3.5 h-3.5" />
+            Edit
+          </Button>
+          <Button
+            variant="danger"
+            size="sm"
+            onPress={() => setShowDeleteModal(true)}
+            aria-label="Delete company"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            Delete
+          </Button>
+        </div>
       </div>
+
+      {/* Edit Company Form */}
+      {editing && (
+        <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 mb-6 animate-slide-down">
+          <CardHeader>
+            <CardTitle className="text-gray-900 dark:text-gray-100 flex items-center gap-2">
+              <Pencil className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              Edit Company Details
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Legal Name *</label>
+                <input value={editForm.legalName} onChange={(e) => setEditForm({ ...editForm, legalName: e.target.value })} className="w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors" placeholder="Legal Name" aria-label="Legal Name" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Trading Name</label>
+                <input value={editForm.tradingName} onChange={(e) => setEditForm({ ...editForm, tradingName: e.target.value })} className="w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors" placeholder="Trading Name (optional)" aria-label="Trading Name" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">CRO Number</label>
+                <input value={editForm.croNumber} onChange={(e) => setEditForm({ ...editForm, croNumber: e.target.value })} className="w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors" placeholder="CRO Number" aria-label="CRO Number" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Tax Reference</label>
+                <input value={editForm.taxReference} onChange={(e) => setEditForm({ ...editForm, taxReference: e.target.value })} className="w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors" placeholder="Tax Reference" aria-label="Tax Reference" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Company Type</label>
+                <select value={editForm.companyType} onChange={(e) => setEditForm({ ...editForm, companyType: e.target.value })} className="w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors" aria-label="Company Type" title="Company Type">
+                  <option value="LTD">LTD - Private Limited</option>
+                  <option value="DAC">DAC - Designated Activity</option>
+                  <option value="CLG">CLG - Company Limited by Guarantee</option>
+                  <option value="PLC">PLC - Public Limited</option>
+                  <option value="UC">UC - Unlimited Company</option>
+                </select>
+              </div>
+              <div className="flex items-center gap-6 pt-6">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={editForm.isTrading} onChange={(e) => setEditForm({ ...editForm, isTrading: e.target.checked })} className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500" aria-label="Is Trading" title="Is Trading" />
+                  <span className="text-sm text-gray-700 dark:text-gray-300">Trading</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={editForm.isDormant} onChange={(e) => setEditForm({ ...editForm, isDormant: e.target.checked })} className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500" aria-label="Is Dormant" title="Is Dormant" />
+                  <span className="text-sm text-gray-700 dark:text-gray-300">Dormant</span>
+                </label>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 mt-6 pt-4 border-t border-gray-100 dark:border-neutral-700">
+              <Button variant="primary" size="sm" onPress={handleSaveCompany} isDisabled={savingCompany}>
+                {savingCompany ? "Saving..." : <><Save className="w-3.5 h-3.5" /> Save Changes</>}
+              </Button>
+              <Button variant="ghost" size="sm" onPress={() => setEditing(false)}>Cancel</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Info cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-        <Card className="border border-gray-200 dark:border-neutral-700">
+        <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
           <CardHeader>
             <CardTitle className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">
               Registration
@@ -225,7 +394,7 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ compan
           </CardContent>
         </Card>
 
-        <Card className="border border-gray-200 dark:border-neutral-700">
+        <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
           <CardHeader>
             <CardTitle className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide flex items-center gap-2">
               <MapPin className="w-3.5 h-3.5" /> Address
@@ -243,7 +412,7 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ compan
           </CardContent>
         </Card>
 
-        <Card className="border border-gray-200 dark:border-neutral-700">
+        <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
           <CardHeader>
             <CardTitle className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide flex items-center justify-between">
               <span className="flex items-center gap-2"><Users className="w-3.5 h-3.5" /> Officers</span>
@@ -342,8 +511,182 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ compan
         </Card>
       </div>
 
+      {/* Charity Info Card */}
+      {company.isCharitableOrganisation && (
+        <Card className="bg-white dark:bg-neutral-900 shadow-sm border border-gray-200 dark:border-neutral-700 mb-8">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-gray-100">
+              <Heart className="w-4 h-4 text-pink-500" />
+              Charity Info
+            </CardTitle>
+            {!editingCharity && (
+              <Button variant="outline" size="sm" onPress={startEditingCharity}>
+                <Pencil className="w-3.5 h-3.5" />
+                Edit
+              </Button>
+            )}
+          </CardHeader>
+          <CardContent>
+            {editingCharity ? (
+              <div className="space-y-4 animate-fade-in">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Charity Number</label>
+                    <input
+                      type="text"
+                      className="w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500"
+                      value={charityForm.charityNumber || ""}
+                      onChange={(e) => setCharityForm({ ...charityForm, charityNumber: e.target.value })}
+                      placeholder="e.g. CHY12345"
+                      aria-label="Charity number"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Gross Income</label>
+                    <input
+                      type="number"
+                      className="w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500"
+                      value={charityForm.grossIncome || ""}
+                      onChange={(e) => setCharityForm({ ...charityForm, grossIncome: Number(e.target.value) })}
+                      placeholder="0.00"
+                      aria-label="Gross income"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Charitable Objectives</label>
+                  <textarea
+                    className="w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500 min-h-[80px]"
+                    value={charityForm.charitableObjectives || ""}
+                    onChange={(e) => setCharityForm({ ...charityForm, charitableObjectives: e.target.value })}
+                    placeholder="Describe the charity's objects..."
+                    aria-label="Charitable objectives"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Principal Activities</label>
+                  <textarea
+                    className="w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500 min-h-[80px]"
+                    value={charityForm.principalActivities || ""}
+                    onChange={(e) => setCharityForm({ ...charityForm, principalActivities: e.target.value })}
+                    placeholder="Describe the charity's principal activities..."
+                    aria-label="Principal activities"
+                  />
+                </div>
+                <div className="space-y-3">
+                  <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                    <input
+                      type="checkbox"
+                      checked={charityForm.governanceCodeCompliant}
+                      onChange={(e) => setCharityForm({ ...charityForm, governanceCodeCompliant: e.target.checked })}
+                      className="rounded border-gray-300 dark:border-neutral-600 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    Governance Code Compliant
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                    <input
+                      type="checkbox"
+                      checked={charityForm.trusteeRemunerationPaid}
+                      onChange={(e) => setCharityForm({ ...charityForm, trusteeRemunerationPaid: e.target.checked })}
+                      className="rounded border-gray-300 dark:border-neutral-600 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    Trustee Remuneration Paid
+                  </label>
+                  {charityForm.trusteeRemunerationPaid && (
+                    <div className="ml-6">
+                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Remuneration Amount</label>
+                      <input
+                        type="number"
+                        className="w-48 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500"
+                        value={charityForm.trusteeRemunerationAmount || ""}
+                        onChange={(e) => setCharityForm({ ...charityForm, trusteeRemunerationAmount: Number(e.target.value) })}
+                        placeholder="0.00"
+                        aria-label="Trustee remuneration amount"
+                      />
+                    </div>
+                  )}
+                  <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                    <input
+                      type="checkbox"
+                      checked={charityForm.hasInternationalTransfers}
+                      onChange={(e) => setCharityForm({ ...charityForm, hasInternationalTransfers: e.target.checked })}
+                      className="rounded border-gray-300 dark:border-neutral-600 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    International Transfers
+                  </label>
+                </div>
+                <div className="flex items-center gap-2 justify-end pt-2">
+                  <Button variant="ghost" size="sm" onPress={() => setEditingCharity(false)} isDisabled={savingCharity}>
+                    Cancel
+                  </Button>
+                  <Button variant="primary" size="sm" onPress={handleSaveCharity} isDisabled={savingCharity}>
+                    <Save className="w-3.5 h-3.5" />
+                    {savingCharity ? "Saving..." : "Save Charity Info"}
+                  </Button>
+                </div>
+              </div>
+            ) : charityInfo ? (
+              <div className="space-y-3 text-sm">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div>
+                    <span className="text-gray-500 dark:text-gray-400">Charity No:</span>{" "}
+                    <span className="font-medium text-gray-900 dark:text-gray-100">{charityInfo.charityNumber || "\u2014"}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 dark:text-gray-400">SORP Tier:</span>{" "}
+                    <Chip size="sm" color={charityInfo.sorpTier === 1 ? "success" : "warning"} variant="soft">
+                      Tier {charityInfo.sorpTier}
+                    </Chip>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 dark:text-gray-400">Gross Income:</span>{" "}
+                    <span className="font-medium text-gray-900 dark:text-gray-100">
+                      {new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" }).format(charityInfo.grossIncome)}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 dark:text-gray-400">Governance Code:</span>{" "}
+                    <Chip size="sm" color={charityInfo.governanceCodeCompliant ? "success" : "default"} variant="soft">
+                      {charityInfo.governanceCodeCompliant ? "Compliant" : "Not confirmed"}
+                    </Chip>
+                  </div>
+                </div>
+                {charityInfo.charitableObjectives && (
+                  <div>
+                    <span className="text-gray-500 dark:text-gray-400">Objectives:</span>{" "}
+                    <span className="text-gray-900 dark:text-gray-100">{charityInfo.charitableObjectives}</span>
+                  </div>
+                )}
+                {charityInfo.trusteeRemunerationPaid && (
+                  <div>
+                    <span className="text-gray-500 dark:text-gray-400">Trustee Remuneration:</span>{" "}
+                    <span className="font-medium text-gray-900 dark:text-gray-100">
+                      {new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" }).format(charityInfo.trusteeRemunerationAmount)}
+                    </span>
+                  </div>
+                )}
+                {charityInfo.hasInternationalTransfers && (
+                  <Chip size="sm" color="warning" variant="soft">International Transfers</Chip>
+                )}
+              </div>
+            ) : (
+              <div className="py-4 text-center">
+                <Heart className="w-8 h-8 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
+                <p className="text-gray-400 dark:text-gray-500 text-sm mb-3">
+                  No charity info recorded yet.
+                </p>
+                <Button variant="primary" size="sm" onPress={startEditingCharity}>
+                  <Plus className="w-3.5 h-3.5" />
+                  Add Charity Info
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Accounting Periods */}
-      <Card className="border border-gray-200 dark:border-neutral-700">
+      <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-gray-100">
             <Calendar className="w-4 h-4 text-gray-400" />
