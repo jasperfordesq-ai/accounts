@@ -45,4 +45,5 @@ public class AccountingPeriod
     public List<PostBalanceSheetEvent> PostBalanceSheetEvents { get; set; } = [];
     public List<RelatedPartyTransaction> RelatedPartyTransactions { get; set; } = [];
     public List<ContingentLiability> ContingentLiabilities { get; set; } = [];
+    public List<FundBalance> FundBalances { get; set; } = [];
 }

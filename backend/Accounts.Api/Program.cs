@@ -43,6 +43,8 @@ builder.Services.AddScoped<NotesDisclosureService>();
 builder.Services.AddScoped<DeadlineService>();
 builder.Services.AddScoped<DirectorLoanComplianceService>();
 builder.Services.AddScoped<DirectorsReportService>();
+builder.Services.AddScoped<CharityReportingService>();
+builder.Services.AddScoped<FilingWorkflowService>();
 
 // CORS
 builder.Services.AddCors(options =>

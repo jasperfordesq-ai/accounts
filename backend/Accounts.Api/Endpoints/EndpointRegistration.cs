@@ -12,5 +12,7 @@ public static class EndpointRegistration
         app.MapDocumentEndpoints();
         app.MapRevenueEndpoints();
         app.MapDeadlineEndpoints();
+        app.MapCharityEndpoints();
+        app.MapFilingWorkflowEndpoints();
     }
 }

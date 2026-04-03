@@ -56,6 +56,10 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
     public DbSet<RelatedPartyTransaction> RelatedPartyTransactions => Set<RelatedPartyTransaction>();
     public DbSet<ContingentLiability> ContingentLiabilities => Set<ContingentLiability>();
 
+    // Charity / SORP
+    public DbSet<CharityInfo> CharityInfos => Set<CharityInfo>();
+    public DbSet<FundBalance> FundBalances => Set<FundBalance>();
+
     // Audit
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
@@ -399,6 +403,32 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
             e.Property(x => x.Description).HasMaxLength(1000).IsRequired();
             e.Property(x => x.EstimatedAmount).HasColumnType("decimal(18,2)");
             e.HasOne(x => x.Period).WithMany(p => p.ContingentLiabilities).HasForeignKey(x => x.PeriodId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // CharityInfo (1:1 with Company)
+        modelBuilder.Entity<CharityInfo>(e =>
+        {
+            e.ToTable("charity_infos");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.CharityNumber).HasMaxLength(20);
+            e.Property(x => x.GrossIncome).HasColumnType("decimal(18,2)");
+            e.Property(x => x.TrusteeRemunerationAmount).HasColumnType("decimal(18,2)");
+            e.HasOne(x => x.Company).WithOne(c => c.CharityInfo).HasForeignKey<CharityInfo>(x => x.CompanyId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // FundBalance
+        modelBuilder.Entity<FundBalance>(e =>
+        {
+            e.ToTable("fund_balances");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.FundName).HasMaxLength(300).IsRequired();
+            e.Property(x => x.OpeningBalance).HasColumnType("decimal(18,2)");
+            e.Property(x => x.IncomingResources).HasColumnType("decimal(18,2)");
+            e.Property(x => x.ResourcesExpended).HasColumnType("decimal(18,2)");
+            e.Property(x => x.Transfers).HasColumnType("decimal(18,2)");
+            e.Property(x => x.GainsLosses).HasColumnType("decimal(18,2)");
+            e.Property(x => x.ClosingBalance).HasColumnType("decimal(18,2)");
+            e.HasOne(x => x.Period).WithMany(p => p.FundBalances).HasForeignKey(x => x.PeriodId).OnDelete(DeleteBehavior.Cascade);
         });
 
         // AuditLog (no foreign keys — records may outlive referenced entities)

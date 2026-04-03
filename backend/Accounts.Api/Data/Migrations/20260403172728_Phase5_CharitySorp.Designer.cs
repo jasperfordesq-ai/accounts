@@ -3,6 +3,7 @@ using System;
 using Accounts.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Accounts.Api.Data.Migrations
 {
     [DbContext(typeof(AccountsDbContext))]
-    partial class AccountsDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260403172728_Phase5_CharitySorp")]
+    partial class Phase5_CharitySorp
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -570,30 +573,8 @@ namespace Accounts.Api.Data.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<bool>("AccountsPdfGenerated")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTime?>("ApprovedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ApprovedBy")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime?>("CorrectionDeadline")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("CroSubmissionReference")
-                        .HasColumnType("text");
-
-                    b.Property<string>("FilingStatus")
-                        .IsRequired()
-                        .HasColumnType("text");
-
                     b.Property<DateTime>("GeneratedAt")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<bool>("PaymentCompleted")
-                        .HasColumnType("boolean");
 
                     b.Property<string>("PdfPath")
                         .HasColumnType("text");
@@ -601,20 +582,8 @@ namespace Accounts.Api.Data.Migrations
                     b.Property<int>("PeriodId")
                         .HasColumnType("integer");
 
-                    b.Property<string>("RejectionReason")
-                        .HasColumnType("text");
-
-                    b.Property<bool>("SignaturePageGenerated")
-                        .HasColumnType("boolean");
-
                     b.Property<string>("Status")
                         .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime?>("SubmittedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("SubmittedBy")
                         .HasColumnType("text");
 
                     b.HasKey("Id");
@@ -1342,35 +1311,13 @@ namespace Accounts.Api.Data.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<DateTime?>("ApprovedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ApprovedBy")
-                        .HasColumnType("text");
-
                     b.Property<string>("Ct1DataJson")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Ct1Reference")
-                        .HasColumnType("text");
-
-                    b.Property<string>("FilingStatus")
-                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<DateTime>("GeneratedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<bool>("IxbrlGenerated")
-                        .HasColumnType("boolean");
-
                     b.Property<string>("IxbrlPath")
-                        .HasColumnType("text");
-
-                    b.Property<bool>("IxbrlValidated")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("IxbrlValidationErrors")
                         .HasColumnType("text");
 
                     b.Property<int>("PeriodId")

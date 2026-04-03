@@ -126,3 +126,16 @@ public enum DeadlineType
     Charity,
     Revenue
 }
+
+public enum FilingStatus
+{
+    NotStarted,
+    InProgress,
+    ReadyForReview,
+    Approved,
+    PackageGenerated,
+    Submitted,
+    Accepted,
+    Rejected,
+    CorrectionRequired
+}

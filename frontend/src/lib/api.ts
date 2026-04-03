@@ -927,3 +927,143 @@ export interface DirectorsReportData {
 
 export const getDirectorsReportData = (companyId: number, periodId: number) =>
   apiFetch<DirectorsReportData>(`/api/companies/${companyId}/periods/${periodId}/documents/directors-report-data`);
+
+// === Phase 5: Charity / SORP ===
+
+export interface CharityInfo {
+  id?: number;
+  companyId?: number;
+  charityNumber?: string;
+  charityType?: string;
+  grossIncome: number;
+  sorpTier: number;
+  charitableObjectives?: string;
+  principalActivities?: string;
+  governanceCodeCompliant: boolean;
+  governanceCodeNote?: string;
+  hasInternationalTransfers: boolean;
+  internationalTransferDetails?: string;
+  trusteeRemunerationPaid: boolean;
+  trusteeRemunerationAmount: number;
+  trusteeExpensesDetails?: string;
+}
+
+export interface FundBalance {
+  id?: number;
+  periodId?: number;
+  fundName: string;
+  fundType: string;
+  openingBalance: number;
+  incomingResources: number;
+  resourcesExpended: number;
+  transfers: number;
+  gainsLosses: number;
+  closingBalance: number;
+  notes?: string;
+}
+
+export interface SofaData {
+  unrestrictedFunds: FundLine[];
+  restrictedFunds: FundLine[];
+  endowmentFunds: FundLine[];
+  totalIncoming: number;
+  totalExpended: number;
+  totalTransfers: number;
+  totalGainsLosses: number;
+  netMovement: number;
+  totalOpeningFunds: number;
+  totalClosingFunds: number;
+}
+
+export interface FundLine {
+  fundName: string;
+  fundType: string;
+  openingBalance: number;
+  incomingResources: number;
+  resourcesExpended: number;
+  transfers: number;
+  gainsLosses: number;
+  closingBalance: number;
+}
+
+export interface TrusteesReportData {
+  charityName: string;
+  charityNumber: string;
+  croNumber: string;
+  periodStart: string;
+  periodEnd: string;
+  trusteeNames: string[];
+  charitableObjectives: string;
+  principalActivities: string;
+  totalIncome: number;
+  totalExpenditure: number;
+  netMovement: number;
+  closingFunds: number;
+  governanceCodeCompliant: boolean;
+  governanceCodeNote?: string;
+  trusteeRemunerationPaid: boolean;
+  trusteeRemunerationAmount: number;
+  trusteeExpensesDetails?: string;
+  hasInternationalTransfers: boolean;
+  internationalTransferDetails?: string;
+  sorpTier: number;
+  filingDeadline: string;
+}
+
+export const getCharityInfo = (companyId: number) =>
+  apiFetch<CharityInfo>(`/api/companies/${companyId}/charity/info`);
+export const saveCharityInfo = (companyId: number, data: CharityInfo) =>
+  apiFetch<CharityInfo>(`/api/companies/${companyId}/charity/info`, { method: "PUT", body: JSON.stringify(data) });
+
+export const getSofa = (companyId: number, periodId: number) =>
+  apiFetch<SofaData>(`/api/companies/${companyId}/periods/${periodId}/charity/sofa`);
+export const getTrusteesReport = (companyId: number, periodId: number) =>
+  apiFetch<TrusteesReportData>(`/api/companies/${companyId}/periods/${periodId}/charity/trustees-report`);
+
+export const getFundBalances = (companyId: number, periodId: number) =>
+  apiFetch<FundBalance[]>(`/api/companies/${companyId}/periods/${periodId}/charity/funds`);
+export const createFundBalance = (companyId: number, periodId: number, data: FundBalance) =>
+  apiFetch<FundBalance>(`/api/companies/${companyId}/periods/${periodId}/charity/funds`, { method: "POST", body: JSON.stringify(data) });
+export const updateFundBalance = (companyId: number, periodId: number, id: number, data: FundBalance) =>
+  apiFetch<FundBalance>(`/api/companies/${companyId}/periods/${periodId}/charity/funds/${id}`, { method: "PUT", body: JSON.stringify(data) });
+export const deleteFundBalance = (companyId: number, periodId: number, id: number) =>
+  apiFetch<void>(`/api/companies/${companyId}/periods/${periodId}/charity/funds/${id}`, { method: "DELETE" });
+
+// === Phase 6: Filing Workflow ===
+
+export interface FilingWorkflowStatus {
+  cro: CroFilingStatus;
+  revenue: RevenueFilingStatus;
+  blockingIssues: string[];
+  readyToFile: boolean;
+}
+
+export interface CroFilingStatus {
+  status: string;
+  accountsPdfReady: boolean;
+  signaturePageReady: boolean;
+  paymentCompleted: boolean;
+  submissionReference?: string;
+  rejectionReason?: string;
+  correctionDeadline?: string;
+}
+
+export interface RevenueFilingStatus {
+  status: string;
+  ixbrlReady: boolean;
+  ixbrlValid: boolean;
+  validationErrors?: string;
+  ct1Reference?: string;
+}
+
+export const getFilingWorkflowStatus = (companyId: number, periodId: number) =>
+  apiFetch<FilingWorkflowStatus>(`/api/companies/${companyId}/periods/${periodId}/filing/status`);
+
+export const updateCroFilingStatus = (companyId: number, periodId: number, data: { status: string; by?: string }) =>
+  apiFetch<unknown>(`/api/companies/${companyId}/periods/${periodId}/filing/cro-status`, { method: "PUT", body: JSON.stringify(data) });
+
+export const markDocumentGenerated = (companyId: number, periodId: number, documentType: string) =>
+  apiFetch<unknown>(`/api/companies/${companyId}/periods/${periodId}/filing/mark-generated`, { method: "POST", body: JSON.stringify({ documentType }) });
+
+export const validateIxbrl = (companyId: number, periodId: number) =>
+  apiFetch<RevenueFilingStatus>(`/api/companies/${companyId}/periods/${periodId}/filing/validate-ixbrl`, { method: "POST" });
