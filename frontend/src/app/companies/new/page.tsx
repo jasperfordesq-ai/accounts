@@ -76,6 +76,11 @@ export default function NewCompanyPage() {
   const [ownsAssets, setOwnsAssets] = useState(false);
   const [hasBorrowings, setHasBorrowings] = useState(false);
   const [hasDirectorLoans, setHasDirectorLoans] = useState(false);
+  const [isListedSecurities, setIsListedSecurities] = useState(false);
+  const [isCreditInstitution, setIsCreditInstitution] = useState(false);
+  const [isInsuranceUndertaking, setIsInsuranceUndertaking] = useState(false);
+  const [isPensionFund, setIsPensionFund] = useState(false);
+  const [isCharitableOrganisation, setIsCharitableOrganisation] = useState(false);
 
   // Step 3: Address & Periods
   const [address1, setAddress1] = useState("");
@@ -158,6 +163,11 @@ export default function NewCompanyPage() {
         ownsAssets,
         hasBorrowings,
         hasDirectorLoans,
+        isListedSecurities,
+        isCreditInstitution,
+        isInsuranceUndertaking,
+        isPensionFund,
+        isCharitableOrganisation,
       });
 
       const validOfficers = officers.filter((o) => o.name.trim().length > 0);
@@ -389,6 +399,9 @@ export default function NewCompanyPage() {
                   <Checkbox isSelected={isEmployer} onChange={setIsEmployer}>
                     Employer (PAYE Registered)
                   </Checkbox>
+                  <Checkbox isSelected={isCharitableOrganisation} onChange={setIsCharitableOrganisation}>
+                    Registered Charity
+                  </Checkbox>
                 </div>
               </div>
 
@@ -410,6 +423,34 @@ export default function NewCompanyPage() {
                     Has Director Loans
                   </Checkbox>
                 </div>
+              </div>
+
+              <div>
+                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                  Regulatory Exclusions (Fifth Schedule)
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                  If any apply, the company is ineligible for micro/small exemptions and must file full accounts.
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <Checkbox isSelected={isListedSecurities} onChange={setIsListedSecurities}>
+                    Listed Securities (regulated market)
+                  </Checkbox>
+                  <Checkbox isSelected={isCreditInstitution} onChange={setIsCreditInstitution}>
+                    Credit Institution
+                  </Checkbox>
+                  <Checkbox isSelected={isInsuranceUndertaking} onChange={setIsInsuranceUndertaking}>
+                    Insurance Undertaking
+                  </Checkbox>
+                  <Checkbox isSelected={isPensionFund} onChange={setIsPensionFund}>
+                    Pension / Investment Fund
+                  </Checkbox>
+                </div>
+                {(isListedSecurities || isCreditInstitution || isInsuranceUndertaking || isPensionFund) && (
+                  <div className="mt-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-400">
+                    This company is an ineligible entity under the Fifth Schedule. Micro, small, and medium exemptions will not be available.
+                  </div>
+                )}
               </div>
             </div>
           )}

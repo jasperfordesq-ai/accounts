@@ -12,6 +12,11 @@ public class AccountingPeriod
     public bool IsFirstYear { get; set; }
     public DateTime? LockedAt { get; set; }
     public string? LockedBy { get; set; }
+
+    // Member audit notice (s.334 Companies Act 2014)
+    public bool MemberAuditNoticeReceived { get; set; }
+    public DateOnly? MemberAuditNoticeDate { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     // Navigation
@@ -33,4 +38,5 @@ public class AccountingPeriod
     public List<NotesDisclosure> NotesDisclosures { get; set; } = [];
     public CroFilingPackage? CroFilingPackage { get; set; }
     public RevenueFilingPackage? RevenueFilingPackage { get; set; }
+    public List<FilingDeadline> FilingDeadlines { get; set; } = [];
 }

@@ -425,5 +425,34 @@ public static class YearEndEndpoints
             await db.SaveChangesAsync();
             return Results.NoContent();
         });
+
+        // ===== DIRECTOR LOAN COMPLIANCE (s.239 / s.307) =====
+        var dlCompliance = app.MapGroup($"{basePath}/director-loans").WithTags("Director Loans");
+
+        dlCompliance.MapGet("/compliance", async (int companyId, int periodId, DirectorLoanComplianceService service) =>
+        {
+            try
+            {
+                var result = await service.GetComplianceStatusAsync(companyId, periodId);
+                return Results.Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+        });
+
+        dlCompliance.MapGet("/section-307-note", async (int companyId, int periodId, DirectorLoanComplianceService service) =>
+        {
+            try
+            {
+                var note = await service.GenerateSection307NoteAsync(companyId, periodId);
+                return Results.Ok(new { note });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+        });
     }
 }

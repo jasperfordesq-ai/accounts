@@ -33,6 +33,13 @@ public class Company
     public bool HasBorrowings { get; set; }
     public bool HasDirectorLoans { get; set; }
 
+    // Fifth Schedule — Ineligible entity flags (Companies Act 2014)
+    public bool IsListedSecurities { get; set; }
+    public bool IsCreditInstitution { get; set; }
+    public bool IsInsuranceUndertaking { get; set; }
+    public bool IsPensionFund { get; set; }
+    public bool IsCharitableOrganisation { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
@@ -45,4 +52,6 @@ public class Company
     public List<AccountCategory> Categories { get; set; } = [];
     public List<TransactionRule> TransactionRules { get; set; } = [];
     public List<ShareCapital> ShareCapitals { get; set; } = [];
+    public List<FilingDeadline> FilingDeadlines { get; set; } = [];
+    public List<FilingHistory> FilingHistories { get; set; } = [];
 }

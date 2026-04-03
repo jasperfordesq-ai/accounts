@@ -11,5 +11,6 @@ public static class EndpointRegistration
         app.MapStatementsEndpoints();
         app.MapDocumentEndpoints();
         app.MapRevenueEndpoints();
+        app.MapDeadlineEndpoints();
     }
 }

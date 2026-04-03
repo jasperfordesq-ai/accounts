@@ -16,7 +16,9 @@ public class SizeClassificationService(AccountsDbContext db, IOptions<SizeThresh
         bool CanUseMicro,
         bool CanFileAbridged,
         bool AuditExempt,
-        List<string> AvailableRegimes
+        List<string> AvailableRegimes,
+        bool IsIneligibleEntity = false,
+        string? IneligibleReason = null
     );
 
     public async Task<ClassificationResult> ClassifyAsync(int periodId)
@@ -73,11 +75,30 @@ public class SizeClassificationService(AccountsDbContext db, IOptions<SizeThresh
             notes.Add("No prior year classification available — using current year only.");
         }
 
+        // Fifth Schedule — Ineligible entity detection (Companies Act 2014)
+        bool isIneligible = company.IsListedSecurities || company.IsCreditInstitution
+                         || company.IsInsuranceUndertaking || company.IsPensionFund;
+        string? ineligibleReason = null;
+
+        if (isIneligible)
+        {
+            var reasons = new List<string>();
+            if (company.IsListedSecurities) reasons.Add("securities admitted to regulated market");
+            if (company.IsCreditInstitution) reasons.Add("credit institution");
+            if (company.IsInsuranceUndertaking) reasons.Add("insurance undertaking");
+            if (company.IsPensionFund) reasons.Add("pension/investment fund");
+            ineligibleReason = $"Ineligible entity under Fifth Schedule: {string.Join(", ", reasons)}.";
+
+            effectiveClass = CompanySizeClass.Large;
+            notes.Add($"INELIGIBLE ENTITY — {ineligibleReason}");
+            notes.Add("Micro, small, and medium exemptions are not available. Full reporting regime applies.");
+        }
+
         // Check micro exclusions
-        bool microExcluded = company.IsHolding || company.IsInvestment || company.IsSubsidiary;
+        bool microExcluded = isIneligible || company.IsHolding || company.IsInvestment || company.IsSubsidiary;
         bool canUseMicro = effectiveClass == CompanySizeClass.Micro && !microExcluded;
 
-        if (effectiveClass == CompanySizeClass.Micro && microExcluded)
+        if (!isIneligible && effectiveClass == CompanySizeClass.Micro && microExcluded)
         {
             notes.Add("Micro regime excluded: company is a holding, investment, or subsidiary company.");
             notes.Add("Falls back to small company regime.");
@@ -85,19 +106,28 @@ public class SizeClassificationService(AccountsDbContext db, IOptions<SizeThresh
 
         // Determine available regimes
         var regimes = new List<string>();
-        if (canUseMicro) regimes.Add("Micro (FRS 105)");
-        if (effectiveClass <= CompanySizeClass.Small)
+        if (isIneligible)
         {
-            regimes.Add("Small — Full");
-            regimes.Add("Small — Abridged");
+            regimes.Add("Full");
         }
-        if (effectiveClass == CompanySizeClass.Medium) regimes.Add("Medium");
-        if (effectiveClass == CompanySizeClass.Large) regimes.Add("Full");
+        else
+        {
+            if (canUseMicro) regimes.Add("Micro (FRS 105)");
+            if (effectiveClass <= CompanySizeClass.Small)
+            {
+                regimes.Add("Small — Full");
+                regimes.Add("Small — Abridged");
+            }
+            if (effectiveClass == CompanySizeClass.Medium) regimes.Add("Medium");
+            if (effectiveClass == CompanySizeClass.Large) regimes.Add("Full");
+        }
 
         // Audit exemption: s.360 Companies Act 2014
-        // Available to small companies (not groups, not public interest entities)
-        bool auditExempt = effectiveClass <= CompanySizeClass.Small && !company.IsGroupMember;
-        if (auditExempt)
+        // Not available to ineligible entities or group members
+        bool auditExempt = !isIneligible && effectiveClass <= CompanySizeClass.Small && !company.IsGroupMember;
+        if (isIneligible)
+            notes.Add("Audit exemption not available — ineligible entity under Fifth Schedule.");
+        else if (auditExempt)
             notes.Add("Audit exemption available under s.360 Companies Act 2014.");
         else if (effectiveClass <= CompanySizeClass.Small && company.IsGroupMember)
             notes.Add("Audit exemption not available — company is part of a group.");
@@ -117,9 +147,11 @@ public class SizeClassificationService(AccountsDbContext db, IOptions<SizeThresh
             effectiveClass,
             string.Join("\n", notes),
             canUseMicro,
-            effectiveClass <= CompanySizeClass.Small,
+            !isIneligible && effectiveClass <= CompanySizeClass.Small,
             auditExempt,
-            regimes
+            regimes,
+            isIneligible,
+            ineligibleReason
         );
     }
 

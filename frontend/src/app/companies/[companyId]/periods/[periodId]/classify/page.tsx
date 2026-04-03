@@ -18,6 +18,7 @@ import {
   saveSizeClassification,
   runClassification,
   setFilingRegime,
+  saveMemberAuditNotice,
   type Company,
   type AccountingPeriod,
 } from "@/lib/api";
@@ -39,6 +40,8 @@ interface ClassificationResult {
   canFileAbridged: boolean;
   auditExempt: boolean;
   availableRegimes: string[];
+  isIneligibleEntity: boolean;
+  ineligibleReason?: string;
 }
 
 export default function ClassifyPage({
@@ -65,6 +68,9 @@ export default function ClassifyPage({
   const [classifying, setClassifying] = useState(false);
   const [classifyError, setClassifyError] = useState<string | null>(null);
 
+  // Member audit notice (s.334)
+  const [memberAuditNotice, setMemberAuditNotice] = useState(false);
+
   // Filing regime
   const [selectedRegime, setSelectedRegime] = useState<string>("");
   const [confirmingRegime, setConfirmingRegime] = useState(false);
@@ -87,6 +93,8 @@ export default function ClassifyPage({
         setBalanceSheetTotal(sc.balanceSheetTotal);
         setAvgEmployees(sc.avgEmployees);
       }
+
+      setMemberAuditNotice(periodData.memberAuditNoticeReceived ?? false);
 
       if (periodData.filingRegime) {
         setSelectedRegime(periodData.filingRegime.electedRegime);
@@ -283,6 +291,46 @@ export default function ClassifyPage({
         </Card.Content>
       </Card>
 
+      {/* Member Audit Notice (s.334) */}
+      <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 mb-6">
+        <Card.Header>
+          <Card.Title className="text-gray-900 dark:text-gray-100">Member Audit Notice</Card.Title>
+          <Card.Description>
+            Under s.334 Companies Act 2014, members may serve notice requiring a statutory audit.
+          </Card.Description>
+        </Card.Header>
+        <Card.Content>
+          <div className="flex items-center gap-4">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={memberAuditNotice}
+                onChange={async (e) => {
+                  setMemberAuditNotice(e.target.checked);
+                  try {
+                    await saveMemberAuditNotice(cId, pId, { received: e.target.checked });
+                    toast.success(e.target.checked ? "Audit notice recorded" : "Audit notice removed");
+                  } catch (err) {
+                    toast.error("Failed to save audit notice");
+                  }
+                }}
+                className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                aria-label="Member audit notice received"
+                title="Member audit notice received"
+              />
+              <span className="text-sm text-gray-700 dark:text-gray-300">
+                A member has served notice requiring a statutory audit
+              </span>
+            </label>
+          </div>
+          {memberAuditNotice && (
+            <div className="mt-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-4 py-3 text-sm text-amber-700 dark:text-amber-400">
+              Audit exemption is overridden. A statutory audit will be required for this period regardless of company size.
+            </div>
+          )}
+        </Card.Content>
+      </Card>
+
       {/* Results */}
       {result && (
         <>
@@ -303,6 +351,16 @@ export default function ClassifyPage({
                     {result.calculatedClass} Company
                   </Chip>
                 </div>
+
+                {/* Ineligible entity banner */}
+                {result.isIneligibleEntity && (
+                  <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-4 py-3">
+                    <h4 className="text-sm font-medium text-red-800 dark:text-red-300 mb-1">Ineligible Entity</h4>
+                    <p className="text-sm text-red-700 dark:text-red-400">
+                      {result.ineligibleReason ?? "This company is an ineligible entity under the Fifth Schedule. Micro, small, and medium exemptions are not available."}
+                    </p>
+                  </div>
+                )}
 
                 {/* Qualification notes */}
                 {result.qualificationNotes && (

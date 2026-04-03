@@ -119,3 +119,10 @@ public enum ElectedRegime
     Medium,
     Full
 }
+
+public enum DeadlineType
+{
+    CRO,
+    Charity,
+    Revenue
+}

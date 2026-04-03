@@ -69,8 +69,22 @@ public static class ClassificationEndpoints
             var fr = await db.FilingRegimes.FirstOrDefaultAsync(f => f.PeriodId == periodId);
             return fr != null ? Results.Ok(fr) : Results.NotFound();
         });
+
+        // Save member audit notice (s.334 Companies Act 2014)
+        group.MapPut("/member-audit-notice", async (int companyId, int periodId, MemberAuditNoticeInput input, AccountsDbContext db) =>
+        {
+            var period = await db.AccountingPeriods
+                .FirstOrDefaultAsync(p => p.Id == periodId && p.CompanyId == companyId);
+            if (period == null) return Results.NotFound();
+
+            period.MemberAuditNoticeReceived = input.Received;
+            period.MemberAuditNoticeDate = input.NoticeDate;
+            await db.SaveChangesAsync();
+            return Results.Ok(new { period.MemberAuditNoticeReceived, period.MemberAuditNoticeDate });
+        });
     }
 }
 
 public record SizeClassificationInput(decimal Turnover, decimal BalanceSheetTotal, int AvgEmployees, CompanySizeClass? PriorYearClass);
 public record FilingRegimeInput(ElectedRegime? ElectedRegime);
+public record MemberAuditNoticeInput(bool Received, DateOnly? NoticeDate);

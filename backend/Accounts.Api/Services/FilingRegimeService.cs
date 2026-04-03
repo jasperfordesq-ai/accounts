@@ -31,10 +31,23 @@ public class FilingRegimeService(AccountsDbContext db)
 
         var company = period.Company;
         var sizeClass = sc.OverrideClass ?? sc.CalculatedClass;
-        var microExcluded = company.IsHolding || company.IsInvestment || company.IsSubsidiary;
+
+        // Fifth Schedule ineligible entity check
+        var isIneligible = company.IsListedSecurities || company.IsCreditInstitution
+                        || company.IsInsuranceUndertaking || company.IsPensionFund;
+
+        if (isIneligible) sizeClass = CompanySizeClass.Large;
+
+        var microExcluded = isIneligible || company.IsHolding || company.IsInvestment || company.IsSubsidiary;
         var canUseMicro = sizeClass == CompanySizeClass.Micro && !microExcluded;
-        var canFileAbridged = sizeClass <= CompanySizeClass.Small;
-        var auditExempt = sizeClass <= CompanySizeClass.Small && !company.IsGroupMember;
+        var canFileAbridged = !isIneligible && sizeClass <= CompanySizeClass.Small;
+
+        // Audit exemption: check s.334 member notice override
+        var auditExempt = !isIneligible && sizeClass <= CompanySizeClass.Small && !company.IsGroupMember;
+        if (auditExempt && period.MemberAuditNoticeReceived)
+        {
+            auditExempt = false; // s.334: member(s) served notice requiring audit
+        }
 
         // Default regime based on classification
         var regime = electedRegime ?? DetermineDefaultRegime(sizeClass, canUseMicro);

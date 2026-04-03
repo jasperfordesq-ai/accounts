@@ -39,6 +39,9 @@ import {
   getReadiness,
   getAccountsPackageUrl,
   getIxbrlUrl,
+  getAgmPackUrl,
+  getCroFilingPackUrl,
+  getSignaturePageUrl,
   getBankAccounts,
   getTransactions,
   getAdjustments,
@@ -279,6 +282,9 @@ export default function PeriodWorkspacePage({
 
   const pdfUrl = getAccountsPackageUrl(cId, pId);
   const ixbrlUrl = getIxbrlUrl(cId, pId);
+  const agmPackUrl = getAgmPackUrl(cId, pId);
+  const croPackUrl = getCroFilingPackUrl(cId, pId);
+  const sigPageUrl = getSignaturePageUrl(cId, pId);
   const categorisedCount = transactions.filter((t) => t.categoryId != null).length;
   const uncategorisedCount = transactionTotal - categorisedCount;
 
@@ -1027,11 +1033,27 @@ export default function PeriodWorkspacePage({
               </Card.Header>
               <Card.Content>
                 <div className="grid grid-cols-2 gap-4">
-                  <a href={pdfUrl} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center gap-3 rounded-xl border-2 border-gray-200 dark:border-neutral-700 p-8 hover:border-emerald-400 dark:hover:border-emerald-600 hover:bg-emerald-50/30 dark:hover:bg-emerald-900/10 transition-all group">
+                  <a href={agmPackUrl} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center gap-3 rounded-xl border-2 border-gray-200 dark:border-neutral-700 p-8 hover:border-emerald-400 dark:hover:border-emerald-600 hover:bg-emerald-50/30 dark:hover:bg-emerald-900/10 transition-all group">
                     <FileText className="w-12 h-12 text-gray-400 dark:text-gray-500 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors" />
                     <div className="text-center">
-                      <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Accounts Package</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">PDF format for printing and review</p>
+                      <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">AGM Pack</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Full statutory accounts for AGM approval</p>
+                    </div>
+                    <Button variant="outline" size="sm"><Download className="w-4 h-4 mr-1" />Download PDF</Button>
+                  </a>
+                  <a href={croPackUrl} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center gap-3 rounded-xl border-2 border-gray-200 dark:border-neutral-700 p-8 hover:border-emerald-400 dark:hover:border-emerald-600 hover:bg-emerald-50/30 dark:hover:bg-emerald-900/10 transition-all group">
+                    <FileText className="w-12 h-12 text-gray-400 dark:text-gray-500 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors" />
+                    <div className="text-center">
+                      <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">CRO Filing Pack</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Abridged accounts for CRO filing</p>
+                    </div>
+                    <Button variant="outline" size="sm"><Download className="w-4 h-4 mr-1" />Download PDF</Button>
+                  </a>
+                  <a href={sigPageUrl} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center gap-3 rounded-xl border-2 border-gray-200 dark:border-neutral-700 p-8 hover:border-emerald-400 dark:hover:border-emerald-600 hover:bg-emerald-50/30 dark:hover:bg-emerald-900/10 transition-all group">
+                    <FileText className="w-12 h-12 text-gray-400 dark:text-gray-500 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors" />
+                    <div className="text-center">
+                      <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Signature Page</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Typeset signatures for CRO (s.347)</p>
                     </div>
                     <Button variant="outline" size="sm"><Download className="w-4 h-4 mr-1" />Download PDF</Button>
                   </a>
@@ -1058,6 +1080,7 @@ export default function PeriodWorkspacePage({
                   <ChecklistItem label="Balance sheet balances" done={readiness?.balanceSheetBalances ?? false} />
                   <ChecklistItem label="Filing readiness at 100%" done={(readiness?.filingReadinessPercent ?? 0) >= 100} />
                   <ChecklistItem label="Accounts package downloaded and reviewed" done={false} />
+                  <ChecklistItem label="CRO filing pack and signature page generated" done={false} />
                 </div>
               </Card.Content>
             </Card>

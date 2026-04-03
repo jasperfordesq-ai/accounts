@@ -47,6 +47,10 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
     // Share Capital
     public DbSet<ShareCapital> ShareCapitals => Set<ShareCapital>();
 
+    // Filing Compliance
+    public DbSet<FilingDeadline> FilingDeadlines => Set<FilingDeadline>();
+    public DbSet<FilingHistory> FilingHistories => Set<FilingHistory>();
+
     // Audit
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
@@ -255,6 +259,10 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
             e.Property(d => d.Advances).HasColumnType("decimal(18,2)");
             e.Property(d => d.Repayments).HasColumnType("decimal(18,2)");
             e.Property(d => d.ClosingBalance).HasColumnType("decimal(18,2)");
+            e.Property(d => d.InterestRate).HasColumnType("decimal(5,2)");
+            e.Property(d => d.InterestCharged).HasColumnType("decimal(18,2)");
+            e.Property(d => d.MaxBalanceDuringYear).HasColumnType("decimal(18,2)");
+            e.Property(d => d.LoanTerms).HasMaxLength(1000);
             e.HasOne(d => d.Period).WithMany(p => p.DirectorLoans).HasForeignKey(d => d.PeriodId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(d => d.Director).WithMany().HasForeignKey(d => d.DirectorId).OnDelete(DeleteBehavior.Restrict);
         });
@@ -332,6 +340,29 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
             e.Property(s => s.NominalValue).HasColumnType("decimal(18,2)");
             e.Property(s => s.TotalValue).HasColumnType("decimal(18,2)");
             e.HasOne(s => s.Company).WithMany(c => c.ShareCapitals).HasForeignKey(s => s.CompanyId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // FilingDeadline
+        modelBuilder.Entity<FilingDeadline>(e =>
+        {
+            e.ToTable("filing_deadlines");
+            e.HasKey(f => f.Id);
+            e.Property(f => f.PenaltyAmount).HasColumnType("decimal(18,2)");
+            e.Property(f => f.Notes).HasMaxLength(1000);
+            e.HasOne(f => f.Company).WithMany(c => c.FilingDeadlines).HasForeignKey(f => f.CompanyId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(f => f.Period).WithMany(p => p.FilingDeadlines).HasForeignKey(f => f.PeriodId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(f => new { f.CompanyId, f.PeriodId, f.DeadlineType }).IsUnique();
+        });
+
+        // FilingHistory
+        modelBuilder.Entity<FilingHistory>(e =>
+        {
+            e.ToTable("filing_histories");
+            e.HasKey(f => f.Id);
+            e.Property(f => f.PenaltyAmount).HasColumnType("decimal(18,2)");
+            e.HasOne(f => f.Company).WithMany(c => c.FilingHistories).HasForeignKey(f => f.CompanyId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(f => f.Period).WithMany().HasForeignKey(f => f.PeriodId).OnDelete(DeleteBehavior.SetNull);
+            e.HasIndex(f => new { f.CompanyId, f.DueDate });
         });
 
         // AuditLog (no foreign keys — records may outlive referenced entities)

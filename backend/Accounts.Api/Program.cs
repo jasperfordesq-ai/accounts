@@ -40,6 +40,8 @@ builder.Services.AddScoped<DocumentGeneratorService>();
 builder.Services.AddScoped<TaxComputationService>();
 builder.Services.AddScoped<IxbrlService>();
 builder.Services.AddScoped<NotesDisclosureService>();
+builder.Services.AddScoped<DeadlineService>();
+builder.Services.AddScoped<DirectorLoanComplianceService>();
 
 // CORS
 builder.Services.AddCors(options =>
@@ -144,6 +146,11 @@ companies.MapPut("/{id:int}", async (int id, Accounts.Api.Entities.Company input
     company.OwnsAssets = input.OwnsAssets;
     company.HasBorrowings = input.HasBorrowings;
     company.HasDirectorLoans = input.HasDirectorLoans;
+    company.IsListedSecurities = input.IsListedSecurities;
+    company.IsCreditInstitution = input.IsCreditInstitution;
+    company.IsInsuranceUndertaking = input.IsInsuranceUndertaking;
+    company.IsPensionFund = input.IsPensionFund;
+    company.IsCharitableOrganisation = input.IsCharitableOrganisation;
     company.UpdatedAt = DateTime.UtcNow;
 
     await db.SaveChangesAsync();

@@ -152,6 +152,12 @@ export interface Company {
   ownsAssets: boolean;
   hasBorrowings: boolean;
   hasDirectorLoans: boolean;
+  // Fifth Schedule ineligibility flags
+  isListedSecurities: boolean;
+  isCreditInstitution: boolean;
+  isInsuranceUndertaking: boolean;
+  isPensionFund: boolean;
+  isCharitableOrganisation: boolean;
   officers?: Officer[];
   periods?: AccountingPeriod[];
   periodCount?: number;
@@ -174,6 +180,8 @@ export interface AccountingPeriod {
   periodEnd: string;
   status: string;
   isFirstYear: boolean;
+  memberAuditNoticeReceived: boolean;
+  memberAuditNoticeDate?: string;
   sizeClassification?: SizeClassification;
   filingRegime?: FilingRegime;
 }
@@ -651,6 +659,8 @@ export const runClassification = (companyId: number, periodId: number) =>
     canFileAbridged: boolean;
     auditExempt: boolean;
     availableRegimes: string[];
+    isIneligibleEntity: boolean;
+    ineligibleReason?: string;
   }>(`/api/companies/${companyId}/periods/${periodId}/classify`, { method: "POST" });
 
 export const setFilingRegime = (companyId: number, periodId: number, electedRegime?: string) =>
@@ -703,3 +713,100 @@ export const getTaxComputation = (companyId: number, periodId: number) =>
   apiFetch<TaxComputation>(
     `/api/companies/${companyId}/periods/${periodId}/revenue/tax-computation`
   );
+
+// === Member Audit Notice (s.334) ===
+export const saveMemberAuditNotice = (
+  companyId: number,
+  periodId: number,
+  data: { received: boolean; noticeDate?: string },
+) =>
+  apiFetch<{ memberAuditNoticeReceived: boolean; memberAuditNoticeDate?: string }>(
+    `/api/companies/${companyId}/periods/${periodId}/member-audit-notice`,
+    { method: "PUT", body: JSON.stringify(data) },
+  );
+
+// === Filing Deadlines ===
+export interface FilingDeadline {
+  id: number;
+  companyId: number;
+  periodId: number;
+  deadlineType: string;
+  dueDate: string;
+  filedDate?: string;
+  isLate: boolean;
+  penaltyAmount: number;
+  notes?: string;
+}
+
+export interface AuditExemptionJeopardy {
+  lateFilingCount: number;
+  isAtRisk: boolean;
+  hasLostExemption: boolean;
+  warning?: string;
+}
+
+export const getDeadlines = (companyId: number) =>
+  apiFetch<FilingDeadline[]>(`/api/companies/${companyId}/deadlines`);
+
+export const getUpcomingDeadline = (companyId: number) =>
+  apiFetch<FilingDeadline | { message: string }>(`/api/companies/${companyId}/deadlines/upcoming`);
+
+export const calculateDeadlines = (companyId: number, periodId: number) =>
+  apiFetch<FilingDeadline[]>(
+    `/api/companies/${companyId}/periods/${periodId}/deadlines/calculate`,
+    { method: "POST" },
+  );
+
+export const markFiled = (
+  companyId: number,
+  periodId: number,
+  data: { deadlineType: string; filedDate: string },
+) =>
+  apiFetch<FilingDeadline>(
+    `/api/companies/${companyId}/periods/${periodId}/mark-filed`,
+    { method: "POST", body: JSON.stringify(data) },
+  );
+
+export const getAuditExemptionJeopardy = (companyId: number) =>
+  apiFetch<AuditExemptionJeopardy>(`/api/companies/${companyId}/deadlines/jeopardy`);
+
+// === Director Loan Compliance ===
+export interface DirectorLoanCompliance {
+  totalDirectorLoans: number;
+  netAssets: number;
+  thresholdAmount: number;
+  exceedsThreshold: boolean;
+  sapRequired: boolean;
+  statutoryInterestDue: number;
+  loans: DirectorLoanDetail[];
+  warning?: string;
+}
+
+export interface DirectorLoanDetail {
+  id: number;
+  directorName: string;
+  openingBalance: number;
+  maxDuringYear: number;
+  closingBalance: number;
+  interestCharged: number;
+  isDocumented: boolean;
+  exceedsThreshold: boolean;
+}
+
+export const getDirectorLoanCompliance = (companyId: number, periodId: number) =>
+  apiFetch<DirectorLoanCompliance>(
+    `/api/companies/${companyId}/periods/${periodId}/director-loans/compliance`
+  );
+
+export const getSection307Note = (companyId: number, periodId: number) =>
+  apiFetch<{ note: string }>(
+    `/api/companies/${companyId}/periods/${periodId}/director-loans/section-307-note`
+  );
+
+// === Dual Filing Packs ===
+export const getAgmPackUrl = (companyId: number, periodId: number) =>
+  `${API_BASE}/api/companies/${companyId}/periods/${periodId}/documents/agm-pack`;
+export const getCroFilingPackUrl = (companyId: number, periodId: number) =>
+  `${API_BASE}/api/companies/${companyId}/periods/${periodId}/documents/cro-filing-pack`;
+export const getSignaturePageUrl = (companyId: number, periodId: number) =>
+  `${API_BASE}/api/companies/${companyId}/periods/${periodId}/documents/signature-page`;
