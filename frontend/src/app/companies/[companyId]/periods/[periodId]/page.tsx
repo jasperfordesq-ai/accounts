@@ -31,6 +31,7 @@ import {
   ClipboardList,
   Eye,
   Shield,
+  Heart,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -53,6 +54,12 @@ import {
   getFilingWorkflowStatus,
   validateIxbrl,
   calculateDeadlines,
+  getDeadlines,
+  markFiled,
+  getAuditExemptionJeopardy,
+  getSection307Note,
+  getCategories,
+  seedCategories,
   type Company,
   type AccountingPeriod,
   type YearEndSummary,
@@ -62,6 +69,9 @@ import {
   type Adjustment,
   type AdjustmentSummary,
   type FilingWorkflowStatus,
+  type FilingDeadline,
+  type AuditExemptionJeopardy,
+  type AccountCategory,
 } from "@/lib/api";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { PeriodWorkspaceSkeleton } from "@/components/Skeleton";
@@ -88,6 +98,10 @@ export default function PeriodWorkspacePage({
   const [readiness, setReadiness] = useState<ReadinessScore | null>(null);
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [filingStatus, setFilingStatus] = useState<FilingWorkflowStatus | null>(null);
+  const [deadlinesList, setDeadlinesList] = useState<FilingDeadline[]>([]);
+  const [jeopardy, setJeopardy] = useState<AuditExemptionJeopardy | null>(null);
+  const [section307Note, setSection307Note] = useState<string | null>(null);
+  const [categories, setCategories] = useState<AccountCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [generatingAdj, setGeneratingAdj] = useState(false);
@@ -156,6 +170,22 @@ export default function PeriodWorkspacePage({
       } catch {
         // Deadline calculation may not be available yet
       }
+      try {
+        const dl = await getDeadlines(cId);
+        setDeadlinesList(dl.filter((d: FilingDeadline) => d.periodId === pId));
+      } catch {}
+      try {
+        const j = await getAuditExemptionJeopardy(cId);
+        setJeopardy(j);
+      } catch {}
+      try {
+        const n = await getSection307Note(cId, pId);
+        setSection307Note(n.note);
+      } catch {}
+      try {
+        const cats = await getCategories(cId);
+        setCategories(cats);
+      } catch {}
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load data");
     } finally {
@@ -440,6 +470,32 @@ export default function PeriodWorkspacePage({
                 )}
               </Card.Content>
             </Card>
+
+            {/* Chart of Accounts Seed */}
+            {categories.length === 0 && (
+              <Card className="shadow-sm border border-amber-200 dark:border-amber-800 bg-amber-50/30 dark:bg-amber-900/10">
+                <Card.Content className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Settings className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                      <div>
+                        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Chart of Accounts</h3>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">No categories configured. Seed the default Irish chart of accounts.</p>
+                      </div>
+                    </div>
+                    <Button variant="outline" size="sm" onPress={async () => {
+                      try {
+                        const cats = await seedCategories(cId);
+                        setCategories(cats);
+                        toast.success(`${cats.length} categories seeded`);
+                      } catch (err) { toast.error("Failed to seed categories"); }
+                    }}>
+                      Seed Categories
+                    </Button>
+                  </div>
+                </Card.Content>
+              </Card>
+            )}
 
             {/* Upload Area */}
             <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
@@ -1038,6 +1094,23 @@ export default function PeriodWorkspacePage({
                 </div>
               </Card.Content>
             </Card>
+
+            {/* Charity SoFA */}
+            {company?.isCharitableOrganisation && (
+              <Card className="shadow-sm border border-green-200 dark:border-green-800 bg-green-50/30 dark:bg-green-900/10">
+                <Card.Content className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Heart className="w-5 h-5 text-green-600 dark:text-green-400" />
+                      <div>
+                        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Charity Reporting (SoFA)</h3>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Statement of Financial Activities and fund accounting.</p>
+                      </div>
+                    </div>
+                  </div>
+                </Card.Content>
+              </Card>
+            )}
           </div>
         </TabPanel>
 
@@ -1149,6 +1222,63 @@ export default function PeriodWorkspacePage({
                 )}
               </Card.Content>
             </Card>
+
+            {/* Filing Deadlines */}
+            {deadlinesList.length > 0 && (
+              <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
+                <Card.Header>
+                  <Card.Title className="text-gray-900 dark:text-gray-100">Filing Deadlines</Card.Title>
+                </Card.Header>
+                <Card.Content>
+                  <div className="space-y-3">
+                    {deadlinesList.map((d) => (
+                      <div key={d.id} className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-neutral-700 px-4 py-3">
+                        <div>
+                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{d.deadlineType} Filing</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">Due: {new Date(d.dueDate).toLocaleDateString("en-IE")}</p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          {d.filedDate ? (
+                            <Chip size="sm" variant="soft" color={d.isLate ? "danger" : "success"}>
+                              Filed {new Date(d.filedDate).toLocaleDateString("en-IE")} {d.isLate ? `(${d.penaltyAmount > 0 ? `\u20AC${d.penaltyAmount} penalty` : "Late"})` : ""}
+                            </Chip>
+                          ) : (
+                            <Button variant="outline" size="sm" onPress={async () => {
+                              try {
+                                await markFiled(cId, pId, { deadlineType: d.deadlineType, filedDate: new Date().toISOString().split("T")[0] });
+                                toast.success(`${d.deadlineType} filing marked as complete`);
+                                loadData();
+                              } catch (err) { toast.error("Failed to mark as filed"); }
+                            }}>
+                              Mark as Filed
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </Card.Content>
+              </Card>
+            )}
+
+            {/* Audit Exemption Jeopardy Warning */}
+            {jeopardy?.warning && (
+              <div className={`rounded-lg px-4 py-3 text-sm ${jeopardy.hasLostExemption ? "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400" : "bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400"}`}>
+                {jeopardy.warning}
+              </div>
+            )}
+
+            {/* s.307 Director Loan Disclosure */}
+            {section307Note && (
+              <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
+                <Card.Header>
+                  <Card.Title className="text-gray-900 dark:text-gray-100">s.307 Director Loan Disclosure</Card.Title>
+                </Card.Header>
+                <Card.Content>
+                  <pre className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-sans">{section307Note}</pre>
+                </Card.Content>
+              </Card>
+            )}
 
             <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
               <Card.Header>
