@@ -25,6 +25,9 @@ import {
   CreditCard,
   UserCheck,
 } from "lucide-react";
+import { toast } from "sonner";
+import { Breadcrumbs } from "@/components/Breadcrumbs";
+import { PeriodWorkspaceSkeleton } from "@/components/Skeleton";
 import {
   getCompany,
   getPeriod,
@@ -59,9 +62,9 @@ import {
 } from "@/lib/api";
 
 const inputClass =
-  "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500";
-const inputSmClass =
-  "rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500";
+  "w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors";
+const selectClass =
+  "w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors";
 
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("en-IE", {
@@ -71,7 +74,7 @@ function formatCurrency(amount: number): string {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Section wrapper – collapsible card                                 */
+/*  Section wrapper -- collapsible card                                */
 /* ------------------------------------------------------------------ */
 function Section({
   title,
@@ -91,32 +94,34 @@ function Section({
   const [open, setOpen] = useState(defaultOpen);
 
   return (
-    <Card className="shadow-sm border border-gray-200">
+    <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 dark:bg-neutral-900">
       <button
         type="button"
-        className="w-full text-left px-6 py-4 flex items-center gap-4 hover:bg-gray-50/50 transition-colors"
+        className="w-full text-left px-6 py-4 flex items-center gap-4 hover:bg-gray-50/50 dark:hover:bg-neutral-800/50 transition-colors"
         onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-label={`${open ? "Collapse" : "Expand"} ${title} section`}
       >
-        <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0">
-          <Icon className="w-5 h-5 text-emerald-600" />
+        <div className="w-10 h-10 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center shrink-0">
+          <Icon className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{title}</h3>
             {completed && (
               <CheckCircle2 className="w-4 h-4 text-emerald-500" />
             )}
           </div>
-          <p className="text-xs text-gray-500 mt-0.5">{subtitle}</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{subtitle}</p>
         </div>
         {open ? (
-          <ChevronDown className="w-5 h-5 text-gray-400 shrink-0" />
+          <ChevronDown className="w-5 h-5 text-gray-400 dark:text-gray-500 shrink-0" />
         ) : (
-          <ChevronRight className="w-5 h-5 text-gray-400 shrink-0" />
+          <ChevronRight className="w-5 h-5 text-gray-400 dark:text-gray-500 shrink-0" />
         )}
       </button>
       {open && (
-        <div className="px-6 pb-6 border-t border-gray-100 pt-4">
+        <div className="animate-slide-down px-6 pb-6 border-t border-gray-100 dark:border-neutral-700 pt-4">
           {children}
         </div>
       )}
@@ -216,8 +221,8 @@ export default function YearEndQuestionnairePage({
         setTaxForms(newTaxForms);
       }
       setTaxBalances(taxData);
-    } catch {
-      // ignore
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to load year-end data");
     } finally {
       setLoading(false);
     }
@@ -236,7 +241,10 @@ export default function YearEndQuestionnairePage({
       const created = await createDebtor(cId, pId, newDebtor);
       setDebtors((prev) => [...prev, created]);
       setNewDebtor({ name: "", amount: 0, type: "Trade" });
-    } catch { /* ignore */ }
+      toast.success("Debtor added");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to add debtor");
+    }
     setSavingSection(null);
   }
 
@@ -245,7 +253,10 @@ export default function YearEndQuestionnairePage({
     try {
       await deleteDebtor(cId, pId, id);
       setDebtors((prev) => prev.filter((d) => d.id !== id));
-    } catch { /* ignore */ }
+      toast.success("Debtor removed");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete debtor");
+    }
     setSavingSection(null);
   }
 
@@ -257,7 +268,10 @@ export default function YearEndQuestionnairePage({
       const created = await createCreditor(cId, pId, newCreditor);
       setCreditors((prev) => [...prev, created]);
       setNewCreditor({ name: "", amount: 0, type: "Trade", dueWithinYear: true });
-    } catch { /* ignore */ }
+      toast.success("Creditor added");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to add creditor");
+    }
     setSavingSection(null);
   }
 
@@ -266,7 +280,10 @@ export default function YearEndQuestionnairePage({
     try {
       await deleteCreditor(cId, pId, id);
       setCreditors((prev) => prev.filter((c) => c.id !== id));
-    } catch { /* ignore */ }
+      toast.success("Creditor removed");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete creditor");
+    }
     setSavingSection(null);
   }
 
@@ -278,7 +295,10 @@ export default function YearEndQuestionnairePage({
       const created = await createFixedAsset(cId, newAsset);
       setFixedAssets((prev) => [...prev, created]);
       setNewAsset({ name: "", category: "Equipment", cost: 0, acquisitionDate: "", usefulLifeYears: 5, depreciationMethod: "StraightLine" });
-    } catch { /* ignore */ }
+      toast.success("Fixed asset added");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to add fixed asset");
+    }
     setSavingSection(null);
   }
 
@@ -287,7 +307,10 @@ export default function YearEndQuestionnairePage({
     try {
       await deleteFixedAsset(cId, id);
       setFixedAssets((prev) => prev.filter((a) => a.id !== id));
-    } catch { /* ignore */ }
+      toast.success("Fixed asset removed");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete fixed asset");
+    }
     setSavingSection(null);
   }
 
@@ -299,7 +322,10 @@ export default function YearEndQuestionnairePage({
       const created = await createInventory(cId, pId, newInventoryItem);
       setInventory((prev) => [...prev, created]);
       setNewInventoryItem({ description: "", value: 0, valuationMethod: "FIFO" });
-    } catch { /* ignore */ }
+      toast.success("Inventory item added");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to add inventory item");
+    }
     setSavingSection(null);
   }
 
@@ -308,7 +334,10 @@ export default function YearEndQuestionnairePage({
     try {
       await deleteInventory(cId, pId, id);
       setInventory((prev) => prev.filter((i) => i.id !== id));
-    } catch { /* ignore */ }
+      toast.success("Inventory item removed");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete inventory item");
+    }
     setSavingSection(null);
   }
 
@@ -318,7 +347,10 @@ export default function YearEndQuestionnairePage({
     try {
       const saved = await savePayroll(cId, pId, payrollForm);
       setPayroll(saved);
-    } catch { /* ignore */ }
+      toast.success("Payroll saved");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save payroll");
+    }
     setSavingSection(null);
   }
 
@@ -336,7 +368,10 @@ export default function YearEndQuestionnairePage({
         }
         return [...prev, saved];
       });
-    } catch { /* ignore */ }
+      toast.success(`${taxType === "PAYE_PRSI" ? "PAYE/PRSI" : taxType === "CorporationTax" ? "Corporation Tax" : taxType} saved`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : `Failed to save ${taxType}`);
+    }
     setSavingSection(null);
   }
 
@@ -348,7 +383,10 @@ export default function YearEndQuestionnairePage({
       const created = await createDividend(cId, pId, newDividend);
       setDividends((prev) => [...prev, created]);
       setNewDividend({ amount: 0, dateDeclared: "", datePaid: "" });
-    } catch { /* ignore */ }
+      toast.success("Dividend added");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to add dividend");
+    }
     setSavingSection(null);
   }
 
@@ -357,7 +395,10 @@ export default function YearEndQuestionnairePage({
     try {
       await deleteDividend(cId, pId, id);
       setDividends((prev) => prev.filter((d) => d.id !== id));
-    } catch { /* ignore */ }
+      toast.success("Dividend removed");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete dividend");
+    }
     setSavingSection(null);
   }
 
@@ -375,42 +416,53 @@ export default function YearEndQuestionnairePage({
   ];
   const completedCount = sectionCompleteness.filter(Boolean).length;
 
+  const periodLabel = period
+    ? `${new Date(period.periodStart).toLocaleDateString("en-IE")} to ${new Date(period.periodEnd).toLocaleDateString("en-IE")}`
+    : "";
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <Spinner size="lg" />
+      <div className="max-w-4xl mx-auto">
+        <PeriodWorkspaceSkeleton />
       </div>
     );
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-4xl mx-auto animate-fade-in">
+      {/* Breadcrumbs */}
+      <Breadcrumbs
+        items={[
+          { label: company?.legalName ?? "Company", href: `/companies/${companyId}` },
+          { label: periodLabel, href: `/companies/${companyId}/periods/${periodId}` },
+          { label: "Year-End" },
+        ]}
+      />
+
       {/* Header */}
       <div className="mb-6">
         <Link
           href={`/companies/${companyId}/periods/${periodId}`}
-          className="inline-flex items-center gap-1.5 text-sm text-emerald-700 hover:text-emerald-800 mb-3"
+          className="inline-flex items-center gap-1.5 text-sm text-emerald-700 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300 mb-3"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to Period Workspace
         </Link>
-        <h1 className="text-2xl font-bold text-gray-900">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
           Year-End Questionnaire
         </h1>
-        <p className="text-sm text-gray-500 mt-1">
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
           {company?.legalName ?? "Company"} &mdash;{" "}
-          {period
-            ? `${new Date(period.periodStart).toLocaleDateString("en-IE")} to ${new Date(period.periodEnd).toLocaleDateString("en-IE")}`
-            : ""}
+          {periodLabel}
         </p>
       </div>
 
       {/* Progress */}
       <div className="mb-6">
-        <Card className="shadow-sm border border-gray-200">
+        <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 dark:bg-neutral-900">
           <Card.Content className="p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-gray-700">
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                 Progress
               </span>
               <Chip
@@ -421,7 +473,7 @@ export default function YearEndQuestionnairePage({
                 {completedCount} of 9 sections completed
               </Chip>
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-2.5">
+            <div className="w-full bg-gray-200 dark:bg-neutral-700 rounded-full h-2.5">
               <div
                 className="bg-emerald-500 h-2.5 rounded-full transition-all"
                 style={{ width: `${Math.round((completedCount / 9) * 100)}%` }}
@@ -446,23 +498,24 @@ export default function YearEndQuestionnairePage({
               {debtors.map((d) => (
                 <div
                   key={d.id}
-                  className="flex items-center justify-between rounded-lg border border-gray-200 px-4 py-3"
+                  className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-neutral-700 px-4 py-3 dark:bg-neutral-800/50"
                 >
                   <div>
-                    <p className="text-sm font-medium text-gray-900">{d.name}</p>
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{d.name}</p>
                     <div className="flex items-center gap-2 mt-0.5">
                       <Chip variant="soft" size="sm" color="default">{d.type}</Chip>
-                      {d.notes && <span className="text-xs text-gray-400">{d.notes}</span>}
+                      {d.notes && <span className="text-xs text-gray-400 dark:text-gray-500">{d.notes}</span>}
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-sm font-semibold text-gray-900">
+                    <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                       {formatCurrency(d.amount)}
                     </span>
                     <button
                       type="button"
                       onClick={() => d.id && handleDeleteDebtor(d.id)}
-                      className="text-red-400 hover:text-red-600"
+                      className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400"
+                      aria-label={`Delete debtor ${d.name}`}
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -475,31 +528,35 @@ export default function YearEndQuestionnairePage({
           {/* Add form */}
           <div className="grid grid-cols-12 gap-3 items-end">
             <div className="col-span-4">
-              <label className="block text-xs font-medium text-gray-600 mb-1">Name</label>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Name</label>
               <input
                 type="text"
                 className={inputClass}
                 placeholder="Who owes you?"
                 value={newDebtor.name}
                 onChange={(e) => setNewDebtor({ ...newDebtor, name: e.target.value })}
+                aria-label="Debtor name"
               />
             </div>
             <div className="col-span-3">
-              <label className="block text-xs font-medium text-gray-600 mb-1">Amount</label>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Amount</label>
               <input
                 type="number"
                 className={inputClass}
                 placeholder="0.00"
                 value={newDebtor.amount || ""}
                 onChange={(e) => setNewDebtor({ ...newDebtor, amount: Number(e.target.value) })}
+                aria-label="Debtor amount"
               />
             </div>
             <div className="col-span-3">
-              <label className="block text-xs font-medium text-gray-600 mb-1">Type</label>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Type</label>
               <select
-                className={inputClass}
+                className={selectClass}
                 value={newDebtor.type}
                 onChange={(e) => setNewDebtor({ ...newDebtor, type: e.target.value })}
+                title="Debtor type"
+                aria-label="Debtor type"
               >
                 <option value="Trade">Trade</option>
                 <option value="Other">Other</option>
@@ -532,10 +589,10 @@ export default function YearEndQuestionnairePage({
               {creditors.map((c) => (
                 <div
                   key={c.id}
-                  className="flex items-center justify-between rounded-lg border border-gray-200 px-4 py-3"
+                  className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-neutral-700 px-4 py-3 dark:bg-neutral-800/50"
                 >
                   <div>
-                    <p className="text-sm font-medium text-gray-900">{c.name}</p>
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{c.name}</p>
                     <div className="flex items-center gap-2 mt-0.5">
                       <Chip variant="soft" size="sm" color="default">{c.type}</Chip>
                       <Chip variant="soft" size="sm" color={c.dueWithinYear ? "warning" : "default"}>
@@ -544,13 +601,14 @@ export default function YearEndQuestionnairePage({
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-sm font-semibold text-gray-900">
+                    <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                       {formatCurrency(c.amount)}
                     </span>
                     <button
                       type="button"
                       onClick={() => c.id && handleDeleteCreditor(c.id)}
-                      className="text-red-400 hover:text-red-600"
+                      className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400"
+                      aria-label={`Delete creditor ${c.name}`}
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -562,31 +620,35 @@ export default function YearEndQuestionnairePage({
 
           <div className="grid grid-cols-12 gap-3 items-end">
             <div className="col-span-3">
-              <label className="block text-xs font-medium text-gray-600 mb-1">Name</label>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Name</label>
               <input
                 type="text"
                 className={inputClass}
                 placeholder="Who do you owe?"
                 value={newCreditor.name}
                 onChange={(e) => setNewCreditor({ ...newCreditor, name: e.target.value })}
+                aria-label="Creditor name"
               />
             </div>
             <div className="col-span-2">
-              <label className="block text-xs font-medium text-gray-600 mb-1">Amount</label>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Amount</label>
               <input
                 type="number"
                 className={inputClass}
                 placeholder="0.00"
                 value={newCreditor.amount || ""}
                 onChange={(e) => setNewCreditor({ ...newCreditor, amount: Number(e.target.value) })}
+                aria-label="Creditor amount"
               />
             </div>
             <div className="col-span-2">
-              <label className="block text-xs font-medium text-gray-600 mb-1">Type</label>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Type</label>
               <select
-                className={inputClass}
+                className={selectClass}
                 value={newCreditor.type}
                 onChange={(e) => setNewCreditor({ ...newCreditor, type: e.target.value })}
+                title="Creditor type"
+                aria-label="Creditor type"
               >
                 <option value="Trade">Trade</option>
                 <option value="Other">Other</option>
@@ -595,11 +657,13 @@ export default function YearEndQuestionnairePage({
               </select>
             </div>
             <div className="col-span-3">
-              <label className="block text-xs font-medium text-gray-600 mb-1">Due within year?</label>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Due within year?</label>
               <select
-                className={inputClass}
+                className={selectClass}
                 value={newCreditor.dueWithinYear ? "yes" : "no"}
                 onChange={(e) => setNewCreditor({ ...newCreditor, dueWithinYear: e.target.value === "yes" })}
+                title="Due within one year"
+                aria-label="Due within one year"
               >
                 <option value="yes">Yes</option>
                 <option value="no">No</option>
@@ -631,28 +695,29 @@ export default function YearEndQuestionnairePage({
               {fixedAssets.map((a) => (
                 <div
                   key={a.id}
-                  className="flex items-center justify-between rounded-lg border border-gray-200 px-4 py-3"
+                  className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-neutral-700 px-4 py-3 dark:bg-neutral-800/50"
                 >
                   <div>
-                    <p className="text-sm font-medium text-gray-900">{a.name}</p>
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{a.name}</p>
                     <div className="flex items-center gap-2 mt-0.5">
                       <Chip variant="soft" size="sm" color="default">{a.category}</Chip>
-                      <span className="text-xs text-gray-400">
+                      <span className="text-xs text-gray-400 dark:text-gray-500">
                         {a.usefulLifeYears}yr {a.depreciationMethod}
                       </span>
-                      <span className="text-xs text-gray-400">
+                      <span className="text-xs text-gray-400 dark:text-gray-500">
                         Acquired {new Date(a.acquisitionDate).toLocaleDateString("en-IE")}
                       </span>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-sm font-semibold text-gray-900">
+                    <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                       {formatCurrency(a.cost)}
                     </span>
                     <button
                       type="button"
                       onClick={() => a.id && handleDeleteAsset(a.id)}
-                      className="text-red-400 hover:text-red-600"
+                      className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400"
+                      aria-label={`Delete asset ${a.name}`}
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -665,21 +730,24 @@ export default function YearEndQuestionnairePage({
           <div className="space-y-3">
             <div className="grid grid-cols-12 gap-3 items-end">
               <div className="col-span-4">
-                <label className="block text-xs font-medium text-gray-600 mb-1">Asset Name</label>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Asset Name</label>
                 <input
                   type="text"
                   className={inputClass}
                   placeholder="e.g. Company Van"
                   value={newAsset.name}
                   onChange={(e) => setNewAsset({ ...newAsset, name: e.target.value })}
+                  aria-label="Asset name"
                 />
               </div>
               <div className="col-span-3">
-                <label className="block text-xs font-medium text-gray-600 mb-1">Category</label>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Category</label>
                 <select
-                  className={inputClass}
+                  className={selectClass}
                   value={newAsset.category}
                   onChange={(e) => setNewAsset({ ...newAsset, category: e.target.value })}
+                  title="Asset category"
+                  aria-label="Asset category"
                 >
                   <option value="Equipment">Equipment</option>
                   <option value="Vehicles">Vehicles</option>
@@ -690,41 +758,46 @@ export default function YearEndQuestionnairePage({
                 </select>
               </div>
               <div className="col-span-2">
-                <label className="block text-xs font-medium text-gray-600 mb-1">Cost</label>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Cost</label>
                 <input
                   type="number"
                   className={inputClass}
                   placeholder="0.00"
                   value={newAsset.cost || ""}
                   onChange={(e) => setNewAsset({ ...newAsset, cost: Number(e.target.value) })}
+                  aria-label="Asset cost"
                 />
               </div>
               <div className="col-span-3">
-                <label className="block text-xs font-medium text-gray-600 mb-1">Acquisition Date</label>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Acquisition Date</label>
                 <input
                   type="date"
                   className={inputClass}
                   value={newAsset.acquisitionDate}
                   onChange={(e) => setNewAsset({ ...newAsset, acquisitionDate: e.target.value })}
+                  aria-label="Asset acquisition date"
                 />
               </div>
             </div>
             <div className="grid grid-cols-12 gap-3 items-end">
               <div className="col-span-3">
-                <label className="block text-xs font-medium text-gray-600 mb-1">Useful Life (years)</label>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Useful Life (years)</label>
                 <input
                   type="number"
                   className={inputClass}
                   value={newAsset.usefulLifeYears}
                   onChange={(e) => setNewAsset({ ...newAsset, usefulLifeYears: Number(e.target.value) })}
+                  aria-label="Useful life in years"
                 />
               </div>
               <div className="col-span-4">
-                <label className="block text-xs font-medium text-gray-600 mb-1">Depreciation Method</label>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Depreciation Method</label>
                 <select
-                  className={inputClass}
+                  className={selectClass}
                   value={newAsset.depreciationMethod}
                   onChange={(e) => setNewAsset({ ...newAsset, depreciationMethod: e.target.value })}
+                  title="Depreciation method"
+                  aria-label="Depreciation method"
                 >
                   <option value="StraightLine">Straight Line</option>
                   <option value="ReducingBalance">Reducing Balance</option>
@@ -756,20 +829,21 @@ export default function YearEndQuestionnairePage({
               {inventory.map((item) => (
                 <div
                   key={item.id}
-                  className="flex items-center justify-between rounded-lg border border-gray-200 px-4 py-3"
+                  className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-neutral-700 px-4 py-3 dark:bg-neutral-800/50"
                 >
                   <div>
-                    <p className="text-sm font-medium text-gray-900">{item.description}</p>
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{item.description}</p>
                     <Chip variant="soft" size="sm" color="default">{item.valuationMethod}</Chip>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-sm font-semibold text-gray-900">
+                    <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                       {formatCurrency(item.value)}
                     </span>
                     <button
                       type="button"
                       onClick={() => item.id && handleDeleteInventory(item.id)}
-                      className="text-red-400 hover:text-red-600"
+                      className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400"
+                      aria-label={`Delete inventory item ${item.description}`}
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -781,31 +855,35 @@ export default function YearEndQuestionnairePage({
 
           <div className="grid grid-cols-12 gap-3 items-end">
             <div className="col-span-4">
-              <label className="block text-xs font-medium text-gray-600 mb-1">Description</label>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Description</label>
               <input
                 type="text"
                 className={inputClass}
                 placeholder="e.g. Finished goods"
                 value={newInventoryItem.description}
                 onChange={(e) => setNewInventoryItem({ ...newInventoryItem, description: e.target.value })}
+                aria-label="Inventory item description"
               />
             </div>
             <div className="col-span-3">
-              <label className="block text-xs font-medium text-gray-600 mb-1">Value</label>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Value</label>
               <input
                 type="number"
                 className={inputClass}
                 placeholder="0.00"
                 value={newInventoryItem.value || ""}
                 onChange={(e) => setNewInventoryItem({ ...newInventoryItem, value: Number(e.target.value) })}
+                aria-label="Inventory item value"
               />
             </div>
             <div className="col-span-3">
-              <label className="block text-xs font-medium text-gray-600 mb-1">Valuation Method</label>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Valuation Method</label>
               <select
-                className={inputClass}
+                className={selectClass}
                 value={newInventoryItem.valuationMethod}
                 onChange={(e) => setNewInventoryItem({ ...newInventoryItem, valuationMethod: e.target.value })}
+                title="Valuation method"
+                aria-label="Valuation method"
               >
                 <option value="FIFO">FIFO</option>
                 <option value="WeightedAverage">Weighted Average</option>
@@ -833,8 +911,8 @@ export default function YearEndQuestionnairePage({
           icon={Landmark}
           completed={true}
         >
-          <div className="rounded-lg bg-gray-50 p-4 text-center">
-            <p className="text-sm text-gray-500">
+          <div className="rounded-lg bg-gray-50 dark:bg-neutral-800 p-4 text-center">
+            <p className="text-sm text-gray-500 dark:text-gray-400">
               Loan data is managed in the Company Setup section. Any existing loans linked to this company will appear in the year-end summary automatically.
             </p>
           </div>
@@ -849,43 +927,47 @@ export default function YearEndQuestionnairePage({
         >
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Number of Staff</label>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Number of Staff</label>
               <input
                 type="number"
                 className={inputClass}
                 placeholder="0"
                 value={payrollForm.staffCount || ""}
                 onChange={(e) => setPayrollForm({ ...payrollForm, staffCount: Number(e.target.value) })}
+                aria-label="Number of staff"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Gross Wages</label>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Gross Wages</label>
               <input
                 type="number"
                 className={inputClass}
                 placeholder="0.00"
                 value={payrollForm.grossWages || ""}
                 onChange={(e) => setPayrollForm({ ...payrollForm, grossWages: Number(e.target.value) })}
+                aria-label="Gross wages"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Employer PRSI</label>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Employer PRSI</label>
               <input
                 type="number"
                 className={inputClass}
                 placeholder="0.00"
                 value={payrollForm.employerPrsi || ""}
                 onChange={(e) => setPayrollForm({ ...payrollForm, employerPrsi: Number(e.target.value) })}
+                aria-label="Employer PRSI"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Pension Contributions</label>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Pension Contributions</label>
               <input
                 type="number"
                 className={inputClass}
                 placeholder="0.00"
                 value={payrollForm.pensionContributions || ""}
                 onChange={(e) => setPayrollForm({ ...payrollForm, pensionContributions: Number(e.target.value) })}
+                aria-label="Pension contributions"
               />
             </div>
           </div>
@@ -915,13 +997,13 @@ export default function YearEndQuestionnairePage({
               { key: "PAYE_PRSI", label: "PAYE / PRSI" },
             ].map(({ key, label }) => (
               <div key={key}>
-                <h4 className="text-sm font-medium text-gray-800 mb-3">{label}</h4>
+                <h4 className="text-sm font-medium text-gray-800 dark:text-gray-200 mb-3">{label}</h4>
                 <div className="grid grid-cols-12 gap-3 items-end">
                   <div className="col-span-3">
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Liability</label>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Liability</label>
                     <input
                       type="number"
-                      className={inputSmClass + " w-full"}
+                      className={inputClass}
                       placeholder="0.00"
                       value={taxForms[key]?.liability || ""}
                       onChange={(e) =>
@@ -930,13 +1012,14 @@ export default function YearEndQuestionnairePage({
                           [key]: { ...prev[key], liability: Number(e.target.value) },
                         }))
                       }
+                      aria-label={`${label} liability`}
                     />
                   </div>
                   <div className="col-span-3">
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Paid</label>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Paid</label>
                     <input
                       type="number"
-                      className={inputSmClass + " w-full"}
+                      className={inputClass}
                       placeholder="0.00"
                       value={taxForms[key]?.paid || ""}
                       onChange={(e) =>
@@ -945,13 +1028,14 @@ export default function YearEndQuestionnairePage({
                           [key]: { ...prev[key], paid: Number(e.target.value) },
                         }))
                       }
+                      aria-label={`${label} paid`}
                     />
                   </div>
                   <div className="col-span-3">
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Balance</label>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Balance</label>
                     <input
                       type="number"
-                      className={inputSmClass + " w-full"}
+                      className={inputClass}
                       placeholder="0.00"
                       value={taxForms[key]?.balance || ""}
                       onChange={(e) =>
@@ -960,6 +1044,7 @@ export default function YearEndQuestionnairePage({
                           [key]: { ...prev[key], balance: Number(e.target.value) },
                         }))
                       }
+                      aria-label={`${label} balance`}
                     />
                   </div>
                   <div className="col-span-3">
@@ -991,20 +1076,20 @@ export default function YearEndQuestionnairePage({
               {dividends.map((d) => (
                 <div
                   key={d.id}
-                  className="flex items-center justify-between rounded-lg border border-gray-200 px-4 py-3"
+                  className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-neutral-700 px-4 py-3 dark:bg-neutral-800/50"
                 >
                   <div>
-                    <p className="text-sm font-medium text-gray-900">
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
                       {formatCurrency(d.amount)}
                     </p>
                     <div className="flex items-center gap-2 mt-0.5">
                       {d.dateDeclared && (
-                        <span className="text-xs text-gray-400">
+                        <span className="text-xs text-gray-400 dark:text-gray-500">
                           Declared: {new Date(d.dateDeclared).toLocaleDateString("en-IE")}
                         </span>
                       )}
                       {d.datePaid && (
-                        <span className="text-xs text-gray-400">
+                        <span className="text-xs text-gray-400 dark:text-gray-500">
                           Paid: {new Date(d.datePaid).toLocaleDateString("en-IE")}
                         </span>
                       )}
@@ -1013,7 +1098,8 @@ export default function YearEndQuestionnairePage({
                   <button
                     type="button"
                     onClick={() => d.id && handleDeleteDividend(d.id)}
-                    className="text-red-400 hover:text-red-600"
+                    className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400"
+                    aria-label={`Delete dividend of ${formatCurrency(d.amount)}`}
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -1024,31 +1110,34 @@ export default function YearEndQuestionnairePage({
 
           <div className="grid grid-cols-12 gap-3 items-end">
             <div className="col-span-3">
-              <label className="block text-xs font-medium text-gray-600 mb-1">Amount</label>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Amount</label>
               <input
                 type="number"
                 className={inputClass}
                 placeholder="0.00"
                 value={newDividend.amount || ""}
                 onChange={(e) => setNewDividend({ ...newDividend, amount: Number(e.target.value) })}
+                aria-label="Dividend amount"
               />
             </div>
             <div className="col-span-3">
-              <label className="block text-xs font-medium text-gray-600 mb-1">Date Declared</label>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Date Declared</label>
               <input
                 type="date"
                 className={inputClass}
                 value={newDividend.dateDeclared}
                 onChange={(e) => setNewDividend({ ...newDividend, dateDeclared: e.target.value })}
+                aria-label="Date dividend declared"
               />
             </div>
             <div className="col-span-3">
-              <label className="block text-xs font-medium text-gray-600 mb-1">Date Paid</label>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Date Paid</label>
               <input
                 type="date"
                 className={inputClass}
                 value={newDividend.datePaid}
                 onChange={(e) => setNewDividend({ ...newDividend, datePaid: e.target.value })}
+                aria-label="Date dividend paid"
               />
             </div>
             <div className="col-span-3">
@@ -1072,8 +1161,8 @@ export default function YearEndQuestionnairePage({
           icon={UserCheck}
           completed={true}
         >
-          <div className="rounded-lg bg-gray-50 p-4 text-center">
-            <p className="text-sm text-gray-500">
+          <div className="rounded-lg bg-gray-50 dark:bg-neutral-800 p-4 text-center">
+            <p className="text-sm text-gray-500 dark:text-gray-400">
               Director loan balances are managed in Company Setup. Any existing director loans will be reflected in the year-end summary automatically.
             </p>
           </div>

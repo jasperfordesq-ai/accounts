@@ -1,16 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
-  CardDescription,
-  CardFooter,
   Chip,
-  Spinner,
   Button,
 } from "@heroui/react";
 import {
@@ -22,27 +19,38 @@ import {
   AlertCircle,
   CheckCircle2,
   Clock,
+  Search,
+  X,
 } from "lucide-react";
 import { getCompanies, type Company } from "@/lib/api";
+import { DashboardSkeleton } from "@/components/Skeleton";
 
 export default function Dashboard() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     getCompanies()
       .then(setCompanies)
-      .catch(console.error)
+      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load companies"))
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) {
-    return (
-      <div className="flex justify-center py-20">
-        <Spinner size="lg" />
-      </div>
+  const filtered = useMemo(() => {
+    if (!search.trim()) return companies;
+    const q = search.toLowerCase();
+    return companies.filter(
+      (c) =>
+        c.legalName?.toLowerCase().includes(q) ||
+        c.tradingName?.toLowerCase().includes(q) ||
+        c.croNumber?.toLowerCase().includes(q) ||
+        c.companyType?.toLowerCase().includes(q)
     );
-  }
+  }, [companies, search]);
+
+  if (loading) return <DashboardSkeleton />;
 
   // Compute quick stats from companies
   const totalCompanies = companies.length;
@@ -54,11 +62,13 @@ export default function Dashboard() {
   const dormantCompanies = companies.filter((c) => c.isDormant).length;
 
   return (
-    <div>
+    <div className="animate-fade-in">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-500 mt-1">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+            Dashboard
+          </h1>
+          <p className="text-gray-500 dark:text-gray-400 mt-1">
             Irish Accounts Platform overview
           </p>
         </div>
@@ -70,91 +80,143 @@ export default function Dashboard() {
         </Link>
       </div>
 
+      {/* Error state */}
+      {error && (
+        <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-400 mb-6 flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          {error}
+        </div>
+      )}
+
       {/* Quick Stats Bar */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        <Card className="shadow-sm border border-gray-200">
+        <Card className="shadow-sm border border-gray-200 dark:border-neutral-700">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="bg-emerald-50 p-2 rounded-lg">
-                <Building2 className="w-5 h-5 text-emerald-600" />
+              <div className="bg-emerald-50 dark:bg-emerald-900/30 p-2 rounded-lg">
+                <Building2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-gray-900">
+                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                   {totalCompanies}
                 </p>
-                <p className="text-xs text-gray-500">Total Companies</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Companies
+                </p>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="shadow-sm border border-gray-200">
+        <Card className="shadow-sm border border-gray-200 dark:border-neutral-700">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="bg-blue-50 p-2 rounded-lg">
-                <Calendar className="w-5 h-5 text-blue-600" />
+              <div className="bg-blue-50 dark:bg-blue-900/30 p-2 rounded-lg">
+                <Calendar className="w-5 h-5 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-gray-900">
+                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                   {totalPeriods}
                 </p>
-                <p className="text-xs text-gray-500">
-                  Total Periods
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Periods
                 </p>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="shadow-sm border border-gray-200">
+        <Card className="shadow-sm border border-gray-200 dark:border-neutral-700">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="bg-amber-50 p-2 rounded-lg">
-                <Clock className="w-5 h-5 text-amber-600" />
+              <div className="bg-purple-50 dark:bg-purple-900/30 p-2 rounded-lg">
+                <CheckCircle2 className="w-5 h-5 text-purple-600 dark:text-purple-400" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-gray-900">
+                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                   {tradingCompanies}
                 </p>
-                <p className="text-xs text-gray-500">Trading</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Trading
+                </p>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="shadow-sm border border-gray-200">
+        <Card className="shadow-sm border border-gray-200 dark:border-neutral-700">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="bg-gray-100 p-2 rounded-lg">
-                <AlertCircle className="w-5 h-5 text-gray-500" />
+              <div className="bg-amber-50 dark:bg-amber-900/30 p-2 rounded-lg">
+                <Clock className="w-5 h-5 text-amber-600 dark:text-amber-400" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-gray-900">
+                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                   {dormantCompanies}
                 </p>
-                <p className="text-xs text-gray-500">Dormant</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Dormant
+                </p>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Companies Section */}
-      <div className="mb-4">
-        <h2 className="text-lg font-semibold text-gray-900">Companies</h2>
-        <p className="text-sm text-gray-500">
-          Manage your Irish company accounts
-        </p>
+      {/* Companies section with search */}
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+          Companies
+        </h2>
+        <div className="relative w-64">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search companies..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-9 pr-8 py-2 text-sm rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors"
+            aria-label="Search companies"
+          />
+          {search && (
+            <button
+              onClick={() => setSearch("")}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              aria-label="Clear search"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
       </div>
 
-      {companies.length === 0 ? (
-        <Card className="text-center py-16">
-          <CardContent>
-            <Building2 className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-            <CardTitle className="text-lg mb-2">No companies yet</CardTitle>
-            <CardDescription className="mb-6">
-              Add your first company to get started with accounts preparation.
-            </CardDescription>
+      {filtered.length === 0 && companies.length > 0 ? (
+        <Card className="shadow-sm border border-gray-200 dark:border-neutral-700">
+          <CardContent className="text-center py-12">
+            <Search className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              No companies match &ldquo;{search}&rdquo;
+            </p>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mt-3"
+              onPress={() => setSearch("")}
+            >
+              Clear search
+            </Button>
+          </CardContent>
+        </Card>
+      ) : filtered.length === 0 ? (
+        <Card className="shadow-sm border border-gray-200 dark:border-neutral-700">
+          <CardContent className="text-center py-12">
+            <Building2 className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+            <p className="text-gray-500 dark:text-gray-400 font-medium">
+              No companies yet
+            </p>
+            <p className="text-sm text-gray-400 dark:text-gray-500 mt-1 mb-4">
+              Get started by creating your first company
+            </p>
             <Link href="/companies/new">
               <Button variant="primary" size="sm">
                 <Plus className="w-4 h-4" />
@@ -164,88 +226,58 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {companies.map((company) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {filtered.map((company) => (
             <Link key={company.id} href={`/companies/${company.id}`}>
-              <Card className="hover:border-emerald-300 hover:shadow-md transition-all cursor-pointer h-full">
-                <CardHeader className="flex flex-row items-start justify-between">
-                  <div className="bg-emerald-50 p-2 rounded-lg">
-                    <Building2 className="w-5 h-5 text-emerald-600" />
+              <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 card-hover cursor-pointer h-full">
+                <CardContent className="p-5">
+                  <div className="flex items-start gap-3 mb-3">
+                    <div className="bg-emerald-50 dark:bg-emerald-900/30 p-2.5 rounded-lg shrink-0">
+                      <Building2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="font-semibold text-gray-900 dark:text-gray-100 truncate">
+                        {company.legalName}
+                      </h3>
+                      {company.tradingName && (
+                        <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
+                          t/a {company.tradingName}
+                        </p>
+                      )}
+                    </div>
+                    <ArrowRight className="w-4 h-4 text-gray-300 dark:text-gray-600 shrink-0 mt-1" />
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Chip
-                      size="sm"
-                      variant="soft"
-                      color={
-                        company.isTrading
-                          ? "success"
-                          : company.isDormant
-                            ? "default"
-                            : "warning"
-                      }
-                    >
-                      {company.isTrading
-                        ? "Trading"
-                        : company.isDormant
-                          ? "Dormant"
-                          : "Inactive"}
-                    </Chip>
-                    <ArrowRight className="w-4 h-4 text-gray-300" />
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <CardTitle className="text-base">
-                    {company.legalName}
-                  </CardTitle>
-                  {company.tradingName && (
-                    <CardDescription>
-                      t/a {company.tradingName}
-                    </CardDescription>
-                  )}
 
-                  {/* Company details */}
-                  <div className="mt-3 space-y-1.5">
-                    {company.croNumber && (
-                      <p className="text-xs text-gray-500">
-                        CRO: {company.croNumber}
-                      </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Chip size="sm" variant="soft" color="default">
+                      {company.companyType}
+                    </Chip>
+                    {company.isTrading && (
+                      <Chip size="sm" variant="soft" color="success">
+                        <CheckCircle2 className="w-3 h-3" />
+                        Trading
+                      </Chip>
                     )}
-                    {company.taxReference && (
-                      <p className="text-xs text-gray-500">
-                        Tax Ref: {company.taxReference}
-                      </p>
+                    {company.isDormant && (
+                      <Chip size="sm" variant="soft" color="warning">
+                        <Clock className="w-3 h-3" />
+                        Dormant
+                      </Chip>
                     )}
-                    <p className="text-xs text-gray-500">
-                      Type: {company.companyType}
+                    {(company.periodCount ?? 0) > 0 && (
+                      <Chip size="sm" variant="soft" color="accent">
+                        <FileText className="w-3 h-3" />
+                        {company.periodCount} period{company.periodCount !== 1 ? "s" : ""}
+                      </Chip>
+                    )}
+                  </div>
+
+                  {company.croNumber && (
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-3">
+                      CRO: {company.croNumber}
                     </p>
-                  </div>
+                  )}
                 </CardContent>
-                <CardFooter className="flex items-center justify-between border-t border-gray-100 pt-3">
-                  <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                    <FileText className="w-3.5 h-3.5" />
-                    <span>
-                      {company.periodCount || 0} period
-                      {(company.periodCount || 0) !== 1 ? "s" : ""}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {company.isVatRegistered && (
-                      <Chip size="sm" variant="soft" color="accent">
-                        VAT
-                      </Chip>
-                    )}
-                    {company.isEmployer && (
-                      <Chip size="sm" variant="soft" color="accent">
-                        Employer
-                      </Chip>
-                    )}
-                    {(company.periodCount || 0) > 0 ? (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                    ) : (
-                      <AlertCircle className="w-4 h-4 text-amber-400" />
-                    )}
-                  </div>
-                </CardFooter>
               </Card>
             </Link>
           ))}

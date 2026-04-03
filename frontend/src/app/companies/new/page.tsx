@@ -5,15 +5,17 @@ import { useRouter } from "next/navigation";
 import {
   Button,
   Card,
-  Chip,
   Checkbox,
   Input,
   Label,
   TextField,
   Spinner,
 } from "@heroui/react";
-import { Building2, ChevronLeft, ChevronRight, Plus, Trash2, Users } from "lucide-react";
+import { Building2, ChevronLeft, ChevronRight, Plus, Trash2, Users, Check } from "lucide-react";
+import { toast } from "sonner";
 import { createCompany, createOfficer, type Officer } from "@/lib/api";
+import { Breadcrumbs } from "@/components/Breadcrumbs";
+import { validateStep } from "@/lib/validation";
 
 const COMPANY_TYPES = [
   { value: "Private", label: "Private Company Limited by Shares" },
@@ -43,11 +45,15 @@ interface OfficerEntry {
   role: string;
 }
 
+const selectClass =
+  "w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors";
+
 export default function NewCompanyPage() {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   // Step 1: Legal Details
   const [legalName, setLegalName] = useState("");
@@ -105,6 +111,23 @@ export default function NewCompanyPage() {
     return true;
   }
 
+  function handleNext() {
+    setFieldErrors({});
+    const stepData: Record<string, unknown> = {};
+    if (step === 0) {
+      Object.assign(stepData, { legalName, tradingName, croNumber, taxReference, companyType, incorporationDate });
+    } else if (step === 2) {
+      Object.assign(stepData, { address1, address2, city, county, eircode });
+    }
+    const errors = validateStep(step, stepData);
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      toast.error(Object.values(errors)[0]);
+      return;
+    }
+    setStep(step + 1);
+  }
+
   async function handleCreate() {
     setSaving(true);
     setError(null);
@@ -145,50 +168,76 @@ export default function NewCompanyPage() {
         } as Officer);
       }
 
+      toast.success(`${legalName} created successfully`);
       router.push(`/companies/${company.id}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create company");
+      const msg = err instanceof Error ? err.message : "Failed to create company";
+      setError(msg);
+      toast.error(msg);
       setSaving(false);
     }
   }
 
   return (
-    <div className="max-w-3xl mx-auto">
+    <div className="max-w-3xl mx-auto animate-fade-in">
+      <Breadcrumbs items={[{ label: "New Company" }]} />
+
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-          <Building2 className="w-7 h-7 text-emerald-600" />
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+          <Building2 className="w-7 h-7 text-emerald-600 dark:text-emerald-400" />
           New Company
         </h1>
-        <p className="text-gray-500 mt-1">Set up a new company for statutory accounts production</p>
+        <p className="text-gray-500 dark:text-gray-400 mt-1">
+          Set up a new company for statutory accounts production
+        </p>
       </div>
 
-      {/* Step Indicators */}
-      <div className="flex items-center gap-2 mb-6">
-        {STEP_LABELS.map((label, i) => (
-          <Button
-            key={label}
-            variant="ghost"
-            size="sm"
-            onPress={() => { if (i < step) setStep(i); }}
-            className="flex items-center gap-2"
-          >
-            <Chip
-              color={i === step ? "accent" : i < step ? "success" : "default"}
-              variant={i === step ? "primary" : "soft"}
-              size="sm"
+      {/* Progress Bar */}
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-2">
+          {STEP_LABELS.map((label, i) => (
+            <button
+              key={label}
+              onClick={() => { if (i < step) setStep(i); }}
+              className={`flex items-center gap-2 text-sm font-medium transition-colors ${
+                i === step
+                  ? "text-emerald-700 dark:text-emerald-400"
+                  : i < step
+                    ? "text-emerald-600 dark:text-emerald-500 cursor-pointer hover:text-emerald-800 dark:hover:text-emerald-300"
+                    : "text-gray-400 dark:text-gray-500"
+              }`}
+              disabled={i > step}
+              type="button"
             >
-              {i + 1}. {label}
-            </Chip>
-          </Button>
-        ))}
+              <span
+                className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold transition-colors ${
+                  i === step
+                    ? "bg-emerald-600 text-white"
+                    : i < step
+                      ? "bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400"
+                      : "bg-gray-200 dark:bg-neutral-700 text-gray-500 dark:text-gray-400"
+                }`}
+              >
+                {i < step ? <Check className="w-3.5 h-3.5" /> : i + 1}
+              </span>
+              <span className="hidden sm:inline">{label}</span>
+            </button>
+          ))}
+        </div>
+        <div className="h-1.5 bg-gray-200 dark:bg-neutral-700 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-emerald-500 rounded-full transition-all duration-300"
+            style={{ width: `${((step + 1) / STEP_LABELS.length) * 100}%` }}
+          />
+        </div>
       </div>
 
       {/* Form Card */}
-      <Card className="shadow-sm border border-gray-200">
+      <Card className="shadow-sm border border-gray-200 dark:border-neutral-700">
         <Card.Header>
-          <Card.Title>{STEP_LABELS[step]}</Card.Title>
-          <Card.Description>
+          <Card.Title className="text-gray-900 dark:text-gray-100">{STEP_LABELS[step]}</Card.Title>
+          <Card.Description className="text-gray-500 dark:text-gray-400">
             {step === 0 && "Enter the company's legal and registration details"}
             {step === 1 && "Configure the company's structural characteristics"}
             {step === 2 && "Set the registered office address and financial periods"}
@@ -200,14 +249,19 @@ export default function NewCompanyPage() {
           {/* Step 1: Legal Details */}
           {step === 0 && (
             <>
-              <TextField fullWidth>
-                <Label>Legal Name *</Label>
-                <Input
-                  value={legalName}
-                  onChange={(e) => setLegalName(e.target.value)}
-                  placeholder="e.g. Acme Trading Limited"
-                />
-              </TextField>
+              <div>
+                <TextField fullWidth>
+                  <Label>Legal Name *</Label>
+                  <Input
+                    value={legalName}
+                    onChange={(e) => { setLegalName(e.target.value); setFieldErrors((p) => { const n = {...p}; delete n.legalName; return n; }); }}
+                    placeholder="e.g. Acme Trading Limited"
+                    autoFocus
+                    aria-invalid={!!fieldErrors.legalName}
+                  />
+                </TextField>
+                {fieldErrors.legalName && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{fieldErrors.legalName}</p>}
+              </div>
 
               <TextField fullWidth>
                 <Label>Trading Name</Label>
@@ -219,34 +273,44 @@ export default function NewCompanyPage() {
               </TextField>
 
               <div className="grid grid-cols-2 gap-4">
-                <TextField fullWidth>
-                  <Label>CRO Number</Label>
-                  <Input
-                    value={croNumber}
-                    onChange={(e) => setCroNumber(e.target.value)}
-                    placeholder="e.g. 123456"
-                  />
-                </TextField>
+                <div>
+                  <TextField fullWidth>
+                    <Label>CRO Number</Label>
+                    <Input
+                      value={croNumber}
+                      onChange={(e) => { setCroNumber(e.target.value); setFieldErrors((p) => { const n = {...p}; delete n.croNumber; return n; }); }}
+                      placeholder="e.g. 123456"
+                      aria-invalid={!!fieldErrors.croNumber}
+                    />
+                  </TextField>
+                  {fieldErrors.croNumber && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{fieldErrors.croNumber}</p>}
+                </div>
 
-                <TextField fullWidth>
-                  <Label>Tax Reference</Label>
-                  <Input
-                    value={taxReference}
-                    onChange={(e) => setTaxReference(e.target.value)}
-                    placeholder="e.g. 1234567T"
-                  />
-                </TextField>
+                <div>
+                  <TextField fullWidth>
+                    <Label>Tax Reference</Label>
+                    <Input
+                      value={taxReference}
+                      onChange={(e) => { setTaxReference(e.target.value); setFieldErrors((p) => { const n = {...p}; delete n.taxReference; return n; }); }}
+                      placeholder="e.g. 1234567T"
+                      aria-invalid={!!fieldErrors.taxReference}
+                    />
+                  </TextField>
+                  {fieldErrors.taxReference && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{fieldErrors.taxReference}</p>}
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                     Company Type
                   </label>
                   <select
                     value={companyType}
                     onChange={(e) => setCompanyType(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                    className={selectClass}
+                    aria-label="Company type"
+                    title="Company type"
                   >
                     {COMPANY_TYPES.map((ct) => (
                       <option key={ct.value} value={ct.value}>
@@ -256,14 +320,18 @@ export default function NewCompanyPage() {
                   </select>
                 </div>
 
-                <TextField fullWidth>
-                  <Label>Incorporation Date</Label>
-                  <Input
-                    type="date"
-                    value={incorporationDate}
-                    onChange={(e) => setIncorporationDate(e.target.value)}
-                  />
-                </TextField>
+                <div>
+                  <TextField fullWidth>
+                    <Label>Incorporation Date</Label>
+                    <Input
+                      type="date"
+                      value={incorporationDate}
+                      onChange={(e) => { setIncorporationDate(e.target.value); setFieldErrors((p) => { const n = {...p}; delete n.incorporationDate; return n; }); }}
+                      aria-invalid={!!fieldErrors.incorporationDate}
+                    />
+                  </TextField>
+                  {fieldErrors.incorporationDate && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{fieldErrors.incorporationDate}</p>}
+                </div>
               </div>
             </>
           )}
@@ -272,7 +340,9 @@ export default function NewCompanyPage() {
           {step === 1 && (
             <div className="space-y-6">
               <div>
-                <h3 className="text-sm font-semibold text-gray-700 mb-3">Trading Status</h3>
+                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                  Trading Status
+                </h3>
                 <div className="grid grid-cols-2 gap-3">
                   <Checkbox isSelected={isTrading} onChange={setIsTrading}>
                     Currently Trading
@@ -281,10 +351,17 @@ export default function NewCompanyPage() {
                     Dormant
                   </Checkbox>
                 </div>
+                {isTrading && isDormant && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+                    A company is usually either trading or dormant, not both.
+                  </p>
+                )}
               </div>
 
               <div>
-                <h3 className="text-sm font-semibold text-gray-700 mb-3">Group Structure</h3>
+                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                  Group Structure
+                </h3>
                 <div className="grid grid-cols-2 gap-3">
                   <Checkbox isSelected={isGroupMember} onChange={setIsGroupMember}>
                     Group Member
@@ -302,7 +379,9 @@ export default function NewCompanyPage() {
               </div>
 
               <div>
-                <h3 className="text-sm font-semibold text-gray-700 mb-3">Registrations</h3>
+                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                  Registrations
+                </h3>
                 <div className="grid grid-cols-2 gap-3">
                   <Checkbox isSelected={isVatRegistered} onChange={setIsVatRegistered}>
                     VAT Registered
@@ -314,7 +393,9 @@ export default function NewCompanyPage() {
               </div>
 
               <div>
-                <h3 className="text-sm font-semibold text-gray-700 mb-3">Balance Sheet Items</h3>
+                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                  Balance Sheet Items
+                </h3>
                 <div className="grid grid-cols-2 gap-3">
                   <Checkbox isSelected={hasStock} onChange={setHasStock}>
                     Has Stock / Inventory
@@ -336,7 +417,9 @@ export default function NewCompanyPage() {
           {/* Step 3: Address & Periods */}
           {step === 2 && (
             <>
-              <h3 className="text-sm font-semibold text-gray-700 mb-1">Registered Office</h3>
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                Registered Office
+              </h3>
               <TextField fullWidth>
                 <Label>Address Line 1</Label>
                 <Input
@@ -366,11 +449,15 @@ export default function NewCompanyPage() {
                 </TextField>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">County</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                    County
+                  </label>
                   <select
                     value={county}
                     onChange={(e) => setCounty(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                    className={selectClass}
+                    aria-label="County"
+                    title="County"
                   >
                     <option value="">Select county</option>
                     {IRISH_COUNTIES.map((c) => (
@@ -379,27 +466,35 @@ export default function NewCompanyPage() {
                   </select>
                 </div>
 
-                <TextField fullWidth>
-                  <Label>Eircode</Label>
-                  <Input
-                    value={eircode}
-                    onChange={(e) => setEircode(e.target.value)}
-                    placeholder="e.g. D02 AF30"
-                  />
-                </TextField>
+                <div>
+                  <TextField fullWidth>
+                    <Label>Eircode</Label>
+                    <Input
+                      value={eircode}
+                      onChange={(e) => { setEircode(e.target.value); setFieldErrors((p) => { const n = {...p}; delete n.eircode; return n; }); }}
+                      placeholder="e.g. D02 AF30"
+                      aria-invalid={!!fieldErrors.eircode}
+                    />
+                  </TextField>
+                  {fieldErrors.eircode && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{fieldErrors.eircode}</p>}
+                </div>
               </div>
 
-              <div className="border-t border-gray-200 pt-5 mt-5">
-                <h3 className="text-sm font-semibold text-gray-700 mb-3">Financial Periods</h3>
+              <div className="border-t border-gray-200 dark:border-neutral-700 pt-5 mt-5">
+                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                  Financial Periods
+                </h3>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                       Financial Year Start Month
                     </label>
                     <select
                       value={financialYearStartMonth}
                       onChange={(e) => setFinancialYearStartMonth(Number(e.target.value))}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                      className={selectClass}
+                      aria-label="Financial year start month"
+                      title="Financial year start month"
                     >
                       {MONTHS.map((m, i) => (
                         <option key={m} value={i + 1}>{m}</option>
@@ -408,13 +503,15 @@ export default function NewCompanyPage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                       ARD Month (Annual Return Date)
                     </label>
                     <select
                       value={ardMonth}
                       onChange={(e) => setArdMonth(Number(e.target.value))}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                      className={selectClass}
+                      aria-label="Annual return date month"
+                      title="Annual return date month"
                     >
                       {MONTHS.map((m, i) => (
                         <option key={m} value={i + 1}>{m}</option>
@@ -432,26 +529,28 @@ export default function NewCompanyPage() {
               {officers.map((officer, index) => (
                 <div
                   key={index}
-                  className="flex items-start gap-3 p-4 rounded-lg border border-gray-200 bg-gray-50"
+                  className="flex items-start gap-3 p-4 rounded-lg border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800/50 animate-fade-in"
                 >
-                  <Users className="w-5 h-5 text-gray-400 mt-2 shrink-0" />
+                  <Users className="w-5 h-5 text-gray-400 dark:text-gray-500 mt-2 shrink-0" />
                   <div className="flex-1 grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-                      <input
-                        type="text"
+                    <TextField fullWidth>
+                      <Label>Name</Label>
+                      <Input
                         value={officer.name}
                         onChange={(e) => updateOfficer(index, "name", e.target.value)}
                         placeholder="Full name"
-                        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                       />
-                    </div>
+                    </TextField>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Role
+                      </label>
                       <select
                         value={officer.role}
                         onChange={(e) => updateOfficer(index, "role", e.target.value)}
-                        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                        className={selectClass}
+                        aria-label={`Role for officer ${index + 1}`}
+                        title={`Role for officer ${index + 1}`}
                       >
                         <option value="Director">Director</option>
                         <option value="Secretary">Secretary</option>
@@ -466,7 +565,7 @@ export default function NewCompanyPage() {
                       size="sm"
                       isIconOnly
                       onPress={() => removeOfficer(index)}
-                      aria-label="Remove officer"
+                      aria-label={`Remove officer ${officer.name || index + 1}`}
                     >
                       <Trash2 className="w-4 h-4 text-red-500" />
                     </Button>
@@ -483,7 +582,7 @@ export default function NewCompanyPage() {
 
           {/* Error Display */}
           {error && (
-            <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+            <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-400">
               {error}
             </div>
           )}
@@ -502,7 +601,7 @@ export default function NewCompanyPage() {
           {step < 3 ? (
             <Button
               variant="primary"
-              onPress={() => setStep(step + 1)}
+              onPress={handleNext}
               isDisabled={!canProceed()}
             >
               Next

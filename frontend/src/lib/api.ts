@@ -1,19 +1,130 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
-async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: { "Content-Type": "application/json", ...options?.headers },
-    ...options,
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => "Unknown error");
-    throw new Error(`API error ${res.status}: ${text}`);
+// --- Core fetch with retry, timeout, structured errors ---
+
+class ApiError extends Error {
+  constructor(
+    public status: number,
+    public statusText: string,
+    public body: string,
+  ) {
+    super(ApiError.formatMessage(status, body));
+    this.name = "ApiError";
   }
-  if (res.status === 204) return undefined as T;
-  return res.json();
+
+  static formatMessage(status: number, body: string): string {
+    // Try to extract a meaningful message from the response body
+    try {
+      const parsed = JSON.parse(body);
+      if (parsed.message) return parsed.message;
+      if (parsed.title) return parsed.title;
+      if (parsed.detail) return parsed.detail;
+      if (typeof parsed === "string") return parsed;
+    } catch {
+      // Not JSON — use the raw body if short enough
+    }
+    if (body && body.length < 200) return body;
+
+    // Fallback to status-based messages
+    switch (status) {
+      case 400: return "Invalid request. Please check your input.";
+      case 401: return "Not authenticated. Please sign in.";
+      case 403: return "You do not have permission for this action.";
+      case 404: return "The requested resource was not found.";
+      case 409: return "A conflict occurred. The data may have been modified.";
+      case 422: return "Validation failed. Please check your input.";
+      case 429: return "Too many requests. Please wait a moment.";
+      case 500: return "Server error. Please try again later.";
+      case 502: return "The API server is unavailable. Please try again.";
+      case 503: return "Service temporarily unavailable. Please try again.";
+      default: return `Request failed (${status})`;
+    }
+  }
+
+  get isRetryable(): boolean {
+    return this.status >= 500 || this.status === 429;
+  }
+
+  get isNotFound(): boolean {
+    return this.status === 404;
+  }
 }
 
-// === Companies ===
+export { ApiError };
+
+const DEFAULT_TIMEOUT = 30000; // 30 seconds
+const MAX_RETRIES = 2;
+const RETRY_DELAYS = [500, 1500]; // ms delays between retries
+
+async function apiFetch<T>(
+  path: string,
+  options?: RequestInit & { timeout?: number; retries?: number },
+): Promise<T> {
+  const { timeout = DEFAULT_TIMEOUT, retries = MAX_RETRIES, ...fetchOptions } = options ?? {};
+
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+      const res = await fetch(`${API_BASE}${path}`, {
+        headers: { "Content-Type": "application/json", ...fetchOptions?.headers },
+        signal: controller.signal,
+        ...fetchOptions,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        const error = new ApiError(res.status, res.statusText, body);
+
+        // Only retry on server errors and rate limits (not client errors)
+        if (error.isRetryable && attempt < retries) {
+          lastError = error;
+          await new Promise((r) => setTimeout(r, RETRY_DELAYS[attempt] ?? 1500));
+          continue;
+        }
+
+        throw error;
+      }
+
+      if (res.status === 204) return undefined as T;
+      return res.json();
+    } catch (err) {
+      if (err instanceof ApiError) throw err;
+
+      // Handle abort (timeout)
+      if (err instanceof DOMException && err.name === "AbortError") {
+        lastError = new Error("Request timed out. Please try again.");
+        if (attempt < retries) {
+          await new Promise((r) => setTimeout(r, RETRY_DELAYS[attempt] ?? 1500));
+          continue;
+        }
+        throw lastError;
+      }
+
+      // Handle network errors
+      if (err instanceof TypeError && err.message.includes("fetch")) {
+        lastError = new Error("Network error. Please check your connection.");
+        if (attempt < retries) {
+          await new Promise((r) => setTimeout(r, RETRY_DELAYS[attempt] ?? 1500));
+          continue;
+        }
+        throw lastError;
+      }
+
+      throw err;
+    }
+  }
+
+  throw lastError ?? new Error("Request failed after retries");
+}
+
+// === Types ===
+
 export interface Company {
   id: number;
   legalName: string;
@@ -133,51 +244,6 @@ export interface ReadinessScore {
   warnings: string[];
 }
 
-// Companies
-export const getCompanies = () => apiFetch<Company[]>("/api/companies");
-export const getCompany = (id: number) => apiFetch<Company>(`/api/companies/${id}`);
-export const createCompany = (data: Partial<Company>) =>
-  apiFetch<Company>("/api/companies", { method: "POST", body: JSON.stringify(data) });
-export const updateCompany = (id: number, data: Partial<Company>) =>
-  apiFetch<Company>(`/api/companies/${id}`, { method: "PUT", body: JSON.stringify(data) });
-export const deleteCompany = (id: number) =>
-  apiFetch<void>(`/api/companies/${id}`, { method: "DELETE" });
-
-// Officers
-export const getOfficers = (companyId: number) =>
-  apiFetch<Officer[]>(`/api/companies/${companyId}/officers`);
-export const createOfficer = (companyId: number, data: Officer) =>
-  apiFetch<Officer>(`/api/companies/${companyId}/officers`, { method: "POST", body: JSON.stringify(data) });
-
-// Periods
-export const getPeriods = (companyId: number) =>
-  apiFetch<AccountingPeriod[]>(`/api/companies/${companyId}/periods`);
-export const getPeriod = (companyId: number, id: number) =>
-  apiFetch<AccountingPeriod>(`/api/companies/${companyId}/periods/${id}`);
-export const createPeriod = (companyId: number, data: Partial<AccountingPeriod>) =>
-  apiFetch<AccountingPeriod>(`/api/companies/${companyId}/periods`, { method: "POST", body: JSON.stringify(data) });
-
-// Bank Accounts
-export const getBankAccounts = (companyId: number) =>
-  apiFetch<BankAccount[]>(`/api/companies/${companyId}/bank-accounts`);
-
-// Transactions
-export const getTransactions = (companyId: number, periodId: number, page = 1) =>
-  apiFetch<{ total: number; items: ImportedTransaction[] }>(
-    `/api/companies/${companyId}/periods/${periodId}/transactions?page=${page}&pageSize=50`
-  );
-
-// Categories
-export const getCategories = (companyId: number) =>
-  apiFetch<AccountCategory[]>(`/api/companies/${companyId}/categories`);
-export const seedCategories = (companyId: number) =>
-  apiFetch<AccountCategory[]>(`/api/companies/${companyId}/categories/seed`, { method: "POST" });
-
-// Year-End
-export const getYearEndSummary = (companyId: number, periodId: number) =>
-  apiFetch<YearEndSummary>(`/api/companies/${companyId}/periods/${periodId}/year-end-summary`);
-
-// Adjustments
 export interface Adjustment {
   id: number;
   description: string;
@@ -201,30 +267,271 @@ export interface AdjustmentSummary {
   totalImpactOnAssets: number;
 }
 
+export interface Debtor {
+  id?: number;
+  periodId?: number;
+  name: string;
+  amount: number;
+  type: string;
+  notes?: string;
+}
+
+export interface Creditor {
+  id?: number;
+  periodId?: number;
+  name: string;
+  amount: number;
+  type: string;
+  dueWithinYear: boolean;
+  notes?: string;
+}
+
+export interface FixedAsset {
+  id?: number;
+  companyId?: number;
+  name: string;
+  category: string;
+  cost: number;
+  acquisitionDate: string;
+  disposalDate?: string;
+  disposalProceeds?: number;
+  usefulLifeYears: number;
+  depreciationMethod: string;
+}
+
+export interface PayrollSummary {
+  id?: number;
+  periodId?: number;
+  grossWages: number;
+  employerPrsi: number;
+  pensionContributions: number;
+  staffCount: number;
+}
+
+export interface TaxBalance {
+  id?: number;
+  periodId?: number;
+  taxType: string;
+  liability: number;
+  paid: number;
+  balance: number;
+}
+
+export interface Dividend {
+  id?: number;
+  periodId?: number;
+  amount: number;
+  dateDeclared?: string;
+  datePaid?: string;
+}
+
+export interface InventoryItem {
+  id?: number;
+  periodId?: number;
+  description: string;
+  value: number;
+  valuationMethod: string;
+}
+
+export interface NotesDisclosure {
+  id?: number;
+  periodId?: number;
+  noteNumber: number;
+  title: string;
+  content?: string;
+  isRequired: boolean;
+  isIncluded: boolean;
+}
+
+export interface TrialBalanceLine {
+  code: string;
+  name: string;
+  type: string;
+  debit: number;
+  credit: number;
+}
+
+export interface ProfitAndLoss {
+  turnover: number;
+  costOfSales: number;
+  grossProfit: number;
+  overheads: { code: string; name: string; amount: number }[];
+  totalOverheads: number;
+  operatingProfit: number;
+  interestPayable: number;
+  profitBeforeTax: number;
+  taxCharge: number;
+  profitAfterTax: number;
+}
+
+export interface BalanceSheet {
+  fixedAssets: {
+    categories: { category: string; cost: number; depreciation: number; nbv: number }[];
+    total: number;
+  };
+  currentAssets: {
+    stock: number;
+    debtors: number;
+    prepayments: number;
+    cash: number;
+    total: number;
+  };
+  creditorsWithinYear: {
+    tradeCreditors: number;
+    accruals: number;
+    taxCreditors: number;
+    otherCreditors: number;
+    total: number;
+  };
+  netCurrentAssets: number;
+  totalAssetsLessCurrentLiabilities: number;
+  creditorsAfterYear: {
+    loans: number;
+    other: number;
+    total: number;
+  };
+  netAssets: number;
+  capitalAndReserves: {
+    shareCapital: number;
+    retainedEarnings: number;
+    total: number;
+  };
+  balances: boolean;
+}
+
+export interface TaxComputation {
+  accountingProfit: number;
+  adjustments: { description: string; amount: number; basis: string }[];
+  taxableProfit: number;
+  corporationTaxAt125: number;
+  corporationTaxAt25: number;
+  totalCorporationTax: number;
+  preliminaryTaxPaid: number;
+  balanceDue: number;
+  notes: string;
+}
+
+// === API Functions ===
+
+// Companies
+export const getCompanies = () => apiFetch<Company[]>("/api/companies");
+export const getCompany = (id: number) => apiFetch<Company>(`/api/companies/${id}`);
+export const createCompany = (data: Partial<Company>) =>
+  apiFetch<Company>("/api/companies", { method: "POST", body: JSON.stringify(data) });
+export const updateCompany = (id: number, data: Partial<Company>) =>
+  apiFetch<Company>(`/api/companies/${id}`, { method: "PUT", body: JSON.stringify(data) });
+export const deleteCompany = (id: number) =>
+  apiFetch<void>(`/api/companies/${id}`, { method: "DELETE" });
+
+// Officers
+export const getOfficers = (companyId: number) =>
+  apiFetch<Officer[]>(`/api/companies/${companyId}/officers`);
+export const createOfficer = (companyId: number, data: Officer) =>
+  apiFetch<Officer>(`/api/companies/${companyId}/officers`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+export const updateOfficer = (companyId: number, officerId: number, data: Partial<Officer>) =>
+  apiFetch<Officer>(`/api/companies/${companyId}/officers/${officerId}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+export const deleteOfficer = (companyId: number, officerId: number) =>
+  apiFetch<void>(`/api/companies/${companyId}/officers/${officerId}`, { method: "DELETE" });
+
+// Periods
+export const getPeriods = (companyId: number) =>
+  apiFetch<AccountingPeriod[]>(`/api/companies/${companyId}/periods`);
+export const getPeriod = (companyId: number, id: number) =>
+  apiFetch<AccountingPeriod>(`/api/companies/${companyId}/periods/${id}`);
+export const createPeriod = (companyId: number, data: Partial<AccountingPeriod>) =>
+  apiFetch<AccountingPeriod>(`/api/companies/${companyId}/periods`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+
+// Bank Accounts
+export const getBankAccounts = (companyId: number) =>
+  apiFetch<BankAccount[]>(`/api/companies/${companyId}/bank-accounts`);
+
+// Transactions
+export const getTransactions = (companyId: number, periodId: number, page = 1, pageSize = 50) =>
+  apiFetch<{ total: number; items: ImportedTransaction[] }>(
+    `/api/companies/${companyId}/periods/${periodId}/transactions?page=${page}&pageSize=${pageSize}`
+  );
+
+// Categories
+export const getCategories = (companyId: number) =>
+  apiFetch<AccountCategory[]>(`/api/companies/${companyId}/categories`);
+export const seedCategories = (companyId: number) =>
+  apiFetch<AccountCategory[]>(`/api/companies/${companyId}/categories/seed`, { method: "POST" });
+
+// Year-End
+export const getYearEndSummary = (companyId: number, periodId: number) =>
+  apiFetch<YearEndSummary>(
+    `/api/companies/${companyId}/periods/${periodId}/year-end-summary`
+  );
+
+// Adjustments
 export const getAdjustments = (companyId: number, periodId: number) =>
   apiFetch<Adjustment[]>(`/api/companies/${companyId}/periods/${periodId}/adjustments`);
 export const getAdjustmentSummary = (companyId: number, periodId: number) =>
-  apiFetch<AdjustmentSummary>(`/api/companies/${companyId}/periods/${periodId}/adjustments/summary`);
+  apiFetch<AdjustmentSummary>(
+    `/api/companies/${companyId}/periods/${periodId}/adjustments/summary`
+  );
 export const generateAdjustments = (companyId: number, periodId: number) =>
-  apiFetch<AdjustmentSummary>(`/api/companies/${companyId}/periods/${periodId}/adjustments/generate`, { method: "POST" });
-export const approveAdjustment = (companyId: number, periodId: number, id: number, approvedBy: string) =>
-  apiFetch<Adjustment>(`/api/companies/${companyId}/periods/${periodId}/adjustments/${id}/approve`, { method: "POST", body: JSON.stringify({ approvedBy }) });
+  apiFetch<AdjustmentSummary>(
+    `/api/companies/${companyId}/periods/${periodId}/adjustments/generate`,
+    { method: "POST" },
+  );
+export const approveAdjustment = (
+  companyId: number,
+  periodId: number,
+  id: number,
+  approvedBy: string,
+) =>
+  apiFetch<Adjustment>(
+    `/api/companies/${companyId}/periods/${periodId}/adjustments/${id}/approve`,
+    { method: "POST", body: JSON.stringify({ approvedBy }) },
+  );
 
 // Import
-export const uploadBankCsv = async (companyId: number, bankAccountId: number, periodId: number, file: File) => {
-  const formData = new FormData();
-  formData.append("file", file);
-  const res = await fetch(
-    `${API_BASE}/api/companies/${companyId}/bank-accounts/${bankAccountId}/import?periodId=${periodId}`,
-    { method: "POST", body: formData }
-  );
-  if (!res.ok) throw new Error(`Import failed: ${res.status}`);
-  return res.json();
+export const uploadBankCsv = async (
+  companyId: number,
+  bankAccountId: number,
+  periodId: number,
+  file: File,
+) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 min for uploads
+
+  try {
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch(
+      `${API_BASE}/api/companies/${companyId}/bank-accounts/${bankAccountId}/import?periodId=${periodId}`,
+      { method: "POST", body: formData, signal: controller.signal },
+    );
+    clearTimeout(timeoutId);
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new ApiError(res.status, res.statusText, body);
+    }
+    return res.json();
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new Error("Upload timed out. The file may be too large.");
+    }
+    throw err;
+  }
 };
 
 // Statements
 export const getReadiness = (companyId: number, periodId: number) =>
-  apiFetch<ReadinessScore>(`/api/companies/${companyId}/periods/${periodId}/statements/readiness`);
+  apiFetch<ReadinessScore>(
+    `/api/companies/${companyId}/periods/${periodId}/statements/readiness`
+  );
 
 // Documents
 export const getAccountsPackageUrl = (companyId: number, periodId: number) =>
@@ -233,71 +540,166 @@ export const getIxbrlUrl = (companyId: number, periodId: number) =>
   `${API_BASE}/api/companies/${companyId}/periods/${periodId}/revenue/ixbrl`;
 
 // Debtors
-export interface Debtor { id?: number; periodId?: number; name: string; amount: number; type: string; notes?: string; }
-export const getDebtors = (cId: number, pId: number) => apiFetch<Debtor[]>(`/api/companies/${cId}/periods/${pId}/debtors`);
-export const createDebtor = (cId: number, pId: number, d: Debtor) => apiFetch<Debtor>(`/api/companies/${cId}/periods/${pId}/debtors`, { method: "POST", body: JSON.stringify(d) });
-export const deleteDebtor = (cId: number, pId: number, id: number) => apiFetch<void>(`/api/companies/${cId}/periods/${pId}/debtors/${id}`, { method: "DELETE" });
+export const getDebtors = (companyId: number, periodId: number) =>
+  apiFetch<Debtor[]>(`/api/companies/${companyId}/periods/${periodId}/debtors`);
+export const createDebtor = (companyId: number, periodId: number, data: Debtor) =>
+  apiFetch<Debtor>(`/api/companies/${companyId}/periods/${periodId}/debtors`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+export const deleteDebtor = (companyId: number, periodId: number, id: number) =>
+  apiFetch<void>(`/api/companies/${companyId}/periods/${periodId}/debtors/${id}`, {
+    method: "DELETE",
+  });
 
 // Creditors
-export interface Creditor { id?: number; periodId?: number; name: string; amount: number; type: string; dueWithinYear: boolean; notes?: string; }
-export const getCreditors = (cId: number, pId: number) => apiFetch<Creditor[]>(`/api/companies/${cId}/periods/${pId}/creditors`);
-export const createCreditor = (cId: number, pId: number, c: Creditor) => apiFetch<Creditor>(`/api/companies/${cId}/periods/${pId}/creditors`, { method: "POST", body: JSON.stringify(c) });
-export const deleteCreditor = (cId: number, pId: number, id: number) => apiFetch<void>(`/api/companies/${cId}/periods/${pId}/creditors/${id}`, { method: "DELETE" });
+export const getCreditors = (companyId: number, periodId: number) =>
+  apiFetch<Creditor[]>(`/api/companies/${companyId}/periods/${periodId}/creditors`);
+export const createCreditor = (companyId: number, periodId: number, data: Creditor) =>
+  apiFetch<Creditor>(`/api/companies/${companyId}/periods/${periodId}/creditors`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+export const deleteCreditor = (companyId: number, periodId: number, id: number) =>
+  apiFetch<void>(`/api/companies/${companyId}/periods/${periodId}/creditors/${id}`, {
+    method: "DELETE",
+  });
 
 // Fixed Assets
-export interface FixedAsset { id?: number; companyId?: number; name: string; category: string; cost: number; acquisitionDate: string; disposalDate?: string; disposalProceeds?: number; usefulLifeYears: number; depreciationMethod: string; }
-export const getFixedAssets = (cId: number) => apiFetch<FixedAsset[]>(`/api/companies/${cId}/fixed-assets`);
-export const createFixedAsset = (cId: number, a: FixedAsset) => apiFetch<FixedAsset>(`/api/companies/${cId}/fixed-assets`, { method: "POST", body: JSON.stringify(a) });
-export const deleteFixedAsset = (cId: number, id: number) => apiFetch<void>(`/api/companies/${cId}/fixed-assets/${id}`, { method: "DELETE" });
+export const getFixedAssets = (companyId: number) =>
+  apiFetch<FixedAsset[]>(`/api/companies/${companyId}/fixed-assets`);
+export const createFixedAsset = (companyId: number, data: FixedAsset) =>
+  apiFetch<FixedAsset>(`/api/companies/${companyId}/fixed-assets`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+export const deleteFixedAsset = (companyId: number, id: number) =>
+  apiFetch<void>(`/api/companies/${companyId}/fixed-assets/${id}`, { method: "DELETE" });
 
 // Payroll
-export interface PayrollSummary { id?: number; periodId?: number; grossWages: number; employerPrsi: number; pensionContributions: number; staffCount: number; }
-export const getPayroll = (cId: number, pId: number) => apiFetch<PayrollSummary>(`/api/companies/${cId}/periods/${pId}/payroll`).catch(() => null);
-export const savePayroll = (cId: number, pId: number, p: PayrollSummary) => apiFetch<PayrollSummary>(`/api/companies/${cId}/periods/${pId}/payroll`, { method: "PUT", body: JSON.stringify(p) });
+export const getPayroll = (companyId: number, periodId: number) =>
+  apiFetch<PayrollSummary>(`/api/companies/${companyId}/periods/${periodId}/payroll`).catch(
+    () => null,
+  );
+export const savePayroll = (companyId: number, periodId: number, data: PayrollSummary) =>
+  apiFetch<PayrollSummary>(`/api/companies/${companyId}/periods/${periodId}/payroll`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
 
 // Tax Balances
-export interface TaxBalance { id?: number; periodId?: number; taxType: string; liability: number; paid: number; balance: number; }
-export const getTaxBalances = (cId: number, pId: number) => apiFetch<TaxBalance[]>(`/api/companies/${cId}/periods/${pId}/tax-balances`);
-export const saveTaxBalance = (cId: number, pId: number, taxType: string, t: TaxBalance) => apiFetch<TaxBalance>(`/api/companies/${cId}/periods/${pId}/tax-balances/${taxType}`, { method: "PUT", body: JSON.stringify(t) });
+export const getTaxBalances = (companyId: number, periodId: number) =>
+  apiFetch<TaxBalance[]>(`/api/companies/${companyId}/periods/${periodId}/tax-balances`);
+export const saveTaxBalance = (
+  companyId: number,
+  periodId: number,
+  taxType: string,
+  data: TaxBalance,
+) =>
+  apiFetch<TaxBalance>(
+    `/api/companies/${companyId}/periods/${periodId}/tax-balances/${taxType}`,
+    { method: "PUT", body: JSON.stringify(data) },
+  );
 
 // Dividends
-export interface Dividend { id?: number; periodId?: number; amount: number; dateDeclared?: string; datePaid?: string; }
-export const getDividends = (cId: number, pId: number) => apiFetch<Dividend[]>(`/api/companies/${cId}/periods/${pId}/dividends`);
-export const createDividend = (cId: number, pId: number, d: Dividend) => apiFetch<Dividend>(`/api/companies/${cId}/periods/${pId}/dividends`, { method: "POST", body: JSON.stringify(d) });
-export const deleteDividend = (cId: number, pId: number, id: number) => apiFetch<void>(`/api/companies/${cId}/periods/${pId}/dividends/${id}`, { method: "DELETE" });
+export const getDividends = (companyId: number, periodId: number) =>
+  apiFetch<Dividend[]>(`/api/companies/${companyId}/periods/${periodId}/dividends`);
+export const createDividend = (companyId: number, periodId: number, data: Dividend) =>
+  apiFetch<Dividend>(`/api/companies/${companyId}/periods/${periodId}/dividends`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+export const deleteDividend = (companyId: number, periodId: number, id: number) =>
+  apiFetch<void>(`/api/companies/${companyId}/periods/${periodId}/dividends/${id}`, {
+    method: "DELETE",
+  });
 
 // Inventory
-export interface InventoryItem { id?: number; periodId?: number; description: string; value: number; valuationMethod: string; }
-export const getInventory = (cId: number, pId: number) => apiFetch<InventoryItem[]>(`/api/companies/${cId}/periods/${pId}/inventory`);
-export const createInventory = (cId: number, pId: number, i: InventoryItem) => apiFetch<InventoryItem>(`/api/companies/${cId}/periods/${pId}/inventory`, { method: "POST", body: JSON.stringify(i) });
-export const deleteInventory = (cId: number, pId: number, id: number) => apiFetch<void>(`/api/companies/${cId}/periods/${pId}/inventory/${id}`, { method: "DELETE" });
+export const getInventory = (companyId: number, periodId: number) =>
+  apiFetch<InventoryItem[]>(`/api/companies/${companyId}/periods/${periodId}/inventory`);
+export const createInventory = (companyId: number, periodId: number, data: InventoryItem) =>
+  apiFetch<InventoryItem>(`/api/companies/${companyId}/periods/${periodId}/inventory`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+export const deleteInventory = (companyId: number, periodId: number, id: number) =>
+  apiFetch<void>(`/api/companies/${companyId}/periods/${periodId}/inventory/${id}`, {
+    method: "DELETE",
+  });
 
 // Size Classification
-export const saveSizeClassification = (cId: number, pId: number, data: { turnover: number; balanceSheetTotal: number; avgEmployees: number; priorYearClass?: string }) =>
-  apiFetch<unknown>(`/api/companies/${cId}/periods/${pId}/size-classification`, { method: "PUT", body: JSON.stringify(data) });
-export const runClassification = (cId: number, pId: number) =>
-  apiFetch<{ calculatedClass: string; qualificationNotes: string; canUseMicro: boolean; canFileAbridged: boolean; auditExempt: boolean; availableRegimes: string[] }>(`/api/companies/${cId}/periods/${pId}/classify`, { method: "POST" });
-export const setFilingRegime = (cId: number, pId: number, electedRegime?: string) =>
-  apiFetch<unknown>(`/api/companies/${cId}/periods/${pId}/filing-regime`, { method: "POST", body: JSON.stringify({ electedRegime }) });
+export const saveSizeClassification = (
+  companyId: number,
+  periodId: number,
+  data: {
+    turnover: number;
+    balanceSheetTotal: number;
+    avgEmployees: number;
+    priorYearClass?: string;
+  },
+) =>
+  apiFetch<unknown>(
+    `/api/companies/${companyId}/periods/${periodId}/size-classification`,
+    { method: "PUT", body: JSON.stringify(data) },
+  );
+
+export const runClassification = (companyId: number, periodId: number) =>
+  apiFetch<{
+    calculatedClass: string;
+    qualificationNotes: string;
+    canUseMicro: boolean;
+    canFileAbridged: boolean;
+    auditExempt: boolean;
+    availableRegimes: string[];
+  }>(`/api/companies/${companyId}/periods/${periodId}/classify`, { method: "POST" });
+
+export const setFilingRegime = (companyId: number, periodId: number, electedRegime?: string) =>
+  apiFetch<unknown>(`/api/companies/${companyId}/periods/${periodId}/filing-regime`, {
+    method: "POST",
+    body: JSON.stringify({ electedRegime }),
+  });
 
 // Notes
-export interface NotesDisclosure { id?: number; periodId?: number; noteNumber: number; title: string; content?: string; isRequired: boolean; isIncluded: boolean; }
-export const getNotes = (cId: number, pId: number) => apiFetch<NotesDisclosure[]>(`/api/companies/${cId}/periods/${pId}/notes`);
-export const generateNotes = (cId: number, pId: number) => apiFetch<NotesDisclosure[]>(`/api/companies/${cId}/periods/${pId}/notes/generate`, { method: "POST" });
-export const updateNote = (cId: number, pId: number, id: number, data: Partial<NotesDisclosure>) =>
-  apiFetch<NotesDisclosure>(`/api/companies/${cId}/periods/${pId}/notes/${id}`, { method: "PUT", body: JSON.stringify(data) });
-export const createNote = (cId: number, pId: number, data: Partial<NotesDisclosure>) =>
-  apiFetch<NotesDisclosure>(`/api/companies/${cId}/periods/${pId}/notes`, { method: "POST", body: JSON.stringify(data) });
-export const deleteNote = (cId: number, pId: number, id: number) =>
-  apiFetch<void>(`/api/companies/${cId}/periods/${pId}/notes/${id}`, { method: "DELETE" });
+export const getNotes = (companyId: number, periodId: number) =>
+  apiFetch<NotesDisclosure[]>(`/api/companies/${companyId}/periods/${periodId}/notes`);
+export const generateNotes = (companyId: number, periodId: number) =>
+  apiFetch<NotesDisclosure[]>(`/api/companies/${companyId}/periods/${periodId}/notes/generate`, {
+    method: "POST",
+  });
+export const updateNote = (
+  companyId: number,
+  periodId: number,
+  id: number,
+  data: Partial<NotesDisclosure>,
+) =>
+  apiFetch<NotesDisclosure>(`/api/companies/${companyId}/periods/${periodId}/notes/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+export const createNote = (companyId: number, periodId: number, data: Partial<NotesDisclosure>) =>
+  apiFetch<NotesDisclosure>(`/api/companies/${companyId}/periods/${periodId}/notes`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+export const deleteNote = (companyId: number, periodId: number, id: number) =>
+  apiFetch<void>(`/api/companies/${companyId}/periods/${periodId}/notes/${id}`, {
+    method: "DELETE",
+  });
 
 // Statements
-export interface TrialBalanceLine { code: string; name: string; type: string; debit: number; credit: number; }
-export interface ProfitAndLoss { turnover: number; costOfSales: number; grossProfit: number; overheads: { code: string; name: string; amount: number }[]; totalOverheads: number; operatingProfit: number; interestPayable: number; profitBeforeTax: number; taxCharge: number; profitAfterTax: number; }
-export interface BalanceSheet { fixedAssets: { categories: { category: string; cost: number; depreciation: number; nbv: number }[]; total: number }; currentAssets: { stock: number; debtors: number; prepayments: number; cash: number; total: number }; creditorsWithinYear: { tradeCreditors: number; accruals: number; taxCreditors: number; otherCreditors: number; total: number }; netCurrentAssets: number; totalAssetsLessCurrentLiabilities: number; creditorsAfterYear: { loans: number; other: number; total: number }; netAssets: number; capitalAndReserves: { shareCapital: number; retainedEarnings: number; total: number }; balances: boolean; }
-export interface TaxComputation { accountingProfit: number; adjustments: { description: string; amount: number; basis: string }[]; taxableProfit: number; corporationTaxAt125: number; corporationTaxAt25: number; totalCorporationTax: number; preliminaryTaxPaid: number; balanceDue: number; notes: string; }
-
-export const getTrialBalance = (cId: number, pId: number) => apiFetch<TrialBalanceLine[]>(`/api/companies/${cId}/periods/${pId}/statements/trial-balance`);
-export const getProfitAndLoss = (cId: number, pId: number) => apiFetch<ProfitAndLoss>(`/api/companies/${cId}/periods/${pId}/statements/profit-and-loss`);
-export const getBalanceSheet = (cId: number, pId: number) => apiFetch<BalanceSheet>(`/api/companies/${cId}/periods/${pId}/statements/balance-sheet`);
-export const getTaxComputation = (cId: number, pId: number) => apiFetch<TaxComputation>(`/api/companies/${cId}/periods/${pId}/revenue/tax-computation`);
+export const getTrialBalance = (companyId: number, periodId: number) =>
+  apiFetch<TrialBalanceLine[]>(
+    `/api/companies/${companyId}/periods/${periodId}/statements/trial-balance`
+  );
+export const getProfitAndLoss = (companyId: number, periodId: number) =>
+  apiFetch<ProfitAndLoss>(
+    `/api/companies/${companyId}/periods/${periodId}/statements/profit-and-loss`
+  );
+export const getBalanceSheet = (companyId: number, periodId: number) =>
+  apiFetch<BalanceSheet>(
+    `/api/companies/${companyId}/periods/${periodId}/statements/balance-sheet`
+  );
+export const getTaxComputation = (companyId: number, periodId: number) =>
+  apiFetch<TaxComputation>(
+    `/api/companies/${companyId}/periods/${periodId}/revenue/tax-computation`
+  );

@@ -3,6 +3,43 @@
 :root {
   --background: #fafafa;
   --foreground: #171717;
+  --card: #ffffff;
+  --card-foreground: #171717;
+  --muted: #f5f5f5;
+  --muted-foreground: #737373;
+  --border: #e5e5e5;
+  --ring: #10b981;
+  --emerald-50: #ecfdf5;
+  --emerald-100: #d1fae5;
+  --emerald-600: #059669;
+  --emerald-700: #047857;
+  --danger: #ef4444;
+  --danger-light: #fef2f2;
+  --warning: #f59e0b;
+  --warning-light: #fffbeb;
+  --info: #3b82f6;
+  --info-light: #eff6ff;
+}
+
+.dark {
+  --background: #0a0a0a;
+  --foreground: #fafafa;
+  --card: #171717;
+  --card-foreground: #fafafa;
+  --muted: #262626;
+  --muted-foreground: #a3a3a3;
+  --border: #2e2e2e;
+  --ring: #10b981;
+  --emerald-50: #052e1c;
+  --emerald-100: #064e32;
+  --emerald-600: #34d399;
+  --emerald-700: #6ee7b7;
+  --danger: #f87171;
+  --danger-light: #1c0a0a;
+  --warning: #fbbf24;
+  --warning-light: #1c1a0a;
+  --info: #60a5fa;
+  --info-light: #0a1628;
 }
 
 @theme inline {
@@ -10,4 +47,121 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+}
+
+/* Smooth transitions for theme switching */
+html {
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Focus-visible ring for accessibility */
+*:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Skeleton animation */
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.skeleton {
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+  background: linear-gradient(90deg, var(--muted) 25%, var(--border) 50%, var(--muted) 75%);
+  background-size: 200% 100%;
+  border-radius: 0.5rem;
+}
+
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.skeleton-shimmer {
+  animation: skeleton-shimmer 2s ease-in-out infinite;
+  background: linear-gradient(90deg, var(--muted) 25%, var(--border) 50%, var(--muted) 75%);
+  background-size: 200% 100%;
+  border-radius: 0.5rem;
+}
+
+/* Page transition */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.25s ease-out;
+}
+
+/* Slide-down for modals / expandable sections */
+@keyframes slide-down {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-slide-down {
+  animation: slide-down 0.2s ease-out;
+}
+
+/* Backdrop for modals */
+@keyframes backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-backdrop {
+  animation: backdrop-in 0.15s ease-out;
+}
+
+/* Card hover lift */
+.card-hover {
+  transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+}
+
+.card-hover:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+  border-color: var(--ring);
+}
+
+/* Dropzone drag-over state */
+.dropzone-active {
+  border-color: var(--ring) !important;
+  background-color: var(--emerald-50) !important;
+}
+
+/* Table zebra striping */
+.table-zebra > *:nth-child(even) {
+  background-color: var(--muted);
+}
+
+/* Print styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: white !important;
+    color: black !important;
+  }
+
+  .print-break-before {
+    break-before: page;
+  }
+}
+
+/* Smooth scroll */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Toaster position override */
+[data-sonner-toaster] {
+  --normal-bg: var(--card);
+  --normal-text: var(--foreground);
+  --normal-border: var(--border);
 }

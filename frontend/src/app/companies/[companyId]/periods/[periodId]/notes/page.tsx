@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState, useEffect, useCallback } from "react";
+import { use, useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import {
   Button,
@@ -19,6 +19,9 @@ import {
   Wand2,
   Save,
 } from "lucide-react";
+import { toast } from "sonner";
+import { Breadcrumbs } from "@/components/Breadcrumbs";
+import { PeriodWorkspaceSkeleton } from "@/components/Skeleton";
 import {
   getCompany,
   getPeriod,
@@ -31,6 +34,12 @@ import {
   type AccountingPeriod,
   type NotesDisclosure,
 } from "@/lib/api";
+
+const inputClass =
+  "w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-colors";
+
+const textareaClass =
+  "w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 resize-y transition-colors";
 
 export default function NotesPage({
   params,
@@ -46,7 +55,6 @@ export default function NotesPage({
   const [notes, setNotes] = useState<NotesDisclosure[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [savingIds, setSavingIds] = useState<Set<number>>(new Set());
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
@@ -59,9 +67,17 @@ export default function NotesPage({
   // Local edits tracking (noteId -> edited content)
   const [editedContent, setEditedContent] = useState<Record<number, string>>({});
 
+  // Warn user before leaving with unsaved edits
+  const hasUnsavedEdits = useMemo(() => Object.keys(editedContent).length > 0, [editedContent]);
+  useEffect(() => {
+    if (!hasUnsavedEdits) return;
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [hasUnsavedEdits]);
+
   const loadData = useCallback(async () => {
     setLoading(true);
-    setError(null);
     try {
       const [companyData, periodData] = await Promise.all([
         getCompany(cId),
@@ -77,7 +93,7 @@ export default function NotesPage({
         setNotes([]);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load data");
+      toast.error(err instanceof Error ? err.message : "Failed to load data");
     } finally {
       setLoading(false);
     }
@@ -89,15 +105,13 @@ export default function NotesPage({
 
   async function handleGenerateNotes() {
     setGenerating(true);
-    setError(null);
     try {
       const generatedNotes = await generateNotes(cId, pId);
       setNotes(generatedNotes);
       setEditedContent({});
+      toast.success(`Generated ${generatedNotes.length} note${generatedNotes.length !== 1 ? "s" : ""}`);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to generate notes"
-      );
+      toast.error(err instanceof Error ? err.message : "Failed to generate notes");
     } finally {
       setGenerating(false);
     }
@@ -122,10 +136,9 @@ export default function NotesPage({
         delete next[noteId];
         return next;
       });
+      toast.success("Note saved");
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to save note"
-      );
+      toast.error(err instanceof Error ? err.message : "Failed to save note");
     } finally {
       setSavingIds((prev) => {
         const next = new Set(prev);
@@ -146,10 +159,9 @@ export default function NotesPage({
       setNotes((prev) =>
         prev.map((n) => (n.id === noteId ? updated : n))
       );
+      toast.success(updated.isIncluded ? "Note included" : "Note excluded");
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to update note"
-      );
+      toast.error(err instanceof Error ? err.message : "Failed to update note");
     } finally {
       setSavingIds((prev) => {
         const next = new Set(prev);
@@ -169,10 +181,9 @@ export default function NotesPage({
         delete next[noteId];
         return next;
       });
+      toast.success("Note deleted");
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to delete note"
-      );
+      toast.error(err instanceof Error ? err.message : "Failed to delete note");
     } finally {
       setDeletingId(null);
     }
@@ -197,30 +208,25 @@ export default function NotesPage({
       setNewTitle("");
       setNewContent("");
       setShowNewForm(false);
+      toast.success("Custom note created");
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to create note"
-      );
+      toast.error(err instanceof Error ? err.message : "Failed to create note");
     } finally {
       setCreatingNote(false);
     }
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Spinner size="lg" />
-      </div>
-    );
+    return <PeriodWorkspaceSkeleton />;
   }
 
-  if (error && !company) {
+  if (!company) {
     return (
       <div className="max-w-2xl mx-auto">
-        <Card className="border border-red-200">
+        <Card className="border border-red-200 dark:border-red-800">
           <Card.Content className="text-center py-8">
             <AlertTriangle className="w-10 h-10 text-red-500 mx-auto mb-3" />
-            <p className="text-red-700 font-medium">{error}</p>
+            <p className="text-red-700 dark:text-red-400 font-medium">Failed to load company data</p>
             <Button variant="outline" className="mt-4" onPress={loadData}>
               <RefreshCw className="w-4 h-4 mr-1" />
               Retry
@@ -237,21 +243,30 @@ export default function NotesPage({
   const includedCount = notes.filter((n) => n.isIncluded).length;
 
   return (
-    <div>
+    <div className="animate-fade-in">
+      {/* Breadcrumbs */}
+      <Breadcrumbs
+        items={[
+          { label: "Company", href: `/companies/${companyId}` },
+          { label: "Period", href: `/companies/${companyId}/periods/${periodId}` },
+          { label: "Notes" },
+        ]}
+      />
+
       {/* Header */}
       <div className="mb-6">
         <Link
           href={`/companies/${companyId}/periods/${periodId}`}
-          className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-emerald-600 mb-3"
+          className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-emerald-600 dark:text-gray-400 dark:hover:text-emerald-400 mb-3"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to Period Workspace
         </Link>
-        <h1 className="text-2xl font-bold text-gray-900">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
           Notes to the Financial Statements
         </h1>
         {company && period && (
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             {company.legalName} &mdash;{" "}
             {new Date(period.periodStart).toLocaleDateString("en-IE")} to{" "}
             {new Date(period.periodEnd).toLocaleDateString("en-IE")}
@@ -259,14 +274,8 @@ export default function NotesPage({
         )}
       </div>
 
-      {error && (
-        <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700 mb-4">
-          {error}
-        </div>
-      )}
-
       {/* Actions Bar */}
-      <Card className="shadow-sm border border-gray-200 mb-6">
+      <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 mb-6">
         <Card.Content className="p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -307,7 +316,7 @@ export default function NotesPage({
                 Refresh
               </Button>
             </div>
-            <div className="flex items-center gap-3 text-sm text-gray-500">
+            <div className="flex items-center gap-3 text-sm text-gray-500 dark:text-gray-400">
               <span>
                 {notes.length} note{notes.length !== 1 ? "s" : ""} total
               </span>
@@ -321,7 +330,7 @@ export default function NotesPage({
 
       {/* New Note Form */}
       {showNewForm && (
-        <Card className="shadow-sm border border-emerald-200 bg-emerald-50/20 mb-6">
+        <Card className="shadow-sm border border-emerald-200 dark:border-emerald-800 bg-emerald-50/20 dark:bg-emerald-900/10 mb-6 animate-fade-in">
           <Card.Header>
             <Card.Title>Add Custom Note</Card.Title>
           </Card.Header>
@@ -330,7 +339,7 @@ export default function NotesPage({
               <div>
                 <label
                   htmlFor="note-title"
-                  className="block text-sm font-medium text-gray-700 mb-1"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
                 >
                   Note Title
                 </label>
@@ -340,13 +349,13 @@ export default function NotesPage({
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
                   placeholder="e.g. Directors' Remuneration"
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  className={inputClass}
                 />
               </div>
               <div>
                 <label
                   htmlFor="note-content"
-                  className="block text-sm font-medium text-gray-700 mb-1"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
                 >
                   Content
                 </label>
@@ -356,7 +365,7 @@ export default function NotesPage({
                   onChange={(e) => setNewContent(e.target.value)}
                   rows={4}
                   placeholder="Enter the note disclosure content..."
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 resize-y"
+                  className={textareaClass}
                 />
               </div>
               <div className="flex items-center gap-3">
@@ -394,13 +403,13 @@ export default function NotesPage({
 
       {/* Notes List */}
       {sortedNotes.length === 0 ? (
-        <Card className="shadow-sm border border-gray-200">
+        <Card className="shadow-sm border border-gray-200 dark:border-neutral-700">
           <Card.Content className="text-center py-12">
-            <FileText className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-            <p className="text-sm text-gray-500">
+            <FileText className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+            <p className="text-sm text-gray-500 dark:text-gray-400">
               No notes have been created yet.
             </p>
-            <p className="text-xs text-gray-400 mt-1">
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
               Click &ldquo;Generate Auto-Notes&rdquo; to create standard
               disclosures, or add a custom note.
             </p>
@@ -419,20 +428,20 @@ export default function NotesPage({
             return (
               <Card
                 key={noteId}
-                className={`shadow-sm border ${
+                className={`shadow-sm border animate-fade-in ${
                   note.isIncluded
-                    ? "border-gray-200"
-                    : "border-gray-200 opacity-60"
+                    ? "border-gray-200 dark:border-neutral-700"
+                    : "border-gray-200 dark:border-neutral-700 opacity-60"
                 }`}
               >
                 <Card.Content className="p-5">
                   <div className="flex items-start justify-between gap-4 mb-3">
                     <div className="flex items-center gap-3">
-                      <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold">
+                      <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 text-xs font-bold">
                         {note.noteNumber}
                       </span>
                       <div>
-                        <h3 className="text-sm font-semibold text-gray-900">
+                        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                           {note.title}
                         </h3>
                         <div className="flex items-center gap-2 mt-0.5">
@@ -465,9 +474,10 @@ export default function NotesPage({
                           checked={note.isIncluded}
                           onChange={() => handleToggleIncluded(note)}
                           disabled={isSaving}
-                          className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                          title={note.isIncluded ? "Exclude this note from the financial statements" : "Include this note in the financial statements"}
+                          className="rounded border-gray-300 dark:border-neutral-600 text-emerald-600 focus:ring-emerald-500 dark:bg-neutral-800"
                         />
-                        <span className="text-xs text-gray-500">
+                        <span className="text-xs text-gray-500 dark:text-gray-400">
                           Include
                         </span>
                       </label>
@@ -499,7 +509,7 @@ export default function NotesPage({
                       }))
                     }
                     rows={4}
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 resize-y"
+                    className={textareaClass}
                     placeholder="Enter note content..."
                   />
 
@@ -538,7 +548,7 @@ export default function NotesPage({
                         Discard
                       </Button>
                       <CheckCircle2 className="w-4 h-4 text-amber-500" />
-                      <span className="text-xs text-amber-600">
+                      <span className="text-xs text-amber-600 dark:text-amber-400">
                         Unsaved changes
                       </span>
                     </div>

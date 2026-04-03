@@ -9,6 +9,9 @@ import {
   Spinner,
 } from "@heroui/react";
 import { ArrowLeft, CheckCircle2, AlertTriangle, Scale } from "lucide-react";
+import { toast } from "sonner";
+import { Breadcrumbs } from "@/components/Breadcrumbs";
+import { PeriodWorkspaceSkeleton } from "@/components/Skeleton";
 import {
   getCompany,
   getPeriod,
@@ -20,7 +23,7 @@ import {
 } from "@/lib/api";
 
 const inputClass =
-  "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500";
+  "w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors";
 
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("en-IE", {
@@ -89,8 +92,8 @@ export default function ClassifyPage({
         setSelectedRegime(periodData.filingRegime.electedRegime);
         setRegimeConfirmed(true);
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to load classification data");
     } finally {
       setLoading(false);
     }
@@ -118,8 +121,10 @@ export default function ClassifyPage({
       if (classResult.availableRegimes.length > 0) {
         setSelectedRegime(classResult.availableRegimes[0]);
       }
+      toast.success(`Classified as ${classResult.calculatedClass} company`);
     } catch (err) {
       setClassifyError(err instanceof Error ? err.message : "Classification failed");
+      toast.error(err instanceof Error ? err.message : "Classification failed");
     } finally {
       setClassifying(false);
     }
@@ -131,8 +136,9 @@ export default function ClassifyPage({
     try {
       await setFilingRegime(cId, pId, selectedRegime);
       setRegimeConfirmed(true);
-    } catch {
-      // ignore
+      toast.success(`Filing regime set to ${selectedRegime}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to confirm regime");
     } finally {
       setConfirmingRegime(false);
     }
@@ -146,28 +152,33 @@ export default function ClassifyPage({
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Spinner size="lg" />
-      </div>
-    );
+    return <PeriodWorkspaceSkeleton />;
   }
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="max-w-2xl mx-auto animate-fade-in">
+      {/* Breadcrumbs */}
+      <Breadcrumbs
+        items={[
+          { label: "Company", href: `/companies/${companyId}` },
+          { label: "Period", href: `/companies/${companyId}/periods/${periodId}` },
+          { label: "Classification" },
+        ]}
+      />
+
       {/* Header */}
       <div className="mb-6">
         <Link
           href={`/companies/${companyId}/periods/${periodId}`}
-          className="inline-flex items-center gap-1.5 text-sm text-emerald-700 hover:text-emerald-800 mb-3"
+          className="inline-flex items-center gap-1.5 text-sm text-emerald-700 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300 mb-3"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to Period Workspace
         </Link>
-        <h1 className="text-2xl font-bold text-gray-900">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
           Company Size Classification
         </h1>
-        <p className="text-sm text-gray-500 mt-1">
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
           {company?.legalName ?? "Company"} &mdash;{" "}
           {period
             ? `${new Date(period.periodStart).toLocaleDateString("en-IE")} to ${new Date(period.periodEnd).toLocaleDateString("en-IE")}`
@@ -176,10 +187,10 @@ export default function ClassifyPage({
       </div>
 
       {/* Input Form */}
-      <Card className="shadow-sm border border-gray-200 mb-6">
+      <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 mb-6">
         <Card.Header>
           <Card.Title className="flex items-center gap-2">
-            <Scale className="w-5 h-5 text-emerald-600" />
+            <Scale className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
             Classification Data
           </Card.Title>
           <Card.Description>
@@ -189,7 +200,7 @@ export default function ClassifyPage({
         <Card.Content>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                 Turnover
               </label>
               <input
@@ -201,7 +212,7 @@ export default function ClassifyPage({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                 Balance Sheet Total
               </label>
               <input
@@ -213,7 +224,7 @@ export default function ClassifyPage({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                 Average Employees
               </label>
               <input
@@ -225,13 +236,15 @@ export default function ClassifyPage({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                 Prior Year Classification
               </label>
               <select
                 className={inputClass}
                 value={priorYearClass}
                 onChange={(e) => setPriorYearClass(e.target.value)}
+                title="Prior Year Classification"
+                aria-label="Prior Year Classification"
               >
                 <option value="">None / First Year</option>
                 <option value="Micro">Micro</option>
@@ -263,7 +276,7 @@ export default function ClassifyPage({
           </div>
 
           {classifyError && (
-            <div className="mt-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+            <div className="mt-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-400">
               {classifyError}
             </div>
           )}
@@ -273,7 +286,7 @@ export default function ClassifyPage({
       {/* Results */}
       {result && (
         <>
-          <Card className="shadow-sm border border-gray-200 mb-6">
+          <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 mb-6">
             <Card.Header>
               <Card.Title>Classification Result</Card.Title>
             </Card.Header>
@@ -293,9 +306,9 @@ export default function ClassifyPage({
 
                 {/* Qualification notes */}
                 {result.qualificationNotes && (
-                  <div className="rounded-lg bg-blue-50 border border-blue-200 px-4 py-3">
-                    <h4 className="text-sm font-medium text-blue-800 mb-1">Qualification Notes</h4>
-                    <p className="text-sm text-blue-700 whitespace-pre-line">
+                  <div className="rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 px-4 py-3">
+                    <h4 className="text-sm font-medium text-blue-800 dark:text-blue-300 mb-1">Qualification Notes</h4>
+                    <p className="text-sm text-blue-700 dark:text-blue-400 whitespace-pre-line">
                       {result.qualificationNotes}
                     </p>
                   </div>
@@ -303,42 +316,42 @@ export default function ClassifyPage({
 
                 {/* Status badges */}
                 <div className="grid grid-cols-3 gap-4">
-                  <div className="rounded-lg bg-gray-50 p-4 text-center">
+                  <div className="rounded-lg bg-gray-50 dark:bg-neutral-800 p-4 text-center">
                     <div className="flex items-center justify-center mb-2">
                       {result.canUseMicro ? (
                         <CheckCircle2 className="w-6 h-6 text-emerald-500" />
                       ) : (
-                        <AlertTriangle className="w-6 h-6 text-gray-400" />
+                        <AlertTriangle className="w-6 h-6 text-gray-400 dark:text-gray-500" />
                       )}
                     </div>
-                    <p className="text-xs font-medium text-gray-600">Micro Regime</p>
-                    <p className="text-sm font-semibold text-gray-900 mt-0.5">
+                    <p className="text-xs font-medium text-gray-600 dark:text-gray-400">Micro Regime</p>
+                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">
                       {result.canUseMicro ? "Available" : "Not available"}
                     </p>
                   </div>
-                  <div className="rounded-lg bg-gray-50 p-4 text-center">
+                  <div className="rounded-lg bg-gray-50 dark:bg-neutral-800 p-4 text-center">
                     <div className="flex items-center justify-center mb-2">
                       {result.canFileAbridged ? (
                         <CheckCircle2 className="w-6 h-6 text-emerald-500" />
                       ) : (
-                        <AlertTriangle className="w-6 h-6 text-gray-400" />
+                        <AlertTriangle className="w-6 h-6 text-gray-400 dark:text-gray-500" />
                       )}
                     </div>
-                    <p className="text-xs font-medium text-gray-600">Abridged Filing</p>
-                    <p className="text-sm font-semibold text-gray-900 mt-0.5">
+                    <p className="text-xs font-medium text-gray-600 dark:text-gray-400">Abridged Filing</p>
+                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">
                       {result.canFileAbridged ? "Available" : "Not available"}
                     </p>
                   </div>
-                  <div className="rounded-lg bg-gray-50 p-4 text-center">
+                  <div className="rounded-lg bg-gray-50 dark:bg-neutral-800 p-4 text-center">
                     <div className="flex items-center justify-center mb-2">
                       {result.auditExempt ? (
                         <CheckCircle2 className="w-6 h-6 text-emerald-500" />
                       ) : (
-                        <AlertTriangle className="w-6 h-6 text-gray-400" />
+                        <AlertTriangle className="w-6 h-6 text-gray-400 dark:text-gray-500" />
                       )}
                     </div>
-                    <p className="text-xs font-medium text-gray-600">Audit Exemption</p>
-                    <p className="text-sm font-semibold text-gray-900 mt-0.5">
+                    <p className="text-xs font-medium text-gray-600 dark:text-gray-400">Audit Exemption</p>
+                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">
                       {result.auditExempt ? "Exempt" : "Audit required"}
                     </p>
                   </div>
@@ -349,7 +362,7 @@ export default function ClassifyPage({
 
           {/* Filing Regime Selection */}
           {result.availableRegimes.length > 0 && (
-            <Card className="shadow-sm border border-gray-200 mb-6">
+            <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 mb-6">
               <Card.Header>
                 <Card.Title>Select Filing Regime</Card.Title>
                 <Card.Description>
@@ -374,7 +387,7 @@ export default function ClassifyPage({
                   </div>
 
                   {selectedRegime && (
-                    <div className="flex items-center gap-4 pt-2 border-t border-gray-100">
+                    <div className="flex items-center gap-4 pt-2 border-t border-gray-100 dark:border-neutral-700">
                       <Button
                         variant="primary"
                         onPress={handleConfirmRegime}
@@ -395,7 +408,7 @@ export default function ClassifyPage({
                         )}
                       </Button>
                       {regimeConfirmed && (
-                        <span className="text-sm text-emerald-600 font-medium">
+                        <span className="text-sm text-emerald-600 dark:text-emerald-400 font-medium">
                           {selectedRegime} regime has been set for this period.
                         </span>
                       )}
@@ -410,7 +423,7 @@ export default function ClassifyPage({
 
       {/* Pre-existing classification display (when loaded from period data) */}
       {!result && period?.sizeClassification && (
-        <Card className="shadow-sm border border-gray-200 mb-6">
+        <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 mb-6">
           <Card.Header>
             <Card.Title>Current Classification</Card.Title>
           </Card.Header>
@@ -427,33 +440,33 @@ export default function ClassifyPage({
                 </Chip>
               </div>
               {period.sizeClassification.qualificationNotes && (
-                <div className="rounded-lg bg-blue-50 border border-blue-200 px-4 py-3">
-                  <p className="text-sm text-blue-700">
+                <div className="rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 px-4 py-3">
+                  <p className="text-sm text-blue-700 dark:text-blue-400">
                     {period.sizeClassification.qualificationNotes}
                   </p>
                 </div>
               )}
               <div className="grid grid-cols-3 gap-4 text-center">
-                <div className="rounded-lg bg-gray-50 p-3">
-                  <p className="text-xs text-gray-500">Turnover</p>
-                  <p className="text-sm font-semibold text-gray-900">
+                <div className="rounded-lg bg-gray-50 dark:bg-neutral-800 p-3">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Turnover</p>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                     {formatCurrency(period.sizeClassification.turnover)}
                   </p>
                 </div>
-                <div className="rounded-lg bg-gray-50 p-3">
-                  <p className="text-xs text-gray-500">Balance Sheet</p>
-                  <p className="text-sm font-semibold text-gray-900">
+                <div className="rounded-lg bg-gray-50 dark:bg-neutral-800 p-3">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Balance Sheet</p>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                     {formatCurrency(period.sizeClassification.balanceSheetTotal)}
                   </p>
                 </div>
-                <div className="rounded-lg bg-gray-50 p-3">
-                  <p className="text-xs text-gray-500">Avg Employees</p>
-                  <p className="text-sm font-semibold text-gray-900">
+                <div className="rounded-lg bg-gray-50 dark:bg-neutral-800 p-3">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Avg Employees</p>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                     {period.sizeClassification.avgEmployees}
                   </p>
                 </div>
               </div>
-              <p className="text-xs text-gray-400 text-center">
+              <p className="text-xs text-gray-400 dark:text-gray-500 text-center">
                 Re-classify above to update.
               </p>
             </div>

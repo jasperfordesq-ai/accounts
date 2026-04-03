@@ -21,7 +21,10 @@ import {
   Calculator,
   BarChart3,
   Scale,
+  Printer,
 } from "lucide-react";
+import { Breadcrumbs } from "@/components/Breadcrumbs";
+import { PeriodWorkspaceSkeleton } from "@/components/Skeleton";
 import {
   getCompany,
   getPeriod,
@@ -101,20 +104,16 @@ export default function StatementsPage({
   }, [loadData]);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Spinner size="lg" />
-      </div>
-    );
+    return <PeriodWorkspaceSkeleton />;
   }
 
   if (error && !company) {
     return (
       <div className="max-w-2xl mx-auto">
-        <Card className="border border-red-200">
+        <Card className="border border-red-200 dark:border-red-800">
           <Card.Content className="text-center py-8">
             <AlertTriangle className="w-10 h-10 text-red-500 mx-auto mb-3" />
-            <p className="text-red-700 font-medium">{error}</p>
+            <p className="text-red-700 dark:text-red-400 font-medium">{error}</p>
             <Button variant="outline" className="mt-4" onPress={loadData}>
               <RefreshCw className="w-4 h-4 mr-1" />
               Retry
@@ -126,58 +125,78 @@ export default function StatementsPage({
   }
 
   return (
-    <div>
+    <div className="animate-fade-in">
+      {/* Breadcrumbs */}
+      <Breadcrumbs
+        items={[
+          { label: "Company", href: `/companies/${companyId}` },
+          { label: "Period", href: `/companies/${companyId}/periods/${periodId}` },
+          { label: "Statements" },
+        ]}
+      />
+
       {/* Header */}
-      <div className="mb-6">
-        <Link
-          href={`/companies/${companyId}/periods/${periodId}`}
-          className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-emerald-600 mb-3"
+      <div className="mb-6 flex items-start justify-between">
+        <div>
+          <Link
+            href={`/companies/${companyId}/periods/${periodId}`}
+            className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-emerald-600 dark:text-gray-400 dark:hover:text-emerald-400 mb-3"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to Period Workspace
+          </Link>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+            Financial Statements
+          </h1>
+          {company && period && (
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              {company.legalName} &mdash;{" "}
+              {new Date(period.periodStart).toLocaleDateString("en-IE")} to{" "}
+              {new Date(period.periodEnd).toLocaleDateString("en-IE")}
+            </p>
+          )}
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="no-print mt-1"
+          onPress={() => window.print()}
         >
-          <ArrowLeft className="w-4 h-4" />
-          Back to Period Workspace
-        </Link>
-        <h1 className="text-2xl font-bold text-gray-900">
-          Financial Statements
-        </h1>
-        {company && period && (
-          <p className="text-sm text-gray-500 mt-1">
-            {company.legalName} &mdash;{" "}
-            {new Date(period.periodStart).toLocaleDateString("en-IE")} to{" "}
-            {new Date(period.periodEnd).toLocaleDateString("en-IE")}
-          </p>
-        )}
+          <Printer className="w-4 h-4 mr-1.5" />
+          Print
+        </Button>
       </div>
 
       {/* Tabs */}
       <TabsRoot>
         <TabList
           aria-label="Financial statements tabs"
-          className="flex gap-1 border-b border-gray-200 mb-6"
+          className="flex gap-1 border-b border-gray-200 dark:border-neutral-700 mb-6 no-print"
         >
           <Tab
             id="trial-balance"
-            className="px-4 py-2.5 text-sm font-medium text-gray-600 border-b-2 border-transparent data-[selected]:border-emerald-600 data-[selected]:text-emerald-700 cursor-pointer outline-none"
+            className="px-4 py-2.5 text-sm font-medium text-gray-600 dark:text-gray-400 border-b-2 border-transparent data-[selected]:border-emerald-600 data-[selected]:text-emerald-700 dark:data-[selected]:text-emerald-400 cursor-pointer outline-none"
           >
             <Scale className="w-4 h-4 inline mr-1.5 -mt-0.5" />
             Trial Balance
           </Tab>
           <Tab
             id="pnl"
-            className="px-4 py-2.5 text-sm font-medium text-gray-600 border-b-2 border-transparent data-[selected]:border-emerald-600 data-[selected]:text-emerald-700 cursor-pointer outline-none"
+            className="px-4 py-2.5 text-sm font-medium text-gray-600 dark:text-gray-400 border-b-2 border-transparent data-[selected]:border-emerald-600 data-[selected]:text-emerald-700 dark:data-[selected]:text-emerald-400 cursor-pointer outline-none"
           >
             <BarChart3 className="w-4 h-4 inline mr-1.5 -mt-0.5" />
             Profit &amp; Loss
           </Tab>
           <Tab
             id="balance-sheet"
-            className="px-4 py-2.5 text-sm font-medium text-gray-600 border-b-2 border-transparent data-[selected]:border-emerald-600 data-[selected]:text-emerald-700 cursor-pointer outline-none"
+            className="px-4 py-2.5 text-sm font-medium text-gray-600 dark:text-gray-400 border-b-2 border-transparent data-[selected]:border-emerald-600 data-[selected]:text-emerald-700 dark:data-[selected]:text-emerald-400 cursor-pointer outline-none"
           >
             <FileText className="w-4 h-4 inline mr-1.5 -mt-0.5" />
             Balance Sheet
           </Tab>
           <Tab
             id="tax-computation"
-            className="px-4 py-2.5 text-sm font-medium text-gray-600 border-b-2 border-transparent data-[selected]:border-emerald-600 data-[selected]:text-emerald-700 cursor-pointer outline-none"
+            className="px-4 py-2.5 text-sm font-medium text-gray-600 dark:text-gray-400 border-b-2 border-transparent data-[selected]:border-emerald-600 data-[selected]:text-emerald-700 dark:data-[selected]:text-emerald-400 cursor-pointer outline-none"
           >
             <Calculator className="w-4 h-4 inline mr-1.5 -mt-0.5" />
             Tax Computation
@@ -186,7 +205,7 @@ export default function StatementsPage({
 
         {/* Trial Balance Tab */}
         <TabPanel id="trial-balance">
-          <Card className="shadow-sm border border-gray-200">
+          <Card className="shadow-sm border border-gray-200 dark:border-neutral-700">
             <Card.Header>
               <Card.Title>Trial Balance</Card.Title>
               <Card.Description>
@@ -195,56 +214,58 @@ export default function StatementsPage({
             </Card.Header>
             <Card.Content>
               {trialBalance ? (
-                <div className="border border-gray-200 rounded-lg overflow-hidden">
-                  {/* Header */}
-                  <div className="grid grid-cols-12 gap-2 bg-gray-50 border-b border-gray-200 px-4 py-2.5 text-xs font-medium text-gray-600 uppercase tracking-wide">
-                    <div className="col-span-2">Code</div>
-                    <div className="col-span-4">Account Name</div>
-                    <div className="col-span-2">Type</div>
-                    <div className="col-span-2 text-right">Debit</div>
-                    <div className="col-span-2 text-right">Credit</div>
-                  </div>
-                  {/* Rows */}
-                  <div className="divide-y divide-gray-100">
-                    {trialBalance.map((line, idx) => (
-                      <div
-                        key={`${line.code}-${idx}`}
-                        className="grid grid-cols-12 gap-2 px-4 py-2.5 text-sm hover:bg-gray-50/50 items-center"
-                      >
-                        <div className="col-span-2 text-gray-600 font-mono text-xs">
-                          {line.code}
-                        </div>
-                        <div className="col-span-4 text-gray-900">
-                          {line.name}
-                        </div>
-                        <div className="col-span-2">
-                          <Chip size="sm" variant="soft" color="default">
-                            {line.type}
-                          </Chip>
-                        </div>
-                        <div className="col-span-2 text-right font-mono text-gray-900">
-                          {line.debit > 0 ? eur(line.debit) : ""}
-                        </div>
-                        <div className="col-span-2 text-right font-mono text-gray-900">
-                          {line.credit > 0 ? eur(line.credit) : ""}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  {/* Totals */}
-                  <div className="grid grid-cols-12 gap-2 bg-gray-100 border-t-2 border-gray-300 px-4 py-3 text-sm font-bold">
-                    <div className="col-span-8 text-gray-900">Totals</div>
-                    <div className="col-span-2 text-right font-mono text-gray-900">
-                      {eur(
-                        trialBalance.reduce((sum, l) => sum + l.debit, 0)
-                      )}
-                    </div>
-                    <div className="col-span-2 text-right font-mono text-gray-900">
-                      {eur(
-                        trialBalance.reduce((sum, l) => sum + l.credit, 0)
-                      )}
-                    </div>
-                  </div>
+                <div className="overflow-x-auto -mx-1">
+                  <table className="w-full text-sm border border-gray-200 dark:border-neutral-700 rounded-lg overflow-hidden" role="table">
+                    <caption className="sr-only">Trial Balance</caption>
+                    <thead>
+                      <tr className="bg-gray-50 dark:bg-neutral-800 border-b border-gray-200 dark:border-neutral-700 text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                        <th scope="col" className="text-left px-4 py-2.5 w-[12%]">Code</th>
+                        <th scope="col" className="text-left px-4 py-2.5 w-[36%]">Account Name</th>
+                        <th scope="col" className="text-left px-4 py-2.5 w-[16%]">Type</th>
+                        <th scope="col" className="text-right px-4 py-2.5 w-[18%]">Debit</th>
+                        <th scope="col" className="text-right px-4 py-2.5 w-[18%]">Credit</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {trialBalance.map((line, idx) => (
+                        <tr
+                          key={`${line.code}-${idx}`}
+                          className={`border-b border-gray-100 dark:border-neutral-800 hover:bg-gray-50/50 dark:hover:bg-neutral-800/50 transition-colors ${
+                            idx % 2 === 1 ? "bg-gray-50/50 dark:bg-neutral-800/25" : ""
+                          }`}
+                        >
+                          <td className="px-4 py-2.5 text-gray-600 dark:text-gray-400 font-mono text-xs">
+                            {line.code}
+                          </td>
+                          <td className="px-4 py-2.5 text-gray-900 dark:text-gray-100">
+                            {line.name}
+                          </td>
+                          <td className="px-4 py-2.5">
+                            <Chip size="sm" variant="soft" color="default">
+                              {line.type}
+                            </Chip>
+                          </td>
+                          <td className="px-4 py-2.5 text-right font-mono text-gray-900 dark:text-gray-100">
+                            {line.debit > 0 ? eur(line.debit) : ""}
+                          </td>
+                          <td className="px-4 py-2.5 text-right font-mono text-gray-900 dark:text-gray-100">
+                            {line.credit > 0 ? eur(line.credit) : ""}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-gray-100 dark:bg-neutral-800 border-t-2 border-gray-300 dark:border-neutral-600 font-bold">
+                        <td colSpan={3} className="px-4 py-3 text-gray-900 dark:text-gray-100">Totals</td>
+                        <td className="px-4 py-3 text-right font-mono text-gray-900 dark:text-gray-100">
+                          {eur(trialBalance.reduce((sum, l) => sum + l.debit, 0))}
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono text-gray-900 dark:text-gray-100">
+                          {eur(trialBalance.reduce((sum, l) => sum + l.credit, 0))}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
                   {/* Balance check */}
                   {(() => {
                     const totalDebit = trialBalance.reduce(
@@ -257,14 +278,14 @@ export default function StatementsPage({
                     );
                     const diff = Math.abs(totalDebit - totalCredit);
                     return (
-                      <div className="px-4 py-2.5 bg-gray-50 border-t border-gray-200">
+                      <div className="px-4 py-2.5 bg-gray-50 dark:bg-neutral-800/50 border-t border-gray-200 dark:border-neutral-700">
                         {diff < 0.01 ? (
-                          <div className="flex items-center gap-2 text-sm text-emerald-700">
+                          <div className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-400">
                             <CheckCircle2 className="w-4 h-4" />
                             Trial balance agrees - debits equal credits
                           </div>
                         ) : (
-                          <div className="flex items-center gap-2 text-sm text-red-700">
+                          <div className="flex items-center gap-2 text-sm text-red-700 dark:text-red-400">
                             <AlertTriangle className="w-4 h-4" />
                             Trial balance does not agree - difference of{" "}
                             {eur(diff)}
@@ -283,7 +304,7 @@ export default function StatementsPage({
 
         {/* P&L Tab */}
         <TabPanel id="pnl">
-          <Card className="shadow-sm border border-gray-200">
+          <Card className="shadow-sm border border-gray-200 dark:border-neutral-700">
             <Card.Header>
               <Card.Title>Profit &amp; Loss Account</Card.Title>
               <Card.Description>
@@ -306,7 +327,7 @@ export default function StatementsPage({
                     highlight
                   />
                   <div className="pt-2">
-                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+                    <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
                       Overheads
                     </p>
                     {pnl.overheads.map((oh) => (
@@ -362,7 +383,7 @@ export default function StatementsPage({
 
         {/* Balance Sheet Tab */}
         <TabPanel id="balance-sheet">
-          <Card className="shadow-sm border border-gray-200">
+          <Card className="shadow-sm border border-gray-200 dark:border-neutral-700">
             <Card.Header>
               <Card.Title>Balance Sheet</Card.Title>
               <Card.Description>
@@ -373,12 +394,12 @@ export default function StatementsPage({
               {bs ? (
                 <div className="max-w-lg mx-auto space-y-1">
                   {/* Fixed Assets */}
-                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide pb-1">
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide pb-1">
                     Fixed Assets
                   </p>
                   {bs.fixedAssets.categories.length > 0 && (
-                    <div className="border border-gray-200 rounded-lg overflow-hidden mb-2">
-                      <div className="grid grid-cols-4 gap-2 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-500">
+                    <div className="border border-gray-200 dark:border-neutral-700 rounded-lg overflow-hidden mb-2">
+                      <div className="grid grid-cols-4 gap-2 bg-gray-50 dark:bg-neutral-800 px-3 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400">
                         <div>Category</div>
                         <div className="text-right">Cost</div>
                         <div className="text-right">Depn</div>
@@ -387,16 +408,16 @@ export default function StatementsPage({
                       {bs.fixedAssets.categories.map((cat) => (
                         <div
                           key={cat.category}
-                          className="grid grid-cols-4 gap-2 px-3 py-1.5 text-sm border-t border-gray-100"
+                          className="grid grid-cols-4 gap-2 px-3 py-1.5 text-sm border-t border-gray-100 dark:border-neutral-700"
                         >
-                          <div className="text-gray-700">{cat.category}</div>
-                          <div className="text-right font-mono text-gray-900">
+                          <div className="text-gray-700 dark:text-gray-300">{cat.category}</div>
+                          <div className="text-right font-mono text-gray-900 dark:text-gray-100">
                             {eur(cat.cost)}
                           </div>
-                          <div className="text-right font-mono text-gray-900">
+                          <div className="text-right font-mono text-gray-900 dark:text-gray-100">
                             {eur(cat.depreciation)}
                           </div>
-                          <div className="text-right font-mono text-gray-900">
+                          <div className="text-right font-mono text-gray-900 dark:text-gray-100">
                             {eur(cat.nbv)}
                           </div>
                         </div>
@@ -411,7 +432,7 @@ export default function StatementsPage({
 
                   {/* Current Assets */}
                   <div className="pt-3">
-                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide pb-1">
+                    <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide pb-1">
                       Current Assets
                     </p>
                     <StatementRow label="Stock" amount={bs.currentAssets.stock} indent />
@@ -436,7 +457,7 @@ export default function StatementsPage({
 
                   {/* Creditors: amounts falling due within one year */}
                   <div className="pt-3">
-                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide pb-1">
+                    <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide pb-1">
                       Creditors: amounts falling due within one year
                     </p>
                     <StatementRow
@@ -484,7 +505,7 @@ export default function StatementsPage({
 
                   {/* Creditors after year */}
                   <div className="pt-3">
-                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide pb-1">
+                    <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide pb-1">
                       Creditors: amounts falling due after more than one year
                     </p>
                     <StatementRow label="Loans" amount={bs.creditorsAfterYear.loans} indent />
@@ -506,7 +527,7 @@ export default function StatementsPage({
 
                   {/* Capital and Reserves */}
                   <div className="pt-3">
-                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide pb-1">
+                    <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide pb-1">
                       Capital and Reserves
                     </p>
                     <StatementRow
@@ -529,16 +550,16 @@ export default function StatementsPage({
                   </div>
 
                   {/* Balance check */}
-                  <div className="mt-4 pt-3 border-t border-gray-200">
+                  <div className="mt-4 pt-3 border-t border-gray-200 dark:border-neutral-700">
                     {bs.balances ? (
-                      <div className="flex items-center gap-2 text-sm text-emerald-700">
+                      <div className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-400">
                         <CheckCircle2 className="w-5 h-5" />
                         <span className="font-medium">
                           Balance sheet balances
                         </span>
                       </div>
                     ) : (
-                      <div className="flex items-center gap-2 text-sm text-red-700">
+                      <div className="flex items-center gap-2 text-sm text-red-700 dark:text-red-400">
                         <AlertTriangle className="w-5 h-5" />
                         <span className="font-medium">
                           Balance sheet does not balance
@@ -556,7 +577,7 @@ export default function StatementsPage({
 
         {/* Tax Computation Tab */}
         <TabPanel id="tax-computation">
-          <Card className="shadow-sm border border-gray-200">
+          <Card className="shadow-sm border border-gray-200 dark:border-neutral-700">
             <Card.Header>
               <Card.Title>Corporation Tax Computation</Card.Title>
               <Card.Description>
@@ -574,22 +595,22 @@ export default function StatementsPage({
 
                   {tax.adjustments.length > 0 && (
                     <div className="pt-2">
-                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+                      <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
                         Tax Adjustments
                       </p>
                       {tax.adjustments.map((adj, idx) => (
                         <div key={idx} className="flex justify-between items-start py-1 pl-4">
                           <div className="flex-1">
-                            <span className="text-sm text-gray-700">
+                            <span className="text-sm text-gray-700 dark:text-gray-300">
                               {adj.description}
                             </span>
                             {adj.basis && (
-                              <span className="text-xs text-gray-400 ml-2">
+                              <span className="text-xs text-gray-400 dark:text-gray-500 ml-2">
                                 ({adj.basis})
                               </span>
                             )}
                           </div>
-                          <span className="text-sm font-mono text-gray-900 ml-4">
+                          <span className="text-sm font-mono text-gray-900 dark:text-gray-100 ml-4">
                             {eur(adj.amount)}
                           </span>
                         </div>
@@ -606,7 +627,7 @@ export default function StatementsPage({
                   />
 
                   <div className="pt-2">
-                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+                    <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
                       Corporation Tax
                     </p>
                     <StatementRow
@@ -639,9 +660,9 @@ export default function StatementsPage({
                   />
 
                   {tax.notes && (
-                    <div className="mt-4 rounded-lg bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-800">
+                    <div className="mt-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 px-4 py-3 text-sm text-blue-800 dark:text-blue-300">
                       <p className="font-medium mb-1">Notes</p>
-                      <p className="text-blue-700 whitespace-pre-wrap">
+                      <p className="text-blue-700 dark:text-blue-400 whitespace-pre-wrap">
                         {tax.notes}
                       </p>
                     </div>
@@ -677,19 +698,19 @@ function StatementRow({
     <div
       className={`flex justify-between items-center py-1 ${
         indent ? "pl-4" : ""
-      } ${highlight ? "bg-emerald-50/50 rounded px-2 -mx-2" : ""}`}
+      } ${highlight ? "bg-emerald-50/50 dark:bg-emerald-900/20 rounded px-2 -mx-2" : ""}`}
     >
       <span
         className={`text-sm ${
-          bold ? "font-semibold text-gray-900" : "text-gray-700"
+          bold ? "font-semibold text-gray-900 dark:text-gray-100" : "text-gray-700 dark:text-gray-300"
         }`}
       >
         {label}
       </span>
       <span
         className={`text-sm font-mono ${
-          bold ? "font-semibold text-gray-900" : "text-gray-900"
-        } ${amount < 0 ? "text-red-700" : ""}`}
+          bold ? "font-semibold text-gray-900 dark:text-gray-100" : "text-gray-900 dark:text-gray-100"
+        } ${amount < 0 ? "text-red-700 dark:text-red-400" : ""}`}
       >
         {eur(amount)}
       </span>
@@ -699,16 +720,16 @@ function StatementRow({
 
 function Divider({ double = false }: { double?: boolean }) {
   return (
-    <div className={`${double ? "border-t-2 border-double" : "border-t"} border-gray-300 my-1`} />
+    <div className={`${double ? "border-t-2 border-double" : "border-t"} border-gray-300 dark:border-neutral-600 my-1`} />
   );
 }
 
 function EmptyState({ message }: { message: string }) {
   return (
     <div className="text-center py-12">
-      <FileText className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-      <p className="text-sm text-gray-500">{message}</p>
-      <p className="text-xs text-gray-400 mt-1">
+      <FileText className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+      <p className="text-sm text-gray-500 dark:text-gray-400">{message}</p>
+      <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
         Complete the year-end process and generate adjustments first.
       </p>
     </div>
