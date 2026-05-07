@@ -5,8 +5,6 @@ import Link from "next/link";
 import {
   Card,
   CardContent,
-  CardHeader,
-  CardTitle,
   Chip,
   Button,
 } from "@heroui/react";
@@ -65,6 +63,14 @@ export default function Dashboard() {
         c.companyType?.toLowerCase().includes(q)
     );
   }, [companies, search]);
+
+  const deadlineThresholds = useMemo(() => {
+    const now = new Date();
+    return {
+      now,
+      warning: new Date(now.getTime() + 30 * 86400000),
+    };
+  }, []);
 
   if (loading) return <DashboardSkeleton />;
 
@@ -291,9 +297,9 @@ export default function Dashboard() {
                         size="sm"
                         variant="soft"
                         color={
-                          new Date(deadlines[company.id]!.dueDate) < new Date()
+                          new Date(deadlines[company.id]!.dueDate) < deadlineThresholds.now
                             ? "danger"
-                            : new Date(deadlines[company.id]!.dueDate) < new Date(Date.now() + 30 * 86400000)
+                            : new Date(deadlines[company.id]!.dueDate) < deadlineThresholds.warning
                               ? "warning"
                               : "default"
                         }

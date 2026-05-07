@@ -231,6 +231,14 @@ export interface AccountCategory {
   type: string;
 }
 
+export interface TransactionRule {
+  id: number;
+  companyId: number;
+  pattern: string;
+  categoryId: number;
+  priority: number;
+}
+
 export interface YearEndSummary {
   debtors: { count: number; total: number };
   creditors: { count: number; total: number };
@@ -401,8 +409,12 @@ export interface BalanceSheet {
   netAssets: number;
   capitalAndReserves: {
     shareCapital: number;
+    openingRetainedEarnings: number;
+    profitForYear: number;
+    dividendsPaid: number;
     retainedEarnings: number;
     total: number;
+    unexplainedDifference: number;
   };
   balances: boolean;
 }
@@ -461,11 +473,49 @@ export const createPeriod = (companyId: number, data: Partial<AccountingPeriod>)
 // Bank Accounts
 export const getBankAccounts = (companyId: number) =>
   apiFetch<BankAccount[]>(`/api/companies/${companyId}/bank-accounts`);
+export const createBankAccount = (companyId: number, data: Partial<BankAccount>) =>
+  apiFetch<BankAccount>(`/api/companies/${companyId}/bank-accounts`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+export const updateBankAccount = (companyId: number, id: number, data: Partial<BankAccount>) =>
+  apiFetch<BankAccount>(`/api/companies/${companyId}/bank-accounts/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+export const deleteBankAccount = (companyId: number, id: number) =>
+  apiFetch<void>(`/api/companies/${companyId}/bank-accounts/${id}`, { method: "DELETE" });
 
 // Transactions
-export const getTransactions = (companyId: number, periodId: number, page = 1, pageSize = 50) =>
-  apiFetch<{ total: number; items: ImportedTransaction[] }>(
-    `/api/companies/${companyId}/periods/${periodId}/transactions?page=${page}&pageSize=${pageSize}`
+export const getTransactions = (
+  companyId: number,
+  periodId: number,
+  page = 1,
+  pageSize = 50,
+  filters?: { uncategorised?: boolean; categoryId?: number; bankAccountId?: number; search?: string }
+) => {
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+  if (filters?.uncategorised) params.set("uncategorised", "true");
+  if (filters?.categoryId) params.set("categoryId", String(filters.categoryId));
+  if (filters?.bankAccountId) params.set("bankAccountId", String(filters.bankAccountId));
+  if (filters?.search) params.set("search", filters.search);
+  return apiFetch<{ total: number; items: ImportedTransaction[] }>(
+    `/api/companies/${companyId}/periods/${periodId}/transactions?${params}`
+  );
+};
+
+export const categoriseTransaction = (
+  companyId: number,
+  periodId: number,
+  transactionId: number,
+  categoryId: number
+) =>
+  apiFetch<ImportedTransaction>(
+    `/api/companies/${companyId}/periods/${periodId}/transactions/${transactionId}/categorise`,
+    {
+      method: "PUT",
+      body: JSON.stringify({ categoryId }),
+    }
   );
 
 // Categories
@@ -474,6 +524,17 @@ export const getCategories = (companyId: number) =>
 export const seedCategories = (companyId: number) =>
   apiFetch<AccountCategory[]>(`/api/companies/${companyId}/categories/seed`, { method: "POST" });
 
+// Transaction Rules
+export const getTransactionRules = (companyId: number) =>
+  apiFetch<TransactionRule[]>(`/api/companies/${companyId}/transaction-rules`);
+export const createTransactionRule = (companyId: number, data: Partial<TransactionRule>) =>
+  apiFetch<TransactionRule>(`/api/companies/${companyId}/transaction-rules`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+export const deleteTransactionRule = (companyId: number, id: number) =>
+  apiFetch<void>(`/api/companies/${companyId}/transaction-rules/${id}`, { method: "DELETE" });
+
 // Year-End
 export const getYearEndSummary = (companyId: number, periodId: number) =>
   apiFetch<YearEndSummary>(
@@ -481,8 +542,19 @@ export const getYearEndSummary = (companyId: number, periodId: number) =>
   );
 
 // Adjustments
-export const getAdjustments = (companyId: number, periodId: number) =>
-  apiFetch<Adjustment[]>(`/api/companies/${companyId}/periods/${periodId}/adjustments`);
+export const getAdjustments = (
+  companyId: number,
+  periodId: number,
+  filters?: { approved?: boolean; isAuto?: boolean }
+) => {
+  const params = new URLSearchParams();
+  if (filters?.approved !== undefined) params.set("approved", String(filters.approved));
+  if (filters?.isAuto !== undefined) params.set("isAuto", String(filters.isAuto));
+  const qs = params.toString();
+  return apiFetch<Adjustment[]>(
+    `/api/companies/${companyId}/periods/${periodId}/adjustments${qs ? `?${qs}` : ""}`
+  );
+};
 export const getAdjustmentSummary = (companyId: number, periodId: number) =>
   apiFetch<AdjustmentSummary>(
     `/api/companies/${companyId}/periods/${periodId}/adjustments/summary`

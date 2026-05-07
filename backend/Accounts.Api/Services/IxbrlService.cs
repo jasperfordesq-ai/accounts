@@ -1,4 +1,5 @@
 using System.Text;
+using System.Globalization;
 using Accounts.Api.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -23,6 +24,8 @@ public class IxbrlService(AccountsDbContext db, FinancialStatementsService state
         sb.AppendLine("<html xmlns=\"http://www.w3.org/1999/xhtml\"");
         sb.AppendLine("      xmlns:ix=\"http://www.xbrl.org/2013/inlineXBRL\"");
         sb.AppendLine("      xmlns:ixt=\"http://www.xbrl.org/inlineXBRL/transformation/2020-02-12\"");
+        sb.AppendLine("      xmlns:xbrli=\"http://www.xbrl.org/2003/instance\"");
+        sb.AppendLine("      xmlns:iso4217=\"http://www.xbrl.org/2003/iso4217\"");
         sb.AppendLine("      xmlns:ie-common=\"http://xbrl.frc.org.uk/ie/FRS-102/2022-01-01/ie-common\"");
         sb.AppendLine("      xmlns:ie-direp=\"http://xbrl.frc.org.uk/ie/FRS-102/2022-01-01/ie-direp\"");
         sb.AppendLine("      xmlns:core=\"http://xbrl.frc.org.uk/FRS-102/2022-01-01/core\"");
@@ -57,8 +60,9 @@ public class IxbrlService(AccountsDbContext db, FinancialStatementsService state
         // Company info
         sb.AppendLine($"<h1>{Escape(company.LegalName)}</h1>");
         sb.AppendLine($"<h2>Financial Statements for the year ended {period.PeriodEnd:dd MMMM yyyy}</h2>");
+        sb.AppendLine("<p><strong>Internal validation note:</strong> this inline XBRL file is generated from the platform's mapped accounts data. External ROS/iXBRL validation remains required before Revenue filing.</p>");
         if (!string.IsNullOrEmpty(company.CroNumber))
-            sb.AppendLine($"<p>Company Registration Number: <ix:nonFraction name=\"ie-common:CompanyRegistrationNumber\" contextRef=\"instant\" unitRef=\"EUR\" decimals=\"0\">{Escape(company.CroNumber)}</ix:nonFraction></p>");
+            sb.AppendLine($"<p>Company Registration Number: <ix:nonNumeric name=\"ie-common:CompanyRegistrationNumber\" contextRef=\"instant\">{Escape(company.CroNumber)}</ix:nonNumeric></p>");
 
         // Balance Sheet
         sb.AppendLine("<h2>Balance Sheet</h2>");
@@ -103,10 +107,11 @@ public class IxbrlService(AccountsDbContext db, FinancialStatementsService state
     private static void AddIxbrlRow(StringBuilder sb, string label, string concept, decimal amount, bool bold = false)
     {
         var cls = bold ? " class=\"bold\"" : "";
-        var formatted = amount < 0 ? $"({Math.Abs(amount):N0})" : $"{amount:N0}";
+        var factValue = Math.Round(amount, 0).ToString(CultureInfo.InvariantCulture);
+        var displayValue = amount < 0 ? $"({Math.Abs(amount):N0})" : $"{amount:N0}";
         sb.AppendLine($"<tr{cls}>");
         sb.AppendLine($"  <td>{label}</td>");
-        sb.AppendLine($"  <td class=\"amount\"><ix:nonFraction name=\"{concept}\" contextRef=\"instant\" unitRef=\"EUR\" decimals=\"0\" format=\"ixt:num-dot-decimal\">{formatted}</ix:nonFraction></td>");
+        sb.AppendLine($"  <td class=\"amount\"><ix:nonFraction name=\"{concept}\" contextRef=\"instant\" unitRef=\"EUR\" decimals=\"0\" format=\"ixt:num-dot-decimal\" title=\"{displayValue}\">{factValue}</ix:nonFraction></td>");
         sb.AppendLine("</tr>");
     }
 

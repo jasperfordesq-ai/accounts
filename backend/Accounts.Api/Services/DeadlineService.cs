@@ -25,8 +25,8 @@ public class DeadlineService(AccountsDbContext db)
         // CRO deadline: earlier of (ARD + 56 days) or (FYE + 9 months + 56 days)
         var ardDate = new DateOnly(fye.Year, company.ArdMonth, 1).AddMonths(1).AddDays(-1); // Last day of ARD month
         if (ardDate <= fye) ardDate = ardDate.AddYears(1); // Next occurrence after FYE
-        var croOption1 = ardDate.AddDays(56);
-        var croOption2 = fye.AddMonths(9).AddDays(56);
+        var croOption1 = MoveToNextWorkingDay(ardDate.AddDays(56));
+        var croOption2 = MoveToNextWorkingDay(fye.AddMonths(9).AddDays(56));
         var croDueDate = croOption1 < croOption2 ? croOption1 : croOption2;
 
         deadlines.Add(await UpsertDeadline(companyId, periodId, DeadlineType.CRO, croDueDate));
@@ -109,6 +109,14 @@ public class DeadlineService(AccountsDbContext db)
         var daysLate = filedDate.DayNumber - dueDate.DayNumber;
         var penalty = 100m + (daysLate * 3m);
         return Math.Min(penalty, 1200m);
+    }
+
+    public static DateOnly MoveToNextWorkingDay(DateOnly date)
+    {
+        while (date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday)
+            date = date.AddDays(1);
+
+        return date;
     }
 
     /// <summary>

@@ -1,30 +1,32 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { Button } from "@heroui/react";
 import { Moon, Sun } from "lucide-react";
 
-export function ThemeToggle() {
-  const [dark, setDark] = useState(false);
-  const [mounted, setMounted] = useState(false);
+function subscribe(callback: () => void) {
+  window.addEventListener("storage", callback);
+  window.addEventListener("accounts-theme-change", callback);
+  return () => {
+    window.removeEventListener("storage", callback);
+    window.removeEventListener("accounts-theme-change", callback);
+  };
+}
 
-  useEffect(() => {
-    setMounted(true);
-    const stored = localStorage.getItem("theme");
-    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    const isDark = stored === "dark" || (!stored && prefersDark);
-    setDark(isDark);
-    document.documentElement.classList.toggle("dark", isDark);
-  }, []);
+function getSnapshot() {
+  return document.documentElement.classList.contains("dark") ? "dark" : "light";
+}
+
+export function ThemeToggle() {
+  const theme = useSyncExternalStore(subscribe, getSnapshot, () => "light");
+  const dark = theme === "dark";
 
   function toggle() {
     const next = !dark;
-    setDark(next);
     document.documentElement.classList.toggle("dark", next);
     localStorage.setItem("theme", next ? "dark" : "light");
+    window.dispatchEvent(new Event("accounts-theme-change"));
   }
-
-  if (!mounted) return <div className="w-9 h-9" />;
 
   return (
     <Button

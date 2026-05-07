@@ -14,7 +14,6 @@ import {
   Plus,
   Trash2,
   RefreshCw,
-  Save,
   FileText,
   Users,
   DollarSign,
@@ -29,7 +28,6 @@ import {
   getTrusteesReport,
   getFundBalances,
   createFundBalance,
-  updateFundBalance,
   deleteFundBalance,
   type Company,
   type AccountingPeriod,
@@ -224,10 +222,10 @@ export default function CharityReportingPage({
 
               {/* Fund Columns */}
               {[
-                { title: "Unrestricted Funds", funds: sofa.unrestrictedFunds, color: "emerald" },
-                { title: "Restricted Funds", funds: sofa.restrictedFunds, color: "blue" },
-                { title: "Endowment Funds", funds: sofa.endowmentFunds, color: "purple" },
-              ].map(({ title, funds: fundList, color }) => (
+                { title: "Unrestricted Funds", funds: sofa.unrestrictedFunds },
+                { title: "Restricted Funds", funds: sofa.restrictedFunds },
+                { title: "Endowment Funds", funds: sofa.endowmentFunds },
+              ].map(({ title, funds: fundList }) => (
                 fundList.length > 0 && (
                   <Card key={title} className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
                     <Card.Header>

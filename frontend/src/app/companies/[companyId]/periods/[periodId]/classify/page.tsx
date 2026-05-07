@@ -310,7 +310,7 @@ export default function ClassifyPage({
                   try {
                     await saveMemberAuditNotice(cId, pId, { received: e.target.checked });
                     toast.success(e.target.checked ? "Audit notice recorded" : "Audit notice removed");
-                  } catch (err) {
+                  } catch {
                     toast.error("Failed to save audit notice");
                   }
                 }}

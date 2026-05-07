@@ -1,10 +1,11 @@
 using Accounts.Api.Data;
 using Accounts.Api.Entities;
 using Microsoft.EntityFrameworkCore;
+using System.Text;
 
 namespace Accounts.Api.Services;
 
-public class FilingWorkflowService(AccountsDbContext db, FinancialStatementsService statementsService)
+public class FilingWorkflowService(AccountsDbContext db, FinancialStatementsService statementsService, IxbrlService ixbrlService)
 {
     public record FilingWorkflowStatus(
         CroFilingStatus Cro,
@@ -76,6 +77,19 @@ public class FilingWorkflowService(AccountsDbContext db, FinancialStatementsServ
 
         if (!croStatus.AccountsPdfReady) issues.Add("CRO accounts PDF not generated");
         if (!croStatus.SignaturePageReady) issues.Add("CRO signature page not generated");
+        if (croStatus.Status == FilingStatus.Submitted && !croStatus.PaymentCompleted)
+            issues.Add("CORE payment has not been confirmed. The B1 is not complete until payment is made.");
+        if (croStatus.Status == FilingStatus.CorrectionRequired && croStatus.CorrectionDeadline.HasValue && croStatus.CorrectionDeadline.Value < DateTime.UtcNow)
+            issues.Add("CRO correction deadline has passed. Treat the filing as not delivered and recalculate late filing exposure.");
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var overdueDeadlines = await db.FilingDeadlines
+            .Where(d => d.CompanyId == companyId && d.PeriodId == periodId && d.FiledDate == null && d.DueDate < today)
+            .OrderBy(d => d.DueDate)
+            .ToListAsync();
+
+        foreach (var deadline in overdueDeadlines)
+            issues.Add($"{deadline.DeadlineType} deadline passed on {deadline.DueDate:yyyy-MM-dd} and has not been marked as filed.");
 
         return new FilingWorkflowStatus(croStatus, revStatus, issues, issues.Count == 0);
     }
@@ -123,7 +137,10 @@ public class FilingWorkflowService(AccountsDbContext db, FinancialStatementsServ
 
     public async Task<RevenueFilingPackage> ValidateIxbrlAsync(int periodId)
     {
-        var period = await db.AccountingPeriods.Include(p => p.RevenueFilingPackage).FirstAsync(p => p.Id == periodId);
+        var period = await db.AccountingPeriods
+            .Include(p => p.Company)
+            .Include(p => p.RevenueFilingPackage)
+            .FirstAsync(p => p.Id == periodId);
         var pkg = period.RevenueFilingPackage;
         if (pkg == null)
         {
@@ -131,19 +148,44 @@ public class FilingWorkflowService(AccountsDbContext db, FinancialStatementsServ
             db.RevenueFilingPackages.Add(pkg);
         }
 
-        // Basic iXBRL validation checks
+        // Internal iXBRL validation checks. This is not a substitute for ROS validation.
         var errors = new List<string>();
 
-        // Check required tags are present by verifying data exists
-        var hasBS = await db.Adjustments.AnyAsync(a => a.PeriodId == periodId);
-        if (!hasBS) errors.Add("No adjustments generated — balance sheet data may be incomplete");
+        if (string.IsNullOrWhiteSpace(period.Company.CroNumber))
+            errors.Add("Company CRO number is required for iXBRL entity identification");
+
+        try
+        {
+            var bs = await statementsService.GetBalanceSheetAsync(periodId);
+            if (!bs.Balances)
+                errors.Add($"Balance sheet does not balance; unexplained difference {bs.CapitalAndReserves.UnexplainedDifference:C}");
+        }
+        catch
+        {
+            errors.Add("Balance sheet could not be generated");
+        }
 
         var hasTax = await db.TaxBalances.AnyAsync(t => t.PeriodId == periodId && t.TaxType == TaxType.CorporationTax);
         if (!hasTax) errors.Add("Corporation tax balance not entered");
 
+        try
+        {
+            var xhtml = Encoding.UTF8.GetString(await ixbrlService.GenerateIxbrlAsync(periodId));
+            if (!xhtml.Contains("<ix:header>") || !xhtml.Contains("xmlns:xbrli="))
+                errors.Add("Generated XHTML is missing required inline XBRL header/resources");
+            if (!xhtml.Contains("External ROS/iXBRL validation remains required"))
+                errors.Add("Generated file must carry the external ROS validation warning");
+        }
+        catch (Exception ex)
+        {
+            errors.Add($"iXBRL generation failed: {ex.Message}");
+        }
+
         pkg.IxbrlGenerated = true;
         pkg.IxbrlValidated = errors.Count == 0;
-        pkg.IxbrlValidationErrors = errors.Count > 0 ? string.Join("; ", errors) : null;
+        pkg.IxbrlValidationErrors = errors.Count > 0
+            ? string.Join("; ", errors)
+            : "Internal checks passed. External ROS/iXBRL validation is still required before Revenue filing.";
         if (pkg.FilingStatus == FilingStatus.NotStarted) pkg.FilingStatus = FilingStatus.InProgress;
 
         await db.SaveChangesAsync();

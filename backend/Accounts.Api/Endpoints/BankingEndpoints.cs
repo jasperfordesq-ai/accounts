@@ -61,7 +61,8 @@ public static class BankingEndpoints
         // Transactions
         var transactions = app.MapGroup("/api/companies/{companyId:int}/periods/{periodId:int}/transactions").WithTags("Transactions");
 
-        transactions.MapGet("/", async (int companyId, int periodId, AccountsDbContext db, int? page, int? pageSize, bool? uncategorised) =>
+        transactions.MapGet("/", async (int companyId, int periodId, AccountsDbContext db,
+            int? page, int? pageSize, bool? uncategorised, int? categoryId, int? bankAccountId, string? search) =>
         {
             var query = db.ImportedTransactions
                 .Include(t => t.Category)
@@ -69,6 +70,15 @@ public static class BankingEndpoints
 
             if (uncategorised == true)
                 query = query.Where(t => t.CategoryId == null);
+
+            if (categoryId.HasValue)
+                query = query.Where(t => t.CategoryId == categoryId.Value);
+
+            if (bankAccountId.HasValue)
+                query = query.Where(t => t.BankAccountId == bankAccountId.Value);
+
+            if (!string.IsNullOrWhiteSpace(search))
+                query = query.Where(t => t.Description.Contains(search));
 
             var total = await query.CountAsync();
             var items = await query

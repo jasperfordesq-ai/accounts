@@ -234,7 +234,19 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
             AddBsLine(table, ref row, "Called up share capital", bs.CapitalAndReserves.ShareCapital, priorBs?.CapitalAndReserves.ShareCapital);
             AddBsLine(table, ref row, "Profit and loss account", bs.CapitalAndReserves.RetainedEarnings, priorBs?.CapitalAndReserves.RetainedEarnings);
             AddBsDoubleTotal(table, ref row, "SHAREHOLDERS' FUNDS", bs.CapitalAndReserves.Total, priorBs?.CapitalAndReserves.Total);
+
+            if (!bs.Balances)
+            {
+                AddBsLine(table, ref row, "Unreconciled difference requiring review", bs.CapitalAndReserves.UnexplainedDifference, priorBs?.CapitalAndReserves.UnexplainedDifference);
+            }
         });
+
+        if (!bs.Balances)
+        {
+            col.Item().PaddingTop(10).Background(Colors.Orange.Lighten5).Border(1).BorderColor(Colors.Orange.Lighten2).Padding(8)
+                .Text($"Preparation warning: this balance sheet has an unreconciled difference of {FormatEuro(bs.CapitalAndReserves.UnexplainedDifference)}. It should not be approved or filed until the underlying records, adjustments, or reserves have been reviewed.")
+                .FontSize(8).FontColor(Colors.Orange.Darken4);
+        }
 
         // Signature
         col.Item().PaddingTop(30).Text("The financial statements were approved and authorised for issue by the Board of Directors and were signed on its behalf by:").FontSize(9);
@@ -503,14 +515,145 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
 
         var regime = period.FilingRegime?.ElectedRegime ?? ElectedRegime.Full;
 
-        // For Medium/Full/Small (non-abridged), CRO pack is same as full accounts
+        // For Medium/Full/Small (non-abridged), CRO pack is the full accounts package.
         if (regime == ElectedRegime.Medium || regime == ElectedRegime.Full || regime == ElectedRegime.Small)
             return await GenerateAccountsPackageAsync(periodId);
 
-        // For Micro and SmallAbridged, generate a filleted version
-        // This reuses the full generation but the existing logic already
-        // omits P&L for Micro and SmallAbridged CRO filing
-        return await GenerateAccountsPackageAsync(periodId);
+        return await GenerateAbridgedCroFilingPackAsync(period, regime);
+    }
+
+    private async Task<byte[]> GenerateAbridgedCroFilingPackAsync(AccountingPeriod period, ElectedRegime regime)
+    {
+        var company = period.Company;
+        var balanceSheet = await statementsService.GetBalanceSheetAsync(period.Id);
+        var notes = await db.NotesDisclosures
+            .Where(n => n.PeriodId == period.Id && n.IsIncluded)
+            .OrderBy(n => n.NoteNumber)
+            .ToListAsync();
+        var directors = company.Officers
+            .Where(o => o.Role == OfficerRole.Director && o.ResignedDate == null)
+            .ToList();
+
+        FinancialStatementsService.BalanceSheet? priorBs = null;
+        var priorPeriod = await db.AccountingPeriods
+            .Where(p => p.CompanyId == company.Id && p.PeriodEnd < period.PeriodStart)
+            .OrderByDescending(p => p.PeriodEnd)
+            .FirstOrDefaultAsync();
+        if (priorPeriod != null)
+        {
+            try { priorBs = await statementsService.GetBalanceSheetAsync(priorPeriod.Id); } catch { }
+        }
+
+        return Document.Create(container =>
+        {
+            container.Page(page =>
+            {
+                page.Size(PageSizes.A4);
+                page.MarginHorizontal(50);
+                page.MarginVertical(40);
+                page.DefaultTextStyle(x => x.FontSize(10).FontFamily("Helvetica"));
+
+                page.Header().Element(c => ComposeHeader(c, company));
+
+                page.Content().Column(col =>
+                {
+                    col.Spacing(15);
+
+                    col.Item().PaddingTop(70).AlignCenter().Column(c =>
+                    {
+                        c.Spacing(10);
+                        c.Item().AlignCenter().Text(company.LegalName).Bold().FontSize(20);
+                        c.Item().AlignCenter().Text(regime == ElectedRegime.Micro
+                            ? "CRO FILING PACK - MICRO COMPANY"
+                            : "CRO FILING PACK - ABRIDGED FINANCIAL STATEMENTS").Bold().FontSize(13);
+                        c.Item().AlignCenter().Text($"for the financial year ended {period.PeriodEnd:dd MMMM yyyy}").FontSize(11);
+                        if (!string.IsNullOrWhiteSpace(company.CroNumber))
+                            c.Item().AlignCenter().Text($"Company Registration Number: {company.CroNumber}").FontSize(9);
+                    });
+
+                    col.Item().PageBreak();
+
+                    ComposeCompanyIdentification(col, company);
+                    ComposeBalanceSheet(col, company, period, balanceSheet, priorBs, directors);
+                    ComposeCroFilingStatements(col, company, regime, balanceSheet);
+
+                    col.Item().PageBreak();
+
+                    ComposeNotes(col, company, period, regime, balanceSheet, notes);
+                });
+
+                page.Footer().AlignCenter().Text(t =>
+                {
+                    t.CurrentPageNumber();
+                    t.Span(" of ");
+                    t.TotalPages();
+                });
+            });
+        }).GeneratePdf();
+    }
+
+    private static void ComposeCompanyIdentification(ColumnDescriptor col, Company company)
+    {
+        col.Item().Text("COMPANY IDENTIFICATION").Bold().FontSize(10);
+        col.Item().PaddingTop(5).Table(table =>
+        {
+            table.ColumnsDefinition(columns =>
+            {
+                columns.ConstantColumn(140);
+                columns.RelativeColumn();
+            });
+
+            uint row = 1;
+            AddInfoRow(table, ref row, "Name", company.LegalName);
+            AddInfoRow(table, ref row, "Legal form", company.CompanyType.ToString());
+            AddInfoRow(table, ref row, "Registered number", company.CroNumber ?? "Not recorded");
+            AddInfoRow(table, ref row, "Place of registration", "Ireland");
+            AddInfoRow(table, ref row, "Registered office", FormatAddress(company));
+            AddInfoRow(table, ref row, "Winding up status", "The company is not being wound up.");
+        });
+    }
+
+    private static void ComposeCroFilingStatements(ColumnDescriptor col, Company company, ElectedRegime regime, FinancialStatementsService.BalanceSheet balanceSheet)
+    {
+        col.Item().PaddingTop(15).Text("CRO FILING STATEMENTS").Bold().FontSize(10);
+
+        if (regime == ElectedRegime.Micro)
+        {
+            col.Item().PaddingTop(5).Text($"The directors of {company.LegalName} state that the company has relied on the specified exemption contained in section 352 of the Companies Act 2014 on the grounds that it is entitled to the benefit of that exemption as a micro company, and that these abridged financial statements have been prepared from the statutory financial statements in accordance with section 353.").FontSize(8);
+            col.Item().PaddingTop(5).Text("The company is claiming the micro company regime and, where the audit exemption conditions are satisfied, the audit exemption. Directors remain responsible for approving the financial statements and for ensuring the annual return is filed on CORE with the required single-PDF accounts and signature page.").FontSize(8);
+        }
+        else
+        {
+            col.Item().PaddingTop(5).Text($"The directors of {company.LegalName} state that the company has relied on the specified exemption contained in section 352 of the Companies Act 2014 on the grounds that it is entitled to the benefit of that exemption as a small company, and that these abridged financial statements have been prepared in accordance with section 353.").FontSize(8);
+        }
+
+        if (!balanceSheet.Balances)
+        {
+            col.Item().PaddingTop(8).Background(Colors.Red.Lighten5).Border(1).BorderColor(Colors.Red.Lighten2).Padding(8)
+                .Text("Filing blocker: the balance sheet does not currently balance. Do not upload this CRO pack until the unreconciled difference has been resolved.")
+                .FontSize(8).FontColor(Colors.Red.Darken3);
+        }
+    }
+
+    private static void AddInfoRow(TableDescriptor table, ref uint row, string label, string value)
+    {
+        table.Cell().Row(row).Column(1).PaddingBottom(3).Text(label).FontSize(8).FontColor(Colors.Grey.Darken1);
+        table.Cell().Row(row).Column(2).PaddingBottom(3).Text(value).FontSize(8);
+        row++;
+    }
+
+    private static string FormatAddress(Company company)
+    {
+        var parts = new[]
+        {
+            company.RegisteredOfficeAddress1,
+            company.RegisteredOfficeAddress2,
+            company.RegisteredOfficeCity,
+            string.IsNullOrWhiteSpace(company.RegisteredOfficeCounty) ? null : $"Co. {company.RegisteredOfficeCounty}",
+            company.RegisteredOfficeEircode
+        }.Where(p => !string.IsNullOrWhiteSpace(p));
+
+        return string.Join(", ", parts);
     }
 
     /// <summary>

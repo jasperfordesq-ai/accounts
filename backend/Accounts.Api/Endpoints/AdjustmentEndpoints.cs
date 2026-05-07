@@ -13,14 +13,27 @@ public static class AdjustmentEndpoints
         var group = app.MapGroup(basePath).WithTags("Adjustments");
 
         // List all adjustments
-        group.MapGet("/", async (int companyId, int periodId, AccountsDbContext db) =>
-            await db.Adjustments
+        group.MapGet("/", async (int companyId, int periodId, AccountsDbContext db,
+            bool? approved, bool? isAuto) =>
+        {
+            var query = db.Adjustments
                 .Include(a => a.DebitCategory)
                 .Include(a => a.CreditCategory)
-                .Where(a => a.PeriodId == periodId)
+                .Where(a => a.PeriodId == periodId);
+
+            if (approved == true)
+                query = query.Where(a => a.ApprovedAt != null);
+            else if (approved == false)
+                query = query.Where(a => a.ApprovedAt == null);
+
+            if (isAuto.HasValue)
+                query = query.Where(a => a.IsAuto == isAuto.Value);
+
+            return await query
                 .OrderBy(a => a.IsAuto ? 0 : 1)
                 .ThenBy(a => a.CreatedAt)
-                .ToListAsync());
+                .ToListAsync();
+        });
 
         // Generate auto adjustments
         group.MapPost("/generate", async (int companyId, int periodId, AdjustmentService service) =>

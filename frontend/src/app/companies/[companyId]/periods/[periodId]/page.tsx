@@ -39,13 +39,14 @@ import {
   getPeriod,
   getYearEndSummary,
   getReadiness,
-  getAccountsPackageUrl,
   getIxbrlUrl,
   getAgmPackUrl,
   getCroFilingPackUrl,
   getSignaturePageUrl,
   getBankAccounts,
+  createBankAccount,
   getTransactions,
+  categoriseTransaction,
   getAdjustments,
   getAdjustmentSummary,
   generateAdjustments,
@@ -62,6 +63,9 @@ import {
   getSection307Note,
   getCategories,
   seedCategories,
+  getTransactionRules,
+  createTransactionRule,
+  deleteTransactionRule,
   type Company,
   type AccountingPeriod,
   type YearEndSummary,
@@ -74,9 +78,12 @@ import {
   type FilingDeadline,
   type AuditExemptionJeopardy,
   type AccountCategory,
+  type TransactionRule,
 } from "@/lib/api";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { PeriodWorkspaceSkeleton } from "@/components/Skeleton";
+import { MetricStrip, ReviewPanel, WorkbenchHeader, WorkflowRail, type WorkflowItem } from "@/components/workbench";
+import { getReviewerName } from "@/lib/reviewer";
 
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("en-IE", {
@@ -99,11 +106,20 @@ export default function PeriodWorkspacePage({
   const [yearEnd, setYearEnd] = useState<YearEndSummary | null>(null);
   const [readiness, setReadiness] = useState<ReadinessScore | null>(null);
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
+  const [showBankForm, setShowBankForm] = useState(false);
+  const [savingBankAccount, setSavingBankAccount] = useState(false);
+  const [bankForm, setBankForm] = useState({
+    name: "",
+    iban: "",
+    openingBalance: "0",
+    currency: "EUR",
+  });
   const [filingStatus, setFilingStatus] = useState<FilingWorkflowStatus | null>(null);
   const [deadlinesList, setDeadlinesList] = useState<FilingDeadline[]>([]);
   const [jeopardy, setJeopardy] = useState<AuditExemptionJeopardy | null>(null);
   const [section307Note, setSection307Note] = useState<string | null>(null);
   const [categories, setCategories] = useState<AccountCategory[]>([]);
+  const [transactionRules, setTransactionRules] = useState<TransactionRule[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [generatingAdj, setGeneratingAdj] = useState(false);
@@ -125,12 +141,23 @@ export default function PeriodWorkspacePage({
   const [transactions, setTransactions] = useState<ImportedTransaction[]>([]);
   const [transactionTotal, setTransactionTotal] = useState(0);
   const [loadingTransactions, setLoadingTransactions] = useState(false);
+  const [categorisingId, setCategorisingId] = useState<number | null>(null);
+  const [txFilterCategory, setTxFilterCategory] = useState<string>("");
+  const [txFilterBank, setTxFilterBank] = useState<string>("");
+  const [txFilterStatus, setTxFilterStatus] = useState<string>("");
+  const [txFilterSearch, setTxFilterSearch] = useState("");
+  const txSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [ruleForm, setRuleForm] = useState({ pattern: "", categoryId: "", priority: "100" });
+  const [savingRule, setSavingRule] = useState(false);
+  const [deletingRuleId, setDeletingRuleId] = useState<number | null>(null);
 
   // Adjustments tab state
   const [adjustments, setAdjustments] = useState<Adjustment[]>([]);
   const [adjSummary, setAdjSummary] = useState<AdjustmentSummary | null>(null);
   const [loadingAdjustments, setLoadingAdjustments] = useState(false);
   const [approvingId, setApprovingId] = useState<number | null>(null);
+  const [adjFilterApproved, setAdjFilterApproved] = useState<string>("");
+  const [adjFilterType, setAdjFilterType] = useState<string>("");
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -188,6 +215,10 @@ export default function PeriodWorkspacePage({
         const cats = await getCategories(cId);
         setCategories(cats);
       } catch {}
+      try {
+        const rules = await getTransactionRules(cId);
+        setTransactionRules(rules);
+      } catch {}
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load data");
     } finally {
@@ -198,7 +229,12 @@ export default function PeriodWorkspacePage({
   const loadTransactions = useCallback(async () => {
     setLoadingTransactions(true);
     try {
-      const data = await getTransactions(cId, pId);
+      const filters: { uncategorised?: boolean; categoryId?: number; bankAccountId?: number; search?: string } = {};
+      if (txFilterStatus === "uncategorised") filters.uncategorised = true;
+      if (txFilterCategory) filters.categoryId = Number(txFilterCategory);
+      if (txFilterBank) filters.bankAccountId = Number(txFilterBank);
+      if (txFilterSearch.trim()) filters.search = txFilterSearch.trim();
+      const data = await getTransactions(cId, pId, 1, 50, filters);
       setTransactions(data.items);
       setTransactionTotal(data.total);
     } catch {
@@ -207,13 +243,18 @@ export default function PeriodWorkspacePage({
     } finally {
       setLoadingTransactions(false);
     }
-  }, [cId, pId]);
+  }, [cId, pId, txFilterCategory, txFilterBank, txFilterStatus, txFilterSearch]);
 
   const loadAdjustments = useCallback(async () => {
     setLoadingAdjustments(true);
     try {
+      const filters: { approved?: boolean; isAuto?: boolean } = {};
+      if (adjFilterApproved === "approved") filters.approved = true;
+      else if (adjFilterApproved === "pending") filters.approved = false;
+      if (adjFilterType === "auto") filters.isAuto = true;
+      else if (adjFilterType === "manual") filters.isAuto = false;
       const [adjData, summaryData] = await Promise.all([
-        getAdjustments(cId, pId),
+        getAdjustments(cId, pId, filters),
         getAdjustmentSummary(cId, pId),
       ]);
       setAdjustments(adjData);
@@ -224,7 +265,7 @@ export default function PeriodWorkspacePage({
     } finally {
       setLoadingAdjustments(false);
     }
-  }, [cId, pId]);
+  }, [cId, pId, adjFilterApproved, adjFilterType]);
 
   useEffect(() => {
     loadData();
@@ -281,6 +322,83 @@ export default function PeriodWorkspacePage({
     if (file) handleFileUpload(file);
   }
 
+  async function handleCreateBankAccount() {
+    if (!bankForm.name.trim()) {
+      toast.error("Bank account name is required");
+      return;
+    }
+
+    setSavingBankAccount(true);
+    try {
+      const account = await createBankAccount(cId, {
+        name: bankForm.name.trim(),
+        iban: bankForm.iban.trim() || undefined,
+        currency: bankForm.currency || "EUR",
+        openingBalance: Number(bankForm.openingBalance || 0),
+      });
+      setBankAccounts((current) => [...current, account]);
+      setSelectedBankAccountId(account.id);
+      setBankForm({ name: "", iban: "", openingBalance: "0", currency: "EUR" });
+      setShowBankForm(false);
+      toast.success("Bank account linked");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to create bank account");
+    } finally {
+      setSavingBankAccount(false);
+    }
+  }
+
+  async function handleCategoriseTransaction(transactionId: number, categoryId: number) {
+    setCategorisingId(transactionId);
+    try {
+      const updated = await categoriseTransaction(cId, pId, transactionId, categoryId);
+      setTransactions((current) =>
+        current.map((tx) => (tx.id === transactionId ? { ...tx, ...updated } : tx))
+      );
+      toast.success("Transaction categorised");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to categorise transaction");
+    } finally {
+      setCategorisingId(null);
+    }
+  }
+
+  async function handleCreateRule() {
+    if (!ruleForm.pattern.trim() || !ruleForm.categoryId) {
+      toast.error("Rule pattern and category are required");
+      return;
+    }
+
+    setSavingRule(true);
+    try {
+      const created = await createTransactionRule(cId, {
+        pattern: ruleForm.pattern.trim(),
+        categoryId: Number(ruleForm.categoryId),
+        priority: Number(ruleForm.priority || 100),
+      });
+      setTransactionRules((current) => [...current, created].sort((a, b) => a.priority - b.priority));
+      setRuleForm({ pattern: "", categoryId: "", priority: "100" });
+      toast.success("Transaction rule created");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to create transaction rule");
+    } finally {
+      setSavingRule(false);
+    }
+  }
+
+  async function handleDeleteRule(ruleId: number) {
+    setDeletingRuleId(ruleId);
+    try {
+      await deleteTransactionRule(cId, ruleId);
+      setTransactionRules((current) => current.filter((rule) => rule.id !== ruleId));
+      toast.success("Transaction rule deleted");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete transaction rule");
+    } finally {
+      setDeletingRuleId(null);
+    }
+  }
+
   async function handleGenerateAdjustments() {
     setGeneratingAdj(true);
     try {
@@ -301,13 +419,23 @@ export default function PeriodWorkspacePage({
   async function handleApproveAdjustment(id: number) {
     setApprovingId(id);
     try {
-      await approveAdjustment(cId, pId, id, "Current User");
+      await approveAdjustment(cId, pId, id, getReviewerName());
       toast.success("Adjustment approved");
       await loadAdjustments();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to approve adjustment");
     } finally {
       setApprovingId(null);
+    }
+  }
+
+  async function markGeneratedAndRefresh(documentType: "accounts" | "signature") {
+    try {
+      await markDocumentGenerated(cId, pId, documentType);
+      const fs = await getFilingWorkflowStatus(cId, pId);
+      setFilingStatus(fs);
+    } catch {
+      // Download still opens; the readiness panel will refresh on the next status load.
     }
   }
 
@@ -330,13 +458,50 @@ export default function PeriodWorkspacePage({
     );
   }
 
-  const pdfUrl = getAccountsPackageUrl(cId, pId);
   const ixbrlUrl = getIxbrlUrl(cId, pId);
   const agmPackUrl = getAgmPackUrl(cId, pId);
   const croPackUrl = getCroFilingPackUrl(cId, pId);
   const sigPageUrl = getSignaturePageUrl(cId, pId);
   const categorisedCount = transactions.filter((t) => t.categoryId != null).length;
   const uncategorisedCount = transactionTotal - categorisedCount;
+  const adjustmentCount = adjSummary ? adjSummary.autoGenerated + adjSummary.manual : 0;
+  const readyToFile = filingStatus?.readyToFile ?? false;
+  const periodDateRange = period
+    ? `${new Date(period.periodStart).toLocaleDateString("en-IE")} to ${new Date(period.periodEnd).toLocaleDateString("en-IE")}`
+    : "Period loading";
+  const classificationLabel = period?.sizeClassification?.calculatedClass ?? "Unclassified";
+  const workflowItems: WorkflowItem[] = [
+    {
+      label: "Classify",
+      detail: period?.sizeClassification ? period.sizeClassification.calculatedClass : "Size/regime not complete",
+      state: period?.sizeClassification ? "done" : "active",
+    },
+    {
+      label: "Import",
+      detail: transactionTotal > 0 ? `${transactionTotal} transactions loaded` : "No transaction data",
+      state: transactionTotal > 0 ? "done" : "todo",
+    },
+    {
+      label: "Categorise",
+      detail: transactionTotal > 0 ? `${uncategorisedCount} uncategorised` : "Waiting for import",
+      state: transactionTotal === 0 ? "todo" : uncategorisedCount === 0 ? "done" : "active",
+    },
+    {
+      label: "Adjust",
+      detail: adjSummary ? `${adjSummary.pendingApproval} pending approval` : "No journals generated",
+      state: adjustmentCount > 0 && adjSummary?.pendingApproval === 0 ? "done" : adjustmentCount > 0 ? "active" : "todo",
+    },
+    {
+      label: "Statements",
+      detail: readiness?.balanceSheetBalances ? "Balance sheet agrees" : "Needs review",
+      state: readiness?.balanceSheetBalances ? "done" : "blocked",
+    },
+    {
+      label: "File",
+      detail: readyToFile ? "CRO pack ready" : `${filingStatus?.blockingIssues.length ?? 0} blockers`,
+      state: readyToFile ? "done" : "blocked",
+    },
+  ];
 
   const tabClass = "px-4 py-2.5 text-sm font-medium text-gray-600 dark:text-gray-400 border-b-2 border-transparent data-[selected]:border-emerald-600 data-[selected]:text-emerald-700 dark:data-[selected]:text-emerald-400 cursor-pointer outline-none transition-colors";
 
@@ -354,28 +519,87 @@ export default function PeriodWorkspacePage({
         ]}
       />
 
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-          {company?.legalName ?? "Company"}
-        </h1>
-        {period && (
-          <div className="flex items-center gap-3 mt-2">
-            <Chip color="accent" variant="soft" size="sm">
-              {period.status}
+      <WorkbenchHeader
+        title={company?.legalName ?? "Company"}
+        subtitle={`${periodDateRange} - annual accounts production file`}
+        meta={
+          <>
+            <Chip color="accent" variant="soft" size="sm">{period?.status ?? "Loading"}</Chip>
+            <Chip color={classificationLabel === "Micro" ? "success" : "warning"} variant="soft" size="sm">
+              {classificationLabel}
             </Chip>
-            <span className="text-sm text-gray-500 dark:text-gray-400">
-              {new Date(period.periodStart).toLocaleDateString("en-IE")} &mdash;{" "}
-              {new Date(period.periodEnd).toLocaleDateString("en-IE")}
-            </span>
-            {period.isFirstYear && (
-              <Chip color="warning" variant="soft" size="sm">
-                First Year
+            {period?.isFirstYear && <Chip color="warning" variant="soft" size="sm">First year</Chip>}
+            {readyToFile ? (
+              <Chip color="success" variant="soft" size="sm">Ready to file</Chip>
+            ) : (
+              <Chip color="danger" variant="soft" size="sm">
+                {filingStatus?.blockingIssues.length ?? 0} blockers
               </Chip>
             )}
-          </div>
-        )}
+          </>
+        }
+        actions={
+          <>
+            <Link href={`/companies/${companyId}/periods/${periodId}/classify`}>
+              <Button variant="outline" size="sm"><Scale className="w-4 h-4 mr-1" />Classify</Button>
+            </Link>
+            <Link href={`/companies/${companyId}/periods/${periodId}/year-end`}>
+              <Button variant="outline" size="sm"><ClipboardList className="w-4 h-4 mr-1" />Year-end review</Button>
+            </Link>
+            <Link href={`/companies/${companyId}/periods/${periodId}/statements`}>
+              <Button variant="primary" size="sm"><FileText className="w-4 h-4 mr-1" />Working papers</Button>
+            </Link>
+          </>
+        }
+      />
+
+      <div className="mb-6">
+        <MetricStrip
+          metrics={[
+            {
+              label: "Filing readiness",
+              value: `${readiness?.filingReadinessPercent ?? 0}%`,
+              tone: (readiness?.filingReadinessPercent ?? 0) >= 90 ? "good" : "warn",
+            },
+            {
+              label: "Transactions",
+              value: transactionTotal,
+              tone: transactionTotal > 0 ? "good" : "warn",
+            },
+            {
+              label: "Uncategorised",
+              value: uncategorisedCount,
+              tone: uncategorisedCount === 0 ? "good" : "bad",
+            },
+            {
+              label: "Adjustments pending",
+              value: adjSummary?.pendingApproval ?? 0,
+              tone: (adjSummary?.pendingApproval ?? 0) === 0 ? "good" : "warn",
+            },
+          ]}
+        />
       </div>
+
+      <WorkflowRail items={workflowItems} />
+
+      {filingStatus && filingStatus.blockingIssues.length > 0 && (
+        <div className="mb-6">
+          <ReviewPanel
+            title="Readiness Blockers"
+            description="Resolve these before treating the accounts pack as final."
+            actions={<Chip color="danger" variant="soft" size="sm">{filingStatus.blockingIssues.length} open</Chip>}
+          >
+            <div className="grid gap-2 md:grid-cols-2">
+              {filingStatus.blockingIssues.map((issue) => (
+                <div key={issue} className="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>{issue}</span>
+                </div>
+              ))}
+            </div>
+          </ReviewPanel>
+        </div>
+      )}
 
       {error && (
         <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-400 mb-4 animate-fade-in">
@@ -441,35 +665,109 @@ export default function PeriodWorkspacePage({
             {/* Bank Accounts */}
             <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
               <Card.Header>
-                <Card.Title className="text-gray-900 dark:text-gray-100">Bank Accounts</Card.Title>
-                <Card.Description>
-                  {bankAccounts.length} bank account{bankAccounts.length !== 1 ? "s" : ""} linked
-                </Card.Description>
+                <div className="flex w-full flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <Card.Title className="text-gray-900 dark:text-gray-100">Bank Accounts</Card.Title>
+                    <Card.Description>
+                      {bankAccounts.length} bank account{bankAccounts.length !== 1 ? "s" : ""} linked for import and reconciliation.
+                    </Card.Description>
+                  </div>
+                  <Button variant="outline" size="sm" onPress={() => setShowBankForm((open) => !open)}>
+                    {showBankForm ? "Cancel" : "Add Bank Account"}
+                  </Button>
+                </div>
               </Card.Header>
               <Card.Content>
-                {bankAccounts.length === 0 ? (
-                  <p className="text-sm text-gray-500 dark:text-gray-400 italic">No bank accounts linked yet.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {bankAccounts.map((ba) => (
-                      <div
-                        key={ba.id}
-                        className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-neutral-700 px-4 py-3 hover:bg-gray-50 dark:hover:bg-neutral-800/50 transition-colors"
-                      >
+                <div className="space-y-4">
+                  {showBankForm && (
+                    <div className="rounded-md border border-gray-200 bg-gray-50 p-4 dark:border-neutral-700 dark:bg-neutral-800/40">
+                      <div className="grid gap-3 md:grid-cols-4">
                         <div>
-                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{ba.name}</p>
-                          {ba.iban && <p className="text-xs text-gray-500 dark:text-gray-400">{ba.iban}</p>}
+                          <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Account name</label>
+                          <input
+                            value={bankForm.name}
+                            onChange={(e) => setBankForm((current) => ({ ...current, name: e.target.value }))}
+                            className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-gray-100"
+                            placeholder="Main current account"
+                          />
                         </div>
-                        <div className="text-right">
-                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                            {formatCurrency(ba.openingBalance)}
-                          </p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">{ba.currency}</p>
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">IBAN</label>
+                          <input
+                            value={bankForm.iban}
+                            onChange={(e) => setBankForm((current) => ({ ...current, iban: e.target.value }))}
+                            className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-gray-100"
+                            placeholder="IE00..."
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Opening balance</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={bankForm.openingBalance}
+                            onChange={(e) => setBankForm((current) => ({ ...current, openingBalance: e.target.value }))}
+                            className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-gray-100"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Currency</label>
+                          <select
+                            value={bankForm.currency}
+                            onChange={(e) => setBankForm((current) => ({ ...current, currency: e.target.value }))}
+                            className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-gray-100"
+                          >
+                            <option value="EUR">EUR</option>
+                            <option value="GBP">GBP</option>
+                            <option value="USD">USD</option>
+                          </select>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                )}
+                      <div className="mt-3 flex justify-end">
+                        <Button variant="primary" size="sm" onPress={handleCreateBankAccount} isDisabled={savingBankAccount}>
+                          {savingBankAccount ? <Spinner size="sm" /> : "Save Bank Account"}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {bankAccounts.length === 0 ? (
+                    <div className="rounded-md border border-dashed border-gray-300 px-4 py-6 text-sm text-gray-500 dark:border-neutral-700 dark:text-gray-400">
+                      No bank accounts linked yet. Add the account that matches the year-end bank statement before importing transactions.
+                    </div>
+                  ) : (
+                    <div className="overflow-hidden rounded-md border border-gray-200 dark:border-neutral-700">
+                      <div className="grid grid-cols-12 gap-2 bg-gray-50 px-4 py-2 text-xs font-semibold uppercase text-gray-500 dark:bg-neutral-800 dark:text-gray-400">
+                        <div className="col-span-5">Account</div>
+                        <div className="col-span-2">Currency</div>
+                        <div className="col-span-3 text-right">Opening balance</div>
+                        <div className="col-span-2 text-right">Import target</div>
+                      </div>
+                      <div className="divide-y divide-gray-100 dark:divide-neutral-800">
+                        {bankAccounts.map((ba) => (
+                          <div
+                            key={ba.id}
+                            className="grid grid-cols-12 items-center gap-2 px-4 py-3 text-sm"
+                          >
+                            <div className="col-span-5 min-w-0">
+                              <p className="font-medium text-gray-900 dark:text-gray-100">{ba.name}</p>
+                              <p className="truncate text-xs text-gray-500 dark:text-gray-400">{ba.iban || "No IBAN recorded"}</p>
+                            </div>
+                            <div className="col-span-2 text-gray-600 dark:text-gray-300">{ba.currency}</div>
+                            <div className="col-span-3 text-right font-mono text-gray-900 dark:text-gray-100">{formatCurrency(ba.openingBalance)}</div>
+                            <div className="col-span-2 text-right">
+                              {selectedBankAccountId === ba.id ? (
+                                <Chip color="success" variant="soft" size="sm">Selected</Chip>
+                              ) : (
+                                <Button variant="ghost" size="sm" onPress={() => setSelectedBankAccountId(ba.id)}>Use</Button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </Card.Content>
             </Card>
 
@@ -490,7 +788,7 @@ export default function PeriodWorkspacePage({
                         const cats = await seedCategories(cId);
                         setCategories(cats);
                         toast.success(`${cats.length} categories seeded`);
-                      } catch (err) { toast.error("Failed to seed categories"); }
+                      } catch { toast.error("Failed to seed categories"); }
                     }}>
                       Seed Categories
                     </Button>
@@ -683,6 +981,128 @@ export default function PeriodWorkspacePage({
                   </div>
                 )}
 
+                <div className="mb-6 rounded-md border border-gray-200 bg-gray-50 p-4 dark:border-neutral-700 dark:bg-neutral-800/40">
+                  <div className="mb-3 flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Transaction Rules</h3>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        Match recurring bank descriptions to account categories for future imports.
+                      </p>
+                    </div>
+                    <Chip size="sm" variant="soft" color={transactionRules.length > 0 ? "success" : "default"}>
+                      {transactionRules.length} rule{transactionRules.length !== 1 ? "s" : ""}
+                    </Chip>
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-12">
+                    <input
+                      value={ruleForm.pattern}
+                      onChange={(e) => setRuleForm((current) => ({ ...current, pattern: e.target.value }))}
+                      placeholder="Description contains..."
+                      className="md:col-span-5 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-gray-100"
+                      aria-label="Rule pattern"
+                    />
+                    <select
+                      value={ruleForm.categoryId}
+                      onChange={(e) => setRuleForm((current) => ({ ...current, categoryId: e.target.value }))}
+                      className="md:col-span-4 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-gray-100"
+                      aria-label="Rule category"
+                    >
+                      <option value="">Choose category</option>
+                      {categories.map((cat) => (
+                        <option key={cat.id} value={cat.id}>
+                          {cat.code ? `${cat.code} - ${cat.name}` : cat.name}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="number"
+                      value={ruleForm.priority}
+                      onChange={(e) => setRuleForm((current) => ({ ...current, priority: e.target.value }))}
+                      className="md:col-span-1 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-gray-100"
+                      aria-label="Rule priority"
+                    />
+                    <Button variant="outline" size="sm" onPress={handleCreateRule} isDisabled={savingRule || categories.length === 0} className="md:col-span-2">
+                      {savingRule ? <Spinner size="sm" /> : "Add Rule"}
+                    </Button>
+                  </div>
+                  {transactionRules.length > 0 && (
+                    <div className="mt-4 overflow-hidden rounded-md border border-gray-200 bg-white dark:border-neutral-700 dark:bg-neutral-900">
+                      {transactionRules.map((rule) => {
+                        const category = categories.find((cat) => cat.id === rule.categoryId);
+                        return (
+                          <div key={rule.id} className="grid grid-cols-12 items-center gap-2 border-b border-gray-100 px-3 py-2 text-xs last:border-b-0 dark:border-neutral-800">
+                            <div className="col-span-5 font-medium text-gray-900 dark:text-gray-100">{rule.pattern}</div>
+                            <div className="col-span-5 text-gray-600 dark:text-gray-300">
+                              {category ? (category.code ? `${category.code} - ${category.name}` : category.name) : `Category ${rule.categoryId}`}
+                            </div>
+                            <div className="col-span-1 text-right text-gray-500 dark:text-gray-400">{rule.priority}</div>
+                            <div className="col-span-1 text-right">
+                              <Button variant="ghost" size="sm" onPress={() => handleDeleteRule(rule.id)} isDisabled={deletingRuleId === rule.id}>
+                                {deletingRuleId === rule.id ? <Spinner size="sm" /> : "Delete"}
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Transaction Filters */}
+                <div className="grid grid-cols-4 gap-3 mb-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Status</label>
+                    <select
+                      className="w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm text-gray-900 dark:text-gray-100 px-3 py-2"
+                      value={txFilterStatus}
+                      onChange={(e) => setTxFilterStatus(e.target.value)}
+                    >
+                      <option value="">All</option>
+                      <option value="uncategorised">Uncategorised</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Category</label>
+                    <select
+                      className="w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm text-gray-900 dark:text-gray-100 px-3 py-2"
+                      value={txFilterCategory}
+                      onChange={(e) => setTxFilterCategory(e.target.value)}
+                    >
+                      <option value="">All Categories</option>
+                      {categories.map((cat) => (
+                        <option key={cat.id} value={cat.id}>{cat.code ? `${cat.code} - ${cat.name}` : cat.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Bank Account</label>
+                    <select
+                      className="w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm text-gray-900 dark:text-gray-100 px-3 py-2"
+                      value={txFilterBank}
+                      onChange={(e) => setTxFilterBank(e.target.value)}
+                    >
+                      <option value="">All Accounts</option>
+                      {bankAccounts.map((ba) => (
+                        <option key={ba.id} value={ba.id}>{ba.name} {ba.iban ? `(${ba.iban})` : ""}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Search</label>
+                    <input
+                      type="text"
+                      placeholder="Search description..."
+                      className="w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm text-gray-900 dark:text-gray-100 px-3 py-2"
+                      defaultValue={txFilterSearch}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (txSearchTimerRef.current) clearTimeout(txSearchTimerRef.current);
+                        txSearchTimerRef.current = setTimeout(() => setTxFilterSearch(val), 400);
+                      }}
+                    />
+                  </div>
+                </div>
+
                 {loadingTransactions ? (
                   <div className="flex items-center justify-center py-8">
                     <Spinner size="sm" />
@@ -722,14 +1142,29 @@ export default function PeriodWorkspacePage({
                             {formatCurrency(tx.amount)}
                           </div>
                           <div className="col-span-3">
-                            {tx.category ? (
-                              <Chip color={tx.manualOverride ? "accent" : "success"} variant="soft" size="sm">
-                                {tx.category.name}
-                              </Chip>
-                            ) : (
-                              <Chip color="warning" variant="soft" size="sm">
-                                Uncategorised
-                              </Chip>
+                            <div className="flex items-center gap-2">
+                              <select
+                                value={tx.categoryId ?? ""}
+                                onChange={(e) => {
+                                  if (e.target.value) {
+                                    handleCategoriseTransaction(tx.id, Number(e.target.value));
+                                  }
+                                }}
+                                disabled={categories.length === 0 || categorisingId === tx.id}
+                                aria-label={`Categorise ${tx.description}`}
+                                className="min-w-0 flex-1 rounded-md border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-gray-100"
+                              >
+                                <option value="">Uncategorised</option>
+                                {categories.map((cat) => (
+                                  <option key={cat.id} value={cat.id}>
+                                    {cat.code ? `${cat.code} - ${cat.name}` : cat.name}
+                                  </option>
+                                ))}
+                              </select>
+                              {categorisingId === tx.id && <Spinner size="sm" />}
+                            </div>
+                            {tx.manualOverride && (
+                              <p className="mt-1 text-[11px] text-blue-600 dark:text-blue-400">Manual</p>
                             )}
                           </div>
                           <div className="col-span-1 text-center text-xs text-gray-400 dark:text-gray-500">
@@ -927,6 +1362,38 @@ export default function PeriodWorkspacePage({
                 </Card.Description>
               </Card.Header>
               <Card.Content>
+                <div className="mb-4 grid gap-3 md:grid-cols-3">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Approval status</label>
+                    <select
+                      value={adjFilterApproved}
+                      onChange={(e) => setAdjFilterApproved(e.target.value)}
+                      className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-gray-100"
+                    >
+                      <option value="">All adjustments</option>
+                      <option value="pending">Pending approval</option>
+                      <option value="approved">Approved</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Source</label>
+                    <select
+                      value={adjFilterType}
+                      onChange={(e) => setAdjFilterType(e.target.value)}
+                      className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-gray-100"
+                    >
+                      <option value="">Auto and manual</option>
+                      <option value="auto">Auto-generated</option>
+                      <option value="manual">Manual only</option>
+                    </select>
+                  </div>
+                  <div className="flex items-end">
+                    <Button variant="outline" size="sm" onPress={loadAdjustments} isDisabled={loadingAdjustments}>
+                      <RefreshCw className={`w-4 h-4 mr-1 ${loadingAdjustments ? "animate-spin" : ""}`} />
+                      Apply Filters
+                    </Button>
+                  </div>
+                </div>
                 {loadingAdjustments ? (
                   <div className="flex items-center justify-center py-8"><Spinner size="sm" /></div>
                 ) : adjustments.length === 0 ? (
@@ -1223,7 +1690,7 @@ export default function PeriodWorkspacePage({
                       {filingStatus.cro.status === "NotStarted" || filingStatus.cro.status === "InProgress" || filingStatus.cro.status === "PackageGenerated" ? (
                         <Button variant="primary" size="sm" onPress={async () => {
                           try {
-                            await updateCroFilingStatus(cId, pId, { status: "Approved", by: "Current User" });
+                            await updateCroFilingStatus(cId, pId, { status: "Approved", by: getReviewerName() });
                             toast.success("Filing approved");
                             const fs = await getFilingWorkflowStatus(cId, pId); setFilingStatus(fs);
                           } catch { toast.error("Failed to approve"); }
@@ -1233,7 +1700,7 @@ export default function PeriodWorkspacePage({
                       ) : filingStatus.cro.status === "Approved" ? (
                         <Button variant="primary" size="sm" onPress={async () => {
                           try {
-                            await updateCroFilingStatus(cId, pId, { status: "Submitted", by: "Current User" });
+                            await updateCroFilingStatus(cId, pId, { status: "Submitted", by: getReviewerName() });
                             toast.success("Marked as submitted to CRO");
                             const fs = await getFilingWorkflowStatus(cId, pId); setFilingStatus(fs);
                           } catch { toast.error("Failed to update status"); }
@@ -1241,7 +1708,7 @@ export default function PeriodWorkspacePage({
                           <Upload className="w-4 h-4 mr-1" /> Mark as Submitted
                         </Button>
                       ) : filingStatus.cro.status === "Submitted" ? (
-                        <Chip size="sm" variant="soft" color="accent">Submitted — awaiting CRO acceptance</Chip>
+                        <Chip size="sm" variant="soft" color="accent">Submitted - awaiting CRO acceptance</Chip>
                       ) : filingStatus.cro.status === "Accepted" ? (
                         <Chip size="sm" variant="soft" color="success">Filing accepted by CRO</Chip>
                       ) : null}
@@ -1282,7 +1749,7 @@ export default function PeriodWorkspacePage({
                                 await markFiled(cId, pId, { deadlineType: d.deadlineType, filedDate: new Date().toISOString().split("T")[0] });
                                 toast.success(`${d.deadlineType} filing marked as complete`);
                                 loadData();
-                              } catch (err) { toast.error("Failed to mark as filed"); }
+                              } catch (err) { toast.error(err instanceof Error ? err.message : "Failed to mark as filed"); }
                             }}>
                               Mark as Filed
                             </Button>
@@ -1329,7 +1796,7 @@ export default function PeriodWorkspacePage({
                     </div>
                     <Button variant="outline" size="sm"><Download className="w-4 h-4 mr-1" />Download PDF</Button>
                   </a>
-                  <a href={croPackUrl} target="_blank" rel="noopener noreferrer" onClick={() => { markDocumentGenerated(cId, pId, "accounts").catch(() => {}); }} className="flex flex-col items-center gap-3 rounded-xl border-2 border-gray-200 dark:border-neutral-700 p-8 hover:border-emerald-400 dark:hover:border-emerald-600 hover:bg-emerald-50/30 dark:hover:bg-emerald-900/10 transition-all group">
+                  <a href={croPackUrl} target="_blank" rel="noopener noreferrer" onClick={() => { markGeneratedAndRefresh("accounts"); }} className="flex flex-col items-center gap-3 rounded-xl border-2 border-gray-200 dark:border-neutral-700 p-8 hover:border-emerald-400 dark:hover:border-emerald-600 hover:bg-emerald-50/30 dark:hover:bg-emerald-900/10 transition-all group">
                     <FileText className="w-12 h-12 text-gray-400 dark:text-gray-500 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors" />
                     <div className="text-center">
                       <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">CRO Filing Pack</p>
@@ -1337,7 +1804,7 @@ export default function PeriodWorkspacePage({
                     </div>
                     <Button variant="outline" size="sm"><Download className="w-4 h-4 mr-1" />Download PDF</Button>
                   </a>
-                  <a href={sigPageUrl} target="_blank" rel="noopener noreferrer" onClick={() => { markDocumentGenerated(cId, pId, "signature").catch(() => {}); }} className="flex flex-col items-center gap-3 rounded-xl border-2 border-gray-200 dark:border-neutral-700 p-8 hover:border-emerald-400 dark:hover:border-emerald-600 hover:bg-emerald-50/30 dark:hover:bg-emerald-900/10 transition-all group">
+                  <a href={sigPageUrl} target="_blank" rel="noopener noreferrer" onClick={() => { markGeneratedAndRefresh("signature"); }} className="flex flex-col items-center gap-3 rounded-xl border-2 border-gray-200 dark:border-neutral-700 p-8 hover:border-emerald-400 dark:hover:border-emerald-600 hover:bg-emerald-50/30 dark:hover:bg-emerald-900/10 transition-all group">
                     <FileText className="w-12 h-12 text-gray-400 dark:text-gray-500 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors" />
                     <div className="text-center">
                       <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Signature Page</p>
@@ -1367,8 +1834,8 @@ export default function PeriodWorkspacePage({
                   <ChecklistItem label="Year-end adjustments generated and reviewed" done={adjSummary != null && adjSummary.pendingApproval === 0 && (adjSummary.autoGenerated + adjSummary.manual) > 0} />
                   <ChecklistItem label="Balance sheet balances" done={readiness?.balanceSheetBalances ?? false} />
                   <ChecklistItem label="Filing readiness at 100%" done={(readiness?.filingReadinessPercent ?? 0) >= 100} />
-                  <ChecklistItem label="Accounts package downloaded and reviewed" done={false} />
-                  <ChecklistItem label="CRO filing pack and signature page generated" done={false} />
+                  <ChecklistItem label="CRO accounts PDF generated" done={filingStatus?.cro.accountsPdfReady ?? false} />
+                  <ChecklistItem label="CRO filing pack and signature page generated" done={(filingStatus?.cro.accountsPdfReady ?? false) && (filingStatus?.cro.signaturePageReady ?? false)} />
                 </div>
               </Card.Content>
             </Card>

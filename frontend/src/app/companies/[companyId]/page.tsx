@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, use } from "react";
+import { useCallback, useEffect, useState, use } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -132,7 +132,7 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ compan
     }
   };
 
-  const load = () => {
+  const load = useCallback(() => {
     getCompany(Number(id))
       .then((companyData) => {
         setCompany(companyData);
@@ -146,9 +146,9 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ compan
       })
       .catch((err) => toast.error(err instanceof Error ? err.message : "Failed to load company"))
       .finally(() => setLoading(false));
-  };
+  }, [id]);
 
-  useEffect(() => { load(); }, [id]);
+  useEffect(() => { load(); }, [load]);
 
   const handleDelete = async () => {
     setDeleting(true);

@@ -43,7 +43,15 @@ public class FinancialStatementsService(AccountsDbContext db)
     public record CurrentAssetsSection(decimal Stock, decimal Debtors, decimal Prepayments, decimal Cash, decimal Total);
     public record CreditorsWithinYearSection(decimal TradeCreditors, decimal Accruals, decimal TaxCreditors, decimal OtherCreditors, decimal Total);
     public record CreditorsAfterYearSection(decimal Loans, decimal Other, decimal Total);
-    public record CapitalSection(decimal ShareCapital, decimal RetainedEarnings, decimal Total);
+    public record CapitalSection(
+        decimal ShareCapital,
+        decimal OpeningRetainedEarnings,
+        decimal ProfitForYear,
+        decimal DividendsPaid,
+        decimal RetainedEarnings,
+        decimal Total,
+        decimal UnexplainedDifference
+    );
 
     // Cash Flow Statement
     public record CashFlowStatement(
@@ -260,16 +268,18 @@ public class FinancialStatementsService(AccountsDbContext db)
 
         var netAssets = totalAssetsLessCurrentLiabs - totalCreditorsAfter;
 
-        // Capital and Reserves
-        // Share capital - placeholder (from equity categories or manual entry)
-        // For now, derive retained earnings as the balancing figure
+        // Capital and reserves are computed independently from equity movements.
+        // Any difference is surfaced instead of being hidden inside retained earnings.
         var shareCapitals = await db.ShareCapitals.Where(s => s.CompanyId == companyId).ToListAsync();
         var shareCapital = shareCapitals.Count > 0 ? shareCapitals.Sum(s => s.TotalValue) : 1m;
+        var openingRetainedEarnings = await GetOpeningRetainedEarningsAsync(period);
+        var profitForYear = (await GetProfitAndLossAsync(periodId)).ProfitAfterTax;
         var dividendsPaid = await db.Dividends.Where(d => d.PeriodId == periodId).SumAsync(d => d.Amount);
-        var retainedEarnings = netAssets - shareCapital;
+        var retainedEarnings = openingRetainedEarnings + profitForYear - dividendsPaid;
         var totalCapital = shareCapital + retainedEarnings;
+        var unexplainedDifference = netAssets - totalCapital;
 
-        var balances = Math.Abs(netAssets - totalCapital) < 0.01m;
+        var balances = Math.Abs(unexplainedDifference) < 0.01m;
 
         return new BalanceSheet(
             new FixedAssetsSection(assetCategories, fixedAssetsTotal),
@@ -279,9 +289,28 @@ public class FinancialStatementsService(AccountsDbContext db)
             totalAssetsLessCurrentLiabs,
             new CreditorsAfterYearSection(loansAfterYear, otherCreditorsAfter, totalCreditorsAfter),
             netAssets,
-            new CapitalSection(shareCapital, retainedEarnings, totalCapital),
+            new CapitalSection(shareCapital, openingRetainedEarnings, profitForYear, dividendsPaid, retainedEarnings, totalCapital, unexplainedDifference),
             balances
         );
+    }
+
+    private async Task<decimal> GetOpeningRetainedEarningsAsync(AccountingPeriod period)
+    {
+        var priorPeriod = await db.AccountingPeriods
+            .Where(p => p.CompanyId == period.CompanyId && p.PeriodEnd < period.PeriodStart)
+            .OrderByDescending(p => p.PeriodEnd)
+            .FirstOrDefaultAsync();
+
+        if (priorPeriod == null)
+            return 0m;
+
+        var priorProfit = (await GetProfitAndLossAsync(priorPeriod.Id)).ProfitAfterTax;
+        var priorDividends = await db.Dividends
+            .Where(d => d.PeriodId == priorPeriod.Id)
+            .SumAsync(d => d.Amount);
+        var earlierOpening = await GetOpeningRetainedEarningsAsync(priorPeriod);
+
+        return earlierOpening + priorProfit - priorDividends;
     }
 
     public async Task<ReadinessScore> GetReadinessScoreAsync(int periodId)
@@ -353,16 +382,31 @@ public class FinancialStatementsService(AccountsDbContext db)
         try
         {
             var bs = await GetBalanceSheetAsync(periodId);
-            if (bs.Balances) completedChecks++; else warnings.Add("Balance sheet does not balance");
+            if (bs.Balances)
+                completedChecks++;
+            else
+                warnings.Add($"Balance sheet does not balance. Unexplained difference: {bs.CapitalAndReserves.UnexplainedDifference:C}.");
         }
         catch { warnings.Add("Could not compute balance sheet"); }
 
         var completeness = (int)Math.Round((double)completedChecks / totalChecks * 100);
 
         // Filing readiness is completeness minus critical missing items
-        var filingReady = missing.Count == 0 && warnings.Count == 0 ? completeness : Math.Max(0, completeness - missing.Count * 10);
+        var balanceSheetBalances = false;
+        try
+        {
+            balanceSheetBalances = (await GetBalanceSheetAsync(periodId)).Balances;
+        }
+        catch
+        {
+            balanceSheetBalances = false;
+        }
 
-        return new ReadinessScore(completeness, filingReady, missing.Count == 0, missing, warnings);
+        var filingReady = missing.Count == 0 && warnings.Count == 0 && balanceSheetBalances
+            ? completeness
+            : Math.Max(0, completeness - missing.Count * 10 - (balanceSheetBalances ? 0 : 20));
+
+        return new ReadinessScore(completeness, filingReady, balanceSheetBalances, missing, warnings);
     }
 
     public async Task<CashFlowStatement> GetCashFlowStatementAsync(int periodId)
@@ -493,16 +537,7 @@ public class FinancialStatementsService(AccountsDbContext db)
                 .SumAsync(s => s.TotalValue);
             if (openingShareCapital == 0) openingShareCapital = 1m;
 
-            // Get prior period balance sheet to extract retained earnings
-            try
-            {
-                var priorBs = await GetBalanceSheetAsync(priorPeriod.Id);
-                openingRetainedEarnings = priorBs.CapitalAndReserves.RetainedEarnings;
-            }
-            catch
-            {
-                openingRetainedEarnings = 0;
-            }
+            openingRetainedEarnings = await GetOpeningRetainedEarningsAsync(period);
         }
         else
         {

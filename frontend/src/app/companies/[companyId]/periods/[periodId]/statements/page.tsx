@@ -6,7 +6,6 @@ import {
   Button,
   Card,
   Chip,
-  Spinner,
   TabsRoot,
   TabList,
   Tab,
@@ -168,7 +167,7 @@ export default function StatementsPage({
           </h1>
           {company && period && (
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              {company.legalName} &mdash;{" "}
+              {company.legalName} -{" "}
               {new Date(period.periodStart).toLocaleDateString("en-IE")} to{" "}
               {new Date(period.periodEnd).toLocaleDateString("en-IE")}
             </p>
@@ -575,10 +574,32 @@ export default function StatementsPage({
                       indent
                     />
                     <StatementRow
-                      label="Retained Earnings"
+                      label="Opening retained earnings"
+                      amount={bs.capitalAndReserves.openingRetainedEarnings}
+                      indent
+                    />
+                    <StatementRow
+                      label="Profit after tax"
+                      amount={bs.capitalAndReserves.profitForYear}
+                      indent
+                    />
+                    <StatementRow
+                      label="Dividends paid"
+                      amount={-Math.abs(bs.capitalAndReserves.dividendsPaid)}
+                      indent
+                    />
+                    <StatementRow
+                      label="Retained earnings (derived)"
                       amount={bs.capitalAndReserves.retainedEarnings}
                       indent
                     />
+                    {Math.abs(bs.capitalAndReserves.unexplainedDifference) >= 0.01 && (
+                      <StatementRow
+                        label="Unexplained balance sheet difference"
+                        amount={bs.capitalAndReserves.unexplainedDifference}
+                        indent
+                      />
+                    )}
                     <Divider double />
                     <StatementRow
                       label="Total Capital and Reserves"
@@ -598,11 +619,16 @@ export default function StatementsPage({
                         </span>
                       </div>
                     ) : (
-                      <div className="flex items-center gap-2 text-sm text-red-700 dark:text-red-400">
+                      <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">
+                        <div className="flex items-center gap-2">
                         <AlertTriangle className="w-5 h-5" />
                         <span className="font-medium">
                           Balance sheet does not balance
                         </span>
+                        </div>
+                        <p className="mt-1 text-xs">
+                          Unexplained difference: {eur(bs.capitalAndReserves.unexplainedDifference)}. Review source transactions, year-end facts and journals before approving.
+                        </p>
                       </div>
                     )}
                   </div>
@@ -799,13 +825,13 @@ export default function StatementsPage({
                       </tr>
                       <tr className="border-b border-gray-100 dark:border-neutral-800">
                         <td className="px-4 py-2.5 text-gray-700 dark:text-gray-300">Profit for the Year</td>
-                        <td className="px-4 py-2.5 text-right font-mono text-gray-400 dark:text-gray-500">&mdash;</td>
+                        <td className="px-4 py-2.5 text-right font-mono text-gray-400 dark:text-gray-500">-</td>
                         <td className="px-4 py-2.5 text-right font-mono text-gray-900 dark:text-gray-100">{eur(equity.profitForYear)}</td>
                         <td className="px-4 py-2.5 text-right font-mono text-gray-900 dark:text-gray-100">{eur(equity.profitForYear)}</td>
                       </tr>
                       <tr className="border-b border-gray-100 dark:border-neutral-800">
                         <td className="px-4 py-2.5 text-gray-700 dark:text-gray-300">Dividends Paid</td>
-                        <td className="px-4 py-2.5 text-right font-mono text-gray-400 dark:text-gray-500">&mdash;</td>
+                        <td className="px-4 py-2.5 text-right font-mono text-gray-400 dark:text-gray-500">-</td>
                         <td className="px-4 py-2.5 text-right font-mono text-red-700 dark:text-red-400">{equity.dividendsPaid !== 0 ? eur(-Math.abs(equity.dividendsPaid)) : eur(0)}</td>
                         <td className="px-4 py-2.5 text-right font-mono text-red-700 dark:text-red-400">{equity.dividendsPaid !== 0 ? eur(-Math.abs(equity.dividendsPaid)) : eur(0)}</td>
                       </tr>
@@ -813,7 +839,7 @@ export default function StatementsPage({
                         <tr className="border-b border-gray-100 dark:border-neutral-800">
                           <td className="px-4 py-2.5 text-gray-700 dark:text-gray-300">Shares Issued</td>
                           <td className="px-4 py-2.5 text-right font-mono text-gray-900 dark:text-gray-100">{eur(equity.sharesIssued)}</td>
-                          <td className="px-4 py-2.5 text-right font-mono text-gray-400 dark:text-gray-500">&mdash;</td>
+                          <td className="px-4 py-2.5 text-right font-mono text-gray-400 dark:text-gray-500">-</td>
                           <td className="px-4 py-2.5 text-right font-mono text-gray-900 dark:text-gray-100">{eur(equity.sharesIssued)}</td>
                         </tr>
                       )}
