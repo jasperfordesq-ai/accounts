@@ -58,6 +58,7 @@ import {
   validateIxbrl,
   calculateDeadlines,
   updateCroFilingStatus,
+  confirmCroPayment,
   markDocumentGenerated,
   getDeadlines,
   markFiled,
@@ -1992,6 +1993,19 @@ export default function PeriodWorkspacePage({
                       </div>
                     )}
 
+                    {filingStatus.warningIssues.length > 0 && (
+                      <div>
+                        <h4 className="text-sm font-medium text-amber-700 dark:text-amber-400 mb-2">Filing Warnings</h4>
+                        <ul className="space-y-1.5">
+                          {filingStatus.warningIssues.map((issue, i) => (
+                            <li key={i} className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-400">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 mt-1.5 shrink-0" />{issue}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
                     {/* Validate iXBRL Button */}
                     <Button
                       variant="outline"
@@ -2026,14 +2040,14 @@ export default function PeriodWorkspacePage({
                     </Button>
 
                     {/* Filing Action Buttons */}
-                    <div className="flex items-center gap-3 pt-2 border-t border-gray-200 dark:border-neutral-700">
+                    <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-gray-200 dark:border-neutral-700">
                       {filingStatus.cro.status === "NotStarted" || filingStatus.cro.status === "InProgress" || filingStatus.cro.status === "PackageGenerated" ? (
-                        <Button variant="primary" size="sm" onPress={async () => {
+                        <Button variant="primary" size="sm" isDisabled={!filingStatus.readyToFile} onPress={async () => {
                           try {
                             await updateCroFilingStatus(cId, pId, { status: "Approved", by: getReviewerName() });
                             toast.success("Filing approved");
                             const fs = await getFilingWorkflowStatus(cId, pId); setFilingStatus(fs);
-                          } catch { toast.error("Failed to approve"); }
+                          } catch (err) { toast.error(err instanceof Error ? err.message : "Failed to approve"); }
                         }}>
                           <CheckCircle2 className="w-4 h-4 mr-1" /> Approve for Filing
                         </Button>
@@ -2043,14 +2057,55 @@ export default function PeriodWorkspacePage({
                             await updateCroFilingStatus(cId, pId, { status: "Submitted", by: getReviewerName() });
                             toast.success("Marked as submitted to CRO");
                             const fs = await getFilingWorkflowStatus(cId, pId); setFilingStatus(fs);
-                          } catch { toast.error("Failed to update status"); }
+                          } catch (err) { toast.error(err instanceof Error ? err.message : "Failed to update status"); }
                         }}>
                           <Upload className="w-4 h-4 mr-1" /> Mark as Submitted
                         </Button>
                       ) : filingStatus.cro.status === "Submitted" ? (
-                        <Chip size="sm" variant="soft" color="accent">Submitted - awaiting CRO acceptance</Chip>
+                        <>
+                          <Chip size="sm" variant="soft" color={filingStatus.cro.paymentCompleted ? "success" : "warning"}>
+                            {filingStatus.cro.paymentCompleted ? "CORE payment confirmed" : "Submitted - payment needed"}
+                          </Chip>
+                          {!filingStatus.cro.paymentCompleted && (
+                            <Button variant="outline" size="sm" onPress={async () => {
+                              try {
+                                await confirmCroPayment(cId, pId, getReviewerName());
+                                toast.success("CORE payment confirmed");
+                                const fs = await getFilingWorkflowStatus(cId, pId); setFilingStatus(fs);
+                              } catch (err) { toast.error(err instanceof Error ? err.message : "Failed to confirm payment"); }
+                            }}>
+                              Confirm CORE Payment
+                            </Button>
+                          )}
+                          <Button variant="outline" size="sm" isDisabled={!filingStatus.cro.paymentCompleted} onPress={async () => {
+                            try {
+                              await updateCroFilingStatus(cId, pId, { status: "Accepted", by: getReviewerName() });
+                              toast.success("CRO acceptance recorded");
+                              const fs = await getFilingWorkflowStatus(cId, pId); setFilingStatus(fs);
+                            } catch (err) { toast.error(err instanceof Error ? err.message : "Failed to mark accepted"); }
+                          }}>
+                            Mark Accepted
+                          </Button>
+                          <Button variant="outline" size="sm" onPress={async () => {
+                            try {
+                              await updateCroFilingStatus(cId, pId, {
+                                status: "CorrectionRequired",
+                                by: getReviewerName(),
+                                reason: "CRO send-back/correction required. Correct and redeliver within 14 days.",
+                              });
+                              toast.warning("Correction deadline opened");
+                              const fs = await getFilingWorkflowStatus(cId, pId); setFilingStatus(fs);
+                            } catch (err) { toast.error(err instanceof Error ? err.message : "Failed to record correction"); }
+                          }}>
+                            Record Send-Back
+                          </Button>
+                        </>
                       ) : filingStatus.cro.status === "Accepted" ? (
                         <Chip size="sm" variant="soft" color="success">Filing accepted by CRO</Chip>
+                      ) : filingStatus.cro.status === "CorrectionRequired" ? (
+                        <Chip size="sm" variant="soft" color="danger">
+                          Correction due {filingStatus.cro.correctionDeadline ? new Date(filingStatus.cro.correctionDeadline).toLocaleDateString("en-IE") : "within 14 days"}
+                        </Chip>
                       ) : null}
                     </div>
                   </div>

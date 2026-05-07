@@ -11,6 +11,7 @@ public class FilingWorkflowService(AccountsDbContext db, FinancialStatementsServ
         CroFilingStatus Cro,
         RevenueFilingStatus Revenue,
         List<string> BlockingIssues,
+        List<string> WarningIssues,
         bool ReadyToFile
     );
 
@@ -63,6 +64,7 @@ public class FilingWorkflowService(AccountsDbContext db, FinancialStatementsServ
 
         // Check blocking issues
         var issues = new List<string>();
+        var warnings = new List<string>();
         try
         {
             var readiness = await statementsService.GetReadinessScoreAsync(periodId);
@@ -95,16 +97,16 @@ public class FilingWorkflowService(AccountsDbContext db, FinancialStatementsServ
             .ToListAsync();
 
         foreach (var deadline in overdueDeadlines)
-            issues.Add($"{deadline.DeadlineType} deadline passed on {deadline.DueDate:yyyy-MM-dd} and has not been marked as filed.");
+            warnings.Add($"{deadline.DeadlineType} deadline passed on {deadline.DueDate:yyyy-MM-dd}. Filing can still proceed, but late filing exposure and audit exemption impact must be reviewed.");
 
-        return new FilingWorkflowStatus(croStatus, revStatus, issues, issues.Count == 0);
+        return new FilingWorkflowStatus(croStatus, revStatus, issues, warnings, issues.Count == 0);
     }
 
-    public async Task<CroFilingPackage> UpdateCroStatusAsync(int periodId, FilingStatus status, string? by = null)
+    public async Task<CroFilingPackage> UpdateCroStatusAsync(int companyId, int periodId, FilingStatus status, string? by = null, string? reason = null, string? submissionReference = null)
     {
         var period = await db.AccountingPeriods
             .Include(p => p.CroFilingPackage)
-            .FirstAsync(p => p.Id == periodId);
+            .FirstAsync(p => p.Id == periodId && p.CompanyId == companyId);
 
         var pkg = period.CroFilingPackage;
         if (pkg == null)
@@ -113,18 +115,70 @@ public class FilingWorkflowService(AccountsDbContext db, FinancialStatementsServ
             db.CroFilingPackages.Add(pkg);
         }
 
+        if (status == FilingStatus.Approved)
+        {
+            var statusSnapshot = await GetStatusAsync(companyId, periodId);
+            if (statusSnapshot.BlockingIssues.Count > 0)
+                throw new InvalidOperationException($"Cannot approve CRO filing while blockers remain: {string.Join("; ", statusSnapshot.BlockingIssues.Distinct())}");
+        }
+
+        if (status == FilingStatus.Submitted)
+        {
+            if (pkg.FilingStatus != FilingStatus.Approved)
+                throw new InvalidOperationException("Approve the CRO filing pack before marking it as submitted to CORE.");
+            if (!pkg.AccountsPdfGenerated || !pkg.SignaturePageGenerated)
+                throw new InvalidOperationException("Generate the CRO filing pack and signature page before submission.");
+        }
+
+        if (status == FilingStatus.Accepted)
+        {
+            if (pkg.FilingStatus != FilingStatus.Submitted)
+                throw new InvalidOperationException("Only a submitted CRO filing can be marked as accepted.");
+            if (!pkg.PaymentCompleted)
+                throw new InvalidOperationException("Confirm CORE payment before marking the CRO filing as accepted.");
+        }
+
         pkg.FilingStatus = status;
         if (status == FilingStatus.Approved) { pkg.ApprovedBy = by; pkg.ApprovedAt = DateTime.UtcNow; }
-        if (status == FilingStatus.Submitted) { pkg.SubmittedBy = by; pkg.SubmittedAt = DateTime.UtcNow; }
-        if (status == FilingStatus.CorrectionRequired) { pkg.CorrectionDeadline = DateTime.UtcNow.AddDays(14); }
+        if (status == FilingStatus.Submitted)
+        {
+            pkg.SubmittedBy = by;
+            pkg.SubmittedAt = DateTime.UtcNow;
+            pkg.CroSubmissionReference = string.IsNullOrWhiteSpace(submissionReference) ? pkg.CroSubmissionReference : submissionReference.Trim();
+        }
+        if (status == FilingStatus.CorrectionRequired)
+        {
+            pkg.RejectionReason = string.IsNullOrWhiteSpace(reason) ? "CRO send-back/correction required. Correct and redeliver within 14 days." : reason.Trim();
+            pkg.CorrectionDeadline = DateTime.UtcNow.AddDays(14);
+        }
 
         await db.SaveChangesAsync();
         return pkg;
     }
 
-    public async Task<CroFilingPackage> MarkDocumentGeneratedAsync(int periodId, string documentType)
+    public async Task<CroFilingPackage> ConfirmCroPaymentAsync(int companyId, int periodId, string? by = null)
     {
-        var period = await db.AccountingPeriods.Include(p => p.CroFilingPackage).FirstAsync(p => p.Id == periodId);
+        var period = await db.AccountingPeriods
+            .Include(p => p.CroFilingPackage)
+            .FirstAsync(p => p.Id == periodId && p.CompanyId == companyId);
+
+        var pkg = period.CroFilingPackage
+            ?? throw new InvalidOperationException("Generate and submit the CRO filing pack before confirming payment.");
+
+        if (pkg.FilingStatus != FilingStatus.Submitted && pkg.FilingStatus != FilingStatus.Accepted)
+            throw new InvalidOperationException("CORE payment can only be confirmed after the filing is marked as submitted.");
+
+        pkg.PaymentCompleted = true;
+        if (!string.IsNullOrWhiteSpace(by) && string.IsNullOrWhiteSpace(pkg.SubmittedBy))
+            pkg.SubmittedBy = by.Trim();
+
+        await db.SaveChangesAsync();
+        return pkg;
+    }
+
+    public async Task<CroFilingPackage> MarkDocumentGeneratedAsync(int companyId, int periodId, string documentType)
+    {
+        var period = await db.AccountingPeriods.Include(p => p.CroFilingPackage).FirstAsync(p => p.Id == periodId && p.CompanyId == companyId);
         var pkg = period.CroFilingPackage;
         if (pkg == null)
         {

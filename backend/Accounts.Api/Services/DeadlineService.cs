@@ -113,10 +113,30 @@ public class DeadlineService(AccountsDbContext db)
 
     public static DateOnly MoveToNextWorkingDay(DateOnly date)
     {
-        while (date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday)
+        while (date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday || IsIrishPublicHoliday(date))
             date = date.AddDays(1);
 
         return date;
+    }
+
+    public static bool IsIrishPublicHoliday(DateOnly date)
+    {
+        var year = date.Year;
+        var observedFixedHolidays = new HashSet<DateOnly>
+        {
+            ObservedFixedHoliday(year, 1, 1),
+            ObservedFixedHoliday(year, 3, 17),
+            ObservedFixedHoliday(year, 12, 25),
+            ObservedFixedHoliday(year, 12, 26)
+        };
+
+        return observedFixedHolidays.Contains(date)
+            || date == FirstMonday(year, 2)
+            || date == EasterSunday(year).AddDays(1)
+            || date == FirstMonday(year, 5)
+            || date == FirstMonday(year, 6)
+            || date == FirstMonday(year, 8)
+            || date == LastMonday(year, 10);
     }
 
     /// <summary>
@@ -134,7 +154,7 @@ public class DeadlineService(AccountsDbContext db)
         var hasLostExemption = lateFilings >= 2;
 
         var warning = hasLostExemption
-            ? "AUDIT EXEMPTION LOST: Company has filed late more than once in the past 5 years. Statutory audit is mandatory for the next 2 years under s.22 Companies (Corporate Governance) Act 2024."
+            ? "AUDIT EXEMPTION LOST: Company has filed late more than once in the past 5 years. Statutory audit is mandatory for the next 2 years."
             : isAtRisk
                 ? "WARNING: Company has one late CRO filing in the past 5 years. A second late filing will revoke audit exemption for 2 years."
                 : null;
@@ -162,6 +182,52 @@ public class DeadlineService(AccountsDbContext db)
         };
         db.FilingDeadlines.Add(deadline);
         return deadline;
+    }
+
+    private static DateOnly ObservedFixedHoliday(int year, int month, int day)
+    {
+        var date = new DateOnly(year, month, day);
+        return date.DayOfWeek switch
+        {
+            DayOfWeek.Saturday => date.AddDays(2),
+            DayOfWeek.Sunday => date.AddDays(1),
+            _ => date
+        };
+    }
+
+    private static DateOnly FirstMonday(int year, int month)
+    {
+        var date = new DateOnly(year, month, 1);
+        while (date.DayOfWeek != DayOfWeek.Monday)
+            date = date.AddDays(1);
+        return date;
+    }
+
+    private static DateOnly LastMonday(int year, int month)
+    {
+        var date = new DateOnly(year, month, DateTime.DaysInMonth(year, month));
+        while (date.DayOfWeek != DayOfWeek.Monday)
+            date = date.AddDays(-1);
+        return date;
+    }
+
+    private static DateOnly EasterSunday(int year)
+    {
+        var a = year % 19;
+        var b = year / 100;
+        var c = year % 100;
+        var d = b / 4;
+        var e = b % 4;
+        var f = (b + 8) / 25;
+        var g = (b - f + 1) / 3;
+        var h = (19 * a + b - d - g + 15) % 30;
+        var i = c / 4;
+        var k = c % 4;
+        var l = (32 + 2 * e + 2 * i - h - k) % 7;
+        var m = (a + 11 * h + 22 * l) / 451;
+        var month = (h + l - 7 * m + 114) / 31;
+        var day = ((h + l - 7 * m + 114) % 31) + 1;
+        return new DateOnly(year, month, day);
     }
 }
 

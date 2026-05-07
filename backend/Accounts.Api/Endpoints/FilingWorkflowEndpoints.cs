@@ -28,7 +28,21 @@ public static class FilingWorkflowEndpoints
         {
             try
             {
-                var result = await service.UpdateCroStatusAsync(periodId, input.Status, input.By);
+                var result = await service.UpdateCroStatusAsync(companyId, periodId, input.Status, input.By, input.Reason, input.SubmissionReference);
+                return Results.Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+        });
+
+        // Confirm CORE payment for the annual return
+        group.MapPost("/cro-payment", async (int companyId, int periodId, CroPaymentInput input, FilingWorkflowService service) =>
+        {
+            try
+            {
+                var result = await service.ConfirmCroPaymentAsync(companyId, periodId, input.By);
                 return Results.Ok(result);
             }
             catch (Exception ex)
@@ -42,7 +56,7 @@ public static class FilingWorkflowEndpoints
         {
             try
             {
-                var result = await service.MarkDocumentGeneratedAsync(periodId, input.DocumentType);
+                var result = await service.MarkDocumentGeneratedAsync(companyId, periodId, input.DocumentType);
                 return Results.Ok(result);
             }
             catch (Exception ex)
@@ -67,5 +81,6 @@ public static class FilingWorkflowEndpoints
     }
 }
 
-public record FilingStatusInput(FilingStatus Status, string? By);
+public record FilingStatusInput(FilingStatus Status, string? By, string? Reason, string? SubmissionReference);
 public record MarkGeneratedInput(string DocumentType);
+public record CroPaymentInput(string? By);

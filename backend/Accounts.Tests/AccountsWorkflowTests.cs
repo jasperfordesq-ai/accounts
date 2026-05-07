@@ -540,6 +540,97 @@ public class AccountsWorkflowTests
         Assert.Contains("No active company secretary recorded for CRO accounts certification.", status.BlockingIssues);
     }
 
+    [Fact]
+    public async Task FilingWorkflow_DoesNotApproveCroFilingWhileBlockersRemain()
+    {
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var statements = new FinancialStatementsService(db);
+        var ixbrl = new IxbrlService(db, statements);
+        var workflow = new FilingWorkflowService(db, statements, ixbrl);
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            workflow.UpdateCroStatusAsync(period.CompanyId, period.Id, FilingStatus.Approved, "Reviewer"));
+
+        Assert.Contains("Cannot approve CRO filing while blockers remain", error.Message);
+    }
+
+    [Fact]
+    public async Task FilingWorkflow_TreatsOverdueDeadlinesAsWarningsNotReadinessBlockers()
+    {
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        db.FilingDeadlines.Add(new FilingDeadline
+        {
+            CompanyId = period.CompanyId,
+            PeriodId = period.Id,
+            DeadlineType = DeadlineType.CRO,
+            DueDate = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-1)
+        });
+        await db.SaveChangesAsync();
+
+        var statements = new FinancialStatementsService(db);
+        var ixbrl = new IxbrlService(db, statements);
+        var workflow = new FilingWorkflowService(db, statements, ixbrl);
+
+        var status = await workflow.GetStatusAsync(period.CompanyId, period.Id);
+
+        Assert.Contains(status.WarningIssues, w => w.Contains("CRO deadline passed"));
+        Assert.DoesNotContain(status.BlockingIssues, b => b.Contains("CRO deadline passed"));
+    }
+
+    [Fact]
+    public async Task FilingWorkflow_RequiresPaymentBeforeCroAcceptance()
+    {
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        db.FilingRegimes.Add(new FilingRegime
+        {
+            PeriodId = period.Id,
+            ElectedRegime = ElectedRegime.Micro,
+            CanUseMicro = true,
+            CanFileAbridged = true,
+            AuditExempt = true
+        });
+        db.NotesDisclosures.Add(new NotesDisclosure
+        {
+            PeriodId = period.Id,
+            NoteNumber = 1,
+            Title = "Approval of Financial Statements",
+            Content = "Approved by the directors.",
+            IsRequired = true,
+            IsIncluded = true
+        });
+        await db.SaveChangesAsync();
+        await MakePeriodReadyForCroDocumentsAsync(db, period);
+
+        var statements = new FinancialStatementsService(db);
+        var ixbrl = new IxbrlService(db, statements);
+        var workflow = new FilingWorkflowService(db, statements, ixbrl);
+        await workflow.MarkDocumentGeneratedAsync(period.CompanyId, period.Id, "accounts");
+        await workflow.MarkDocumentGeneratedAsync(period.CompanyId, period.Id, "signature");
+        await workflow.UpdateCroStatusAsync(period.CompanyId, period.Id, FilingStatus.Approved, "Reviewer");
+        await workflow.UpdateCroStatusAsync(period.CompanyId, period.Id, FilingStatus.Submitted, "Reviewer");
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            workflow.UpdateCroStatusAsync(period.CompanyId, period.Id, FilingStatus.Accepted, "Reviewer"));
+        Assert.Contains("Confirm CORE payment", error.Message);
+
+        await workflow.ConfirmCroPaymentAsync(period.CompanyId, period.Id, "Reviewer");
+        var accepted = await workflow.UpdateCroStatusAsync(period.CompanyId, period.Id, FilingStatus.Accepted, "Reviewer");
+
+        Assert.Equal(FilingStatus.Accepted, accepted.FilingStatus);
+        Assert.True(accepted.PaymentCompleted);
+    }
+
+    [Fact]
+    public void Deadline_MoveToNextWorkingDay_SkipsIrishPublicHolidays()
+    {
+        Assert.Equal(new DateOnly(2026, 3, 18), DeadlineService.MoveToNextWorkingDay(new DateOnly(2026, 3, 17)));
+        Assert.Equal(new DateOnly(2026, 4, 7), DeadlineService.MoveToNextWorkingDay(new DateOnly(2026, 4, 6)));
+        Assert.Equal(new DateOnly(2026, 12, 29), DeadlineService.MoveToNextWorkingDay(new DateOnly(2026, 12, 25)));
+    }
+
     private static AccountsDbContext CreateDbContext()
     {
         var options = new DbContextOptionsBuilder<AccountsDbContext>()

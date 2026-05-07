@@ -1204,6 +1204,7 @@ export interface FilingWorkflowStatus {
   cro: CroFilingStatus;
   revenue: RevenueFilingStatus;
   blockingIssues: string[];
+  warningIssues: string[];
   readyToFile: boolean;
 }
 
@@ -1228,11 +1229,18 @@ export interface RevenueFilingStatus {
 export const getFilingWorkflowStatus = (companyId: number, periodId: number) =>
   apiFetch<FilingWorkflowStatus>(`/api/companies/${companyId}/periods/${periodId}/filing/status`);
 
-export const updateCroFilingStatus = (companyId: number, periodId: number, data: { status: string; by?: string }) =>
+export const updateCroFilingStatus = (
+  companyId: number,
+  periodId: number,
+  data: { status: string; by?: string; reason?: string; submissionReference?: string }
+) =>
   apiFetch<unknown>(`/api/companies/${companyId}/periods/${periodId}/filing/cro-status`, { method: "PUT", body: JSON.stringify(data) });
 
 export const markDocumentGenerated = (companyId: number, periodId: number, documentType: string) =>
   apiFetch<unknown>(`/api/companies/${companyId}/periods/${periodId}/filing/mark-generated`, { method: "POST", body: JSON.stringify({ documentType }) });
+
+export const confirmCroPayment = (companyId: number, periodId: number, by?: string) =>
+  apiFetch<unknown>(`/api/companies/${companyId}/periods/${periodId}/filing/cro-payment`, { method: "POST", body: JSON.stringify({ by }) });
 
 export const validateIxbrl = (companyId: number, periodId: number) =>
   apiFetch<RevenueFilingStatus>(`/api/companies/${companyId}/periods/${periodId}/filing/validate-ixbrl`, { method: "POST" });
