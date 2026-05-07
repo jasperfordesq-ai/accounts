@@ -1,4 +1,5 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
+const API_KEY = process.env.NEXT_PUBLIC_ACCOUNTS_API_KEY || "";
 
 // --- Core fetch with retry, timeout, structured errors ---
 
@@ -70,7 +71,11 @@ async function apiFetch<T>(
       const timeoutId = setTimeout(() => controller.abort(), timeout);
 
       const res = await fetch(`${API_BASE}${path}`, {
-        headers: { "Content-Type": "application/json", ...fetchOptions?.headers },
+        headers: {
+          "Content-Type": "application/json",
+          ...(API_KEY ? { "X-Accounts-Api-Key": API_KEY } : {}),
+          ...fetchOptions?.headers,
+        },
         signal: controller.signal,
         ...fetchOptions,
       });
@@ -688,7 +693,10 @@ export const uploadBankCsv = async (
         method: "POST",
         body: formData,
         signal: controller.signal,
-        headers: reviewer ? { "X-Reviewer": reviewer } : undefined,
+        headers: {
+          ...(API_KEY ? { "X-Accounts-Api-Key": API_KEY } : {}),
+          ...(reviewer ? { "X-Reviewer": reviewer } : {}),
+        },
       },
     );
     clearTimeout(timeoutId);

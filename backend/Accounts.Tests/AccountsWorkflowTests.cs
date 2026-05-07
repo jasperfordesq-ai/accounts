@@ -2,6 +2,7 @@ using Accounts.Api.Data;
 using Accounts.Api.Entities;
 using Accounts.Api.Rules;
 using Accounts.Api.Services;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.FileProviders;
@@ -699,7 +700,10 @@ public class AccountsWorkflowTests
             {
                 AutoMigrateOnStartup = true,
                 SeedDemoData = true
-            }));
+            }),
+            new ApiAccessService(
+                Options.Create(new ApiAccessConfig { Enabled = false, RequireInProduction = true }),
+                new TestEnvironment("Production")));
 
         var failures = service.Validate();
 
@@ -707,6 +711,7 @@ public class AccountsWorkflowTests
         Assert.Contains(failures, f => f.Contains("SeedDemoData"));
         Assert.Contains(failures, f => f.Contains("development database password"));
         Assert.Contains(failures, f => f.Contains("localhost"));
+        Assert.Contains(failures, f => f.Contains("ApiAccess:Enabled"));
     }
 
     [Fact]
@@ -726,9 +731,69 @@ public class AccountsWorkflowTests
             {
                 AutoMigrateOnStartup = false,
                 SeedDemoData = false
-            }));
+            }),
+            new ApiAccessService(
+                Options.Create(new ApiAccessConfig
+                {
+                    Enabled = true,
+                    RequireInProduction = true,
+                    Keys =
+                    [
+                        new ApiAccessKeyConfig
+                        {
+                            Name = "Production firm",
+                            KeyHash = ApiAccessService.HashKey("real-secret")
+                        }
+                    ]
+                }),
+                new TestEnvironment("Production")));
 
         Assert.Empty(service.Validate());
+    }
+
+    [Fact]
+    public void ApiAccess_AllowsKeyForConfiguredCompanyOnly()
+    {
+        var service = new ApiAccessService(
+            Options.Create(new ApiAccessConfig
+            {
+                Enabled = true,
+                Keys =
+                [
+                    new ApiAccessKeyConfig
+                    {
+                        Name = "Firm A",
+                        KeyHash = ApiAccessService.HashKey("secret-a"),
+                        AllowedCompanyIds = [10]
+                    }
+                ]
+            }),
+            new TestEnvironment("Production"));
+
+        var allowed = service.Authorize("secret-a", new PathString("/api/companies/10/periods"));
+        var denied = service.Authorize("secret-a", new PathString("/api/companies/11/periods"));
+        var invalid = service.Authorize("wrong", new PathString("/api/companies/10/periods"));
+
+        Assert.True(allowed.IsAllowed);
+        Assert.False(denied.IsAllowed);
+        Assert.False(invalid.IsAllowed);
+        Assert.Contains("not authorised", denied.DenialReason);
+    }
+
+    [Fact]
+    public void ApiAccess_RejectsDevelopmentKeysInProduction()
+    {
+        var service = new ApiAccessService(
+            Options.Create(new ApiAccessConfig
+            {
+                Enabled = true,
+                Keys = [new ApiAccessKeyConfig { Name = "Dev key", DevelopmentKey = "plain-text" }]
+            }),
+            new TestEnvironment("Production"));
+
+        var failures = service.ValidateConfiguration();
+
+        Assert.Contains(failures, f => f.Contains("DevelopmentKey"));
     }
 
     private static AccountsDbContext CreateDbContext()

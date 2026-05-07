@@ -3,7 +3,11 @@ using Microsoft.Extensions.Options;
 
 namespace Accounts.Api.Services;
 
-public class ProductionSafetyService(IHostEnvironment environment, IConfiguration configuration, IOptions<DatabaseStartupConfig> databaseStartup)
+public class ProductionSafetyService(
+    IHostEnvironment environment,
+    IConfiguration configuration,
+    IOptions<DatabaseStartupConfig> databaseStartup,
+    ApiAccessService apiAccess)
 {
     public IReadOnlyList<string> Validate()
     {
@@ -28,7 +32,9 @@ public class ProductionSafetyService(IHostEnvironment environment, IConfiguratio
             failures.Add("AllowedOrigins must be explicitly configured in production.");
 
         if (allowedOrigins.Any(o => o.Contains("localhost", StringComparison.OrdinalIgnoreCase) || o.Contains("127.0.0.1", StringComparison.OrdinalIgnoreCase)))
-            failures.Add("AllowedOrigins contains localhost in production. Configure the real application origin.");
+        failures.Add("AllowedOrigins contains localhost in production. Configure the real application origin.");
+
+        failures.AddRange(apiAccess.ValidateConfiguration());
 
         return failures;
     }

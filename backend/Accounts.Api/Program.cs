@@ -31,6 +31,7 @@ builder.Services.AddDbContext<AccountsDbContext>(options =>
 builder.Services.Configure<SizeThresholdConfig>(builder.Configuration.GetSection("SizeThresholds"));
 builder.Services.Configure<ImportLimitConfig>(builder.Configuration.GetSection("ImportLimits"));
 builder.Services.Configure<DatabaseStartupConfig>(builder.Configuration.GetSection("DatabaseStartup"));
+builder.Services.Configure<ApiAccessConfig>(builder.Configuration.GetSection("ApiAccess"));
 
 var importLimits = builder.Configuration.GetSection("ImportLimits").Get<ImportLimitConfig>() ?? new ImportLimitConfig();
 builder.Services.Configure<FormOptions>(options =>
@@ -74,6 +75,7 @@ builder.Services.AddScoped<DirectorLoanComplianceService>();
 builder.Services.AddScoped<DirectorsReportService>();
 builder.Services.AddScoped<CharityReportingService>();
 builder.Services.AddScoped<FilingWorkflowService>();
+builder.Services.AddSingleton<ApiAccessService>();
 builder.Services.AddSingleton<ProductionSafetyService>();
 
 // CORS
@@ -123,6 +125,7 @@ using (var scope = app.Services.CreateScope())
 app.UseMiddleware<Accounts.Api.Middleware.SecurityHeadersMiddleware>();
 app.UseRateLimiter();
 app.UseCors();
+app.UseMiddleware<Accounts.Api.Middleware.ApiAccessMiddleware>();
 app.UseMiddleware<Accounts.Api.Middleware.ExceptionMiddleware>();
 if (app.Environment.IsDevelopment())
 {
