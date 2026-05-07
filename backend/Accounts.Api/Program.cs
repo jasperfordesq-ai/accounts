@@ -1,5 +1,7 @@
 using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Http.Features;
 using Accounts.Api.Data;
 using Accounts.Api.Endpoints;
 using Accounts.Api.Rules;
@@ -28,6 +30,32 @@ builder.Services.AddDbContext<AccountsDbContext>(options =>
 // Rules engine config
 builder.Services.Configure<SizeThresholdConfig>(builder.Configuration.GetSection("SizeThresholds"));
 builder.Services.Configure<ImportLimitConfig>(builder.Configuration.GetSection("ImportLimits"));
+builder.Services.Configure<DatabaseStartupConfig>(builder.Configuration.GetSection("DatabaseStartup"));
+
+var importLimits = builder.Configuration.GetSection("ImportLimits").Get<ImportLimitConfig>() ?? new ImportLimitConfig();
+builder.Services.Configure<FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = importLimits.MaxCsvBytes;
+});
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestBodySize = importLimits.MaxCsvBytes + 1024 * 1024;
+});
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    var permitLimit = builder.Configuration.GetValue("RateLimits:PermitLimitPerMinute", 300);
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = permitLimit,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                AutoReplenishment = true
+            }));
+});
 
 // Services
 builder.Services.AddScoped<SizeClassificationService>();
@@ -46,6 +74,7 @@ builder.Services.AddScoped<DirectorLoanComplianceService>();
 builder.Services.AddScoped<DirectorsReportService>();
 builder.Services.AddScoped<CharityReportingService>();
 builder.Services.AddScoped<FilingWorkflowService>();
+builder.Services.AddSingleton<ProductionSafetyService>();
 
 // CORS
 builder.Services.AddCors(options =>
@@ -74,16 +103,25 @@ builder.Services.AddSwaggerGen(c =>
 
 var app = builder.Build();
 
-// Auto-migrate on startup
+app.Services.GetRequiredService<ProductionSafetyService>().ThrowIfUnsafe();
+
+// Database startup tasks. In production these must be explicitly opted into.
 using (var scope = app.Services.CreateScope())
 {
-    var db = scope.ServiceProvider.GetRequiredService<AccountsDbContext>();
-    await db.Database.MigrateAsync();
-    await SeedData.SeedAsync(db);
+    var dbStartup = scope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<DatabaseStartupConfig>>().Value;
+    if (dbStartup.AutoMigrateOnStartup)
+    {
+        var db = scope.ServiceProvider.GetRequiredService<AccountsDbContext>();
+        await db.Database.MigrateAsync();
+
+        if (dbStartup.SeedDemoData)
+            await SeedData.SeedAsync(db);
+    }
 }
 
 // Middleware
 app.UseMiddleware<Accounts.Api.Middleware.SecurityHeadersMiddleware>();
+app.UseRateLimiter();
 app.UseCors();
 app.UseMiddleware<Accounts.Api.Middleware.ExceptionMiddleware>();
 if (app.Environment.IsDevelopment())

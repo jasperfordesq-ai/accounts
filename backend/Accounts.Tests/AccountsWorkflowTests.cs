@@ -3,6 +3,9 @@ using Accounts.Api.Entities;
 using Accounts.Api.Rules;
 using Accounts.Api.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using QuestPDF.Infrastructure;
 using System.Text;
@@ -679,6 +682,55 @@ public class AccountsWorkflowTests
         Assert.Contains("too many rows", error.Message);
     }
 
+    [Fact]
+    public void ProductionSafety_BlocksDemoDatabaseStartupInProduction()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=accounts_dev",
+                ["AllowedOrigins:0"] = "http://localhost:3000"
+            })
+            .Build();
+        var service = new ProductionSafetyService(
+            new TestEnvironment("Production"),
+            config,
+            Options.Create(new DatabaseStartupConfig
+            {
+                AutoMigrateOnStartup = true,
+                SeedDemoData = true
+            }));
+
+        var failures = service.Validate();
+
+        Assert.Contains(failures, f => f.Contains("AutoMigrateOnStartup"));
+        Assert.Contains(failures, f => f.Contains("SeedDemoData"));
+        Assert.Contains(failures, f => f.Contains("development database password"));
+        Assert.Contains(failures, f => f.Contains("localhost"));
+    }
+
+    [Fact]
+    public void ProductionSafety_AllowsDeliberateProductionConfiguration()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password",
+                ["AllowedOrigins:0"] = "https://accounts.example.ie"
+            })
+            .Build();
+        var service = new ProductionSafetyService(
+            new TestEnvironment("Production"),
+            config,
+            Options.Create(new DatabaseStartupConfig
+            {
+                AutoMigrateOnStartup = false,
+                SeedDemoData = false
+            }));
+
+        Assert.Empty(service.Validate());
+    }
+
     private static AccountsDbContext CreateDbContext()
     {
         var options = new DbContextOptionsBuilder<AccountsDbContext>()
@@ -829,4 +881,12 @@ public class AccountsWorkflowTests
         ConfirmedBy = "Accounts reviewer",
         Note = "Nil position reviewed."
     };
+
+    private sealed class TestEnvironment(string environmentName) : IHostEnvironment
+    {
+        public string EnvironmentName { get; set; } = environmentName;
+        public string ApplicationName { get; set; } = "Accounts.Tests";
+        public string ContentRootPath { get; set; } = Directory.GetCurrentDirectory();
+        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
+    }
 }
