@@ -27,6 +27,7 @@ builder.Services.AddDbContext<AccountsDbContext>(options =>
 
 // Rules engine config
 builder.Services.Configure<SizeThresholdConfig>(builder.Configuration.GetSection("SizeThresholds"));
+builder.Services.Configure<ImportLimitConfig>(builder.Configuration.GetSection("ImportLimits"));
 
 // Services
 builder.Services.AddScoped<SizeClassificationService>();
@@ -82,6 +83,7 @@ using (var scope = app.Services.CreateScope())
 }
 
 // Middleware
+app.UseMiddleware<Accounts.Api.Middleware.SecurityHeadersMiddleware>();
 app.UseCors();
 app.UseMiddleware<Accounts.Api.Middleware.ExceptionMiddleware>();
 if (app.Environment.IsDevelopment())

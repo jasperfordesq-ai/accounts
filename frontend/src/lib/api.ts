@@ -674,6 +674,7 @@ export const uploadBankCsv = async (
   bankAccountId: number,
   periodId: number,
   file: File,
+  reviewer?: string,
 ) => {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 min for uploads
@@ -683,7 +684,12 @@ export const uploadBankCsv = async (
     formData.append("file", file);
     const res = await fetch(
       `${API_BASE}/api/companies/${companyId}/bank-accounts/${bankAccountId}/import?periodId=${periodId}`,
-      { method: "POST", body: formData, signal: controller.signal },
+      {
+        method: "POST",
+        body: formData,
+        signal: controller.signal,
+        headers: reviewer ? { "X-Reviewer": reviewer } : undefined,
+      },
     );
     clearTimeout(timeoutId);
     if (!res.ok) {
@@ -1208,6 +1214,19 @@ export interface FilingWorkflowStatus {
   readyToFile: boolean;
 }
 
+export interface AuditLogEntry {
+  id: number;
+  companyId?: number;
+  periodId?: number;
+  entityType: string;
+  entityId: number;
+  action: string;
+  oldValueJson?: string;
+  newValueJson?: string;
+  userId?: string;
+  timestamp: string;
+}
+
 export interface CroFilingStatus {
   status: string;
   accountsPdfReady: boolean;
@@ -1244,3 +1263,9 @@ export const confirmCroPayment = (companyId: number, periodId: number, by?: stri
 
 export const validateIxbrl = (companyId: number, periodId: number) =>
   apiFetch<RevenueFilingStatus>(`/api/companies/${companyId}/periods/${periodId}/filing/validate-ixbrl`, { method: "POST" });
+
+export const getAuditLog = (companyId: number, periodId?: number, page = 1, pageSize = 20) => {
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+  if (periodId) params.set("periodId", String(periodId));
+  return apiFetch<{ total: number; items: AuditLogEntry[] }>(`/api/companies/${companyId}/audit-log?${params}`);
+};

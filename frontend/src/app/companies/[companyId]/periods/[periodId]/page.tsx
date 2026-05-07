@@ -72,6 +72,7 @@ import {
   getTransactionRules,
   createTransactionRule,
   deleteTransactionRule,
+  getAuditLog,
   type Company,
   type AccountingPeriod,
   type YearEndSummary,
@@ -86,6 +87,7 @@ import {
   type AccountCategory,
   type OpeningBalance,
   type TransactionRule,
+  type AuditLogEntry,
 } from "@/lib/api";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { PeriodWorkspaceSkeleton } from "@/components/Skeleton";
@@ -137,6 +139,8 @@ export default function PeriodWorkspacePage({
   const [savingOpeningBalance, setSavingOpeningBalance] = useState(false);
   const [deletingOpeningCategoryId, setDeletingOpeningCategoryId] = useState<number | null>(null);
   const [transactionRules, setTransactionRules] = useState<TransactionRule[]>([]);
+  const [auditLog, setAuditLog] = useState<AuditLogEntry[]>([]);
+  const [auditTotal, setAuditTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reviewerName, setReviewerName] = useState("Accounts reviewer");
@@ -245,6 +249,11 @@ export default function PeriodWorkspacePage({
         const rules = await getTransactionRules(cId);
         setTransactionRules(rules);
       } catch {}
+      try {
+        const audit = await getAuditLog(cId, pId, 1, 12);
+        setAuditLog(audit.items);
+        setAuditTotal(audit.total);
+      } catch {}
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load data");
     } finally {
@@ -329,7 +338,7 @@ export default function PeriodWorkspacePage({
     setUploadError(null);
     setUploadResult(null);
     try {
-      const result = await uploadBankCsv(cId, Number(selectedBankAccountId), pId, file);
+      const result = await uploadBankCsv(cId, Number(selectedBankAccountId), pId, file, getReviewerName());
       setUploadResult({
         rowsImported: result.rowsImported ?? result.imported ?? 0,
         duplicatesSkipped: result.duplicatesSkipped ?? result.duplicates ?? 0,
@@ -337,6 +346,7 @@ export default function PeriodWorkspacePage({
       });
       toast.success(`Imported ${result.rowsImported ?? result.imported ?? 0} transactions`);
       await loadTransactions();
+      await loadData();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Upload failed";
       setUploadError(msg);
@@ -531,6 +541,7 @@ export default function PeriodWorkspacePage({
       await approveAdjustment(cId, pId, id, getReviewerName());
       toast.success("Adjustment approved");
       await loadAdjustments();
+      await loadData();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to approve adjustment");
     } finally {
@@ -2244,6 +2255,50 @@ export default function PeriodWorkspacePage({
                   <ChecklistItem label="CRO accounts PDF generated" done={filingStatus?.cro.accountsPdfReady ?? false} />
                   <ChecklistItem label="CRO filing pack and signature page generated" done={(filingStatus?.cro.accountsPdfReady ?? false) && (filingStatus?.cro.signaturePageReady ?? false)} />
                 </div>
+              </Card.Content>
+            </Card>
+
+            <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
+              <Card.Header>
+                <Card.Title className="text-gray-900 dark:text-gray-100">Period Audit Trail</Card.Title>
+                <Card.Description>Recent review actions and evidence changes for this period.</Card.Description>
+              </Card.Header>
+              <Card.Content>
+                {auditLog.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-gray-300 dark:border-neutral-700 px-4 py-6 text-sm text-gray-500 dark:text-gray-400">
+                    No audit events recorded for this period yet.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-200 text-left text-xs uppercase text-gray-500 dark:border-neutral-700 dark:text-gray-400">
+                          <th className="py-2 pr-4">Time</th>
+                          <th className="py-2 pr-4">Action</th>
+                          <th className="py-2 pr-4">Record</th>
+                          <th className="py-2 pr-4">Reviewer</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {auditLog.map((entry) => (
+                          <tr key={entry.id} className="border-b border-gray-100 dark:border-neutral-800">
+                            <td className="py-2 pr-4 whitespace-nowrap text-gray-600 dark:text-gray-300">
+                              {new Date(entry.timestamp).toLocaleString("en-IE", { dateStyle: "medium", timeStyle: "short" })}
+                            </td>
+                            <td className="py-2 pr-4 font-medium text-gray-900 dark:text-gray-100">{entry.action}</td>
+                            <td className="py-2 pr-4 text-gray-600 dark:text-gray-300">{entry.entityType} #{entry.entityId}</td>
+                            <td className="py-2 pr-4 text-gray-600 dark:text-gray-300">{entry.userId || "System"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {auditTotal > auditLog.length && (
+                      <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+                        Showing latest {auditLog.length} of {auditTotal} audit events.
+                      </p>
+                    )}
+                  </div>
+                )}
               </Card.Content>
             </Card>
 

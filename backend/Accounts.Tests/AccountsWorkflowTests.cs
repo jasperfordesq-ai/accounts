@@ -5,6 +5,7 @@ using Accounts.Api.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using QuestPDF.Infrastructure;
+using System.Text;
 using Xunit;
 
 namespace Accounts.Tests;
@@ -629,6 +630,53 @@ public class AccountsWorkflowTests
         Assert.Equal(new DateOnly(2026, 3, 18), DeadlineService.MoveToNextWorkingDay(new DateOnly(2026, 3, 17)));
         Assert.Equal(new DateOnly(2026, 4, 7), DeadlineService.MoveToNextWorkingDay(new DateOnly(2026, 4, 6)));
         Assert.Equal(new DateOnly(2026, 12, 29), DeadlineService.MoveToNextWorkingDay(new DateOnly(2026, 12, 25)));
+    }
+
+    [Fact]
+    public async Task ImportCsv_RejectsBankAccountFromAnotherCompanyPeriod()
+    {
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var otherPeriod = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var bankAccount = new BankAccount
+        {
+            CompanyId = period.CompanyId,
+            Name = "Current Account",
+            OpeningBalance = 0m
+        };
+        db.BankAccounts.Add(bankAccount);
+        await db.SaveChangesAsync();
+
+        using var csv = new MemoryStream(Encoding.UTF8.GetBytes("Date,Description,Amount\n01/01/2026,Receipt,100\n"));
+        var service = new ImportService(db, Options.Create(new ImportLimitConfig()));
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.ImportCsvAsync(bankAccount.Id, otherPeriod.Id, csv, "bank.csv"));
+
+        Assert.Contains("does not belong to the company", error.Message);
+    }
+
+    [Fact]
+    public async Task ImportCsv_EnforcesConfiguredRowLimit()
+    {
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var bankAccount = new BankAccount
+        {
+            CompanyId = period.CompanyId,
+            Name = "Current Account",
+            OpeningBalance = 0m
+        };
+        db.BankAccounts.Add(bankAccount);
+        await db.SaveChangesAsync();
+
+        using var csv = new MemoryStream(Encoding.UTF8.GetBytes("Date,Description,Amount\n01/01/2026,Receipt,100\n02/01/2026,Receipt,200\n"));
+        var service = new ImportService(db, Options.Create(new ImportLimitConfig { MaxRows = 1 }));
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.ImportCsvAsync(bankAccount.Id, period.Id, csv, "bank.csv"));
+
+        Assert.Contains("too many rows", error.Message);
     }
 
     private static AccountsDbContext CreateDbContext()

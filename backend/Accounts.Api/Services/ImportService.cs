@@ -3,14 +3,18 @@ using System.Security.Cryptography;
 using System.Text;
 using Accounts.Api.Data;
 using Accounts.Api.Entities;
+using Accounts.Api.Rules;
 using CsvHelper;
 using CsvHelper.Configuration;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace Accounts.Api.Services;
 
-public class ImportService(AccountsDbContext db)
+public class ImportService(AccountsDbContext db, IOptions<ImportLimitConfig>? importLimits = null)
 {
+    private readonly ImportLimitConfig _limits = importLimits?.Value ?? new ImportLimitConfig();
+
     public record ImportResult(int TotalRows, int ImportedRows, int DuplicatesSkipped, int AutoCategorised, List<string> Warnings);
 
     public record ColumnMapping(int DateColumn, int DescriptionColumn, int AmountColumn, int? BalanceColumn, int? ReferenceColumn, string DateFormat = "dd/MM/yyyy");
@@ -29,16 +33,30 @@ public class ImportService(AccountsDbContext db)
 
     public async Task<ImportResult> ImportCsvAsync(int bankAccountId, int periodId, Stream csvStream, string filename, ColumnMapping? mapping = null)
     {
+        if (csvStream.CanSeek && csvStream.Length > _limits.MaxCsvBytes)
+            throw new InvalidOperationException($"CSV file is too large. Maximum allowed size is {_limits.MaxCsvBytes / 1024 / 1024} MB.");
+
         var bankAccount = await db.BankAccounts.FindAsync(bankAccountId)
             ?? throw new InvalidOperationException("Bank account not found");
+        var period = await db.AccountingPeriods.FindAsync(periodId)
+            ?? throw new InvalidOperationException("Accounting period not found");
+
+        if (bankAccount.CompanyId != period.CompanyId)
+            throw new InvalidOperationException("Bank account does not belong to the company for this accounting period.");
 
         // Read all lines
         using var reader = new StreamReader(csvStream);
         var content = await reader.ReadToEndAsync();
+        if (Encoding.UTF8.GetByteCount(content) > _limits.MaxCsvBytes)
+            throw new InvalidOperationException($"CSV file is too large. Maximum allowed size is {_limits.MaxCsvBytes / 1024 / 1024} MB.");
+
         var lines = content.Split('\n', StringSplitOptions.RemoveEmptyEntries);
 
         if (lines.Length < 2)
             return new ImportResult(0, 0, 0, 0, ["File is empty or has no data rows"]);
+
+        if (lines.Length - 1 > _limits.MaxRows)
+            throw new InvalidOperationException($"CSV has too many rows. Maximum allowed data rows is {_limits.MaxRows:N0}.");
 
         // Auto-detect format if no mapping provided
         mapping ??= DetectFormat(lines[0]).Mapping;

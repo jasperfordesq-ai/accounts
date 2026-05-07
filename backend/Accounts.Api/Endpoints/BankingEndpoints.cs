@@ -1,7 +1,9 @@
 using Accounts.Api.Data;
 using Accounts.Api.Entities;
+using Accounts.Api.Rules;
 using Accounts.Api.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace Accounts.Api.Endpoints;
 
@@ -46,15 +48,35 @@ public static class BankingEndpoints
         });
 
         // CSV Import
-        banks.MapPost("/{bankAccountId:int}/import", async (int companyId, int bankAccountId, int periodId, HttpRequest request, ImportService importService) =>
+        banks.MapPost("/{bankAccountId:int}/import", async (int companyId, int bankAccountId, int periodId, HttpRequest request, ImportService importService, AuditService auditService, IOptions<ImportLimitConfig> importLimits) =>
         {
             if (!request.HasFormContentType) return Results.BadRequest(new { error = "Expected multipart form data" });
             var form = await request.ReadFormAsync();
             var file = form.Files.FirstOrDefault();
             if (file == null) return Results.BadRequest(new { error = "No file uploaded" });
+            var limits = importLimits.Value;
+            var extension = Path.GetExtension(file.FileName);
+            if (string.IsNullOrWhiteSpace(extension) || !limits.AllowedExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase))
+                return Results.BadRequest(new { error = "Only CSV bank statement files are accepted." });
+            if (file.Length <= 0)
+                return Results.BadRequest(new { error = "Uploaded file is empty." });
+            if (file.Length > limits.MaxCsvBytes)
+                return Results.BadRequest(new { error = $"CSV file is too large. Maximum allowed size is {limits.MaxCsvBytes / 1024 / 1024} MB." });
+            if (!string.IsNullOrWhiteSpace(file.ContentType) && !limits.AllowedContentTypes.Contains(file.ContentType, StringComparer.OrdinalIgnoreCase))
+                return Results.BadRequest(new { error = $"Unsupported upload content type '{file.ContentType}'. Upload a CSV export from the bank." });
 
             using var stream = file.OpenReadStream();
             var result = await importService.ImportCsvAsync(bankAccountId, periodId, stream, file.FileName);
+            await auditService.LogAsync(companyId, periodId, "ImportBatch", bankAccountId, "BankCsvImported", null, new
+            {
+                file.FileName,
+                file.Length,
+                result.TotalRows,
+                result.ImportedRows,
+                result.DuplicatesSkipped,
+                result.AutoCategorised,
+                WarningCount = result.Warnings.Count
+            }, request.Headers["X-Reviewer"].FirstOrDefault());
             return Results.Ok(result);
         }).DisableAntiforgery();
 
