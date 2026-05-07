@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { getCompanies, getUpcomingDeadline, type Company, type FilingDeadline } from "@/lib/api";
 import { DashboardSkeleton } from "@/components/Skeleton";
+import { formatCompanyType, formatDateIE } from "@/lib/format";
 
 export default function Dashboard() {
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -60,7 +61,8 @@ export default function Dashboard() {
         c.legalName?.toLowerCase().includes(q) ||
         c.tradingName?.toLowerCase().includes(q) ||
         c.croNumber?.toLowerCase().includes(q) ||
-        c.companyType?.toLowerCase().includes(q)
+        c.companyType?.toLowerCase().includes(q) ||
+        formatCompanyType(c.companyType).toLowerCase().includes(q)
     );
   }, [companies, search]);
 
@@ -272,7 +274,7 @@ export default function Dashboard() {
 
                   <div className="flex flex-wrap items-center gap-2">
                     <Chip size="sm" variant="soft" color="default">
-                      {company.companyType}
+                      {formatCompanyType(company.companyType)}
                     </Chip>
                     {company.isTrading && (
                       <Chip size="sm" variant="soft" color="success">
@@ -306,7 +308,7 @@ export default function Dashboard() {
                       >
                         <Clock className="w-3 h-3" />
                         {deadlines[company.id]!.deadlineType} due{" "}
-                        {new Date(deadlines[company.id]!.dueDate).toLocaleDateString("en-IE")}
+                        {formatDateIE(deadlines[company.id]!.dueDate)}
                       </Chip>
                     )}
                   </div>

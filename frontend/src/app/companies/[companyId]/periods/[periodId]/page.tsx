@@ -32,6 +32,7 @@ import {
   Eye,
   Shield,
   Heart,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -47,6 +48,7 @@ import {
   createBankAccount,
   getTransactions,
   categoriseTransaction,
+  bulkCategoriseTransactions,
   getAdjustments,
   getAdjustmentSummary,
   generateAdjustments,
@@ -63,6 +65,9 @@ import {
   getSection307Note,
   getCategories,
   seedCategories,
+  getOpeningBalances,
+  saveOpeningBalance,
+  deleteOpeningBalance,
   getTransactionRules,
   createTransactionRule,
   deleteTransactionRule,
@@ -78,12 +83,14 @@ import {
   type FilingDeadline,
   type AuditExemptionJeopardy,
   type AccountCategory,
+  type OpeningBalance,
   type TransactionRule,
 } from "@/lib/api";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { PeriodWorkspaceSkeleton } from "@/components/Skeleton";
 import { MetricStrip, ReviewPanel, WorkbenchHeader, WorkflowRail, type WorkflowItem } from "@/components/workbench";
 import { getReviewerName } from "@/lib/reviewer";
+import { formatPeriodRange } from "@/lib/format";
 
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("en-IE", {
@@ -119,11 +126,22 @@ export default function PeriodWorkspacePage({
   const [jeopardy, setJeopardy] = useState<AuditExemptionJeopardy | null>(null);
   const [section307Note, setSection307Note] = useState<string | null>(null);
   const [categories, setCategories] = useState<AccountCategory[]>([]);
+  const [openingBalances, setOpeningBalances] = useState<OpeningBalance[]>([]);
+  const [openingBalanceForm, setOpeningBalanceForm] = useState({
+    categoryId: "",
+    side: "debit",
+    amount: "",
+    sourceNote: "",
+  });
+  const [savingOpeningBalance, setSavingOpeningBalance] = useState(false);
+  const [deletingOpeningCategoryId, setDeletingOpeningCategoryId] = useState<number | null>(null);
   const [transactionRules, setTransactionRules] = useState<TransactionRule[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reviewerName, setReviewerName] = useState("Accounts reviewer");
   const [generatingAdj, setGeneratingAdj] = useState(false);
   const [validatingIxbrl, setValidatingIxbrl] = useState(false);
+  const [downloadingDocument, setDownloadingDocument] = useState<string | null>(null);
 
   // Import tab state
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -147,6 +165,9 @@ export default function PeriodWorkspacePage({
   const [txFilterStatus, setTxFilterStatus] = useState<string>("");
   const [txFilterSearch, setTxFilterSearch] = useState("");
   const txSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [selectedTransactionIds, setSelectedTransactionIds] = useState<number[]>([]);
+  const [bulkCategoryId, setBulkCategoryId] = useState("");
+  const [bulkCategorising, setBulkCategorising] = useState(false);
   const [ruleForm, setRuleForm] = useState({ pattern: "", categoryId: "", priority: "100" });
   const [savingRule, setSavingRule] = useState(false);
   const [deletingRuleId, setDeletingRuleId] = useState<number | null>(null);
@@ -216,6 +237,10 @@ export default function PeriodWorkspacePage({
         setCategories(cats);
       } catch {}
       try {
+        const opening = await getOpeningBalances(cId, pId);
+        setOpeningBalances(opening);
+      } catch {}
+      try {
         const rules = await getTransactionRules(cId);
         setTransactionRules(rules);
       } catch {}
@@ -237,6 +262,7 @@ export default function PeriodWorkspacePage({
       const data = await getTransactions(cId, pId, 1, 50, filters);
       setTransactions(data.items);
       setTransactionTotal(data.total);
+      setSelectedTransactionIds((current) => current.filter((id) => data.items.some((tx) => tx.id === id)));
     } catch {
       setTransactions([]);
       setTransactionTotal(0);
@@ -270,6 +296,17 @@ export default function PeriodWorkspacePage({
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    setReviewerName(getReviewerName());
+  }, []);
+
+  function handleSaveReviewerName() {
+    const clean = reviewerName.trim() || "Accounts reviewer";
+    window.localStorage.setItem("accounts.reviewerName", clean);
+    setReviewerName(clean);
+    toast.success("Reviewer identity saved");
+  }
 
   useEffect(() => {
     if (!loading) {
@@ -348,6 +385,56 @@ export default function PeriodWorkspacePage({
     }
   }
 
+  async function handleSaveOpeningBalance() {
+    if (!openingBalanceForm.categoryId) {
+      toast.error("Choose an account category for the opening balance");
+      return;
+    }
+
+    const amount = Number(openingBalanceForm.amount || 0);
+    if (amount <= 0) {
+      toast.error("Enter a positive opening balance amount");
+      return;
+    }
+
+    setSavingOpeningBalance(true);
+    try {
+      const categoryId = Number(openingBalanceForm.categoryId);
+      const saved = await saveOpeningBalance(cId, pId, categoryId, {
+        debit: openingBalanceForm.side === "debit" ? amount : 0,
+        credit: openingBalanceForm.side === "credit" ? amount : 0,
+        sourceNote: openingBalanceForm.sourceNote.trim() || undefined,
+        enteredBy: getReviewerName(),
+        reviewed: true,
+      });
+      setOpeningBalances((current) => [
+        ...current.filter((balance) => balance.accountCategoryId !== categoryId),
+        saved,
+      ].sort((a, b) => a.accountCategory.code.localeCompare(b.accountCategory.code)));
+      setOpeningBalanceForm({ categoryId: "", side: "debit", amount: "", sourceNote: "" });
+      toast.success("Opening balance saved and reviewed");
+      await loadData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save opening balance");
+    } finally {
+      setSavingOpeningBalance(false);
+    }
+  }
+
+  async function handleDeleteOpeningBalance(categoryId: number) {
+    setDeletingOpeningCategoryId(categoryId);
+    try {
+      await deleteOpeningBalance(cId, pId, categoryId);
+      setOpeningBalances((current) => current.filter((balance) => balance.accountCategoryId !== categoryId));
+      toast.success("Opening balance removed");
+      await loadData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to remove opening balance");
+    } finally {
+      setDeletingOpeningCategoryId(null);
+    }
+  }
+
   async function handleCategoriseTransaction(transactionId: number, categoryId: number) {
     setCategorisingId(transactionId);
     try {
@@ -360,6 +447,27 @@ export default function PeriodWorkspacePage({
       toast.error(err instanceof Error ? err.message : "Failed to categorise transaction");
     } finally {
       setCategorisingId(null);
+    }
+  }
+
+  async function handleBulkCategoriseTransactions() {
+    if (selectedTransactionIds.length === 0 || !bulkCategoryId) {
+      toast.error("Select transactions and a category first");
+      return;
+    }
+
+    setBulkCategorising(true);
+    try {
+      const result = await bulkCategoriseTransactions(cId, pId, selectedTransactionIds, Number(bulkCategoryId));
+      toast.success(`${result.updated} transactions categorised`);
+      setSelectedTransactionIds([]);
+      setBulkCategoryId("");
+      await loadTransactions();
+      await loadData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to bulk categorise transactions");
+    } finally {
+      setBulkCategorising(false);
     }
   }
 
@@ -439,6 +547,42 @@ export default function PeriodWorkspacePage({
     }
   }
 
+  async function downloadDocument(url: string, label: string, documentType?: "accounts" | "signature", requiresRegime = false) {
+    if (requiresRegime && !period?.filingRegime) {
+      toast.error("Confirm the filing regime before generating CRO documents.");
+      return;
+    }
+
+    setDownloadingDocument(label);
+    try {
+      const response = await fetch(url);
+      if (!response.ok) {
+        const body = await response.text().catch(() => "");
+        let message = `Failed to generate ${label}`;
+        try {
+          const parsed = JSON.parse(body);
+          message = parsed.error ?? parsed.message ?? parsed.title ?? message;
+        } catch {
+          if (body && body.length < 200) message = body;
+        }
+        throw new Error(message);
+      }
+
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      window.open(objectUrl, "_blank", "noopener,noreferrer");
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+
+      if (documentType) {
+        await markGeneratedAndRefresh(documentType);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : `Failed to generate ${label}`);
+    } finally {
+      setDownloadingDocument(null);
+    }
+  }
+
   if (loading) return <PeriodWorkspaceSkeleton />;
 
   if (error && !company) {
@@ -466,10 +610,17 @@ export default function PeriodWorkspacePage({
   const uncategorisedCount = transactionTotal - categorisedCount;
   const adjustmentCount = adjSummary ? adjSummary.autoGenerated + adjSummary.manual : 0;
   const readyToFile = filingStatus?.readyToFile ?? false;
-  const periodDateRange = period
-    ? `${new Date(period.periodStart).toLocaleDateString("en-IE")} to ${new Date(period.periodEnd).toLocaleDateString("en-IE")}`
-    : "Period loading";
+  const periodDateRange = period ? formatPeriodRange(period.periodStart, period.periodEnd) : "Period loading";
   const classificationLabel = period?.sizeClassification?.calculatedClass ?? "Unclassified";
+  const openingDebitTotal = openingBalances.reduce((sum, balance) => sum + balance.debit, 0);
+  const openingCreditTotal = openingBalances.reduce((sum, balance) => sum + balance.credit, 0);
+  const bankOpeningDebit = bankAccounts.filter((bank) => bank.openingBalance > 0).reduce((sum, bank) => sum + bank.openingBalance, 0);
+  const bankOpeningCredit = bankAccounts.filter((bank) => bank.openingBalance < 0).reduce((sum, bank) => sum + Math.abs(bank.openingBalance), 0);
+  const openingDifference = openingDebitTotal + bankOpeningDebit - openingCreditTotal - bankOpeningCredit;
+  const openingBalanceCategories = categories.filter((category) => category.type !== "Income" && category.type !== "Expense");
+  const visibleTransactionIds = transactions.map((tx) => tx.id);
+  const allVisibleTransactionsSelected = visibleTransactionIds.length > 0
+    && visibleTransactionIds.every((id) => selectedTransactionIds.includes(id));
   const workflowItems: WorkflowItem[] = [
     {
       label: "Classify",
@@ -513,7 +664,7 @@ export default function PeriodWorkspacePage({
           { label: company?.legalName ?? "Company", href: `/companies/${companyId}` },
           {
             label: period
-              ? `${new Date(period.periodStart).toLocaleDateString("en-IE")} \u2013 ${new Date(period.periodEnd).toLocaleDateString("en-IE")}`
+              ? formatPeriodRange(period.periodStart, period.periodEnd)
               : "Period",
           },
         ]}
@@ -581,6 +732,30 @@ export default function PeriodWorkspacePage({
       </div>
 
       <WorkflowRail items={workflowItems} />
+
+      <div className="mb-6">
+        <ReviewPanel
+          title="Reviewer Identity"
+          description="Used on opening balances, year-end confirmations, adjustment approvals, and filing workflow actions."
+          actions={
+            <Button variant="outline" size="sm" onPress={handleSaveReviewerName}>
+              Save reviewer
+            </Button>
+          }
+        >
+          <div className="grid gap-3 md:grid-cols-[minmax(220px,360px)_1fr] md:items-center">
+            <input
+              value={reviewerName}
+              onChange={(e) => setReviewerName(e.target.value)}
+              className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-gray-100"
+              aria-label="Reviewer name"
+            />
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              This is not a login system. Production deployment still needs authenticated users, firm roles, and tenant access controls.
+            </p>
+          </div>
+        </ReviewPanel>
+      </div>
 
       {filingStatus && filingStatus.blockingIssues.length > 0 && (
         <div className="mb-6">
@@ -796,6 +971,111 @@ export default function PeriodWorkspacePage({
                 </Card.Content>
               </Card>
             )}
+
+            {/* Opening Balances */}
+            <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
+              <Card.Header>
+                <div className="flex w-full flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <Card.Title className="text-gray-900 dark:text-gray-100">Opening Balances & Reserves</Card.Title>
+                    <Card.Description>
+                      Enter reviewed opening reserves, share capital, creditors, and other balance-sheet balances before finalising.
+                    </Card.Description>
+                  </div>
+                  <Chip color={Math.abs(openingDifference) < 0.01 ? "success" : "warning"} variant="soft" size="sm">
+                    Difference {formatCurrency(openingDifference)}
+                  </Chip>
+                </div>
+              </Card.Header>
+              <Card.Content>
+                <div className="grid gap-3 md:grid-cols-5">
+                  <div className="md:col-span-2">
+                    <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Account</label>
+                    <select
+                      value={openingBalanceForm.categoryId}
+                      onChange={(e) => setOpeningBalanceForm((current) => ({ ...current, categoryId: e.target.value }))}
+                      className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-gray-100"
+                    >
+                      <option value="">Select account...</option>
+                      {openingBalanceCategories.map((category) => (
+                        <option key={category.id} value={category.id}>
+                          {category.code} - {category.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Side</label>
+                    <select
+                      value={openingBalanceForm.side}
+                      onChange={(e) => setOpeningBalanceForm((current) => ({ ...current, side: e.target.value }))}
+                      className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-gray-100"
+                    >
+                      <option value="debit">Debit</option>
+                      <option value="credit">Credit</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Amount</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={openingBalanceForm.amount}
+                      onChange={(e) => setOpeningBalanceForm((current) => ({ ...current, amount: e.target.value }))}
+                      className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-gray-100"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Evidence note</label>
+                    <input
+                      value={openingBalanceForm.sourceNote}
+                      onChange={(e) => setOpeningBalanceForm((current) => ({ ...current, sourceNote: e.target.value }))}
+                      className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-gray-100"
+                      placeholder="Prior accounts / TB"
+                    />
+                  </div>
+                </div>
+                <div className="mt-3 flex justify-end">
+                  <Button variant="primary" size="sm" onPress={handleSaveOpeningBalance} isDisabled={savingOpeningBalance || categories.length === 0}>
+                    {savingOpeningBalance ? <Spinner size="sm" /> : "Save Reviewed Balance"}
+                  </Button>
+                </div>
+
+                <div className="mt-4 overflow-hidden rounded-md border border-gray-200 dark:border-neutral-700">
+                  <div className="grid grid-cols-12 gap-2 bg-gray-50 px-4 py-2 text-xs font-semibold uppercase text-gray-500 dark:bg-neutral-800 dark:text-gray-400">
+                    <div className="col-span-5">Account</div>
+                    <div className="col-span-2 text-right">Debit</div>
+                    <div className="col-span-2 text-right">Credit</div>
+                    <div className="col-span-2">Evidence</div>
+                    <div className="col-span-1 text-right">Action</div>
+                  </div>
+                  {openingBalances.length === 0 ? (
+                    <div className="px-4 py-5 text-sm text-gray-500 dark:text-gray-400">
+                      No reviewed opening balances entered yet. Bank account opening balances are included automatically, but reserves/equity need an explicit balancing entry.
+                    </div>
+                  ) : (
+                    openingBalances.map((balance) => (
+                      <div key={balance.id} className="grid grid-cols-12 gap-2 border-t border-gray-100 px-4 py-3 text-sm dark:border-neutral-800">
+                        <div className="col-span-5">
+                          <span className="font-mono text-xs text-gray-500">{balance.accountCategory.code}</span>{" "}
+                          <span className="font-medium text-gray-900 dark:text-gray-100">{balance.accountCategory.name}</span>
+                        </div>
+                        <div className="col-span-2 text-right font-mono">{balance.debit ? formatCurrency(balance.debit) : "-"}</div>
+                        <div className="col-span-2 text-right font-mono">{balance.credit ? formatCurrency(balance.credit) : "-"}</div>
+                        <div className="col-span-2 truncate text-xs text-gray-500" title={balance.sourceNote ?? ""}>
+                          {balance.reviewed ? "Reviewed" : "Unreviewed"}{balance.sourceNote ? ` - ${balance.sourceNote}` : ""}
+                        </div>
+                        <div className="col-span-1 text-right">
+                          <Button variant="ghost" size="sm" onPress={() => handleDeleteOpeningBalance(balance.accountCategoryId)} isDisabled={deletingOpeningCategoryId === balance.accountCategoryId}>
+                            {deletingOpeningCategoryId === balance.accountCategoryId ? <Spinner size="sm" /> : <Trash2 className="h-4 w-4" />}
+                          </Button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </Card.Content>
+            </Card>
 
             {/* Upload Area */}
             <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
@@ -1048,6 +1328,42 @@ export default function PeriodWorkspacePage({
                   )}
                 </div>
 
+                {transactions.length > 0 && (
+                  <div className="mb-4 rounded-md border border-slate-200 bg-slate-50 p-3 dark:border-neutral-700 dark:bg-neutral-800/40">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Bulk categorisation</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {selectedTransactionIds.length} selected. Use this for reviewed recurring items only.
+                        </p>
+                      </div>
+                      <div className="flex flex-col gap-2 md:flex-row md:items-center">
+                        <select
+                          value={bulkCategoryId}
+                          onChange={(e) => setBulkCategoryId(e.target.value)}
+                          className="min-w-64 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-gray-100"
+                          aria-label="Bulk category"
+                        >
+                          <option value="">Choose category</option>
+                          {categories.map((cat) => (
+                            <option key={cat.id} value={cat.id}>
+                              {cat.code ? `${cat.code} - ${cat.name}` : cat.name}
+                            </option>
+                          ))}
+                        </select>
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          onPress={handleBulkCategoriseTransactions}
+                          isDisabled={bulkCategorising || selectedTransactionIds.length === 0 || !bulkCategoryId}
+                        >
+                          {bulkCategorising ? <Spinner size="sm" /> : "Apply to Selected"}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Transaction Filters */}
                 <div className="grid grid-cols-4 gap-3 mb-4">
                   <div>
@@ -1118,8 +1434,18 @@ export default function PeriodWorkspacePage({
                   <div className="border border-gray-200 dark:border-neutral-700 rounded-lg overflow-hidden">
                     {/* Header row */}
                     <div className="grid grid-cols-12 gap-2 bg-gray-50 dark:bg-neutral-800 border-b border-gray-200 dark:border-neutral-700 px-4 py-2.5 text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                      <div className="col-span-1">
+                        <input
+                          type="checkbox"
+                          checked={allVisibleTransactionsSelected}
+                          onChange={(e) => {
+                            setSelectedTransactionIds(e.target.checked ? visibleTransactionIds : []);
+                          }}
+                          aria-label="Select visible transactions"
+                        />
+                      </div>
                       <div className="col-span-2">Date</div>
-                      <div className="col-span-4">Description</div>
+                      <div className="col-span-3">Description</div>
                       <div className="col-span-2 text-right">Amount</div>
                       <div className="col-span-3">Category</div>
                       <div className="col-span-1 text-center">Conf.</div>
@@ -1132,10 +1458,24 @@ export default function PeriodWorkspacePage({
                             idx % 2 === 1 ? "bg-gray-50/50 dark:bg-neutral-800/25" : ""
                           }`}
                         >
+                          <div className="col-span-1">
+                            <input
+                              type="checkbox"
+                              checked={selectedTransactionIds.includes(tx.id)}
+                              onChange={(e) => {
+                                setSelectedTransactionIds((current) =>
+                                  e.target.checked
+                                    ? [...current, tx.id]
+                                    : current.filter((id) => id !== tx.id)
+                                );
+                              }}
+                              aria-label={`Select ${tx.description}`}
+                            />
+                          </div>
                           <div className="col-span-2 text-gray-600 dark:text-gray-400">
                             {new Date(tx.date).toLocaleDateString("en-IE")}
                           </div>
-                          <div className="col-span-4 text-gray-900 dark:text-gray-100 truncate" title={tx.description}>
+                          <div className="col-span-3 text-gray-900 dark:text-gray-100 truncate" title={tx.description}>
                             {tx.description}
                           </div>
                           <div className={`col-span-2 text-right font-medium font-mono ${tx.amount >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
@@ -1787,39 +2127,51 @@ export default function PeriodWorkspacePage({
                 <Card.Description>Download the final accounts package and iXBRL filing documents</Card.Description>
               </Card.Header>
               <Card.Content>
-                <div className="grid grid-cols-2 gap-4">
-                  <a href={agmPackUrl} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center gap-3 rounded-xl border-2 border-gray-200 dark:border-neutral-700 p-8 hover:border-emerald-400 dark:hover:border-emerald-600 hover:bg-emerald-50/30 dark:hover:bg-emerald-900/10 transition-all group">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <button type="button" onClick={() => downloadDocument(agmPackUrl, "AGM pack")} disabled={downloadingDocument !== null} className="flex flex-col items-center gap-3 rounded-xl border-2 border-gray-200 p-8 text-center transition-all hover:border-emerald-400 hover:bg-emerald-50/30 disabled:cursor-wait disabled:opacity-70 dark:border-neutral-700 dark:hover:border-emerald-600 dark:hover:bg-emerald-900/10 group">
                     <FileText className="w-12 h-12 text-gray-400 dark:text-gray-500 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors" />
                     <div className="text-center">
                       <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">AGM Pack</p>
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Full statutory accounts for AGM approval</p>
                     </div>
-                    <Button variant="outline" size="sm"><Download className="w-4 h-4 mr-1" />Download PDF</Button>
-                  </a>
-                  <a href={croPackUrl} target="_blank" rel="noopener noreferrer" onClick={() => { markGeneratedAndRefresh("accounts"); }} className="flex flex-col items-center gap-3 rounded-xl border-2 border-gray-200 dark:border-neutral-700 p-8 hover:border-emerald-400 dark:hover:border-emerald-600 hover:bg-emerald-50/30 dark:hover:bg-emerald-900/10 transition-all group">
+                    <span className="inline-flex h-9 items-center gap-2 rounded-md border border-gray-300 px-3 text-sm font-medium text-gray-700 dark:border-neutral-600 dark:text-gray-200">
+                      {downloadingDocument === "AGM pack" ? <Spinner size="sm" /> : <Download className="w-4 h-4" />}
+                      Download PDF
+                    </span>
+                  </button>
+                  <button type="button" onClick={() => downloadDocument(croPackUrl, "CRO filing pack", "accounts", true)} disabled={downloadingDocument !== null} className={`flex flex-col items-center gap-3 rounded-xl border-2 border-gray-200 p-8 text-center transition-all dark:border-neutral-700 group ${period?.filingRegime ? "hover:border-emerald-400 hover:bg-emerald-50/30 dark:hover:border-emerald-600 dark:hover:bg-emerald-900/10 disabled:cursor-wait disabled:opacity-70" : "cursor-not-allowed opacity-60"}`}>
                     <FileText className="w-12 h-12 text-gray-400 dark:text-gray-500 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors" />
                     <div className="text-center">
                       <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">CRO Filing Pack</p>
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Abridged accounts for CRO filing</p>
                     </div>
-                    <Button variant="outline" size="sm"><Download className="w-4 h-4 mr-1" />Download PDF</Button>
-                  </a>
-                  <a href={sigPageUrl} target="_blank" rel="noopener noreferrer" onClick={() => { markGeneratedAndRefresh("signature"); }} className="flex flex-col items-center gap-3 rounded-xl border-2 border-gray-200 dark:border-neutral-700 p-8 hover:border-emerald-400 dark:hover:border-emerald-600 hover:bg-emerald-50/30 dark:hover:bg-emerald-900/10 transition-all group">
+                    <span className="inline-flex h-9 items-center gap-2 rounded-md border border-gray-300 px-3 text-sm font-medium text-gray-700 dark:border-neutral-600 dark:text-gray-200">
+                      {downloadingDocument === "CRO filing pack" ? <Spinner size="sm" /> : <Download className="w-4 h-4" />}
+                      Download PDF
+                    </span>
+                  </button>
+                  <button type="button" onClick={() => downloadDocument(sigPageUrl, "signature page", "signature", true)} disabled={downloadingDocument !== null} className={`flex flex-col items-center gap-3 rounded-xl border-2 border-gray-200 p-8 text-center transition-all dark:border-neutral-700 group ${period?.filingRegime ? "hover:border-emerald-400 hover:bg-emerald-50/30 dark:hover:border-emerald-600 dark:hover:bg-emerald-900/10 disabled:cursor-wait disabled:opacity-70" : "cursor-not-allowed opacity-60"}`}>
                     <FileText className="w-12 h-12 text-gray-400 dark:text-gray-500 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors" />
                     <div className="text-center">
                       <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Signature Page</p>
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Typeset signatures for CRO (s.347)</p>
                     </div>
-                    <Button variant="outline" size="sm"><Download className="w-4 h-4 mr-1" />Download PDF</Button>
-                  </a>
-                  <a href={ixbrlUrl} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center gap-3 rounded-xl border-2 border-gray-200 dark:border-neutral-700 p-8 hover:border-emerald-400 dark:hover:border-emerald-600 hover:bg-emerald-50/30 dark:hover:bg-emerald-900/10 transition-all group">
+                    <span className="inline-flex h-9 items-center gap-2 rounded-md border border-gray-300 px-3 text-sm font-medium text-gray-700 dark:border-neutral-600 dark:text-gray-200">
+                      {downloadingDocument === "signature page" ? <Spinner size="sm" /> : <Download className="w-4 h-4" />}
+                      Download PDF
+                    </span>
+                  </button>
+                  <button type="button" onClick={() => downloadDocument(ixbrlUrl, "iXBRL filing")} disabled={downloadingDocument !== null} className="flex flex-col items-center gap-3 rounded-xl border-2 border-gray-200 p-8 text-center transition-all hover:border-emerald-400 hover:bg-emerald-50/30 disabled:cursor-wait disabled:opacity-70 dark:border-neutral-700 dark:hover:border-emerald-600 dark:hover:bg-emerald-900/10 group">
                     <FileText className="w-12 h-12 text-gray-400 dark:text-gray-500 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors" />
                     <div className="text-center">
                       <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">iXBRL Filing</p>
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">For Revenue Online Service (ROS) submission</p>
                     </div>
-                    <Button variant="outline" size="sm"><Download className="w-4 h-4 mr-1" />Download iXBRL</Button>
-                  </a>
+                    <span className="inline-flex h-9 items-center gap-2 rounded-md border border-gray-300 px-3 text-sm font-medium text-gray-700 dark:border-neutral-600 dark:text-gray-200">
+                      {downloadingDocument === "iXBRL filing" ? <Spinner size="sm" /> : <Download className="w-4 h-4" />}
+                      Download iXBRL
+                    </span>
+                  </button>
                 </div>
               </Card.Content>
             </Card>

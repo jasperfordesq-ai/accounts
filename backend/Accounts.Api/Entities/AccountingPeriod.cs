@@ -36,9 +36,11 @@ public class AccountingPeriod
     public PayrollSummary? PayrollSummary { get; set; }
     public List<TaxBalance> TaxBalances { get; set; } = [];
     public List<Dividend> Dividends { get; set; } = [];
+    public List<OpeningBalance> OpeningBalances { get; set; } = [];
     public List<Adjustment> Adjustments { get; set; } = [];
     public List<Report> Reports { get; set; } = [];
     public List<NotesDisclosure> NotesDisclosures { get; set; } = [];
+    public List<YearEndReviewConfirmation> YearEndReviewConfirmations { get; set; } = [];
     public CroFilingPackage? CroFilingPackage { get; set; }
     public RevenueFilingPackage? RevenueFilingPackage { get; set; }
     public List<FilingDeadline> FilingDeadlines { get; set; } = [];

@@ -32,6 +32,12 @@ public static class StatementsEndpoints
             return Results.Ok(result);
         });
 
+        group.MapGet("/sources", async (int companyId, int periodId, FinancialStatementsService service) =>
+        {
+            var result = await service.GetStatementSourcesAsync(periodId);
+            return Results.Ok(result);
+        });
+
         group.MapGet("/cash-flow", async (int companyId, int periodId, FinancialStatementsService service) =>
         {
             var result = await service.GetCashFlowStatementAsync(periodId);

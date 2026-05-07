@@ -182,6 +182,8 @@ export interface AccountingPeriod {
   isFirstYear: boolean;
   memberAuditNoticeReceived: boolean;
   memberAuditNoticeDate?: string;
+  goingConcernConfirmed: boolean;
+  goingConcernNote?: string;
   sizeClassification?: SizeClassification;
   filingRegime?: FilingRegime;
 }
@@ -231,6 +233,21 @@ export interface AccountCategory {
   type: string;
 }
 
+export interface OpeningBalance {
+  id: number;
+  periodId: number;
+  accountCategoryId: number;
+  debit: number;
+  credit: number;
+  sourceNote?: string;
+  enteredBy?: string;
+  enteredAt: string;
+  reviewed: boolean;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  accountCategory: AccountCategory;
+}
+
 export interface TransactionRule {
   id: number;
   companyId: number;
@@ -249,7 +266,18 @@ export interface YearEndSummary {
   payroll: { grossWages: number; staffCount: number } | null;
   taxes: { count: number; totalLiability: number; totalBalance: number };
   dividends: { count: number; total: number };
+  reviewConfirmations: YearEndReviewConfirmation[];
   completeness: { score: number; completed: number; total: number; incomplete: string[] };
+}
+
+export interface YearEndReviewConfirmation {
+  id: number;
+  periodId: number;
+  sectionKey: string;
+  confirmed: boolean;
+  confirmedBy?: string;
+  confirmedAt: string;
+  note?: string;
 }
 
 export interface ReadinessScore {
@@ -367,6 +395,23 @@ export interface TrialBalanceLine {
   credit: number;
 }
 
+export interface StatementSourceSummary {
+  code: string;
+  name: string;
+  type: string;
+  openingDebit: number;
+  openingCredit: number;
+  transactionDebit: number;
+  transactionCredit: number;
+  transactionCount: number;
+  adjustmentDebit: number;
+  adjustmentCredit: number;
+  adjustmentCount: number;
+  closingDebit: number;
+  closingCredit: number;
+  sourceNotes: string[];
+}
+
 export interface ProfitAndLoss {
   turnover: number;
   costOfSales: number;
@@ -378,6 +423,8 @@ export interface ProfitAndLoss {
   profitBeforeTax: number;
   taxCharge: number;
   profitAfterTax: number;
+  yearEndAdjustments: { description: string; amount: number; approved: boolean }[];
+  totalYearEndAdjustments: number;
 }
 
 export interface BalanceSheet {
@@ -517,6 +564,19 @@ export const categoriseTransaction = (
       body: JSON.stringify({ categoryId }),
     }
   );
+export const bulkCategoriseTransactions = (
+  companyId: number,
+  periodId: number,
+  transactionIds: number[],
+  categoryId: number,
+) =>
+  apiFetch<{ updated: number }>(
+    `/api/companies/${companyId}/periods/${periodId}/transactions/bulk-categorise`,
+    {
+      method: "POST",
+      body: JSON.stringify({ transactionIds, categoryId }),
+    },
+  );
 
 // Categories
 export const getCategories = (companyId: number) =>
@@ -539,6 +599,39 @@ export const deleteTransactionRule = (companyId: number, id: number) =>
 export const getYearEndSummary = (companyId: number, periodId: number) =>
   apiFetch<YearEndSummary>(
     `/api/companies/${companyId}/periods/${periodId}/year-end-summary`
+  );
+export const getOpeningBalances = (companyId: number, periodId: number) =>
+  apiFetch<OpeningBalance[]>(
+    `/api/companies/${companyId}/periods/${periodId}/opening-balances`
+  );
+export const saveOpeningBalance = (
+  companyId: number,
+  periodId: number,
+  categoryId: number,
+  data: { debit: number; credit: number; sourceNote?: string; enteredBy?: string; reviewed: boolean },
+) =>
+  apiFetch<OpeningBalance>(
+    `/api/companies/${companyId}/periods/${periodId}/opening-balances/${categoryId}`,
+    { method: "PUT", body: JSON.stringify(data) },
+  );
+export const deleteOpeningBalance = (companyId: number, periodId: number, categoryId: number) =>
+  apiFetch<void>(
+    `/api/companies/${companyId}/periods/${periodId}/opening-balances/${categoryId}`,
+    { method: "DELETE" },
+  );
+export const getYearEndReviewConfirmations = (companyId: number, periodId: number) =>
+  apiFetch<YearEndReviewConfirmation[]>(
+    `/api/companies/${companyId}/periods/${periodId}/year-end-reviews`
+  );
+export const saveYearEndReviewConfirmation = (
+  companyId: number,
+  periodId: number,
+  sectionKey: string,
+  data: { confirmed: boolean; confirmedBy?: string; note?: string },
+) =>
+  apiFetch<YearEndReviewConfirmation>(
+    `/api/companies/${companyId}/periods/${periodId}/year-end-reviews/${sectionKey}`,
+    { method: "PUT", body: JSON.stringify(data) },
   );
 
 // Adjustments
@@ -611,6 +704,10 @@ export const uploadBankCsv = async (
 export const getReadiness = (companyId: number, periodId: number) =>
   apiFetch<ReadinessScore>(
     `/api/companies/${companyId}/periods/${periodId}/statements/readiness`
+  );
+export const getStatementSources = (companyId: number, periodId: number) =>
+  apiFetch<StatementSourceSummary[]>(
+    `/api/companies/${companyId}/periods/${periodId}/statements/sources`
   );
 
 // Documents

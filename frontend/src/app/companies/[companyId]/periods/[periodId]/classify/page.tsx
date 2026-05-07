@@ -44,6 +44,33 @@ interface ClassificationResult {
   ineligibleReason?: string;
 }
 
+type RegimeOption = {
+  label: string;
+  value: string;
+};
+
+function toRegimeOption(regime: string): RegimeOption {
+  const normalised = regime
+    .replace(/[–—]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+
+  if (normalised.includes("micro")) return { label: "Micro (FRS 105)", value: "Micro" };
+  if (normalised.includes("small") && normalised.includes("abridged")) {
+    return { label: "Small - Abridged", value: "SmallAbridged" };
+  }
+  if (normalised.includes("small")) return { label: "Small - Full", value: "Small" };
+  if (normalised.includes("medium")) return { label: "Medium", value: "Medium" };
+  return { label: "Full", value: "Full" };
+}
+
+function regimeLabel(value: string, availableRegimes: string[] = []): string {
+  return availableRegimes
+    .map(toRegimeOption)
+    .find((option) => option.value === value)?.label ?? toRegimeOption(value).label;
+}
+
 export default function ClassifyPage({
   params,
 }: {
@@ -92,6 +119,16 @@ export default function ClassifyPage({
         setTurnover(sc.turnover);
         setBalanceSheetTotal(sc.balanceSheetTotal);
         setAvgEmployees(sc.avgEmployees);
+
+        try {
+          const classResult = await runClassification(cId, pId);
+          setResult(classResult);
+          if (!periodData.filingRegime && classResult.availableRegimes.length > 0) {
+            setSelectedRegime(toRegimeOption(classResult.availableRegimes[0]).value);
+          }
+        } catch {
+          // Existing classification can still be displayed; the user can re-run it manually.
+        }
       }
 
       setMemberAuditNotice(periodData.memberAuditNoticeReceived ?? false);
@@ -127,7 +164,7 @@ export default function ClassifyPage({
       const classResult = await runClassification(cId, pId);
       setResult(classResult);
       if (classResult.availableRegimes.length > 0) {
-        setSelectedRegime(classResult.availableRegimes[0]);
+        setSelectedRegime(toRegimeOption(classResult.availableRegimes[0]).value);
       }
       toast.success(`Classified as ${classResult.calculatedClass} company`);
     } catch (err) {
@@ -144,7 +181,7 @@ export default function ClassifyPage({
     try {
       await setFilingRegime(cId, pId, selectedRegime);
       setRegimeConfirmed(true);
-      toast.success(`Filing regime set to ${selectedRegime}`);
+      toast.success(`Filing regime set to ${regimeLabel(selectedRegime, result?.availableRegimes)}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to confirm regime");
     } finally {
@@ -430,18 +467,21 @@ export default function ClassifyPage({
               <Card.Content>
                 <div className="space-y-4">
                   <div className="flex flex-wrap gap-3">
-                    {result.availableRegimes.map((regime) => (
+                    {result.availableRegimes.map((regime) => {
+                      const option = toRegimeOption(regime);
+                      return (
                       <Button
-                        key={regime}
-                        variant={selectedRegime === regime ? "primary" : "outline"}
+                        key={option.value}
+                        variant={selectedRegime === option.value ? "primary" : "outline"}
                         onPress={() => {
-                          setSelectedRegime(regime);
+                          setSelectedRegime(option.value);
                           setRegimeConfirmed(false);
                         }}
                       >
-                        {regime}
+                        {option.label}
                       </Button>
-                    ))}
+                      );
+                    })}
                   </div>
 
                   {selectedRegime && (
@@ -467,7 +507,7 @@ export default function ClassifyPage({
                       </Button>
                       {regimeConfirmed && (
                         <span className="text-sm text-emerald-600 dark:text-emerald-400 font-medium">
-                          {selectedRegime} regime has been set for this period.
+                          {regimeLabel(selectedRegime, result.availableRegimes)} regime has been set for this period.
                         </span>
                       )}
                     </div>

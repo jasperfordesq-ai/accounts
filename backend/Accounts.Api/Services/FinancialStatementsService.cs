@@ -20,9 +20,12 @@ public class FinancialStatementsService(AccountsDbContext db)
         decimal InterestPayable,
         decimal ProfitBeforeTax,
         decimal TaxCharge,
-        decimal ProfitAfterTax
+        decimal ProfitAfterTax,
+        List<AdjustmentLine> YearEndAdjustments,
+        decimal TotalYearEndAdjustments
     );
     public record ExpenseLine(string Code, string Name, decimal Amount);
+    public record AdjustmentLine(string Description, decimal Amount, bool Approved);
 
     // Balance Sheet
     public record BalanceSheet(
@@ -95,57 +98,64 @@ public class FinancialStatementsService(AccountsDbContext db)
         List<string> MissingItems,
         List<string> Warnings
     );
+    public record StatementSourceSummary(
+        string Code,
+        string Name,
+        string Type,
+        decimal OpeningDebit,
+        decimal OpeningCredit,
+        decimal TransactionDebit,
+        decimal TransactionCredit,
+        int TransactionCount,
+        decimal AdjustmentDebit,
+        decimal AdjustmentCredit,
+        int AdjustmentCount,
+        decimal ClosingDebit,
+        decimal ClosingCredit,
+        List<string> SourceNotes
+    );
+
+    private sealed class AccountMovement
+    {
+        public decimal Debit { get; set; }
+        public decimal Credit { get; set; }
+    }
+
+    private sealed class SourceAccumulator(AccountCategory category)
+    {
+        public AccountCategory Category { get; } = category;
+        public decimal OpeningDebit { get; set; }
+        public decimal OpeningCredit { get; set; }
+        public decimal TransactionDebit { get; set; }
+        public decimal TransactionCredit { get; set; }
+        public int TransactionCount { get; set; }
+        public decimal AdjustmentDebit { get; set; }
+        public decimal AdjustmentCredit { get; set; }
+        public int AdjustmentCount { get; set; }
+        public decimal Debit { get; set; }
+        public decimal Credit { get; set; }
+        public List<string> SourceNotes { get; } = [];
+    }
 
     public async Task<List<TrialBalanceLine>> GetTrialBalanceAsync(int periodId)
     {
         var period = await db.AccountingPeriods.Include(p => p.Company).FirstAsync(p => p.Id == periodId);
         var companyId = period.CompanyId;
 
-        // Get categorised transaction totals
-        var txnTotals = await db.ImportedTransactions
-            .Where(t => t.PeriodId == periodId && t.CategoryId != null && !t.IsDuplicate)
-            .GroupBy(t => t.CategoryId)
-            .Select(g => new { CategoryId = g.Key!.Value, Total = g.Sum(t => t.Amount) })
-            .ToListAsync();
-
-        // Get adjustment impacts by category
-        var debitAdjs = await db.Adjustments
-            .Where(a => a.PeriodId == periodId && a.DebitCategoryId != null)
-            .GroupBy(a => a.DebitCategoryId)
-            .Select(g => new { CategoryId = g.Key!.Value, Total = g.Sum(a => a.Amount) })
-            .ToListAsync();
-
-        var creditAdjs = await db.Adjustments
-            .Where(a => a.PeriodId == periodId && a.CreditCategoryId != null)
-            .GroupBy(a => a.CreditCategoryId)
-            .Select(g => new { CategoryId = g.Key!.Value, Total = g.Sum(a => a.Amount) })
-            .ToListAsync();
-
         var categories = await db.AccountCategories
             .Where(c => c.CompanyId == companyId || (c.IsSystem && c.CompanyId == null))
             .OrderBy(c => c.Code)
             .ToListAsync();
+        var movements = await GetAccountMovementsAsync(periodId, categories);
 
         var lines = new List<TrialBalanceLine>();
         foreach (var cat in categories)
         {
-            var txnTotal = txnTotals.FirstOrDefault(t => t.CategoryId == cat.Id)?.Total ?? 0;
-            var debitAdj = debitAdjs.FirstOrDefault(d => d.CategoryId == cat.Id)?.Total ?? 0;
-            var creditAdj = creditAdjs.FirstOrDefault(c => c.CategoryId == cat.Id)?.Total ?? 0;
-
-            var netAmount = txnTotal + debitAdj - creditAdj;
-            if (netAmount == 0) continue;
-
-            decimal debit = 0, credit = 0;
-            // Income and Liabilities are credit balances; Assets and Expenses are debit
-            if (cat.Type == AccountCategoryType.Income || cat.Type == AccountCategoryType.Liability || cat.Type == AccountCategoryType.Equity)
-            {
-                if (netAmount < 0) debit = Math.Abs(netAmount); else credit = netAmount;
-            }
-            else
-            {
-                if (netAmount > 0) debit = netAmount; else credit = Math.Abs(netAmount);
-            }
+            if (!movements.TryGetValue(cat.Id, out var movement)) continue;
+            var netDebit = movement.Debit - movement.Credit;
+            if (netDebit == 0) continue;
+            var debit = netDebit > 0 ? netDebit : 0;
+            var credit = netDebit < 0 ? Math.Abs(netDebit) : 0;
 
             lines.Add(new TrialBalanceLine(cat.Code, cat.Name, cat.Type.ToString(), debit, credit));
         }
@@ -161,32 +171,58 @@ public class FinancialStatementsService(AccountsDbContext db)
         var categories = await db.AccountCategories
             .Where(c => c.CompanyId == companyId || (c.IsSystem && c.CompanyId == null))
             .ToListAsync();
+        var movements = await GetAccountMovementsAsync(periodId, categories);
 
-        var txnTotals = await db.ImportedTransactions
-            .Where(t => t.PeriodId == periodId && t.CategoryId != null && !t.IsDuplicate)
-            .GroupBy(t => t.CategoryId)
-            .Select(g => new { CategoryId = g.Key!.Value, Total = g.Sum(t => t.Amount) })
-            .ToDictionaryAsync(g => g.CategoryId, g => g.Total);
+        decimal IncomeAmount(AccountCategory category)
+        {
+            var movement = movements.GetValueOrDefault(category.Id);
+            return movement == null ? 0 : movement.Credit - movement.Debit;
+        }
 
-        decimal GetCategoryTotal(string codePrefix) =>
-            categories.Where(c => c.Code.StartsWith(codePrefix))
-                .Sum(c => Math.Abs(txnTotals.GetValueOrDefault(c.Id, 0)));
+        decimal ExpenseAmount(AccountCategory category)
+        {
+            var movement = movements.GetValueOrDefault(category.Id);
+            return movement == null ? 0 : movement.Debit - movement.Credit;
+        }
 
-        var turnover = GetCategoryTotal("4");
-        var costOfSales = GetCategoryTotal("5");
+        decimal GetIncomeTotal(string codePrefix) =>
+            categories.Where(c => c.Type == AccountCategoryType.Income && c.Code.StartsWith(codePrefix))
+                .Sum(IncomeAmount);
+
+        decimal GetExpenseTotal(string codePrefix) =>
+            categories.Where(c => c.Type == AccountCategoryType.Expense && c.Code.StartsWith(codePrefix))
+                .Sum(ExpenseAmount);
+
+        var turnover = GetIncomeTotal("4");
+        var costOfSales = GetExpenseTotal("5");
         var grossProfit = turnover - costOfSales;
 
         var overheads = categories
-            .Where(c => c.Code.StartsWith("6") || c.Code.StartsWith("7"))
-            .Select(c => new ExpenseLine(c.Code, c.Name, Math.Abs(txnTotals.GetValueOrDefault(c.Id, 0))))
+            .Where(c => (c.Code.StartsWith("6") && !c.Code.StartsWith("69")) || c.Code.StartsWith("7"))
+            .Select(c => new ExpenseLine(c.Code, c.Name, ExpenseAmount(c)))
             .Where(e => e.Amount != 0)
             .ToList();
 
         var totalOverheads = overheads.Sum(o => o.Amount);
         var operatingProfit = grossProfit - totalOverheads;
 
-        var interestPayable = GetCategoryTotal("69"); // Bank charges & interest
-        var profitBeforeTax = operatingProfit - interestPayable;
+        var interestPayable = GetExpenseTotal("69"); // Bank charges & interest
+
+        var unpostedAdjustments = await db.Adjustments
+            .Where(a => a.PeriodId == periodId
+                && a.DebitCategoryId == null
+                && a.CreditCategoryId == null
+                && a.ImpactOnProfit != 0)
+            .OrderBy(a => a.IsAuto ? 0 : 1)
+            .ThenBy(a => a.CreatedAt)
+            .ToListAsync();
+        var yearEndAdjustments = unpostedAdjustments
+            .Where(a => !a.Description.Contains("corporation tax", StringComparison.OrdinalIgnoreCase))
+            .Select(a => new AdjustmentLine(a.Description, a.ImpactOnProfit, a.ApprovedAt != null))
+            .ToList();
+        var totalYearEndAdjustments = yearEndAdjustments.Sum(a => a.Amount);
+
+        var profitBeforeTax = operatingProfit - interestPayable + totalYearEndAdjustments;
 
         var corpTax = await db.TaxBalances
             .Where(t => t.PeriodId == periodId && t.TaxType == TaxType.CorporationTax)
@@ -196,7 +232,223 @@ public class FinancialStatementsService(AccountsDbContext db)
         var profitAfterTax = profitBeforeTax - corpTax;
 
         return new ProfitAndLoss(turnover, costOfSales, grossProfit, overheads, totalOverheads,
-            operatingProfit, interestPayable, profitBeforeTax, corpTax, profitAfterTax);
+            operatingProfit, interestPayable, profitBeforeTax, corpTax, profitAfterTax,
+            yearEndAdjustments, totalYearEndAdjustments);
+    }
+
+    private async Task<Dictionary<int, AccountMovement>> GetAccountMovementsAsync(int periodId, List<AccountCategory> categories)
+    {
+        var movements = new Dictionary<int, AccountMovement>();
+        var bankCategory = categories.FirstOrDefault(c => c.Code == "1400");
+        var categoryById = categories.ToDictionary(c => c.Id);
+
+        void Debit(int categoryId, decimal amount)
+        {
+            if (amount == 0) return;
+            if (!movements.TryGetValue(categoryId, out var movement))
+                movements[categoryId] = movement = new AccountMovement();
+            movement.Debit += Math.Abs(amount);
+        }
+
+        void Credit(int categoryId, decimal amount)
+        {
+            if (amount == 0) return;
+            if (!movements.TryGetValue(categoryId, out var movement))
+                movements[categoryId] = movement = new AccountMovement();
+            movement.Credit += Math.Abs(amount);
+        }
+
+        var transactions = await db.ImportedTransactions
+            .Where(t => t.PeriodId == periodId && t.CategoryId != null && !t.IsDuplicate)
+            .ToListAsync();
+
+        foreach (var transaction in transactions)
+        {
+            if (!categoryById.ContainsKey(transaction.CategoryId!.Value)) continue;
+
+            if (transaction.Amount >= 0)
+            {
+                if (bankCategory != null) Debit(bankCategory.Id, transaction.Amount);
+                Credit(transaction.CategoryId.Value, transaction.Amount);
+            }
+            else
+            {
+                if (bankCategory != null) Credit(bankCategory.Id, transaction.Amount);
+                Debit(transaction.CategoryId.Value, transaction.Amount);
+            }
+        }
+
+        var adjustments = await db.Adjustments
+            .Where(a => a.PeriodId == periodId)
+            .ToListAsync();
+
+        foreach (var adjustment in adjustments)
+        {
+            if (adjustment.DebitCategoryId.HasValue && categoryById.ContainsKey(adjustment.DebitCategoryId.Value))
+                Debit(adjustment.DebitCategoryId.Value, adjustment.Amount);
+            if (adjustment.CreditCategoryId.HasValue && categoryById.ContainsKey(adjustment.CreditCategoryId.Value))
+                Credit(adjustment.CreditCategoryId.Value, adjustment.Amount);
+        }
+
+        var openingBalances = await db.OpeningBalances
+            .Where(o => o.PeriodId == periodId)
+            .ToListAsync();
+
+        foreach (var opening in openingBalances)
+        {
+            if (!categoryById.ContainsKey(opening.AccountCategoryId)) continue;
+            Debit(opening.AccountCategoryId, opening.Debit);
+            Credit(opening.AccountCategoryId, opening.Credit);
+        }
+
+        if (bankCategory != null)
+        {
+            var period = await db.AccountingPeriods.FirstAsync(p => p.Id == periodId);
+            var bankAccounts = await db.BankAccounts.Where(b => b.CompanyId == period.CompanyId).ToListAsync();
+            foreach (var bank in bankAccounts)
+            {
+                if (bank.OpeningBalance > 0) Debit(bankCategory.Id, bank.OpeningBalance);
+                if (bank.OpeningBalance < 0) Credit(bankCategory.Id, bank.OpeningBalance);
+            }
+        }
+
+        return movements;
+    }
+
+    public async Task<List<StatementSourceSummary>> GetStatementSourcesAsync(int periodId)
+    {
+        var period = await db.AccountingPeriods.Include(p => p.Company).FirstAsync(p => p.Id == periodId);
+        var companyId = period.CompanyId;
+        var categories = await db.AccountCategories
+            .Where(c => c.CompanyId == companyId || (c.IsSystem && c.CompanyId == null))
+            .OrderBy(c => c.Code)
+            .ToListAsync();
+        var categoryById = categories.ToDictionary(c => c.Id);
+        var bankCategory = categories.FirstOrDefault(c => c.Code == "1400");
+
+        var lines = categories.ToDictionary(c => c.Id, c => new SourceAccumulator(c));
+
+        void AddDebit(int categoryId, decimal amount, string note)
+        {
+            if (amount == 0 || !lines.TryGetValue(categoryId, out var line)) return;
+            line.Debit += Math.Abs(amount);
+            line.SourceNotes.Add(note);
+        }
+
+        void AddCredit(int categoryId, decimal amount, string note)
+        {
+            if (amount == 0 || !lines.TryGetValue(categoryId, out var line)) return;
+            line.Credit += Math.Abs(amount);
+            line.SourceNotes.Add(note);
+        }
+
+        var openingBalances = await db.OpeningBalances
+            .Include(o => o.AccountCategory)
+            .Where(o => o.PeriodId == periodId)
+            .ToListAsync();
+        foreach (var opening in openingBalances)
+        {
+            if (!lines.TryGetValue(opening.AccountCategoryId, out var line)) continue;
+            line.OpeningDebit += opening.Debit;
+            line.OpeningCredit += opening.Credit;
+            AddDebit(opening.AccountCategoryId, opening.Debit, $"Opening balance: {opening.SourceNote ?? "entered by reviewer"}");
+            AddCredit(opening.AccountCategoryId, opening.Credit, $"Opening balance: {opening.SourceNote ?? "entered by reviewer"}");
+        }
+
+        if (bankCategory != null)
+        {
+            var banks = await db.BankAccounts.Where(b => b.CompanyId == companyId && b.OpeningBalance != 0).ToListAsync();
+            foreach (var bank in banks)
+            {
+                var note = $"Bank opening balance: {bank.Name}";
+                if (bank.OpeningBalance > 0)
+                {
+                    lines[bankCategory.Id].OpeningDebit += bank.OpeningBalance;
+                    AddDebit(bankCategory.Id, bank.OpeningBalance, note);
+                }
+                else
+                {
+                    lines[bankCategory.Id].OpeningCredit += Math.Abs(bank.OpeningBalance);
+                    AddCredit(bankCategory.Id, bank.OpeningBalance, note);
+                }
+            }
+        }
+
+        var transactions = await db.ImportedTransactions
+            .Where(t => t.PeriodId == periodId && t.CategoryId != null && !t.IsDuplicate)
+            .ToListAsync();
+        foreach (var transaction in transactions)
+        {
+            if (!categoryById.ContainsKey(transaction.CategoryId!.Value)) continue;
+            var note = $"Imported transaction: {transaction.Description}";
+            if (transaction.Amount >= 0)
+            {
+                if (bankCategory != null)
+                {
+                    lines[bankCategory.Id].TransactionDebit += transaction.Amount;
+                    AddDebit(bankCategory.Id, transaction.Amount, note);
+                }
+                lines[transaction.CategoryId.Value].TransactionCredit += transaction.Amount;
+                lines[transaction.CategoryId.Value].TransactionCount++;
+                AddCredit(transaction.CategoryId.Value, transaction.Amount, note);
+            }
+            else
+            {
+                if (bankCategory != null)
+                {
+                    lines[bankCategory.Id].TransactionCredit += Math.Abs(transaction.Amount);
+                    AddCredit(bankCategory.Id, transaction.Amount, note);
+                }
+                lines[transaction.CategoryId.Value].TransactionDebit += Math.Abs(transaction.Amount);
+                lines[transaction.CategoryId.Value].TransactionCount++;
+                AddDebit(transaction.CategoryId.Value, transaction.Amount, note);
+            }
+        }
+
+        var adjustments = await db.Adjustments.Where(a => a.PeriodId == periodId).ToListAsync();
+        foreach (var adjustment in adjustments)
+        {
+            if (adjustment.DebitCategoryId.HasValue && lines.ContainsKey(adjustment.DebitCategoryId.Value))
+            {
+                lines[adjustment.DebitCategoryId.Value].AdjustmentDebit += adjustment.Amount;
+                lines[adjustment.DebitCategoryId.Value].AdjustmentCount++;
+                AddDebit(adjustment.DebitCategoryId.Value, adjustment.Amount, $"Adjustment: {adjustment.Description}");
+            }
+            if (adjustment.CreditCategoryId.HasValue && lines.ContainsKey(adjustment.CreditCategoryId.Value))
+            {
+                lines[adjustment.CreditCategoryId.Value].AdjustmentCredit += adjustment.Amount;
+                lines[adjustment.CreditCategoryId.Value].AdjustmentCount++;
+                AddCredit(adjustment.CreditCategoryId.Value, adjustment.Amount, $"Adjustment: {adjustment.Description}");
+            }
+        }
+
+        return lines.Values
+            .Select(l =>
+            {
+                var netDebit = l.Debit - l.Credit;
+                return new StatementSourceSummary(
+                    l.Category.Code,
+                    l.Category.Name,
+                    l.Category.Type.ToString(),
+                    l.OpeningDebit,
+                    l.OpeningCredit,
+                    l.TransactionDebit,
+                    l.TransactionCredit,
+                    l.TransactionCount,
+                    l.AdjustmentDebit,
+                    l.AdjustmentCredit,
+                    l.AdjustmentCount,
+                    netDebit > 0 ? netDebit : 0,
+                    netDebit < 0 ? Math.Abs(netDebit) : 0,
+                    l.SourceNotes.Distinct().Take(12).ToList()
+                );
+            })
+            .Where(s => s.OpeningDebit != 0 || s.OpeningCredit != 0
+                || s.TransactionDebit != 0 || s.TransactionCredit != 0
+                || s.AdjustmentDebit != 0 || s.AdjustmentCredit != 0
+                || s.ClosingDebit != 0 || s.ClosingCredit != 0)
+            .OrderBy(s => s.Code)
+            .ToList();
     }
 
     public async Task<BalanceSheet> GetBalanceSheetAsync(int periodId)
@@ -271,7 +523,10 @@ public class FinancialStatementsService(AccountsDbContext db)
         // Capital and reserves are computed independently from equity movements.
         // Any difference is surfaced instead of being hidden inside retained earnings.
         var shareCapitals = await db.ShareCapitals.Where(s => s.CompanyId == companyId).ToListAsync();
-        var shareCapital = shareCapitals.Count > 0 ? shareCapitals.Sum(s => s.TotalValue) : 1m;
+        var openingShareCapital = await GetOpeningEquityBalanceAsync(periodId, "3000");
+        var shareCapital = shareCapitals.Count > 0
+            ? shareCapitals.Sum(s => s.TotalValue)
+            : openingShareCapital != 0 ? openingShareCapital : 1m;
         var openingRetainedEarnings = await GetOpeningRetainedEarningsAsync(period);
         var profitForYear = (await GetProfitAndLossAsync(periodId)).ProfitAfterTax;
         var dividendsPaid = await db.Dividends.Where(d => d.PeriodId == periodId).SumAsync(d => d.Amount);
@@ -296,6 +551,10 @@ public class FinancialStatementsService(AccountsDbContext db)
 
     private async Task<decimal> GetOpeningRetainedEarningsAsync(AccountingPeriod period)
     {
+        var explicitOpening = await GetOpeningEquityBalanceAsync(period.Id, "3100");
+        if (explicitOpening != 0)
+            return explicitOpening;
+
         var priorPeriod = await db.AccountingPeriods
             .Where(p => p.CompanyId == period.CompanyId && p.PeriodEnd < period.PeriodStart)
             .OrderByDescending(p => p.PeriodEnd)
@@ -313,6 +572,16 @@ public class FinancialStatementsService(AccountsDbContext db)
         return earlierOpening + priorProfit - priorDividends;
     }
 
+    private async Task<decimal> GetOpeningEquityBalanceAsync(int periodId, string code)
+    {
+        var balances = await db.OpeningBalances
+            .Include(o => o.AccountCategory)
+            .Where(o => o.PeriodId == periodId && o.AccountCategory.Code == code)
+            .ToListAsync();
+
+        return balances.Sum(o => o.Credit - o.Debit);
+    }
+
     public async Task<ReadinessScore> GetReadinessScoreAsync(int periodId)
     {
         var period = await db.AccountingPeriods
@@ -325,7 +594,12 @@ public class FinancialStatementsService(AccountsDbContext db)
         var missing = new List<string>();
         var warnings = new List<string>();
         int completedChecks = 0;
-        int totalChecks = 12;
+        int totalChecks = 19;
+        var reviewedSections = await db.YearEndReviewConfirmations
+            .Where(r => r.PeriodId == periodId && r.Confirmed)
+            .Select(r => r.SectionKey)
+            .ToListAsync();
+        var reviewed = reviewedSections.ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         // 1. Size classification done?
         if (period.SizeClassification != null) completedChecks++; else missing.Add("Size classification not completed");
@@ -344,12 +618,20 @@ public class FinancialStatementsService(AccountsDbContext db)
 
         // 5. Debtors reviewed?
         var hasDebtors = await db.Debtors.AnyAsync(d => d.PeriodId == periodId);
-        completedChecks++; // Reviewed even if none (zero debtors is valid)
+        if (hasDebtors || reviewed.Contains("debtors")) completedChecks++;
+        else missing.Add("Debtors and other receivables not reviewed");
 
         // 6. Creditors reviewed?
-        completedChecks++;
+        var hasCreditors = await db.Creditors.AnyAsync(c => c.PeriodId == periodId);
+        if (hasCreditors || reviewed.Contains("creditors")) completedChecks++;
+        else missing.Add("Creditors, accruals and payables not reviewed");
 
-        // 7. Fixed assets up to date?
+        // 7. Inventory reviewed?
+        var hasInventory = await db.Inventories.AnyAsync(i => i.PeriodId == periodId);
+        if (!period.Company.HasStock || hasInventory || reviewed.Contains("inventory")) completedChecks++;
+        else missing.Add("Stock / inventory not reviewed");
+
+        // 8. Fixed assets up to date?
         if (period.Company.OwnsAssets)
         {
             var assetCount = await db.FixedAssets.CountAsync(a => a.CompanyId == companyId);
@@ -357,28 +639,82 @@ public class FinancialStatementsService(AccountsDbContext db)
         }
         else completedChecks++;
 
-        // 8. Payroll summary?
+        // 9. Loans and director loans reviewed?
+        var hasLoans = await db.Loans.AnyAsync(l => l.CompanyId == companyId);
+        var hasDirectorLoans = await db.DirectorLoans.AnyAsync(d => d.PeriodId == periodId);
+        if ((!period.Company.HasBorrowings || hasLoans || reviewed.Contains("loans"))
+            && (!period.Company.HasDirectorLoans || hasDirectorLoans || reviewed.Contains("director-loans")))
+            completedChecks++;
+        else
+            missing.Add("Loans or director loans not reviewed");
+
+        // 10. Payroll summary?
         if (period.Company.IsEmployer)
         {
             var hasPayroll = await db.PayrollSummaries.AnyAsync(p => p.PeriodId == periodId);
             if (hasPayroll) completedChecks++; else missing.Add("Payroll summary not entered (company is an employer)");
         }
-        else completedChecks++;
+        else if (reviewed.Contains("payroll")) completedChecks++;
+        else missing.Add("Payroll and staff status not confirmed");
 
-        // 9. Tax balances entered?
+        // 11. Tax balances entered?
         var hasTax = await db.TaxBalances.AnyAsync(t => t.PeriodId == periodId);
-        if (hasTax) completedChecks++; else missing.Add("No tax balances entered");
+        if (hasTax || reviewed.Contains("tax")) completedChecks++; else missing.Add("Tax balances not reviewed");
 
-        // 10. Adjustments generated?
+        // 12. Dividends reviewed?
+        var hasDividends = await db.Dividends.AnyAsync(d => d.PeriodId == periodId);
+        if (hasDividends || reviewed.Contains("dividends")) completedChecks++;
+        else missing.Add("Dividends not reviewed");
+
+        // 13. Other statutory disclosures reviewed?
+        var hasPostBalanceSheetEvents = await db.PostBalanceSheetEvents.AnyAsync(e => e.PeriodId == periodId);
+        var hasRelatedParties = await db.RelatedPartyTransactions.AnyAsync(r => r.PeriodId == periodId);
+        var hasContingencies = await db.ContingentLiabilities.AnyAsync(c => c.PeriodId == periodId);
+        if ((hasPostBalanceSheetEvents || reviewed.Contains("post-balance-sheet-events"))
+            && (hasRelatedParties || reviewed.Contains("related-parties"))
+            && (hasContingencies || reviewed.Contains("contingent-liabilities")))
+            completedChecks++;
+        else
+            missing.Add("Post balance sheet events, related parties, or contingencies not reviewed");
+
+        // 14. Going concern assessment completed?
+        if (reviewed.Contains("going-concern") && (period.GoingConcernConfirmed || !string.IsNullOrWhiteSpace(period.GoingConcernNote)))
+            completedChecks++;
+        else
+            missing.Add("Going concern assessment not completed");
+
+        // 15. Notes generated and included?
+        var hasIncludedNotes = await db.NotesDisclosures.AnyAsync(n => n.PeriodId == periodId && n.IsIncluded);
+        if (hasIncludedNotes)
+            completedChecks++;
+        else
+            missing.Add("Notes to the financial statements not generated or reviewed");
+
+        // 16. Adjustments generated?
         var hasAdj = await db.Adjustments.AnyAsync(a => a.PeriodId == periodId);
         if (hasAdj) completedChecks++; else missing.Add("Year-end adjustments not generated");
 
-        // 11. Adjustments approved?
+        // 17. Adjustments approved?
         var unapproved = await db.Adjustments.CountAsync(a => a.PeriodId == periodId && a.ApprovedAt == null);
         if (unapproved == 0 && hasAdj) completedChecks++;
         else if (unapproved > 0) warnings.Add($"{unapproved} adjustments pending approval");
 
-        // 12. Balance sheet balances?
+        // 18. Opening balances reviewed and balanced?
+        var openingBalances = await db.OpeningBalances.Where(o => o.PeriodId == periodId).ToListAsync();
+        var unreviewedOpeningBalances = openingBalances.Count(o => !o.Reviewed);
+        var bankOpeningBalances = await db.BankAccounts
+            .Where(b => b.CompanyId == companyId && b.OpeningBalance != 0)
+            .ToListAsync();
+        var openingDebit = openingBalances.Sum(o => o.Debit) + bankOpeningBalances.Where(b => b.OpeningBalance > 0).Sum(b => b.OpeningBalance);
+        var openingCredit = openingBalances.Sum(o => o.Credit) + bankOpeningBalances.Where(b => b.OpeningBalance < 0).Sum(b => Math.Abs(b.OpeningBalance));
+        if (unreviewedOpeningBalances > 0)
+            missing.Add($"{unreviewedOpeningBalances} opening balances not reviewed");
+        else if (Math.Abs(openingDebit - openingCredit) > 0.01m)
+            warnings.Add($"Opening balances do not agree. Difference: {(openingDebit - openingCredit):C}.");
+        else
+            completedChecks++;
+
+        // 19. Balance sheet balances?
         try
         {
             var bs = await GetBalanceSheetAsync(periodId);

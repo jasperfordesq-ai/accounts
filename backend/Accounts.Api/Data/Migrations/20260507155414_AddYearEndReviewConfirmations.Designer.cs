@@ -3,6 +3,7 @@ using System;
 using Accounts.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Accounts.Api.Data.Migrations
 {
     [DbContext(typeof(AccountsDbContext))]
-    partial class AccountsDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260507155414_AddYearEndReviewConfirmations")]
+    partial class AddYearEndReviewConfirmations
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1194,57 +1197,6 @@ namespace Accounts.Api.Data.Migrations
                     b.ToTable("notes_disclosures", (string)null);
                 });
 
-            modelBuilder.Entity("Accounts.Api.Entities.OpeningBalance", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("AccountCategoryId")
-                        .HasColumnType("integer");
-
-                    b.Property<decimal>("Credit")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<decimal>("Debit")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<DateTime>("EnteredAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("EnteredBy")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<int>("PeriodId")
-                        .HasColumnType("integer");
-
-                    b.Property<bool>("Reviewed")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTime?>("ReviewedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ReviewedBy")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<string>("SourceNote")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AccountCategoryId");
-
-                    b.HasIndex("PeriodId", "AccountCategoryId")
-                        .IsUnique();
-
-                    b.ToTable("opening_balances", (string)null);
-                });
-
             modelBuilder.Entity("Accounts.Api.Entities.PayrollSummary", b =>
                 {
                     b.Property<int>("Id")
@@ -1950,25 +1902,6 @@ namespace Accounts.Api.Data.Migrations
                     b.Navigation("Period");
                 });
 
-            modelBuilder.Entity("Accounts.Api.Entities.OpeningBalance", b =>
-                {
-                    b.HasOne("Accounts.Api.Entities.AccountCategory", "AccountCategory")
-                        .WithMany()
-                        .HasForeignKey("AccountCategoryId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Accounts.Api.Entities.AccountingPeriod", "Period")
-                        .WithMany("OpeningBalances")
-                        .HasForeignKey("PeriodId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("AccountCategory");
-
-                    b.Navigation("Period");
-                });
-
             modelBuilder.Entity("Accounts.Api.Entities.PayrollSummary", b =>
                 {
                     b.HasOne("Accounts.Api.Entities.AccountingPeriod", "Period")
@@ -2123,8 +2056,6 @@ namespace Accounts.Api.Data.Migrations
                     b.Navigation("Inventories");
 
                     b.Navigation("NotesDisclosures");
-
-                    b.Navigation("OpeningBalances");
 
                     b.Navigation("PayrollSummary");
 

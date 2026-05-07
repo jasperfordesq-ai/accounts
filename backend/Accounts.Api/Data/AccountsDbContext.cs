@@ -36,6 +36,8 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
     public DbSet<PayrollSummary> PayrollSummaries => Set<PayrollSummary>();
     public DbSet<TaxBalance> TaxBalances => Set<TaxBalance>();
     public DbSet<Dividend> Dividends => Set<Dividend>();
+    public DbSet<OpeningBalance> OpeningBalances => Set<OpeningBalance>();
+    public DbSet<YearEndReviewConfirmation> YearEndReviewConfirmations => Set<YearEndReviewConfirmation>();
 
     // Adjustments
     public DbSet<Adjustment> Adjustments => Set<Adjustment>();
@@ -243,6 +245,33 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
             e.Property(i => i.Description).HasMaxLength(500).IsRequired();
             e.Property(i => i.Value).HasColumnType("decimal(18,2)");
             e.HasOne(i => i.Period).WithMany(p => p.Inventories).HasForeignKey(i => i.PeriodId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Opening balances
+        modelBuilder.Entity<OpeningBalance>(e =>
+        {
+            e.ToTable("opening_balances");
+            e.HasKey(o => o.Id);
+            e.Property(o => o.Debit).HasColumnType("decimal(18,2)");
+            e.Property(o => o.Credit).HasColumnType("decimal(18,2)");
+            e.Property(o => o.SourceNote).HasMaxLength(1000);
+            e.Property(o => o.EnteredBy).HasMaxLength(200);
+            e.Property(o => o.ReviewedBy).HasMaxLength(200);
+            e.HasOne(o => o.Period).WithMany(p => p.OpeningBalances).HasForeignKey(o => o.PeriodId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(o => o.AccountCategory).WithMany().HasForeignKey(o => o.AccountCategoryId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(o => new { o.PeriodId, o.AccountCategoryId }).IsUnique();
+        });
+
+        // Year-end review confirmations
+        modelBuilder.Entity<YearEndReviewConfirmation>(e =>
+        {
+            e.ToTable("year_end_review_confirmations");
+            e.HasKey(r => r.Id);
+            e.Property(r => r.SectionKey).HasMaxLength(80).IsRequired();
+            e.Property(r => r.ConfirmedBy).HasMaxLength(200);
+            e.Property(r => r.Note).HasMaxLength(1000);
+            e.HasOne(r => r.Period).WithMany(p => p.YearEndReviewConfirmations).HasForeignKey(r => r.PeriodId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(r => new { r.PeriodId, r.SectionKey }).IsUnique();
         });
 
         // Loan

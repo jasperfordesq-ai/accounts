@@ -77,6 +77,12 @@ public class FilingWorkflowService(AccountsDbContext db, FinancialStatementsServ
 
         if (!croStatus.AccountsPdfReady) issues.Add("CRO accounts PDF not generated");
         if (!croStatus.SignaturePageReady) issues.Add("CRO signature page not generated");
+        var hasActiveDirector = await db.CompanyOfficers.AnyAsync(o =>
+            o.CompanyId == companyId && o.Role == OfficerRole.Director && o.ResignedDate == null);
+        var hasActiveSecretary = await db.CompanyOfficers.AnyAsync(o =>
+            o.CompanyId == companyId && (o.Role == OfficerRole.Secretary || o.Role == OfficerRole.CompanySecretary) && o.ResignedDate == null);
+        if (!hasActiveDirector) issues.Add("No active director recorded for CRO accounts certification.");
+        if (!hasActiveSecretary) issues.Add("No active company secretary recorded for CRO accounts certification.");
         if (croStatus.Status == FilingStatus.Submitted && !croStatus.PaymentCompleted)
             issues.Add("CORE payment has not been confirmed. The B1 is not complete until payment is made.");
         if (croStatus.Status == FilingStatus.CorrectionRequired && croStatus.CorrectionDeadline.HasValue && croStatus.CorrectionDeadline.Value < DateTime.UtcNow)

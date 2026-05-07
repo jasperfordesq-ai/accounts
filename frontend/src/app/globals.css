@@ -127,6 +127,254 @@ html {
   border-color: var(--ring);
 }
 
+/* Local HeroUI primitive skin */
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  border: 1px solid transparent;
+  border-radius: 0.375rem;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.button--sm {
+  min-height: 2rem;
+  padding: 0 0.75rem;
+  font-size: 0.875rem;
+}
+
+.button--md {
+  min-height: 2.5rem;
+  padding: 0 1rem;
+  font-size: 0.875rem;
+}
+
+.button--icon-only {
+  width: 2rem;
+  min-width: 2rem;
+  padding: 0;
+}
+
+.button--primary {
+  background: #047857;
+  border-color: #047857;
+  color: #ffffff;
+  box-shadow: 0 1px 2px rgba(4, 120, 87, 0.18);
+}
+
+.button--primary:hover {
+  background: #065f46;
+  border-color: #065f46;
+}
+
+.button--secondary {
+  background: #ecfdf5;
+  border-color: #bbf7d0;
+  color: #047857;
+}
+
+.button--secondary:hover {
+  background: #d1fae5;
+}
+
+.button--outline {
+  background: #ffffff;
+  border-color: #d1d5db;
+  color: #374151;
+}
+
+.button--outline:hover,
+.button--ghost:hover {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+}
+
+.button--ghost {
+  background: transparent;
+  color: #374151;
+}
+
+.button--danger {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #ffffff;
+}
+
+.button--danger:hover {
+  background: #b91c1c;
+  border-color: #b91c1c;
+}
+
+.button:disabled,
+.button[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.card {
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+.card__header {
+  padding: 1rem 1.25rem 0.75rem;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.card__title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+.card__description {
+  margin-top: 0.25rem;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: #6b7280;
+}
+
+.card__content {
+  padding: 1rem 1.25rem;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  width: fit-content;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.chip--sm {
+  min-height: 1.5rem;
+  padding: 0 0.5rem;
+  font-size: 0.75rem;
+}
+
+.chip--lg {
+  min-height: 2.25rem;
+  padding: 0 0.875rem;
+  font-size: 0.95rem;
+}
+
+.chip--default {
+  background: #f3f4f6;
+  border-color: #e5e7eb;
+  color: #374151;
+}
+
+.chip--success {
+  background: #ecfdf5;
+  border-color: #bbf7d0;
+  color: #047857;
+}
+
+.chip--warning {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #92400e;
+}
+
+.chip--danger {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
+.chip--accent,
+.chip--primary {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+
+.dark .button--primary {
+  background: #059669;
+  border-color: #059669;
+  color: #ffffff;
+}
+
+.dark .button--secondary {
+  background: #064e3b;
+  border-color: #047857;
+  color: #d1fae5;
+}
+
+.dark .button--outline {
+  background: #171717;
+  border-color: #404040;
+  color: #f5f5f5;
+}
+
+.dark .button--ghost {
+  color: #f5f5f5;
+}
+
+.dark .button--outline:hover,
+.dark .button--ghost:hover {
+  background: #262626;
+  border-color: #525252;
+}
+
+.dark .card__header {
+  border-bottom-color: #262626;
+}
+
+.dark .card__title {
+  color: #f5f5f5;
+}
+
+.dark .card__description {
+  color: #a3a3a3;
+}
+
+.dark .chip--default {
+  background: #262626;
+  border-color: #404040;
+  color: #d4d4d4;
+}
+
+.dark .chip--success {
+  background: #052e1c;
+  border-color: #047857;
+  color: #a7f3d0;
+}
+
+.dark .chip--warning {
+  background: #451a03;
+  border-color: #92400e;
+  color: #fde68a;
+}
+
+.dark .chip--danger {
+  background: #450a0a;
+  border-color: #991b1b;
+  color: #fecaca;
+}
+
+.dark .chip--accent,
+.dark .chip--primary {
+  background: #172554;
+  border-color: #1d4ed8;
+  color: #bfdbfe;
+}
+
 /* Dropzone drag-over state */
 .dropzone-active {
   border-color: var(--ring) !important;

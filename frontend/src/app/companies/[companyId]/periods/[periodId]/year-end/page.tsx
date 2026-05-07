@@ -78,7 +78,11 @@ import {
   type RelatedPartyTransaction,
   type ContingentLiability,
   type DirectorLoanCompliance,
+  getYearEndReviewConfirmations,
+  saveYearEndReviewConfirmation,
+  type YearEndReviewConfirmation,
 } from "@/lib/api";
+import { getReviewerName } from "@/lib/reviewer";
 
 const inputClass =
   "w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors";
@@ -100,6 +104,9 @@ function Section({
   subtitle,
   icon: Icon,
   completed,
+  review,
+  onConfirmReview,
+  reviewSaving,
   children,
   defaultOpen = false,
 }: {
@@ -107,10 +114,15 @@ function Section({
   subtitle: string;
   icon: React.ComponentType<{ className?: string }>;
   completed: boolean;
+  review?: YearEndReviewConfirmation;
+  onConfirmReview?: () => void;
+  reviewSaving?: boolean;
   children: React.ReactNode;
   defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
+  const isReviewed = review?.confirmed === true;
+  const isComplete = completed || isReviewed;
 
   return (
     <Card className="bg-white dark:bg-neutral-900 shadow-sm border border-gray-200 dark:border-neutral-700">
@@ -127,8 +139,13 @@ function Section({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{title}</h3>
-            {completed && (
+            {isComplete && (
               <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+            )}
+            {onConfirmReview && (
+              <Chip size="sm" color={isReviewed ? "success" : "warning"} variant="soft">
+                {isReviewed ? "Reviewed" : "Needs review"}
+              </Chip>
             )}
           </div>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{subtitle}</p>
@@ -142,6 +159,30 @@ function Section({
       {open && (
         <div className="animate-slide-down px-6 pb-6 border-t border-gray-100 dark:border-neutral-700 pt-4">
           {children}
+          {onConfirmReview && (
+            <div className="mt-5 flex flex-col gap-3 rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm dark:border-neutral-700 dark:bg-neutral-800/60 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-medium text-slate-800 dark:text-slate-100">
+                  {isReviewed ? "Section review confirmed" : "Review this section before final accounts"}
+                </p>
+                {isReviewed && review?.confirmedBy && (
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Confirmed by {review.confirmedBy}
+                    {review.confirmedAt && ` on ${new Date(review.confirmedAt).toLocaleDateString("en-IE")}`}
+                  </p>
+                )}
+              </div>
+              <Button
+                size="sm"
+                variant={isReviewed ? "outline" : "primary"}
+                onPress={onConfirmReview}
+                isDisabled={reviewSaving}
+              >
+                {reviewSaving ? <Spinner size="sm" /> : <CheckCircle2 className="w-4 h-4 mr-1" />}
+                {isReviewed ? "Refresh confirmation" : "Confirm reviewed"}
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </Card>
@@ -195,6 +236,7 @@ export default function YearEndQuestionnairePage({
   const [goingConcernConfirmed, setGoingConcernConfirmed] = useState(true);
   const [goingConcernNote, setGoingConcernNote] = useState("");
   const [directorLoanCompliance, setDirectorLoanCompliance] = useState<DirectorLoanCompliance | null>(null);
+  const [reviewConfirmations, setReviewConfirmations] = useState<Record<string, YearEndReviewConfirmation>>({});
 
   const [newPbseDesc, setNewPbseDesc] = useState("");
   const [newPbseDate, setNewPbseDate] = useState("");
@@ -211,6 +253,7 @@ export default function YearEndQuestionnairePage({
 
   // Saving indicators
   const [savingSection, setSavingSection] = useState<string | null>(null);
+  const [savingReviewKey, setSavingReviewKey] = useState<string | null>(null);
 
   const loadAllData = useCallback(async () => {
     setLoading(true);
@@ -231,6 +274,7 @@ export default function YearEndQuestionnairePage({
         payrollData,
         taxData,
         dividendsData,
+        reviewData,
       ] = await Promise.all([
         getDebtors(cId, pId).catch(() => []),
         getCreditors(cId, pId).catch(() => []),
@@ -239,6 +283,7 @@ export default function YearEndQuestionnairePage({
         getPayroll(cId, pId),
         getTaxBalances(cId, pId).catch(() => []),
         getDividends(cId, pId).catch(() => []),
+        getYearEndReviewConfirmations(cId, pId).catch(() => []),
       ]);
 
       setDebtors(debtorsData);
@@ -247,6 +292,9 @@ export default function YearEndQuestionnairePage({
       setInventory(inventoryData);
       setPayroll(payrollData);
       setDividends(dividendsData);
+      setReviewConfirmations(
+        Object.fromEntries(reviewData.map((review) => [review.sectionKey, review]))
+      );
 
       // Phase 2: Interrogation data
       try { const pbse = await getPostBalanceSheetEvents(cId, pId); setPostBsEvents(pbse); } catch {}
@@ -279,6 +327,23 @@ export default function YearEndQuestionnairePage({
   useEffect(() => {
     loadAllData();
   }, [loadAllData]);
+
+  async function handleConfirmReview(sectionKey: string, note?: string) {
+    setSavingReviewKey(sectionKey);
+    try {
+      const updated = await saveYearEndReviewConfirmation(cId, pId, sectionKey, {
+        confirmed: true,
+        confirmedBy: getReviewerName(),
+        note,
+      });
+      setReviewConfirmations((current) => ({ ...current, [sectionKey]: updated }));
+      toast.success("Section review confirmed");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to confirm section review");
+    } finally {
+      setSavingReviewKey(null);
+    }
+  }
 
   /* ---- Debtor handlers ---- */
   async function handleAddDebtor() {
@@ -572,20 +637,22 @@ export default function YearEndQuestionnairePage({
   }
 
   /* ---- Completeness tracking ---- */
+  const isReviewed = (key: string) => reviewConfirmations[key]?.confirmed === true;
+  const sectionIsComplete = (key: string, hasEvidence: boolean) => hasEvidence || isReviewed(key);
   const sectionCompleteness = [
-    debtors.length > 0,
-    creditors.length > 0,
-    fixedAssets.length > 0,
-    inventory.length > 0,
-    true, // loans placeholder
-    payroll !== null,
-    taxBalances.length > 0,
-    dividends.length > 0,
-    directorLoanCompliance !== null, // director loans
-    postBsEvents.length > 0 || true, // post-BS events (optional — always counts)
-    relatedParties.length > 0 || true, // related parties (optional — always counts)
-    contingencies.length > 0 || true, // contingencies (optional — always counts)
-    true, // going concern (always answered)
+    sectionIsComplete("debtors", debtors.length > 0),
+    sectionIsComplete("creditors", creditors.length > 0),
+    sectionIsComplete("fixed-assets", fixedAssets.length > 0),
+    sectionIsComplete("inventory", inventory.length > 0),
+    sectionIsComplete("loans", false),
+    sectionIsComplete("director-loans", directorLoanCompliance !== null),
+    sectionIsComplete("payroll", payroll !== null),
+    sectionIsComplete("tax", taxBalances.length > 0),
+    sectionIsComplete("dividends", dividends.length > 0),
+    sectionIsComplete("post-balance-sheet-events", postBsEvents.length > 0),
+    sectionIsComplete("related-parties", relatedParties.length > 0),
+    sectionIsComplete("contingent-liabilities", contingencies.length > 0),
+    sectionIsComplete("going-concern", false),
   ];
   const totalSections = sectionCompleteness.length;
   const completedCount = sectionCompleteness.filter(Boolean).length;
@@ -665,6 +732,9 @@ export default function YearEndQuestionnairePage({
           subtitle="Does anyone owe the company money at year-end?"
           icon={Users}
           completed={debtors.length > 0}
+          review={reviewConfirmations["debtors"]}
+          reviewSaving={savingReviewKey === "debtors"}
+          onConfirmReview={() => handleConfirmReview("debtors", debtors.length === 0 ? "Confirmed no year-end debtors, prepayments, or other receivables to disclose." : undefined)}
         >
           {/* Existing items */}
           {debtors.length > 0 && (
@@ -757,6 +827,9 @@ export default function YearEndQuestionnairePage({
           subtitle="Does the company owe anyone money at year-end?"
           icon={CreditCard}
           completed={creditors.length > 0}
+          review={reviewConfirmations["creditors"]}
+          reviewSaving={savingReviewKey === "creditors"}
+          onConfirmReview={() => handleConfirmReview("creditors", creditors.length === 0 ? "Confirmed no year-end creditors, accruals, or other payables to disclose." : undefined)}
         >
           {creditors.length > 0 && (
             <div className="space-y-2 mb-4">
@@ -863,6 +936,9 @@ export default function YearEndQuestionnairePage({
           subtitle="Did you buy or sell equipment, vehicles, or property during the year?"
           icon={Building2}
           completed={fixedAssets.length > 0}
+          review={reviewConfirmations["fixed-assets"]}
+          reviewSaving={savingReviewKey === "fixed-assets"}
+          onConfirmReview={() => handleConfirmReview("fixed-assets", fixedAssets.length === 0 ? "Confirmed no fixed assets requiring disclosure or depreciation for this period." : undefined)}
         >
           {fixedAssets.length > 0 && (
             <div className="space-y-2 mb-4">
@@ -997,6 +1073,9 @@ export default function YearEndQuestionnairePage({
           subtitle="Does the company hold stock or work in progress at year-end?"
           icon={Package}
           completed={inventory.length > 0}
+          review={reviewConfirmations["inventory"]}
+          reviewSaving={savingReviewKey === "inventory"}
+          onConfirmReview={() => handleConfirmReview("inventory", inventory.length === 0 ? "Confirmed no stock or work in progress at year-end." : undefined)}
         >
           {inventory.length > 0 && (
             <div className="space-y-2 mb-4">
@@ -1083,7 +1162,10 @@ export default function YearEndQuestionnairePage({
           title="Loans & Borrowings"
           subtitle="Does the company have any loans or borrowings outstanding?"
           icon={Landmark}
-          completed={true}
+          completed={false}
+          review={reviewConfirmations["loans"]}
+          reviewSaving={savingReviewKey === "loans"}
+          onConfirmReview={() => handleConfirmReview("loans", "Loans and borrowings reviewed for this company.")}
         >
           <div className="rounded-lg bg-gray-50 dark:bg-neutral-800 p-4 text-center">
             <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -1098,6 +1180,9 @@ export default function YearEndQuestionnairePage({
           subtitle="How many staff does the company employ? What are the total wages?"
           icon={Receipt}
           completed={payroll !== null}
+          review={reviewConfirmations["payroll"]}
+          reviewSaving={savingReviewKey === "payroll"}
+          onConfirmReview={() => handleConfirmReview("payroll", payroll === null ? "Confirmed no payroll or staff costs for this period." : undefined)}
         >
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -1163,6 +1248,9 @@ export default function YearEndQuestionnairePage({
           subtitle="Corporation Tax, VAT, and PAYE/PRSI balances at year-end"
           icon={Banknote}
           completed={taxBalances.length > 0}
+          review={reviewConfirmations["tax"]}
+          reviewSaving={savingReviewKey === "tax"}
+          onConfirmReview={() => handleConfirmReview("tax", taxBalances.length === 0 ? "Confirmed no tax creditor/debtor balances requiring recognition at year-end." : undefined)}
         >
           <div className="space-y-6">
             {[
@@ -1244,6 +1332,9 @@ export default function YearEndQuestionnairePage({
           subtitle="Were any dividends declared or paid during the year?"
           icon={PiggyBank}
           completed={dividends.length > 0}
+          review={reviewConfirmations["dividends"]}
+          reviewSaving={savingReviewKey === "dividends"}
+          onConfirmReview={() => handleConfirmReview("dividends", dividends.length === 0 ? "Confirmed no dividends were declared or paid during the period." : undefined)}
         >
           {dividends.length > 0 && (
             <div className="space-y-2 mb-4">
@@ -1334,6 +1425,9 @@ export default function YearEndQuestionnairePage({
           subtitle="Are there any loans between directors and the company?"
           icon={UserCheck}
           completed={directorLoanCompliance !== null}
+          review={reviewConfirmations["director-loans"]}
+          reviewSaving={savingReviewKey === "director-loans"}
+          onConfirmReview={() => handleConfirmReview("director-loans", "Director loan position reviewed for the period.")}
         >
           {directorLoanCompliance ? (
             <div className="space-y-4">
@@ -1425,6 +1519,9 @@ export default function YearEndQuestionnairePage({
           subtitle="Has anything significant happened between year-end and today?"
           icon={CalendarCheck}
           completed={postBsEvents.length > 0}
+          review={reviewConfirmations["post-balance-sheet-events"]}
+          reviewSaving={savingReviewKey === "post-balance-sheet-events"}
+          onConfirmReview={() => handleConfirmReview("post-balance-sheet-events", postBsEvents.length === 0 ? "Confirmed no adjusting or material non-adjusting post balance sheet events identified." : undefined)}
         >
           {postBsEvents.length > 0 && (
             <div className="space-y-2 mb-4">
@@ -1525,6 +1622,9 @@ export default function YearEndQuestionnairePage({
           subtitle="Were there any transactions with directors, connected persons, or group companies?"
           icon={Users}
           completed={relatedParties.length > 0}
+          review={reviewConfirmations["related-parties"]}
+          reviewSaving={savingReviewKey === "related-parties"}
+          onConfirmReview={() => handleConfirmReview("related-parties", relatedParties.length === 0 ? "Confirmed no related party transactions requiring disclosure were identified." : undefined)}
         >
           {relatedParties.length > 0 && (
             <div className="space-y-2 mb-4">
@@ -1637,6 +1737,9 @@ export default function YearEndQuestionnairePage({
           subtitle="Are there any potential liabilities that depend on the outcome of uncertain future events?"
           icon={ShieldAlert}
           completed={contingencies.length > 0}
+          review={reviewConfirmations["contingent-liabilities"]}
+          reviewSaving={savingReviewKey === "contingent-liabilities"}
+          onConfirmReview={() => handleConfirmReview("contingent-liabilities", contingencies.length === 0 ? "Confirmed no contingent liabilities requiring disclosure were identified." : undefined)}
         >
           {contingencies.length > 0 && (
             <div className="space-y-2 mb-4">
@@ -1750,7 +1853,10 @@ export default function YearEndQuestionnairePage({
           title="Going Concern"
           subtitle="Do the directors confirm the company will continue in business for at least 12 months?"
           icon={HeartPulse}
-          completed={true}
+          completed={false}
+          review={reviewConfirmations["going-concern"]}
+          reviewSaving={savingReviewKey === "going-concern"}
+          onConfirmReview={() => handleConfirmReview("going-concern", goingConcernConfirmed ? "Directors' going concern assessment reviewed." : goingConcernNote || "Going concern uncertainty noted for review.")}
         >
           <div className="space-y-4">
             {!goingConcernConfirmed && (

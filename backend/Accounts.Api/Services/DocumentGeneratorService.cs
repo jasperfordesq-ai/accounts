@@ -513,7 +513,12 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
             .FirstOrDefaultAsync(p => p.Id == periodId)
             ?? throw new InvalidOperationException($"Period {periodId} not found");
 
-        var regime = period.FilingRegime?.ElectedRegime ?? ElectedRegime.Full;
+        if (period.FilingRegime == null)
+            throw new InvalidOperationException("Confirm the filing regime before generating the CRO filing pack.");
+
+        await AssertFinalDocumentReadinessAsync(periodId, "CRO filing pack");
+
+        var regime = period.FilingRegime.ElectedRegime;
 
         // For Medium/Full/Small (non-abridged), CRO pack is the full accounts package.
         if (regime == ElectedRegime.Medium || regime == ElectedRegime.Full || regime == ElectedRegime.Small)
@@ -671,7 +676,17 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
         var company = period.Company;
         var directors = company.Officers.Where(o => o.Role == OfficerRole.Director).ToList();
         var secretary = company.Officers.FirstOrDefault(o => o.Role == OfficerRole.Secretary || o.Role == OfficerRole.CompanySecretary);
-        var regime = period.FilingRegime?.ElectedRegime ?? ElectedRegime.Full;
+
+        if (period.FilingRegime == null)
+            throw new InvalidOperationException("Confirm the filing regime before generating the CRO signature page.");
+        if (directors.Count == 0)
+            throw new InvalidOperationException("Record at least one active director before generating the CRO signature page.");
+        if (secretary == null)
+            throw new InvalidOperationException("Record an active company secretary before generating the CRO signature page.");
+
+        await AssertFinalDocumentReadinessAsync(periodId, "CRO signature page");
+
+        var regime = period.FilingRegime.ElectedRegime;
         var approvalDate = DateTime.UtcNow;
 
         var document = Document.Create(doc =>
@@ -733,5 +748,25 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
         using var stream = new MemoryStream();
         document.GeneratePdf(stream);
         return stream.ToArray();
+    }
+
+    private async Task AssertFinalDocumentReadinessAsync(int periodId, string documentName)
+    {
+        var readiness = await statementsService.GetReadinessScoreAsync(periodId);
+        var blockers = new List<string>();
+
+        if (!readiness.BalanceSheetBalances)
+            blockers.Add("balance sheet does not balance");
+
+        blockers.AddRange(readiness.MissingItems);
+        blockers.AddRange(readiness.Warnings.Where(w =>
+            w.Contains("pending approval", StringComparison.OrdinalIgnoreCase)
+            || w.Contains("Opening balances do not agree", StringComparison.OrdinalIgnoreCase)
+            || w.Contains("Balance sheet does not balance", StringComparison.OrdinalIgnoreCase)));
+
+        blockers = blockers.Distinct().Take(10).ToList();
+        if (blockers.Count > 0)
+            throw new InvalidOperationException(
+                $"Cannot generate final {documentName} until readiness blockers are resolved: {string.Join("; ", blockers)}");
     }
 }

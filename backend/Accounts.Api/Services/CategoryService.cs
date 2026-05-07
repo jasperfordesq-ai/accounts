@@ -47,6 +47,7 @@ public class CategoryService(AccountsDbContext db)
             new() { CompanyId = companyId, Code = "7400", Name = "Training & Development", Type = AccountCategoryType.Expense, TaxTreatment = TaxTreatment.Deductible, IsSystem = true },
             new() { CompanyId = companyId, Code = "7500", Name = "Entertainment", Type = AccountCategoryType.Expense, TaxTreatment = TaxTreatment.NonDeductible, IsSystem = true },
             new() { CompanyId = companyId, Code = "7900", Name = "Sundry Expenses", Type = AccountCategoryType.Expense, TaxTreatment = TaxTreatment.Deductible, IsSystem = true },
+            new() { CompanyId = companyId, Code = "8000", Name = "Corporation Tax Charge", Type = AccountCategoryType.Expense, TaxTreatment = TaxTreatment.NonDeductible, IsSystem = true },
 
             // Fixed Assets
             new() { CompanyId = companyId, Code = "0010", Name = "Land & Buildings", Type = AccountCategoryType.Asset, TaxTreatment = TaxTreatment.CapitalAllowance, IsSystem = true },
@@ -99,7 +100,7 @@ public class CategoryService(AccountsDbContext db)
 
         // Fuzzy matching — check category names
         var categories = await db.AccountCategories
-            .Where(c => c.CompanyId == companyId || c.IsSystem)
+            .Where(c => c.CompanyId == companyId || (c.IsSystem && c.CompanyId == null))
             .ToListAsync();
 
         var descLower = description.ToLower();

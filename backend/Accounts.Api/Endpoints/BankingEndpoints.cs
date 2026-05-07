@@ -92,8 +92,15 @@ public static class BankingEndpoints
 
         transactions.MapPut("/{id:int}/categorise", async (int companyId, int periodId, int id, CategoriseInput input, AccountsDbContext db) =>
         {
-            var txn = await db.ImportedTransactions.FirstOrDefaultAsync(t => t.Id == id && t.PeriodId == periodId);
+            var txn = await db.ImportedTransactions
+                .Include(t => t.BankAccount)
+                .FirstOrDefaultAsync(t => t.Id == id && t.PeriodId == periodId && t.BankAccount.CompanyId == companyId);
             if (txn == null) return Results.NotFound();
+
+            var categoryExists = await db.AccountCategories
+                .AnyAsync(c => c.Id == input.CategoryId && (c.CompanyId == companyId || (c.IsSystem && c.CompanyId == null)));
+            if (!categoryExists) return Results.BadRequest(new { error = "Category is not available for this company." });
+
             txn.CategoryId = input.CategoryId;
             txn.ManualOverride = true;
             txn.ConfidenceScore = 1.0m;
@@ -103,8 +110,16 @@ public static class BankingEndpoints
 
         transactions.MapPost("/bulk-categorise", async (int companyId, int periodId, BulkCategoriseInput input, AccountsDbContext db) =>
         {
+            if (input.TransactionIds.Count == 0)
+                return Results.BadRequest(new { error = "No transactions selected." });
+
+            var categoryExists = await db.AccountCategories
+                .AnyAsync(c => c.Id == input.CategoryId && (c.CompanyId == companyId || (c.IsSystem && c.CompanyId == null)));
+            if (!categoryExists) return Results.BadRequest(new { error = "Category is not available for this company." });
+
             var txns = await db.ImportedTransactions
-                .Where(t => input.TransactionIds.Contains(t.Id) && t.PeriodId == periodId)
+                .Include(t => t.BankAccount)
+                .Where(t => input.TransactionIds.Contains(t.Id) && t.PeriodId == periodId && t.BankAccount.CompanyId == companyId)
                 .ToListAsync();
             foreach (var txn in txns)
             {

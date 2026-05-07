@@ -37,6 +37,7 @@ import {
   getCashFlowStatement,
   getEquityChanges,
   getDirectorsReportData,
+  getStatementSources,
   type Company,
   type AccountingPeriod,
   type TrialBalanceLine,
@@ -46,6 +47,7 @@ import {
   type CashFlowStatement,
   type EquityChanges,
   type DirectorsReportData,
+  type StatementSourceSummary,
 } from "@/lib/api";
 
 /** Format a number as EUR accounting style: negative in parentheses */
@@ -77,6 +79,7 @@ export default function StatementsPage({
   const [cashFlow, setCashFlow] = useState<CashFlowStatement | null>(null);
   const [equity, setEquity] = useState<EquityChanges | null>(null);
   const [directorsReport, setDirectorsReport] = useState<DirectorsReportData | null>(null);
+  const [sources, setSources] = useState<StatementSourceSummary[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -100,6 +103,7 @@ export default function StatementsPage({
         getCashFlowStatement(cId, pId),
         getEquityChanges(cId, pId),
         getDirectorsReportData(cId, pId),
+        getStatementSources(cId, pId),
       ]);
 
       if (results[0].status === "fulfilled") setTrialBalance(results[0].value);
@@ -109,6 +113,7 @@ export default function StatementsPage({
       if (results[4].status === "fulfilled") setCashFlow(results[4].value);
       if (results[5].status === "fulfilled") setEquity(results[5].value);
       if (results[6].status === "fulfilled") setDirectorsReport(results[6].value);
+      if (results[7].status === "fulfilled") setSources(results[7].value);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load data");
     } finally {
@@ -196,6 +201,13 @@ export default function StatementsPage({
           >
             <Scale className="w-4 h-4 inline mr-1.5 -mt-0.5" />
             Trial Balance
+          </Tab>
+          <Tab
+            id="sources"
+            className="px-4 py-2.5 text-sm font-medium text-gray-600 dark:text-gray-400 border-b-2 border-transparent data-[selected]:border-emerald-600 data-[selected]:text-emerald-700 dark:data-[selected]:text-emerald-400 cursor-pointer outline-none"
+          >
+            <FileText className="w-4 h-4 inline mr-1.5 -mt-0.5" />
+            Source Trail
           </Tab>
           <Tab
             id="pnl"
@@ -340,6 +352,73 @@ export default function StatementsPage({
           </Card>
         </TabPanel>
 
+        {/* Source Trail Tab */}
+        <TabPanel id="sources">
+          <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
+            <Card.Header>
+              <Card.Title>Figure Source Trail</Card.Title>
+              <Card.Description>
+                Shows how each account balance is built from opening balances, imported transactions, and adjustments.
+              </Card.Description>
+            </Card.Header>
+            <Card.Content>
+              {sources && sources.length > 0 ? (
+                <div className="overflow-x-auto -mx-1">
+                  <table className="w-full text-xs border border-gray-200 dark:border-neutral-700 rounded-lg overflow-hidden" role="table">
+                    <caption className="sr-only">Statement source trail</caption>
+                    <thead>
+                      <tr className="bg-gray-50 dark:bg-neutral-800 border-b border-gray-200 dark:border-neutral-700 text-gray-600 dark:text-gray-400 uppercase">
+                        <th className="px-3 py-2 text-left">Account</th>
+                        <th className="px-3 py-2 text-right">Opening Dr</th>
+                        <th className="px-3 py-2 text-right">Opening Cr</th>
+                        <th className="px-3 py-2 text-right">Txn Dr</th>
+                        <th className="px-3 py-2 text-right">Txn Cr</th>
+                        <th className="px-3 py-2 text-right">Adj Dr</th>
+                        <th className="px-3 py-2 text-right">Adj Cr</th>
+                        <th className="px-3 py-2 text-right">Closing Dr</th>
+                        <th className="px-3 py-2 text-right">Closing Cr</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sources.map((source) => (
+                        <tr key={source.code} className="border-b border-gray-100 align-top dark:border-neutral-800">
+                          <td className="px-3 py-2 min-w-72">
+                            <div className="font-medium text-gray-900 dark:text-gray-100">
+                              <span className="font-mono text-gray-500">{source.code}</span> {source.name}
+                            </div>
+                            <div className="mt-1 flex flex-wrap gap-1">
+                              <Chip size="sm" variant="soft" color="default">{source.type}</Chip>
+                              {source.transactionCount > 0 && <Chip size="sm" variant="soft" color="accent">{source.transactionCount} txns</Chip>}
+                              {source.adjustmentCount > 0 && <Chip size="sm" variant="soft" color="warning">{source.adjustmentCount} journals</Chip>}
+                            </div>
+                            {source.sourceNotes.length > 0 && (
+                              <ul className="mt-2 space-y-0.5 text-[11px] text-gray-500 dark:text-gray-400">
+                                {source.sourceNotes.slice(0, 3).map((note) => (
+                                  <li key={note}>{note}</li>
+                                ))}
+                              </ul>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-right font-mono">{source.openingDebit ? eur(source.openingDebit) : ""}</td>
+                          <td className="px-3 py-2 text-right font-mono">{source.openingCredit ? eur(source.openingCredit) : ""}</td>
+                          <td className="px-3 py-2 text-right font-mono">{source.transactionDebit ? eur(source.transactionDebit) : ""}</td>
+                          <td className="px-3 py-2 text-right font-mono">{source.transactionCredit ? eur(source.transactionCredit) : ""}</td>
+                          <td className="px-3 py-2 text-right font-mono">{source.adjustmentDebit ? eur(source.adjustmentDebit) : ""}</td>
+                          <td className="px-3 py-2 text-right font-mono">{source.adjustmentCredit ? eur(source.adjustmentCredit) : ""}</td>
+                          <td className="px-3 py-2 text-right font-mono font-semibold">{source.closingDebit ? eur(source.closingDebit) : ""}</td>
+                          <td className="px-3 py-2 text-right font-mono font-semibold">{source.closingCredit ? eur(source.closingCredit) : ""}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <EmptyState message="No statement source data is available yet." />
+              )}
+            </Card.Content>
+          </Card>
+        </TabPanel>
+
         {/* P&L Tab */}
         <TabPanel id="pnl">
           <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
@@ -393,6 +472,25 @@ export default function StatementsPage({
                     label="Less: Interest Payable"
                     amount={-pnl.interestPayable}
                   />
+                  {pnl.yearEndAdjustments.length > 0 && (
+                    <div className="pt-2">
+                      <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
+                        Unposted Year-End Adjustments
+                      </p>
+                      {pnl.yearEndAdjustments.map((adj, idx) => (
+                        <StatementRow
+                          key={`${adj.description}-${idx}`}
+                          label={`  ${adj.description}${adj.approved ? "" : " (pending approval)"}`}
+                          amount={adj.amount}
+                        />
+                      ))}
+                      <StatementRow
+                        label="Total unposted adjustment impact"
+                        amount={pnl.totalYearEndAdjustments}
+                        bold
+                      />
+                    </div>
+                  )}
                   <Divider />
                   <StatementRow
                     label="Profit Before Tax"

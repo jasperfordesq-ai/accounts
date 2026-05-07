@@ -16,6 +16,7 @@ import { getCompany, updateCompany, deleteCompany, createPeriod, deleteOfficer, 
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { CompanyDetailSkeleton } from "@/components/Skeleton";
+import { formatCompanyType, formatDateIE, formatPeriodRange } from "@/lib/format";
 
 export default function CompanyDetailPage({ params }: { params: Promise<{ companyId: string }> }) {
   const { companyId: id } = use(params);
@@ -48,7 +49,7 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ compan
     tradingName: "",
     croNumber: "",
     taxReference: "",
-    companyType: "LTD",
+    companyType: "Private",
     isTrading: true,
     isDormant: false,
   });
@@ -98,7 +99,7 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ compan
       tradingName: company.tradingName || "",
       croNumber: company.croNumber || "",
       taxReference: company.taxReference || "",
-      companyType: company.companyType || "LTD",
+      companyType: company.companyType || "Private",
       isTrading: company.isTrading ?? true,
       isDormant: company.isDormant ?? false,
     });
@@ -330,11 +331,11 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ compan
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Company Type</label>
                 <select value={editForm.companyType} onChange={(e) => setEditForm({ ...editForm, companyType: e.target.value })} className="w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors" aria-label="Company Type" title="Company Type">
-                  <option value="LTD">LTD - Private Limited</option>
-                  <option value="DAC">DAC - Designated Activity</option>
-                  <option value="CLG">CLG - Company Limited by Guarantee</option>
-                  <option value="PLC">PLC - Public Limited</option>
-                  <option value="UC">UC - Unlimited Company</option>
+                  <option value="Private">LTD - Private company limited by shares</option>
+                  <option value="PrivateUnlimited">Unlimited company</option>
+                  <option value="DesignatedActivityCompany">DAC - Designated activity company</option>
+                  <option value="CompanyLimitedByGuarantee">CLG - Company limited by guarantee</option>
+                  <option value="PublicLimitedCompany">PLC - Public limited company</option>
                 </select>
               </div>
               <div className="flex items-center gap-6 pt-6">
@@ -382,13 +383,13 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ compan
             <div>
               <span className="text-gray-500 dark:text-gray-400">Type:</span>{" "}
               <span className="font-medium text-gray-900 dark:text-gray-100">
-                {company.companyType}
+                {formatCompanyType(company.companyType)}
               </span>
             </div>
             <div>
               <span className="text-gray-500 dark:text-gray-400">Incorporated:</span>{" "}
               <span className="font-medium text-gray-900 dark:text-gray-100">
-                {company.incorporationDate}
+                {formatDateIE(company.incorporationDate)}
               </span>
             </div>
           </CardContent>
@@ -740,7 +741,7 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ compan
                 >
                   <div className="flex items-center gap-4">
                     <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                      {period.periodStart} &mdash; {period.periodEnd}
+                      {formatPeriodRange(period.periodStart, period.periodEnd)}
                     </span>
                     {period.isFirstYear && (
                       <Chip size="sm" color="warning" variant="soft">First Year</Chip>

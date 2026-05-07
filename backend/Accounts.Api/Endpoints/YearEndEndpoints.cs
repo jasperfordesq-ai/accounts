@@ -7,6 +7,23 @@ namespace Accounts.Api.Endpoints;
 
 public static class YearEndEndpoints
 {
+    private static readonly HashSet<string> ReviewSectionKeys = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "debtors",
+        "creditors",
+        "fixed-assets",
+        "inventory",
+        "loans",
+        "director-loans",
+        "payroll",
+        "tax",
+        "dividends",
+        "post-balance-sheet-events",
+        "related-parties",
+        "contingent-liabilities",
+        "going-concern"
+    };
+
     public static void MapYearEndEndpoints(this WebApplication app)
     {
         var basePath = "/api/companies/{companyId:int}/periods/{periodId:int}";
@@ -307,6 +324,9 @@ public static class YearEndEndpoints
         // ===== YEAR-END SUMMARY (read-only overview) =====
         app.MapGet($"{basePath}/year-end-summary", async (int companyId, int periodId, AccountsDbContext db) =>
         {
+            var company = await db.Companies.FirstOrDefaultAsync(c => c.Id == companyId);
+            if (company == null) return Results.NotFound();
+
             var debtorsList = await db.Debtors.Where(d => d.PeriodId == periodId).ToListAsync();
             var creditorsList = await db.Creditors.Where(c => c.PeriodId == periodId).ToListAsync();
             var assetsList = await db.FixedAssets.Where(a => a.CompanyId == companyId).ToListAsync();
@@ -316,21 +336,41 @@ public static class YearEndEndpoints
             var payrollItem = await db.PayrollSummaries.FirstOrDefaultAsync(p => p.PeriodId == periodId);
             var taxList = await db.TaxBalances.Where(t => t.PeriodId == periodId).ToListAsync();
             var dividendsList = await db.Dividends.Where(d => d.PeriodId == periodId).ToListAsync();
+            var postBalanceSheetEvents = await db.PostBalanceSheetEvents.Where(e => e.PeriodId == periodId).ToListAsync();
+            var relatedPartyTransactions = await db.RelatedPartyTransactions.Where(r => r.PeriodId == periodId).ToListAsync();
+            var contingentLiabilities = await db.ContingentLiabilities.Where(c => c.PeriodId == periodId).ToListAsync();
+            var confirmations = await db.YearEndReviewConfirmations
+                .Where(r => r.PeriodId == periodId)
+                .OrderBy(r => r.SectionKey)
+                .ToListAsync();
+            var reviewed = confirmations
+                .Where(r => r.Confirmed)
+                .Select(r => r.SectionKey)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
             // Completeness scoring
-            int totalSections = 9;
-            int completedSections = 0;
-            var incomplete = new List<string>();
-
-            if (debtorsList.Count > 0 || true) completedSections++; // Always counts as reviewed
-            if (creditorsList.Count > 0 || true) completedSections++;
-            if (assetsList.Count > 0) completedSections++; else incomplete.Add("Fixed Assets");
-            if (inventoryList.Count > 0 || true) completedSections++;
-            if (loansList.Count > 0 || true) completedSections++;
-            if (dirLoansList.Count > 0 || true) completedSections++;
-            if (payrollItem != null) completedSections++; else incomplete.Add("Payroll Summary");
-            if (taxList.Count > 0) completedSections++; else incomplete.Add("Tax Balances");
-            if (dividendsList.Count > 0 || true) completedSections++;
+            var sections = new (string Key, string Label, bool HasEvidence)[]
+            {
+                ("debtors", "Debtors and other receivables", debtorsList.Count > 0),
+                ("creditors", "Creditors, accruals and payables", creditorsList.Count > 0),
+                ("fixed-assets", "Fixed assets", assetsList.Count > 0),
+                ("inventory", "Stock / inventory", inventoryList.Count > 0),
+                ("loans", "Loans and borrowings", loansList.Count > 0),
+                ("director-loans", "Director loans", dirLoansList.Count > 0),
+                ("payroll", "Payroll and staff", payrollItem != null),
+                ("tax", "Tax balances", taxList.Count > 0),
+                ("dividends", "Dividends", dividendsList.Count > 0),
+                ("post-balance-sheet-events", "Post balance sheet events", postBalanceSheetEvents.Count > 0),
+                ("related-parties", "Related party transactions", relatedPartyTransactions.Count > 0),
+                ("contingent-liabilities", "Contingent liabilities", contingentLiabilities.Count > 0),
+                ("going-concern", "Going concern", reviewed.Contains("going-concern"))
+            };
+            var incomplete = sections
+                .Where(s => !s.HasEvidence && !reviewed.Contains(s.Key))
+                .Select(s => s.Label)
+                .ToList();
+            var totalSections = sections.Length;
+            var completedSections = totalSections - incomplete.Count;
 
             return Results.Ok(new
             {
@@ -343,9 +383,49 @@ public static class YearEndEndpoints
                 payroll = payrollItem != null ? new { payrollItem.GrossWages, payrollItem.StaffCount } : null,
                 taxes = new { count = taxList.Count, totalLiability = taxList.Sum(t => t.Liability), totalBalance = taxList.Sum(t => t.Balance) },
                 dividends = new { count = dividendsList.Count, total = dividendsList.Sum(d => d.Amount) },
+                reviewConfirmations = confirmations,
                 completeness = new { score = (int)Math.Round((double)completedSections / totalSections * 100), completed = completedSections, total = totalSections, incomplete }
             });
         }).WithTags("Year-End Summary");
+
+        // ===== YEAR-END REVIEW CONFIRMATIONS =====
+        var reviews = app.MapGroup($"{basePath}/year-end-reviews").WithTags("Year-End Review");
+
+        reviews.MapGet("/", async (int companyId, int periodId, AccountsDbContext db) =>
+            await db.YearEndReviewConfirmations
+                .Where(r => r.PeriodId == periodId)
+                .OrderBy(r => r.SectionKey)
+                .ToListAsync());
+
+        reviews.MapPut("/{sectionKey}", async (int companyId, int periodId, string sectionKey, YearEndReviewInput input, AccountsDbContext db) =>
+        {
+            if (!ReviewSectionKeys.Contains(sectionKey))
+                return Results.BadRequest(new { error = "Unknown year-end review section." });
+
+            var periodExists = await db.AccountingPeriods.AnyAsync(p => p.Id == periodId && p.CompanyId == companyId);
+            if (!periodExists) return Results.NotFound();
+
+            var confirmation = await db.YearEndReviewConfirmations
+                .FirstOrDefaultAsync(r => r.PeriodId == periodId && r.SectionKey == sectionKey);
+
+            if (confirmation == null)
+            {
+                confirmation = new YearEndReviewConfirmation
+                {
+                    PeriodId = periodId,
+                    SectionKey = sectionKey
+                };
+                db.YearEndReviewConfirmations.Add(confirmation);
+            }
+
+            confirmation.Confirmed = input.Confirmed;
+            confirmation.ConfirmedBy = string.IsNullOrWhiteSpace(input.ConfirmedBy) ? "Accounts reviewer" : input.ConfirmedBy.Trim();
+            confirmation.ConfirmedAt = DateTime.UtcNow;
+            confirmation.Note = string.IsNullOrWhiteSpace(input.Note) ? null : input.Note.Trim();
+
+            await db.SaveChangesAsync();
+            return Results.Ok(confirmation);
+        });
 
         // ===== NOTES DISCLOSURES =====
         var notesGroup = app.MapGroup($"{basePath}/notes").WithTags("Notes");
@@ -422,6 +502,68 @@ public static class YearEndEndpoints
             var item = await db.ShareCapitals.FirstOrDefaultAsync(s => s.Id == id && s.CompanyId == companyId);
             if (item == null) return Results.NotFound();
             db.ShareCapitals.Remove(item);
+            await db.SaveChangesAsync();
+            return Results.NoContent();
+        });
+
+        // ===== OPENING BALANCES =====
+        var openingBalances = app.MapGroup($"{basePath}/opening-balances").WithTags("Opening Balances");
+
+        openingBalances.MapGet("/", async (int companyId, int periodId, AccountsDbContext db) =>
+            await db.OpeningBalances
+                .Include(o => o.AccountCategory)
+                .Where(o => o.PeriodId == periodId)
+                .OrderBy(o => o.AccountCategory.Code)
+                .ToListAsync());
+
+        openingBalances.MapPut("/{categoryId:int}", async (int companyId, int periodId, int categoryId, OpeningBalanceInput input, AccountsDbContext db) =>
+        {
+            if (input.Debit < 0 || input.Credit < 0)
+                return Results.BadRequest(new { error = "Opening balance debit and credit must not be negative." });
+            if (input.Debit > 0 && input.Credit > 0)
+                return Results.BadRequest(new { error = "Enter either a debit or a credit opening balance, not both." });
+
+            var periodExists = await db.AccountingPeriods.AnyAsync(p => p.Id == periodId && p.CompanyId == companyId);
+            if (!periodExists) return Results.NotFound();
+
+            var categoryExists = await db.AccountCategories
+                .AnyAsync(c => c.Id == categoryId && (c.CompanyId == companyId || (c.IsSystem && c.CompanyId == null)));
+            if (!categoryExists) return Results.BadRequest(new { error = "Account category is not available for this company." });
+
+            var balance = await db.OpeningBalances
+                .FirstOrDefaultAsync(o => o.PeriodId == periodId && o.AccountCategoryId == categoryId);
+            if (balance == null)
+            {
+                balance = new OpeningBalance
+                {
+                    PeriodId = periodId,
+                    AccountCategoryId = categoryId
+                };
+                db.OpeningBalances.Add(balance);
+            }
+
+            balance.Debit = input.Debit;
+            balance.Credit = input.Credit;
+            balance.SourceNote = string.IsNullOrWhiteSpace(input.SourceNote) ? null : input.SourceNote.Trim();
+            balance.EnteredBy = string.IsNullOrWhiteSpace(input.EnteredBy) ? "Accounts reviewer" : input.EnteredBy.Trim();
+            balance.EnteredAt = DateTime.UtcNow;
+            balance.Reviewed = input.Reviewed;
+            balance.ReviewedBy = input.Reviewed
+                ? string.IsNullOrWhiteSpace(input.EnteredBy) ? "Accounts reviewer" : input.EnteredBy.Trim()
+                : null;
+            balance.ReviewedAt = input.Reviewed ? DateTime.UtcNow : null;
+
+            await db.SaveChangesAsync();
+            await db.Entry(balance).Reference(b => b.AccountCategory).LoadAsync();
+            return Results.Ok(balance);
+        });
+
+        openingBalances.MapDelete("/{categoryId:int}", async (int companyId, int periodId, int categoryId, AccountsDbContext db) =>
+        {
+            var balance = await db.OpeningBalances
+                .FirstOrDefaultAsync(o => o.PeriodId == periodId && o.AccountCategoryId == categoryId);
+            if (balance == null) return Results.NotFound();
+            db.OpeningBalances.Remove(balance);
             await db.SaveChangesAsync();
             return Results.NoContent();
         });
@@ -536,3 +678,5 @@ public static class YearEndEndpoints
 }
 
 public record GoingConcernInput(bool Confirmed, string? Note);
+public record YearEndReviewInput(bool Confirmed, string? ConfirmedBy, string? Note);
+public record OpeningBalanceInput(decimal Debit, decimal Credit, string? SourceNote, string? EnteredBy, bool Reviewed);

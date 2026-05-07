@@ -22,6 +22,13 @@ public class AdjustmentService(AccountsDbContext db)
         db.Adjustments.RemoveRange(existingAuto);
 
         var adjustments = new List<Adjustment>();
+        var depreciationExpenseId = await GetOrCreateCategoryIdAsync(companyId, "7000", "Depreciation", AccountCategoryType.Expense, TaxTreatment.NonDeductible);
+        var prepaymentId = await GetOrCreateCategoryIdAsync(companyId, "1200", "Prepayments", AccountCategoryType.Asset, TaxTreatment.Other);
+        var inventoryId = await GetOrCreateCategoryIdAsync(companyId, "1000", "Stock / Inventory", AccountCategoryType.Asset, TaxTreatment.Other);
+        var costOfSalesId = await GetOrCreateCategoryIdAsync(companyId, "5000", "Cost of Sales", AccountCategoryType.Expense, TaxTreatment.Deductible);
+        var accrualsId = await GetOrCreateCategoryIdAsync(companyId, "2100", "Accruals", AccountCategoryType.Liability, TaxTreatment.Other);
+        var corporationTaxChargeId = await GetOrCreateCategoryIdAsync(companyId, "8000", "Corporation Tax Charge", AccountCategoryType.Expense, TaxTreatment.NonDeductible);
+        var corporationTaxPayableId = await GetOrCreateCategoryIdAsync(companyId, "2400", "Corporation Tax Payable", AccountCategoryType.Liability, TaxTreatment.Other);
 
         // 1. Depreciation charges
         var assets = await db.FixedAssets
@@ -71,6 +78,8 @@ public class AdjustmentService(AccountsDbContext db)
             {
                 PeriodId = periodId,
                 Description = $"Depreciation — {asset.Name} ({asset.Category})",
+                DebitCategoryId = depreciationExpenseId,
+                CreditCategoryId = await GetAssetCategoryIdAsync(companyId, asset.Category),
                 Amount = annualCharge,
                 Source = AdjustmentSource.Auto,
                 Reason = $"{asset.DepreciationMethod} over {asset.UsefulLifeYears} years",
@@ -93,6 +102,8 @@ public class AdjustmentService(AccountsDbContext db)
             {
                 PeriodId = periodId,
                 Description = $"Prepayment — {prep.Name}",
+                DebitCategoryId = prepaymentId,
+                CreditCategoryId = await GetExpenseCategoryForDescriptionAsync(companyId, prep.Name),
                 Amount = prep.Amount,
                 Source = AdjustmentSource.Auto,
                 Reason = "Expense paid in advance, recognised as current asset",
@@ -115,6 +126,8 @@ public class AdjustmentService(AccountsDbContext db)
             {
                 PeriodId = periodId,
                 Description = $"Accrual — {acc.Name}",
+                DebitCategoryId = await GetExpenseCategoryForDescriptionAsync(companyId, acc.Name),
+                CreditCategoryId = accrualsId,
                 Amount = acc.Amount,
                 Source = AdjustmentSource.Auto,
                 Reason = "Expense incurred but not yet invoiced/paid",
@@ -136,6 +149,8 @@ public class AdjustmentService(AccountsDbContext db)
             {
                 PeriodId = periodId,
                 Description = "Corporation tax provision",
+                DebitCategoryId = corporationTaxChargeId,
+                CreditCategoryId = corporationTaxPayableId,
                 Amount = corpTax.Liability,
                 Source = AdjustmentSource.Auto,
                 Reason = $"Estimated corporation tax liability: €{corpTax.Liability:N2}",
@@ -159,6 +174,8 @@ public class AdjustmentService(AccountsDbContext db)
             {
                 PeriodId = periodId,
                 Description = "Closing stock / inventory recognition",
+                DebitCategoryId = inventoryId,
+                CreditCategoryId = costOfSalesId,
                 Amount = closingStockValue,
                 Source = AdjustmentSource.Auto,
                 Reason = $"Closing stock valued at €{closingStockValue:N2} ({string.Join(", ", inventories.Select(i => i.ValuationMethod.ToString()).Distinct())})",
@@ -206,5 +223,66 @@ public class AdjustmentService(AccountsDbContext db)
             allAdjustments.Sum(a => a.ImpactOnProfit),
             allAdjustments.Sum(a => a.ImpactOnAssets)
         );
+    }
+
+    private async Task<int> GetAssetCategoryIdAsync(int companyId, string assetCategory)
+    {
+        var code = assetCategory switch
+        {
+            "Land & Buildings" => "0010",
+            "Plant & Machinery" => "0020",
+            "Motor Vehicles" => "0030",
+            "Office Equipment" => "0040",
+            "Computer Equipment" => "0050",
+            _ => "0040"
+        };
+
+        return await GetOrCreateCategoryIdAsync(companyId, code, assetCategory, AccountCategoryType.Asset, TaxTreatment.CapitalAllowance);
+    }
+
+    private async Task<int> GetExpenseCategoryForDescriptionAsync(int companyId, string description)
+    {
+        var lower = description.ToLowerInvariant();
+        var (code, name) = lower switch
+        {
+            var text when text.Contains("account") || text.Contains("audit") => ("6810", "Accountancy Fees"),
+            var text when text.Contains("legal") || text.Contains("solicitor") => ("6820", "Legal Fees"),
+            var text when text.Contains("insurance") => ("6200", "Insurance"),
+            var text when text.Contains("electric") || text.Contains("heat") || text.Contains("light") => ("6300", "Light & Heat"),
+            var text when text.Contains("phone") || text.Contains("internet") || text.Contains("vodafone") => ("6400", "Telephone & Internet"),
+            var text when text.Contains("software") || text.Contains("subscription") => ("7300", "Software & Subscriptions"),
+            var text when text.Contains("rent") => ("6100", "Rent"),
+            _ => ("7900", "Sundry Expenses")
+        };
+
+        return await GetOrCreateCategoryIdAsync(companyId, code, name, AccountCategoryType.Expense, TaxTreatment.Deductible);
+    }
+
+    private async Task<int> GetOrCreateCategoryIdAsync(
+        int companyId,
+        string code,
+        string name,
+        AccountCategoryType type,
+        TaxTreatment taxTreatment)
+    {
+        var category = await db.AccountCategories
+            .FirstOrDefaultAsync(c => c.CompanyId == companyId && c.Code == code);
+
+        if (category != null)
+            return category.Id;
+
+        category = new AccountCategory
+        {
+            CompanyId = companyId,
+            Code = code,
+            Name = name,
+            Type = type,
+            TaxTreatment = taxTreatment,
+            IsSystem = true
+        };
+        db.AccountCategories.Add(category);
+        await db.SaveChangesAsync();
+
+        return category.Id;
     }
 }
