@@ -11,6 +11,7 @@ public class ApiAccessConfig
 public class ApiAccessKeyConfig
 {
     public string Name { get; set; } = "Unnamed key";
+    public string Role { get; set; } = "Admin";
     public string? KeyHash { get; set; }
     public string? DevelopmentKey { get; set; }
     public List<int> AllowedCompanyIds { get; set; } = [];

@@ -22,6 +22,7 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
         var regime = period.FilingRegime?.ElectedRegime ?? ElectedRegime.Small;
         var balanceSheet = await statementsService.GetBalanceSheetAsync(periodId);
         var pl = await statementsService.GetProfitAndLossAsync(periodId);
+        var auditExempt = period.FilingRegime?.AuditExempt == true;
 
         // Get prior year balance sheet if available
         FinancialStatementsService.BalanceSheet? priorBs = null;
@@ -84,7 +85,7 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
                         }
 
                         // Statutory statement
-                        ComposeStatutoryStatement(col, company, period, regime, directors);
+                        ComposeStatutoryStatement(col, company, period, regime, directors, auditExempt);
 
                         col.Item().PageBreak();
 
@@ -359,7 +360,10 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
         });
     }
 
-    private static void ComposeStatutoryStatement(ColumnDescriptor col, Company company, AccountingPeriod period, ElectedRegime regime, List<CompanyOfficer> directors)
+    public static bool ShouldIncludeAuditExemptionStatement(ElectedRegime regime, bool auditExempt) =>
+        auditExempt && (regime == ElectedRegime.Micro || regime == ElectedRegime.Small || regime == ElectedRegime.SmallAbridged);
+
+    private static void ComposeStatutoryStatement(ColumnDescriptor col, Company company, AccountingPeriod period, ElectedRegime regime, List<CompanyOfficer> directors, bool auditExempt)
     {
         if (regime == ElectedRegime.Micro)
         {
@@ -384,8 +388,7 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
             col.Item().PaddingTop(10).Text("The directors are responsible for preparing the directors' report and the financial statements in accordance with applicable Irish law and regulations. The directors have elected to prepare the financial statements in accordance with FRS 102 \"The Financial Reporting Standard applicable in the UK and Republic of Ireland\".");
         }
 
-        // Audit exemption statement (for small companies)
-        if (regime == ElectedRegime.Micro || regime == ElectedRegime.Small || regime == ElectedRegime.SmallAbridged)
+        if (ShouldIncludeAuditExemptionStatement(regime, auditExempt))
         {
             col.Item().PaddingTop(15).Text("AUDIT EXEMPTION STATEMENT").Bold().FontSize(12);
             col.Item().PaddingTop(10).Text("The directors have availed of the exemption from the requirement to have the financial statements audited under Section 360 of the Companies Act 2014.");
@@ -580,7 +583,7 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
 
                     ComposeCompanyIdentification(col, company);
                     ComposeBalanceSheet(col, company, period, balanceSheet, priorBs, directors);
-                    ComposeCroFilingStatements(col, company, regime, balanceSheet);
+                    ComposeCroFilingStatements(col, company, regime, balanceSheet, period.FilingRegime?.AuditExempt == true);
 
                     col.Item().PageBreak();
 
@@ -618,18 +621,22 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
         });
     }
 
-    private static void ComposeCroFilingStatements(ColumnDescriptor col, Company company, ElectedRegime regime, FinancialStatementsService.BalanceSheet balanceSheet)
+    private static void ComposeCroFilingStatements(ColumnDescriptor col, Company company, ElectedRegime regime, FinancialStatementsService.BalanceSheet balanceSheet, bool auditExempt)
     {
         col.Item().PaddingTop(15).Text("CRO FILING STATEMENTS").Bold().FontSize(10);
 
         if (regime == ElectedRegime.Micro)
         {
             col.Item().PaddingTop(5).Text($"The directors of {company.LegalName} state that the company has relied on the specified exemption contained in section 352 of the Companies Act 2014 on the grounds that it is entitled to the benefit of that exemption as a micro company, and that these abridged financial statements have been prepared from the statutory financial statements in accordance with section 353.").FontSize(8);
-            col.Item().PaddingTop(5).Text("The company is claiming the micro company regime and, where the audit exemption conditions are satisfied, the audit exemption. Directors remain responsible for approving the financial statements and for ensuring the annual return is filed on CORE with the required single-PDF accounts and signature page.").FontSize(8);
+            col.Item().PaddingTop(5).Text(auditExempt
+                ? "The company is claiming the micro company regime and audit exemption. Directors remain responsible for approving the financial statements and for ensuring the annual return is filed on CORE with the required single-PDF accounts and signature page."
+                : "The company is claiming the micro company regime only. The current filing regime does not mark audit exemption as available, so no audit-exemption declaration is included.").FontSize(8);
         }
         else
         {
             col.Item().PaddingTop(5).Text($"The directors of {company.LegalName} state that the company has relied on the specified exemption contained in section 352 of the Companies Act 2014 on the grounds that it is entitled to the benefit of that exemption as a small company, and that these abridged financial statements have been prepared in accordance with section 353.").FontSize(8);
+            if (auditExempt)
+                col.Item().PaddingTop(5).Text("The company is also claiming audit exemption based on the confirmed filing regime.").FontSize(8);
         }
 
         if (!balanceSheet.Balances)

@@ -5,8 +5,22 @@ using System.Text.Json;
 
 namespace Accounts.Api.Services;
 
-public class FilingRegimeService(AccountsDbContext db)
+public class FilingRegimeService
 {
+    private readonly AccountsDbContext db;
+    private readonly DeadlineService deadlineService;
+
+    public FilingRegimeService(AccountsDbContext db)
+        : this(db, new DeadlineService(db))
+    {
+    }
+
+    public FilingRegimeService(AccountsDbContext db, DeadlineService deadlineService)
+    {
+        this.db = db;
+        this.deadlineService = deadlineService;
+    }
+
     public record FilingRequirements(
         ElectedRegime Regime,
         bool CanUseMicro,
@@ -42,11 +56,18 @@ public class FilingRegimeService(AccountsDbContext db)
         var canUseMicro = sizeClass == CompanySizeClass.Micro && !microExcluded;
         var canFileAbridged = !isIneligible && sizeClass <= CompanySizeClass.Small;
 
-        // Audit exemption: check s.334 member notice override
+        // Audit exemption: check s.334 member notice and CRO late-filing loss.
+        var auditExemptionJeopardy = await deadlineService.CheckAuditExemptionJeopardyAsync(company.Id);
+        var lateCroFilingCount = auditExemptionJeopardy.LateFilingCount;
+        var hasLostAuditExemption = auditExemptionJeopardy.HasLostExemption;
         var auditExempt = !isIneligible && sizeClass <= CompanySizeClass.Small && !company.IsGroupMember;
         if (auditExempt && period.MemberAuditNoticeReceived)
         {
             auditExempt = false; // s.334: member(s) served notice requiring audit
+        }
+        if (auditExempt && hasLostAuditExemption)
+        {
+            auditExempt = false;
         }
 
         // Default regime based on classification
@@ -54,7 +75,7 @@ public class FilingRegimeService(AccountsDbContext db)
 
         var requiredStatements = GetRequiredStatements(regime, sizeClass);
         var requiredNotes = GetRequiredNotes(regime, sizeClass, company);
-        var summary = GenerateSummary(regime, canUseMicro, canFileAbridged, auditExempt);
+        var summary = GenerateSummary(regime, canUseMicro, canFileAbridged, auditExempt, hasLostAuditExemption, lateCroFilingCount);
 
         // Save or update filing regime
         var fr = period.FilingRegime;
@@ -193,7 +214,7 @@ public class FilingRegimeService(AccountsDbContext db)
         return notes;
     }
 
-    private static string GenerateSummary(ElectedRegime regime, bool canUseMicro, bool canFileAbridged, bool auditExempt)
+    private static string GenerateSummary(ElectedRegime regime, bool canUseMicro, bool canFileAbridged, bool auditExempt, bool hasLostAuditExemption, int lateCroFilingCount)
     {
         var parts = new List<string>();
 
@@ -210,6 +231,8 @@ public class FilingRegimeService(AccountsDbContext db)
 
         if (auditExempt)
             parts.Add("Audit exemption is available under s.360 Companies Act 2014.");
+        else if (hasLostAuditExemption)
+            parts.Add($"Statutory audit is required because the company has {lateCroFilingCount} late CRO filings in the five-year audit-exemption lookback.");
         else
             parts.Add("Statutory audit is required.");
 

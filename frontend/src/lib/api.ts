@@ -1,5 +1,4 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
-const API_KEY = process.env.NEXT_PUBLIC_ACCOUNTS_API_KEY || "";
+const API_BASE = "";
 
 // --- Core fetch with retry, timeout, structured errors ---
 
@@ -73,7 +72,6 @@ async function apiFetch<T>(
       const res = await fetch(`${API_BASE}${path}`, {
         headers: {
           "Content-Type": "application/json",
-          ...(API_KEY ? { "X-Accounts-Api-Key": API_KEY } : {}),
           ...fetchOptions?.headers,
         },
         signal: controller.signal,
@@ -694,7 +692,6 @@ export const uploadBankCsv = async (
         body: formData,
         signal: controller.signal,
         headers: {
-          ...(API_KEY ? { "X-Accounts-Api-Key": API_KEY } : {}),
           ...(reviewer ? { "X-Reviewer": reviewer } : {}),
         },
       },

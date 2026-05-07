@@ -13,7 +13,7 @@ public class ApiAccessMiddleware(RequestDelegate next)
         }
 
         var presentedKey = context.Request.Headers[access.HeaderName].FirstOrDefault();
-        var decision = access.Authorize(presentedKey, context.Request.Path);
+        var decision = access.Authorize(presentedKey, context.Request.Path, context.Request.Method);
         if (!decision.IsAllowed)
         {
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
@@ -23,7 +23,9 @@ public class ApiAccessMiddleware(RequestDelegate next)
         }
 
         context.Items["ApiPrincipal"] = decision.PrincipalName;
+        context.Items["ApiRole"] = decision.Role;
         context.Items["ApiCompanyId"] = decision.CompanyId;
+        context.Items["ApiAllowedCompanyIds"] = decision.AllowedCompanyIds;
         await next(context);
     }
 }

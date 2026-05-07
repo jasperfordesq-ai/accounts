@@ -48,8 +48,19 @@ public static class BankingEndpoints
         });
 
         // CSV Import
-        banks.MapPost("/{bankAccountId:int}/import", async (int companyId, int bankAccountId, int periodId, HttpRequest request, ImportService importService, AuditService auditService, IOptions<ImportLimitConfig> importLimits) =>
+        banks.MapPost("/{bankAccountId:int}/import", async (int companyId, int bankAccountId, int periodId, HttpRequest request, ImportService importService, AuditService auditService, IOptions<ImportLimitConfig> importLimits, AccountsDbContext db) =>
         {
+            var bankBelongsToCompany = await db.BankAccounts
+                .AnyAsync(b => b.Id == bankAccountId && b.CompanyId == companyId);
+            var period = await db.AccountingPeriods
+                .Where(p => p.Id == periodId && p.CompanyId == companyId)
+                .Select(p => new { p.Status, p.LockedAt })
+                .FirstOrDefaultAsync();
+            if (!bankBelongsToCompany || period is null)
+                return Results.NotFound(new { error = "Bank account or accounting period not found for this company." });
+            if (period.Status is PeriodStatus.Finalised or PeriodStatus.Filed || period.LockedAt is not null)
+                return Results.Conflict(new { error = "Accounting period is locked. Reopen the period before importing transactions." });
+
             if (!request.HasFormContentType) return Results.BadRequest(new { error = "Expected multipart form data" });
             var form = await request.ReadFormAsync();
             var file = form.Files.FirstOrDefault();

@@ -2,6 +2,11 @@
 
 Multi-company web application that replaces the traditional year-end accountant workflow for Irish private companies. Takes imported bank transactions + year-end business facts and produces statutory financial statements, CRO filing outputs, and Revenue CT1/iXBRL support.
 
+## Repository
+
+- GitHub: https://github.com/jasperfordesq-ai/accounts
+- Treat this as the canonical repository for the Irish statutory accounts production platform.
+
 ## Tech Stack
 
 - **Backend**: ASP.NET Core (.NET 10) Minimal API + EF Core 9 + PostgreSQL 16.4

@@ -1,5 +1,6 @@
 using Accounts.Api.Data;
 using Accounts.Api.Entities;
+using Accounts.Api.Middleware;
 using Accounts.Api.Rules;
 using Accounts.Api.Services;
 using Microsoft.AspNetCore.Http;
@@ -70,6 +71,52 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task FilingRegime_RecentRepeatedLateCroFilings_RemoveAuditExemption()
+    {
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        db.SizeClassifications.Add(new SizeClassification
+        {
+            PeriodId = period.Id,
+            Turnover = 100_000m,
+            BalanceSheetTotal = 20_000m,
+            AvgEmployees = 1,
+            CalculatedClass = CompanySizeClass.Micro
+        });
+        db.FilingHistories.AddRange(
+            new FilingHistory
+            {
+                CompanyId = period.CompanyId,
+                PeriodId = period.Id,
+                DeadlineType = DeadlineType.CRO,
+                DueDate = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(-1)),
+                FiledDate = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(-1).AddDays(4)),
+                DaysLate = 4,
+                PenaltyAmount = 112m
+            },
+            new FilingHistory
+            {
+                CompanyId = period.CompanyId,
+                PeriodId = period.Id,
+                DeadlineType = DeadlineType.CRO,
+                DueDate = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(-2)),
+                FiledDate = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(-2).AddDays(1)),
+                DaysLate = 1,
+                PenaltyAmount = 103m
+            });
+        await db.SaveChangesAsync();
+
+        var service = new FilingRegimeService(db);
+
+        var result = await service.DetermineAsync(period.Id);
+
+        Assert.False(result.AuditExempt);
+        Assert.Contains("late CRO filings", result.Summary);
+        var saved = await db.FilingRegimes.SingleAsync(f => f.PeriodId == period.Id);
+        Assert.False(saved.AuditExempt);
+    }
+
+    [Fact]
     public async Task BalanceSheet_ExposesUnexplainedDifferenceInsteadOfPluggingReserves()
     {
         await using var db = CreateDbContext();
@@ -99,6 +146,61 @@ public class AccountsWorkflowTests
         Assert.Equal(99m, balanceSheet.CapitalAndReserves.UnexplainedDifference);
         Assert.Equal(0m, balanceSheet.CapitalAndReserves.RetainedEarnings);
         Assert.Equal(1m, balanceSheet.CapitalAndReserves.Total);
+    }
+
+    [Fact]
+    public async Task BalanceSheet_GroupsFixedAssetDepreciationPerAssetNotPerCategoryTotal()
+    {
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var laptop = new FixedAsset
+        {
+            CompanyId = period.CompanyId,
+            Name = "Laptop",
+            Category = "Computer Equipment",
+            Cost = 100m,
+            AcquisitionDate = period.PeriodStart,
+            UsefulLifeYears = 3
+        };
+        var server = new FixedAsset
+        {
+            CompanyId = period.CompanyId,
+            Name = "Server",
+            Category = "Computer Equipment",
+            Cost = 200m,
+            AcquisitionDate = period.PeriodStart,
+            UsefulLifeYears = 4
+        };
+        db.FixedAssets.AddRange(laptop, server);
+        await db.SaveChangesAsync();
+
+        db.DepreciationEntries.AddRange(
+            new DepreciationEntry
+            {
+                AssetId = laptop.Id,
+                PeriodId = period.Id,
+                OpeningNbv = 100m,
+                Charge = 30m,
+                ClosingNbv = 70m
+            },
+            new DepreciationEntry
+            {
+                AssetId = server.Id,
+                PeriodId = period.Id,
+                OpeningNbv = 200m,
+                Charge = 50m,
+                ClosingNbv = 150m
+            });
+        await db.SaveChangesAsync();
+
+        var service = new FinancialStatementsService(db);
+
+        var balanceSheet = await service.GetBalanceSheetAsync(period.Id);
+        var computerEquipment = balanceSheet.FixedAssets.Categories.Single(c => c.Category == "Computer Equipment");
+
+        Assert.Equal(300m, computerEquipment.Cost);
+        Assert.Equal(80m, computerEquipment.Depreciation);
+        Assert.Equal(220m, computerEquipment.Nbv);
     }
 
     [Fact]
@@ -252,6 +354,15 @@ public class AccountsWorkflowTests
         Assert.NotEmpty(approvalPack);
         Assert.NotEmpty(croPack);
         Assert.NotEqual(approvalPack.Length, croPack.Length);
+    }
+
+    [Fact]
+    public void AuditExemptionStatement_IsPrintedOnlyWhenConfirmedAvailable()
+    {
+        Assert.True(DocumentGeneratorService.ShouldIncludeAuditExemptionStatement(ElectedRegime.Micro, auditExempt: true));
+        Assert.True(DocumentGeneratorService.ShouldIncludeAuditExemptionStatement(ElectedRegime.SmallAbridged, auditExempt: true));
+        Assert.False(DocumentGeneratorService.ShouldIncludeAuditExemptionStatement(ElectedRegime.Micro, auditExempt: false));
+        Assert.False(DocumentGeneratorService.ShouldIncludeAuditExemptionStatement(ElectedRegime.Medium, auditExempt: true));
     }
 
     [Fact]
@@ -781,6 +892,55 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public void ApiAccess_EnforcesRolesForWritesAndAdminActions()
+    {
+        var service = new ApiAccessService(
+            Options.Create(new ApiAccessConfig
+            {
+                Enabled = true,
+                Keys =
+                [
+                    new ApiAccessKeyConfig
+                    {
+                        Name = "Read only",
+                        Role = "Reader",
+                        DevelopmentKey = "reader",
+                        AllowedCompanyIds = [10]
+                    },
+                    new ApiAccessKeyConfig
+                    {
+                        Name = "Writer",
+                        Role = "Writer",
+                        DevelopmentKey = "writer",
+                        AllowedCompanyIds = [10]
+                    },
+                    new ApiAccessKeyConfig
+                    {
+                        Name = "Admin",
+                        Role = "Admin",
+                        DevelopmentKey = "admin"
+                    }
+                ]
+            }),
+            new TestEnvironment("Development"));
+
+        var readerWrite = service.Authorize("reader", new PathString("/api/companies/10/periods"), HttpMethods.Post);
+        var writerWrite = service.Authorize("writer", new PathString("/api/companies/10/periods"), HttpMethods.Post);
+        var writerDelete = service.Authorize("writer", new PathString("/api/companies/10"), HttpMethods.Delete);
+        var scopedCompanyCreate = service.Authorize("writer", new PathString("/api/companies"), HttpMethods.Post);
+        var adminCompanyCreate = service.Authorize("admin", new PathString("/api/companies"), HttpMethods.Post);
+
+        Assert.False(readerWrite.IsAllowed);
+        Assert.Contains("read-only", readerWrite.DenialReason);
+        Assert.True(writerWrite.IsAllowed);
+        Assert.False(writerDelete.IsAllowed);
+        Assert.Contains("administrative", writerDelete.DenialReason);
+        Assert.False(scopedCompanyCreate.IsAllowed);
+        Assert.Contains("administrative", scopedCompanyCreate.DenialReason);
+        Assert.True(adminCompanyCreate.IsAllowed);
+    }
+
+    [Fact]
     public void ApiAccess_RejectsDevelopmentKeysInProduction()
     {
         var service = new ApiAccessService(
@@ -794,6 +954,203 @@ public class AccountsWorkflowTests
         var failures = service.ValidateConfiguration();
 
         Assert.Contains(failures, f => f.Contains("DevelopmentKey"));
+    }
+
+    [Fact]
+    public void ApiAccess_RejectsInvalidRoleConfiguration()
+    {
+        var service = new ApiAccessService(
+            Options.Create(new ApiAccessConfig
+            {
+                Enabled = true,
+                Keys = [new ApiAccessKeyConfig { Name = "Odd key", Role = "SuperUser", DevelopmentKey = "plain-text" }]
+            }),
+            new TestEnvironment("Development"));
+
+        var failures = service.ValidateConfiguration();
+
+        Assert.Contains(failures, f => f.Contains("invalid Role"));
+    }
+
+    [Fact]
+    public async Task PeriodOwnershipMiddleware_BlocksPeriodFromDifferentCompany()
+    {
+        await using var db = CreateDbContext();
+        var allowedPeriod = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var otherPeriod = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var nextCalled = false;
+        var context = new DefaultHttpContext
+        {
+            Response =
+            {
+                Body = new MemoryStream()
+            }
+        };
+        context.Request.Path = $"/api/companies/{allowedPeriod.CompanyId}/periods/{otherPeriod.Id}/debtors";
+        var middleware = new PeriodOwnershipMiddleware(_ =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        });
+
+        await middleware.InvokeAsync(context, db);
+
+        Assert.False(nextCalled);
+        Assert.Equal(StatusCodes.Status404NotFound, context.Response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PeriodOwnershipMiddleware_AllowsPeriodFromRouteCompany()
+    {
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var nextCalled = false;
+        var context = new DefaultHttpContext
+        {
+            Response =
+            {
+                Body = new MemoryStream()
+            }
+        };
+        context.Request.Path = $"/api/companies/{period.CompanyId}/periods/{period.Id}/debtors";
+        var middleware = new PeriodOwnershipMiddleware(_ =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        });
+
+        await middleware.InvokeAsync(context, db);
+
+        Assert.True(nextCalled);
+    }
+
+    [Fact]
+    public async Task PeriodLockMiddleware_BlocksAccountingWritesToFinalisedPeriod()
+    {
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        period.Status = PeriodStatus.Finalised;
+        period.LockedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        var nextCalled = false;
+        var context = new DefaultHttpContext
+        {
+            Response =
+            {
+                Body = new MemoryStream()
+            }
+        };
+        context.Request.Method = HttpMethods.Post;
+        context.Request.Path = $"/api/companies/{period.CompanyId}/periods/{period.Id}/debtors";
+        var middleware = new PeriodLockMiddleware(_ =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        });
+
+        await middleware.InvokeAsync(context, db);
+
+        Assert.False(nextCalled);
+        Assert.Equal(StatusCodes.Status409Conflict, context.Response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PeriodLockMiddleware_AllowsReadsToFinalisedPeriod()
+    {
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        period.Status = PeriodStatus.Finalised;
+        period.LockedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        var nextCalled = false;
+        var context = new DefaultHttpContext
+        {
+            Response =
+            {
+                Body = new MemoryStream()
+            }
+        };
+        context.Request.Method = HttpMethods.Get;
+        context.Request.Path = $"/api/companies/{period.CompanyId}/periods/{period.Id}/debtors";
+        var middleware = new PeriodLockMiddleware(_ =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        });
+
+        await middleware.InvokeAsync(context, db);
+
+        Assert.True(nextCalled);
+    }
+
+    [Fact]
+    public async Task PeriodLockMiddleware_AllowsFilingWorkflowWritesToFinalisedPeriod()
+    {
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        period.Status = PeriodStatus.Finalised;
+        period.LockedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        var nextCalled = false;
+        var context = new DefaultHttpContext
+        {
+            Response =
+            {
+                Body = new MemoryStream()
+            }
+        };
+        context.Request.Method = HttpMethods.Put;
+        context.Request.Path = $"/api/companies/{period.CompanyId}/periods/{period.Id}/filing/cro-status";
+        var middleware = new PeriodLockMiddleware(_ =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        });
+
+        await middleware.InvokeAsync(context, db);
+
+        Assert.True(nextCalled);
+    }
+
+    [Fact]
+    public void EndpointInputs_RejectsInvalidCompanyAndPeriodInputs()
+    {
+        var badCompany = new CompanyInput
+        {
+            LegalName = "",
+            IncorporationDate = default,
+            FinancialYearStartMonth = 13,
+            ArdMonth = 0
+        };
+        var badPeriod = new AccountingPeriodInput
+        {
+            PeriodStart = new DateOnly(2025, 1, 1),
+            PeriodEnd = new DateOnly(2026, 8, 1),
+            MemberAuditNoticeReceived = true
+        };
+
+        Assert.NotNull(EndpointInputs.ValidateCompany(badCompany));
+        Assert.NotNull(EndpointInputs.ValidatePeriod(badPeriod));
+    }
+
+    [Fact]
+    public void EndpointInputs_RequiresReasonWhenReopeningLockedPeriod()
+    {
+        var period = new AccountingPeriod
+        {
+            CompanyId = 1,
+            PeriodStart = new DateOnly(2025, 1, 1),
+            PeriodEnd = new DateOnly(2025, 12, 31),
+            IsFirstYear = true,
+            Status = PeriodStatus.Finalised,
+            LockedAt = DateTime.UtcNow,
+            LockedBy = "Reviewer"
+        };
+        var invalid = new PeriodStatusUpdate(PeriodStatus.Review, null, "too short");
+        var valid = new PeriodStatusUpdate(PeriodStatus.Review, null, "Material correction required");
+
+        Assert.NotNull(EndpointInputs.ValidatePeriodStatusUpdate(period, invalid));
+        Assert.Null(EndpointInputs.ValidatePeriodStatusUpdate(period, valid));
     }
 
     private static AccountsDbContext CreateDbContext()

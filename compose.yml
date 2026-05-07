@@ -18,8 +18,8 @@ services:
 
   api:
     build:
-      context: ./backend/Accounts.Api
-      dockerfile: ../../Dockerfile.backend
+      context: .
+      dockerfile: Dockerfile.backend
     container_name: accounts-api
     ports:
       - "5090:8080"
@@ -39,11 +39,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.frontend
+      args:
+        API_URL: "http://api:8080"
     container_name: accounts-frontend
     ports:
       - "3000:3000"
     environment:
-      NEXT_PUBLIC_API_URL: "http://api:8080"
+      API_URL: "http://api:8080"
+      ACCOUNTS_API_KEY: "${ACCOUNTS_API_KEY:-}"
     depends_on:
       - api
 

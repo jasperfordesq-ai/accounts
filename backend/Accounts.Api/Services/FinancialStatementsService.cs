@@ -470,7 +470,7 @@ public class FinancialStatementsService(AccountsDbContext db)
                 var depTotal = g.Sum(a =>
                 {
                     var entry = a.DepreciationEntries.FirstOrDefault(d => d.PeriodId == periodId);
-                    return entry != null ? cost - entry.ClosingNbv : a.DepreciationEntries.Sum(d => d.Charge);
+                    return entry != null ? a.Cost - entry.ClosingNbv : a.DepreciationEntries.Sum(d => d.Charge);
                 });
                 return new AssetCategoryLine(g.Key, cost, depTotal, cost - depTotal);
             }).ToList();
