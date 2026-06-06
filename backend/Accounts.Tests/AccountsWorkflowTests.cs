@@ -1167,6 +1167,21 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task AuthService_LoginRejectsInactiveUserWithWrongPasswordAsInvalidCredentials()
+    {
+        await using var db = CreateDbContext();
+        var tenant = await SeedTenantAsync(db);
+        await SeedUserAsync(db, tenant, "owner@example.ie", "Correct Horse Battery Staple 1!", isActive: false);
+        var service = CreateAuthService(db);
+
+        var result = await service.LoginAsync("owner@example.ie", "wrong password");
+
+        Assert.False(result.Succeeded);
+        Assert.Null(result.User);
+        Assert.Equal("Invalid email or password.", result.FailureReason);
+    }
+
+    [Fact]
     public async Task AuthService_LoginRejectsMissingCredentialsWithFailureReason()
     {
         await using var db = CreateDbContext();
@@ -1180,7 +1195,7 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
-    public async Task AuthService_LoginRejectsUnsupportedPasswordAlgorithmWithFailureReason()
+    public async Task AuthService_LoginRejectsUnsupportedPasswordAlgorithmAsInvalidCredentials()
     {
         await using var db = CreateDbContext();
         var tenant = await SeedTenantAsync(db);
@@ -1196,7 +1211,7 @@ public class AccountsWorkflowTests
 
         Assert.False(result.Succeeded);
         Assert.Null(result.User);
-        Assert.Contains("Unsupported password algorithm", result.FailureReason);
+        Assert.Equal("Invalid email or password.", result.FailureReason);
     }
 
     [Fact]

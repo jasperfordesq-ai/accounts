@@ -50,14 +50,14 @@ public class AuthService
         if (user is null || user.Tenant is null)
             return LoginResult.Failed("Invalid email or password.");
 
-        if (!user.IsActive)
-            return LoginResult.Failed("User account is inactive.");
-
         if (user.PasswordAlgorithm != PasswordAlgorithm)
-            return LoginResult.Failed($"Unsupported password algorithm '{user.PasswordAlgorithm}'.");
+            return LoginResult.Failed("Invalid email or password.");
 
         if (!VerifyPassword(user, password))
             return LoginResult.Failed("Invalid email or password.");
+
+        if (!user.IsActive)
+            return LoginResult.Failed("User account is inactive.");
 
         user.LastLoginAt = DateTime.UtcNow;
         user.UpdatedAt = DateTime.UtcNow;
@@ -135,12 +135,6 @@ public class AuthService
         Expires = DateTimeOffset.UnixEpoch,
         Secure = environment.IsProduction()
     };
-
-    public CookieOptions CreateSessionCookieOptions(DateTimeOffset now) =>
-        CreateCookieOptions(now);
-
-    public CookieOptions CreateExpiredSessionCookieOptions(DateTimeOffset now) =>
-        ClearCookieOptions();
 
     private int ClampedExpiryMinutes => Math.Clamp(config.ExpiryMinutes, 15, 1_440);
 
