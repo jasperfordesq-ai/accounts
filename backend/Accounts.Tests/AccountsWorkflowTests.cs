@@ -16,6 +16,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using QuestPDF.Infrastructure;
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
 using Xunit;
@@ -2324,16 +2325,24 @@ public class AccountsWorkflowTests
         return new AccountsDbContext(options);
     }
 
-    private static string RepositoryRoot()
+    private static string RepositoryRoot([CallerFilePath] string sourceFilePath = "")
     {
-        var directory = new DirectoryInfo(Directory.GetCurrentDirectory());
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "compose.yml")))
+        foreach (var startPath in new[] { Directory.GetCurrentDirectory(), Path.GetDirectoryName(sourceFilePath) })
         {
-            directory = directory.Parent;
+            if (string.IsNullOrWhiteSpace(startPath))
+                continue;
+
+            var directory = new DirectoryInfo(startPath);
+            while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "compose.yml")))
+            {
+                directory = directory.Parent;
+            }
+
+            if (directory is not null)
+                return directory.FullName;
         }
 
-        return directory?.FullName
-            ?? throw new InvalidOperationException("Could not locate repository root.");
+        throw new InvalidOperationException("Could not locate repository root.");
     }
 
     private static async Task<AccountingPeriod> SeedCompanyPeriodAsync(AccountsDbContext db, bool isFirstYear)
