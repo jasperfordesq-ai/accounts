@@ -7,6 +7,9 @@ public static class RoleAuthorizationService
         if (HttpMethods.IsGet(method) || HttpMethods.IsHead(method) || HttpMethods.IsOptions(method))
             return RoleAuthorizationDecision.Allowed();
 
+        if (IsAuthenticatedLogout(path, method))
+            return RoleAuthorizationDecision.Allowed();
+
         var role = user.Role.Trim();
         if (role.Equals("Owner", StringComparison.OrdinalIgnoreCase))
             return RoleAuthorizationDecision.Allowed();
@@ -16,14 +19,14 @@ public static class RoleAuthorizationService
 
         if (role.Equals("Reviewer", StringComparison.OrdinalIgnoreCase))
         {
-            return IsReviewerWrite(path)
+            return IsReviewerWrite(path, method)
                 ? RoleAuthorizationDecision.Allowed()
                 : RoleAuthorizationDecision.Denied("Reviewer users can approve, review, finalise, and update filing workflow only.");
         }
 
         if (role.Equals("Accountant", StringComparison.OrdinalIgnoreCase))
         {
-            if (IsReviewerWrite(path) || IsCompanyDelete(path, method))
+            if (IsReviewerWrite(path, method) || IsCompanyDelete(path, method))
                 return RoleAuthorizationDecision.Denied("Accountant users cannot perform reviewer or owner-only actions.");
 
             return RoleAuthorizationDecision.Allowed();
@@ -32,35 +35,72 @@ public static class RoleAuthorizationService
         return RoleAuthorizationDecision.Denied("User role is not authorised.");
     }
 
-    private static bool IsReviewerWrite(PathString path)
+    private static bool IsReviewerWrite(PathString path, string method)
     {
         var segments = SplitPath(path);
-        if (segments.Length == 0)
-            return false;
 
-        if (segments.Contains("approve", StringComparer.OrdinalIgnoreCase)
-            || segments.Contains("year-end-reviews", StringComparer.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        if (segments[^1].Equals("status", StringComparison.OrdinalIgnoreCase))
+        if (HttpMethods.IsPost(method) && IsAdjustmentApproval(segments))
             return true;
 
-        for (var i = 0; i < segments.Length - 1; i++)
-        {
-            if (!segments[i].Equals("filing", StringComparison.OrdinalIgnoreCase))
-                continue;
+        if (HttpMethods.IsPut(method) && IsYearEndReviewConfirmation(segments))
+            return true;
 
-            if (segments[i + 1].Equals("cro-status", StringComparison.OrdinalIgnoreCase)
-                || segments[i + 1].Equals("cro-payment", StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
+        if (HttpMethods.IsPut(method) && IsPeriodStatusUpdate(segments))
+            return true;
+
+        if (HttpMethods.IsPut(method) && IsPeriodFilingAction(segments, "cro-status"))
+            return true;
+
+        if (HttpMethods.IsPost(method)
+            && (IsPeriodFilingAction(segments, "cro-payment")
+                || IsPeriodFilingAction(segments, "mark-generated")
+                || IsPeriodFilingAction(segments, "validate-ixbrl")
+                || IsPeriodAction(segments, "mark-filed")))
+        {
+            return true;
         }
 
         return false;
     }
+
+    private static bool IsAuthenticatedLogout(PathString path, string method) =>
+        HttpMethods.IsPost(method)
+        && path.Equals("/api/auth/logout", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsAdjustmentApproval(string[] segments) =>
+        segments is { Length: 8 }
+        && IsCompanyPeriodPrefix(segments)
+        && segments[5].Equals("adjustments", StringComparison.OrdinalIgnoreCase)
+        && int.TryParse(segments[6], out _)
+        && segments[7].Equals("approve", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsYearEndReviewConfirmation(string[] segments) =>
+        segments is { Length: 7 }
+        && IsCompanyPeriodPrefix(segments)
+        && segments[5].Equals("year-end-reviews", StringComparison.OrdinalIgnoreCase)
+        && !string.IsNullOrWhiteSpace(segments[6]);
+
+    private static bool IsPeriodStatusUpdate(string[] segments) =>
+        IsPeriodAction(segments, "status");
+
+    private static bool IsPeriodFilingAction(string[] segments, string action) =>
+        segments is { Length: 7 }
+        && IsCompanyPeriodPrefix(segments)
+        && segments[5].Equals("filing", StringComparison.OrdinalIgnoreCase)
+        && segments[6].Equals(action, StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsPeriodAction(string[] segments, string action) =>
+        segments is { Length: 6 }
+        && IsCompanyPeriodPrefix(segments)
+        && segments[5].Equals(action, StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsCompanyPeriodPrefix(string[] segments) =>
+        segments.Length >= 5
+        && segments[0].Equals("api", StringComparison.OrdinalIgnoreCase)
+        && segments[1].Equals("companies", StringComparison.OrdinalIgnoreCase)
+        && int.TryParse(segments[2], out _)
+        && segments[3].Equals("periods", StringComparison.OrdinalIgnoreCase)
+        && int.TryParse(segments[4], out _);
 
     private static bool IsCompanyDelete(PathString path, string method)
     {

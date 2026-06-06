@@ -1170,7 +1170,7 @@ public class AccountsWorkflowTests
         Assert.Equal("Example Firm", result.User.TenantName);
         Assert.Equal("owner@example.ie", result.User.Email);
         Assert.Equal("Owner User", result.User.DisplayName);
-        Assert.Equal("Admin", result.User.Role);
+        Assert.Equal("Owner", result.User.Role);
         var saved = await db.UserAccounts.FindAsync(user.Id);
         Assert.NotNull(saved?.LastLoginAt);
     }
@@ -1272,7 +1272,7 @@ public class AccountsWorkflowTests
         Assert.Equal("Example Firm", roundTripped.TenantName);
         Assert.Equal("owner@example.ie", roundTripped.Email);
         Assert.Equal("Owner User", roundTripped.DisplayName);
-        Assert.Equal("Admin", roundTripped.Role);
+        Assert.Equal("Owner", roundTripped.Role);
     }
 
     [Fact]
@@ -1740,7 +1740,7 @@ public class AccountsWorkflowTests
             TenantName: tenantA.Name,
             Email: "owner@tenant-a.test",
             DisplayName: "Tenant A Owner",
-            Role: "Admin");
+            Role: "Owner");
         var middleware = new TenantAccessMiddleware(_ =>
         {
             nextCalled = true;
@@ -1774,7 +1774,7 @@ public class AccountsWorkflowTests
             TenantName: tenantA.Name,
             Email: "owner@tenant-a.test",
             DisplayName: "Tenant A Owner",
-            Role: "Admin");
+            Role: "Owner");
         var middleware = new TenantAccessMiddleware(_ =>
         {
             nextCalled = true;
@@ -1800,7 +1800,7 @@ public class AccountsWorkflowTests
             TenantName: tenantA.Name,
             Email: "owner@tenant-a.test",
             DisplayName: "Tenant A Owner",
-            Role: "Admin");
+            Role: "Owner");
         context.Items["ApiAllowedCompanyIds"] = new[] { companyA.Id };
 
         var visibleCompanyIds = await CompanyListQuery
@@ -1856,6 +1856,35 @@ public class AccountsWorkflowTests
         Assert.Contains("read-only", body);
     }
 
+    [Theory]
+    [InlineData("Client")]
+    [InlineData("Reviewer")]
+    [InlineData("Accountant")]
+    [InlineData("Owner")]
+    public async Task RoleAuthorizationMiddleware_AllowsAuthenticatedLogoutForFirmRoles(string role)
+    {
+        var nextCalled = false;
+        var context = new DefaultHttpContext
+        {
+            Response =
+            {
+                Body = new MemoryStream()
+            }
+        };
+        context.Request.Method = HttpMethods.Post;
+        context.Request.Path = "/api/auth/logout";
+        context.Items[AuthContext.ItemKey] = AuthenticatedRole(role);
+        var middleware = new RoleAuthorizationMiddleware(_ =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        });
+
+        await middleware.InvokeAsync(context);
+
+        Assert.True(nextCalled);
+    }
+
     [Fact]
     public void RoleAuthorization_AllowsClientRead()
     {
@@ -1879,8 +1908,39 @@ public class AccountsWorkflowTests
         Assert.Contains("not authorised", decision.DenialReason);
     }
 
+    [Fact]
+    public void RoleAuthorization_DeniesLegacyAdminHumanSessionWrite()
+    {
+        var decision = RoleAuthorizationService.Authorize(
+            AuthenticatedRole("Admin"),
+            new PathString("/api/companies/1/periods"),
+            HttpMethods.Post);
+
+        Assert.False(decision.IsAllowed);
+        Assert.Contains("not authorised", decision.DenialReason);
+    }
+
+    [Fact]
+    public void RoleAuthorization_TreatsPatchAsWriteForClient()
+    {
+        var decision = RoleAuthorizationService.Authorize(
+            AuthenticatedRole("Client"),
+            new PathString("/api/companies/1/periods/2/debtors/3"),
+            HttpMethods.Patch);
+
+        Assert.False(decision.IsAllowed);
+        Assert.Contains("read-only", decision.DenialReason);
+    }
+
     [Theory]
     [InlineData("POST", "/api/companies/1/periods/2/adjustments/3/approve")]
+    [InlineData("PUT", "/api/companies/1/periods/2/year-end-reviews/debtors")]
+    [InlineData("PUT", "/api/companies/1/periods/2/status")]
+    [InlineData("PUT", "/api/companies/1/periods/2/filing/cro-status")]
+    [InlineData("POST", "/api/companies/1/periods/2/filing/cro-payment")]
+    [InlineData("POST", "/api/companies/1/periods/2/filing/mark-generated")]
+    [InlineData("POST", "/api/companies/1/periods/2/filing/validate-ixbrl")]
+    [InlineData("POST", "/api/companies/1/periods/2/mark-filed")]
     [InlineData("DELETE", "/api/companies/1")]
     public void RoleAuthorization_DeniesAccountantReviewerAndOwnerOnlyActions(string method, string path)
     {
@@ -1897,6 +1957,9 @@ public class AccountsWorkflowTests
     [InlineData("PUT", "/api/companies/1/periods/2/status")]
     [InlineData("PUT", "/api/companies/1/periods/2/filing/cro-status")]
     [InlineData("POST", "/api/companies/1/periods/2/filing/cro-payment")]
+    [InlineData("POST", "/api/companies/1/periods/2/filing/mark-generated")]
+    [InlineData("POST", "/api/companies/1/periods/2/filing/validate-ixbrl")]
+    [InlineData("POST", "/api/companies/1/periods/2/mark-filed")]
     public void RoleAuthorization_AllowsReviewerWorkflowWrites(string method, string path)
     {
         var decision = RoleAuthorizationService.Authorize(
@@ -1918,6 +1981,34 @@ public class AccountsWorkflowTests
             method);
 
         Assert.False(decision.IsAllowed);
+    }
+
+    [Theory]
+    [InlineData("POST", "/api/companies/1/approve")]
+    [InlineData("PUT", "/api/companies/1/status")]
+    public void RoleAuthorization_DeniesReviewerFalsePositiveWorkflowNames(string method, string path)
+    {
+        var decision = RoleAuthorizationService.Authorize(
+            AuthenticatedRole("Reviewer"),
+            new PathString(path),
+            method);
+
+        Assert.False(decision.IsAllowed);
+    }
+
+    [Theory]
+    [InlineData("POST", "/api/companies/1/periods/2/debtors")]
+    [InlineData("POST", "/api/companies/1/bank-accounts")]
+    [InlineData("POST", "/api/companies/1/approve")]
+    [InlineData("PUT", "/api/companies/1/status")]
+    public void RoleAuthorization_AllowsAccountantPreparationAndFalsePositiveWrites(string method, string path)
+    {
+        var decision = RoleAuthorizationService.Authorize(
+            AuthenticatedRole("Accountant"),
+            new PathString(path),
+            method);
+
+        Assert.True(decision.IsAllowed);
     }
 
     [Fact]
@@ -2272,7 +2363,7 @@ public class AccountsWorkflowTests
         string email,
         string password,
         bool isActive = true,
-        string role = "Admin",
+        string role = "Owner",
         string passwordAlgorithm = AuthService.PasswordAlgorithm)
     {
         var salt = RandomNumberGenerator.GetBytes(16);
