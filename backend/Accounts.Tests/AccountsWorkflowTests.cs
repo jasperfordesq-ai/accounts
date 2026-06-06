@@ -812,7 +812,7 @@ public class AccountsWorkflowTests
                 AutoMigrateOnStartup = true,
                 SeedDemoData = true
             }),
-            Options.Create(new AuthSessionConfig()),
+            AuthSessionOptions(config),
             new ApiAccessService(
                 Options.Create(new ApiAccessConfig { Enabled = false, RequireInProduction = true }),
                 new TestEnvironment("Production")));
@@ -823,6 +823,7 @@ public class AccountsWorkflowTests
         Assert.Contains(failures, f => f.Contains("SeedDemoData"));
         Assert.Contains(failures, f => f.Contains("development database password"));
         Assert.Contains(failures, f => f.Contains("localhost"));
+        Assert.Contains(failures, f => f.Contains("AuthSession:SigningKey"));
         Assert.Contains(failures, f => f.Contains("ApiAccess:Enabled"));
     }
 
@@ -833,7 +834,8 @@ public class AccountsWorkflowTests
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password",
-                ["AllowedOrigins:0"] = "https://accounts.example.ie"
+                ["AllowedOrigins:0"] = "https://accounts.example.ie",
+                ["AuthSession:SigningKey"] = StrongSessionSigningKey()
             })
             .Build();
         var service = new ProductionSafetyService(
@@ -844,7 +846,7 @@ public class AccountsWorkflowTests
                 AutoMigrateOnStartup = false,
                 SeedDemoData = false
             }),
-            Options.Create(new AuthSessionConfig { SigningKey = new string('a', 64) }),
+            AuthSessionOptions(config),
             new ApiAccessService(
                 Options.Create(new ApiAccessConfig
                 {
@@ -872,7 +874,7 @@ public class AccountsWorkflowTests
             {
                 ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password",
                 ["AllowedOrigins:0"] = "https://accounts.example.ie",
-                ["AuthSession:SigningKey"] = "short"
+                ["AuthSession:SigningKey"] = new string('a', 64)
             })
             .Build();
         var service = new ProductionSafetyService(
@@ -883,7 +885,48 @@ public class AccountsWorkflowTests
                 AutoMigrateOnStartup = false,
                 SeedDemoData = false
             }),
-            Options.Create(new AuthSessionConfig { SigningKey = "short" }),
+            AuthSessionOptions(config),
+            new ApiAccessService(
+                Options.Create(new ApiAccessConfig
+                {
+                    Enabled = true,
+                    RequireInProduction = true,
+                    Keys =
+                    [
+                        new ApiAccessKeyConfig
+                        {
+                            Name = "Production firm",
+                            KeyHash = ApiAccessService.HashKey("real-secret")
+                        }
+                    ]
+                }),
+                new TestEnvironment("Production")));
+
+        var failures = service.Validate();
+
+        Assert.Contains(failures, f => f.Contains("AuthSession:SigningKey"));
+    }
+
+    [Fact]
+    public void ProductionSafety_BlocksInvalidEncodedSessionSigningKeyInProduction()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password",
+                ["AllowedOrigins:0"] = "https://accounts.example.ie",
+                ["AuthSession:SigningKey"] = "not-a-base64-session-secret-value!!!!!"
+            })
+            .Build();
+        var service = new ProductionSafetyService(
+            new TestEnvironment("Production"),
+            config,
+            Options.Create(new DatabaseStartupConfig
+            {
+                AutoMigrateOnStartup = false,
+                SeedDemoData = false
+            }),
+            AuthSessionOptions(config),
             new ApiAccessService(
                 Options.Create(new ApiAccessConfig
                 {
@@ -913,7 +956,7 @@ public class AccountsWorkflowTests
             {
                 ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password",
                 ["AllowedOrigins:0"] = "https://accounts.example.ie",
-                ["AuthSession:SigningKey"] = new string('a', 64)
+                ["AuthSession:SigningKey"] = StrongSessionSigningKey()
             })
             .Build();
         var service = new ProductionSafetyService(
@@ -924,7 +967,7 @@ public class AccountsWorkflowTests
                 AutoMigrateOnStartup = false,
                 SeedDemoData = false
             }),
-            Options.Create(new AuthSessionConfig { SigningKey = new string('a', 64) }),
+            AuthSessionOptions(config),
             new ApiAccessService(
                 Options.Create(new ApiAccessConfig
                 {
@@ -942,6 +985,131 @@ public class AccountsWorkflowTests
                 new TestEnvironment("Production")));
 
         Assert.Empty(service.Validate());
+    }
+
+    [Fact]
+    public void ProductionSafety_AllowsStrongBase64UrlSessionSigningConfiguration()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password",
+                ["AllowedOrigins:0"] = "https://accounts.example.ie",
+                ["AuthSession:SigningKey"] = StrongSessionSigningKeyBase64Url()
+            })
+            .Build();
+        var service = new ProductionSafetyService(
+            new TestEnvironment("Production"),
+            config,
+            Options.Create(new DatabaseStartupConfig
+            {
+                AutoMigrateOnStartup = false,
+                SeedDemoData = false
+            }),
+            AuthSessionOptions(config),
+            new ApiAccessService(
+                Options.Create(new ApiAccessConfig
+                {
+                    Enabled = true,
+                    RequireInProduction = true,
+                    Keys =
+                    [
+                        new ApiAccessKeyConfig
+                        {
+                            Name = "Production firm",
+                            KeyHash = ApiAccessService.HashKey("real-secret")
+                        }
+                    ]
+                }),
+                new TestEnvironment("Production")));
+
+        Assert.Empty(service.Validate());
+    }
+
+    [Theory]
+    [InlineData(14)]
+    [InlineData(1441)]
+    public void ProductionSafety_BlocksSessionExpiryOutsideProductionRange(int expiryMinutes)
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password",
+                ["AllowedOrigins:0"] = "https://accounts.example.ie",
+                ["AuthSession:SigningKey"] = StrongSessionSigningKey(),
+                ["AuthSession:ExpiryMinutes"] = expiryMinutes.ToString()
+            })
+            .Build();
+        var service = new ProductionSafetyService(
+            new TestEnvironment("Production"),
+            config,
+            Options.Create(new DatabaseStartupConfig
+            {
+                AutoMigrateOnStartup = false,
+                SeedDemoData = false
+            }),
+            AuthSessionOptions(config),
+            new ApiAccessService(
+                Options.Create(new ApiAccessConfig
+                {
+                    Enabled = true,
+                    RequireInProduction = true,
+                    Keys =
+                    [
+                        new ApiAccessKeyConfig
+                        {
+                            Name = "Production firm",
+                            KeyHash = ApiAccessService.HashKey("real-secret")
+                        }
+                    ]
+                }),
+                new TestEnvironment("Production")));
+
+        var failures = service.Validate();
+
+        Assert.Contains(failures, f => f.Contains("AuthSession:ExpiryMinutes"));
+    }
+
+    [Fact]
+    public void ProductionSafety_BlocksInsecureSessionCookiesInProduction()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password",
+                ["AllowedOrigins:0"] = "https://accounts.example.ie",
+                ["AuthSession:SigningKey"] = StrongSessionSigningKey(),
+                ["AuthSession:SecureCookiesInProduction"] = "false"
+            })
+            .Build();
+        var service = new ProductionSafetyService(
+            new TestEnvironment("Production"),
+            config,
+            Options.Create(new DatabaseStartupConfig
+            {
+                AutoMigrateOnStartup = false,
+                SeedDemoData = false
+            }),
+            AuthSessionOptions(config),
+            new ApiAccessService(
+                Options.Create(new ApiAccessConfig
+                {
+                    Enabled = true,
+                    RequireInProduction = true,
+                    Keys =
+                    [
+                        new ApiAccessKeyConfig
+                        {
+                            Name = "Production firm",
+                            KeyHash = ApiAccessService.HashKey("real-secret")
+                        }
+                    ]
+                }),
+                new TestEnvironment("Production")));
+
+        var failures = service.Validate();
+
+        Assert.Contains(failures, f => f.Contains("AuthSession:SecureCookiesInProduction"));
     }
 
     [Fact]
@@ -1385,6 +1553,15 @@ public class AccountsWorkflowTests
         ConfirmedBy = "Accounts reviewer",
         Note = "Nil position reviewed."
     };
+
+    private static IOptions<AuthSessionConfig> AuthSessionOptions(IConfiguration config) =>
+        Options.Create(config.GetSection("AuthSession").Get<AuthSessionConfig>() ?? new AuthSessionConfig());
+
+    private static string StrongSessionSigningKey() =>
+        Convert.ToBase64String(Enumerable.Range(0, 64).Select(i => (byte)i).ToArray());
+
+    private static string StrongSessionSigningKeyBase64Url() =>
+        StrongSessionSigningKey().TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
     private sealed class TestEnvironment(string environmentName) : IHostEnvironment
     {

@@ -10,6 +10,10 @@ public class ProductionSafetyService(
     IOptions<AuthSessionConfig> authSession,
     ApiAccessService apiAccess)
 {
+    private const int MinimumSigningKeyBytes = 32;
+    private const int MinimumSigningKeyDistinctEncodedChars = 8;
+    private const int MinimumSigningKeyDistinctBytes = 16;
+
     public IReadOnlyList<string> Validate()
     {
         if (!environment.IsProduction())
@@ -36,8 +40,8 @@ public class ProductionSafetyService(
             failures.Add("AllowedOrigins contains localhost in production. Configure the real application origin.");
 
         var session = authSession.Value;
-        if (string.IsNullOrWhiteSpace(session.SigningKey) || session.SigningKey.Trim().Length < 32)
-            failures.Add("AuthSession:SigningKey must be configured to at least 32 characters in production.");
+        if (!HasStrongSigningKey(session.SigningKey))
+            failures.Add("AuthSession:SigningKey must be a generated Base64 or Base64Url-encoded secret of at least 32 bytes in production.");
 
         if (session.ExpiryMinutes is < 15 or > 1440)
             failures.Add("AuthSession:ExpiryMinutes must be between 15 and 1440 minutes in production.");
@@ -55,5 +59,67 @@ public class ProductionSafetyService(
         var failures = Validate();
         if (failures.Count > 0)
             throw new InvalidOperationException("Unsafe production configuration: " + string.Join(" ", failures));
+    }
+
+    private static bool HasStrongSigningKey(string? signingKey)
+    {
+        if (string.IsNullOrWhiteSpace(signingKey))
+            return false;
+
+        var trimmed = signingKey.Trim();
+        if (!TryDecodeSigningKey(trimmed, out var decoded))
+            return false;
+
+        return decoded.Length >= MinimumSigningKeyBytes
+            && trimmed.TrimEnd('=').Distinct().Count() >= MinimumSigningKeyDistinctEncodedChars
+            && decoded.Distinct().Count() >= MinimumSigningKeyDistinctBytes;
+    }
+
+    private static bool TryDecodeSigningKey(string signingKey, out byte[] decoded)
+    {
+        if (TryDecodeBase64(signingKey, out decoded))
+            return true;
+
+        return TryDecodeBase64Url(signingKey, out decoded);
+    }
+
+    private static bool TryDecodeBase64(string value, out byte[] decoded)
+    {
+        try
+        {
+            decoded = Convert.FromBase64String(value);
+            return true;
+        }
+        catch (FormatException)
+        {
+            decoded = [];
+            return false;
+        }
+    }
+
+    private static bool TryDecodeBase64Url(string value, out byte[] decoded)
+    {
+        if (value.Any(c => !(char.IsLetterOrDigit(c) || c is '-' or '_' or '=')))
+        {
+            decoded = [];
+            return false;
+        }
+
+        var normalized = value.Replace('-', '+').Replace('_', '/');
+        normalized += (normalized.Length % 4) switch
+        {
+            0 => "",
+            2 => "==",
+            3 => "=",
+            _ => ""
+        };
+
+        if (normalized.Length % 4 != 0)
+        {
+            decoded = [];
+            return false;
+        }
+
+        return TryDecodeBase64(normalized, out decoded);
     }
 }
