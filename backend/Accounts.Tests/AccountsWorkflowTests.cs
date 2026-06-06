@@ -1787,6 +1787,32 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task CompanyList_IntersectsTenantAndApiKeyAllowedCompanyIds()
+    {
+        await using var db = CreateDbContext();
+        var tenantA = await SeedTenantAsync(db, name: "Tenant A", slug: "tenant-a");
+        var companyA = await SeedTenantCompanyAsync(db, tenantA.Id, "Tenant A Limited");
+        var companyB = await SeedTenantCompanyAsync(db, tenantA.Id, "Tenant B Limited");
+        var context = new DefaultHttpContext();
+        context.Items[AuthContext.ItemKey] = new AuthenticatedUser(
+            UserId: 1,
+            TenantId: tenantA.Id,
+            TenantName: tenantA.Name,
+            Email: "owner@tenant-a.test",
+            DisplayName: "Tenant A Owner",
+            Role: "Admin");
+        context.Items["ApiAllowedCompanyIds"] = new[] { companyA.Id };
+
+        var visibleCompanyIds = await CompanyListQuery
+            .ForContext(context, db.Companies)
+            .Select(c => c.Id)
+            .ToListAsync();
+
+        Assert.Equal([companyA.Id], visibleCompanyIds);
+        Assert.DoesNotContain(companyB.Id, visibleCompanyIds);
+    }
+
+    [Fact]
     public async Task PeriodLockMiddleware_BlocksAccountingWritesToFinalisedPeriod()
     {
         await using var db = CreateDbContext();

@@ -158,8 +158,7 @@ var companies = app.MapGroup("/api/companies").WithTags("Companies");
 
 companies.MapGet("/", async (HttpContext context, AccountsDbContext db) =>
 {
-    var user = AuthContext.RequireUser(context);
-    var query = db.Companies.Where(c => c.TenantId == user.TenantId);
+    var query = CompanyListQuery.ForContext(context, db.Companies);
 
     return await query.Select(c => new
     {
@@ -314,6 +313,25 @@ app.MapAllEndpoints();
 app.Run();
 
 public record PeriodStatusUpdate(Accounts.Api.Entities.PeriodStatus Status, string? LockedBy, string? ReopenReason);
+
+public static class CompanyListQuery
+{
+    public static IQueryable<Accounts.Api.Entities.Company> ForContext(
+        HttpContext context,
+        IQueryable<Accounts.Api.Entities.Company> companies)
+    {
+        var user = AuthContext.RequireUser(context);
+        var query = companies.Where(c => c.TenantId == user.TenantId);
+        var allowedCompanyIds = ApiAccessService.GetAllowedCompanyIds(context);
+        if (allowedCompanyIds is { Count: > 0 })
+        {
+            var ids = allowedCompanyIds.ToArray();
+            query = query.Where(c => ids.Contains(c.Id));
+        }
+
+        return query;
+    }
+}
 
 public class CompanyInput
 {
