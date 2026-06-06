@@ -23,7 +23,6 @@ public static class SeedData
         var medium = await SeedAtlanticManufacturingAsync(db, tenant.Id);
 
         await EnsureDemoUsersAsync(db, tenant.Id);
-        await EnsureExistingUsersHaveStrongPasswordsAsync(db);
         await EnsureTenantAuditLogAsync(db, tenant, [micro, small, medium]);
 
         await db.SaveChangesAsync();
@@ -1418,25 +1417,6 @@ public static class SeedData
         await db.SaveChangesAsync();
     }
 
-    private static async Task EnsureExistingUsersHaveStrongPasswordsAsync(AccountsDbContext db)
-    {
-        var weakUsers = await db.UserAccounts
-            .Where(u => string.IsNullOrWhiteSpace(u.PasswordHash)
-                || string.IsNullOrWhiteSpace(u.PasswordSalt)
-                || u.PasswordAlgorithm != PasswordAlgorithm
-                || u.PasswordStrengthScore < 5)
-            .ToListAsync();
-
-        foreach (var user in weakUsers)
-        {
-            SetPassword(user, BuildStrongResetPassword(user));
-            user.MustChangePassword = true;
-            user.UpdatedAt = DateTime.UtcNow;
-        }
-
-        await db.SaveChangesAsync();
-    }
-
     private static void SetPassword(UserAccount user, string password)
     {
         if (!MeetsStrongPasswordPolicy(password))
@@ -1449,13 +1429,6 @@ public static class SeedData
         user.PasswordAlgorithm = PasswordAlgorithm;
         user.PasswordStrengthScore = 5;
         user.PasswordLastChangedAt = DateTime.UtcNow;
-    }
-
-    private static string BuildStrongResetPassword(UserAccount user)
-    {
-        var input = $"{user.Id}:{user.Email}:{user.TenantId}:accounts-v2";
-        var suffix = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(input))).ToLowerInvariant()[..12];
-        return $"AccountsV2!Reset-{user.Id:0000}-{suffix}";
     }
 
     private static bool MeetsStrongPasswordPolicy(string password) =>

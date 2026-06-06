@@ -1114,6 +1114,39 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task SeedData_DoesNotRewriteNonDemoUserCredentials()
+    {
+        await using var db = CreateDbContext();
+        var tenant = await SeedTenantAsync(db, "External Firm", "external-firm");
+        var user = new UserAccount
+        {
+            TenantId = tenant.Id,
+            Email = "real-user@example.ie",
+            DisplayName = "Real User",
+            Role = "Owner",
+            PasswordHash = "legacy-hash",
+            PasswordSalt = "legacy-salt",
+            PasswordAlgorithm = "Legacy-SHA1",
+            PasswordStrengthScore = 1,
+            MustChangePassword = false,
+            IsActive = true
+        };
+        db.UserAccounts.Add(user);
+        await db.SaveChangesAsync();
+        var userId = user.Id;
+
+        await SeedData.SeedAsync(db);
+
+        db.ChangeTracker.Clear();
+        var reloaded = await db.UserAccounts.SingleAsync(u => u.Id == userId);
+        Assert.Equal("legacy-hash", reloaded.PasswordHash);
+        Assert.Equal("legacy-salt", reloaded.PasswordSalt);
+        Assert.Equal("Legacy-SHA1", reloaded.PasswordAlgorithm);
+        Assert.Equal(1, reloaded.PasswordStrengthScore);
+        Assert.False(reloaded.MustChangePassword);
+    }
+
+    [Fact]
     public async Task AuthService_LoginAcceptsValidPasswordAndReturnsTenantPrincipal()
     {
         await using var db = CreateDbContext();
