@@ -32,6 +32,7 @@ builder.Services.Configure<SizeThresholdConfig>(builder.Configuration.GetSection
 builder.Services.Configure<ImportLimitConfig>(builder.Configuration.GetSection("ImportLimits"));
 builder.Services.Configure<DatabaseStartupConfig>(builder.Configuration.GetSection("DatabaseStartup"));
 builder.Services.Configure<ApiAccessConfig>(builder.Configuration.GetSection("ApiAccess"));
+builder.Services.Configure<AuthSessionConfig>(builder.Configuration.GetSection("AuthSession"));
 
 var importLimits = builder.Configuration.GetSection("ImportLimits").Get<ImportLimitConfig>() ?? new ImportLimitConfig();
 builder.Services.Configure<FormOptions>(options =>

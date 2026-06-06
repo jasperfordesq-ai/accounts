@@ -7,6 +7,7 @@ public class ProductionSafetyService(
     IHostEnvironment environment,
     IConfiguration configuration,
     IOptions<DatabaseStartupConfig> databaseStartup,
+    IOptions<AuthSessionConfig> authSession,
     ApiAccessService apiAccess)
 {
     public IReadOnlyList<string> Validate()
@@ -32,7 +33,17 @@ public class ProductionSafetyService(
             failures.Add("AllowedOrigins must be explicitly configured in production.");
 
         if (allowedOrigins.Any(o => o.Contains("localhost", StringComparison.OrdinalIgnoreCase) || o.Contains("127.0.0.1", StringComparison.OrdinalIgnoreCase)))
-        failures.Add("AllowedOrigins contains localhost in production. Configure the real application origin.");
+            failures.Add("AllowedOrigins contains localhost in production. Configure the real application origin.");
+
+        var session = authSession.Value;
+        if (string.IsNullOrWhiteSpace(session.SigningKey) || session.SigningKey.Trim().Length < 32)
+            failures.Add("AuthSession:SigningKey must be configured to at least 32 characters in production.");
+
+        if (session.ExpiryMinutes is < 15 or > 1440)
+            failures.Add("AuthSession:ExpiryMinutes must be between 15 and 1440 minutes in production.");
+
+        if (!session.SecureCookiesInProduction)
+            failures.Add("AuthSession:SecureCookiesInProduction must be true in production.");
 
         failures.AddRange(apiAccess.ValidateConfiguration());
 
