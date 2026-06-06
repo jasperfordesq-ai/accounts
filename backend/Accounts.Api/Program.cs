@@ -47,6 +47,16 @@ builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     var permitLimit = builder.Configuration.GetValue("RateLimits:PermitLimitPerMinute", 300);
+    options.AddPolicy(AuthEndpoints.LoginRateLimitPolicy, context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                AutoReplenishment = true
+            }));
     options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
         RateLimitPartition.GetFixedWindowLimiter(
             context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
@@ -125,11 +135,11 @@ using (var scope = app.Services.CreateScope())
 
 // Middleware
 app.UseMiddleware<Accounts.Api.Middleware.SecurityHeadersMiddleware>();
+app.UseMiddleware<Accounts.Api.Middleware.ExceptionMiddleware>();
 app.UseRateLimiter();
 app.UseCors();
 app.UseMiddleware<Accounts.Api.Middleware.ApiAccessMiddleware>();
 app.UseMiddleware<Accounts.Api.Middleware.UserSessionMiddleware>();
-app.UseMiddleware<Accounts.Api.Middleware.ExceptionMiddleware>();
 app.UseMiddleware<Accounts.Api.Middleware.PeriodOwnershipMiddleware>();
 app.UseMiddleware<Accounts.Api.Middleware.PeriodLockMiddleware>();
 if (app.Environment.IsDevelopment())

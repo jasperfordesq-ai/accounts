@@ -1,13 +1,19 @@
+using Accounts.Api.Endpoints;
 using Accounts.Api.Data;
 using Accounts.Api.Entities;
 using Accounts.Api.Middleware;
 using Accounts.Api.Rules;
 using Accounts.Api.Services;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using QuestPDF.Infrastructure;
 using System.Security.Cryptography;
@@ -1342,10 +1348,13 @@ public class AccountsWorkflowTests
                 Body = new MemoryStream()
             }
         };
+        context.RequestServices = new ServiceCollection()
+            .AddSingleton(auth)
+            .BuildServiceProvider();
         context.Request.Path = "/api/companies";
         var middleware = new UserSessionMiddleware(_ => Task.CompletedTask);
 
-        await middleware.InvokeAsync(context, auth);
+        await middleware.InvokeAsync(context);
 
         Assert.Equal(StatusCodes.Status401Unauthorized, context.Response.StatusCode);
     }
@@ -1353,11 +1362,35 @@ public class AccountsWorkflowTests
     [Fact]
     public async Task UserSessionMiddleware_AllowsLoginWithoutSession()
     {
-        await using var db = CreateDbContext();
-        var auth = CreateAuthService(db);
         var nextCalled = false;
         var context = new DefaultHttpContext
         {
+            Response =
+            {
+                Body = new MemoryStream()
+            }
+        };
+        context.RequestServices = new ServiceCollection().BuildServiceProvider();
+        context.Request.Method = HttpMethods.Post;
+        context.Request.Path = "/api/auth/login";
+        var middleware = new UserSessionMiddleware(_ =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        });
+
+        await middleware.InvokeAsync(context);
+
+        Assert.True(nextCalled);
+    }
+
+    [Fact]
+    public async Task UserSessionMiddleware_AllowsLoginWithoutResolvingAuthService()
+    {
+        var nextCalled = false;
+        var context = new DefaultHttpContext
+        {
+            RequestServices = new ServiceCollection().BuildServiceProvider(),
             Response =
             {
                 Body = new MemoryStream()
@@ -1371,9 +1404,34 @@ public class AccountsWorkflowTests
             return Task.CompletedTask;
         });
 
-        await middleware.InvokeAsync(context, auth);
+        await middleware.InvokeAsync(context);
 
         Assert.True(nextCalled);
+    }
+
+    [Fact]
+    public async Task UserSessionMiddleware_ExceptionMiddlewareCatchesAuthResolutionFailures()
+    {
+        var context = new DefaultHttpContext
+        {
+            RequestServices = new ServiceCollection()
+                .AddSingleton<IHostEnvironment>(new TestEnvironment("Development"))
+                .BuildServiceProvider(),
+            Response =
+            {
+                Body = new MemoryStream()
+            }
+        };
+        context.Request.Path = "/api/companies";
+        var session = new UserSessionMiddleware(_ => Task.CompletedTask);
+        var exception = new ExceptionMiddleware(
+            innerContext => session.InvokeAsync(innerContext),
+            NullLogger<ExceptionMiddleware>.Instance);
+
+        await exception.InvokeAsync(context);
+
+        Assert.Equal(StatusCodes.Status400BadRequest, context.Response.StatusCode);
+        Assert.Equal("application/json", context.Response.ContentType);
     }
 
     [Fact]
@@ -1393,6 +1451,9 @@ public class AccountsWorkflowTests
                 Body = new MemoryStream()
             }
         };
+        context.RequestServices = new ServiceCollection()
+            .AddSingleton(auth)
+            .BuildServiceProvider();
         context.Request.Path = "/api/companies";
         context.Request.Headers.Cookie = $"{auth.CookieName}={cookieValue}";
         var middleware = new UserSessionMiddleware(innerContext =>
@@ -1402,7 +1463,7 @@ public class AccountsWorkflowTests
             return Task.CompletedTask;
         });
 
-        await middleware.InvokeAsync(context, auth);
+        await middleware.InvokeAsync(context);
 
         Assert.True(nextCalled);
     }
@@ -1426,10 +1487,73 @@ public class AccountsWorkflowTests
             new TestEnvironment("Production"));
 
         var authEndpoint = service.Authorize(null, new PathString("/api/auth/login"), HttpMethods.Post);
+        var logoutEndpoint = service.Authorize(null, new PathString("/api/auth/logout"), HttpMethods.Post);
+        var meEndpoint = service.Authorize(null, new PathString("/api/auth/me"), HttpMethods.Get);
         var ordinaryEndpoint = service.Authorize(null, new PathString("/api/companies"), HttpMethods.Get);
 
         Assert.True(authEndpoint.IsAllowed);
+        Assert.True(logoutEndpoint.IsAllowed);
+        Assert.True(meEndpoint.IsAllowed);
         Assert.False(ordinaryEndpoint.IsAllowed);
+    }
+
+    [Fact]
+    public void ApiAccess_DeniesUnknownAuthEndpointWithoutServiceKey()
+    {
+        var service = new ApiAccessService(
+            Options.Create(new ApiAccessConfig
+            {
+                Enabled = true,
+                Keys =
+                [
+                    new ApiAccessKeyConfig
+                    {
+                        Name = "Firm A",
+                        KeyHash = ApiAccessService.HashKey("secret-a")
+                    }
+                ]
+            }),
+            new TestEnvironment("Production"));
+
+        var decision = service.Authorize(null, new PathString("/api/auth/anything-else"), HttpMethods.Get);
+
+        Assert.False(decision.IsAllowed);
+        Assert.Contains("Missing API access key", decision.DenialReason);
+    }
+
+    [Fact]
+    public async Task AuthEndpoints_LoginRequiresNamedRateLimit()
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.Services.AddScoped<AuthService>();
+        await using var app = builder.Build();
+
+        app.MapAuthEndpoints();
+
+        var loginEndpoint = ((IEndpointRouteBuilder)app).DataSources
+            .SelectMany(source => source.Endpoints)
+            .OfType<RouteEndpoint>()
+            .Single(endpoint => endpoint.RoutePattern.RawText == "/api/auth/login");
+        var metadata = loginEndpoint.Metadata.GetMetadata<EnableRateLimitingAttribute>();
+
+        Assert.NotNull(metadata);
+        Assert.Equal(AuthEndpoints.LoginRateLimitPolicy, metadata.PolicyName);
+    }
+
+    [Fact]
+    public void DevelopmentConfig_ProvidesStrongSessionSigningKeyWithoutBaseDefault()
+    {
+        var apiPath = Path.Combine(RepositoryRoot(), "backend", "Accounts.Api");
+        var baseConfig = new ConfigurationBuilder()
+            .AddJsonFile(Path.Combine(apiPath, "appsettings.json"), optional: false)
+            .Build();
+        var developmentConfig = new ConfigurationBuilder()
+            .AddJsonFile(Path.Combine(apiPath, "appsettings.json"), optional: false)
+            .AddJsonFile(Path.Combine(apiPath, "appsettings.Development.json"), optional: false)
+            .Build();
+
+        Assert.True(string.IsNullOrWhiteSpace(baseConfig["AuthSession:SigningKey"]));
+        Assert.True(AuthSessionKey.HasStrongKey(developmentConfig["AuthSession:SigningKey"]));
     }
 
     [Fact]
@@ -1730,6 +1854,18 @@ public class AccountsWorkflowTests
             .Options;
 
         return new AccountsDbContext(options);
+    }
+
+    private static string RepositoryRoot()
+    {
+        var directory = new DirectoryInfo(Directory.GetCurrentDirectory());
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "compose.yml")))
+        {
+            directory = directory.Parent;
+        }
+
+        return directory?.FullName
+            ?? throw new InvalidOperationException("Could not locate repository root.");
     }
 
     private static async Task<AccountingPeriod> SeedCompanyPeriodAsync(AccountsDbContext db, bool isFirstYear)

@@ -4,14 +4,17 @@ namespace Accounts.Api.Middleware;
 
 public class UserSessionMiddleware(RequestDelegate next)
 {
-    public async Task InvokeAsync(HttpContext context, AuthService auth)
+    public async Task InvokeAsync(HttpContext context)
     {
-        if (!context.Request.Path.StartsWithSegments("/api") || IsAnonymousAuthEndpoint(context))
+        if (!context.Request.Path.StartsWithSegments("/api")
+            || HttpMethods.IsOptions(context.Request.Method)
+            || IsAnonymousAuthEndpoint(context))
         {
             await next(context);
             return;
         }
 
+        var auth = context.RequestServices.GetRequiredService<AuthService>();
         var user = await auth.ReadSessionAsync(
             context.Request.Cookies[auth.CookieName],
             DateTimeOffset.UtcNow);

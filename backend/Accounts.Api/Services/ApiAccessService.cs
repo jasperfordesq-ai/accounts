@@ -18,7 +18,7 @@ public class ApiAccessService(IOptions<ApiAccessConfig> options, IHostEnvironmen
         if (!_config.Enabled)
             return ApiAccessDecision.Allowed("Development", ApiAccessRole.Admin, null, null);
 
-        if (IsAuthEndpoint(path))
+        if (IsBrowserAuthEndpoint(path, method))
             return ApiAccessDecision.Allowed("Browser auth", ApiAccessRole.Admin, null, null);
 
         if (string.IsNullOrWhiteSpace(presentedKey))
@@ -131,8 +131,10 @@ public class ApiAccessService(IOptions<ApiAccessConfig> options, IHostEnvironmen
         !HttpMethods.IsGet(method)
         && Regex.IsMatch(path.Value ?? "", @"^/api/companies/?$", RegexOptions.IgnoreCase);
 
-    private static bool IsAuthEndpoint(PathString path) =>
-        path.StartsWithSegments("/api/auth", StringComparison.OrdinalIgnoreCase);
+    private static bool IsBrowserAuthEndpoint(PathString path, string method) =>
+        (HttpMethods.IsPost(method) && path.Equals("/api/auth/login", StringComparison.OrdinalIgnoreCase))
+        || (HttpMethods.IsPost(method) && path.Equals("/api/auth/logout", StringComparison.OrdinalIgnoreCase))
+        || (HttpMethods.IsGet(method) && path.Equals("/api/auth/me", StringComparison.OrdinalIgnoreCase));
 
     private static bool TryParseRole(string? role, out ApiAccessRole parsed) =>
         Enum.TryParse(role?.Trim() ?? "Admin", ignoreCase: true, out parsed);

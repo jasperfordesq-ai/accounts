@@ -4,6 +4,8 @@ namespace Accounts.Api.Endpoints;
 
 public static class AuthEndpoints
 {
+    public const string LoginRateLimitPolicy = "auth-login";
+
     public static void MapAuthEndpoints(this WebApplication app)
     {
         var auth = app.MapGroup("/api/auth").WithTags("Auth");
@@ -21,7 +23,7 @@ public static class AuthEndpoints
                 authService.CreateCookieOptions(now));
 
             return Results.Ok(AuthResponse.From(result.User));
-        });
+        }).RequireRateLimiting(LoginRateLimitPolicy);
 
         auth.MapPost("/logout", (AuthService authService, HttpContext context) =>
         {
