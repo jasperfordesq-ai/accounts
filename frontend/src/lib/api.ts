@@ -70,12 +70,13 @@ async function apiFetch<T>(
       const timeoutId = setTimeout(() => controller.abort(), timeout);
 
       const res = await fetch(`${API_BASE}${path}`, {
+        ...fetchOptions,
         headers: {
           "Content-Type": "application/json",
           ...fetchOptions?.headers,
         },
+        credentials: "include",
         signal: controller.signal,
-        ...fetchOptions,
       });
 
       clearTimeout(timeoutId);
@@ -690,6 +691,7 @@ export const uploadBankCsv = async (
       {
         method: "POST",
         body: formData,
+        credentials: "include",
         signal: controller.signal,
         headers: {
           ...(reviewer ? { "X-Reviewer": reviewer } : {}),
