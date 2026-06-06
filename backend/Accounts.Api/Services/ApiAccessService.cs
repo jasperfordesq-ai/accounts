@@ -18,6 +18,9 @@ public class ApiAccessService(IOptions<ApiAccessConfig> options, IHostEnvironmen
         if (!_config.Enabled)
             return ApiAccessDecision.Allowed("Development", ApiAccessRole.Admin, null, null);
 
+        if (IsAuthEndpoint(path))
+            return ApiAccessDecision.Allowed("Browser auth", ApiAccessRole.Admin, null, null);
+
         if (string.IsNullOrWhiteSpace(presentedKey))
             return ApiAccessDecision.Denied("Missing API access key.");
 
@@ -127,6 +130,9 @@ public class ApiAccessService(IOptions<ApiAccessConfig> options, IHostEnvironmen
     private static bool IsCompanyCollectionWrite(PathString path, string method) =>
         !HttpMethods.IsGet(method)
         && Regex.IsMatch(path.Value ?? "", @"^/api/companies/?$", RegexOptions.IgnoreCase);
+
+    private static bool IsAuthEndpoint(PathString path) =>
+        path.StartsWithSegments("/api/auth", StringComparison.OrdinalIgnoreCase);
 
     private static bool TryParseRole(string? role, out ApiAccessRole parsed) =>
         Enum.TryParse(role?.Trim() ?? "Admin", ignoreCase: true, out parsed);

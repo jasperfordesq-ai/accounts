@@ -1331,6 +1331,108 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task UserSessionMiddleware_BlocksProtectedApiWithoutSession()
+    {
+        await using var db = CreateDbContext();
+        var auth = CreateAuthService(db);
+        var context = new DefaultHttpContext
+        {
+            Response =
+            {
+                Body = new MemoryStream()
+            }
+        };
+        context.Request.Path = "/api/companies";
+        var middleware = new UserSessionMiddleware(_ => Task.CompletedTask);
+
+        await middleware.InvokeAsync(context, auth);
+
+        Assert.Equal(StatusCodes.Status401Unauthorized, context.Response.StatusCode);
+    }
+
+    [Fact]
+    public async Task UserSessionMiddleware_AllowsLoginWithoutSession()
+    {
+        await using var db = CreateDbContext();
+        var auth = CreateAuthService(db);
+        var nextCalled = false;
+        var context = new DefaultHttpContext
+        {
+            Response =
+            {
+                Body = new MemoryStream()
+            }
+        };
+        context.Request.Method = HttpMethods.Post;
+        context.Request.Path = "/api/auth/login";
+        var middleware = new UserSessionMiddleware(_ =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        });
+
+        await middleware.InvokeAsync(context, auth);
+
+        Assert.True(nextCalled);
+    }
+
+    [Fact]
+    public async Task UserSessionMiddleware_LoadsPrincipalFromValidSession()
+    {
+        await using var db = CreateDbContext();
+        var tenant = await SeedTenantAsync(db);
+        var user = await SeedUserAsync(db, tenant, "owner@example.ie", "Correct Horse Battery Staple 1!");
+        var auth = CreateAuthService(db);
+        var login = await auth.LoginAsync("owner@example.ie", "Correct Horse Battery Staple 1!");
+        var cookieValue = auth.CreateSessionCookieValue(login.User!, DateTimeOffset.UtcNow);
+        var nextCalled = false;
+        var context = new DefaultHttpContext
+        {
+            Response =
+            {
+                Body = new MemoryStream()
+            }
+        };
+        context.Request.Path = "/api/companies";
+        context.Request.Headers.Cookie = $"{auth.CookieName}={cookieValue}";
+        var middleware = new UserSessionMiddleware(innerContext =>
+        {
+            nextCalled = true;
+            Assert.Equal(user.Id, AuthContext.RequireUser(innerContext).UserId);
+            return Task.CompletedTask;
+        });
+
+        await middleware.InvokeAsync(context, auth);
+
+        Assert.True(nextCalled);
+    }
+
+    [Fact]
+    public void ApiAccess_AllowsAuthEndpointsWithoutServiceKey()
+    {
+        var service = new ApiAccessService(
+            Options.Create(new ApiAccessConfig
+            {
+                Enabled = true,
+                Keys =
+                [
+                    new ApiAccessKeyConfig
+                    {
+                        Name = "Firm A",
+                        KeyHash = ApiAccessService.HashKey("secret-a")
+                    }
+                ]
+            }),
+            new TestEnvironment("Production"));
+
+        var authEndpoint = service.Authorize(null, new PathString("/api/auth/login"), HttpMethods.Post);
+        var ordinaryEndpoint = service.Authorize(null, new PathString("/api/companies"), HttpMethods.Get);
+
+        Assert.True(authEndpoint.IsAllowed);
+        Assert.False(ordinaryEndpoint.IsAllowed);
+    }
+
+    [Fact]
     public void ApiAccess_AllowsKeyForConfiguredCompanyOnly()
     {
         var service = new ApiAccessService(

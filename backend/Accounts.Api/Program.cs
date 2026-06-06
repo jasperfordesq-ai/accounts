@@ -128,6 +128,7 @@ app.UseMiddleware<Accounts.Api.Middleware.SecurityHeadersMiddleware>();
 app.UseRateLimiter();
 app.UseCors();
 app.UseMiddleware<Accounts.Api.Middleware.ApiAccessMiddleware>();
+app.UseMiddleware<Accounts.Api.Middleware.UserSessionMiddleware>();
 app.UseMiddleware<Accounts.Api.Middleware.ExceptionMiddleware>();
 app.UseMiddleware<Accounts.Api.Middleware.PeriodOwnershipMiddleware>();
 app.UseMiddleware<Accounts.Api.Middleware.PeriodLockMiddleware>();

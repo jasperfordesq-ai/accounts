@@ -4,6 +4,7 @@ public static class EndpointRegistration
 {
     public static void MapAllEndpoints(this WebApplication app)
     {
+        app.MapAuthEndpoints();
         app.MapClassificationEndpoints();
         app.MapBankingEndpoints();
         app.MapYearEndEndpoints();
