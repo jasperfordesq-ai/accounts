@@ -140,6 +140,7 @@ app.UseRateLimiter();
 app.UseCors();
 app.UseMiddleware<Accounts.Api.Middleware.ApiAccessMiddleware>();
 app.UseMiddleware<Accounts.Api.Middleware.UserSessionMiddleware>();
+app.UseMiddleware<Accounts.Api.Middleware.TenantAccessMiddleware>();
 app.UseMiddleware<Accounts.Api.Middleware.PeriodOwnershipMiddleware>();
 app.UseMiddleware<Accounts.Api.Middleware.PeriodLockMiddleware>();
 if (app.Environment.IsDevelopment())
@@ -157,13 +158,8 @@ var companies = app.MapGroup("/api/companies").WithTags("Companies");
 
 companies.MapGet("/", async (HttpContext context, AccountsDbContext db) =>
 {
-    var query = db.Companies.AsQueryable();
-    var allowedCompanyIds = ApiAccessService.GetAllowedCompanyIds(context);
-    if (allowedCompanyIds is { Count: > 0 })
-    {
-        var ids = allowedCompanyIds.ToArray();
-        query = query.Where(c => ids.Contains(c.Id));
-    }
+    var user = AuthContext.RequireUser(context);
+    var query = db.Companies.Where(c => c.TenantId == user.TenantId);
 
     return await query.Select(c => new
     {
@@ -173,30 +169,36 @@ companies.MapGet("/", async (HttpContext context, AccountsDbContext db) =>
     }).ToListAsync();
 });
 
-companies.MapGet("/{id:int}", async (int id, AccountsDbContext db) =>
-    await db.Companies
+companies.MapGet("/{id:int}", async (int id, HttpContext context, AccountsDbContext db) =>
+{
+    var user = AuthContext.RequireUser(context);
+    return await db.Companies
         .Include(c => c.Officers)
         .Include(c => c.Periods)
-        .FirstOrDefaultAsync(c => c.Id == id)
-    is { } company ? Results.Ok(company) : Results.NotFound());
+        .FirstOrDefaultAsync(c => c.Id == id && c.TenantId == user.TenantId)
+    is { } company ? Results.Ok(company) : Results.NotFound();
+});
 
-companies.MapPost("/", async (CompanyInput input, AccountsDbContext db) =>
+companies.MapPost("/", async (CompanyInput input, HttpContext context, AccountsDbContext db) =>
 {
     if (EndpointInputs.ValidateCompany(input) is { } validationProblem)
         return validationProblem;
 
+    var user = AuthContext.RequireUser(context);
     var company = EndpointInputs.ToCompany(input);
+    company.TenantId = user.TenantId;
     db.Companies.Add(company);
     await db.SaveChangesAsync();
     return Results.Created($"/api/companies/{company.Id}", company);
 });
 
-companies.MapPut("/{id:int}", async (int id, CompanyInput input, AccountsDbContext db) =>
+companies.MapPut("/{id:int}", async (int id, CompanyInput input, HttpContext context, AccountsDbContext db) =>
 {
     if (EndpointInputs.ValidateCompany(input) is { } validationProblem)
         return validationProblem;
 
-    var company = await db.Companies.FindAsync(id);
+    var user = AuthContext.RequireUser(context);
+    var company = await db.Companies.FirstOrDefaultAsync(c => c.Id == id && c.TenantId == user.TenantId);
     if (company is null) return Results.NotFound();
 
     EndpointInputs.ApplyCompany(company, input);
@@ -205,9 +207,10 @@ companies.MapPut("/{id:int}", async (int id, CompanyInput input, AccountsDbConte
     return Results.Ok(company);
 });
 
-companies.MapDelete("/{id:int}", async (int id, AccountsDbContext db) =>
+companies.MapDelete("/{id:int}", async (int id, HttpContext context, AccountsDbContext db) =>
 {
-    var company = await db.Companies.FindAsync(id);
+    var user = AuthContext.RequireUser(context);
+    var company = await db.Companies.FirstOrDefaultAsync(c => c.Id == id && c.TenantId == user.TenantId);
     if (company is null) return Results.NotFound();
     db.Companies.Remove(company);
     await db.SaveChangesAsync();

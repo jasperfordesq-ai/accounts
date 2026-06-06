@@ -1719,6 +1719,74 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task TenantAccessMiddleware_HidesCrossTenantCompany()
+    {
+        await using var db = CreateDbContext();
+        var tenantA = await SeedTenantAsync(db, name: "Tenant A", slug: "tenant-a");
+        var tenantB = await SeedTenantAsync(db, name: "Tenant B", slug: "tenant-b");
+        var companyB = await SeedTenantCompanyAsync(db, tenantB.Id, "Tenant B Limited");
+        var nextCalled = false;
+        var context = new DefaultHttpContext
+        {
+            Response =
+            {
+                Body = new MemoryStream()
+            }
+        };
+        context.Request.Path = $"/api/companies/{companyB.Id}";
+        context.Items[AuthContext.ItemKey] = new AuthenticatedUser(
+            UserId: 1,
+            TenantId: tenantA.Id,
+            TenantName: tenantA.Name,
+            Email: "owner@tenant-a.test",
+            DisplayName: "Tenant A Owner",
+            Role: "Admin");
+        var middleware = new TenantAccessMiddleware(_ =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        });
+
+        await middleware.InvokeAsync(context, db);
+
+        Assert.False(nextCalled);
+        Assert.Equal(StatusCodes.Status404NotFound, context.Response.StatusCode);
+    }
+
+    [Fact]
+    public async Task TenantAccessMiddleware_AllowsOwnTenantCompany()
+    {
+        await using var db = CreateDbContext();
+        var tenantA = await SeedTenantAsync(db, name: "Tenant A", slug: "tenant-a");
+        var companyA = await SeedTenantCompanyAsync(db, tenantA.Id, "Tenant A Limited");
+        var nextCalled = false;
+        var context = new DefaultHttpContext
+        {
+            Response =
+            {
+                Body = new MemoryStream()
+            }
+        };
+        context.Request.Path = $"/api/companies/{companyA.Id}";
+        context.Items[AuthContext.ItemKey] = new AuthenticatedUser(
+            UserId: 1,
+            TenantId: tenantA.Id,
+            TenantName: tenantA.Name,
+            Email: "owner@tenant-a.test",
+            DisplayName: "Tenant A Owner",
+            Role: "Admin");
+        var middleware = new TenantAccessMiddleware(_ =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        });
+
+        await middleware.InvokeAsync(context, db);
+
+        Assert.True(nextCalled);
+    }
+
+    [Fact]
     public async Task PeriodLockMiddleware_BlocksAccountingWritesToFinalisedPeriod()
     {
         await using var db = CreateDbContext();
@@ -2039,6 +2107,29 @@ public class AccountsWorkflowTests
         db.Tenants.Add(tenant);
         await db.SaveChangesAsync();
         return tenant;
+    }
+
+    private static async Task<Company> SeedTenantCompanyAsync(
+        AccountsDbContext db,
+        int tenantId,
+        string legalName)
+    {
+        var company = new Company
+        {
+            TenantId = tenantId,
+            LegalName = legalName,
+            CroNumber = $"T{tenantId}{Guid.NewGuid():N}"[..20],
+            CompanyType = CompanyType.Private,
+            IncorporationDate = new DateOnly(2025, 1, 1),
+            ArdMonth = 9,
+            IsTrading = true,
+            RegisteredOfficeAddress1 = "1 Main Street",
+            RegisteredOfficeCity = "Dublin",
+            RegisteredOfficeCounty = "Dublin"
+        };
+        db.Companies.Add(company);
+        await db.SaveChangesAsync();
+        return company;
     }
 
     private static async Task<UserAccount> SeedUserAsync(
