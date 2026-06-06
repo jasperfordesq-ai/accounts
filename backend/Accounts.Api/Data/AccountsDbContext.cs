@@ -5,6 +5,10 @@ namespace Accounts.Api.Data;
 
 public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : DbContext(options)
 {
+    // Tenancy & Users
+    public DbSet<Tenant> Tenants => Set<Tenant>();
+    public DbSet<UserAccount> UserAccounts => Set<UserAccount>();
+
     // Company & Officers
     public DbSet<Company> Companies => Set<Company>();
     public DbSet<CompanyOfficer> CompanyOfficers => Set<CompanyOfficer>();
@@ -69,6 +73,32 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
     {
         base.OnModelCreating(modelBuilder);
 
+        // Tenant
+        modelBuilder.Entity<Tenant>(e =>
+        {
+            e.ToTable("tenants");
+            e.HasKey(t => t.Id);
+            e.Property(t => t.Name).HasMaxLength(200).IsRequired();
+            e.Property(t => t.Slug).HasMaxLength(120).IsRequired();
+            e.HasIndex(t => t.Slug).IsUnique();
+        });
+
+        // UserAccount
+        modelBuilder.Entity<UserAccount>(e =>
+        {
+            e.ToTable("user_accounts");
+            e.HasKey(u => u.Id);
+            e.Property(u => u.Email).HasMaxLength(320).IsRequired();
+            e.Property(u => u.DisplayName).HasMaxLength(200).IsRequired();
+            e.Property(u => u.Role).HasMaxLength(80).IsRequired();
+            e.Property(u => u.PasswordHash).HasMaxLength(512).IsRequired();
+            e.Property(u => u.PasswordSalt).HasMaxLength(256).IsRequired();
+            e.Property(u => u.PasswordAlgorithm).HasMaxLength(80).IsRequired();
+            e.HasOne(u => u.Tenant).WithMany(t => t.Users).HasForeignKey(u => u.TenantId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(u => u.Email).IsUnique();
+            e.HasIndex(u => new { u.TenantId, u.Role });
+        });
+
         // Company
         modelBuilder.Entity<Company>(e =>
         {
@@ -78,7 +108,9 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
             e.Property(c => c.TradingName).HasMaxLength(500);
             e.Property(c => c.CroNumber).HasMaxLength(20);
             e.Property(c => c.TaxReference).HasMaxLength(20);
+            e.HasOne(c => c.Tenant).WithMany(t => t.Companies).HasForeignKey(c => c.TenantId).OnDelete(DeleteBehavior.SetNull);
             e.HasIndex(c => c.CroNumber).IsUnique().HasFilter("\"CroNumber\" IS NOT NULL");
+            e.HasIndex(c => c.TenantId);
         });
 
         // CompanyOfficer

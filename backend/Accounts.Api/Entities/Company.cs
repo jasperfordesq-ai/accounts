@@ -3,6 +3,7 @@ namespace Accounts.Api.Entities;
 public class Company
 {
     public int Id { get; set; }
+    public int? TenantId { get; set; }
     public required string LegalName { get; set; }
     public string? TradingName { get; set; }
     public string? CroNumber { get; set; }
@@ -55,4 +56,5 @@ public class Company
     public List<FilingDeadline> FilingDeadlines { get; set; } = [];
     public List<FilingHistory> FilingHistories { get; set; } = [];
     public CharityInfo? CharityInfo { get; set; }
+    public Tenant? Tenant { get; set; }
 }
