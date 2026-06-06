@@ -1487,7 +1487,7 @@ public class AccountsWorkflowTests
     [Fact]
     public void AuthenticatedIdentity_UsesEmailForBlankReviewerDisplayName()
     {
-        var reviewer = new AuthenticatedUser(7, 1, "Firm A", "reviewer@example.ie", "   ", "Reviewer");
+        var reviewer = new AuthenticatedUser(7, 1, "Firm A", " reviewer@example.ie ", "   ", "Reviewer");
 
         Assert.Equal("reviewer@example.ie", AuthenticatedIdentity.ReviewerDisplayName(reviewer));
     }
@@ -2181,6 +2181,36 @@ public class AccountsWorkflowTests
             new PeriodStatusUpdate(PeriodStatus.Finalised, null, null));
 
         Assert.Null(result);
+    }
+
+    [Fact]
+    public void ManualAdjustment_PrepareOverwritesCallerSuppliedIdentityAndApprovalState()
+    {
+        var user = new AuthenticatedUser(7, 1, "Firm A", "reviewer@example.ie", "Maeve Reviewer", "Reviewer");
+        var now = new DateTime(2026, 6, 6, 12, 30, 0, DateTimeKind.Utc);
+        var forgedApprovedAt = new DateTime(2025, 1, 1, 9, 0, 0, DateTimeKind.Utc);
+        var input = new Adjustment
+        {
+            PeriodId = 999,
+            Description = "Manual accrual",
+            Amount = 125m,
+            Source = AdjustmentSource.Auto,
+            CreatedBy = "Forged creator",
+            CreatedAt = forgedApprovedAt,
+            ApprovedBy = "Forged approver",
+            ApprovedAt = forgedApprovedAt,
+            IsAuto = true
+        };
+
+        AdjustmentInputs.PrepareManualAdjustment(input, periodId: 42, user, now);
+
+        Assert.Equal(42, input.PeriodId);
+        Assert.False(input.IsAuto);
+        Assert.Equal(AdjustmentSource.Manual, input.Source);
+        Assert.Equal("Maeve Reviewer", input.CreatedBy);
+        Assert.Equal(now, input.CreatedAt);
+        Assert.Null(input.ApprovedBy);
+        Assert.Null(input.ApprovedAt);
     }
 
     private static AccountsDbContext CreateDbContext()

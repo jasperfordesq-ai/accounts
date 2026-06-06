@@ -53,9 +53,7 @@ public static class AdjustmentEndpoints
         group.MapPost("/", async (int companyId, int periodId, Adjustment input, AccountsDbContext db, AuditService audit, HttpContext context) =>
         {
             var user = AuthContext.RequireUser(context);
-            input.PeriodId = periodId;
-            input.IsAuto = false;
-            input.Source = AdjustmentSource.Manual;
+            AdjustmentInputs.PrepareManualAdjustment(input, periodId, user, DateTime.UtcNow);
             db.Adjustments.Add(input);
             await db.SaveChangesAsync();
             await audit.LogAsync(
@@ -150,3 +148,17 @@ public static class AdjustmentEndpoints
 }
 
 public record ApprovalInput(string ApprovedBy);
+
+public static class AdjustmentInputs
+{
+    public static void PrepareManualAdjustment(Adjustment input, int periodId, AuthenticatedUser user, DateTime now)
+    {
+        input.PeriodId = periodId;
+        input.IsAuto = false;
+        input.Source = AdjustmentSource.Manual;
+        input.CreatedBy = AuthenticatedIdentity.ReviewerDisplayName(user);
+        input.CreatedAt = now;
+        input.ApprovedBy = null;
+        input.ApprovedAt = null;
+    }
+}
