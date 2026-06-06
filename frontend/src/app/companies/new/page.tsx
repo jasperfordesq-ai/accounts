@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Button,
@@ -15,6 +15,7 @@ import { Building2, ChevronLeft, ChevronRight, Plus, Trash2, Users, Check } from
 import { toast } from "sonner";
 import { createCompany, createOfficer, type Officer } from "@/lib/api";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
+import { useAuth } from "@/components/AuthProvider";
 import { validateStep } from "@/lib/validation";
 
 const COMPANY_TYPES = [
@@ -50,6 +51,7 @@ const selectClass =
 
 export default function NewCompanyPage() {
   const router = useRouter();
+  const { isOwner, loading: authLoading } = useAuth();
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -96,6 +98,12 @@ export default function NewCompanyPage() {
     { name: "", role: "Director" },
   ]);
 
+  useEffect(() => {
+    if (!authLoading && !isOwner) {
+      router.replace("/");
+    }
+  }, [authLoading, isOwner, router]);
+
   function addOfficer() {
     setOfficers([...officers, { name: "", role: "Director" }]);
   }
@@ -134,6 +142,13 @@ export default function NewCompanyPage() {
   }
 
   async function handleCreate() {
+    if (!isOwner) {
+      const msg = "Only owners can create companies";
+      setError(msg);
+      toast.error(msg);
+      return;
+    }
+
     setSaving(true);
     setError(null);
     try {
@@ -186,6 +201,14 @@ export default function NewCompanyPage() {
       toast.error(msg);
       setSaving(false);
     }
+  }
+
+  if (authLoading || !isOwner) {
+    return (
+      <div className="min-h-[320px] flex items-center justify-center">
+        <Spinner size="sm" />
+      </div>
+    );
   }
 
   return (

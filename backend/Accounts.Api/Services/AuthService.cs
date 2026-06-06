@@ -13,24 +13,24 @@ public class AuthService
 {
     public const string PasswordAlgorithm = "PBKDF2-SHA256-210000";
 
-    private const int PasswordIterations = 210_000;
-    private const int MinimumSaltBytes = 16;
-    private const int MinimumStoredHashBytes = 16;
     private static readonly JsonSerializerOptions SessionJsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly AccountsDbContext db;
     private readonly AuthSessionConfig config;
     private readonly IHostEnvironment environment;
+    private readonly IPasswordVerifier passwordVerifier;
     private readonly byte[] signingKey;
 
     public AuthService(
         AccountsDbContext db,
         IOptions<AuthSessionConfig> config,
-        IHostEnvironment environment)
+        IHostEnvironment environment,
+        IPasswordVerifier passwordVerifier)
     {
         this.db = db;
         this.config = config.Value;
         this.environment = environment;
+        this.passwordVerifier = passwordVerifier;
         signingKey = AuthSessionKey.DecodeRequired(this.config.SigningKey);
     }
 
@@ -47,13 +47,12 @@ public class AuthService
             .Include(u => u.Tenant)
             .SingleOrDefaultAsync(u => u.Email.ToLower() == normalizedEmail);
 
-        if (user is null || user.Tenant is null)
-            return LoginResult.Failed("Invalid email or password.");
+        var passwordMatches = passwordVerifier.Verify(password, user);
 
-        if (user.PasswordAlgorithm != PasswordAlgorithm)
-            return LoginResult.Failed("Invalid email or password.");
-
-        if (!VerifyPassword(user, password))
+        if (user is null
+            || user.Tenant is null
+            || user.PasswordAlgorithm != PasswordAlgorithm
+            || !passwordMatches)
             return LoginResult.Failed("Invalid email or password.");
 
         if (!user.IsActive)
@@ -143,39 +142,6 @@ public class AuthService
         && user.IsActive
         && user.Tenant is not null
         && user.PasswordAlgorithm == PasswordAlgorithm;
-
-    private static bool VerifyPassword(UserAccount user, string password)
-    {
-        if (!TryDecodeStoredPassword(user, out var salt, out var storedHash))
-            return false;
-
-        var candidateHash = Rfc2898DeriveBytes.Pbkdf2(
-            password,
-            salt,
-            PasswordIterations,
-            HashAlgorithmName.SHA256,
-            storedHash.Length);
-
-        return CryptographicOperations.FixedTimeEquals(candidateHash, storedHash);
-    }
-
-    private static bool TryDecodeStoredPassword(UserAccount user, out byte[] salt, out byte[] storedHash)
-    {
-        salt = [];
-        storedHash = [];
-
-        try
-        {
-            salt = Convert.FromBase64String(user.PasswordSalt);
-            storedHash = Convert.FromBase64String(user.PasswordHash);
-        }
-        catch (FormatException)
-        {
-            return false;
-        }
-
-        return salt.Length >= MinimumSaltBytes && storedHash.Length >= MinimumStoredHashBytes;
-    }
 
     private byte[] ComputeSignature(string encodedPayload)
     {

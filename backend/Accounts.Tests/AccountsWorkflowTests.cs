@@ -956,6 +956,47 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public void ProductionSafety_BlocksDevelopmentSessionSigningKeyInProduction()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password",
+                ["AllowedOrigins:0"] = "https://accounts.example.ie",
+                ["AuthSession:SigningKey"] = DevelopmentSessionSigningKey()
+            })
+            .Build();
+        var service = new ProductionSafetyService(
+            new TestEnvironment("Production"),
+            config,
+            Options.Create(new DatabaseStartupConfig
+            {
+                AutoMigrateOnStartup = false,
+                SeedDemoData = false
+            }),
+            AuthSessionOptions(config),
+            new ApiAccessService(
+                Options.Create(new ApiAccessConfig
+                {
+                    Enabled = true,
+                    RequireInProduction = true,
+                    Keys =
+                    [
+                        new ApiAccessKeyConfig
+                        {
+                            Name = "Production firm",
+                            KeyHash = ApiAccessService.HashKey("real-secret")
+                        }
+                    ]
+                }),
+                new TestEnvironment("Production")));
+
+        var failures = service.Validate();
+
+        Assert.Contains(failures, f => f.Contains("development session signing key", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void ProductionSafety_AllowsStrongSessionSigningConfiguration()
     {
         var config = new ConfigurationBuilder()
@@ -1251,6 +1292,34 @@ public class AccountsWorkflowTests
         Assert.False(result.Succeeded);
         Assert.Null(result.User);
         Assert.Equal("Invalid email or password.", result.FailureReason);
+    }
+
+    [Theory]
+    [InlineData("missing@example.ie")]
+    [InlineData("unsupported@example.ie")]
+    [InlineData("malformed@example.ie")]
+    public async Task AuthService_LoginRunsPasswordVerificationForInvalidCredentialShapes(string email)
+    {
+        await using var db = CreateDbContext();
+        var tenant = await SeedTenantAsync(db);
+        await SeedUserAsync(
+            db,
+            tenant,
+            "unsupported@example.ie",
+            "Correct Horse Battery Staple 1!",
+            passwordAlgorithm: "PBKDF2-SHA1-1000");
+        var malformed = await SeedUserAsync(db, tenant, "malformed@example.ie", "Correct Horse Battery Staple 1!");
+        malformed.PasswordSalt = "not base64";
+        malformed.PasswordHash = "not base64";
+        await db.SaveChangesAsync();
+        var verifier = new CountingPasswordVerifier();
+        var service = CreateAuthService(db, passwordVerifier: verifier);
+
+        var result = await service.LoginAsync(email, "wrong password");
+
+        Assert.False(result.Succeeded);
+        Assert.Equal("Invalid email or password.", result.FailureReason);
+        Assert.Equal(1, verifier.CallCount);
     }
 
     [Fact]
@@ -1854,6 +1923,7 @@ public class AccountsWorkflowTests
     }
 
     [Theory]
+    [InlineData("Accountant", "POST", "/api/companies", false)]
     [InlineData("Client", "POST", "/api/companies/1/periods", false)]
     [InlineData("Accountant", "POST", "/api/companies/1/periods", true)]
     [InlineData("Reviewer", "POST", "/api/companies/1/periods/2/adjustments/3/approve", true)]
@@ -1865,6 +1935,21 @@ public class AccountsWorkflowTests
             AuthenticatedRole(role),
             new PathString(path),
             method);
+
+        Assert.Equal(expected, decision.IsAllowed);
+    }
+
+    [Theory]
+    [InlineData("Owner", true)]
+    [InlineData("Accountant", false)]
+    [InlineData("Reviewer", false)]
+    [InlineData("Client", false)]
+    public void RoleAuthorization_AllowsCompanyCreationForOwnersOnly(string role, bool expected)
+    {
+        var decision = RoleAuthorizationService.Authorize(
+            AuthenticatedRole(role),
+            new PathString("/api/companies"),
+            HttpMethods.Post);
 
         Assert.Equal(expected, decision.IsAllowed);
     }
@@ -2398,7 +2483,8 @@ public class AccountsWorkflowTests
         string? signingKey = null,
         string environmentName = "Development",
         int expiryMinutes = 60,
-        bool secureCookiesInProduction = true) =>
+        bool secureCookiesInProduction = true,
+        IPasswordVerifier? passwordVerifier = null) =>
         new(
             db,
             Options.Create(new AuthSessionConfig
@@ -2407,7 +2493,8 @@ public class AccountsWorkflowTests
                 ExpiryMinutes = expiryMinutes,
                 SecureCookiesInProduction = secureCookiesInProduction
             }),
-            new TestEnvironment(environmentName));
+            new TestEnvironment(environmentName),
+            passwordVerifier ?? new Pbkdf2PasswordVerifier());
 
     private static async Task<Tenant> SeedTenantAsync(
         AccountsDbContext db,
@@ -2490,6 +2577,9 @@ public class AccountsWorkflowTests
     private static string StrongSessionSigningKeyBase64Url() =>
         StrongSessionSigningKey().TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
+    private static string DevelopmentSessionSigningKey() =>
+        "IyRih0V4m+9WHp+buroLFov10a+LGRhgg8g4J7vm3uTnRtUU6t1JenYYfZTaqT9Gl9H7FmYhGwNORssVZ/BPkg==";
+
     private static AuthenticatedUser AuthenticatedRole(string role) => new(
         UserId: 1,
         TenantId: 1,
@@ -2504,5 +2594,16 @@ public class AccountsWorkflowTests
         public string ApplicationName { get; set; } = "Accounts.Tests";
         public string ContentRootPath { get; set; } = Directory.GetCurrentDirectory();
         public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
+    }
+
+    private sealed class CountingPasswordVerifier : IPasswordVerifier
+    {
+        public int CallCount { get; private set; }
+
+        public bool Verify(string password, UserAccount? user)
+        {
+            CallCount++;
+            return false;
+        }
     }
 }

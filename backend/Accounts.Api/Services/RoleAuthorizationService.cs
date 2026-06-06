@@ -26,7 +26,7 @@ public static class RoleAuthorizationService
 
         if (role.Equals("Accountant", StringComparison.OrdinalIgnoreCase))
         {
-            if (IsReviewerWrite(path, method) || IsCompanyDelete(path, method))
+            if (IsReviewerWrite(path, method) || IsCompanyCreate(path, method) || IsCompanyDelete(path, method))
                 return RoleAuthorizationDecision.Denied("Accountant users cannot perform reviewer or owner-only actions.");
 
             return RoleAuthorizationDecision.Allowed();
@@ -66,6 +66,17 @@ public static class RoleAuthorizationService
     private static bool IsAuthenticatedLogout(PathString path, string method) =>
         HttpMethods.IsPost(method)
         && path.Equals("/api/auth/logout", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsCompanyCreate(PathString path, string method)
+    {
+        if (!HttpMethods.IsPost(method))
+            return false;
+
+        var segments = SplitPath(path);
+        return segments is { Length: 2 }
+            && segments[0].Equals("api", StringComparison.OrdinalIgnoreCase)
+            && segments[1].Equals("companies", StringComparison.OrdinalIgnoreCase);
+    }
 
     private static bool IsAdjustmentApproval(string[] segments) =>
         segments is { Length: 8 }

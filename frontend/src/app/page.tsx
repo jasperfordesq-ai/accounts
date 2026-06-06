@@ -23,8 +23,10 @@ import {
 import { getCompanies, getUpcomingDeadline, type Company, type FilingDeadline } from "@/lib/api";
 import { DashboardSkeleton } from "@/components/Skeleton";
 import { formatCompanyType, formatDateIE } from "@/lib/format";
+import { useAuth } from "@/components/AuthProvider";
 
 export default function Dashboard() {
+  const { isOwner } = useAuth();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [deadlines, setDeadlines] = useState<Record<number, FilingDeadline | null>>({});
   const [loading, setLoading] = useState(true);
@@ -96,12 +98,14 @@ export default function Dashboard() {
             Irish Accounts Platform overview
           </p>
         </div>
-        <Link href="/companies/new">
-          <Button variant="primary" size="sm">
-            <Plus className="w-4 h-4" />
-            Add Company
-          </Button>
-        </Link>
+        {isOwner && (
+          <Link href="/companies/new">
+            <Button variant="primary" size="sm">
+              <Plus className="w-4 h-4" />
+              Add Company
+            </Button>
+          </Link>
+        )}
       </div>
 
       {/* Error state */}
@@ -236,17 +240,16 @@ export default function Dashboard() {
           <CardContent className="text-center py-12">
             <Building2 className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
             <p className="text-gray-500 dark:text-gray-400 font-medium">
-              No companies yet
+              No companies available
             </p>
-            <p className="text-sm text-gray-400 dark:text-gray-500 mt-1 mb-4">
-              Get started by creating your first company
-            </p>
-            <Link href="/companies/new">
-              <Button variant="primary" size="sm">
-                <Plus className="w-4 h-4" />
-                Add Company
-              </Button>
-            </Link>
+            {isOwner && (
+              <Link href="/companies/new" className="inline-block mt-4">
+                <Button variant="primary" size="sm">
+                  <Plus className="w-4 h-4" />
+                  Add Company
+                </Button>
+              </Link>
+            )}
           </CardContent>
         </Card>
       ) : (

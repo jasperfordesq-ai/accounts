@@ -39,6 +39,9 @@ public class ProductionSafetyService(
         if (!AuthSessionKey.HasStrongKey(session.SigningKey))
             failures.Add("AuthSession:SigningKey must be a generated Base64 or Base64Url-encoded secret of at least 32 bytes in production.");
 
+        if (AuthSessionKey.IsKnownDevelopmentKey(session.SigningKey))
+            failures.Add("AuthSession:SigningKey uses the committed development session signing key in production. Generate a fresh production secret.");
+
         if (session.ExpiryMinutes is < 15 or > 1440)
             failures.Add("AuthSession:ExpiryMinutes must be between 15 and 1440 minutes in production.");
 

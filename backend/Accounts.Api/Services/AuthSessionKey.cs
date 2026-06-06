@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+
 namespace Accounts.Api.Services;
 
 public static class AuthSessionKey
@@ -5,6 +7,8 @@ public static class AuthSessionKey
     private const int MinimumSigningKeyBytes = 32;
     private const int MinimumSigningKeyDistinctEncodedChars = 8;
     private const int MinimumSigningKeyDistinctBytes = 16;
+    private const string DevelopmentSigningKeyBase64 = "IyRih0V4m+9WHp+buroLFov10a+LGRhgg8g4J7vm3uTnRtUU6t1JenYYfZTaqT9Gl9H7FmYhGwNORssVZ/BPkg==";
+    private static readonly byte[] DevelopmentSigningKeyBytes = Convert.FromBase64String(DevelopmentSigningKeyBase64);
 
     public static bool HasStrongKey(string? signingKey)
     {
@@ -27,6 +31,16 @@ public static class AuthSessionKey
 
         TryDecode(signingKey!.Trim(), out var decoded);
         return decoded;
+    }
+
+    public static bool IsKnownDevelopmentKey(string? signingKey)
+    {
+        if (string.IsNullOrWhiteSpace(signingKey))
+            return false;
+
+        return TryDecode(signingKey.Trim(), out var decoded)
+            && decoded.Length == DevelopmentSigningKeyBytes.Length
+            && CryptographicOperations.FixedTimeEquals(decoded, DevelopmentSigningKeyBytes);
     }
 
     public static bool TryDecode(string signingKey, out byte[] decoded)
