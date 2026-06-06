@@ -26,6 +26,7 @@ Thumbs.db
 appsettings.Development.json
 
 # Build artifacts
+.dotnet-artifacts/
 *.dll
 *.exe
 *.pdb
