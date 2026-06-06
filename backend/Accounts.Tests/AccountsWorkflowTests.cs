@@ -1121,15 +1121,17 @@ public class AccountsWorkflowTests
         var user = await SeedUserAsync(db, tenant, "owner@example.ie", "Correct Horse Battery Staple 1!");
         var service = CreateAuthService(db);
 
-        var authenticated = await service.LoginAsync(" OWNER@EXAMPLE.IE ", "Correct Horse Battery Staple 1!");
+        var result = await service.LoginAsync(" OWNER@EXAMPLE.IE ", "Correct Horse Battery Staple 1!");
 
-        Assert.NotNull(authenticated);
-        Assert.Equal(user.Id, authenticated.UserId);
-        Assert.Equal(tenant.Id, authenticated.TenantId);
-        Assert.Equal("Example Firm", authenticated.TenantName);
-        Assert.Equal("owner@example.ie", authenticated.Email);
-        Assert.Equal("Owner User", authenticated.DisplayName);
-        Assert.Equal("Admin", authenticated.Role);
+        Assert.True(result.Succeeded);
+        Assert.Null(result.FailureReason);
+        Assert.NotNull(result.User);
+        Assert.Equal(user.Id, result.User.UserId);
+        Assert.Equal(tenant.Id, result.User.TenantId);
+        Assert.Equal("Example Firm", result.User.TenantName);
+        Assert.Equal("owner@example.ie", result.User.Email);
+        Assert.Equal("Owner User", result.User.DisplayName);
+        Assert.Equal("Admin", result.User.Role);
         var saved = await db.UserAccounts.FindAsync(user.Id);
         Assert.NotNull(saved?.LastLoginAt);
     }
@@ -1142,9 +1144,11 @@ public class AccountsWorkflowTests
         await SeedUserAsync(db, tenant, "owner@example.ie", "Correct Horse Battery Staple 1!");
         var service = CreateAuthService(db);
 
-        var authenticated = await service.LoginAsync("owner@example.ie", "wrong password");
+        var result = await service.LoginAsync("owner@example.ie", "wrong password");
 
-        Assert.Null(authenticated);
+        Assert.False(result.Succeeded);
+        Assert.Null(result.User);
+        Assert.Contains("Invalid email or password", result.FailureReason);
     }
 
     [Fact]
@@ -1155,9 +1159,44 @@ public class AccountsWorkflowTests
         await SeedUserAsync(db, tenant, "owner@example.ie", "Correct Horse Battery Staple 1!", isActive: false);
         var service = CreateAuthService(db);
 
-        var authenticated = await service.LoginAsync("owner@example.ie", "Correct Horse Battery Staple 1!");
+        var result = await service.LoginAsync("owner@example.ie", "Correct Horse Battery Staple 1!");
 
-        Assert.Null(authenticated);
+        Assert.False(result.Succeeded);
+        Assert.Null(result.User);
+        Assert.Contains("inactive", result.FailureReason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task AuthService_LoginRejectsMissingCredentialsWithFailureReason()
+    {
+        await using var db = CreateDbContext();
+        var service = CreateAuthService(db);
+
+        var result = await service.LoginAsync(" ", null);
+
+        Assert.False(result.Succeeded);
+        Assert.Null(result.User);
+        Assert.Equal("Email and password are required.", result.FailureReason);
+    }
+
+    [Fact]
+    public async Task AuthService_LoginRejectsUnsupportedPasswordAlgorithmWithFailureReason()
+    {
+        await using var db = CreateDbContext();
+        var tenant = await SeedTenantAsync(db);
+        await SeedUserAsync(
+            db,
+            tenant,
+            "owner@example.ie",
+            "Correct Horse Battery Staple 1!",
+            passwordAlgorithm: "PBKDF2-SHA1-1000");
+        var service = CreateAuthService(db);
+
+        var result = await service.LoginAsync("owner@example.ie", "Correct Horse Battery Staple 1!");
+
+        Assert.False(result.Succeeded);
+        Assert.Null(result.User);
+        Assert.Contains("Unsupported password algorithm", result.FailureReason);
     }
 
     [Fact]
@@ -1167,10 +1206,10 @@ public class AccountsWorkflowTests
         var tenant = await SeedTenantAsync(db);
         var user = await SeedUserAsync(db, tenant, "owner@example.ie", "Correct Horse Battery Staple 1!");
         var service = CreateAuthService(db);
-        var authenticated = await service.LoginAsync("owner@example.ie", "Correct Horse Battery Staple 1!");
+        var login = await service.LoginAsync("owner@example.ie", "Correct Horse Battery Staple 1!");
         var now = new DateTimeOffset(2026, 1, 15, 10, 0, 0, TimeSpan.Zero);
 
-        var cookieValue = service.CreateSessionCookieValue(authenticated!, now);
+        var cookieValue = service.CreateSessionCookieValue(login.User!, now);
         var roundTripped = await service.ReadSessionAsync(cookieValue, now.AddMinutes(10));
 
         Assert.NotNull(roundTripped);
@@ -1189,15 +1228,58 @@ public class AccountsWorkflowTests
         var tenant = await SeedTenantAsync(db);
         var user = await SeedUserAsync(db, tenant, "owner@example.ie", "Correct Horse Battery Staple 1!");
         var service = CreateAuthService(db, StrongSessionSigningKeyBase64Url());
-        var authenticated = await service.LoginAsync("owner@example.ie", "Correct Horse Battery Staple 1!");
+        var login = await service.LoginAsync("owner@example.ie", "Correct Horse Battery Staple 1!");
         var now = new DateTimeOffset(2026, 1, 15, 10, 0, 0, TimeSpan.Zero);
 
-        var cookieValue = service.CreateSessionCookieValue(authenticated!, now);
+        var cookieValue = service.CreateSessionCookieValue(login.User!, now);
         var roundTripped = await service.ReadSessionAsync(cookieValue, now.AddMinutes(10));
 
         Assert.NotNull(roundTripped);
         Assert.Equal(user.Id, roundTripped.UserId);
         Assert.Equal(tenant.Id, roundTripped.TenantId);
+    }
+
+    [Fact]
+    public void AuthService_CreateCookieOptionsClampsExpiryAndSecuresProductionCookies()
+    {
+        using var db = CreateDbContext();
+        var now = new DateTimeOffset(2026, 1, 15, 10, 0, 0, TimeSpan.Zero);
+        var lowExpiry = CreateAuthService(db, expiryMinutes: 5);
+        var highExpiry = CreateAuthService(db, expiryMinutes: 2_000, environmentName: "Production", secureCookiesInProduction: false);
+
+        var lowOptions = lowExpiry.CreateCookieOptions(now);
+        var highOptions = highExpiry.CreateCookieOptions(now);
+        var clearOptions = highExpiry.ClearCookieOptions();
+
+        Assert.True(lowOptions.HttpOnly);
+        Assert.Equal(SameSiteMode.Lax, lowOptions.SameSite);
+        Assert.Equal("/", lowOptions.Path);
+        Assert.Equal(now.AddMinutes(15), lowOptions.Expires);
+        Assert.Equal(now.AddMinutes(1_440), highOptions.Expires);
+        Assert.True(highOptions.Secure);
+        Assert.True(clearOptions.HttpOnly);
+        Assert.Equal(SameSiteMode.Lax, clearOptions.SameSite);
+        Assert.Equal("/", clearOptions.Path);
+        Assert.True(clearOptions.Secure);
+        Assert.True(clearOptions.Expires < DateTimeOffset.UtcNow);
+    }
+
+    [Fact]
+    public async Task AuthService_SessionExpiryUsesClampedExpiryMinutes()
+    {
+        await using var db = CreateDbContext();
+        var tenant = await SeedTenantAsync(db);
+        await SeedUserAsync(db, tenant, "owner@example.ie", "Correct Horse Battery Staple 1!");
+        var service = CreateAuthService(db, expiryMinutes: 5);
+        var login = await service.LoginAsync("owner@example.ie", "Correct Horse Battery Staple 1!");
+        var now = new DateTimeOffset(2026, 1, 15, 10, 0, 0, TimeSpan.Zero);
+
+        var cookieValue = service.CreateSessionCookieValue(login.User!, now);
+        var stillValidAtClampedExpiry = await service.ReadSessionAsync(cookieValue, now.AddMinutes(14));
+        var expiredAfterClampedExpiry = await service.ReadSessionAsync(cookieValue, now.AddMinutes(16));
+
+        Assert.NotNull(stillValidAtClampedExpiry);
+        Assert.Null(expiredAfterClampedExpiry);
     }
 
     [Fact]
@@ -1645,13 +1727,16 @@ public class AccountsWorkflowTests
     private static AuthService CreateAuthService(
         AccountsDbContext db,
         string? signingKey = null,
-        string environmentName = "Development") =>
+        string environmentName = "Development",
+        int expiryMinutes = 60,
+        bool secureCookiesInProduction = true) =>
         new(
             db,
             Options.Create(new AuthSessionConfig
             {
                 SigningKey = signingKey ?? StrongSessionSigningKey(),
-                ExpiryMinutes = 60
+                ExpiryMinutes = expiryMinutes,
+                SecureCookiesInProduction = secureCookiesInProduction
             }),
             new TestEnvironment(environmentName));
 
@@ -1676,7 +1761,8 @@ public class AccountsWorkflowTests
         string email,
         string password,
         bool isActive = true,
-        string role = "Admin")
+        string role = "Admin",
+        string passwordAlgorithm = AuthService.PasswordAlgorithm)
     {
         var salt = RandomNumberGenerator.GetBytes(16);
         var hash = Rfc2898DeriveBytes.Pbkdf2(
@@ -1694,7 +1780,7 @@ public class AccountsWorkflowTests
             Role = role,
             PasswordHash = Convert.ToBase64String(hash),
             PasswordSalt = Convert.ToBase64String(salt),
-            PasswordAlgorithm = AuthService.PasswordAlgorithm,
+            PasswordAlgorithm = passwordAlgorithm,
             PasswordStrengthScore = 5,
             IsActive = isActive
         };

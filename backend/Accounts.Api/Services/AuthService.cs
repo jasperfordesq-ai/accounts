@@ -37,24 +37,33 @@ public class AuthService
     public string CookieName =>
         string.IsNullOrWhiteSpace(config.CookieName) ? "accounts_session" : config.CookieName.Trim();
 
-    public async Task<AuthenticatedUser?> LoginAsync(string? email, string? password)
+    public async Task<LoginResult> LoginAsync(string? email, string? password)
     {
         var normalizedEmail = NormalizeEmail(email);
         if (normalizedEmail is null || string.IsNullOrWhiteSpace(password))
-            return null;
+            return LoginResult.Failed("Email and password are required.");
 
         var user = await db.UserAccounts
             .Include(u => u.Tenant)
             .SingleOrDefaultAsync(u => u.Email.ToLower() == normalizedEmail);
 
-        if (!CanAuthenticate(user) || !VerifyPassword(user!, password))
-            return null;
+        if (user is null || user.Tenant is null)
+            return LoginResult.Failed("Invalid email or password.");
 
-        user!.LastLoginAt = DateTime.UtcNow;
+        if (!user.IsActive)
+            return LoginResult.Failed("User account is inactive.");
+
+        if (user.PasswordAlgorithm != PasswordAlgorithm)
+            return LoginResult.Failed($"Unsupported password algorithm '{user.PasswordAlgorithm}'.");
+
+        if (!VerifyPassword(user, password))
+            return LoginResult.Failed("Invalid email or password.");
+
+        user.LastLoginAt = DateTime.UtcNow;
         user.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
 
-        return ToAuthenticatedUser(user);
+        return LoginResult.Success(ToPrincipal(user));
     }
 
     public string CreateSessionCookieValue(AuthenticatedUser user, DateTimeOffset now)
@@ -62,7 +71,7 @@ public class AuthService
         var payload = new SessionPayload(
             user.UserId,
             user.TenantId,
-            now.AddMinutes(config.ExpiryMinutes).ToUnixTimeSeconds());
+            now.AddMinutes(ClampedExpiryMinutes).ToUnixTimeSeconds());
         var payloadBytes = JsonSerializer.SerializeToUtf8Bytes(payload, SessionJsonOptions);
         var encodedPayload = Base64UrlEncode(payloadBytes);
         var signature = Base64UrlEncode(ComputeSignature(encodedPayload));
@@ -101,7 +110,7 @@ public class AuthService
             if (!CanAuthenticate(user) || user!.TenantId != payload.TenantId)
                 return null;
 
-            return ToAuthenticatedUser(user);
+            return ToPrincipal(user);
         }
         catch (JsonException)
         {
@@ -109,23 +118,31 @@ public class AuthService
         }
     }
 
-    public CookieOptions CreateSessionCookieOptions(DateTimeOffset now) => new()
+    public CookieOptions CreateCookieOptions(DateTimeOffset now) => new()
     {
         HttpOnly = true,
         SameSite = SameSiteMode.Lax,
         Path = "/",
-        Expires = now.AddMinutes(config.ExpiryMinutes),
-        Secure = environment.IsProduction() && config.SecureCookiesInProduction
+        Expires = now.AddMinutes(ClampedExpiryMinutes),
+        Secure = environment.IsProduction()
     };
 
-    public CookieOptions CreateExpiredSessionCookieOptions(DateTimeOffset now) => new()
+    public CookieOptions ClearCookieOptions() => new()
     {
         HttpOnly = true,
         SameSite = SameSiteMode.Lax,
         Path = "/",
-        Expires = now.AddDays(-1),
-        Secure = environment.IsProduction() && config.SecureCookiesInProduction
+        Expires = DateTimeOffset.UnixEpoch,
+        Secure = environment.IsProduction()
     };
+
+    public CookieOptions CreateSessionCookieOptions(DateTimeOffset now) =>
+        CreateCookieOptions(now);
+
+    public CookieOptions CreateExpiredSessionCookieOptions(DateTimeOffset now) =>
+        ClearCookieOptions();
+
+    private int ClampedExpiryMinutes => Math.Clamp(config.ExpiryMinutes, 15, 1_440);
 
     private static bool CanAuthenticate(UserAccount? user) =>
         user is not null
@@ -182,7 +199,7 @@ public class AuthService
             && CryptographicOperations.FixedTimeEquals(providedSignature, expectedSignature);
     }
 
-    private static AuthenticatedUser ToAuthenticatedUser(UserAccount user) => new(
+    private static AuthenticatedUser ToPrincipal(UserAccount user) => new(
         user.Id,
         user.TenantId,
         user.Tenant.Name,
@@ -230,4 +247,13 @@ public class AuthService
         int UserId,
         int TenantId,
         long ExpiresAtUnixSeconds);
+}
+
+public record LoginResult(bool Succeeded, AuthenticatedUser? User, string? FailureReason)
+{
+    public static LoginResult Success(AuthenticatedUser user) =>
+        new(true, user, null);
+
+    public static LoginResult Failed(string failureReason) =>
+        new(false, null, failureReason);
 }
