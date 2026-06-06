@@ -613,7 +613,7 @@ export const saveOpeningBalance = (
   companyId: number,
   periodId: number,
   categoryId: number,
-  data: { debit: number; credit: number; sourceNote?: string; enteredBy?: string; reviewed: boolean },
+  data: { debit: number; credit: number; sourceNote?: string; reviewed: boolean },
 ) =>
   apiFetch<OpeningBalance>(
     `/api/companies/${companyId}/periods/${periodId}/opening-balances/${categoryId}`,
@@ -632,7 +632,7 @@ export const saveYearEndReviewConfirmation = (
   companyId: number,
   periodId: number,
   sectionKey: string,
-  data: { confirmed: boolean; confirmedBy?: string; note?: string },
+  data: { confirmed: boolean; note?: string },
 ) =>
   apiFetch<YearEndReviewConfirmation>(
     `/api/companies/${companyId}/periods/${periodId}/year-end-reviews/${sectionKey}`,
@@ -666,11 +666,10 @@ export const approveAdjustment = (
   companyId: number,
   periodId: number,
   id: number,
-  approvedBy: string,
 ) =>
   apiFetch<Adjustment>(
     `/api/companies/${companyId}/periods/${periodId}/adjustments/${id}/approve`,
-    { method: "POST", body: JSON.stringify({ approvedBy }) },
+    { method: "POST", body: JSON.stringify({}) },
   );
 
 // Import
@@ -679,7 +678,6 @@ export const uploadBankCsv = async (
   bankAccountId: number,
   periodId: number,
   file: File,
-  reviewer?: string,
 ) => {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 min for uploads
@@ -694,9 +692,6 @@ export const uploadBankCsv = async (
         body: formData,
         credentials: "include",
         signal: controller.signal,
-        headers: {
-          ...(reviewer ? { "X-Reviewer": reviewer } : {}),
-        },
       },
     );
     clearTimeout(timeoutId);
@@ -1259,15 +1254,15 @@ export const getFilingWorkflowStatus = (companyId: number, periodId: number) =>
 export const updateCroFilingStatus = (
   companyId: number,
   periodId: number,
-  data: { status: string; by?: string; reason?: string; submissionReference?: string }
+  data: { status: string; reason?: string; submissionReference?: string }
 ) =>
   apiFetch<unknown>(`/api/companies/${companyId}/periods/${periodId}/filing/cro-status`, { method: "PUT", body: JSON.stringify(data) });
 
 export const markDocumentGenerated = (companyId: number, periodId: number, documentType: string) =>
   apiFetch<unknown>(`/api/companies/${companyId}/periods/${periodId}/filing/mark-generated`, { method: "POST", body: JSON.stringify({ documentType }) });
 
-export const confirmCroPayment = (companyId: number, periodId: number, by?: string) =>
-  apiFetch<unknown>(`/api/companies/${companyId}/periods/${periodId}/filing/cro-payment`, { method: "POST", body: JSON.stringify({ by }) });
+export const confirmCroPayment = (companyId: number, periodId: number) =>
+  apiFetch<unknown>(`/api/companies/${companyId}/periods/${periodId}/filing/cro-payment`, { method: "POST", body: JSON.stringify({}) });
 
 export const validateIxbrl = (companyId: number, periodId: number) =>
   apiFetch<RevenueFilingStatus>(`/api/companies/${companyId}/periods/${periodId}/filing/validate-ixbrl`, { method: "POST" });

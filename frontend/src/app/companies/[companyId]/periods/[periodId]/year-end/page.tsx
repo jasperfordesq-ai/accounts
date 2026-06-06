@@ -82,7 +82,6 @@ import {
   saveYearEndReviewConfirmation,
   type YearEndReviewConfirmation,
 } from "@/lib/api";
-import { getReviewerName } from "@/lib/reviewer";
 
 const inputClass =
   "w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors";
@@ -333,7 +332,6 @@ export default function YearEndQuestionnairePage({
     try {
       const updated = await saveYearEndReviewConfirmation(cId, pId, sectionKey, {
         confirmed: true,
-        confirmedBy: getReviewerName(),
         note,
       });
       setReviewConfirmations((current) => ({ ...current, [sectionKey]: updated }));

@@ -92,7 +92,6 @@ import {
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { PeriodWorkspaceSkeleton } from "@/components/Skeleton";
 import { MetricStrip, ReviewPanel, WorkbenchHeader, WorkflowRail, type WorkflowItem } from "@/components/workbench";
-import { getReviewerName } from "@/lib/reviewer";
 import { formatPeriodRange } from "@/lib/format";
 
 function formatCurrency(amount: number): string {
@@ -143,7 +142,6 @@ export default function PeriodWorkspacePage({
   const [auditTotal, setAuditTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [reviewerName, setReviewerName] = useState("Accounts reviewer");
   const [generatingAdj, setGeneratingAdj] = useState(false);
   const [validatingIxbrl, setValidatingIxbrl] = useState(false);
   const [downloadingDocument, setDownloadingDocument] = useState<string | null>(null);
@@ -308,17 +306,6 @@ export default function PeriodWorkspacePage({
   }, [loadData]);
 
   useEffect(() => {
-    setReviewerName(getReviewerName());
-  }, []);
-
-  function handleSaveReviewerName() {
-    const clean = reviewerName.trim() || "Accounts reviewer";
-    window.localStorage.setItem("accounts.reviewerName", clean);
-    setReviewerName(clean);
-    toast.success("Reviewer identity saved");
-  }
-
-  useEffect(() => {
     if (!loading) {
       loadTransactions();
       loadAdjustments();
@@ -338,7 +325,7 @@ export default function PeriodWorkspacePage({
     setUploadError(null);
     setUploadResult(null);
     try {
-      const result = await uploadBankCsv(cId, Number(selectedBankAccountId), pId, file, getReviewerName());
+      const result = await uploadBankCsv(cId, Number(selectedBankAccountId), pId, file);
       setUploadResult({
         rowsImported: result.rowsImported ?? result.imported ?? 0,
         duplicatesSkipped: result.duplicatesSkipped ?? result.duplicates ?? 0,
@@ -415,7 +402,6 @@ export default function PeriodWorkspacePage({
         debit: openingBalanceForm.side === "debit" ? amount : 0,
         credit: openingBalanceForm.side === "credit" ? amount : 0,
         sourceNote: openingBalanceForm.sourceNote.trim() || undefined,
-        enteredBy: getReviewerName(),
         reviewed: true,
       });
       setOpeningBalances((current) => [
@@ -538,7 +524,7 @@ export default function PeriodWorkspacePage({
   async function handleApproveAdjustment(id: number) {
     setApprovingId(id);
     try {
-      await approveAdjustment(cId, pId, id, getReviewerName());
+      await approveAdjustment(cId, pId, id);
       toast.success("Adjustment approved");
       await loadAdjustments();
       await loadData();
@@ -744,30 +730,6 @@ export default function PeriodWorkspacePage({
       </div>
 
       <WorkflowRail items={workflowItems} />
-
-      <div className="mb-6">
-        <ReviewPanel
-          title="Reviewer Identity"
-          description="Used on opening balances, year-end confirmations, adjustment approvals, and filing workflow actions."
-          actions={
-            <Button variant="outline" size="sm" onPress={handleSaveReviewerName}>
-              Save reviewer
-            </Button>
-          }
-        >
-          <div className="grid gap-3 md:grid-cols-[minmax(220px,360px)_1fr] md:items-center">
-            <input
-              value={reviewerName}
-              onChange={(e) => setReviewerName(e.target.value)}
-              className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-gray-100"
-              aria-label="Reviewer name"
-            />
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              This is not a login system. Production deployment still needs authenticated users, firm roles, and tenant access controls.
-            </p>
-          </div>
-        </ReviewPanel>
-      </div>
 
       {filingStatus && filingStatus.blockingIssues.length > 0 && (
         <div className="mb-6">
@@ -2055,7 +2017,7 @@ export default function PeriodWorkspacePage({
                       {filingStatus.cro.status === "NotStarted" || filingStatus.cro.status === "InProgress" || filingStatus.cro.status === "PackageGenerated" ? (
                         <Button variant="primary" size="sm" isDisabled={!filingStatus.readyToFile} onPress={async () => {
                           try {
-                            await updateCroFilingStatus(cId, pId, { status: "Approved", by: getReviewerName() });
+                            await updateCroFilingStatus(cId, pId, { status: "Approved" });
                             toast.success("Filing approved");
                             const fs = await getFilingWorkflowStatus(cId, pId); setFilingStatus(fs);
                           } catch (err) { toast.error(err instanceof Error ? err.message : "Failed to approve"); }
@@ -2065,7 +2027,7 @@ export default function PeriodWorkspacePage({
                       ) : filingStatus.cro.status === "Approved" ? (
                         <Button variant="primary" size="sm" onPress={async () => {
                           try {
-                            await updateCroFilingStatus(cId, pId, { status: "Submitted", by: getReviewerName() });
+                            await updateCroFilingStatus(cId, pId, { status: "Submitted" });
                             toast.success("Marked as submitted to CRO");
                             const fs = await getFilingWorkflowStatus(cId, pId); setFilingStatus(fs);
                           } catch (err) { toast.error(err instanceof Error ? err.message : "Failed to update status"); }
@@ -2080,7 +2042,7 @@ export default function PeriodWorkspacePage({
                           {!filingStatus.cro.paymentCompleted && (
                             <Button variant="outline" size="sm" onPress={async () => {
                               try {
-                                await confirmCroPayment(cId, pId, getReviewerName());
+                                await confirmCroPayment(cId, pId);
                                 toast.success("CORE payment confirmed");
                                 const fs = await getFilingWorkflowStatus(cId, pId); setFilingStatus(fs);
                               } catch (err) { toast.error(err instanceof Error ? err.message : "Failed to confirm payment"); }
@@ -2090,7 +2052,7 @@ export default function PeriodWorkspacePage({
                           )}
                           <Button variant="outline" size="sm" isDisabled={!filingStatus.cro.paymentCompleted} onPress={async () => {
                             try {
-                              await updateCroFilingStatus(cId, pId, { status: "Accepted", by: getReviewerName() });
+                              await updateCroFilingStatus(cId, pId, { status: "Accepted" });
                               toast.success("CRO acceptance recorded");
                               const fs = await getFilingWorkflowStatus(cId, pId); setFilingStatus(fs);
                             } catch (err) { toast.error(err instanceof Error ? err.message : "Failed to mark accepted"); }
@@ -2101,7 +2063,6 @@ export default function PeriodWorkspacePage({
                             try {
                               await updateCroFilingStatus(cId, pId, {
                                 status: "CorrectionRequired",
-                                by: getReviewerName(),
                                 reason: "CRO send-back/correction required. Correct and redeliver within 14 days.",
                               });
                               toast.warning("Correction deadline opened");
