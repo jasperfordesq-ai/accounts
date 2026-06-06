@@ -397,8 +397,9 @@ public static class YearEndEndpoints
                 .OrderBy(r => r.SectionKey)
                 .ToListAsync());
 
-        reviews.MapPut("/{sectionKey}", async (int companyId, int periodId, string sectionKey, YearEndReviewInput input, AccountsDbContext db) =>
+        reviews.MapPut("/{sectionKey}", async (int companyId, int periodId, string sectionKey, YearEndReviewInput input, AccountsDbContext db, HttpContext context) =>
         {
+            var user = AuthContext.RequireUser(context);
             if (!ReviewSectionKeys.Contains(sectionKey))
                 return Results.BadRequest(new { error = "Unknown year-end review section." });
 
@@ -419,7 +420,7 @@ public static class YearEndEndpoints
             }
 
             confirmation.Confirmed = input.Confirmed;
-            confirmation.ConfirmedBy = string.IsNullOrWhiteSpace(input.ConfirmedBy) ? "Accounts reviewer" : input.ConfirmedBy.Trim();
+            confirmation.ConfirmedBy = AuthenticatedIdentity.ReviewerDisplayName(user);
             confirmation.ConfirmedAt = DateTime.UtcNow;
             confirmation.Note = string.IsNullOrWhiteSpace(input.Note) ? null : input.Note.Trim();
 

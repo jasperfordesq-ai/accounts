@@ -50,6 +50,7 @@ public static class BankingEndpoints
         // CSV Import
         banks.MapPost("/{bankAccountId:int}/import", async (int companyId, int bankAccountId, int periodId, HttpRequest request, ImportService importService, AuditService auditService, IOptions<ImportLimitConfig> importLimits, AccountsDbContext db) =>
         {
+            var user = AuthContext.RequireUser(request.HttpContext);
             var bankBelongsToCompany = await db.BankAccounts
                 .AnyAsync(b => b.Id == bankAccountId && b.CompanyId == companyId);
             var period = await db.AccountingPeriods
@@ -87,7 +88,7 @@ public static class BankingEndpoints
                 result.DuplicatesSkipped,
                 result.AutoCategorised,
                 WarningCount = result.Warnings.Count
-            }, request.Headers["X-Reviewer"].FirstOrDefault());
+            }, AuthenticatedIdentity.AuditUserId(user));
             return Results.Ok(result);
         }).DisableAntiforgery();
 

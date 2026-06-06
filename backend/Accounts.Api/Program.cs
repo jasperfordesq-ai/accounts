@@ -284,8 +284,9 @@ periods.MapPost("/", async (int companyId, AccountingPeriodInput input, Accounts
     return Results.Created($"/api/companies/{companyId}/periods/{period.Id}", period);
 });
 
-periods.MapPut("/{id:int}/status", async (int companyId, int id, PeriodStatusUpdate update, AccountsDbContext db) =>
+periods.MapPut("/{id:int}/status", async (int companyId, int id, PeriodStatusUpdate update, AccountsDbContext db, HttpContext context) =>
 {
+    var user = AuthContext.RequireUser(context);
     var period = await db.AccountingPeriods.FirstOrDefaultAsync(p => p.Id == id && p.CompanyId == companyId);
     if (period is null) return Results.NotFound();
 
@@ -297,7 +298,7 @@ periods.MapPut("/{id:int}/status", async (int companyId, int id, PeriodStatusUpd
     if (update.Status is Accounts.Api.Entities.PeriodStatus.Finalised or Accounts.Api.Entities.PeriodStatus.Filed)
     {
         period.LockedAt ??= DateTime.UtcNow;
-        period.LockedBy = update.LockedBy?.Trim();
+        period.LockedBy = AuthenticatedIdentity.ReviewerDisplayName(user);
     }
     else if (wasLocked)
     {
@@ -445,8 +446,6 @@ public static class EndpointInputs
         var locking = update.Status is Accounts.Api.Entities.PeriodStatus.Finalised or Accounts.Api.Entities.PeriodStatus.Filed;
         var reopening = (period.Status is Accounts.Api.Entities.PeriodStatus.Finalised or Accounts.Api.Entities.PeriodStatus.Filed || period.LockedAt is not null) && !locking;
 
-        if (locking && string.IsNullOrWhiteSpace(update.LockedBy))
-            errors["lockedBy"] = ["Locked by is required when finalising or filing a period."];
         if (reopening && (string.IsNullOrWhiteSpace(update.ReopenReason) || update.ReopenReason.Trim().Length < 10))
             errors["reopenReason"] = ["A reopen reason of at least 10 characters is required."];
 

@@ -24,11 +24,18 @@ public static class FilingWorkflowEndpoints
         });
 
         // Update CRO filing status
-        group.MapPut("/cro-status", async (int companyId, int periodId, FilingStatusInput input, FilingWorkflowService service) =>
+        group.MapPut("/cro-status", async (int companyId, int periodId, FilingStatusInput input, FilingWorkflowService service, HttpContext context) =>
         {
             try
             {
-                var result = await service.UpdateCroStatusAsync(companyId, periodId, input.Status, input.By, input.Reason, input.SubmissionReference);
+                var user = AuthContext.RequireUser(context);
+                var result = await service.UpdateCroStatusAsync(
+                    companyId,
+                    periodId,
+                    input.Status,
+                    AuthenticatedIdentity.ReviewerDisplayName(user),
+                    input.Reason,
+                    input.SubmissionReference);
                 return Results.Ok(result);
             }
             catch (Exception ex)
@@ -38,11 +45,15 @@ public static class FilingWorkflowEndpoints
         });
 
         // Confirm CORE payment for the annual return
-        group.MapPost("/cro-payment", async (int companyId, int periodId, CroPaymentInput input, FilingWorkflowService service) =>
+        group.MapPost("/cro-payment", async (int companyId, int periodId, CroPaymentInput input, FilingWorkflowService service, HttpContext context) =>
         {
             try
             {
-                var result = await service.ConfirmCroPaymentAsync(companyId, periodId, input.By);
+                var user = AuthContext.RequireUser(context);
+                var result = await service.ConfirmCroPaymentAsync(
+                    companyId,
+                    periodId,
+                    AuthenticatedIdentity.ReviewerDisplayName(user));
                 return Results.Ok(result);
             }
             catch (Exception ex)

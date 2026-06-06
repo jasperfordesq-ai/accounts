@@ -50,14 +50,22 @@ public static class AdjustmentEndpoints
         });
 
         // Create manual adjustment
-        group.MapPost("/", async (int companyId, int periodId, Adjustment input, AccountsDbContext db, AuditService audit) =>
+        group.MapPost("/", async (int companyId, int periodId, Adjustment input, AccountsDbContext db, AuditService audit, HttpContext context) =>
         {
+            var user = AuthContext.RequireUser(context);
             input.PeriodId = periodId;
             input.IsAuto = false;
             input.Source = AdjustmentSource.Manual;
             db.Adjustments.Add(input);
             await db.SaveChangesAsync();
-            await audit.LogAsync(companyId, periodId, "Adjustment", input.Id, "Created", newValue: new { input.Description, input.Amount });
+            await audit.LogAsync(
+                companyId,
+                periodId,
+                "Adjustment",
+                input.Id,
+                "Created",
+                newValue: new { input.Description, input.Amount },
+                userId: AuthenticatedIdentity.AuditUserId(user));
             return Results.Created($"{basePath}/{input.Id}", input);
         });
 
@@ -79,14 +87,22 @@ public static class AdjustmentEndpoints
         });
 
         // Approve adjustment
-        group.MapPost("/{id:int}/approve", async (int companyId, int periodId, int id, ApprovalInput input, AccountsDbContext db, AuditService audit) =>
+        group.MapPost("/{id:int}/approve", async (int companyId, int periodId, int id, ApprovalInput input, AccountsDbContext db, AuditService audit, HttpContext context) =>
         {
+            var user = AuthContext.RequireUser(context);
             var item = await db.Adjustments.FirstOrDefaultAsync(a => a.Id == id && a.PeriodId == periodId);
             if (item == null) return Results.NotFound();
-            item.ApprovedBy = input.ApprovedBy;
+            item.ApprovedBy = AuthenticatedIdentity.ReviewerDisplayName(user);
             item.ApprovedAt = DateTime.UtcNow;
             await db.SaveChangesAsync();
-            await audit.LogAsync(companyId, periodId, "Adjustment", id, "Approved", newValue: new { item.Description, input.ApprovedBy });
+            await audit.LogAsync(
+                companyId,
+                periodId,
+                "Adjustment",
+                id,
+                "Approved",
+                newValue: new { item.Description, item.ApprovedBy },
+                userId: AuthenticatedIdentity.AuditUserId(user));
             return Results.Ok(item);
         });
 

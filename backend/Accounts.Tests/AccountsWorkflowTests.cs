@@ -1469,6 +1469,30 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public void AuthenticatedIdentity_UsesPrincipalForReviewerDisplayName()
+    {
+        var reviewer = new AuthenticatedUser(7, 1, "Firm A", "reviewer@example.ie", "Maeve Reviewer", "Reviewer");
+
+        Assert.Equal("Maeve Reviewer", AuthenticatedIdentity.ReviewerDisplayName(reviewer));
+    }
+
+    [Fact]
+    public void AuthenticatedIdentity_UsesPrincipalEmailForAuditUserId()
+    {
+        var reviewer = new AuthenticatedUser(7, 1, "Firm A", "Reviewer@Example.IE", "Maeve Reviewer", "Reviewer");
+
+        Assert.Equal("reviewer@example.ie", AuthenticatedIdentity.AuditUserId(reviewer));
+    }
+
+    [Fact]
+    public void AuthenticatedIdentity_UsesEmailForBlankReviewerDisplayName()
+    {
+        var reviewer = new AuthenticatedUser(7, 1, "Firm A", "reviewer@example.ie", "   ", "Reviewer");
+
+        Assert.Equal("reviewer@example.ie", AuthenticatedIdentity.ReviewerDisplayName(reviewer));
+    }
+
+    [Fact]
     public void ApiAccess_AllowsAuthEndpointsWithoutServiceKey()
     {
         var service = new ApiAccessService(
@@ -2138,6 +2162,25 @@ public class AccountsWorkflowTests
 
         Assert.NotNull(EndpointInputs.ValidatePeriodStatusUpdate(period, invalid));
         Assert.Null(EndpointInputs.ValidatePeriodStatusUpdate(period, valid));
+    }
+
+    [Fact]
+    public void EndpointInputs_PeriodStatusFinaliseDoesNotRequireCallerSuppliedLockedBy()
+    {
+        var period = new AccountingPeriod
+        {
+            CompanyId = 1,
+            PeriodStart = new DateOnly(2025, 1, 1),
+            PeriodEnd = new DateOnly(2025, 12, 31),
+            IsFirstYear = true,
+            Status = PeriodStatus.Review
+        };
+
+        var result = EndpointInputs.ValidatePeriodStatusUpdate(
+            period,
+            new PeriodStatusUpdate(PeriodStatus.Finalised, null, null));
+
+        Assert.Null(result);
     }
 
     private static AccountsDbContext CreateDbContext()
