@@ -1493,6 +1493,23 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public void OpeningBalanceIdentity_IgnoresPayloadEnteredByAndUsesAuthenticatedReviewer()
+    {
+        var reviewer = new AuthenticatedUser(7, 1, "Firm A", "reviewer@example.ie", "Maeve Reviewer", "Reviewer");
+        var input = new OpeningBalanceInput(100m, 0m, "Opening cash", "Spoofed payload reviewer", true);
+        var balance = new OpeningBalance();
+        var now = new DateTime(2026, 6, 6, 12, 0, 0, DateTimeKind.Utc);
+
+        YearEndEndpoints.StampOpeningBalanceIdentity(balance, input, reviewer, now);
+
+        Assert.Equal("Maeve Reviewer", balance.EnteredBy);
+        Assert.Equal(now, balance.EnteredAt);
+        Assert.True(balance.Reviewed);
+        Assert.Equal("Maeve Reviewer", balance.ReviewedBy);
+        Assert.Equal(now, balance.ReviewedAt);
+    }
+
+    [Fact]
     public void ApiAccess_AllowsAuthEndpointsWithoutServiceKey()
     {
         var service = new ApiAccessService(

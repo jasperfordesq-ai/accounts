@@ -517,8 +517,10 @@ public static class YearEndEndpoints
                 .OrderBy(o => o.AccountCategory.Code)
                 .ToListAsync());
 
-        openingBalances.MapPut("/{categoryId:int}", async (int companyId, int periodId, int categoryId, OpeningBalanceInput input, AccountsDbContext db) =>
+        openingBalances.MapPut("/{categoryId:int}", async (int companyId, int periodId, int categoryId, OpeningBalanceInput input, AccountsDbContext db, HttpContext context) =>
         {
+            var user = AuthContext.RequireUser(context);
+
             if (input.Debit < 0 || input.Credit < 0)
                 return Results.BadRequest(new { error = "Opening balance debit and credit must not be negative." });
             if (input.Debit > 0 && input.Credit > 0)
@@ -546,13 +548,7 @@ public static class YearEndEndpoints
             balance.Debit = input.Debit;
             balance.Credit = input.Credit;
             balance.SourceNote = string.IsNullOrWhiteSpace(input.SourceNote) ? null : input.SourceNote.Trim();
-            balance.EnteredBy = string.IsNullOrWhiteSpace(input.EnteredBy) ? "Accounts reviewer" : input.EnteredBy.Trim();
-            balance.EnteredAt = DateTime.UtcNow;
-            balance.Reviewed = input.Reviewed;
-            balance.ReviewedBy = input.Reviewed
-                ? string.IsNullOrWhiteSpace(input.EnteredBy) ? "Accounts reviewer" : input.EnteredBy.Trim()
-                : null;
-            balance.ReviewedAt = input.Reviewed ? DateTime.UtcNow : null;
+            StampOpeningBalanceIdentity(balance, input, user, DateTime.UtcNow);
 
             await db.SaveChangesAsync();
             await db.Entry(balance).Reference(b => b.AccountCategory).LoadAsync();
@@ -675,6 +671,20 @@ public static class YearEndEndpoints
                 return Results.BadRequest(new { error = ex.Message });
             }
         });
+    }
+
+    public static void StampOpeningBalanceIdentity(
+        OpeningBalance balance,
+        OpeningBalanceInput input,
+        AuthenticatedUser user,
+        DateTime timestamp)
+    {
+        var reviewerName = AuthenticatedIdentity.ReviewerDisplayName(user);
+        balance.EnteredBy = reviewerName;
+        balance.EnteredAt = timestamp;
+        balance.Reviewed = input.Reviewed;
+        balance.ReviewedBy = input.Reviewed ? reviewerName : null;
+        balance.ReviewedAt = input.Reviewed ? timestamp : null;
     }
 }
 
