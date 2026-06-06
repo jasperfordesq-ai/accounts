@@ -76,6 +76,7 @@ builder.Services.AddScoped<DirectorLoanComplianceService>();
 builder.Services.AddScoped<DirectorsReportService>();
 builder.Services.AddScoped<CharityReportingService>();
 builder.Services.AddScoped<FilingWorkflowService>();
+builder.Services.AddScoped<AuthService>();
 builder.Services.AddSingleton<ApiAccessService>();
 builder.Services.AddSingleton<ProductionSafetyService>();
 

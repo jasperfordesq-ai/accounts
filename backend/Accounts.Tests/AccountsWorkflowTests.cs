@@ -10,6 +10,7 @@ using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using QuestPDF.Infrastructure;
+using System.Security.Cryptography;
 using System.Text;
 using Xunit;
 
@@ -1113,6 +1114,93 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task AuthService_LoginAcceptsValidPasswordAndReturnsTenantPrincipal()
+    {
+        await using var db = CreateDbContext();
+        var tenant = await SeedTenantAsync(db);
+        var user = await SeedUserAsync(db, tenant, "owner@example.ie", "Correct Horse Battery Staple 1!");
+        var service = CreateAuthService(db);
+
+        var authenticated = await service.LoginAsync(" OWNER@EXAMPLE.IE ", "Correct Horse Battery Staple 1!");
+
+        Assert.NotNull(authenticated);
+        Assert.Equal(user.Id, authenticated.UserId);
+        Assert.Equal(tenant.Id, authenticated.TenantId);
+        Assert.Equal("Example Firm", authenticated.TenantName);
+        Assert.Equal("owner@example.ie", authenticated.Email);
+        Assert.Equal("Owner User", authenticated.DisplayName);
+        Assert.Equal("Admin", authenticated.Role);
+        var saved = await db.UserAccounts.FindAsync(user.Id);
+        Assert.NotNull(saved?.LastLoginAt);
+    }
+
+    [Fact]
+    public async Task AuthService_LoginRejectsWrongPassword()
+    {
+        await using var db = CreateDbContext();
+        var tenant = await SeedTenantAsync(db);
+        await SeedUserAsync(db, tenant, "owner@example.ie", "Correct Horse Battery Staple 1!");
+        var service = CreateAuthService(db);
+
+        var authenticated = await service.LoginAsync("owner@example.ie", "wrong password");
+
+        Assert.Null(authenticated);
+    }
+
+    [Fact]
+    public async Task AuthService_LoginRejectsInactiveUser()
+    {
+        await using var db = CreateDbContext();
+        var tenant = await SeedTenantAsync(db);
+        await SeedUserAsync(db, tenant, "owner@example.ie", "Correct Horse Battery Staple 1!", isActive: false);
+        var service = CreateAuthService(db);
+
+        var authenticated = await service.LoginAsync("owner@example.ie", "Correct Horse Battery Staple 1!");
+
+        Assert.Null(authenticated);
+    }
+
+    [Fact]
+    public async Task AuthService_SessionRoundTripReturnsActiveUser()
+    {
+        await using var db = CreateDbContext();
+        var tenant = await SeedTenantAsync(db);
+        var user = await SeedUserAsync(db, tenant, "owner@example.ie", "Correct Horse Battery Staple 1!");
+        var service = CreateAuthService(db);
+        var authenticated = await service.LoginAsync("owner@example.ie", "Correct Horse Battery Staple 1!");
+        var now = new DateTimeOffset(2026, 1, 15, 10, 0, 0, TimeSpan.Zero);
+
+        var cookieValue = service.CreateSessionCookieValue(authenticated!, now);
+        var roundTripped = await service.ReadSessionAsync(cookieValue, now.AddMinutes(10));
+
+        Assert.NotNull(roundTripped);
+        Assert.Equal(user.Id, roundTripped.UserId);
+        Assert.Equal(tenant.Id, roundTripped.TenantId);
+        Assert.Equal("Example Firm", roundTripped.TenantName);
+        Assert.Equal("owner@example.ie", roundTripped.Email);
+        Assert.Equal("Owner User", roundTripped.DisplayName);
+        Assert.Equal("Admin", roundTripped.Role);
+    }
+
+    [Fact]
+    public async Task AuthService_Base64UrlSigningKeyRoundTripsSessionCookie()
+    {
+        await using var db = CreateDbContext();
+        var tenant = await SeedTenantAsync(db);
+        var user = await SeedUserAsync(db, tenant, "owner@example.ie", "Correct Horse Battery Staple 1!");
+        var service = CreateAuthService(db, StrongSessionSigningKeyBase64Url());
+        var authenticated = await service.LoginAsync("owner@example.ie", "Correct Horse Battery Staple 1!");
+        var now = new DateTimeOffset(2026, 1, 15, 10, 0, 0, TimeSpan.Zero);
+
+        var cookieValue = service.CreateSessionCookieValue(authenticated!, now);
+        var roundTripped = await service.ReadSessionAsync(cookieValue, now.AddMinutes(10));
+
+        Assert.NotNull(roundTripped);
+        Assert.Equal(user.Id, roundTripped.UserId);
+        Assert.Equal(tenant.Id, roundTripped.TenantId);
+    }
+
+    [Fact]
     public void ApiAccess_AllowsKeyForConfiguredCompanyOnly()
     {
         var service = new ApiAccessService(
@@ -1553,6 +1641,67 @@ public class AccountsWorkflowTests
         ConfirmedBy = "Accounts reviewer",
         Note = "Nil position reviewed."
     };
+
+    private static AuthService CreateAuthService(
+        AccountsDbContext db,
+        string? signingKey = null,
+        string environmentName = "Development") =>
+        new(
+            db,
+            Options.Create(new AuthSessionConfig
+            {
+                SigningKey = signingKey ?? StrongSessionSigningKey(),
+                ExpiryMinutes = 60
+            }),
+            new TestEnvironment(environmentName));
+
+    private static async Task<Tenant> SeedTenantAsync(
+        AccountsDbContext db,
+        string name = "Example Firm",
+        string slug = "example-firm")
+    {
+        var tenant = new Tenant
+        {
+            Name = name,
+            Slug = slug
+        };
+        db.Tenants.Add(tenant);
+        await db.SaveChangesAsync();
+        return tenant;
+    }
+
+    private static async Task<UserAccount> SeedUserAsync(
+        AccountsDbContext db,
+        Tenant tenant,
+        string email,
+        string password,
+        bool isActive = true,
+        string role = "Admin")
+    {
+        var salt = RandomNumberGenerator.GetBytes(16);
+        var hash = Rfc2898DeriveBytes.Pbkdf2(
+            password,
+            salt,
+            210_000,
+            HashAlgorithmName.SHA256,
+            32);
+        var user = new UserAccount
+        {
+            TenantId = tenant.Id,
+            Tenant = tenant,
+            Email = email.Trim().ToLowerInvariant(),
+            DisplayName = "Owner User",
+            Role = role,
+            PasswordHash = Convert.ToBase64String(hash),
+            PasswordSalt = Convert.ToBase64String(salt),
+            PasswordAlgorithm = AuthService.PasswordAlgorithm,
+            PasswordStrengthScore = 5,
+            IsActive = isActive
+        };
+        db.UserAccounts.Add(user);
+        await db.SaveChangesAsync();
+        return user;
+    }
 
     private static IOptions<AuthSessionConfig> AuthSessionOptions(IConfiguration config) =>
         Options.Create(config.GetSection("AuthSession").Get<AuthSessionConfig>() ?? new AuthSessionConfig());
