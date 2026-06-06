@@ -17,6 +17,7 @@ class ApiError extends Error {
     try {
       const parsed = JSON.parse(body);
       if (parsed.message) return parsed.message;
+      if (parsed.error) return parsed.error;
       if (parsed.title) return parsed.title;
       if (parsed.detail) return parsed.detail;
       if (typeof parsed === "string") return parsed;

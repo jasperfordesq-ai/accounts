@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -51,24 +52,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const authTransitionRef = useRef(0);
 
   const isLoginPage = pathname === "/login";
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (signal?: AbortSignal) => {
+    const transitionId = ++authTransitionRef.current;
     setLoading(true);
+
     try {
-      const currentUser = await getCurrentUser();
-      setUser(currentUser);
+      const currentUser = await getCurrentUser(signal);
+      if (authTransitionRef.current === transitionId) {
+        setUser(currentUser);
+      }
     } catch {
-      setUser(null);
+      if (signal?.aborted) return;
+
+      if (authTransitionRef.current === transitionId) {
+        setUser(null);
+      }
     } finally {
-      setLoading(false);
+      if (!signal?.aborted && authTransitionRef.current === transitionId) {
+        setLoading(false);
+      }
     }
   }, []);
 
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    const controller = new AbortController();
+    void refresh(controller.signal);
+
+    return () => controller.abort();
+  }, [pathname, refresh]);
 
   useEffect(() => {
     if (loading) return;
@@ -84,18 +99,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [isLoginPage, loading, router, user]);
 
   const login = useCallback(async (email: string, password: string) => {
-    const nextUser = await loginRequest(email, password);
-    setUser(nextUser);
-    return nextUser;
+    const transitionId = ++authTransitionRef.current;
+
+    try {
+      const nextUser = await loginRequest(email, password);
+      if (authTransitionRef.current === transitionId) {
+        setUser(nextUser);
+      }
+      return nextUser;
+    } finally {
+      if (authTransitionRef.current === transitionId) {
+        setLoading(false);
+      }
+    }
   }, []);
 
   const logout = useCallback(async () => {
+    const transitionId = ++authTransitionRef.current;
+
     try {
       await logoutRequest();
     } catch {
       // The local shell should still clear stale session state if the server session is gone.
     } finally {
-      setUser(null);
+      if (authTransitionRef.current === transitionId) {
+        setUser(null);
+        setLoading(false);
+      }
       router.replace("/login");
     }
   }, [router]);

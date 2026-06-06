@@ -7,10 +7,12 @@ import { AlertCircle, LogIn } from "lucide-react";
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/components/AuthProvider";
 
+const defaultEmail = process.env.NEXT_PUBLIC_DEMO_LOGIN_EMAIL ?? "";
+
 export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuth();
-  const [email, setEmail] = useState("owner@accounts-demo.ie");
+  const [email, setEmail] = useState(defaultEmail);
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);

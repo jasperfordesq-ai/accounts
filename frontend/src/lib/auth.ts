@@ -46,10 +46,11 @@ export async function logout(): Promise<void> {
   }
 }
 
-export async function getCurrentUser(): Promise<AuthUser> {
+export async function getCurrentUser(signal?: AbortSignal): Promise<AuthUser> {
   const res = await fetch("/api/auth/me", {
     method: "GET",
     credentials: "include",
+    signal,
     headers: {
       "Content-Type": "application/json",
     },
