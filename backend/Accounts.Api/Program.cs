@@ -141,6 +141,7 @@ app.UseCors();
 app.UseMiddleware<Accounts.Api.Middleware.ApiAccessMiddleware>();
 app.UseMiddleware<Accounts.Api.Middleware.UserSessionMiddleware>();
 app.UseMiddleware<Accounts.Api.Middleware.TenantAccessMiddleware>();
+app.UseMiddleware<Accounts.Api.Middleware.RoleAuthorizationMiddleware>();
 app.UseMiddleware<Accounts.Api.Middleware.PeriodOwnershipMiddleware>();
 app.UseMiddleware<Accounts.Api.Middleware.PeriodLockMiddleware>();
 if (app.Environment.IsDevelopment())

@@ -1812,6 +1812,114 @@ public class AccountsWorkflowTests
         Assert.DoesNotContain(companyB.Id, visibleCompanyIds);
     }
 
+    [Theory]
+    [InlineData("Client", "POST", "/api/companies/1/periods", false)]
+    [InlineData("Accountant", "POST", "/api/companies/1/periods", true)]
+    [InlineData("Reviewer", "POST", "/api/companies/1/periods/2/adjustments/3/approve", true)]
+    [InlineData("Reviewer", "POST", "/api/companies", false)]
+    [InlineData("Owner", "DELETE", "/api/companies/1", true)]
+    public void RoleAuthorization_EnforcesExpectedWritePermissions(string role, string method, string path, bool expected)
+    {
+        var decision = RoleAuthorizationService.Authorize(
+            AuthenticatedRole(role),
+            new PathString(path),
+            method);
+
+        Assert.Equal(expected, decision.IsAllowed);
+    }
+
+    [Fact]
+    public async Task RoleAuthorizationMiddleware_ReturnsForbiddenForDeniedWrite()
+    {
+        var nextCalled = false;
+        var context = new DefaultHttpContext
+        {
+            Response =
+            {
+                Body = new MemoryStream()
+            }
+        };
+        context.Request.Method = HttpMethods.Post;
+        context.Request.Path = "/api/companies/1/periods";
+        context.Items[AuthContext.ItemKey] = AuthenticatedRole("Client");
+        var middleware = new RoleAuthorizationMiddleware(_ =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        });
+
+        await middleware.InvokeAsync(context);
+
+        var body = Encoding.UTF8.GetString(((MemoryStream)context.Response.Body).ToArray());
+        Assert.False(nextCalled);
+        Assert.Equal(StatusCodes.Status403Forbidden, context.Response.StatusCode);
+        Assert.Contains("read-only", body);
+    }
+
+    [Fact]
+    public void RoleAuthorization_AllowsClientRead()
+    {
+        var decision = RoleAuthorizationService.Authorize(
+            AuthenticatedRole("Client"),
+            new PathString("/api/companies/1/periods"),
+            HttpMethods.Get);
+
+        Assert.True(decision.IsAllowed);
+    }
+
+    [Fact]
+    public void RoleAuthorization_DeniesUnknownRoleWrite()
+    {
+        var decision = RoleAuthorizationService.Authorize(
+            AuthenticatedRole("Mystery"),
+            new PathString("/api/companies/1/periods"),
+            HttpMethods.Post);
+
+        Assert.False(decision.IsAllowed);
+        Assert.Contains("not authorised", decision.DenialReason);
+    }
+
+    [Theory]
+    [InlineData("POST", "/api/companies/1/periods/2/adjustments/3/approve")]
+    [InlineData("DELETE", "/api/companies/1")]
+    public void RoleAuthorization_DeniesAccountantReviewerAndOwnerOnlyActions(string method, string path)
+    {
+        var decision = RoleAuthorizationService.Authorize(
+            AuthenticatedRole("Accountant"),
+            new PathString(path),
+            method);
+
+        Assert.False(decision.IsAllowed);
+    }
+
+    [Theory]
+    [InlineData("PUT", "/api/companies/1/periods/2/year-end-reviews/debtors")]
+    [InlineData("PUT", "/api/companies/1/periods/2/status")]
+    [InlineData("PUT", "/api/companies/1/periods/2/filing/cro-status")]
+    [InlineData("POST", "/api/companies/1/periods/2/filing/cro-payment")]
+    public void RoleAuthorization_AllowsReviewerWorkflowWrites(string method, string path)
+    {
+        var decision = RoleAuthorizationService.Authorize(
+            AuthenticatedRole("Reviewer"),
+            new PathString(path),
+            method);
+
+        Assert.True(decision.IsAllowed);
+    }
+
+    [Theory]
+    [InlineData("POST", "/api/companies/1/periods/2/debtors")]
+    [InlineData("POST", "/api/companies/1/bank-accounts")]
+    public void RoleAuthorization_DeniesReviewerPreparationWrites(string method, string path)
+    {
+        var decision = RoleAuthorizationService.Authorize(
+            AuthenticatedRole("Reviewer"),
+            new PathString(path),
+            method);
+
+        Assert.False(decision.IsAllowed);
+    }
+
     [Fact]
     public async Task PeriodLockMiddleware_BlocksAccountingWritesToFinalisedPeriod()
     {
@@ -2200,6 +2308,14 @@ public class AccountsWorkflowTests
 
     private static string StrongSessionSigningKeyBase64Url() =>
         StrongSessionSigningKey().TrimEnd('=').Replace('+', '-').Replace('/', '_');
+
+    private static AuthenticatedUser AuthenticatedRole(string role) => new(
+        UserId: 1,
+        TenantId: 1,
+        TenantName: "Example Firm",
+        Email: "user@example.ie",
+        DisplayName: "Example User",
+        Role: role);
 
     private sealed class TestEnvironment(string environmentName) : IHostEnvironment
     {
