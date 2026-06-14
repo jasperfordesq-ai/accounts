@@ -31,41 +31,56 @@ public class ImportService(AccountsDbContext db, IOptions<ImportLimitConfig>? im
         new("Generic", new(0, 1, 2, -1, -1, "dd/MM/yyyy")),
     ];
 
-    public async Task<ImportResult> ImportCsvAsync(int bankAccountId, int periodId, Stream csvStream, string filename, ColumnMapping? mapping = null)
+    public async Task<ImportResult> ImportCsvAsync(int companyId, int bankAccountId, int periodId, Stream csvStream, string filename, ColumnMapping? mapping = null)
     {
         if (csvStream.CanSeek && csvStream.Length > _limits.MaxCsvBytes)
-            throw new InvalidOperationException($"CSV file is too large. Maximum allowed size is {_limits.MaxCsvBytes / 1024 / 1024} MB.");
+            throw new BusinessRuleException($"CSV file is too large. Maximum allowed size is {_limits.MaxCsvBytes / 1024 / 1024} MB.");
 
-        var bankAccount = await db.BankAccounts.FindAsync(bankAccountId)
-            ?? throw new InvalidOperationException("Bank account not found");
-        var period = await db.AccountingPeriods.FindAsync(periodId)
-            ?? throw new InvalidOperationException("Accounting period not found");
+        var bankAccount = await db.BankAccounts
+            .FirstOrDefaultAsync(b => b.Id == bankAccountId && b.CompanyId == companyId)
+            ?? throw new ResourceNotFoundException($"Bank account {bankAccountId} not found");
+        var period = await db.AccountingPeriods
+            .FirstOrDefaultAsync(p => p.Id == periodId && p.CompanyId == companyId)
+            ?? throw new ResourceNotFoundException($"Period {periodId} not found");
 
-        if (bankAccount.CompanyId != period.CompanyId)
-            throw new InvalidOperationException("Bank account does not belong to the company for this accounting period.");
+        string content;
+        try
+        {
+            using var reader = new StreamReader(csvStream);
+            content = await reader.ReadToEndAsync();
+        }
+        catch (IOException)
+        {
+            throw new BusinessRuleException("CSV file could not be read. Upload a valid CSV bank statement.");
+        }
 
-        // Read all lines
-        using var reader = new StreamReader(csvStream);
-        var content = await reader.ReadToEndAsync();
         if (Encoding.UTF8.GetByteCount(content) > _limits.MaxCsvBytes)
-            throw new InvalidOperationException($"CSV file is too large. Maximum allowed size is {_limits.MaxCsvBytes / 1024 / 1024} MB.");
+            throw new BusinessRuleException($"CSV file is too large. Maximum allowed size is {_limits.MaxCsvBytes / 1024 / 1024} MB.");
 
-        var lines = content.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        CsvImportRows csvRows;
+        try
+        {
+            csvRows = await ReadCsvRowsAsync(content);
+        }
+        catch (CsvHelperException)
+        {
+            throw new BusinessRuleException("CSV file could not be parsed. Upload a valid CSV bank statement.");
+        }
 
-        if (lines.Length < 2)
+        if (csvRows.Header.Length == 0 || csvRows.Rows.Count == 0)
             return new ImportResult(0, 0, 0, 0, ["File is empty or has no data rows"]);
 
-        if (lines.Length - 1 > _limits.MaxRows)
-            throw new InvalidOperationException($"CSV has too many rows. Maximum allowed data rows is {_limits.MaxRows:N0}.");
+        if (csvRows.Rows.Count > _limits.MaxRows)
+            throw new BusinessRuleException($"CSV has too many rows. Maximum allowed data rows is {_limits.MaxRows:N0}.");
 
         // Auto-detect format if no mapping provided
-        mapping ??= DetectFormat(lines[0]).Mapping;
+        mapping ??= DetectFormat(string.Join(",", csvRows.Header)).Mapping;
 
         var batch = new ImportBatch
         {
             BankAccountId = bankAccountId,
             Filename = filename,
-            RowCount = lines.Length - 1 // exclude header
+            RowCount = csvRows.Rows.Count
         };
         db.ImportBatches.Add(batch);
         await db.SaveChangesAsync();
@@ -83,6 +98,7 @@ public class ImportService(AccountsDbContext db, IOptions<ImportLimitConfig>? im
         // Get transaction rules for auto-categorisation
         var rules = await db.TransactionRules
             .Where(r => r.CompanyId == bankAccount.CompanyId)
+            .Where(r => r.Category.CompanyId == bankAccount.CompanyId || (r.Category.IsSystem && r.Category.CompanyId == null))
             .OrderBy(r => r.Priority)
             .ToListAsync();
 
@@ -91,49 +107,52 @@ public class ImportService(AccountsDbContext db, IOptions<ImportLimitConfig>? im
         int duplicates = 0;
         int autoCategorised = 0;
 
-        for (int i = 1; i < lines.Length; i++)
+        foreach (var row in csvRows.Rows)
         {
-            var line = lines[i].Trim();
-            if (string.IsNullOrEmpty(line)) continue;
-
             try
             {
-                var fields = ParseCsvLine(line);
+                var fields = row.Fields;
 
                 if (fields.Length <= mapping.DescriptionColumn || fields.Length <= mapping.AmountColumn)
                 {
-                    warnings.Add($"Row {i}: insufficient columns");
+                    warnings.Add($"Row {row.RowNumber}: insufficient columns");
                     continue;
                 }
 
-                var dateStr = fields[mapping.DateColumn].Trim().Trim('"');
-                var description = fields[mapping.DescriptionColumn].Trim().Trim('"');
-                var amountStr = fields[mapping.AmountColumn].Trim().Trim('"');
+                var dateStr = CleanCsvField(fields[mapping.DateColumn]);
+                var description = CleanCsvField(fields[mapping.DescriptionColumn]);
+                var amountStr = CleanCsvField(fields[mapping.AmountColumn]);
 
                 if (!DateOnly.TryParseExact(dateStr, mapping.DateFormat, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date) &&
                     !DateOnly.TryParse(dateStr, CultureInfo.InvariantCulture, out date))
                 {
-                    warnings.Add($"Row {i}: could not parse date '{dateStr}'");
+                    warnings.Add($"Row {row.RowNumber}: could not parse date");
+                    continue;
+                }
+
+                if (date < period.PeriodStart || date > period.PeriodEnd)
+                {
+                    warnings.Add($"Row {row.RowNumber}: transaction date {date:yyyy-MM-dd} is outside accounting period {period.PeriodStart:yyyy-MM-dd} to {period.PeriodEnd:yyyy-MM-dd}");
                     continue;
                 }
 
                 if (!decimal.TryParse(amountStr.Replace(",", ""), NumberStyles.Any, CultureInfo.InvariantCulture, out var amount))
                 {
-                    warnings.Add($"Row {i}: could not parse amount '{amountStr}'");
+                    warnings.Add($"Row {row.RowNumber}: could not parse amount");
                     continue;
                 }
 
                 decimal? balance = null;
                 if (mapping.BalanceColumn.HasValue && mapping.BalanceColumn >= 0 && fields.Length > mapping.BalanceColumn)
                 {
-                    var balStr = fields[mapping.BalanceColumn.Value].Trim().Trim('"');
+                    var balStr = CleanCsvField(fields[mapping.BalanceColumn.Value]);
                     if (decimal.TryParse(balStr.Replace(",", ""), NumberStyles.Any, CultureInfo.InvariantCulture, out var bal))
                         balance = bal;
                 }
 
                 string? reference = null;
                 if (mapping.ReferenceColumn.HasValue && mapping.ReferenceColumn >= 0 && fields.Length > mapping.ReferenceColumn)
-                    reference = fields[mapping.ReferenceColumn.Value].Trim().Trim('"');
+                    reference = CleanCsvField(fields[mapping.ReferenceColumn.Value]);
 
                 // Duplicate detection
                 var hash = ComputeHash(date, amount, description);
@@ -171,18 +190,17 @@ public class ImportService(AccountsDbContext db, IOptions<ImportLimitConfig>? im
                     ManualOverride = false
                 });
             }
-            catch (Exception ex)
+            catch
             {
-                warnings.Add($"Row {i}: {ex.Message}");
+                warnings.Add($"Row {row.RowNumber}: could not import row");
             }
         }
 
         db.ImportedTransactions.AddRange(transactions);
         batch.MatchedCount = autoCategorised;
-        batch.RowCount = transactions.Count + duplicates;
         await db.SaveChangesAsync();
 
-        return new ImportResult(transactions.Count + duplicates, transactions.Count, duplicates, autoCategorised, warnings);
+        return new ImportResult(csvRows.Rows.Count, transactions.Count, duplicates, autoCategorised, warnings);
     }
 
     public BankFormat DetectFormat(string headerLine)
@@ -202,20 +220,41 @@ public class ImportService(AccountsDbContext db, IOptions<ImportLimitConfig>? im
         return Convert.ToHexStringLower(hash)[..16];
     }
 
-    private static string[] ParseCsvLine(string line)
+    private static async Task<CsvImportRows> ReadCsvRowsAsync(string content)
     {
-        var fields = new List<string>();
-        bool inQuotes = false;
-        var current = new StringBuilder();
-
-        for (int i = 0; i < line.Length; i++)
+        var config = new CsvConfiguration(CultureInfo.InvariantCulture)
         {
-            char c = line[i];
-            if (c == '"') { inQuotes = !inQuotes; continue; }
-            if (c == ',' && !inQuotes) { fields.Add(current.ToString()); current.Clear(); continue; }
-            current.Append(c);
+            BadDataFound = null,
+            ExceptionMessagesContainRawData = false,
+            IgnoreBlankLines = true,
+            MissingFieldFound = null,
+            TrimOptions = TrimOptions.Trim
+        };
+
+        using var textReader = new StringReader(content);
+        using var parser = new CsvParser(textReader, config, false);
+        if (!await parser.ReadAsync())
+            return new CsvImportRows([], []);
+
+        var header = parser.Record?.ToArray() ?? [];
+        var rows = new List<CsvImportRow>();
+        var rowNumber = 0;
+        while (await parser.ReadAsync())
+        {
+            var fields = parser.Record?.ToArray() ?? [];
+            if (fields.Length == 0 || fields.All(string.IsNullOrWhiteSpace))
+                continue;
+
+            rowNumber++;
+            rows.Add(new CsvImportRow(rowNumber, fields));
         }
-        fields.Add(current.ToString());
-        return fields.ToArray();
+
+        return new CsvImportRows(header, rows);
     }
+
+    private static string CleanCsvField(string? value) => value?.Trim() ?? string.Empty;
+
+    private sealed record CsvImportRows(string[] Header, List<CsvImportRow> Rows);
+
+    private sealed record CsvImportRow(int RowNumber, string[] Fields);
 }

@@ -4,6 +4,13 @@ public static class RoleAuthorizationService
 {
     public static RoleAuthorizationDecision Authorize(AuthenticatedUser user, PathString path, string method)
     {
+        if (user.MustChangePassword)
+        {
+            return IsPasswordChangeAllowedWhileLocked(path, method)
+                ? RoleAuthorizationDecision.Allowed()
+                : RoleAuthorizationDecision.Denied("Change your password before continuing.");
+        }
+
         if (HttpMethods.IsGet(method) || HttpMethods.IsHead(method) || HttpMethods.IsOptions(method))
             return RoleAuthorizationDecision.Allowed();
 
@@ -53,8 +60,6 @@ public static class RoleAuthorizationService
 
         if (HttpMethods.IsPost(method)
             && (IsPeriodFilingAction(segments, "cro-payment")
-                || IsPeriodFilingAction(segments, "mark-generated")
-                || IsPeriodFilingAction(segments, "validate-ixbrl")
                 || IsPeriodAction(segments, "mark-filed")))
         {
             return true;
@@ -66,6 +71,11 @@ public static class RoleAuthorizationService
     private static bool IsAuthenticatedLogout(PathString path, string method) =>
         HttpMethods.IsPost(method)
         && path.Equals("/api/auth/logout", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsPasswordChangeAllowedWhileLocked(PathString path, string method) =>
+        (HttpMethods.IsGet(method) && path.Equals("/api/auth/me", StringComparison.OrdinalIgnoreCase))
+        || IsAuthenticatedLogout(path, method)
+        || (HttpMethods.IsPost(method) && path.Equals("/api/auth/password", StringComparison.OrdinalIgnoreCase));
 
     private static bool IsCompanyCreate(PathString path, string method)
     {

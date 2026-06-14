@@ -10,7 +10,7 @@ public interface IPasswordVerifier
 
 public sealed class Pbkdf2PasswordVerifier : IPasswordVerifier
 {
-    private const int PasswordIterations = 210_000;
+    public const int PasswordIterations = 210_000;
     private const int MinimumSaltBytes = 16;
     private const int MinimumStoredHashBytes = 16;
     private const string DummySaltBase64 = "YWNjb3VudHMtYXV0aC1kdW1teS1zYWx0LXYx";
@@ -62,5 +62,21 @@ public sealed class Pbkdf2PasswordVerifier : IPasswordVerifier
         }
 
         return salt.Length >= MinimumSaltBytes && storedHash.Length >= MinimumStoredHashBytes;
+    }
+}
+
+public static class PasswordHasher
+{
+    public static (string Hash, string Salt) HashPassword(string password)
+    {
+        var salt = RandomNumberGenerator.GetBytes(16);
+        var hash = Rfc2898DeriveBytes.Pbkdf2(
+            password,
+            salt,
+            Pbkdf2PasswordVerifier.PasswordIterations,
+            HashAlgorithmName.SHA256,
+            32);
+
+        return (Convert.ToBase64String(hash), Convert.ToBase64String(salt));
     }
 }

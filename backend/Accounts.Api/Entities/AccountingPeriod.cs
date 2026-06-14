@@ -12,6 +12,9 @@ public class AccountingPeriod
     public bool IsFirstYear { get; set; }
     public DateTime? LockedAt { get; set; }
     public string? LockedBy { get; set; }
+    public DateTime? ReopenedAt { get; set; }
+    public string? ReopenedBy { get; set; }
+    public string? ReopenReason { get; set; }
 
     // Member audit notice (s.334 Companies Act 2014)
     public bool MemberAuditNoticeReceived { get; set; }
@@ -43,6 +46,7 @@ public class AccountingPeriod
     public List<YearEndReviewConfirmation> YearEndReviewConfirmations { get; set; } = [];
     public CroFilingPackage? CroFilingPackage { get; set; }
     public RevenueFilingPackage? RevenueFilingPackage { get; set; }
+    public CharityFilingPackage? CharityFilingPackage { get; set; }
     public List<FilingDeadline> FilingDeadlines { get; set; } = [];
     public List<PostBalanceSheetEvent> PostBalanceSheetEvents { get; set; } = [];
     public List<RelatedPartyTransaction> RelatedPartyTransactions { get; set; } = [];

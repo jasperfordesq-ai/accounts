@@ -24,6 +24,10 @@ export class ErrorBoundary extends Component<Props, State> {
     return { hasError: true, error };
   }
 
+  componentDidCatch(error: Error) {
+    console.error("Unhandled frontend error", error);
+  }
+
   handleReset = () => {
     this.setState({ hasError: false, error: null });
   };
@@ -41,7 +45,7 @@ export class ErrorBoundary extends Component<Props, State> {
             Something went wrong
           </h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md mb-4">
-            {this.state.error?.message || "An unexpected error occurred. Please try again."}
+            An unexpected error occurred. Please try again.
           </p>
           <Button variant="outline" size="sm" onPress={this.handleReset}>
             <RefreshCw className="w-4 h-4 mr-1.5" />

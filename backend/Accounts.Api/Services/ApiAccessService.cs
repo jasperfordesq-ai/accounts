@@ -16,9 +16,11 @@ public class ApiAccessService(IOptions<ApiAccessConfig> options, IHostEnvironmen
     public ApiAccessDecision Authorize(string? presentedKey, PathString path, string method = "GET")
     {
         if (!_config.Enabled)
-            return ApiAccessDecision.Allowed("Development", ApiAccessRole.Admin, null, null);
+            return environment.IsDevelopment()
+                ? ApiAccessDecision.Allowed("Development", ApiAccessRole.Admin, null, null)
+                : ApiAccessDecision.Denied("API access control is not configured.");
 
-        if (IsBrowserAuthEndpoint(path, method))
+        if (environment.IsDevelopment() && IsBrowserAuthEndpoint(path, method))
             return ApiAccessDecision.Allowed("Browser auth", ApiAccessRole.Admin, null, null);
 
         if (string.IsNullOrWhiteSpace(presentedKey))
@@ -55,8 +57,8 @@ public class ApiAccessService(IOptions<ApiAccessConfig> options, IHostEnvironmen
     {
         var failures = new List<string>();
 
-        if (_config.RequireInProduction && environment.IsProduction() && !_config.Enabled)
-            failures.Add("ApiAccess:Enabled must be true in production.");
+        if (_config.RequireInProduction && !environment.IsDevelopment() && !_config.Enabled)
+            failures.Add("ApiAccess:Enabled must be true outside development.");
 
         if (!_config.Enabled)
             return failures;
@@ -72,8 +74,8 @@ public class ApiAccessService(IOptions<ApiAccessConfig> options, IHostEnvironmen
             if (!TryParseRole(key.Role, out _))
                 failures.Add($"API access key '{key.Name}' has invalid Role '{key.Role}'. Use Reader, Writer, or Admin.");
 
-            if (environment.IsProduction() && !string.IsNullOrWhiteSpace(key.DevelopmentKey))
-                failures.Add($"API access key '{key.Name}' uses DevelopmentKey in production. Store only KeyHash in production.");
+            if (!environment.IsDevelopment() && !string.IsNullOrWhiteSpace(key.DevelopmentKey))
+                failures.Add($"API access key '{key.Name}' uses DevelopmentKey outside development. Store only KeyHash outside development.");
 
             if (string.IsNullOrWhiteSpace(key.KeyHash) && string.IsNullOrWhiteSpace(key.DevelopmentKey))
                 failures.Add($"API access key '{key.Name}' must provide KeyHash or a development-only DevelopmentKey.");
@@ -99,7 +101,7 @@ public class ApiAccessService(IOptions<ApiAccessConfig> options, IHostEnvironmen
         if (!string.IsNullOrWhiteSpace(key.KeyHash) && FixedTimeEquals(key.KeyHash, HashKey(presentedKey)))
             return true;
 
-        return !environment.IsProduction()
+        return environment.IsDevelopment()
             && !string.IsNullOrWhiteSpace(key.DevelopmentKey)
             && FixedTimeEquals(key.DevelopmentKey, presentedKey);
     }

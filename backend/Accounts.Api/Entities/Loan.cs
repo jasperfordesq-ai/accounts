@@ -9,6 +9,8 @@ public class Loan
     public required string Lender { get; set; }
     public decimal OriginalAmount { get; set; }
     public decimal Balance { get; set; }
+    public DateOnly? DrawdownDate { get; set; }
+    public DateOnly? BalanceAsOfDate { get; set; }
     public decimal InterestRate { get; set; }
     public bool IsDirectorLoan { get; set; }
     public decimal DueWithinYear { get; set; }

@@ -9,19 +9,30 @@ namespace Accounts.Api.Services;
 
 public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsService statementsService)
 {
-    public async Task<byte[]> GenerateAccountsPackageAsync(int periodId)
+    public async Task<byte[]> GenerateAccountsPackageAsync(int companyId, int periodId)
+        => await GenerateAccountsPackageAsync(companyId, periodId, DocumentPackagePurpose.StatutoryApproval);
+
+    public async Task<byte[]> GenerateAgmApprovalPackAsync(int companyId, int periodId)
+        => await GenerateAccountsPackageAsync(companyId, periodId, DocumentPackagePurpose.AgmApproval);
+
+    private async Task<byte[]> GenerateAccountsPackageAsync(int companyId, int periodId, DocumentPackagePurpose purpose)
     {
         var period = await db.AccountingPeriods
             .Include(p => p.Company).ThenInclude(c => c.Officers)
             .Include(p => p.SizeClassification)
             .Include(p => p.FilingRegime)
-            .FirstOrDefaultAsync(p => p.Id == periodId)
-            ?? throw new InvalidOperationException("Period not found");
+            .FirstOrDefaultAsync(p => p.Id == periodId && p.CompanyId == companyId)
+            ?? throw new ResourceNotFoundException("Period not found");
+
+        if (purpose == DocumentPackagePurpose.StatutoryApproval)
+            await statementsService.AssertFinalOutputReadinessAsync(companyId, periodId, "accounts package");
+        else if (purpose == DocumentPackagePurpose.AgmApproval)
+            await statementsService.AssertFinalOutputReadinessAsync(companyId, periodId, "AGM approval pack");
 
         var company = period.Company;
         var regime = period.FilingRegime?.ElectedRegime ?? ElectedRegime.Small;
-        var balanceSheet = await statementsService.GetBalanceSheetAsync(periodId);
-        var pl = await statementsService.GetProfitAndLossAsync(periodId);
+        var balanceSheet = await statementsService.GetBalanceSheetAsync(companyId, periodId);
+        var pl = await statementsService.GetProfitAndLossAsync(companyId, periodId);
         var auditExempt = period.FilingRegime?.AuditExempt == true;
 
         // Get prior year balance sheet if available
@@ -32,7 +43,7 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
             .FirstOrDefaultAsync();
         if (priorPeriod != null)
         {
-            try { priorBs = await statementsService.GetBalanceSheetAsync(priorPeriod.Id); } catch { }
+            try { priorBs = await statementsService.GetBalanceSheetAsync(company.Id, priorPeriod.Id); } catch { }
         }
 
         var notes = await db.NotesDisclosures
@@ -61,7 +72,7 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
                         col.Spacing(15);
 
                         // Cover page info
-                        ComposeCoverPage(col, company, period, regime);
+                        ComposeCoverPage(col, company, period, regime, purpose);
 
                         col.Item().PageBreak();
 
@@ -77,8 +88,8 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
 
                         col.Item().PageBreak();
 
-                        // Profit and Loss (unless micro or abridged CRO filing)
-                        if (regime != ElectedRegime.Micro && regime != ElectedRegime.SmallAbridged)
+                        // Profit and Loss (full statutory/approval packs include this for small abridged companies)
+                        if (ShouldIncludeProfitAndLoss(regime, purpose))
                         {
                             ComposeProfitAndLoss(col, company, period, pl);
                             col.Item().PageBreak();
@@ -117,7 +128,7 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
         });
     }
 
-    private static void ComposeCoverPage(ColumnDescriptor col, Company company, AccountingPeriod period, ElectedRegime regime)
+    private static void ComposeCoverPage(ColumnDescriptor col, Company company, AccountingPeriod period, ElectedRegime regime, DocumentPackagePurpose purpose)
     {
         col.Item().PaddingTop(100).AlignCenter().Column(c =>
         {
@@ -131,13 +142,8 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
             c.Item().PaddingTop(10).AlignCenter().Text(
                 $"for the financial year ended {period.PeriodEnd:dd MMMM yyyy}").FontSize(12);
 
-            c.Item().PaddingTop(30).AlignCenter().Text(regime switch
-            {
-                ElectedRegime.Micro => "(Prepared under the Micro Companies Regime)",
-                ElectedRegime.SmallAbridged => "(Abridged Financial Statements for filing with the CRO)",
-                ElectedRegime.Small => "(Prepared under the Small Companies Regime)",
-                _ => ""
-            }).FontSize(10).Italic().FontColor(Colors.Grey.Darken1);
+            c.Item().PaddingTop(30).AlignCenter().Text(PackageRegimeSubtitle(regime, purpose))
+                .FontSize(10).Italic().FontColor(Colors.Grey.Darken1);
 
             if (!string.IsNullOrEmpty(company.CroNumber))
                 c.Item().PaddingTop(20).AlignCenter().Text($"Company Registration Number: {company.CroNumber}").FontSize(10);
@@ -363,6 +369,20 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
     public static bool ShouldIncludeAuditExemptionStatement(ElectedRegime regime, bool auditExempt) =>
         auditExempt && (regime == ElectedRegime.Micro || regime == ElectedRegime.Small || regime == ElectedRegime.SmallAbridged);
 
+    public static bool ShouldIncludeProfitAndLoss(ElectedRegime regime, DocumentPackagePurpose purpose) =>
+        regime != ElectedRegime.Micro
+        && !(purpose == DocumentPackagePurpose.CroFiling && regime == ElectedRegime.SmallAbridged);
+
+    public static string PackageRegimeSubtitle(ElectedRegime regime, DocumentPackagePurpose purpose) =>
+        regime switch
+        {
+            ElectedRegime.Micro => "(Prepared under the Micro Companies Regime)",
+            ElectedRegime.SmallAbridged when purpose == DocumentPackagePurpose.CroFiling => "(Abridged Financial Statements for filing with the CRO)",
+            ElectedRegime.SmallAbridged => "(Prepared under the Small Companies Regime - full statutory accounts)",
+            ElectedRegime.Small => "(Prepared under the Small Companies Regime)",
+            _ => ""
+        };
+
     private static void ComposeStatutoryStatement(ColumnDescriptor col, Company company, AccountingPeriod period, ElectedRegime regime, List<CompanyOfficer> directors, bool auditExempt)
     {
         if (regime == ElectedRegime.Micro)
@@ -508,24 +528,24 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
     /// SmallAbridged: balance sheet + notes + directors' report (no P&L).
     /// Other regimes: full accounts package.
     /// </summary>
-    public async Task<byte[]> GenerateCroFilingPackAsync(int periodId)
+    public async Task<byte[]> GenerateCroFilingPackAsync(int companyId, int periodId)
     {
         var period = await db.AccountingPeriods
             .Include(p => p.Company).ThenInclude(c => c.Officers)
             .Include(p => p.FilingRegime)
-            .FirstOrDefaultAsync(p => p.Id == periodId)
-            ?? throw new InvalidOperationException($"Period {periodId} not found");
+            .FirstOrDefaultAsync(p => p.Id == periodId && p.CompanyId == companyId)
+            ?? throw new ResourceNotFoundException($"Period {periodId} not found");
 
         if (period.FilingRegime == null)
-            throw new InvalidOperationException("Confirm the filing regime before generating the CRO filing pack.");
+            throw new BusinessRuleException("Confirm the filing regime before generating the CRO filing pack.");
 
-        await AssertFinalDocumentReadinessAsync(periodId, "CRO filing pack");
+        await AssertFinalDocumentReadinessAsync(companyId, periodId, "CRO filing pack");
 
         var regime = period.FilingRegime.ElectedRegime;
 
         // For Medium/Full/Small (non-abridged), CRO pack is the full accounts package.
         if (regime == ElectedRegime.Medium || regime == ElectedRegime.Full || regime == ElectedRegime.Small)
-            return await GenerateAccountsPackageAsync(periodId);
+            return await GenerateAccountsPackageAsync(companyId, periodId, DocumentPackagePurpose.CroFiling);
 
         return await GenerateAbridgedCroFilingPackAsync(period, regime);
     }
@@ -533,7 +553,7 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
     private async Task<byte[]> GenerateAbridgedCroFilingPackAsync(AccountingPeriod period, ElectedRegime regime)
     {
         var company = period.Company;
-        var balanceSheet = await statementsService.GetBalanceSheetAsync(period.Id);
+        var balanceSheet = await statementsService.GetBalanceSheetAsync(company.Id, period.Id);
         var notes = await db.NotesDisclosures
             .Where(n => n.PeriodId == period.Id && n.IsIncluded)
             .OrderBy(n => n.NoteNumber)
@@ -549,7 +569,7 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
             .FirstOrDefaultAsync();
         if (priorPeriod != null)
         {
-            try { priorBs = await statementsService.GetBalanceSheetAsync(priorPeriod.Id); } catch { }
+            try { priorBs = await statementsService.GetBalanceSheetAsync(company.Id, priorPeriod.Id); } catch { }
         }
 
         return Document.Create(container =>
@@ -672,26 +692,29 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
     /// Generate a separate signature page PDF for CRO upload.
     /// Contains typeset director/secretary signatures per s.347 Companies Act 2014.
     /// </summary>
-    public async Task<byte[]> GenerateSignaturePageAsync(int periodId)
+    public async Task<byte[]> GenerateSignaturePageAsync(int companyId, int periodId)
     {
         var period = await db.AccountingPeriods
             .Include(p => p.Company).ThenInclude(c => c.Officers)
             .Include(p => p.FilingRegime)
-            .FirstOrDefaultAsync(p => p.Id == periodId)
-            ?? throw new InvalidOperationException($"Period {periodId} not found");
+            .FirstOrDefaultAsync(p => p.Id == periodId && p.CompanyId == companyId)
+            ?? throw new ResourceNotFoundException($"Period {periodId} not found");
 
         var company = period.Company;
-        var directors = company.Officers.Where(o => o.Role == OfficerRole.Director).ToList();
-        var secretary = company.Officers.FirstOrDefault(o => o.Role == OfficerRole.Secretary || o.Role == OfficerRole.CompanySecretary);
+        var directors = company.Officers
+            .Where(o => o.Role == OfficerRole.Director && o.ResignedDate == null)
+            .ToList();
+        var secretary = company.Officers
+            .FirstOrDefault(o => (o.Role == OfficerRole.Secretary || o.Role == OfficerRole.CompanySecretary) && o.ResignedDate == null);
 
         if (period.FilingRegime == null)
-            throw new InvalidOperationException("Confirm the filing regime before generating the CRO signature page.");
+            throw new BusinessRuleException("Confirm the filing regime before generating the CRO signature page.");
         if (directors.Count == 0)
-            throw new InvalidOperationException("Record at least one active director before generating the CRO signature page.");
+            throw new BusinessRuleException("Record at least one active director before generating the CRO signature page.");
         if (secretary == null)
-            throw new InvalidOperationException("Record an active company secretary before generating the CRO signature page.");
+            throw new BusinessRuleException("Record an active company secretary before generating the CRO signature page.");
 
-        await AssertFinalDocumentReadinessAsync(periodId, "CRO signature page");
+        await AssertFinalDocumentReadinessAsync(companyId, periodId, "CRO signature page");
 
         var regime = period.FilingRegime.ElectedRegime;
         var approvalDate = DateTime.UtcNow;
@@ -757,23 +780,15 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
         return stream.ToArray();
     }
 
-    private async Task AssertFinalDocumentReadinessAsync(int periodId, string documentName)
+    private async Task AssertFinalDocumentReadinessAsync(int companyId, int periodId, string documentName)
     {
-        var readiness = await statementsService.GetReadinessScoreAsync(periodId);
-        var blockers = new List<string>();
-
-        if (!readiness.BalanceSheetBalances)
-            blockers.Add("balance sheet does not balance");
-
-        blockers.AddRange(readiness.MissingItems);
-        blockers.AddRange(readiness.Warnings.Where(w =>
-            w.Contains("pending approval", StringComparison.OrdinalIgnoreCase)
-            || w.Contains("Opening balances do not agree", StringComparison.OrdinalIgnoreCase)
-            || w.Contains("Balance sheet does not balance", StringComparison.OrdinalIgnoreCase)));
-
-        blockers = blockers.Distinct().Take(10).ToList();
-        if (blockers.Count > 0)
-            throw new InvalidOperationException(
-                $"Cannot generate final {documentName} until readiness blockers are resolved: {string.Join("; ", blockers)}");
+        await statementsService.AssertFinalOutputReadinessAsync(companyId, periodId, documentName);
     }
+}
+
+public enum DocumentPackagePurpose
+{
+    StatutoryApproval,
+    AgmApproval,
+    CroFiling
 }

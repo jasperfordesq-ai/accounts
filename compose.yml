@@ -27,8 +27,20 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=accounts;Username=accounts;Password=accounts_dev"
       AuthSession__SigningKey: "IyRih0V4m+9WHp+buroLFov10a+LGRhgg8g4J7vm3uTnRtUU6t1JenYYfZTaqT9Gl9H7FmYhGwNORssVZ/BPkg=="
+      AuditIntegrity__ActiveKeyId: "development-audit-checkpoint"
+      AuditIntegrity__SigningKeys__0__KeyId: "development-audit-checkpoint"
+      AuditIntegrity__SigningKeys__0__SigningKey: "gIGCg4SFhoeIiYqLjI2Oj5CRkpOUlZaXmJmam5ydnp+goaKjpKWmp6ipqqusra6vsLGys7S1tre4ubq7vL2+vw=="
+      BootstrapOwner__Enabled: "true"
+      BootstrapOwner__TenantName: "Accounts v2 Demo Tenant"
+      BootstrapOwner__TenantSlug: "main-demo"
+      BootstrapOwner__OwnerEmail: "admin@accounts.local"
+      BootstrapOwner__OwnerDisplayName: "Local Charity Admin"
+      BootstrapOwner__OwnerInitialPassword: "LocalAdmin!Accounts-2026-9Qx"
+      BootstrapOwner__OwnerMustChangePassword: "false"
       DatabaseStartup__AutoMigrateOnStartup: "true"
       DatabaseStartup__SeedDemoData: "true"
+      DatabaseStartup__SeedDemoUsers: "false"
+      DatabaseStartup__SeedSampleCompanies: "false"
       AllowedOrigins__0: "http://localhost:5173"
       AllowedOrigins__1: "http://localhost:5174"
       AllowedOrigins__2: "http://localhost:3000"
@@ -42,12 +54,14 @@ services:
       dockerfile: Dockerfile.frontend
       args:
         API_URL: "http://api:8080"
+        NEXT_PUBLIC_DEMO_LOGIN_EMAIL: "admin@accounts.local"
     container_name: accounts-frontend
     ports:
       - "3000:3000"
     environment:
       API_URL: "http://api:8080"
-      ACCOUNTS_API_KEY: "${ACCOUNTS_API_KEY:-}"
+      ACCOUNTS_API_KEY: "${ACCOUNTS_API_KEY:-accounts_dev_frontend_proxy}"
+      NEXT_PUBLIC_DEMO_LOGIN_EMAIL: "admin@accounts.local"
     depends_on:
       - api
 

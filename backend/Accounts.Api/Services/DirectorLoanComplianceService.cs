@@ -39,18 +39,20 @@ public class DirectorLoanComplianceService(AccountsDbContext db, FinancialStatem
     {
         var period = await db.AccountingPeriods
             .Include(p => p.Company)
-            .Include(p => p.DirectorLoans)
-                .ThenInclude(dl => dl.Director)
             .FirstOrDefaultAsync(p => p.Id == periodId && p.CompanyId == companyId)
             ?? throw new InvalidOperationException($"Period {periodId} not found");
 
-        var directorLoans = period.DirectorLoans.Where(dl => dl.ClosingBalance > 0).ToList();
+        var periodDirectorLoans = await db.DirectorLoans
+            .Include(dl => dl.Director)
+            .Where(dl => dl.PeriodId == periodId && dl.Director.CompanyId == companyId)
+            .ToListAsync();
+        var directorLoans = periodDirectorLoans.Where(dl => dl.ClosingBalance > 0).ToList();
 
         // Get net assets from balance sheet
         decimal netAssets;
         try
         {
-            var bs = await statementsService.GetBalanceSheetAsync(periodId);
+            var bs = await statementsService.GetBalanceSheetAsync(companyId, periodId);
             netAssets = bs.NetAssets;
         }
         catch
@@ -66,7 +68,7 @@ public class DirectorLoanComplianceService(AccountsDbContext db, FinancialStatem
         decimal totalInterestDue = 0;
         var details = new List<DirectorLoanDetail>();
 
-        foreach (var dl in period.DirectorLoans)
+        foreach (var dl in periodDirectorLoans)
         {
             var interestDue = 0m;
             if (!dl.IsDocumented && dl.ClosingBalance > 0)

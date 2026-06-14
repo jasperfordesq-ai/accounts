@@ -17,4 +17,32 @@ public record AuthenticatedUser(
     string TenantName,
     string Email,
     string DisplayName,
-    string Role);
+    string Role,
+    IReadOnlySet<int>? AllowedCompanyIds = null,
+    int SessionVersion = 1,
+    string CsrfToken = "",
+    bool MustChangePassword = false,
+    DateTime PasswordLastChangedAt = default)
+{
+    public IReadOnlySet<int> AllowedCompanyIds { get; init; } = AllowedCompanyIds ?? new HashSet<int>();
+}
+
+public static class UserCompanyAccessPolicy
+{
+    public static bool RequiresCompanyAssignments(AuthenticatedUser user) =>
+        user.Role.Trim().Equals("Client", StringComparison.OrdinalIgnoreCase);
+
+    public static bool CanAccessCompany(AuthenticatedUser user, int companyId) =>
+        !RequiresCompanyAssignments(user) || user.AllowedCompanyIds.Contains(companyId);
+
+    public static IQueryable<Accounts.Api.Entities.Company> ApplyToQuery(
+        AuthenticatedUser user,
+        IQueryable<Accounts.Api.Entities.Company> query)
+    {
+        if (!RequiresCompanyAssignments(user))
+            return query;
+
+        var allowedCompanyIds = user.AllowedCompanyIds.ToArray();
+        return query.Where(c => allowedCompanyIds.Contains(c.Id));
+    }
+}

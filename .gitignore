@@ -22,11 +22,19 @@ Thumbs.db
 
 # Environment
 .env
+.env.*
 *.local
 appsettings.Development.json
 
 # Build artifacts
 .dotnet-artifacts/
+artifacts_ct1/
+.tmp-*/
 *.dll
 *.exe
 *.pdb
+
+# Database backups
+backups/
+*.dump
+*.dump.sha256

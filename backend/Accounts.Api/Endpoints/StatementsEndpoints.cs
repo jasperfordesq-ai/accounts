@@ -1,3 +1,4 @@
+using Accounts.Api.Data;
 using Accounts.Api.Services;
 
 namespace Accounts.Api.Endpoints;
@@ -8,45 +9,66 @@ public static class StatementsEndpoints
     {
         var group = app.MapGroup("/api/companies/{companyId:int}/periods/{periodId:int}/statements").WithTags("Financial Statements");
 
-        group.MapGet("/trial-balance", async (int companyId, int periodId, FinancialStatementsService service) =>
+        group.MapGet("/trial-balance", async (int companyId, int periodId, FinancialStatementsService service, AccountsDbContext db, HttpContext context) =>
         {
-            var result = await service.GetTrialBalanceAsync(periodId);
+            if (!await CompanyEndpointAccess.CanAccessCompanyPeriodAsync(context, db, companyId, periodId))
+                return Results.NotFound();
+
+            var result = await service.GetTrialBalanceAsync(companyId, periodId);
             return Results.Ok(result);
         });
 
-        group.MapGet("/profit-and-loss", async (int companyId, int periodId, FinancialStatementsService service) =>
+        group.MapGet("/profit-and-loss", async (int companyId, int periodId, FinancialStatementsService service, AccountsDbContext db, HttpContext context) =>
         {
-            var result = await service.GetProfitAndLossAsync(periodId);
+            if (!await CompanyEndpointAccess.CanAccessCompanyPeriodAsync(context, db, companyId, periodId))
+                return Results.NotFound();
+
+            var result = await service.GetProfitAndLossAsync(companyId, periodId);
             return Results.Ok(result);
         });
 
-        group.MapGet("/balance-sheet", async (int companyId, int periodId, FinancialStatementsService service) =>
+        group.MapGet("/balance-sheet", async (int companyId, int periodId, FinancialStatementsService service, AccountsDbContext db, HttpContext context) =>
         {
-            var result = await service.GetBalanceSheetAsync(periodId);
+            if (!await CompanyEndpointAccess.CanAccessCompanyPeriodAsync(context, db, companyId, periodId))
+                return Results.NotFound();
+
+            var result = await service.GetBalanceSheetAsync(companyId, periodId);
             return Results.Ok(result);
         });
 
-        group.MapGet("/readiness", async (int companyId, int periodId, FinancialStatementsService service) =>
+        group.MapGet("/readiness", async (int companyId, int periodId, FinancialStatementsService service, AccountsDbContext db, HttpContext context) =>
         {
-            var result = await service.GetReadinessScoreAsync(periodId);
+            if (!await CompanyEndpointAccess.CanAccessCompanyPeriodAsync(context, db, companyId, periodId))
+                return Results.NotFound();
+
+            var result = await service.GetReadinessScoreAsync(companyId, periodId);
             return Results.Ok(result);
         });
 
-        group.MapGet("/sources", async (int companyId, int periodId, FinancialStatementsService service) =>
+        group.MapGet("/sources", async (int companyId, int periodId, FinancialStatementsService service, AccountsDbContext db, HttpContext context) =>
         {
-            var result = await service.GetStatementSourcesAsync(periodId);
+            if (!await CompanyEndpointAccess.CanAccessCompanyPeriodAsync(context, db, companyId, periodId))
+                return Results.NotFound();
+
+            var result = await service.GetStatementSourcesAsync(companyId, periodId);
             return Results.Ok(result);
         });
 
-        group.MapGet("/cash-flow", async (int companyId, int periodId, FinancialStatementsService service) =>
+        group.MapGet("/cash-flow", async (int companyId, int periodId, FinancialStatementsService service, AccountsDbContext db, HttpContext context) =>
         {
-            var result = await service.GetCashFlowStatementAsync(periodId);
+            if (!await CompanyEndpointAccess.CanAccessCompanyPeriodAsync(context, db, companyId, periodId))
+                return Results.NotFound();
+
+            var result = await service.GetCashFlowStatementAsync(companyId, periodId);
             return Results.Ok(result);
         });
 
-        group.MapGet("/equity-changes", async (int companyId, int periodId, FinancialStatementsService service) =>
+        group.MapGet("/equity-changes", async (int companyId, int periodId, FinancialStatementsService service, AccountsDbContext db, HttpContext context) =>
         {
-            var result = await service.GetEquityChangesAsync(periodId);
+            if (!await CompanyEndpointAccess.CanAccessCompanyPeriodAsync(context, db, companyId, periodId))
+                return Results.NotFound();
+
+            var result = await service.GetEquityChangesAsync(companyId, periodId);
             return Results.Ok(result);
         });
     }

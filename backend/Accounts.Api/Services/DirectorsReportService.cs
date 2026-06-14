@@ -23,14 +23,15 @@ public class DirectorsReportService(AccountsDbContext db, FinancialStatementsSer
         string ElectedRegime
     );
 
-    public async Task<DirectorsReportData> GenerateAsync(int periodId)
+    public async Task<DirectorsReportData> GenerateAsync(int companyId, int periodId)
     {
         var period = await db.AccountingPeriods
             .Include(p => p.Company).ThenInclude(c => c.Officers)
             .Include(p => p.FilingRegime)
             .Include(p => p.Dividends)
             .Include(p => p.PostBalanceSheetEvents)
-            .FirstAsync(p => p.Id == periodId);
+            .FirstOrDefaultAsync(p => p.Id == periodId && p.CompanyId == companyId)
+            ?? throw new ResourceNotFoundException($"Period {periodId} not found");
 
         var company = period.Company;
         var regime = period.FilingRegime?.ElectedRegime ?? Entities.ElectedRegime.Small;
@@ -44,8 +45,16 @@ public class DirectorsReportService(AccountsDbContext db, FinancialStatementsSer
             .FirstOrDefault(o => o.Role == OfficerRole.Secretary || o.Role == OfficerRole.CompanySecretary)?.Name;
 
         // Results and dividends
-        decimal profitAfterTax = 0;
-        try { var pl = await statementsService.GetProfitAndLossAsync(periodId); profitAfterTax = pl.ProfitAfterTax; } catch { }
+        decimal profitAfterTax;
+        try
+        {
+            var pl = await statementsService.GetProfitAndLossAsync(companyId, periodId);
+            profitAfterTax = pl.ProfitAfterTax;
+        }
+        catch
+        {
+            throw new BusinessRuleException("Cannot generate directors' report data until the profit and loss account can be generated.");
+        }
         var totalDividends = period.Dividends.Sum(d => d.Amount);
         var resultsText = totalDividends > 0
             ? $"The profit for the financial year after providing for corporation tax amounted to \u20ac{profitAfterTax:N0}. The directors paid/proposed dividends of \u20ac{totalDividends:N0} during the year and recommend that the remaining profit of \u20ac{profitAfterTax - totalDividends:N0} be transferred to retained earnings."

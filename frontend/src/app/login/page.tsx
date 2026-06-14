@@ -6,6 +6,7 @@ import { Button, Card, Input, Label, Spinner, TextField } from "@heroui/react";
 import { AlertCircle, LogIn } from "lucide-react";
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/components/AuthProvider";
+import { changePasswordRouteForReturnTo, returnToFromLocation } from "@/lib/navigation";
 
 const defaultEmail = process.env.NEXT_PUBLIC_DEMO_LOGIN_EMAIL ?? "";
 
@@ -23,11 +24,14 @@ export default function LoginPage() {
     setSubmitting(true);
 
     try {
-      await login(email.trim(), password);
-      router.replace("/");
+      const user = await login(email.trim(), password);
+      const returnTo = returnToFromLocation(
+        typeof window === "undefined" ? undefined : new URLSearchParams(window.location.search)
+      );
+      router.replace(user.mustChangePassword ? changePasswordRouteForReturnTo(returnTo) : returnTo);
     } catch (err) {
       if (err instanceof ApiError) {
-        setError(err.message);
+        setError(err.status === 401 ? "Invalid email or password." : err.message);
       } else {
         setError(err instanceof Error ? err.message : "Sign in failed. Please try again.");
       }

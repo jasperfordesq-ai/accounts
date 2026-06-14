@@ -2,6 +2,7 @@
   "name": "frontend",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "overrides": {
     "next": {
       "postcss": "8.5.14"
@@ -10,28 +11,32 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
+    "build:clean": "node scripts/verify-clean-build.mjs",
+    "start": "node .next/standalone/server.js",
+    "lint": "eslint",
+    "test:readiness": "node --experimental-strip-types scripts/verify-readiness.mjs",
+    "test:proxy": "node --experimental-strip-types scripts/verify-api-proxy.mjs",
+    "test:auth": "node --experimental-strip-types scripts/verify-auth-session.mjs"
   },
   "dependencies": {
-    "@heroui/react": "^3.0.1",
-    "@heroui/theme": "^2.4.26",
-    "framer-motion": "^12.38.0",
-    "lucide-react": "^1.7.0",
-    "next": "^16.2.6",
+    "@heroui/react": "3.0.1",
+    "@heroui/theme": "2.4.26",
+    "framer-motion": "12.38.0",
+    "lucide-react": "1.7.0",
+    "next": "16.2.6",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "sonner": "^2.0.7",
-    "zod": "^4.3.6"
+    "sonner": "2.0.7",
+    "zod": "4.3.6"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "^16.2.6",
-    "tailwindcss": "^4",
-    "typescript": "^5"
+    "@tailwindcss/postcss": "4.2.2",
+    "@types/node": "20.19.37",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "eslint": "9.39.4",
+    "eslint-config-next": "16.2.6",
+    "tailwindcss": "4.2.2",
+    "typescript": "5.9.3"
   }
 }

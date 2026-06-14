@@ -1,0 +1,350 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore backend
+        run: dotnet restore backend/Accounts.slnx
+
+      - name: Test backend
+        run: dotnet test backend/Accounts.Tests/Accounts.Tests.csproj --configuration Release --no-restore
+
+      - name: Build API
+        run: dotnet build backend/Accounts.Api/Accounts.Api.csproj --configuration Release --no-restore
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Audit frontend dependencies
+        run: npm audit --audit-level=moderate
+
+      - name: Type-check frontend
+        run: npx tsc --noEmit --incremental false
+
+      - name: Lint frontend
+        run: npm run lint
+
+      - name: Test frontend readiness proxy
+        run: npm run test:readiness
+
+      - name: Test frontend API proxy redaction
+        run: npm run test:proxy
+
+      - name: Test frontend auth session state
+        run: npm run test:auth
+
+      - name: Generate ephemeral frontend build API key
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          accounts_api_key="$(head -c 48 /dev/urandom | base64 -w 0)"
+          echo "::add-mask::$accounts_api_key"
+          printf 'ACCOUNTS_API_KEY=%s\n' "$accounts_api_key" >> "$GITHUB_ENV"
+
+      - name: Build frontend
+        run: npm run build
+        env:
+          API_URL: http://api:8080
+
+  production-config:
+    name: Production Compose Config
+    runs-on: ubuntu-latest
+    env:
+      POSTGRES_DB: accounts
+      POSTGRES_USER: accounts
+      ACCOUNTS_API_IMAGE: accounts-api-ci:${{ github.sha }}
+      ACCOUNTS_FRONTEND_IMAGE: accounts-frontend-ci:${{ github.sha }}
+      ACCOUNTS_ALLOWED_HOSTS: accounts-smoke.local
+      ACCOUNTS_ALLOWED_ORIGIN: https://accounts-smoke.local
+      TRUST_PROXY_HEADERS: "true"
+      FRONTEND_PORT: "3000"
+      NO_PROXY: accounts-smoke.local,127.0.0.1,localhost
+      no_proxy: accounts-smoke.local,127.0.0.1,localhost
+      BOOTSTRAP_TENANT_NAME: CI Firm
+      BOOTSTRAP_TENANT_SLUG: ci-firm
+      BOOTSTRAP_OWNER_EMAIL: owner@example.ie
+      BOOTSTRAP_OWNER_DISPLAY_NAME: CI Owner
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Generate ephemeral production config secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          generate_secret() {
+            head -c 48 /dev/urandom | base64 -w 0
+          }
+
+          generate_bootstrap_owner_password() {
+            printf 'CiOwner1!%s' "$(generate_secret)"
+          }
+
+          set_masked_env() {
+            local name="$1"
+            local value="$2"
+            echo "::add-mask::$value"
+            printf '%s=%s\n' "$name" "$value" >> "$GITHUB_ENV"
+          }
+
+          write_secret_file() {
+            local env_name="$1"
+            local file_name="$2"
+            local value="$3"
+            local path="$secrets_dir/$file_name"
+            echo "::add-mask::$value"
+            printf '%s' "$value" > "$path"
+            chmod 600 "$path"
+            printf '%s=%s\n' "$env_name" "$path" >> "$GITHUB_ENV"
+          }
+
+          secrets_dir="$RUNNER_TEMP/accounts-production-config-secrets"
+          mkdir -p "$secrets_dir"
+          chmod 700 "$secrets_dir"
+
+          postgres_password="$(generate_secret)"
+          accounts_api_key="$(generate_secret)"
+          accounts_api_key_hash="$(printf '%s' "$accounts_api_key" | sha256sum | awk '{print $1}')"
+          accounts_connection_string="Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${postgres_password}"
+          bootstrap_owner_password="$(generate_bootstrap_owner_password)"
+
+          write_secret_file POSTGRES_PASSWORD_FILE postgres_password "$postgres_password"
+          write_secret_file ACCOUNTS_CONNECTION_STRING_FILE accounts_connection_string "$accounts_connection_string"
+          write_secret_file AUTH_SESSION_SIGNING_KEY_FILE auth_session_signing_key "$(generate_secret)"
+          write_secret_file AUDIT_INTEGRITY_SIGNING_KEY_FILE audit_integrity_signing_key "$(generate_secret)"
+          write_secret_file ACCOUNTS_API_KEY_FILE accounts_api_key "$accounts_api_key"
+          write_secret_file BOOTSTRAP_OWNER_PASSWORD_FILE bootstrap_owner_password "$bootstrap_owner_password"
+          set_masked_env ACCOUNTS_API_KEY_HASH "$accounts_api_key_hash"
+
+          printf 'AUDIT_INTEGRITY_ACTIVE_KEY_ID=ci-audit-%s-%s\n' "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" >> "$GITHUB_ENV"
+
+      - name: Validate production compose config
+        run: docker compose -f compose.production.yml config --quiet
+
+      - name: Validate production image contract
+        shell: pwsh
+        run: ./scripts/verify-production-compose-images.ps1
+
+      - name: Validate Caddy ingress example
+        run: >
+          docker run --rm
+          -v "${{ github.workspace }}/deploy/caddy/Caddyfile.example:/etc/caddy/Caddyfile:ro"
+          -e ACCOUNTS_HOSTNAME=accounts.example.ie
+          -e FRONTEND_PORT=3000
+          caddy:2
+          caddy validate --config /etc/caddy/Caddyfile
+
+      - name: Build backend production image
+        run: docker build -f Dockerfile.backend --tag "$ACCOUNTS_API_IMAGE" .
+
+      - name: Build frontend production image
+        run: docker build -f Dockerfile.frontend --build-arg API_URL=http://api:8080 --tag "$ACCOUNTS_FRONTEND_IMAGE" .
+
+  production-smoke:
+    name: Production Stack Smoke
+    runs-on: ubuntu-latest
+    needs:
+      - backend
+      - frontend
+      - production-config
+    env:
+      POSTGRES_DB: accounts
+      POSTGRES_USER: accounts
+      ACCOUNTS_API_IMAGE: accounts-api-ci:${{ github.sha }}
+      ACCOUNTS_FRONTEND_IMAGE: accounts-frontend-ci:${{ github.sha }}
+      ACCOUNTS_ALLOWED_HOSTS: accounts-smoke.local
+      ACCOUNTS_ALLOWED_ORIGIN: https://accounts-smoke.local
+      TRUST_PROXY_HEADERS: "true"
+      FRONTEND_PORT: "3000"
+      NO_PROXY: accounts-smoke.local,127.0.0.1,localhost
+      no_proxy: accounts-smoke.local,127.0.0.1,localhost
+      BOOTSTRAP_TENANT_NAME: CI Firm
+      BOOTSTRAP_TENANT_SLUG: ci-firm
+      BOOTSTRAP_OWNER_EMAIL: owner@example.ie
+      BOOTSTRAP_OWNER_DISPLAY_NAME: CI Owner
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Generate ephemeral production smoke secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          generate_secret() {
+            head -c 48 /dev/urandom | base64 -w 0
+          }
+
+          generate_bootstrap_owner_password() {
+            printf 'CiOwner1!%s' "$(generate_secret)"
+          }
+
+          set_masked_env() {
+            local name="$1"
+            local value="$2"
+            echo "::add-mask::$value"
+            printf '%s=%s\n' "$name" "$value" >> "$GITHUB_ENV"
+          }
+
+          write_secret_file() {
+            local env_name="$1"
+            local file_name="$2"
+            local value="$3"
+            local path="$secrets_dir/$file_name"
+            echo "::add-mask::$value"
+            printf '%s' "$value" > "$path"
+            chmod 600 "$path"
+            printf '%s=%s\n' "$env_name" "$path" >> "$GITHUB_ENV"
+          }
+
+          secrets_dir="$RUNNER_TEMP/accounts-production-smoke-secrets"
+          mkdir -p "$secrets_dir"
+          chmod 700 "$secrets_dir"
+
+          postgres_password="$(generate_secret)"
+          accounts_api_key="$(generate_secret)"
+          accounts_api_key_hash="$(printf '%s' "$accounts_api_key" | sha256sum | awk '{print $1}')"
+          accounts_connection_string="Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${postgres_password}"
+          bootstrap_owner_password="$(generate_bootstrap_owner_password)"
+
+          write_secret_file POSTGRES_PASSWORD_FILE postgres_password "$postgres_password"
+          write_secret_file ACCOUNTS_CONNECTION_STRING_FILE accounts_connection_string "$accounts_connection_string"
+          write_secret_file AUTH_SESSION_SIGNING_KEY_FILE auth_session_signing_key "$(generate_secret)"
+          write_secret_file AUDIT_INTEGRITY_SIGNING_KEY_FILE audit_integrity_signing_key "$(generate_secret)"
+          write_secret_file ACCOUNTS_API_KEY_FILE accounts_api_key "$accounts_api_key"
+          write_secret_file BOOTSTRAP_OWNER_PASSWORD_FILE bootstrap_owner_password "$bootstrap_owner_password"
+          set_masked_env ACCOUNTS_API_KEY_HASH "$accounts_api_key_hash"
+
+          printf 'AUDIT_INTEGRITY_ACTIVE_KEY_ID=ci-audit-%s-%s\n' "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" >> "$GITHUB_ENV"
+
+      - name: Build production smoke images
+        run: |
+          docker build -f Dockerfile.backend --tag "$ACCOUNTS_API_IMAGE" .
+          docker build -f Dockerfile.frontend --build-arg API_URL=http://api:8080 --tag "$ACCOUNTS_FRONTEND_IMAGE" .
+
+      - name: Start production stack
+        run: docker compose -f compose.production.yml up -d --wait --wait-timeout 180
+
+      - name: Map local HTTPS smoke hostname
+        run: echo "127.0.0.1 accounts-smoke.local" | sudo tee -a /etc/hosts
+
+      - name: Start Caddy HTTPS smoke ingress
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p .tmp/production-smoke-caddy/data .tmp/production-smoke-caddy/config
+          docker run -d \
+            --name accounts-production-smoke-ingress \
+            --network host \
+            -v "${{ github.workspace }}/deploy/caddy/Caddyfile.example:/etc/caddy/Caddyfile:ro" \
+            -v "${{ github.workspace }}/.tmp/production-smoke-caddy/data:/data" \
+            -v "${{ github.workspace }}/.tmp/production-smoke-caddy/config:/config" \
+            -e ACCOUNTS_HOSTNAME=accounts-smoke.local \
+            -e FRONTEND_PORT=3000 \
+            -e ACCOUNTS_CADDY_GLOBAL_OPTIONS=local_certs \
+            caddy:2
+
+          for attempt in {1..30}; do
+            if curl -kfsS https://accounts-smoke.local/health/ready >/dev/null 2>&1; then
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              docker logs accounts-production-smoke-ingress
+              exit 1
+            fi
+            sleep 1
+          done
+
+          test -f .tmp/production-smoke-caddy/data/caddy/pki/authorities/local/root.crt
+
+      - name: Trust Caddy local CA
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          sudo cp .tmp/production-smoke-caddy/data/caddy/pki/authorities/local/root.crt /usr/local/share/ca-certificates/accounts-production-smoke-caddy.crt
+          sudo update-ca-certificates
+          curl --fail --silent --show-error https://accounts-smoke.local/health/ready >/dev/null
+
+      - name: Run production smoke script
+        shell: pwsh
+        run: |
+          $bootstrapOwnerPassword = (Get-Content -LiteralPath $env:BOOTSTRAP_OWNER_PASSWORD_FILE -Raw).TrimEnd("`r", "`n")
+          ./scripts/smoke-production.ps1 `
+            -BaseUrl https://accounts-smoke.local `
+            -Email $env:BOOTSTRAP_OWNER_EMAIL `
+            -Password $bootstrapOwnerPassword
+
+      - name: Run production backup restore drill
+        shell: pwsh
+        run: |
+          $backupDir = Join-Path $env:RUNNER_TEMP "accounts-backups"
+          New-Item -ItemType Directory -Force -Path $backupDir | Out-Null
+
+          ./scripts/backup-postgres.ps1 `
+            -OutputDirectory $backupDir
+
+          $backups = @(Get-ChildItem -LiteralPath $backupDir -Filter "*.dump" |
+            Sort-Object LastWriteTimeUtc -Descending |
+            Select-Object)
+          if ($backups.Count -ne 1) {
+            throw "Expected exactly one backup dump in $backupDir, found $($backups.Count)."
+          }
+
+          $backup = $backups[0]
+          if (-not (Test-Path -LiteralPath "$($backup.FullName).sha256")) {
+            throw "Missing sha256 for $($backup.FullName)."
+          }
+
+          ./scripts/verify-postgres-backup.ps1 `
+            -BackupPath $backup.FullName
+
+      - name: Show production stack diagnostics
+        if: failure()
+        run: |
+          docker compose -f compose.production.yml ps
+          docker compose -f compose.production.yml logs --no-color --tail=200
+          docker logs accounts-production-smoke-ingress 2>/dev/null || true
+
+      - name: Stop production stack
+        if: always()
+        run: |
+          docker rm -f accounts-production-smoke-ingress >/dev/null 2>&1 || true
+          docker compose -f compose.production.yml down -v --remove-orphans

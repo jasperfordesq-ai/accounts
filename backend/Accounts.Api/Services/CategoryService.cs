@@ -89,6 +89,7 @@ public class CategoryService(AccountsDbContext db)
     {
         var rules = await db.TransactionRules
             .Where(r => r.CompanyId == companyId)
+            .Where(r => r.Category.CompanyId == companyId || (r.Category.IsSystem && r.Category.CompanyId == null))
             .OrderBy(r => r.Priority)
             .ToListAsync();
 

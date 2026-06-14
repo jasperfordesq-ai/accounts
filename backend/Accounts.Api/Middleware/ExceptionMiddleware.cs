@@ -1,3 +1,4 @@
+using Accounts.Api.Services;
 using System.Text.Json;
 
 namespace Accounts.Api.Middleware;
@@ -10,7 +11,14 @@ public class ExceptionMiddleware(RequestDelegate next, ILogger<ExceptionMiddlewa
         {
             await next(context);
         }
-        catch (InvalidOperationException ex)
+        catch (ResourceNotFoundException ex)
+        {
+            logger.LogWarning(ex, "Resource not found");
+            context.Response.StatusCode = 404;
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsync(JsonSerializer.Serialize(new { error = ex.Message }));
+        }
+        catch (BusinessRuleException ex)
         {
             logger.LogWarning(ex, "Business rule violation");
             context.Response.StatusCode = 400;

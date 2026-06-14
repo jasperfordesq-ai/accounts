@@ -9,16 +9,18 @@ public class FilingRegimeService
 {
     private readonly AccountsDbContext db;
     private readonly DeadlineService deadlineService;
+    private readonly AuditService? audit;
 
     public FilingRegimeService(AccountsDbContext db)
-        : this(db, new DeadlineService(db))
+        : this(db, new DeadlineService(db), null)
     {
     }
 
-    public FilingRegimeService(AccountsDbContext db, DeadlineService deadlineService)
+    public FilingRegimeService(AccountsDbContext db, DeadlineService deadlineService, AuditService? audit = null)
     {
         this.db = db;
         this.deadlineService = deadlineService;
+        this.audit = audit;
     }
 
     public record FilingRequirements(
@@ -31,20 +33,21 @@ public class FilingRegimeService
         string Summary
     );
 
-    public async Task<FilingRequirements> DetermineAsync(int periodId, ElectedRegime? electedRegime = null)
+    public async Task<FilingRequirements> DetermineAsync(int companyId, int periodId, ElectedRegime? electedRegime = null, string? userId = null)
     {
         var period = await db.AccountingPeriods
             .Include(p => p.Company)
             .Include(p => p.SizeClassification)
             .Include(p => p.FilingRegime)
-            .FirstOrDefaultAsync(p => p.Id == periodId)
-            ?? throw new InvalidOperationException($"Period {periodId} not found");
+            .FirstOrDefaultAsync(p => p.Id == periodId && p.CompanyId == companyId)
+            ?? throw new ResourceNotFoundException($"Period {periodId} not found");
 
         var sc = period.SizeClassification
-            ?? throw new InvalidOperationException("Size classification must be completed first.");
+            ?? throw new BusinessRuleException("Size classification must be completed first.");
 
         var company = period.Company;
         var sizeClass = sc.OverrideClass ?? sc.CalculatedClass;
+        var oldValue = period.FilingRegime is null ? null : FilingRegimeAuditSnapshot(period.FilingRegime);
 
         // Fifth Schedule ineligible entity check
         var isIneligible = company.IsListedSecurities || company.IsCreditInstitution
@@ -94,7 +97,21 @@ public class FilingRegimeService
 
         await db.SaveChangesAsync();
 
-        return new FilingRequirements(regime, canUseMicro, canFileAbridged, auditExempt, requiredStatements, requiredNotes, summary);
+        var result = new FilingRequirements(regime, canUseMicro, canFileAbridged, auditExempt, requiredStatements, requiredNotes, summary);
+        if (audit is not null)
+        {
+            await audit.LogAsync(
+                company.Id,
+                periodId,
+                "FilingRegime",
+                fr.Id,
+                AuditEventCodes.FilingRegimeDetermined,
+                oldValue,
+                FilingRegimeAuditSnapshot(fr),
+                userId);
+        }
+
+        return result;
     }
 
     private static ElectedRegime DetermineDefaultRegime(CompanySizeClass sizeClass, bool canUseMicro)
@@ -243,5 +260,31 @@ public class FilingRegimeService
             parts.Add("Note: abridged filing is available for CRO if elected.");
 
         return string.Join(" ", parts);
+    }
+
+    private static object FilingRegimeAuditSnapshot(FilingRegime fr) => new
+    {
+        fr.ElectedRegime,
+        fr.CanUseMicro,
+        fr.CanFileAbridged,
+        fr.AuditExempt,
+        fr.DeterminedAt,
+        RequiredStatements = DeserializeStringList(fr.RequiredStatementsJson),
+        RequiredNotes = DeserializeStringList(fr.RequiredNotesJson)
+    };
+
+    private static List<string> DeserializeStringList(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return [];
+
+        try
+        {
+            return JsonSerializer.Deserialize<List<string>>(json) ?? [];
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
     }
 }

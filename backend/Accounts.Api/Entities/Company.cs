@@ -55,6 +55,7 @@ public class Company
     public List<ShareCapital> ShareCapitals { get; set; } = [];
     public List<FilingDeadline> FilingDeadlines { get; set; } = [];
     public List<FilingHistory> FilingHistories { get; set; } = [];
+    public List<UserCompanyAccess> UserAccesses { get; set; } = [];
     public CharityInfo? CharityInfo { get; set; }
     public Tenant? Tenant { get; set; }
 }

@@ -39,13 +39,14 @@ public class TaxComputationService(AccountsDbContext db, FinancialStatementsServ
         decimal CapitalAllowances
     );
 
-    public async Task<TaxComputation> ComputeAsync(int periodId)
+    public async Task<TaxComputation> ComputeAsync(int companyId, int periodId)
     {
         var period = await db.AccountingPeriods
             .Include(p => p.Company)
-            .FirstAsync(p => p.Id == periodId);
+            .FirstOrDefaultAsync(p => p.Id == periodId && p.CompanyId == companyId)
+            ?? throw new ResourceNotFoundException($"Period {periodId} not found");
 
-        var pl = await statementsService.GetProfitAndLossAsync(periodId);
+        var pl = await statementsService.GetProfitAndLossAsync(companyId, periodId);
         var accountingProfit = pl.ProfitBeforeTax;
 
         var adjustments = new List<TaxAdjustment>();
@@ -76,26 +77,7 @@ public class TaxComputationService(AccountsDbContext db, FinancialStatementsServ
         }
 
         // 3. Deduct capital allowances (12.5% per year over 8 years, tracking prior claims)
-        var qualifyingAssets = await db.FixedAssets
-            .Where(a => a.CompanyId == period.CompanyId && a.DisposalDate == null)
-            .ToListAsync();
-
-        var capitalAllowances = 0m;
-        foreach (var asset in qualifyingAssets)
-        {
-            // Count how many prior periods have depreciation entries for this asset
-            // (each entry represents one year of capital allowances claimed)
-            var priorYearsClaimed = await db.DepreciationEntries
-                .Where(d => d.AssetId == asset.Id && d.PeriodId != periodId)
-                .CountAsync();
-
-            // Only claim 12.5% if fewer than 8 years of allowances have been claimed
-            if (priorYearsClaimed < 8)
-            {
-                capitalAllowances += asset.Cost * 0.125m;
-            }
-        }
-        capitalAllowances = Math.Round(capitalAllowances, 2);
+        var capitalAllowances = await ComputeCapitalAllowancesAsync(period.CompanyId, period.PeriodStart, period.PeriodEnd);
 
         if (capitalAllowances > 0)
         {
@@ -131,28 +113,19 @@ public class TaxComputationService(AccountsDbContext db, FinancialStatementsServ
         return new TaxComputation(accountingProfit, adjustments, taxableProfit, taxAt125, taxAt25, totalTax, prelimTax, balanceDue, notes);
     }
 
-    public async Task<Ct1SupportData> GetCt1SupportDataAsync(int periodId)
+    public async Task<Ct1SupportData> GetCt1SupportDataAsync(int companyId, int periodId)
     {
         var period = await db.AccountingPeriods
             .Include(p => p.Company)
-            .FirstAsync(p => p.Id == periodId);
+            .FirstOrDefaultAsync(p => p.Id == periodId && p.CompanyId == companyId)
+            ?? throw new ResourceNotFoundException($"Period {periodId} not found");
 
-        var computation = await ComputeAsync(periodId);
-        var pl = await statementsService.GetProfitAndLossAsync(periodId);
+        var computation = await ComputeAsync(companyId, periodId);
+        var pl = await statementsService.GetProfitAndLossAsync(companyId, periodId);
 
         var payroll = await db.PayrollSummaries.FirstOrDefaultAsync(p => p.PeriodId == periodId);
         var depCharged = await db.DepreciationEntries.Where(d => d.PeriodId == periodId).SumAsync(d => d.Charge);
-        var ct1QualifyingAssets = await db.FixedAssets.Where(a => a.CompanyId == period.CompanyId && a.DisposalDate == null).ToListAsync();
-        var capitalAllowances = 0m;
-        foreach (var asset in ct1QualifyingAssets)
-        {
-            var priorYearsClaimed = await db.DepreciationEntries
-                .Where(d => d.AssetId == asset.Id && d.PeriodId != periodId)
-                .CountAsync();
-            if (priorYearsClaimed < 8)
-                capitalAllowances += asset.Cost * 0.125m;
-        }
-        capitalAllowances = Math.Round(capitalAllowances, 2);
+        var capitalAllowances = await ComputeCapitalAllowancesAsync(period.CompanyId, period.PeriodStart, period.PeriodEnd);
 
         return new Ct1SupportData(
             period.Company.LegalName,
@@ -172,5 +145,28 @@ public class TaxComputationService(AccountsDbContext db, FinancialStatementsServ
             depCharged,
             capitalAllowances
         );
+    }
+
+    private async Task<decimal> ComputeCapitalAllowancesAsync(int companyId, DateOnly periodStart, DateOnly periodEnd)
+    {
+        var qualifyingAssets = await db.FixedAssets
+            .Where(a => a.CompanyId == companyId
+                && a.AcquisitionDate <= periodEnd
+                && (a.DisposalDate == null || a.DisposalDate > periodEnd))
+            .ToListAsync();
+
+        var capitalAllowances = 0m;
+        foreach (var asset in qualifyingAssets)
+        {
+            // Each prior-period depreciation entry represents a year of capital allowances claimed.
+            var priorYearsClaimed = await db.DepreciationEntries
+                .Where(d => d.AssetId == asset.Id && d.Period.PeriodEnd < periodStart)
+                .CountAsync();
+
+            if (priorYearsClaimed < 8)
+                capitalAllowances += asset.Cost * 0.125m;
+        }
+
+        return Math.Round(capitalAllowances, 2);
     }
 }

@@ -24,6 +24,12 @@ public class CharityReportingService(AccountsDbContext db)
     /// </summary>
     public async Task<SofaData> GenerateSofaAsync(int companyId, int periodId)
     {
+        var periodExists = await db.AccountingPeriods
+            .AsNoTracking()
+            .AnyAsync(p => p.Id == periodId && p.CompanyId == companyId);
+        if (!periodExists)
+            throw new ResourceNotFoundException($"Period {periodId} not found");
+
         var funds = await db.FundBalances
             .Where(f => f.PeriodId == periodId)
             .OrderBy(f => f.FundType).ThenBy(f => f.FundName)
@@ -55,7 +61,8 @@ public class CharityReportingService(AccountsDbContext db)
         var period = await db.AccountingPeriods
             .Include(p => p.Company).ThenInclude(c => c.Officers)
             .Include(p => p.Company).ThenInclude(c => c.CharityInfo)
-            .FirstAsync(p => p.Id == periodId && p.CompanyId == companyId);
+            .FirstOrDefaultAsync(p => p.Id == periodId && p.CompanyId == companyId)
+            ?? throw new ResourceNotFoundException($"Period {periodId} not found");
 
         var company = period.Company;
         var charityInfo = company.CharityInfo;

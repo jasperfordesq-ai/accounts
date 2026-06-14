@@ -19,7 +19,7 @@ public class TenantAccessMiddleware(RequestDelegate next)
             .AsNoTracking()
             .AnyAsync(c => c.Id == companyId && c.TenantId == user.TenantId);
 
-        if (!allowed)
+        if (!allowed || !UserCompanyAccessPolicy.CanAccessCompany(user, companyId))
         {
             context.Response.StatusCode = StatusCodes.Status404NotFound;
             context.Response.ContentType = "application/json";

@@ -10,6 +10,7 @@ public class FilingDeadline
     public DeadlineType DeadlineType { get; set; }
     public DateOnly DueDate { get; set; }
     public DateOnly? FiledDate { get; set; }
+    public string? FilingReference { get; set; }
     public bool IsLate { get; set; }
     public decimal PenaltyAmount { get; set; }
     public string? Notes { get; set; }

@@ -10,6 +10,7 @@ public class FilingHistory
     public DeadlineType DeadlineType { get; set; }
     public DateOnly DueDate { get; set; }
     public DateOnly FiledDate { get; set; }
+    public string? FilingReference { get; set; }
     public int DaysLate { get; set; }
     public decimal PenaltyAmount { get; set; }
     public DateTime RecordedAt { get; set; } = DateTime.UtcNow;

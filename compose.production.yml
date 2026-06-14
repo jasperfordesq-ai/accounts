@@ -1,0 +1,136 @@
+name: accounts-production
+
+services:
+  db:
+    image: postgres:16.4-alpine
+    restart: unless-stopped
+    secrets:
+      - postgres_password
+    environment:
+      POSTGRES_DB: "${POSTGRES_DB:?set POSTGRES_DB}"
+      POSTGRES_USER: "${POSTGRES_USER:?set POSTGRES_USER}"
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    volumes:
+      - accounts_production_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    image: "${ACCOUNTS_API_IMAGE:?set ACCOUNTS_API_IMAGE}"
+    command: ["--migrate-only"]
+    restart: "no"
+    secrets:
+      - accounts_connection_string
+      - auth_session_signing_key
+      - audit_integrity_signing_key
+      - bootstrap_owner_password
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__DefaultConnection_FILE: /run/secrets/accounts_connection_string
+      AuthSession__SigningKey_FILE: /run/secrets/auth_session_signing_key
+      AuthSession__SecureCookiesInProduction: "true"
+      AuditIntegrity__ActiveKeyId: "${AUDIT_INTEGRITY_ACTIVE_KEY_ID:?set AUDIT_INTEGRITY_ACTIVE_KEY_ID}"
+      AuditIntegrity__SigningKeys__0__KeyId: "${AUDIT_INTEGRITY_ACTIVE_KEY_ID:?set AUDIT_INTEGRITY_ACTIVE_KEY_ID}"
+      AuditIntegrity__SigningKeys__0__SigningKey_FILE: /run/secrets/audit_integrity_signing_key
+      DatabaseStartup__AutoMigrateOnStartup: "false"
+      DatabaseStartup__SeedDemoData: "false"
+      AllowedHosts: "${ACCOUNTS_ALLOWED_HOSTS:?set ACCOUNTS_ALLOWED_HOSTS};api"
+      AllowedOrigins__0: "${ACCOUNTS_ALLOWED_ORIGIN:?set ACCOUNTS_ALLOWED_ORIGIN}"
+      RateLimits__TrustForwardedFor: "true"
+      TRUST_PROXY_HEADERS: "${TRUST_PROXY_HEADERS:?set TRUST_PROXY_HEADERS to true only behind a trusted ingress that overwrites X-Forwarded-For}"
+      ApiAccess__Enabled: "true"
+      ApiAccess__RequireInProduction: "true"
+      ApiAccess__Keys__0__Name: "Frontend proxy"
+      ApiAccess__Keys__0__Role: "Admin"
+      ApiAccess__Keys__0__KeyHash: "${ACCOUNTS_API_KEY_HASH:?set ACCOUNTS_API_KEY_HASH}"
+      BootstrapOwner__Enabled: "true"
+      BootstrapOwner__TenantName: "${BOOTSTRAP_TENANT_NAME:?set BOOTSTRAP_TENANT_NAME}"
+      BootstrapOwner__TenantSlug: "${BOOTSTRAP_TENANT_SLUG:?set BOOTSTRAP_TENANT_SLUG}"
+      BootstrapOwner__OwnerEmail: "${BOOTSTRAP_OWNER_EMAIL:?set BOOTSTRAP_OWNER_EMAIL}"
+      BootstrapOwner__OwnerDisplayName: "${BOOTSTRAP_OWNER_DISPLAY_NAME:?set BOOTSTRAP_OWNER_DISPLAY_NAME}"
+      BootstrapOwner__OwnerInitialPassword_FILE: /run/secrets/bootstrap_owner_password
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    image: "${ACCOUNTS_API_IMAGE:?set ACCOUNTS_API_IMAGE}"
+    restart: unless-stopped
+    secrets:
+      - accounts_connection_string
+      - auth_session_signing_key
+      - audit_integrity_signing_key
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__DefaultConnection_FILE: /run/secrets/accounts_connection_string
+      AuthSession__SigningKey_FILE: /run/secrets/auth_session_signing_key
+      AuthSession__SecureCookiesInProduction: "true"
+      AuditIntegrity__ActiveKeyId: "${AUDIT_INTEGRITY_ACTIVE_KEY_ID:?set AUDIT_INTEGRITY_ACTIVE_KEY_ID}"
+      AuditIntegrity__SigningKeys__0__KeyId: "${AUDIT_INTEGRITY_ACTIVE_KEY_ID:?set AUDIT_INTEGRITY_ACTIVE_KEY_ID}"
+      AuditIntegrity__SigningKeys__0__SigningKey_FILE: /run/secrets/audit_integrity_signing_key
+      DatabaseStartup__AutoMigrateOnStartup: "false"
+      DatabaseStartup__SeedDemoData: "false"
+      AllowedHosts: "${ACCOUNTS_ALLOWED_HOSTS:?set ACCOUNTS_ALLOWED_HOSTS};api"
+      AllowedOrigins__0: "${ACCOUNTS_ALLOWED_ORIGIN:?set ACCOUNTS_ALLOWED_ORIGIN}"
+      RateLimits__TrustForwardedFor: "true"
+      TRUST_PROXY_HEADERS: "${TRUST_PROXY_HEADERS:?set TRUST_PROXY_HEADERS to true only behind a trusted ingress that overwrites X-Forwarded-For}"
+      ApiAccess__Enabled: "true"
+      ApiAccess__RequireInProduction: "true"
+      ApiAccess__Keys__0__Name: "Frontend proxy"
+      ApiAccess__Keys__0__Role: "Admin"
+      ApiAccess__Keys__0__KeyHash: "${ACCOUNTS_API_KEY_HASH:?set ACCOUNTS_API_KEY_HASH}"
+      BootstrapOwner__TenantSlug: "${BOOTSTRAP_TENANT_SLUG:?set BOOTSTRAP_TENANT_SLUG}"
+      BootstrapOwner__OwnerEmail: "${BOOTSTRAP_OWNER_EMAIL:?set BOOTSTRAP_OWNER_EMAIL}"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --header 'Host: api' http://localhost:8080/health/ready >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  frontend:
+    image: "${ACCOUNTS_FRONTEND_IMAGE:?set ACCOUNTS_FRONTEND_IMAGE}"
+    restart: unless-stopped
+    secrets:
+      - accounts_api_key
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"
+    environment:
+      API_URL: "http://api:8080"
+      ACCOUNTS_API_KEY_FILE: /run/secrets/accounts_api_key
+      API_PROXY_TIMEOUT_MS: "${API_PROXY_TIMEOUT_MS:-15000}"
+      API_PROXY_DOCUMENT_TIMEOUT_MS: "${API_PROXY_DOCUMENT_TIMEOUT_MS:-120000}"
+      API_PROXY_MAX_BODY_BYTES: "${API_PROXY_MAX_BODY_BYTES:-6291456}"
+      ENABLE_HSTS: "${ENABLE_HSTS:-false}"
+      TRUST_PROXY_HEADERS: "${TRUST_PROXY_HEADERS:?set TRUST_PROXY_HEADERS to true only behind a trusted ingress that overwrites X-Forwarded-For}"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health/ready >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  accounts_production_data:
+
+secrets:
+  postgres_password:
+    file: "${POSTGRES_PASSWORD_FILE:?set POSTGRES_PASSWORD_FILE}"
+  accounts_connection_string:
+    file: "${ACCOUNTS_CONNECTION_STRING_FILE:?set ACCOUNTS_CONNECTION_STRING_FILE}"
+  auth_session_signing_key:
+    file: "${AUTH_SESSION_SIGNING_KEY_FILE:?set AUTH_SESSION_SIGNING_KEY_FILE}"
+  audit_integrity_signing_key:
+    file: "${AUDIT_INTEGRITY_SIGNING_KEY_FILE:?set AUDIT_INTEGRITY_SIGNING_KEY_FILE}"
+  accounts_api_key:
+    file: "${ACCOUNTS_API_KEY_FILE:?set ACCOUNTS_API_KEY_FILE}"
+  bootstrap_owner_password:
+    file: "${BOOTSTRAP_OWNER_PASSWORD_FILE:?set BOOTSTRAP_OWNER_PASSWORD_FILE}"

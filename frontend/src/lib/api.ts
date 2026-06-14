@@ -1,4 +1,90 @@
 const API_BASE = "";
+const ACCOUNTS_CSRF_COOKIE = "accounts_csrf";
+const CSRF_HEADER = "X-CSRF-Token";
+export const SESSION_EXPIRED_EVENT = "accounts:session-expired";
+
+export interface SessionExpiredEventDetail {
+  returnTo?: string;
+}
+
+const SAFE_MESSAGE_STATUSES = new Set([400, 409, 422]);
+const RESPONSE_MESSAGE_FIELDS = ["message", "error", "title", "detail"];
+const INFRASTRUCTURE_ERROR_MARKERS = [
+  "api_proxy_misconfigured",
+  "upstream_unavailable",
+  "stack trace",
+  "exception",
+  "System.",
+  "Npgsql",
+  "SqlException",
+  "ECONNREFUSED",
+  "ETIMEDOUT",
+];
+
+function statusMessage(status: number): string {
+  switch (status) {
+    case 400: return "Invalid request. Please check your input.";
+    case 401: return "Your session has expired. Please sign in again.";
+    case 403: return "You do not have permission for this action.";
+    case 404: return "The requested resource was not found.";
+    case 409: return "A conflict occurred. The data may have been modified.";
+    case 422: return "Validation failed. Please check your input.";
+    case 429: return "Too many requests. Please wait a moment.";
+    case 500: return "Server error. Please try again later.";
+    case 502: return "The API server is unavailable. Please try again.";
+    case 503: return "Service temporarily unavailable. Please try again.";
+    default: return `Request failed (${status})`;
+  }
+}
+
+function extractResponseMessage(body: string): string | null {
+  if (!body) return null;
+
+  try {
+    const parsed: unknown = JSON.parse(body);
+    if (typeof parsed === "string") return parsed;
+
+    if (parsed && typeof parsed === "object") {
+      const record = parsed as Record<string, unknown>;
+      for (const field of RESPONSE_MESSAGE_FIELDS) {
+        const value = record[field];
+        if (typeof value === "string") return value;
+      }
+    }
+  } catch {
+    return body.length < 200 ? body : null;
+  }
+
+  return null;
+}
+
+function shouldExposeResponseMessage(status: number, message: string): boolean {
+  if (status >= 500 || !SAFE_MESSAGE_STATUSES.has(status)) return false;
+
+  const trimmed = message.trim();
+  if (!trimmed) return false;
+
+  const lowerMessage = trimmed.toLowerCase();
+  return !INFRASTRUCTURE_ERROR_MARKERS.some((marker) =>
+    lowerMessage.includes(marker.toLowerCase())
+  );
+}
+
+function currentBrowserPath(): string {
+  if (typeof window === "undefined") return "/";
+
+  const path = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  return path || "/";
+}
+
+export function dispatchSessionExpired(returnTo = currentBrowserPath()) {
+  if (typeof window === "undefined") return;
+
+  window.dispatchEvent(new CustomEvent<SessionExpiredEventDetail>(
+    SESSION_EXPIRED_EVENT,
+    { detail: { returnTo } },
+  ));
+}
 
 // --- Core fetch with retry, timeout, structured errors ---
 
@@ -13,33 +99,12 @@ class ApiError extends Error {
   }
 
   static formatMessage(status: number, body: string): string {
-    // Try to extract a meaningful message from the response body
-    try {
-      const parsed = JSON.parse(body);
-      if (parsed.message) return parsed.message;
-      if (parsed.error) return parsed.error;
-      if (parsed.title) return parsed.title;
-      if (parsed.detail) return parsed.detail;
-      if (typeof parsed === "string") return parsed;
-    } catch {
-      // Not JSON — use the raw body if short enough
+    const responseMessage = extractResponseMessage(body);
+    if (responseMessage && shouldExposeResponseMessage(status, responseMessage)) {
+      return responseMessage;
     }
-    if (body && body.length < 200) return body;
 
-    // Fallback to status-based messages
-    switch (status) {
-      case 400: return "Invalid request. Please check your input.";
-      case 401: return "Not authenticated. Please sign in.";
-      case 403: return "You do not have permission for this action.";
-      case 404: return "The requested resource was not found.";
-      case 409: return "A conflict occurred. The data may have been modified.";
-      case 422: return "Validation failed. Please check your input.";
-      case 429: return "Too many requests. Please wait a moment.";
-      case 500: return "Server error. Please try again later.";
-      case 502: return "The API server is unavailable. Please try again.";
-      case 503: return "Service temporarily unavailable. Please try again.";
-      default: return `Request failed (${status})`;
-    }
+    return statusMessage(status);
   }
 
   get isRetryable(): boolean {
@@ -57,25 +122,50 @@ const DEFAULT_TIMEOUT = 30000; // 30 seconds
 const MAX_RETRIES = 2;
 const RETRY_DELAYS = [500, 1500]; // ms delays between retries
 
+function readCsrfToken(): string | undefined {
+  if (typeof document === "undefined") return undefined;
+
+  const prefix = `${ACCOUNTS_CSRF_COOKIE}=`;
+  const cookie = document.cookie
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(prefix));
+
+  return cookie ? decodeURIComponent(cookie.slice(prefix.length)) : undefined;
+}
+
+function isUnsafeMethod(method?: string) {
+  const normalized = (method ?? "GET").toUpperCase();
+  return method !== "GET" && !["GET", "HEAD", "OPTIONS", "TRACE"].includes(normalized);
+}
+
+function withCsrfHeader(method: string | undefined, headers?: HeadersInit): HeadersInit {
+  const nextHeaders = new Headers(headers);
+  const csrfToken = isUnsafeMethod(method) ? readCsrfToken() : undefined;
+  if (csrfToken) nextHeaders.set(CSRF_HEADER, csrfToken);
+  return nextHeaders;
+}
+
 async function apiFetch<T>(
   path: string,
   options?: RequestInit & { timeout?: number; retries?: number },
 ): Promise<T> {
   const { timeout = DEFAULT_TIMEOUT, retries = MAX_RETRIES, ...fetchOptions } = options ?? {};
+  const effectiveRetries = isUnsafeMethod(fetchOptions.method) ? 0 : retries;
 
   let lastError: Error | null = null;
 
-  for (let attempt = 0; attempt <= retries; attempt++) {
+  for (let attempt = 0; attempt <= effectiveRetries; attempt++) {
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeout);
 
       const res = await fetch(`${API_BASE}${path}`, {
         ...fetchOptions,
-        headers: {
+        headers: withCsrfHeader(fetchOptions.method, {
           "Content-Type": "application/json",
           ...fetchOptions?.headers,
-        },
+        }),
         credentials: "include",
         signal: controller.signal,
       });
@@ -87,10 +177,14 @@ async function apiFetch<T>(
         const error = new ApiError(res.status, res.statusText, body);
 
         // Only retry on server errors and rate limits (not client errors)
-        if (error.isRetryable && attempt < retries) {
+        if (error.isRetryable && attempt < effectiveRetries) {
           lastError = error;
           await new Promise((r) => setTimeout(r, RETRY_DELAYS[attempt] ?? 1500));
           continue;
+        }
+
+        if (error.status === 401) {
+          dispatchSessionExpired();
         }
 
         throw error;
@@ -104,7 +198,7 @@ async function apiFetch<T>(
       // Handle abort (timeout)
       if (err instanceof DOMException && err.name === "AbortError") {
         lastError = new Error("Request timed out. Please try again.");
-        if (attempt < retries) {
+        if (attempt < effectiveRetries) {
           await new Promise((r) => setTimeout(r, RETRY_DELAYS[attempt] ?? 1500));
           continue;
         }
@@ -114,7 +208,7 @@ async function apiFetch<T>(
       // Handle network errors
       if (err instanceof TypeError && err.message.includes("fetch")) {
         lastError = new Error("Network error. Please check your connection.");
-        if (attempt < retries) {
+        if (attempt < effectiveRetries) {
           await new Promise((r) => setTimeout(r, RETRY_DELAYS[attempt] ?? 1500));
           continue;
         }
@@ -217,6 +311,7 @@ export interface BankAccount {
   iban?: string;
   currency: string;
   openingBalance: number;
+  openingBalanceDate?: string;
 }
 
 export interface ImportedTransaction {
@@ -691,13 +786,18 @@ export const uploadBankCsv = async (
         method: "POST",
         body: formData,
         credentials: "include",
+        headers: withCsrfHeader("POST"),
         signal: controller.signal,
       },
     );
     clearTimeout(timeoutId);
     if (!res.ok) {
       const body = await res.text().catch(() => "");
-      throw new ApiError(res.status, res.statusText, body);
+      const error = new ApiError(res.status, res.statusText, body);
+      if (error.status === 401) {
+        dispatchSessionExpired();
+      }
+      throw error;
     }
     return res.json();
   } catch (err) {
@@ -720,6 +820,25 @@ export const getStatementSources = (companyId: number, periodId: number) =>
   );
 
 // Documents
+export async function fetchDocumentBlob(url: string, method: "GET" | "POST" = "GET") {
+  const response = await fetch(url, {
+    method,
+    credentials: "include",
+    headers: withCsrfHeader(method),
+  });
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    const error = new ApiError(response.status, response.statusText, body);
+    if (error.status === 401) {
+      dispatchSessionExpired();
+    }
+    throw error;
+  }
+
+  return response.blob();
+}
+
 export const getAccountsPackageUrl = (companyId: number, periodId: number) =>
   `${API_BASE}/api/companies/${companyId}/periods/${periodId}/documents/accounts-package`;
 export const getIxbrlUrl = (companyId: number, periodId: number) =>
@@ -911,6 +1030,7 @@ export interface FilingDeadline {
   deadlineType: string;
   dueDate: string;
   filedDate?: string;
+  filingReference?: string;
   isLate: boolean;
   penaltyAmount: number;
   notes?: string;
@@ -938,7 +1058,7 @@ export const calculateDeadlines = (companyId: number, periodId: number) =>
 export const markFiled = (
   companyId: number,
   periodId: number,
-  data: { deadlineType: string; filedDate: string },
+  data: { deadlineType: string; filedDate: string; filingReference?: string },
 ) =>
   apiFetch<FilingDeadline>(
     `/api/companies/${companyId}/periods/${periodId}/mark-filed`,
@@ -1212,6 +1332,7 @@ export const deleteFundBalance = (companyId: number, periodId: number, id: numbe
 export interface FilingWorkflowStatus {
   cro: CroFilingStatus;
   revenue: RevenueFilingStatus;
+  charity: CharityFilingStatus;
   blockingIssues: string[];
   warningIssues: string[];
   readyToFile: boolean;
@@ -1243,9 +1364,23 @@ export interface CroFilingStatus {
 export interface RevenueFilingStatus {
   status: string;
   ixbrlReady: boolean;
+  ixbrlInternalChecksPassed: boolean;
   ixbrlValid: boolean;
   validationErrors?: string;
   ct1Reference?: string;
+}
+
+export interface CharityFilingStatus {
+  status: string;
+  sofaGenerated: boolean;
+  trusteesReportGenerated: boolean;
+  annualReturnReference?: string;
+  rejectionReason?: string;
+  correctionDeadline?: string;
+  submittedBy?: string;
+  submittedAt?: string;
+  acceptedBy?: string;
+  acceptedAt?: string;
 }
 
 export const getFilingWorkflowStatus = (companyId: number, periodId: number) =>
@@ -1258,14 +1393,27 @@ export const updateCroFilingStatus = (
 ) =>
   apiFetch<unknown>(`/api/companies/${companyId}/periods/${periodId}/filing/cro-status`, { method: "PUT", body: JSON.stringify(data) });
 
-export const markDocumentGenerated = (companyId: number, periodId: number, documentType: string) =>
-  apiFetch<unknown>(`/api/companies/${companyId}/periods/${periodId}/filing/mark-generated`, { method: "POST", body: JSON.stringify({ documentType }) });
-
 export const confirmCroPayment = (companyId: number, periodId: number) =>
   apiFetch<unknown>(`/api/companies/${companyId}/periods/${periodId}/filing/cro-payment`, { method: "POST", body: JSON.stringify({}) });
 
 export const validateIxbrl = (companyId: number, periodId: number) =>
   apiFetch<RevenueFilingStatus>(`/api/companies/${companyId}/periods/${periodId}/filing/validate-ixbrl`, { method: "POST" });
+
+export const recordCharityReportGenerated = (companyId: number, periodId: number, reportType: string) =>
+  apiFetch<CharityFilingStatus>(
+    `/api/companies/${companyId}/periods/${periodId}/filing/charity-report-generated`,
+    { method: "POST", body: JSON.stringify({ reportType }) },
+  );
+
+export const updateCharityFilingStatus = (
+  companyId: number,
+  periodId: number,
+  data: { status: string; reason?: string; annualReturnReference?: string },
+) =>
+  apiFetch<unknown>(
+    `/api/companies/${companyId}/periods/${periodId}/filing/charity-status`,
+    { method: "PUT", body: JSON.stringify(data) },
+  );
 
 export const getAuditLog = (companyId: number, periodId?: number, page = 1, pageSize = 20) => {
   const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });

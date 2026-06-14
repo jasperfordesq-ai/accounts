@@ -137,7 +137,75 @@ public class FinancialStatementsService(AccountsDbContext db)
         public List<string> SourceNotes { get; } = [];
     }
 
-    public async Task<List<TrialBalanceLine>> GetTrialBalanceAsync(int periodId)
+    private static bool BankOpeningApplies(BankAccount bank, DateOnly periodEnd) =>
+        bank.OpeningBalance != 0
+        && bank.OpeningBalanceDate is { } openingDate
+        && openingDate <= periodEnd;
+
+    private static bool LoanAppliesAtPeriodEnd(Loan loan, DateOnly periodStart, DateOnly periodEnd) =>
+        loan.DrawdownDate is { } drawdownDate
+        && loan.BalanceAsOfDate is { } balanceAsOfDate
+        && drawdownDate <= periodEnd
+        && balanceAsOfDate >= periodStart
+        && balanceAsOfDate <= periodEnd;
+
+    private static bool ShareCapitalAppliesAt(ShareCapital share, DateOnly date) =>
+        share.IssueDate is { } issueDate
+        && issueDate <= date
+        && (share.CancelledDate is null || share.CancelledDate > date);
+
+    private async Task<List<Loan>> GetLoansAtPeriodEndAsync(int companyId, DateOnly periodStart, DateOnly periodEnd) =>
+        (await db.Loans
+            .Where(l => l.CompanyId == companyId
+                && l.DrawdownDate != null
+                && l.BalanceAsOfDate != null
+                && l.DrawdownDate <= periodEnd
+                && l.BalanceAsOfDate >= periodStart
+                && l.BalanceAsOfDate <= periodEnd)
+            .ToListAsync())
+            .Where(l => LoanAppliesAtPeriodEnd(l, periodStart, periodEnd))
+            .ToList();
+
+    private async Task<List<LoanBalanceSnapshot>> GetLoanSnapshotsForPeriodAsync(
+        int companyId,
+        int periodId,
+        DateOnly periodStart,
+        DateOnly periodEnd) =>
+        (await db.LoanBalanceSnapshots
+            .Include(s => s.Loan)
+            .Where(s => s.PeriodId == periodId && s.Loan.CompanyId == companyId)
+            .ToListAsync())
+            .Where(s => LoanAppliesAtPeriodEnd(s.Loan, periodStart, periodEnd))
+            .ToList();
+
+    private async Task<decimal> GetShareCapitalAtAsync(int companyId, DateOnly date)
+    {
+        var shares = await db.ShareCapitals
+            .Where(s => s.CompanyId == companyId
+                && s.IssueDate != null
+                && s.IssueDate <= date
+                && (s.CancelledDate == null || s.CancelledDate > date))
+            .ToListAsync();
+
+        return shares.Where(s => ShareCapitalAppliesAt(s, date)).Sum(s => s.TotalValue);
+    }
+
+    private async Task AssertPeriodBelongsToCompanyAsync(int companyId, int periodId)
+    {
+        var exists = await db.AccountingPeriods
+            .AsNoTracking()
+            .AnyAsync(p => p.Id == periodId && p.CompanyId == companyId);
+        if (!exists)
+            throw new ResourceNotFoundException($"Period {periodId} not found");
+    }
+
+    public async Task<List<TrialBalanceLine>> GetTrialBalanceAsync(int companyId, int periodId)
+    {
+        await AssertPeriodBelongsToCompanyAsync(companyId, periodId);
+        return await GetTrialBalanceForPeriodAsync(periodId);
+    }
+
+    private async Task<List<TrialBalanceLine>> GetTrialBalanceForPeriodAsync(int periodId)
     {
         var period = await db.AccountingPeriods.Include(p => p.Company).FirstAsync(p => p.Id == periodId);
         var companyId = period.CompanyId;
@@ -163,7 +231,13 @@ public class FinancialStatementsService(AccountsDbContext db)
         return lines;
     }
 
-    public async Task<ProfitAndLoss> GetProfitAndLossAsync(int periodId)
+    public virtual async Task<ProfitAndLoss> GetProfitAndLossAsync(int companyId, int periodId)
+    {
+        await AssertPeriodBelongsToCompanyAsync(companyId, periodId);
+        return await GetProfitAndLossForPeriodAsync(periodId);
+    }
+
+    private async Task<ProfitAndLoss> GetProfitAndLossForPeriodAsync(int periodId)
     {
         var period = await db.AccountingPeriods.Include(p => p.Company).FirstAsync(p => p.Id == periodId);
         var companyId = period.CompanyId;
@@ -304,9 +378,15 @@ public class FinancialStatementsService(AccountsDbContext db)
         if (bankCategory != null)
         {
             var period = await db.AccountingPeriods.FirstAsync(p => p.Id == periodId);
-            var bankAccounts = await db.BankAccounts.Where(b => b.CompanyId == period.CompanyId).ToListAsync();
+            var bankAccounts = await db.BankAccounts
+                .Where(b => b.CompanyId == period.CompanyId
+                    && b.OpeningBalance != 0
+                    && b.OpeningBalanceDate != null
+                    && b.OpeningBalanceDate <= period.PeriodEnd)
+                .ToListAsync();
             foreach (var bank in bankAccounts)
             {
+                if (!BankOpeningApplies(bank, period.PeriodEnd)) continue;
                 if (bank.OpeningBalance > 0) Debit(bankCategory.Id, bank.OpeningBalance);
                 if (bank.OpeningBalance < 0) Credit(bankCategory.Id, bank.OpeningBalance);
             }
@@ -315,7 +395,13 @@ public class FinancialStatementsService(AccountsDbContext db)
         return movements;
     }
 
-    public async Task<List<StatementSourceSummary>> GetStatementSourcesAsync(int periodId)
+    public async Task<List<StatementSourceSummary>> GetStatementSourcesAsync(int companyId, int periodId)
+    {
+        await AssertPeriodBelongsToCompanyAsync(companyId, periodId);
+        return await GetStatementSourcesForPeriodAsync(periodId);
+    }
+
+    private async Task<List<StatementSourceSummary>> GetStatementSourcesForPeriodAsync(int periodId)
     {
         var period = await db.AccountingPeriods.Include(p => p.Company).FirstAsync(p => p.Id == periodId);
         var companyId = period.CompanyId;
@@ -357,9 +443,15 @@ public class FinancialStatementsService(AccountsDbContext db)
 
         if (bankCategory != null)
         {
-            var banks = await db.BankAccounts.Where(b => b.CompanyId == companyId && b.OpeningBalance != 0).ToListAsync();
+            var banks = await db.BankAccounts
+                .Where(b => b.CompanyId == companyId
+                    && b.OpeningBalance != 0
+                    && b.OpeningBalanceDate != null
+                    && b.OpeningBalanceDate <= period.PeriodEnd)
+                .ToListAsync();
             foreach (var bank in banks)
             {
+                if (!BankOpeningApplies(bank, period.PeriodEnd)) continue;
                 var note = $"Bank opening balance: {bank.Name}";
                 if (bank.OpeningBalance > 0)
                 {
@@ -451,15 +543,28 @@ public class FinancialStatementsService(AccountsDbContext db)
             .ToList();
     }
 
-    public async Task<BalanceSheet> GetBalanceSheetAsync(int periodId)
+    public async Task<BalanceSheet> GetBalanceSheetAsync(int companyId, int periodId)
+    {
+        await AssertPeriodBelongsToCompanyAsync(companyId, periodId);
+        return await GetBalanceSheetForPeriodAsync(periodId);
+    }
+
+    private async Task<BalanceSheet> GetBalanceSheetForPeriodAsync(int periodId)
     {
         var period = await db.AccountingPeriods.Include(p => p.Company).FirstAsync(p => p.Id == periodId);
         var companyId = period.CompanyId;
 
         // Fixed Assets
+        var periodsToDate = (await db.AccountingPeriods
+            .Where(p => p.CompanyId == companyId && p.PeriodEnd <= period.PeriodEnd)
+            .Select(p => p.Id)
+            .ToListAsync())
+            .ToHashSet();
         var assets = await db.FixedAssets
             .Include(a => a.DepreciationEntries)
-            .Where(a => a.CompanyId == companyId && a.DisposalDate == null)
+            .Where(a => a.CompanyId == companyId
+                && a.AcquisitionDate <= period.PeriodEnd
+                && (a.DisposalDate == null || a.DisposalDate > period.PeriodEnd))
             .ToListAsync();
 
         var assetCategories = assets
@@ -470,7 +575,9 @@ public class FinancialStatementsService(AccountsDbContext db)
                 var depTotal = g.Sum(a =>
                 {
                     var entry = a.DepreciationEntries.FirstOrDefault(d => d.PeriodId == periodId);
-                    return entry != null ? a.Cost - entry.ClosingNbv : a.DepreciationEntries.Sum(d => d.Charge);
+                    return entry != null
+                        ? a.Cost - entry.ClosingNbv
+                        : a.DepreciationEntries.Where(d => periodsToDate.Contains(d.PeriodId)).Sum(d => d.Charge);
                 });
                 return new AssetCategoryLine(g.Key, cost, depTotal, cost - depTotal);
             }).ToList();
@@ -485,14 +592,16 @@ public class FinancialStatementsService(AccountsDbContext db)
         var totalDebtors = tradeDebtors + otherDebtors;
 
         // Cash at bank -- sum bank account balances (simplified: opening + net transactions)
-        var bankAccounts = await db.BankAccounts.Where(b => b.CompanyId == companyId).ToListAsync();
+        var bankAccounts = await db.BankAccounts
+            .Where(b => b.CompanyId == companyId)
+            .ToListAsync();
         decimal cash = 0;
         foreach (var bank in bankAccounts)
         {
             var netTxns = await db.ImportedTransactions
                 .Where(t => t.BankAccountId == bank.Id && t.PeriodId == periodId && !t.IsDuplicate)
                 .SumAsync(t => t.Amount);
-            cash += bank.OpeningBalance + netTxns;
+            cash += (BankOpeningApplies(bank, period.PeriodEnd) ? bank.OpeningBalance : 0) + netTxns;
         }
 
         var totalCurrentAssets = stock + totalDebtors + prepayments + cash;
@@ -506,7 +615,12 @@ public class FinancialStatementsService(AccountsDbContext db)
         taxCreditors += taxLiabilities;
         var otherCreditorsWithin = await db.Creditors.Where(c => c.PeriodId == periodId && c.Type == CreditorType.Other && c.DueWithinYear).SumAsync(c => c.Amount);
         // Add loan portions due within year
-        var loansDueWithin = await db.Loans.Where(l => l.CompanyId == companyId).SumAsync(l => l.DueWithinYear);
+        var loanSnapshots = await GetLoanSnapshotsForPeriodAsync(companyId, periodId, period.PeriodStart, period.PeriodEnd);
+        var snapshotLoanIds = loanSnapshots.Select(s => s.LoanId).ToHashSet();
+        var loansAtPeriodEnd = (await GetLoansAtPeriodEndAsync(companyId, period.PeriodStart, period.PeriodEnd))
+            .Where(l => !snapshotLoanIds.Contains(l.Id))
+            .ToList();
+        var loansDueWithin = loanSnapshots.Sum(s => s.DueWithinYear) + loansAtPeriodEnd.Sum(l => l.DueWithinYear);
         otherCreditorsWithin += loansDueWithin;
         var totalCreditorsWithin = tradeCreditors + accruals + taxCreditors + otherCreditorsWithin;
 
@@ -514,7 +628,7 @@ public class FinancialStatementsService(AccountsDbContext db)
         var totalAssetsLessCurrentLiabs = fixedAssetsTotal + netCurrentAssets;
 
         // Creditors after year
-        var loansAfterYear = await db.Loans.Where(l => l.CompanyId == companyId).SumAsync(l => l.DueAfterYear);
+        var loansAfterYear = loanSnapshots.Sum(s => s.DueAfterYear) + loansAtPeriodEnd.Sum(l => l.DueAfterYear);
         var otherCreditorsAfter = await db.Creditors.Where(c => c.PeriodId == periodId && !c.DueWithinYear).SumAsync(c => c.Amount);
         var totalCreditorsAfter = loansAfterYear + otherCreditorsAfter;
 
@@ -522,13 +636,13 @@ public class FinancialStatementsService(AccountsDbContext db)
 
         // Capital and reserves are computed independently from equity movements.
         // Any difference is surfaced instead of being hidden inside retained earnings.
-        var shareCapitals = await db.ShareCapitals.Where(s => s.CompanyId == companyId).ToListAsync();
+        var closingShareCapital = await GetShareCapitalAtAsync(companyId, period.PeriodEnd);
         var openingShareCapital = await GetOpeningEquityBalanceAsync(periodId, "3000");
-        var shareCapital = shareCapitals.Count > 0
-            ? shareCapitals.Sum(s => s.TotalValue)
+        var shareCapital = closingShareCapital != 0
+            ? closingShareCapital
             : openingShareCapital != 0 ? openingShareCapital : 1m;
         var openingRetainedEarnings = await GetOpeningRetainedEarningsAsync(period);
-        var profitForYear = (await GetProfitAndLossAsync(periodId)).ProfitAfterTax;
+        var profitForYear = (await GetProfitAndLossForPeriodAsync(periodId)).ProfitAfterTax;
         var dividendsPaid = await db.Dividends.Where(d => d.PeriodId == periodId).SumAsync(d => d.Amount);
         var retainedEarnings = openingRetainedEarnings + profitForYear - dividendsPaid;
         var totalCapital = shareCapital + retainedEarnings;
@@ -563,7 +677,7 @@ public class FinancialStatementsService(AccountsDbContext db)
         if (priorPeriod == null)
             return 0m;
 
-        var priorProfit = (await GetProfitAndLossAsync(priorPeriod.Id)).ProfitAfterTax;
+        var priorProfit = (await GetProfitAndLossForPeriodAsync(priorPeriod.Id)).ProfitAfterTax;
         var priorDividends = await db.Dividends
             .Where(d => d.PeriodId == priorPeriod.Id)
             .SumAsync(d => d.Amount);
@@ -582,7 +696,13 @@ public class FinancialStatementsService(AccountsDbContext db)
         return balances.Sum(o => o.Credit - o.Debit);
     }
 
-    public async Task<ReadinessScore> GetReadinessScoreAsync(int periodId)
+    public async Task<ReadinessScore> GetReadinessScoreAsync(int companyId, int periodId)
+    {
+        await AssertPeriodBelongsToCompanyAsync(companyId, periodId);
+        return await GetReadinessScoreForPeriodAsync(periodId);
+    }
+
+    private async Task<ReadinessScore> GetReadinessScoreForPeriodAsync(int periodId)
     {
         var period = await db.AccountingPeriods
             .Include(p => p.Company)
@@ -634,14 +754,24 @@ public class FinancialStatementsService(AccountsDbContext db)
         // 8. Fixed assets up to date?
         if (period.Company.OwnsAssets)
         {
-            var assetCount = await db.FixedAssets.CountAsync(a => a.CompanyId == companyId);
+            var assetCount = await db.FixedAssets.CountAsync(a => a.CompanyId == companyId
+                && a.AcquisitionDate <= period.PeriodEnd
+                && (a.DisposalDate == null || a.DisposalDate > period.PeriodEnd));
             if (assetCount > 0) completedChecks++; else missing.Add("Company owns assets but none registered");
         }
         else completedChecks++;
 
         // 9. Loans and director loans reviewed?
-        var hasLoans = await db.Loans.AnyAsync(l => l.CompanyId == companyId);
-        var hasDirectorLoans = await db.DirectorLoans.AnyAsync(d => d.PeriodId == periodId);
+        var hasLoanSnapshots = await db.LoanBalanceSnapshots.AnyAsync(s => s.PeriodId == periodId && s.Loan.CompanyId == companyId);
+        var hasCurrentLoanRows = await db.Loans.AnyAsync(l => l.CompanyId == companyId
+            && l.DrawdownDate != null
+            && l.BalanceAsOfDate != null
+            && l.DrawdownDate <= period.PeriodEnd
+            && l.BalanceAsOfDate >= period.PeriodStart
+            && l.BalanceAsOfDate <= period.PeriodEnd);
+        var hasLoans = hasLoanSnapshots || hasCurrentLoanRows;
+        var hasDirectorLoans = await db.DirectorLoans.AnyAsync(d =>
+            d.PeriodId == periodId && d.Director.CompanyId == companyId);
         if ((!period.Company.HasBorrowings || hasLoans || reviewed.Contains("loans"))
             && (!period.Company.HasDirectorLoans || hasDirectorLoans || reviewed.Contains("director-loans")))
             completedChecks++;
@@ -703,8 +833,12 @@ public class FinancialStatementsService(AccountsDbContext db)
         var openingBalances = await db.OpeningBalances.Where(o => o.PeriodId == periodId).ToListAsync();
         var unreviewedOpeningBalances = openingBalances.Count(o => !o.Reviewed);
         var bankOpeningBalances = await db.BankAccounts
-            .Where(b => b.CompanyId == companyId && b.OpeningBalance != 0)
+            .Where(b => b.CompanyId == companyId
+                && b.OpeningBalance != 0
+                && b.OpeningBalanceDate != null
+                && b.OpeningBalanceDate <= period.PeriodEnd)
             .ToListAsync();
+        bankOpeningBalances = bankOpeningBalances.Where(b => BankOpeningApplies(b, period.PeriodEnd)).ToList();
         var openingDebit = openingBalances.Sum(o => o.Debit) + bankOpeningBalances.Where(b => b.OpeningBalance > 0).Sum(b => b.OpeningBalance);
         var openingCredit = openingBalances.Sum(o => o.Credit) + bankOpeningBalances.Where(b => b.OpeningBalance < 0).Sum(b => Math.Abs(b.OpeningBalance));
         if (unreviewedOpeningBalances > 0)
@@ -717,7 +851,7 @@ public class FinancialStatementsService(AccountsDbContext db)
         // 19. Balance sheet balances?
         try
         {
-            var bs = await GetBalanceSheetAsync(periodId);
+            var bs = await GetBalanceSheetForPeriodAsync(periodId);
             if (bs.Balances)
                 completedChecks++;
             else
@@ -731,7 +865,7 @@ public class FinancialStatementsService(AccountsDbContext db)
         var balanceSheetBalances = false;
         try
         {
-            balanceSheetBalances = (await GetBalanceSheetAsync(periodId)).Balances;
+            balanceSheetBalances = (await GetBalanceSheetForPeriodAsync(periodId)).Balances;
         }
         catch
         {
@@ -745,13 +879,42 @@ public class FinancialStatementsService(AccountsDbContext db)
         return new ReadinessScore(completeness, filingReady, balanceSheetBalances, missing, warnings);
     }
 
-    public async Task<CashFlowStatement> GetCashFlowStatementAsync(int periodId)
+    public async Task<List<string>> GetFinalOutputReadinessBlockersAsync(int companyId, int periodId)
+    {
+        await AssertPeriodBelongsToCompanyAsync(companyId, periodId);
+        var readiness = await GetReadinessScoreForPeriodAsync(periodId);
+        var blockers = new List<string>();
+
+        if (!readiness.BalanceSheetBalances)
+            blockers.Add("balance sheet does not balance");
+
+        blockers.AddRange(readiness.MissingItems);
+        blockers.AddRange(readiness.Warnings);
+
+        return blockers.Distinct().Take(10).ToList();
+    }
+
+    public async Task AssertFinalOutputReadinessAsync(int companyId, int periodId, string outputName)
+    {
+        var blockers = await GetFinalOutputReadinessBlockersAsync(companyId, periodId);
+        if (blockers.Count > 0)
+            throw new BusinessRuleException(
+                $"Cannot generate final {outputName} until readiness blockers are resolved: {string.Join("; ", blockers)}");
+    }
+
+    public async Task<CashFlowStatement> GetCashFlowStatementAsync(int companyId, int periodId)
+    {
+        await AssertPeriodBelongsToCompanyAsync(companyId, periodId);
+        return await GetCashFlowStatementForPeriodAsync(periodId);
+    }
+
+    private async Task<CashFlowStatement> GetCashFlowStatementForPeriodAsync(int periodId)
     {
         var period = await db.AccountingPeriods.Include(p => p.Company).FirstAsync(p => p.Id == periodId);
         var companyId = period.CompanyId;
 
         // Operating profit from P&L
-        var pl = await GetProfitAndLossAsync(periodId);
+        var pl = await GetProfitAndLossForPeriodAsync(periodId);
         var operatingProfit = pl.OperatingProfit;
 
         var adjustments = new List<CashFlowAdjustment>();
@@ -822,8 +985,25 @@ public class FinancialStatementsService(AccountsDbContext db)
         var netCashFromInvesting = capexDisposals - capexPurchases;
 
         // Financing: loans
-        var loanDrawdowns = await db.Loans.Where(l => l.CompanyId == companyId).SumAsync(l => l.OriginalAmount);
-        var loanRepayments = await db.Loans.Where(l => l.CompanyId == companyId).SumAsync(l => l.OriginalAmount - l.Balance);
+        var loanSnapshots = await GetLoanSnapshotsForPeriodAsync(companyId, periodId, period.PeriodStart, period.PeriodEnd);
+        var snapshotLoanIds = loanSnapshots.Select(s => s.LoanId).ToHashSet();
+        var loanDrawdowns = loanSnapshots.Sum(s => s.Drawdowns) + await db.Loans
+            .Where(l => l.CompanyId == companyId
+                && !snapshotLoanIds.Contains(l.Id)
+                && l.DrawdownDate != null
+                && l.DrawdownDate >= period.PeriodStart
+                && l.DrawdownDate <= period.PeriodEnd)
+            .SumAsync(l => l.OriginalAmount);
+        var loanRepayments = loanSnapshots.Sum(s => s.Repayments) + await db.Loans
+            .Where(l => l.CompanyId == companyId
+                && !snapshotLoanIds.Contains(l.Id)
+                && l.DrawdownDate != null
+                && l.DrawdownDate >= period.PeriodStart
+                && l.DrawdownDate <= period.PeriodEnd
+                && l.BalanceAsOfDate != null
+                && l.BalanceAsOfDate >= period.PeriodStart
+                && l.BalanceAsOfDate <= period.PeriodEnd)
+            .SumAsync(l => l.OriginalAmount - l.Balance);
 
         // Financing: dividends paid
         var dividendsPaid = await db.Dividends
@@ -835,8 +1015,13 @@ public class FinancialStatementsService(AccountsDbContext db)
         var netIncreaseInCash = netCashFromOperating + netCashFromInvesting + netCashFromFinancing;
 
         // Opening cash = sum of bank opening balances
-        var bankAccounts = await db.BankAccounts.Where(b => b.CompanyId == companyId).ToListAsync();
-        var openingCash = bankAccounts.Sum(b => b.OpeningBalance);
+        var bankAccounts = await db.BankAccounts
+            .Where(b => b.CompanyId == companyId
+                && b.OpeningBalance != 0
+                && b.OpeningBalanceDate != null
+                && b.OpeningBalanceDate <= period.PeriodStart)
+            .ToListAsync();
+        var openingCash = bankAccounts.Where(b => BankOpeningApplies(b, period.PeriodStart)).Sum(b => b.OpeningBalance);
         var closingCash = openingCash + netIncreaseInCash;
 
         return new CashFlowStatement(
@@ -847,15 +1032,19 @@ public class FinancialStatementsService(AccountsDbContext db)
         );
     }
 
-    public async Task<EquityChanges> GetEquityChangesAsync(int periodId)
+    public async Task<EquityChanges> GetEquityChangesAsync(int companyId, int periodId)
+    {
+        await AssertPeriodBelongsToCompanyAsync(companyId, periodId);
+        return await GetEquityChangesForPeriodAsync(periodId);
+    }
+
+    private async Task<EquityChanges> GetEquityChangesForPeriodAsync(int periodId)
     {
         var period = await db.AccountingPeriods.Include(p => p.Company).FirstAsync(p => p.Id == periodId);
         var companyId = period.CompanyId;
 
         // Current share capital
-        var closingShareCapital = await db.ShareCapitals
-            .Where(s => s.CompanyId == companyId)
-            .SumAsync(s => s.TotalValue);
+        var closingShareCapital = await GetShareCapitalAtAsync(companyId, period.PeriodEnd);
         if (closingShareCapital == 0) closingShareCapital = 1m; // Default nominal
 
         // Prior period for opening balances
@@ -868,9 +1057,7 @@ public class FinancialStatementsService(AccountsDbContext db)
         decimal openingRetainedEarnings = 0;
         if (priorPeriod != null)
         {
-            openingShareCapital = await db.ShareCapitals
-                .Where(s => s.CompanyId == companyId)
-                .SumAsync(s => s.TotalValue);
+            openingShareCapital = await GetShareCapitalAtAsync(companyId, priorPeriod.PeriodEnd);
             if (openingShareCapital == 0) openingShareCapital = 1m;
 
             openingRetainedEarnings = await GetOpeningRetainedEarningsAsync(period);
@@ -878,13 +1065,13 @@ public class FinancialStatementsService(AccountsDbContext db)
         else
         {
             // First year — opening share capital is the current capital (issued at incorporation)
-            openingShareCapital = closingShareCapital;
+            openingShareCapital = 0m;
         }
 
         var openingTotal = openingShareCapital + openingRetainedEarnings;
 
         // Profit for the year from P&L
-        var pl = await GetProfitAndLossAsync(periodId);
+        var pl = await GetProfitAndLossForPeriodAsync(periodId);
         var profitForYear = pl.ProfitAfterTax;
 
         // Dividends paid in period

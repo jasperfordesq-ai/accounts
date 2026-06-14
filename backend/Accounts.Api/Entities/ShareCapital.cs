@@ -11,6 +11,8 @@ public class ShareCapital
     public int NumberIssued { get; set; } = 1;
     public decimal TotalValue { get; set; } = 1m;
     public bool IsFullyPaid { get; set; } = true;
+    public DateOnly? IssueDate { get; set; }
+    public DateOnly? CancelledDate { get; set; }
 
     [JsonIgnore]
     public Company Company { get; set; } = null!;

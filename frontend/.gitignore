@@ -12,9 +12,13 @@
 
 # testing
 /coverage
+/.codex-acl-probe/
+/.tmp-*/
 
 # next.js
 /.next/
+/.next-codex-probe/
+/.next-probe/
 /out/
 
 # production

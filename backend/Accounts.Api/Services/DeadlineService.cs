@@ -4,23 +4,29 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Accounts.Api.Services;
 
-public class DeadlineService(AccountsDbContext db)
+public class DeadlineService(AccountsDbContext db, AuditService? audit = null, TimeProvider? timeProvider = null)
 {
+    private static readonly TimeZoneInfo IrelandTimeZone = ResolveIrelandTimeZone();
+
     /// <summary>
     /// Calculate CRO filing deadline: earlier of (ARD + 56 days) or (FYE + 9 months + 56 days).
     /// Also calculates charity and revenue deadlines if applicable.
     /// </summary>
-    public async Task<List<FilingDeadline>> CalculateDeadlinesAsync(int companyId, int periodId)
+    public async Task<List<FilingDeadline>> CalculateDeadlinesAsync(int companyId, int periodId, string? userId = null)
     {
         var period = await db.AccountingPeriods
             .Include(p => p.Company)
             .Include(p => p.FilingDeadlines)
             .FirstOrDefaultAsync(p => p.Id == periodId && p.CompanyId == companyId)
-            ?? throw new InvalidOperationException($"Period {periodId} not found");
+            ?? throw new ResourceNotFoundException($"Period {periodId} not found");
 
         var company = period.Company;
         var fye = period.PeriodEnd;
         var deadlines = new List<FilingDeadline>();
+        var oldValue = period.FilingDeadlines
+            .OrderBy(d => d.DeadlineType)
+            .Select(DeadlineAuditSnapshot)
+            .ToList();
 
         // CRO deadline: earlier of (ARD + 56 days) or (FYE + 9 months + 56 days)
         var ardDate = new DateOnly(fye.Year, company.ArdMonth, 1).AddMonths(1).AddDays(-1); // Last day of ARD month
@@ -44,6 +50,18 @@ public class DeadlineService(AccountsDbContext db)
         }
 
         await db.SaveChangesAsync();
+        if (audit is not null)
+        {
+            await audit.LogAsync(
+                companyId,
+                periodId,
+                "FilingDeadlineSet",
+                periodId,
+                AuditEventCodes.DeadlinesCalculated,
+                oldValue,
+                deadlines.OrderBy(d => d.DeadlineType).Select(DeadlineAuditSnapshot).ToList(),
+                userId);
+        }
         return deadlines;
     }
 
@@ -52,7 +70,7 @@ public class DeadlineService(AccountsDbContext db)
     /// </summary>
     public async Task<FilingDeadline?> GetUpcomingDeadlineAsync(int companyId)
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = CurrentIrelandDate();
         return await db.FilingDeadlines
             .Where(d => d.CompanyId == companyId && d.FiledDate == null)
             .OrderBy(d => d.DueDate)
@@ -73,36 +91,171 @@ public class DeadlineService(AccountsDbContext db)
     /// <summary>
     /// Mark a period as filed and record in filing history.
     /// </summary>
-    public async Task<FilingDeadline> MarkFiledAsync(int companyId, int periodId, DeadlineType type, DateOnly filedDate)
+    public async Task<FilingDeadline> MarkFiledAsync(
+        int companyId,
+        int periodId,
+        DeadlineType type,
+        DateOnly filedDate,
+        string? userId = null,
+        string? filingReference = null)
     {
+        var periodBelongsToCompany = await db.AccountingPeriods
+            .AnyAsync(p => p.Id == periodId && p.CompanyId == companyId);
+        if (!periodBelongsToCompany)
+            throw new ResourceNotFoundException($"Period {periodId} not found");
+
+        var today = CurrentIrelandDate();
+        if (filedDate > today)
+            throw new BusinessRuleException("Filed date cannot be in the future.");
+
+        var evidenceReference = type switch
+        {
+            DeadlineType.CRO => await AssertCroWorkflowAcceptedAsync(companyId, periodId),
+            DeadlineType.Revenue => await AssertRevenueFilingEvidenceAsync(periodId, filingReference),
+            DeadlineType.Charity => await AssertCharityFilingEvidenceAsync(companyId, periodId, filingReference),
+            _ => NormalizeOptionalFilingReference(filingReference)
+        };
+
         var deadline = await db.FilingDeadlines
             .FirstOrDefaultAsync(d => d.CompanyId == companyId && d.PeriodId == periodId && d.DeadlineType == type)
-            ?? throw new InvalidOperationException("Deadline not found. Calculate deadlines first.");
+            ?? throw new BusinessRuleException("Deadline not found. Calculate deadlines first.");
+        var oldValue = DeadlineAuditSnapshot(deadline);
 
         deadline.FiledDate = filedDate;
+        deadline.FilingReference = evidenceReference;
         deadline.IsLate = filedDate > deadline.DueDate;
         deadline.PenaltyAmount = deadline.IsLate ? CalculatePenalty(deadline.DueDate, filedDate) : 0;
 
-        // Record in filing history
-        var history = new FilingHistory
+        // Record one filing-history row per company period and deadline type.
+        var history = await db.FilingHistories
+            .FirstOrDefaultAsync(h =>
+                h.CompanyId == companyId
+                && h.PeriodId == periodId
+                && h.DeadlineType == type);
+
+        if (history is null)
         {
-            CompanyId = companyId,
-            PeriodId = periodId,
-            DeadlineType = type,
-            DueDate = deadline.DueDate,
-            FiledDate = filedDate,
-            DaysLate = deadline.IsLate ? filedDate.DayNumber - deadline.DueDate.DayNumber : 0,
-            PenaltyAmount = deadline.PenaltyAmount
-        };
-        db.FilingHistories.Add(history);
+            history = new FilingHistory
+            {
+                CompanyId = companyId,
+                PeriodId = periodId,
+                DeadlineType = type
+            };
+            db.FilingHistories.Add(history);
+        }
+
+        history.DueDate = deadline.DueDate;
+        history.FiledDate = filedDate;
+        history.FilingReference = evidenceReference;
+        history.DaysLate = deadline.IsLate ? filedDate.DayNumber - deadline.DueDate.DayNumber : 0;
+        history.PenaltyAmount = deadline.PenaltyAmount;
 
         await db.SaveChangesAsync();
+        if (audit is not null)
+        {
+            await audit.LogAsync(
+                companyId,
+                periodId,
+                "FilingDeadline",
+                deadline.Id,
+                AuditEventCodes.DeadlineMarkedFiled,
+                oldValue,
+                DeadlineAuditSnapshot(deadline),
+                userId);
+        }
         return deadline;
     }
 
     /// <summary>
     /// CRO late filing penalty: €100 initial + €3/day, max €1,200.
     /// </summary>
+    private async Task<string> AssertCroWorkflowAcceptedAsync(int companyId, int periodId)
+    {
+        var croPackage = await db.AccountingPeriods
+            .Where(p => p.Id == periodId && p.CompanyId == companyId)
+            .Select(p => p.CroFilingPackage == null
+                ? null
+                : new { p.CroFilingPackage.FilingStatus, p.CroFilingPackage.CroSubmissionReference })
+            .SingleAsync();
+
+        if (croPackage?.FilingStatus != FilingStatus.Accepted)
+            throw new BusinessRuleException("Mark the CRO filing workflow as accepted before recording the CRO filed date.");
+
+        var trimmedReference = NormalizeOptionalFilingReference(croPackage.CroSubmissionReference);
+        if (string.IsNullOrWhiteSpace(trimmedReference))
+            throw new BusinessRuleException("CORE submission reference is required before recording the CRO filed date.");
+
+        return trimmedReference;
+    }
+
+    private async Task<string> AssertRevenueFilingEvidenceAsync(int periodId, string? filingReference)
+    {
+        var revenuePackage = await db.RevenueFilingPackages
+            .FirstOrDefaultAsync(p => p.PeriodId == periodId);
+
+        if (revenuePackage?.IxbrlGenerated != true
+            || !InternalIxbrlChecksPassed(revenuePackage.IxbrlValidationErrors))
+        {
+            throw new BusinessRuleException("Run and pass internal iXBRL checks before recording the Revenue filed date.");
+        }
+
+        var trimmedReference = NormalizeOptionalFilingReference(filingReference);
+        if (!string.IsNullOrWhiteSpace(trimmedReference))
+            revenuePackage.Ct1Reference = trimmedReference;
+
+        if (string.IsNullOrWhiteSpace(revenuePackage.Ct1Reference))
+            throw new BusinessRuleException("Revenue filing reference is required before recording the Revenue filed date.");
+
+        return revenuePackage.Ct1Reference;
+    }
+
+    private async Task<string> AssertCharityFilingEvidenceAsync(int companyId, int periodId, string? filingReference)
+    {
+        var evidence = await db.AccountingPeriods
+            .Where(p => p.Id == periodId && p.CompanyId == companyId)
+            .Select(p => new
+            {
+                p.Company.IsCharitableOrganisation,
+                Package = p.CharityFilingPackage == null
+                    ? null
+                    : new
+                    {
+                        p.CharityFilingPackage.FilingStatus,
+                        p.CharityFilingPackage.AnnualReturnReference
+                    }
+            })
+            .SingleAsync();
+
+        var trimmedReference = NormalizeOptionalFilingReference(filingReference);
+        if (!evidence.IsCharitableOrganisation
+            || evidence.Package?.FilingStatus != FilingStatus.Accepted
+            || string.IsNullOrWhiteSpace(evidence.Package.AnnualReturnReference))
+        {
+            throw new BusinessRuleException("Charity annual return package must be accepted with a Charities Regulator reference before recording the Charity filed date.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(trimmedReference)
+            && !string.Equals(trimmedReference, evidence.Package.AnnualReturnReference, StringComparison.Ordinal))
+        {
+            throw new BusinessRuleException("Charity annual return reference must match the accepted package reference.");
+        }
+
+        return evidence.Package.AnnualReturnReference;
+    }
+
+    private static bool InternalIxbrlChecksPassed(string? validationErrors) =>
+        validationErrors?.StartsWith("Internal checks passed.", StringComparison.Ordinal) == true;
+
+    private static string? NormalizeOptionalFilingReference(string? filingReference)
+    {
+        var trimmed = filingReference?.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed))
+            return null;
+        if (trimmed.Length > 200)
+            throw new BusinessRuleException("Filing reference must be 200 characters or fewer.");
+        return trimmed;
+    }
+
     public static decimal CalculatePenalty(DateOnly dueDate, DateOnly filedDate)
     {
         if (filedDate <= dueDate) return 0;
@@ -145,10 +298,20 @@ public class DeadlineService(AccountsDbContext db)
     /// </summary>
     public async Task<AuditExemptionJeopardy> CheckAuditExemptionJeopardyAsync(int companyId)
     {
-        var fiveYearsAgo = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(-5));
-        var lateFilings = await db.FilingHistories
+        var fiveYearsAgo = CurrentIrelandDate().AddYears(-5);
+        var latePeriodFilings = await db.FilingHistories
             .Where(h => h.CompanyId == companyId && h.DaysLate > 0 && h.DueDate >= fiveYearsAgo && h.DeadlineType == DeadlineType.CRO)
+            .Where(h => h.PeriodId != null)
+            .Select(h => h.PeriodId)
+            .Distinct()
             .CountAsync();
+        var lateLegacyFilings = await db.FilingHistories
+            .Where(h => h.CompanyId == companyId && h.DaysLate > 0 && h.DueDate >= fiveYearsAgo && h.DeadlineType == DeadlineType.CRO)
+            .Where(h => h.PeriodId == null)
+            .Select(h => h.DueDate)
+            .Distinct()
+            .CountAsync();
+        var lateFilings = latePeriodFilings + lateLegacyFilings;
 
         var isAtRisk = lateFilings >= 1;
         var hasLostExemption = lateFilings >= 2;
@@ -182,6 +345,35 @@ public class DeadlineService(AccountsDbContext db)
         };
         db.FilingDeadlines.Add(deadline);
         return deadline;
+    }
+
+    private static object DeadlineAuditSnapshot(FilingDeadline deadline) => new
+    {
+        deadline.DeadlineType,
+        deadline.DueDate,
+        deadline.FiledDate,
+        deadline.FilingReference,
+        deadline.IsLate,
+        deadline.PenaltyAmount
+    };
+
+    private DateOnly CurrentIrelandDate()
+    {
+        var now = (timeProvider ?? TimeProvider.System).GetUtcNow();
+        var irishNow = TimeZoneInfo.ConvertTime(now, IrelandTimeZone);
+        return DateOnly.FromDateTime(irishNow.DateTime);
+    }
+
+    private static TimeZoneInfo ResolveIrelandTimeZone()
+    {
+        try
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById("Europe/Dublin");
+        }
+        catch (TimeZoneNotFoundException)
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById("GMT Standard Time");
+        }
     }
 
     private static DateOnly ObservedFixedHoliday(int year, int month, int day)

@@ -6,7 +6,10 @@ using Microsoft.Extensions.Options;
 
 namespace Accounts.Api.Services;
 
-public class SizeClassificationService(AccountsDbContext db, IOptions<SizeThresholdConfig> thresholds)
+public class SizeClassificationService(
+    AccountsDbContext db,
+    IOptions<SizeThresholdConfig> thresholds,
+    AuditService? audit = null)
 {
     private readonly SizeThresholdConfig _config = thresholds.Value;
 
@@ -21,20 +24,21 @@ public class SizeClassificationService(AccountsDbContext db, IOptions<SizeThresh
         string? IneligibleReason = null
     );
 
-    public async Task<ClassificationResult> ClassifyAsync(int periodId)
+    public async Task<ClassificationResult> ClassifyAsync(int companyId, int periodId, string? userId = null)
     {
         var period = await db.AccountingPeriods
             .Include(p => p.Company)
             .Include(p => p.SizeClassification)
-            .FirstOrDefaultAsync(p => p.Id == periodId)
-            ?? throw new InvalidOperationException($"Period {periodId} not found");
+            .FirstOrDefaultAsync(p => p.Id == periodId && p.CompanyId == companyId)
+            ?? throw new ResourceNotFoundException($"Period {periodId} not found");
 
         var company = period.Company;
 
         // Get or create size classification
         var sc = period.SizeClassification;
         if (sc == null)
-            throw new InvalidOperationException("Size classification data not yet entered for this period.");
+            throw new BusinessRuleException("Size classification data not yet entered for this period.");
+        var oldValue = ClassificationAuditSnapshot(sc, null, null, null, null, null);
 
         var turnover = sc.Turnover;
         var balanceSheet = sc.BalanceSheetTotal;
@@ -143,7 +147,7 @@ public class SizeClassificationService(AccountsDbContext db, IOptions<SizeThresh
         sc.CalculatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
 
-        return new ClassificationResult(
+        var result = new ClassificationResult(
             effectiveClass,
             string.Join("\n", notes),
             canUseMicro,
@@ -153,6 +157,21 @@ public class SizeClassificationService(AccountsDbContext db, IOptions<SizeThresh
             isIneligible,
             ineligibleReason
         );
+
+        if (audit is not null)
+        {
+            await audit.LogAsync(
+                company.Id,
+                periodId,
+                "SizeClassification",
+                sc.Id,
+                AuditEventCodes.SizeClassificationRun,
+                oldValue,
+                ClassificationAuditSnapshot(sc, result.CanUseMicro, result.CanFileAbridged, result.AuditExempt, result.AvailableRegimes, result.IsIneligibleEntity),
+                userId);
+        }
+
+        return result;
     }
 
     private CompanySizeClass DetermineClass(decimal turnover, decimal balanceSheet, int employees)
@@ -180,4 +199,27 @@ public class SizeClassificationService(AccountsDbContext db, IOptions<SizeThresh
         if (employees <= thresholds.Employees) met++;
         return met >= 2;
     }
+
+    private static object ClassificationAuditSnapshot(
+        SizeClassification sc,
+        bool? canUseMicro,
+        bool? canFileAbridged,
+        bool? auditExempt,
+        List<string>? availableRegimes,
+        bool? isIneligibleEntity) => new
+    {
+        sc.Turnover,
+        sc.BalanceSheetTotal,
+        sc.AvgEmployees,
+        sc.PriorYearClass,
+        sc.OverrideClass,
+        sc.CalculatedClass,
+        sc.CalculatedAt,
+        sc.QualificationNotes,
+        CanUseMicro = canUseMicro,
+        CanFileAbridged = canFileAbridged,
+        AuditExempt = auditExempt,
+        AvailableRegimes = availableRegimes,
+        IsIneligibleEntity = isIneligibleEntity
+    };
 }

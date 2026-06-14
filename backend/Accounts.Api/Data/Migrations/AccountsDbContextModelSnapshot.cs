@@ -93,7 +93,8 @@ namespace Accounts.Api.Data.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("LockedBy")
-                        .HasColumnType("text");
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
                     b.Property<DateOnly?>("MemberAuditNoticeDate")
                         .HasColumnType("date");
@@ -106,6 +107,17 @@ namespace Accounts.Api.Data.Migrations
 
                     b.Property<DateOnly>("PeriodStart")
                         .HasColumnType("date");
+
+                    b.Property<string>("ReopenReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime?>("ReopenedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ReopenedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -186,6 +198,70 @@ namespace Accounts.Api.Data.Migrations
                     b.ToTable("adjustments", (string)null);
                 });
 
+            modelBuilder.Entity("Accounts.Api.Entities.AuditIntegrityCheckpoint", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CheckedEntries")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedByDisplayName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("CreatedByUserId")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
+                    b.Property<string>("KeyId")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<int>("LastAuditLogId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("LastIntegrityHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("RequestId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("Signature")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int?>("TenantId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Signature")
+                        .IsUnique();
+
+                    b.HasIndex("CompanyId", "Id");
+
+                    b.HasIndex("CompanyId", "LastAuditLogId");
+
+                    b.HasIndex("TenantId", "CreatedAtUtc");
+
+                    b.ToTable("audit_integrity_checkpoints", (string)null);
+                });
+
             modelBuilder.Entity("Accounts.Api.Entities.AuditLog", b =>
                 {
                     b.Property<int>("Id")
@@ -199,6 +275,10 @@ namespace Accounts.Api.Data.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<string>("ActorDisplayName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<int?>("CompanyId")
                         .HasColumnType("integer");
 
@@ -210,6 +290,10 @@ namespace Accounts.Api.Data.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<string>("IntegrityHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<string>("NewValueJson")
                         .HasColumnType("text");
 
@@ -217,6 +301,17 @@ namespace Accounts.Api.Data.Migrations
                         .HasColumnType("text");
 
                     b.Property<int?>("PeriodId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("PreviousIntegrityHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("RequestId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<int?>("TenantId")
                         .HasColumnType("integer");
 
                     b.Property<DateTime>("Timestamp")
@@ -227,9 +322,21 @@ namespace Accounts.Api.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("IntegrityHash")
+                        .IsUnique();
+
+                    b.HasIndex("PreviousIntegrityHash")
+                        .IsUnique();
+
+                    b.HasIndex("RequestId");
+
                     b.HasIndex("Timestamp");
 
                     b.HasIndex("CompanyId", "Timestamp");
+
+                    b.HasIndex("TenantId", "Timestamp");
+
+                    b.HasIndex("CompanyId", "PeriodId", "Timestamp");
 
                     b.ToTable("audit_logs", (string)null);
                 });
@@ -269,7 +376,10 @@ namespace Accounts.Api.Data.Migrations
 
                     b.HasIndex("CompanyId");
 
-                    b.ToTable("bank_accounts", (string)null);
+                    b.ToTable("bank_accounts", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_bank_accounts_opening_balance_date_required", "\"OpeningBalance\" = 0 OR \"OpeningBalanceDate\" IS NOT NULL");
+                        });
                 });
 
             modelBuilder.Entity("Accounts.Api.Entities.CharityInfo", b =>
@@ -332,6 +442,74 @@ namespace Accounts.Api.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("charity_infos", (string)null);
+                });
+
+            modelBuilder.Entity("Accounts.Api.Entities.CharityFilingPackage", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("AcceptedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("AcceptedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("AnnualReturnReference")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ApprovedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime?>("CorrectionDeadline")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FilingStatus")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("GeneratedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("PeriodId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("RejectionReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<bool>("SofaGenerated")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("SubmittedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SubmittedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<bool>("TrusteesReportGenerated")
+                        .HasColumnType("boolean");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PeriodId")
+                        .IsUnique();
+
+                    b.ToTable("charity_filing_packages", (string)null);
                 });
 
             modelBuilder.Entity("Accounts.Api.Entities.Company", b =>
@@ -798,6 +976,10 @@ namespace Accounts.Api.Data.Migrations
                     b.Property<DateOnly?>("FiledDate")
                         .HasColumnType("date");
 
+                    b.Property<string>("FilingReference")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<bool>("IsLate")
                         .HasColumnType("boolean");
 
@@ -845,6 +1027,10 @@ namespace Accounts.Api.Data.Migrations
                     b.Property<DateOnly>("FiledDate")
                         .HasColumnType("date");
 
+                    b.Property<string>("FilingReference")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<decimal>("PenaltyAmount")
                         .HasColumnType("decimal(18,2)");
 
@@ -859,6 +1045,9 @@ namespace Accounts.Api.Data.Migrations
                     b.HasIndex("PeriodId");
 
                     b.HasIndex("CompanyId", "DueDate");
+
+                    b.HasIndex("CompanyId", "PeriodId", "DeadlineType")
+                        .IsUnique();
 
                     b.ToTable("filing_histories", (string)null);
                 });
@@ -1133,8 +1322,14 @@ namespace Accounts.Api.Data.Migrations
                     b.Property<decimal>("Balance")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<DateOnly?>("BalanceAsOfDate")
+                        .HasColumnType("date");
+
                     b.Property<int>("CompanyId")
                         .HasColumnType("integer");
+
+                    b.Property<DateOnly?>("DrawdownDate")
+                        .HasColumnType("date");
 
                     b.Property<decimal>("DueAfterYear")
                         .HasColumnType("decimal(18,2)");
@@ -1158,9 +1353,67 @@ namespace Accounts.Api.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CompanyId");
+                    b.HasIndex("CompanyId", "BalanceAsOfDate");
 
-                    b.ToTable("loans", (string)null);
+                    b.HasIndex("CompanyId", "DrawdownDate");
+
+                    b.ToTable("loans", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_loans_period_effective_dates_required", "\"DrawdownDate\" IS NOT NULL AND \"BalanceAsOfDate\" IS NOT NULL");
+                        });
+                });
+
+            modelBuilder.Entity("Accounts.Api.Entities.LoanBalanceSnapshot", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("ClosingBalance")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("Drawdowns")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("DueAfterYear")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("DueWithinYear")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("EnteredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("EnteredBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("LoanId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<decimal>("OpeningBalance")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("PeriodId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("Repayments")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PeriodId");
+
+                    b.HasIndex("LoanId", "PeriodId")
+                        .IsUnique();
+
+                    b.ToTable("loan_balance_snapshots", (string)null);
                 });
 
             modelBuilder.Entity("Accounts.Api.Entities.NotesDisclosure", b =>
@@ -1452,11 +1705,17 @@ namespace Accounts.Api.Data.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<DateOnly?>("CancelledDate")
+                        .HasColumnType("date");
+
                     b.Property<int>("CompanyId")
                         .HasColumnType("integer");
 
                     b.Property<bool>("IsFullyPaid")
                         .HasColumnType("boolean");
+
+                    b.Property<DateOnly?>("IssueDate")
+                        .HasColumnType("date");
 
                     b.Property<decimal>("NominalValue")
                         .HasColumnType("decimal(18,2)");
@@ -1474,9 +1733,14 @@ namespace Accounts.Api.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CompanyId");
+                    b.HasIndex("CompanyId", "IssueDate");
 
-                    b.ToTable("share_capitals", (string)null);
+                    b.ToTable("share_capitals", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_share_capitals_cancelled_after_issue", "\"CancelledDate\" IS NULL OR \"CancelledDate\" >= \"IssueDate\"");
+
+                            t.HasCheckConstraint("CK_share_capitals_issue_date_required", "\"IssueDate\" IS NOT NULL");
+                        });
                 });
 
             modelBuilder.Entity("Accounts.Api.Entities.SizeClassification", b =>
@@ -1648,10 +1912,21 @@ namespace Accounts.Api.Data.Migrations
                         .HasMaxLength(320)
                         .HasColumnType("character varying(320)");
 
+                    b.Property<int>("FailedLoginCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
+                    b.Property<DateTime?>("LastFailedLoginAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTime?>("LastLoginAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("LockedUntilUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<bool>("MustChangePassword")
@@ -1683,6 +1958,11 @@ namespace Accounts.Api.Data.Migrations
                         .HasMaxLength(80)
                         .HasColumnType("character varying(80)");
 
+                    b.Property<int>("SessionVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
                     b.Property<int>("TenantId")
                         .HasColumnType("integer");
 
@@ -1697,6 +1977,33 @@ namespace Accounts.Api.Data.Migrations
                     b.HasIndex("TenantId", "Role");
 
                     b.ToTable("user_accounts", (string)null);
+                });
+
+            modelBuilder.Entity("Accounts.Api.Entities.UserCompanyAccess", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId");
+
+                    b.HasIndex("UserId", "CompanyId")
+                        .IsUnique();
+
+                    b.ToTable("user_company_accesses", (string)null);
                 });
 
             modelBuilder.Entity("Accounts.Api.Entities.YearEndReviewConfirmation", b =>
@@ -1810,6 +2117,17 @@ namespace Accounts.Api.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Company");
+                });
+
+            modelBuilder.Entity("Accounts.Api.Entities.CharityFilingPackage", b =>
+                {
+                    b.HasOne("Accounts.Api.Entities.AccountingPeriod", "Period")
+                        .WithOne("CharityFilingPackage")
+                        .HasForeignKey("Accounts.Api.Entities.CharityFilingPackage", "PeriodId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Period");
                 });
 
             modelBuilder.Entity("Accounts.Api.Entities.Company", b =>
@@ -2061,6 +2379,25 @@ namespace Accounts.Api.Data.Migrations
                     b.Navigation("Company");
                 });
 
+            modelBuilder.Entity("Accounts.Api.Entities.LoanBalanceSnapshot", b =>
+                {
+                    b.HasOne("Accounts.Api.Entities.Loan", "Loan")
+                        .WithMany()
+                        .HasForeignKey("LoanId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Accounts.Api.Entities.AccountingPeriod", "Period")
+                        .WithMany()
+                        .HasForeignKey("PeriodId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Loan");
+
+                    b.Navigation("Period");
+                });
+
             modelBuilder.Entity("Accounts.Api.Entities.NotesDisclosure", b =>
                 {
                     b.HasOne("Accounts.Api.Entities.AccountingPeriod", "Period")
@@ -2209,6 +2546,25 @@ namespace Accounts.Api.Data.Migrations
                     b.Navigation("Tenant");
                 });
 
+            modelBuilder.Entity("Accounts.Api.Entities.UserCompanyAccess", b =>
+                {
+                    b.HasOne("Accounts.Api.Entities.Company", "Company")
+                        .WithMany("UserAccesses")
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Accounts.Api.Entities.UserAccount", "User")
+                        .WithMany("CompanyAccesses")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Company");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("Accounts.Api.Entities.YearEndReviewConfirmation", b =>
                 {
                     b.HasOne("Accounts.Api.Entities.AccountingPeriod", "Period")
@@ -2236,6 +2592,8 @@ namespace Accounts.Api.Data.Migrations
                     b.Navigation("ContingentLiabilities");
 
                     b.Navigation("Creditors");
+
+                    b.Navigation("CharityFilingPackage");
 
                     b.Navigation("CroFilingPackage");
 
@@ -2308,6 +2666,8 @@ namespace Accounts.Api.Data.Migrations
                     b.Navigation("ShareCapitals");
 
                     b.Navigation("TransactionRules");
+
+                    b.Navigation("UserAccesses");
                 });
 
             modelBuilder.Entity("Accounts.Api.Entities.FixedAsset", b =>
@@ -2325,6 +2685,11 @@ namespace Accounts.Api.Data.Migrations
                     b.Navigation("Companies");
 
                     b.Navigation("Users");
+                });
+
+            modelBuilder.Entity("Accounts.Api.Entities.UserAccount", b =>
+                {
+                    b.Navigation("CompanyAccesses");
                 });
 #pragma warning restore 612, 618
         }

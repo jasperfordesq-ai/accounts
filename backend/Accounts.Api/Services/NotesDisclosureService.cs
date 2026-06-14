@@ -6,19 +6,37 @@ namespace Accounts.Api.Services;
 
 public class NotesDisclosureService(AccountsDbContext db)
 {
-    public async Task<List<NotesDisclosure>> GenerateNotesAsync(int periodId)
+    public async Task<List<NotesDisclosure>> GenerateNotesAsync(int companyId, int periodId)
     {
         var period = await db.AccountingPeriods
             .Include(p => p.Company)
             .Include(p => p.FilingRegime)
-            .FirstAsync(p => p.Id == periodId);
+            .FirstOrDefaultAsync(p => p.Id == periodId && p.CompanyId == companyId)
+            ?? throw new ResourceNotFoundException($"Period {periodId} not found");
 
         var company = period.Company;
         var regime = period.FilingRegime?.ElectedRegime ?? ElectedRegime.Small;
+        var periodsToDate = (await db.AccountingPeriods
+            .Where(p => p.CompanyId == companyId && p.PeriodEnd <= period.PeriodEnd)
+            .Select(p => p.Id)
+            .ToListAsync())
+            .ToHashSet();
+        var activeAssets = await db.FixedAssets
+            .Include(a => a.DepreciationEntries)
+            .Where(a => a.CompanyId == company.Id
+                && a.AcquisitionDate <= period.PeriodEnd
+                && (a.DisposalDate == null || a.DisposalDate > period.PeriodEnd))
+            .ToListAsync();
 
-        // Remove existing auto-generated notes
+        // Remove generated notes while preserving custom user disclosures.
         var existing = await db.NotesDisclosures.Where(n => n.PeriodId == periodId).ToListAsync();
-        db.NotesDisclosures.RemoveRange(existing);
+        var generatedExisting = existing.Where(n => n.IsRequired).ToList();
+        var customExisting = existing
+            .Where(n => !n.IsRequired)
+            .OrderBy(n => n.NoteNumber)
+            .ThenBy(n => n.Id)
+            .ToList();
+        db.NotesDisclosures.RemoveRange(generatedExisting);
 
         var notes = new List<NotesDisclosure>();
         int num = 1;
@@ -32,17 +50,16 @@ public class NotesDisclosureService(AccountsDbContext db)
         policiesContent += "Currency\nThe financial statements are presented in Euro (\u20ac), which is also the functional currency of the company.\n\n";
 
         // Check if company has fixed assets for depreciation policy
-        var hasAssets = await db.FixedAssets.AnyAsync(a => a.CompanyId == company.Id && a.DisposalDate == null);
+        var hasAssets = activeAssets.Count > 0;
         if (hasAssets)
         {
             policiesContent += "Tangible Fixed Assets and Depreciation\n";
             policiesContent += "Tangible fixed assets are stated at cost less accumulated depreciation. Depreciation is provided at rates calculated to write off the cost of each asset over its expected useful life, as follows:\n";
 
-            var categories = await db.FixedAssets
-                .Where(a => a.CompanyId == company.Id && a.DisposalDate == null)
+            var categories = activeAssets
                 .Select(a => new { a.Category, a.DepreciationMethod, a.UsefulLifeYears })
                 .Distinct()
-                .ToListAsync();
+                .ToList();
 
             foreach (var cat in categories)
             {
@@ -67,7 +84,10 @@ public class NotesDisclosureService(AccountsDbContext db)
         if (regime == ElectedRegime.Micro)
         {
             // Director advances/guarantees (micro requirement)
-            var dirLoans = await db.DirectorLoans.Where(d => d.PeriodId == periodId).Include(d => d.Director).ToListAsync();
+            var dirLoans = await db.DirectorLoans
+                .Where(d => d.PeriodId == periodId && d.Director.CompanyId == companyId)
+                .Include(d => d.Director)
+                .ToListAsync();
             if (dirLoans.Count > 0)
             {
                 var dlContent = "The following advances, credits and guarantees existed between the company and its directors during the financial year:\n\n";
@@ -78,23 +98,26 @@ public class NotesDisclosureService(AccountsDbContext db)
 
             notes.Add(new NotesDisclosure { PeriodId = periodId, NoteNumber = num++, Title = "Approval of Financial Statements", Content = $"The financial statements were approved and authorised for issue by the Board of Directors on {DateTime.Now:dd MMMM yyyy}.", IsRequired = true, IsIncluded = true });
 
+            RenumberCustomNotesAfterGenerated(customExisting, notes.Count);
             db.NotesDisclosures.AddRange(notes);
             await db.SaveChangesAsync();
-            return notes;
+            return await db.NotesDisclosures
+                .Where(n => n.PeriodId == periodId)
+                .OrderBy(n => n.NoteNumber)
+                .ToListAsync();
         }
 
         // Note 2: Tangible Fixed Assets (if any)
         if (hasAssets)
         {
-            var assets = await db.FixedAssets.Include(a => a.DepreciationEntries).Where(a => a.CompanyId == company.Id).ToListAsync();
-            var depEntries = assets.SelectMany(a => a.DepreciationEntries.Where(d => d.PeriodId == periodId)).ToList();
+            var depEntries = activeAssets.SelectMany(a => a.DepreciationEntries.Where(d => d.PeriodId == periodId)).ToList();
 
-            var totalCost = assets.Sum(a => a.Cost);
+            var totalCost = activeAssets.Sum(a => a.Cost);
             var totalDep = depEntries.Sum(d => d.Charge);
-            var totalNbv = assets.Sum(a =>
+            var totalNbv = activeAssets.Sum(a =>
             {
                 var entry = a.DepreciationEntries.FirstOrDefault(d => d.PeriodId == periodId);
-                return entry?.ClosingNbv ?? (a.Cost - a.DepreciationEntries.Sum(d => d.Charge));
+                return entry?.ClosingNbv ?? (a.Cost - a.DepreciationEntries.Where(d => periodsToDate.Contains(d.PeriodId)).Sum(d => d.Charge));
             });
 
             var assetContent = $"Cost at period end: \u20ac{totalCost:N0}\n";
@@ -139,18 +162,44 @@ public class NotesDisclosureService(AccountsDbContext db)
         }
 
         // Note: Creditors after one year
-        var loansAfter = await db.Loans.Where(l => l.CompanyId == company.Id && l.DueAfterYear > 0).ToListAsync();
+        var loanSnapshots = await db.LoanBalanceSnapshots
+            .Include(s => s.Loan)
+            .Where(s => s.PeriodId == periodId && s.Loan.CompanyId == company.Id && s.DueAfterYear > 0)
+            .ToListAsync();
+        loanSnapshots = loanSnapshots
+            .Where(s => LoanAppliesAtPeriodEnd(s.Loan, period.PeriodStart, period.PeriodEnd))
+            .ToList();
+        var snapshotLoanIds = loanSnapshots.Select(s => s.LoanId).ToHashSet();
+        var loansAfter = (await db.Loans
+            .Where(l => l.CompanyId == company.Id
+                && l.DueAfterYear > 0
+                && l.DrawdownDate != null
+                && l.BalanceAsOfDate != null
+                && l.DrawdownDate <= period.PeriodEnd
+                && l.BalanceAsOfDate >= period.PeriodStart
+                && l.BalanceAsOfDate <= period.PeriodEnd)
+            .ToListAsync())
+            .Where(l => LoanAppliesAtPeriodEnd(l, period.PeriodStart, period.PeriodEnd))
+            .Where(l => !snapshotLoanIds.Contains(l.Id))
+            .Select(l => new LoanDisclosureLine(l.Lender, l.DueAfterYear))
+            .Concat(loanSnapshots.Select(s => new LoanDisclosureLine(s.Loan.Lender, s.DueAfterYear)))
+            .ToList();
         if (loansAfter.Count > 0)
         {
             var lContent = "";
             foreach (var loan in loansAfter)
-                lContent += $"{loan.Lender}: \u20ac{loan.DueAfterYear:N0}\n";
-            lContent += $"Total: \u20ac{loansAfter.Sum(l => l.DueAfterYear):N0}";
+                lContent += $"{loan.Lender}: \u20ac{loan.Amount:N0}\n";
+            lContent += $"Total: \u20ac{loansAfter.Sum(l => l.Amount):N0}";
             notes.Add(new NotesDisclosure { PeriodId = periodId, NoteNumber = num++, Title = "Creditors: Amounts Falling Due After More Than One Year", Content = lContent, IsRequired = true, IsIncluded = true });
         }
 
         // Note: Share Capital
-        var shareCapitals = await db.ShareCapitals.Where(s => s.CompanyId == company.Id).ToListAsync();
+        var shareCapitals = await db.ShareCapitals
+            .Where(s => s.CompanyId == company.Id
+                && s.IssueDate != null
+                && s.IssueDate <= period.PeriodEnd
+                && (s.CancelledDate == null || s.CancelledDate > period.PeriodEnd))
+            .ToListAsync();
         var scContent = shareCapitals.Count > 0
             ? string.Join("\n", shareCapitals.Select(s => $"Authorised and issued: {s.NumberIssued} {s.ShareClass} shares of \u20ac{s.NominalValue:N2} each, fully paid: \u20ac{s.TotalValue:N0}"))
             : "Authorised and issued: 1 Ordinary share of \u20ac1.00, fully paid: \u20ac1";
@@ -173,7 +222,10 @@ public class NotesDisclosureService(AccountsDbContext db)
         }
 
         // Note: Director loans
-        var directorLoans = await db.DirectorLoans.Where(d => d.PeriodId == periodId).Include(d => d.Director).ToListAsync();
+        var directorLoans = await db.DirectorLoans
+            .Where(d => d.PeriodId == periodId && d.Director.CompanyId == companyId)
+            .Include(d => d.Director)
+            .ToListAsync();
         if (directorLoans.Count > 0)
         {
             var dlContent = "";
@@ -254,8 +306,28 @@ public class NotesDisclosureService(AccountsDbContext db)
         // Note: Approval
         notes.Add(new NotesDisclosure { PeriodId = periodId, NoteNumber = num++, Title = "Approval of Financial Statements", Content = $"The financial statements were approved and authorised for issue by the Board of Directors on {DateTime.Now:dd MMMM yyyy}.", IsRequired = true, IsIncluded = true });
 
+        RenumberCustomNotesAfterGenerated(customExisting, notes.Count);
         db.NotesDisclosures.AddRange(notes);
         await db.SaveChangesAsync();
-        return notes;
+        return await db.NotesDisclosures
+            .Where(n => n.PeriodId == periodId)
+            .OrderBy(n => n.NoteNumber)
+            .ToListAsync();
     }
+
+    private static void RenumberCustomNotesAfterGenerated(List<NotesDisclosure> customNotes, int generatedCount)
+    {
+        var noteNumber = generatedCount + 1;
+        foreach (var note in customNotes)
+            note.NoteNumber = noteNumber++;
+    }
+
+    private static bool LoanAppliesAtPeriodEnd(Loan loan, DateOnly periodStart, DateOnly periodEnd) =>
+        loan.DrawdownDate is { } drawdownDate
+        && loan.BalanceAsOfDate is { } balanceAsOfDate
+        && drawdownDate <= periodEnd
+        && balanceAsOfDate >= periodStart
+        && balanceAsOfDate <= periodEnd;
+
+    private record LoanDisclosureLine(string Lender, decimal Amount);
 }

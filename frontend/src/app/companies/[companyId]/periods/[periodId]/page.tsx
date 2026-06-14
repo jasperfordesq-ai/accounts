@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState, useEffect, useCallback, useRef } from "react";
+import { Fragment, use, useState, useEffect, useCallback, useRef } from "react";
 import {
   Button,
   Card,
@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import {
+  fetchDocumentBlob,
   getCompany,
   getPeriod,
   getYearEndSummary,
@@ -59,7 +60,6 @@ import {
   calculateDeadlines,
   updateCroFilingStatus,
   confirmCroPayment,
-  markDocumentGenerated,
   getDeadlines,
   markFiled,
   getAuditExemptionJeopardy,
@@ -121,10 +121,14 @@ export default function PeriodWorkspacePage({
     name: "",
     iban: "",
     openingBalance: "0",
+    openingBalanceDate: "",
     currency: "EUR",
   });
   const [filingStatus, setFilingStatus] = useState<FilingWorkflowStatus | null>(null);
   const [deadlinesList, setDeadlinesList] = useState<FilingDeadline[]>([]);
+  const [filingReferences, setFilingReferences] = useState<Record<number, string>>({});
+  const [croSubmissionReference, setCroSubmissionReference] = useState("");
+  const [markingFiledId, setMarkingFiledId] = useState<number | null>(null);
   const [jeopardy, setJeopardy] = useState<AuditExemptionJeopardy | null>(null);
   const [section307Note, setSection307Note] = useState<string | null>(null);
   const [categories, setCategories] = useState<AccountCategory[]>([]);
@@ -215,6 +219,7 @@ export default function PeriodWorkspacePage({
       try {
         const fs = await getFilingWorkflowStatus(cId, pId);
         setFilingStatus(fs);
+        setCroSubmissionReference(fs.cro.submissionReference ?? "");
       } catch {
         // Filing status may not be available yet
       }
@@ -248,7 +253,7 @@ export default function PeriodWorkspacePage({
         setTransactionRules(rules);
       } catch {}
       try {
-        const audit = await getAuditLog(cId, pId, 1, 12);
+        const audit = await getAuditLog(cId, pId, 1, 50);
         setAuditLog(audit.items);
         setAuditTotal(audit.total);
       } catch {}
@@ -363,17 +368,25 @@ export default function PeriodWorkspacePage({
       return;
     }
 
+    const openingBalance = Number(bankForm.openingBalance || 0);
+    const openingBalanceDate = bankForm.openingBalanceDate || period?.periodStart || "";
+    if (openingBalance !== 0 && !openingBalanceDate) {
+      toast.error("Opening balance date is required");
+      return;
+    }
+
     setSavingBankAccount(true);
     try {
       const account = await createBankAccount(cId, {
         name: bankForm.name.trim(),
         iban: bankForm.iban.trim() || undefined,
         currency: bankForm.currency || "EUR",
-        openingBalance: Number(bankForm.openingBalance || 0),
+        openingBalance,
+        openingBalanceDate: openingBalance !== 0 ? openingBalanceDate : undefined,
       });
       setBankAccounts((current) => [...current, account]);
       setSelectedBankAccountId(account.id);
-      setBankForm({ name: "", iban: "", openingBalance: "0", currency: "EUR" });
+      setBankForm({ name: "", iban: "", openingBalance: "0", openingBalanceDate: period?.periodStart ?? "", currency: "EUR" });
       setShowBankForm(false);
       toast.success("Bank account linked");
     } catch (err) {
@@ -535,17 +548,16 @@ export default function PeriodWorkspacePage({
     }
   }
 
-  async function markGeneratedAndRefresh(documentType: "accounts" | "signature") {
-    try {
-      await markDocumentGenerated(cId, pId, documentType);
-      const fs = await getFilingWorkflowStatus(cId, pId);
-      setFilingStatus(fs);
-    } catch {
-      // Download still opens; the readiness panel will refresh on the next status load.
-    }
+  function documentDownloadName(label: string, extension = "pdf") {
+    const safeLabel = label
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+
+    return `${safeLabel || "accounts-document"}.${extension}`;
   }
 
-  async function downloadDocument(url: string, label: string, documentType?: "accounts" | "signature", requiresRegime = false) {
+  async function downloadDocument(url: string, label: string, documentType?: "accounts" | "signature", requiresRegime = false, extension = "pdf") {
     if (requiresRegime && !period?.filingRegime) {
       toast.error("Confirm the filing regime before generating CRO documents.");
       return;
@@ -553,26 +565,31 @@ export default function PeriodWorkspacePage({
 
     setDownloadingDocument(label);
     try {
-      const response = await fetch(url);
-      if (!response.ok) {
-        const body = await response.text().catch(() => "");
-        let message = `Failed to generate ${label}`;
-        try {
-          const parsed = JSON.parse(body);
-          message = parsed.error ?? parsed.message ?? parsed.title ?? message;
-        } catch {
-          if (body && body.length < 200) message = body;
-        }
-        throw new Error(message);
+      const blob = await fetchDocumentBlob(url, documentType ? "POST" : "GET");
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      let downloadDelivered = false;
+
+      try {
+        anchor.href = objectUrl;
+        anchor.download = documentDownloadName(label, extension);
+        anchor.rel = "noopener noreferrer";
+        document.body.appendChild(anchor);
+        anchor.click();
+        downloadDelivered = true;
+      } finally {
+        anchor.remove();
+        window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
       }
 
-      const blob = await response.blob();
-      const objectUrl = URL.createObjectURL(blob);
-      window.open(objectUrl, "_blank", "noopener,noreferrer");
-      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
-
-      if (documentType) {
-        await markGeneratedAndRefresh(documentType);
+      if (documentType && downloadDelivered) {
+        try {
+          const fs = await getFilingWorkflowStatus(cId, pId);
+          setFilingStatus(fs);
+          setCroSubmissionReference(fs.cro.submissionReference ?? "");
+        } catch {
+          // Download still opens; the readiness panel will refresh on the next status load.
+        }
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : `Failed to generate ${label}`);
@@ -830,7 +847,7 @@ export default function PeriodWorkspacePage({
                 <div className="space-y-4">
                   {showBankForm && (
                     <div className="rounded-md border border-gray-200 bg-gray-50 p-4 dark:border-neutral-700 dark:bg-neutral-800/40">
-                      <div className="grid gap-3 md:grid-cols-4">
+                      <div className="grid gap-3 md:grid-cols-5">
                         <div>
                           <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Account name</label>
                           <input
@@ -856,6 +873,15 @@ export default function PeriodWorkspacePage({
                             step="0.01"
                             value={bankForm.openingBalance}
                             onChange={(e) => setBankForm((current) => ({ ...current, openingBalance: e.target.value }))}
+                            className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-gray-100"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Balance date</label>
+                          <input
+                            type="date"
+                            value={bankForm.openingBalanceDate || period?.periodStart || ""}
+                            onChange={(e) => setBankForm((current) => ({ ...current, openingBalanceDate: e.target.value }))}
                             className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-gray-100"
                           />
                         </div>
@@ -1979,7 +2005,7 @@ export default function PeriodWorkspacePage({
                       </div>
                     )}
 
-                    {/* Validate iXBRL Button */}
+                    {/* iXBRL internal checks */}
                     <Button
                       variant="outline"
                       size="sm"
@@ -1988,29 +2014,48 @@ export default function PeriodWorkspacePage({
                         setValidatingIxbrl(true);
                         try {
                           const result = await validateIxbrl(cId, pId);
-                          if (result.ixbrlValid) {
-                            toast.success("iXBRL validation passed");
+                          if (result.ixbrlInternalChecksPassed) {
+                            toast.success("Internal iXBRL checks passed; external ROS validation is still required");
                           } else {
-                            toast.error(result.validationErrors || "iXBRL validation failed");
+                            toast.error(result.validationErrors || "Internal iXBRL checks need attention");
                           }
                           // Refresh filing status
                           try {
                             const fs = await getFilingWorkflowStatus(cId, pId);
                             setFilingStatus(fs);
+                            setCroSubmissionReference(fs.cro.submissionReference ?? "");
                           } catch {}
                         } catch (err) {
-                          toast.error(err instanceof Error ? err.message : "iXBRL validation failed");
+                          toast.error(err instanceof Error ? err.message : "Internal iXBRL checks need attention");
                         } finally {
                           setValidatingIxbrl(false);
                         }
                       }}
                     >
                       {validatingIxbrl ? (
-                        <><Spinner size="sm" className="mr-2" />Validating...</>
+                        <><Spinner size="sm" className="mr-2" />Checking...</>
                       ) : (
-                        <><FileText className="w-4 h-4 mr-1" />Validate iXBRL</>
+                        <><FileText className="w-4 h-4 mr-1" />Run iXBRL Checks</>
                       )}
                     </Button>
+
+                    {(filingStatus.cro.status === "Approved" || filingStatus.cro.status === "Submitted" || filingStatus.cro.status === "Accepted") && (
+                      <div className="max-w-sm">
+                        <label htmlFor="cro-submission-reference" className="mb-1 block text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
+                          CORE submission reference
+                        </label>
+                        <input
+                          id="cro-submission-reference"
+                          aria-label="CORE submission reference"
+                          title="CORE submission reference"
+                          value={croSubmissionReference}
+                          onChange={(event) => setCroSubmissionReference(event.target.value)}
+                          disabled={filingStatus.cro.status === "Accepted"}
+                          className="h-9 w-full rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 disabled:bg-gray-100 disabled:text-gray-500 dark:border-neutral-700 dark:bg-neutral-950 dark:text-gray-100 dark:disabled:bg-neutral-800 dark:disabled:text-gray-400 dark:focus:border-emerald-500 dark:focus:ring-emerald-900/40"
+                          placeholder="CORE-2026-0001"
+                        />
+                      </div>
+                    )}
 
                     {/* Filing Action Buttons */}
                     <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-gray-200 dark:border-neutral-700">
@@ -2019,7 +2064,7 @@ export default function PeriodWorkspacePage({
                           try {
                             await updateCroFilingStatus(cId, pId, { status: "Approved" });
                             toast.success("Filing approved");
-                            const fs = await getFilingWorkflowStatus(cId, pId); setFilingStatus(fs);
+                            const fs = await getFilingWorkflowStatus(cId, pId); setFilingStatus(fs); setCroSubmissionReference(fs.cro.submissionReference ?? "");
                           } catch (err) { toast.error(err instanceof Error ? err.message : "Failed to approve"); }
                         }}>
                           <CheckCircle2 className="w-4 h-4 mr-1" /> Approve for Filing
@@ -2027,9 +2072,14 @@ export default function PeriodWorkspacePage({
                       ) : filingStatus.cro.status === "Approved" ? (
                         <Button variant="primary" size="sm" onPress={async () => {
                           try {
-                            await updateCroFilingStatus(cId, pId, { status: "Submitted" });
+                            const coreReference = croSubmissionReference.trim();
+                            if (!coreReference) {
+                              toast.error("CORE submission reference is required");
+                              return;
+                            }
+                            await updateCroFilingStatus(cId, pId, { status: "Submitted", submissionReference: coreReference });
                             toast.success("Marked as submitted to CRO");
-                            const fs = await getFilingWorkflowStatus(cId, pId); setFilingStatus(fs);
+                            const fs = await getFilingWorkflowStatus(cId, pId); setFilingStatus(fs); setCroSubmissionReference(fs.cro.submissionReference ?? "");
                           } catch (err) { toast.error(err instanceof Error ? err.message : "Failed to update status"); }
                         }}>
                           <Upload className="w-4 h-4 mr-1" /> Mark as Submitted
@@ -2044,7 +2094,7 @@ export default function PeriodWorkspacePage({
                               try {
                                 await confirmCroPayment(cId, pId);
                                 toast.success("CORE payment confirmed");
-                                const fs = await getFilingWorkflowStatus(cId, pId); setFilingStatus(fs);
+                                const fs = await getFilingWorkflowStatus(cId, pId); setFilingStatus(fs); setCroSubmissionReference(fs.cro.submissionReference ?? "");
                               } catch (err) { toast.error(err instanceof Error ? err.message : "Failed to confirm payment"); }
                             }}>
                               Confirm CORE Payment
@@ -2054,7 +2104,7 @@ export default function PeriodWorkspacePage({
                             try {
                               await updateCroFilingStatus(cId, pId, { status: "Accepted" });
                               toast.success("CRO acceptance recorded");
-                              const fs = await getFilingWorkflowStatus(cId, pId); setFilingStatus(fs);
+                              const fs = await getFilingWorkflowStatus(cId, pId); setFilingStatus(fs); setCroSubmissionReference(fs.cro.submissionReference ?? "");
                             } catch (err) { toast.error(err instanceof Error ? err.message : "Failed to mark accepted"); }
                           }}>
                             Mark Accepted
@@ -2066,7 +2116,7 @@ export default function PeriodWorkspacePage({
                                 reason: "CRO send-back/correction required. Correct and redeliver within 14 days.",
                               });
                               toast.warning("Correction deadline opened");
-                              const fs = await getFilingWorkflowStatus(cId, pId); setFilingStatus(fs);
+                              const fs = await getFilingWorkflowStatus(cId, pId); setFilingStatus(fs); setCroSubmissionReference(fs.cro.submissionReference ?? "");
                             } catch (err) { toast.error(err instanceof Error ? err.message : "Failed to record correction"); }
                           }}>
                             Record Send-Back
@@ -2111,15 +2161,52 @@ export default function PeriodWorkspacePage({
                               Filed {new Date(d.filedDate).toLocaleDateString("en-IE")} {d.isLate ? `(${d.penaltyAmount > 0 ? `\u20AC${d.penaltyAmount} penalty` : "Late"})` : ""}
                             </Chip>
                           ) : (
-                            <Button variant="outline" size="sm" onPress={async () => {
-                              try {
-                                await markFiled(cId, pId, { deadlineType: d.deadlineType, filedDate: new Date().toISOString().split("T")[0] });
-                                toast.success(`${d.deadlineType} filing marked as complete`);
-                                loadData();
-                              } catch (err) { toast.error(err instanceof Error ? err.message : "Failed to mark as filed"); }
-                            }}>
-                              Mark as Filed
-                            </Button>
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                              {(d.deadlineType === "Revenue" || d.deadlineType === "Charity") && (
+                                <input
+                                  aria-label={d.deadlineType === "Revenue" ? "Revenue ROS or CT1 filing reference" : "Charities Regulator annual return reference"}
+                                  title={d.deadlineType === "Revenue" ? "Revenue ROS or CT1 filing reference" : "Charities Regulator annual return reference"}
+                                  value={filingReferences[d.id] ?? (d.deadlineType === "Revenue" ? filingStatus?.revenue.ct1Reference : filingStatus?.charity.annualReturnReference ?? d.filingReference) ?? ""}
+                                  onChange={(event) => setFilingReferences((current) => ({
+                                    ...current,
+                                    [d.id]: event.target.value,
+                                  }))}
+                                  className="h-9 w-52 max-w-full rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 dark:border-neutral-700 dark:bg-neutral-950 dark:text-gray-100 dark:focus:border-emerald-500 dark:focus:ring-emerald-900/40"
+                                  placeholder={d.deadlineType === "Revenue" ? "ROS/CT1 reference" : "Annual return reference"}
+                                />
+                              )}
+                              <Button variant="outline" size="sm" isDisabled={markingFiledId === d.id} onPress={async () => {
+                                const filingReference = d.deadlineType === "Revenue"
+                                  ? (filingReferences[d.id] ?? filingStatus?.revenue.ct1Reference ?? "").trim()
+                                  : d.deadlineType === "Charity"
+                                    ? (filingReferences[d.id] ?? filingStatus?.charity.annualReturnReference ?? d.filingReference ?? "").trim()
+                                  : undefined;
+                                if (d.deadlineType === "Revenue" && !filingReference) {
+                                  toast.error("Revenue filing reference is required");
+                                  return;
+                                }
+                                if (d.deadlineType === "Charity" && !filingReference) {
+                                  toast.error("Charity annual return reference is required");
+                                  return;
+                                }
+                                setMarkingFiledId(d.id);
+                                try {
+                                  await markFiled(cId, pId, {
+                                    deadlineType: d.deadlineType,
+                                    filedDate: new Date().toISOString().split("T")[0],
+                                    ...(filingReference ? { filingReference } : {}),
+                                  });
+                                  toast.success(`${d.deadlineType} filing marked as complete`);
+                                  loadData();
+                                } catch (err) {
+                                  toast.error(err instanceof Error ? err.message : "Failed to mark as filed");
+                                } finally {
+                                  setMarkingFiledId(null);
+                                }
+                              }}>
+                                {markingFiledId === d.id ? <Spinner size="sm" /> : "Mark as Filed"}
+                              </Button>
+                            </div>
                           )}
                         </div>
                       </div>
@@ -2188,7 +2275,7 @@ export default function PeriodWorkspacePage({
                       Download PDF
                     </span>
                   </button>
-                  <button type="button" onClick={() => downloadDocument(ixbrlUrl, "iXBRL filing")} disabled={downloadingDocument !== null} className="flex flex-col items-center gap-3 rounded-xl border-2 border-gray-200 p-8 text-center transition-all hover:border-emerald-400 hover:bg-emerald-50/30 disabled:cursor-wait disabled:opacity-70 dark:border-neutral-700 dark:hover:border-emerald-600 dark:hover:bg-emerald-900/10 group">
+                  <button type="button" onClick={() => downloadDocument(ixbrlUrl, "iXBRL filing", undefined, false, "xhtml")} disabled={downloadingDocument !== null} className="flex flex-col items-center gap-3 rounded-xl border-2 border-gray-200 p-8 text-center transition-all hover:border-emerald-400 hover:bg-emerald-50/30 disabled:cursor-wait disabled:opacity-70 dark:border-neutral-700 dark:hover:border-emerald-600 dark:hover:bg-emerald-900/10 group">
                     <FileText className="w-12 h-12 text-gray-400 dark:text-gray-500 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors" />
                     <div className="text-center">
                       <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">iXBRL Filing</p>
@@ -2242,14 +2329,43 @@ export default function PeriodWorkspacePage({
                       </thead>
                       <tbody>
                         {auditLog.map((entry) => (
-                          <tr key={entry.id} className="border-b border-gray-100 dark:border-neutral-800">
-                            <td className="py-2 pr-4 whitespace-nowrap text-gray-600 dark:text-gray-300">
-                              {new Date(entry.timestamp).toLocaleString("en-IE", { dateStyle: "medium", timeStyle: "short" })}
-                            </td>
-                            <td className="py-2 pr-4 font-medium text-gray-900 dark:text-gray-100">{entry.action}</td>
-                            <td className="py-2 pr-4 text-gray-600 dark:text-gray-300">{entry.entityType} #{entry.entityId}</td>
-                            <td className="py-2 pr-4 text-gray-600 dark:text-gray-300">{entry.userId || "System"}</td>
-                          </tr>
+                          <Fragment key={entry.id}>
+                            <tr className="border-b border-gray-100 dark:border-neutral-800">
+                              <td className="py-2 pr-4 whitespace-nowrap text-gray-600 dark:text-gray-300">
+                                {new Date(entry.timestamp).toLocaleString("en-IE", { dateStyle: "medium", timeStyle: "short" })}
+                              </td>
+                              <td className="py-2 pr-4 font-medium text-gray-900 dark:text-gray-100">{entry.action}</td>
+                              <td className="py-2 pr-4 text-gray-600 dark:text-gray-300">{entry.entityType} #{entry.entityId}</td>
+                              <td className="py-2 pr-4 text-gray-600 dark:text-gray-300">{entry.userId || "System"}</td>
+                            </tr>
+                            {(entry.oldValueJson || entry.newValueJson) && (
+                              <tr className="border-b border-gray-100 bg-gray-50/60 dark:border-neutral-800 dark:bg-neutral-950/50">
+                                <td colSpan={4} className="px-3 py-3">
+                                  <div className="space-y-2">
+                                    <p className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Audit Details</p>
+                                    <div className="grid gap-3 md:grid-cols-2">
+                                      {entry.oldValueJson && (
+                                        <div>
+                                          <p className="mb-1 text-xs font-medium text-gray-600 dark:text-gray-300">Old value</p>
+                                          <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-all rounded-md border border-gray-200 bg-white p-3 text-xs text-gray-700 dark:border-neutral-700 dark:bg-neutral-900 dark:text-gray-200">
+                                            {formatAuditPayload(entry.oldValueJson)}
+                                          </pre>
+                                        </div>
+                                      )}
+                                      {entry.newValueJson && (
+                                        <div>
+                                          <p className="mb-1 text-xs font-medium text-gray-600 dark:text-gray-300">New value</p>
+                                          <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-all rounded-md border border-gray-200 bg-white p-3 text-xs text-gray-700 dark:border-neutral-700 dark:bg-neutral-900 dark:text-gray-200">
+                                            {formatAuditPayload(entry.newValueJson)}
+                                          </pre>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </Fragment>
                         ))}
                       </tbody>
                     </table>
@@ -2287,6 +2403,14 @@ export default function PeriodWorkspacePage({
 }
 
 /* --- Helper Components --- */
+
+function formatAuditPayload(value: string) {
+  try {
+    return JSON.stringify(JSON.parse(value), null, 2);
+  } catch {
+    return value;
+  }
+}
 
 function SummaryCard({ title, value, subtitle }: { title: string; value: string; subtitle: string }) {
   return (

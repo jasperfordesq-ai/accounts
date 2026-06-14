@@ -1,14 +1,26 @@
 import type { NextConfig } from "next";
 
-const apiUrl = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:5090";
+const enableBuildWorkerThreads = process.env.NEXT_BUILD_WORKER_THREADS === "1";
 
 const nextConfig: NextConfig = {
+  ...(enableBuildWorkerThreads
+    ? {
+        experimental: {
+          workerThreads: true,
+        },
+      }
+    : {}),
   output: "standalone",
-  async rewrites() {
+  async headers() {
     return [
       {
-        source: "/health",
-        destination: `${apiUrl}/health`,
+        source: "/:path*",
+        headers: [
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "no-referrer" },
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=()" },
+        ],
       },
     ];
   },

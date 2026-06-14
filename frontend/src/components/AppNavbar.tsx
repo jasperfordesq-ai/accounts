@@ -10,12 +10,12 @@ import { ThemeToggle } from "./ThemeToggle";
 
 export function AppNavbar() {
   const pathname = usePathname();
-  const { user, isOwner, logout } = useAuth();
+  const { user, isOwner, logout, logoutError } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const isActive = (path: string) => pathname === path;
 
-  if (pathname === "/login") return null;
+  if (pathname === "/login" || pathname === "/change-password") return null;
 
   async function handleLogout() {
     setMobileOpen(false);
@@ -58,7 +58,7 @@ export function AppNavbar() {
             </Link>
           )}
           {user && (
-            <div className="ml-2 flex max-w-xs items-center gap-2 border-l border-gray-200 pl-3 dark:border-neutral-700">
+            <div className="ml-2 flex max-w-xl items-center gap-2 border-l border-gray-200 pl-3 dark:border-neutral-700">
               <UserCircle className="h-5 w-5 shrink-0 text-gray-500 dark:text-gray-400" />
               <div className="min-w-0 leading-tight">
                 <div className="truncate text-sm font-medium text-gray-900 dark:text-gray-100">
@@ -68,6 +68,15 @@ export function AppNavbar() {
                   {user.role} / {user.tenantName}
                 </div>
               </div>
+              {logoutError && (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className="hidden max-w-48 text-xs leading-snug text-red-600 dark:text-red-400 md:block xl:max-w-52"
+                >
+                  {logoutError}
+                </div>
+              )}
               <Button
                 variant="ghost"
                 size="sm"
@@ -99,6 +108,16 @@ export function AppNavbar() {
           </Button>
         </div>
       </div>
+
+      {logoutError && user && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="mx-auto mt-3 max-w-7xl rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs leading-snug text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300 md:hidden"
+        >
+          {logoutError}
+        </div>
+      )}
 
       {/* Mobile menu */}
       {mobileOpen && (
@@ -139,6 +158,15 @@ export function AppNavbar() {
                     </div>
                   </div>
                 </div>
+                {logoutError && (
+                  <div
+                    role="status"
+                    aria-live="polite"
+                    className="mb-2 px-2 text-xs leading-snug text-red-600 dark:text-red-400"
+                  >
+                    {logoutError}
+                  </div>
+                )}
                 <Button
                   variant="ghost"
                   size="sm"

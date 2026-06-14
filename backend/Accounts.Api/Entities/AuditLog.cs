@@ -11,5 +11,10 @@ public class AuditLog
     public string? OldValueJson { get; set; }
     public string? NewValueJson { get; set; }
     public string? UserId { get; set; }
+    public int? TenantId { get; set; }
+    public string? RequestId { get; set; }
+    public string? ActorDisplayName { get; set; }
+    public string? PreviousIntegrityHash { get; set; }
+    public string? IntegrityHash { get; set; }
     public DateTime Timestamp { get; set; } = DateTime.UtcNow;
 }

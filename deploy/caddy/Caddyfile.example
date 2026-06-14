@@ -1,0 +1,26 @@
+# Example HTTPS ingress for the production Docker Compose stack.
+#
+# The frontend service is published only on 127.0.0.1 by compose.production.yml.
+# Set TRUST_PROXY_HEADERS=true only when the ingress overwrites the forwarded
+# headers below and no untrusted client can connect directly to the frontend port.
+
+{
+	{$ACCOUNTS_CADDY_GLOBAL_OPTIONS}
+}
+
+{$ACCOUNTS_HOSTNAME:accounts.example.ie} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+	}
+
+	reverse_proxy 127.0.0.1:{$FRONTEND_PORT:3000} {
+		header_up Host {host}
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Host {host}
+		header_up X-Forwarded-Proto {scheme}
+	}
+}

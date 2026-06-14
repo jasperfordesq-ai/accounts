@@ -8,8 +8,24 @@ public class UserSessionMiddleware(RequestDelegate next)
     {
         if (!context.Request.Path.StartsWithSegments("/api")
             || HttpMethods.IsOptions(context.Request.Method)
-            || IsAnonymousAuthEndpoint(context))
+            || IsLoginEndpoint(context))
         {
+            await next(context);
+            return;
+        }
+
+        if (IsLogoutEndpoint(context))
+        {
+            var optionalAuth = context.RequestServices.GetService<AuthService>();
+            if (optionalAuth is not null)
+            {
+                var optionalUser = await optionalAuth.ReadSessionAsync(
+                    context.Request.Cookies[optionalAuth.CookieName],
+                    DateTimeOffset.UtcNow);
+                if (optionalUser is not null)
+                    context.Items[AuthContext.ItemKey] = optionalUser;
+            }
+
             await next(context);
             return;
         }
@@ -31,7 +47,11 @@ public class UserSessionMiddleware(RequestDelegate next)
         await next(context);
     }
 
-    private static bool IsAnonymousAuthEndpoint(HttpContext context) =>
+    private static bool IsLoginEndpoint(HttpContext context) =>
         HttpMethods.IsPost(context.Request.Method)
         && context.Request.Path.Equals("/api/auth/login", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsLogoutEndpoint(HttpContext context) =>
+        HttpMethods.IsPost(context.Request.Method)
+        && context.Request.Path.Equals("/api/auth/logout", StringComparison.OrdinalIgnoreCase);
 }

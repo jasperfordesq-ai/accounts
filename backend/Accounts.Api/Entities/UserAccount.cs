@@ -16,10 +16,17 @@ public class UserAccount
     public bool IsActive { get; set; } = true;
     public bool MustChangePassword { get; set; }
     public DateTime PasswordLastChangedAt { get; set; } = DateTime.UtcNow;
+    public int SessionVersion { get; set; } = 1;
+    public int FailedLoginCount { get; set; }
+    public DateTime? LastFailedLoginAt { get; set; }
+    public DateTime? LockedUntilUtc { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? LastLoginAt { get; set; }
 
     [JsonIgnore]
     public Tenant Tenant { get; set; } = null!;
+
+    [JsonIgnore]
+    public List<UserCompanyAccess> CompanyAccesses { get; set; } = [];
 }

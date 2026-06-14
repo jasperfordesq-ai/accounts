@@ -8,6 +8,7 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
     // Tenancy & Users
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<UserAccount> UserAccounts => Set<UserAccount>();
+    public DbSet<UserCompanyAccess> UserCompanyAccesses => Set<UserCompanyAccess>();
 
     // Company & Officers
     public DbSet<Company> Companies => Set<Company>();
@@ -21,6 +22,7 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
     public DbSet<FilingRegime> FilingRegimes => Set<FilingRegime>();
     public DbSet<CroFilingPackage> CroFilingPackages => Set<CroFilingPackage>();
     public DbSet<RevenueFilingPackage> RevenueFilingPackages => Set<RevenueFilingPackage>();
+    public DbSet<CharityFilingPackage> CharityFilingPackages => Set<CharityFilingPackage>();
 
     // Banking & Transactions
     public DbSet<BankAccount> BankAccounts => Set<BankAccount>();
@@ -36,6 +38,7 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
     public DbSet<DepreciationEntry> DepreciationEntries => Set<DepreciationEntry>();
     public DbSet<Inventory> Inventories => Set<Inventory>();
     public DbSet<Loan> Loans => Set<Loan>();
+    public DbSet<LoanBalanceSnapshot> LoanBalanceSnapshots => Set<LoanBalanceSnapshot>();
     public DbSet<DirectorLoan> DirectorLoans => Set<DirectorLoan>();
     public DbSet<PayrollSummary> PayrollSummaries => Set<PayrollSummary>();
     public DbSet<TaxBalance> TaxBalances => Set<TaxBalance>();
@@ -68,6 +71,7 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
 
     // Audit
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<AuditIntegrityCheckpoint> AuditIntegrityCheckpoints => Set<AuditIntegrityCheckpoint>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -94,9 +98,22 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
             e.Property(u => u.PasswordHash).HasMaxLength(512).IsRequired();
             e.Property(u => u.PasswordSalt).HasMaxLength(256).IsRequired();
             e.Property(u => u.PasswordAlgorithm).HasMaxLength(80).IsRequired();
+            e.Property(u => u.SessionVersion).HasDefaultValue(1);
+            e.Property(u => u.FailedLoginCount).HasDefaultValue(0);
             e.HasOne(u => u.Tenant).WithMany(t => t.Users).HasForeignKey(u => u.TenantId).OnDelete(DeleteBehavior.Cascade);
             e.HasIndex(u => u.Email).IsUnique();
             e.HasIndex(u => new { u.TenantId, u.Role });
+        });
+
+        // UserCompanyAccess
+        modelBuilder.Entity<UserCompanyAccess>(e =>
+        {
+            e.ToTable("user_company_accesses");
+            e.HasKey(a => a.Id);
+            e.HasOne(a => a.User).WithMany(u => u.CompanyAccesses).HasForeignKey(a => a.UserId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(a => a.Company).WithMany(c => c.UserAccesses).HasForeignKey(a => a.CompanyId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(a => new { a.UserId, a.CompanyId }).IsUnique();
+            e.HasIndex(a => a.CompanyId);
         });
 
         // Company
@@ -127,6 +144,9 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
         {
             e.ToTable("accounting_periods");
             e.HasKey(p => p.Id);
+            e.Property(p => p.LockedBy).HasMaxLength(200);
+            e.Property(p => p.ReopenedBy).HasMaxLength(200);
+            e.Property(p => p.ReopenReason).HasMaxLength(1000);
             e.HasOne(p => p.Company).WithMany(c => c.Periods).HasForeignKey(p => p.CompanyId).OnDelete(DeleteBehavior.Cascade);
             e.HasIndex(p => new { p.CompanyId, p.PeriodEnd }).IsUnique();
         });
@@ -165,6 +185,19 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
             e.HasOne(r => r.Period).WithOne(p => p.RevenueFilingPackage).HasForeignKey<RevenueFilingPackage>(r => r.PeriodId).OnDelete(DeleteBehavior.Cascade);
         });
 
+        // CharityFilingPackage (1:1 with AccountingPeriod)
+        modelBuilder.Entity<CharityFilingPackage>(e =>
+        {
+            e.ToTable("charity_filing_packages");
+            e.HasKey(c => c.Id);
+            e.Property(c => c.ApprovedBy).HasMaxLength(200);
+            e.Property(c => c.SubmittedBy).HasMaxLength(200);
+            e.Property(c => c.AcceptedBy).HasMaxLength(200);
+            e.Property(c => c.AnnualReturnReference).HasMaxLength(200);
+            e.Property(c => c.RejectionReason).HasMaxLength(1000);
+            e.HasOne(c => c.Period).WithOne(p => p.CharityFilingPackage).HasForeignKey<CharityFilingPackage>(c => c.PeriodId).OnDelete(DeleteBehavior.Cascade);
+        });
+
         // BankAccount
         modelBuilder.Entity<BankAccount>(e =>
         {
@@ -175,6 +208,9 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
             e.Property(b => b.Currency).HasMaxLength(3);
             e.Property(b => b.OpeningBalance).HasColumnType("decimal(18,2)");
             e.HasOne(b => b.Company).WithMany(c => c.BankAccounts).HasForeignKey(b => b.CompanyId).OnDelete(DeleteBehavior.Cascade);
+            e.ToTable(t => t.HasCheckConstraint(
+                "CK_bank_accounts_opening_balance_date_required",
+                "\"OpeningBalance\" = 0 OR \"OpeningBalanceDate\" IS NOT NULL"));
         });
 
         // ImportBatch
@@ -318,6 +354,30 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
             e.Property(l => l.DueWithinYear).HasColumnType("decimal(18,2)");
             e.Property(l => l.DueAfterYear).HasColumnType("decimal(18,2)");
             e.HasOne(l => l.Company).WithMany(c => c.Loans).HasForeignKey(l => l.CompanyId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(l => new { l.CompanyId, l.DrawdownDate });
+            e.HasIndex(l => new { l.CompanyId, l.BalanceAsOfDate });
+            e.ToTable(t => t.HasCheckConstraint(
+                "CK_loans_period_effective_dates_required",
+                "\"DrawdownDate\" IS NOT NULL AND \"BalanceAsOfDate\" IS NOT NULL"));
+        });
+
+        // LoanBalanceSnapshot
+        modelBuilder.Entity<LoanBalanceSnapshot>(e =>
+        {
+            e.ToTable("loan_balance_snapshots");
+            e.HasKey(s => s.Id);
+            e.Property(s => s.OpeningBalance).HasColumnType("decimal(18,2)");
+            e.Property(s => s.Drawdowns).HasColumnType("decimal(18,2)");
+            e.Property(s => s.Repayments).HasColumnType("decimal(18,2)");
+            e.Property(s => s.ClosingBalance).HasColumnType("decimal(18,2)");
+            e.Property(s => s.DueWithinYear).HasColumnType("decimal(18,2)");
+            e.Property(s => s.DueAfterYear).HasColumnType("decimal(18,2)");
+            e.Property(s => s.Notes).HasMaxLength(1000);
+            e.Property(s => s.EnteredBy).HasMaxLength(200);
+            e.HasOne(s => s.Loan).WithMany().HasForeignKey(s => s.LoanId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(s => s.Period).WithMany().HasForeignKey(s => s.PeriodId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(s => new { s.LoanId, s.PeriodId }).IsUnique();
+            e.HasIndex(s => s.PeriodId);
         });
 
         // DirectorLoan
@@ -410,6 +470,16 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
             e.Property(s => s.NominalValue).HasColumnType("decimal(18,2)");
             e.Property(s => s.TotalValue).HasColumnType("decimal(18,2)");
             e.HasOne(s => s.Company).WithMany(c => c.ShareCapitals).HasForeignKey(s => s.CompanyId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(s => new { s.CompanyId, s.IssueDate });
+            e.ToTable(t =>
+            {
+                t.HasCheckConstraint(
+                    "CK_share_capitals_issue_date_required",
+                    "\"IssueDate\" IS NOT NULL");
+                t.HasCheckConstraint(
+                    "CK_share_capitals_cancelled_after_issue",
+                    "\"CancelledDate\" IS NULL OR \"CancelledDate\" >= \"IssueDate\"");
+            });
         });
 
         // FilingDeadline
@@ -418,6 +488,7 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
             e.ToTable("filing_deadlines");
             e.HasKey(f => f.Id);
             e.Property(f => f.PenaltyAmount).HasColumnType("decimal(18,2)");
+            e.Property(f => f.FilingReference).HasMaxLength(200);
             e.Property(f => f.Notes).HasMaxLength(1000);
             e.HasOne(f => f.Company).WithMany(c => c.FilingDeadlines).HasForeignKey(f => f.CompanyId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(f => f.Period).WithMany(p => p.FilingDeadlines).HasForeignKey(f => f.PeriodId).OnDelete(DeleteBehavior.Cascade);
@@ -430,9 +501,11 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
             e.ToTable("filing_histories");
             e.HasKey(f => f.Id);
             e.Property(f => f.PenaltyAmount).HasColumnType("decimal(18,2)");
+            e.Property(f => f.FilingReference).HasMaxLength(200);
             e.HasOne(f => f.Company).WithMany(c => c.FilingHistories).HasForeignKey(f => f.CompanyId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(f => f.Period).WithMany().HasForeignKey(f => f.PeriodId).OnDelete(DeleteBehavior.SetNull);
             e.HasIndex(f => new { f.CompanyId, f.DueDate });
+            e.HasIndex(f => new { f.CompanyId, f.PeriodId, f.DeadlineType }).IsUnique();
         });
 
         // PostBalanceSheetEvent
@@ -499,8 +572,33 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
             e.HasKey(a => a.Id);
             e.Property(a => a.EntityType).HasMaxLength(100).IsRequired();
             e.Property(a => a.Action).HasMaxLength(50).IsRequired();
+            e.Property(a => a.RequestId).HasMaxLength(128);
+            e.Property(a => a.ActorDisplayName).HasMaxLength(200);
+            e.Property(a => a.PreviousIntegrityHash).HasMaxLength(64);
+            e.Property(a => a.IntegrityHash).HasMaxLength(64);
             e.HasIndex(a => a.Timestamp);
             e.HasIndex(a => new { a.CompanyId, a.Timestamp });
+            e.HasIndex(a => new { a.TenantId, a.Timestamp });
+            e.HasIndex(a => a.RequestId);
+            e.HasIndex(a => a.IntegrityHash).IsUnique();
+            e.HasIndex(a => a.PreviousIntegrityHash).IsUnique();
+            e.HasIndex(a => new { a.CompanyId, a.PeriodId, a.Timestamp });
+        });
+
+        modelBuilder.Entity<AuditIntegrityCheckpoint>(e =>
+        {
+            e.ToTable("audit_integrity_checkpoints");
+            e.HasKey(c => c.Id);
+            e.Property(c => c.LastIntegrityHash).HasMaxLength(64).IsRequired();
+            e.Property(c => c.CreatedByUserId).HasMaxLength(320);
+            e.Property(c => c.CreatedByDisplayName).HasMaxLength(200);
+            e.Property(c => c.RequestId).HasMaxLength(128);
+            e.Property(c => c.KeyId).HasMaxLength(120).IsRequired();
+            e.Property(c => c.Signature).HasMaxLength(64).IsRequired();
+            e.HasIndex(c => new { c.CompanyId, c.Id });
+            e.HasIndex(c => new { c.CompanyId, c.LastAuditLogId });
+            e.HasIndex(c => new { c.TenantId, c.CreatedAtUtc });
+            e.HasIndex(c => c.Signature).IsUnique();
         });
 
         // Store all enums as strings for readability

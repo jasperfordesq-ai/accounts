@@ -13,17 +13,44 @@ public static class SeedData
     private const string PasswordAlgorithm = "PBKDF2-SHA256-210000";
     private const int PasswordIterations = 210_000;
     private const string DemoSeedUser = "demo.seed@accounts.local";
+    private static readonly string[] DemoUserEmails =
+    [
+        "owner@accounts-demo.ie",
+        "accountant@accounts-demo.ie",
+        "reviewer@accounts-demo.ie",
+        "client@accounts-demo.ie"
+    ];
+    private static readonly string[] NonCharitySampleCompanyCroNumbers =
+    [
+        "654321",
+        "789012"
+    ];
 
-    public static async Task SeedAsync(AccountsDbContext db)
+    public static async Task SeedAsync(
+        AccountsDbContext db,
+        bool seedDemoUsers = true,
+        bool seedSampleCompanies = true)
     {
         var tenant = await EnsureMainTenantAsync(db);
 
         var micro = await SeedGreenValleyAsync(db, tenant.Id);
-        var small = await SeedConnachtDigitalAsync(db, tenant.Id);
-        var medium = await SeedAtlanticManufacturingAsync(db, tenant.Id);
+        var seededCompanies = new List<Company> { micro };
+        if (seedSampleCompanies)
+        {
+            seededCompanies.Add(await SeedConnachtDigitalAsync(db, tenant.Id));
+            seededCompanies.Add(await SeedAtlanticManufacturingAsync(db, tenant.Id));
+        }
+        else
+        {
+            await RemoveNonCharitySampleCompaniesAsync(db);
+        }
 
-        await EnsureDemoUsersAsync(db, tenant.Id);
-        await EnsureTenantAuditLogAsync(db, tenant, [micro, small, medium]);
+        if (seedDemoUsers)
+            await EnsureDemoUsersAsync(db, tenant.Id, micro.Id);
+        else
+            await RemoveDemoUsersAsync(db);
+
+        await EnsureTenantAuditLogAsync(db, tenant, seededCompanies.ToArray());
 
         await db.SaveChangesAsync();
     }
@@ -79,7 +106,7 @@ public static class SeedData
         await EnsureOfficerAsync(db, company.Id, "Mary O'Brien", OfficerRole.Director, new DateOnly(2019, 3, 15), "12 Main Street, Castlebar, Co. Mayo");
         await EnsureOfficerAsync(db, company.Id, "Patrick Walsh", OfficerRole.Director, new DateOnly(2019, 3, 15), "Quay Road, Westport, Co. Mayo");
         await EnsureOfficerAsync(db, company.Id, "Siobhan Kelly", OfficerRole.Secretary, new DateOnly(2019, 3, 15), "Spencer Street, Castlebar, Co. Mayo");
-        await EnsureShareCapitalAsync(db, company.Id, "Guarantee", 1m, 1, 1m);
+        await EnsureShareCapitalAsync(db, company.Id, "Guarantee", 1m, 1, 1m, company.IncorporationDate);
 
         var bank = await EnsureBankAccountAsync(db, company.Id, "AIB Current Account", "IE12AIBK93115212345678", 4_500m, new DateOnly(2024, 1, 1));
         await EnsureFixedAssetAsync(db, company.Id, "Laptop - Dell XPS", "Computer Equipment", 1_200m, new DateOnly(2020, 6, 1), 3, DepreciationMethod.StraightLine);
@@ -207,8 +234,8 @@ public static class SeedData
         var aoife = await EnsureOfficerAsync(db, company.Id, "Aoife Brennan", OfficerRole.Director, new DateOnly(2018, 9, 1), "Salthill, Galway");
         await EnsureOfficerAsync(db, company.Id, "Cian Murphy", OfficerRole.Director, new DateOnly(2018, 9, 1), "Oranmore, Co. Galway");
         await EnsureOfficerAsync(db, company.Id, "Roisin Flaherty", OfficerRole.Secretary, new DateOnly(2019, 1, 15), "Claregalway, Co. Galway");
-        await EnsureShareCapitalAsync(db, company.Id, "Ordinary", 1m, 100, 100m);
-        await EnsureShareCapitalAsync(db, company.Id, "Growth", 0.01m, 2_500, 25m);
+        await EnsureShareCapitalAsync(db, company.Id, "Ordinary", 1m, 100, 100m, company.IncorporationDate);
+        await EnsureShareCapitalAsync(db, company.Id, "Growth", 0.01m, 2_500, 25m, new DateOnly(2020, 1, 1));
 
         var boi = await EnsureBankAccountAsync(db, company.Id, "BOI Business Account", "IE45BOFI90001712345678", 32_000m, new DateOnly(2024, 4, 1));
         var revolut = await EnsureBankAccountAsync(db, company.Id, "Revolut Business", "IE98REVO99036012345678", 5_600m, new DateOnly(2024, 4, 1));
@@ -216,7 +243,7 @@ public static class SeedData
         await EnsureFixedAssetAsync(db, company.Id, "Office Desks and Chairs", "Office Equipment", 3_200m, new DateOnly(2018, 10, 1), 10, DepreciationMethod.StraightLine);
         await EnsureFixedAssetAsync(db, company.Id, "Server Infrastructure", "Computer Equipment", 12_000m, new DateOnly(2022, 6, 1), 5, DepreciationMethod.StraightLine);
         await EnsureFixedAssetAsync(db, company.Id, "Company Van - Ford Transit", "Motor Vehicles", 28_000m, new DateOnly(2023, 3, 1), 5, DepreciationMethod.ReducingBalance);
-        await EnsureLoanAsync(db, company.Id, "Bank of Ireland", 50_000m, 35_000m, 4.5m, false, 10_000m, 25_000m);
+        await EnsureLoanAsync(db, company.Id, "Bank of Ireland", 50_000m, 35_000m, 4.5m, false, 10_000m, 25_000m, new DateOnly(2022, 4, 1), new DateOnly(2025, 3, 31));
 
         var period = await EnsurePeriodAsync(db, company.Id, new DateOnly(2024, 4, 1), new DateOnly(2025, 3, 31), PeriodStatus.Review, false);
         var categories = await EnsureCategoriesAsync(db, company.Id);
@@ -358,8 +385,8 @@ public static class SeedData
         await EnsureOfficerAsync(db, company.Id, "Niamh Fitzgerald", OfficerRole.Director, new DateOnly(2012, 5, 1), "Newmarket-on-Fergus, Co. Clare");
         await EnsureOfficerAsync(db, company.Id, "Tomas O Se", OfficerRole.Director, new DateOnly(2018, 3, 15), "Adare, Co. Limerick");
         await EnsureOfficerAsync(db, company.Id, "Claire Dunne", OfficerRole.Secretary, new DateOnly(2015, 7, 1), "Shannon, Co. Clare");
-        await EnsureShareCapitalAsync(db, company.Id, "Ordinary", 1m, 1_000, 1_000m);
-        await EnsureShareCapitalAsync(db, company.Id, "Redeemable preference", 1m, 50_000, 50_000m);
+        await EnsureShareCapitalAsync(db, company.Id, "Ordinary", 1m, 1_000, 1_000m, company.IncorporationDate);
+        await EnsureShareCapitalAsync(db, company.Id, "Redeemable preference", 1m, 50_000, 50_000m, new DateOnly(2015, 1, 1));
 
         var current = await EnsureBankAccountAsync(db, company.Id, "AIB Business Current", "IE29AIBK93104512345678", 245_000m, new DateOnly(2024, 1, 1));
         var deposit = await EnsureBankAccountAsync(db, company.Id, "AIB Deposit Account", "IE30AIBK93104599999999", 150_000m, new DateOnly(2024, 1, 1));
@@ -369,8 +396,8 @@ public static class SeedData
         await EnsureFixedAssetAsync(db, company.Id, "Delivery Trucks x2", "Motor Vehicles", 120_000m, new DateOnly(2022, 9, 1), 5, DepreciationMethod.ReducingBalance);
         await EnsureFixedAssetAsync(db, company.Id, "IT Infrastructure", "Computer Equipment", 35_000m, new DateOnly(2023, 1, 1), 3, DepreciationMethod.StraightLine);
         await EnsureFixedAssetAsync(db, company.Id, "Office Fit-out", "Office Equipment", 28_000m, new DateOnly(2015, 4, 1), 10, DepreciationMethod.StraightLine);
-        await EnsureLoanAsync(db, company.Id, "AIB Corporate", 500_000m, 280_000m, 3.8m, false, 60_000m, 220_000m);
-        await EnsureLoanAsync(db, company.Id, "Enterprise Ireland", 100_000m, 40_000m, 0m, false, 20_000m, 20_000m);
+        await EnsureLoanAsync(db, company.Id, "AIB Corporate", 500_000m, 280_000m, 3.8m, false, 60_000m, 220_000m, new DateOnly(2020, 1, 1), new DateOnly(2024, 12, 31));
+        await EnsureLoanAsync(db, company.Id, "Enterprise Ireland", 100_000m, 40_000m, 0m, false, 20_000m, 20_000m, new DateOnly(2021, 6, 1), new DateOnly(2024, 12, 31));
 
         var period = await EnsurePeriodAsync(db, company.Id, new DateOnly(2024, 1, 1), new DateOnly(2024, 12, 31), PeriodStatus.Finalised, false, "Claire Dunne");
         var categories = await EnsureCategoriesAsync(db, company.Id);
@@ -602,7 +629,7 @@ public static class SeedData
         return account;
     }
 
-    private static async Task EnsureShareCapitalAsync(AccountsDbContext db, int companyId, string shareClass, decimal nominalValue, int numberIssued, decimal totalValue)
+    private static async Task EnsureShareCapitalAsync(AccountsDbContext db, int companyId, string shareClass, decimal nominalValue, int numberIssued, decimal totalValue, DateOnly issueDate)
     {
         var share = await db.ShareCapitals.FirstOrDefaultAsync(s => s.CompanyId == companyId && s.ShareClass == shareClass);
         if (share is null)
@@ -615,6 +642,8 @@ public static class SeedData
         share.NumberIssued = numberIssued;
         share.TotalValue = totalValue;
         share.IsFullyPaid = true;
+        share.IssueDate = issueDate;
+        share.CancelledDate = null;
         await db.SaveChangesAsync();
     }
 
@@ -643,7 +672,7 @@ public static class SeedData
         await db.SaveChangesAsync();
     }
 
-    private static async Task EnsureLoanAsync(AccountsDbContext db, int companyId, string lender, decimal originalAmount, decimal balance, decimal interestRate, bool isDirectorLoan, decimal dueWithinYear, decimal dueAfterYear)
+    private static async Task EnsureLoanAsync(AccountsDbContext db, int companyId, string lender, decimal originalAmount, decimal balance, decimal interestRate, bool isDirectorLoan, decimal dueWithinYear, decimal dueAfterYear, DateOnly drawdownDate, DateOnly balanceAsOfDate)
     {
         var loan = await db.Loans.FirstOrDefaultAsync(l => l.CompanyId == companyId && l.Lender == lender);
         if (loan is null)
@@ -654,6 +683,8 @@ public static class SeedData
 
         loan.OriginalAmount = originalAmount;
         loan.Balance = balance;
+        loan.DrawdownDate = drawdownDate;
+        loan.BalanceAsOfDate = balanceAsOfDate;
         loan.InterestRate = interestRate;
         loan.IsDirectorLoan = isDirectorLoan;
         loan.DueWithinYear = dueWithinYear;
@@ -912,8 +943,8 @@ public static class SeedData
         revenue.Ct1DataJson = JsonSerializer.Serialize(new { ct1Reference, generatedBy = DemoSeedUser, demo = true });
         revenue.IxbrlPath = $"/demo/revenue/{ct1Reference}.xhtml";
         revenue.IxbrlGenerated = true;
-        revenue.IxbrlValidated = filingStatus is FilingStatus.Accepted or FilingStatus.ReadyForReview or FilingStatus.PackageGenerated;
-        revenue.IxbrlValidationErrors = revenue.IxbrlValidated
+        revenue.IxbrlValidated = false;
+        revenue.IxbrlValidationErrors = filingStatus is FilingStatus.Accepted or FilingStatus.ReadyForReview or FilingStatus.PackageGenerated
             ? "Internal checks passed. External ROS/iXBRL validation remains required."
             : "Draft data awaiting final review.";
         revenue.ApprovedBy = filingStatus is FilingStatus.Accepted ? "demo.reviewer@accounts.local" : null;
@@ -1375,7 +1406,7 @@ public static class SeedData
         await db.SaveChangesAsync();
     }
 
-    private static async Task EnsureDemoUsersAsync(AccountsDbContext db, int tenantId)
+    private static async Task EnsureDemoUsersAsync(AccountsDbContext db, int tenantId, int demoClientCompanyId)
     {
         var users = new DemoUserSeed[]
         {
@@ -1412,9 +1443,69 @@ public static class SeedData
             user.MustChangePassword = false;
             SetPassword(user, seed.Password);
             user.UpdatedAt = DateTime.UtcNow;
+
+            if (seed.Role.Equals("Client", StringComparison.OrdinalIgnoreCase))
+                await EnsureUserCompanyAccessAsync(db, user, demoClientCompanyId);
         }
 
         await db.SaveChangesAsync();
+    }
+
+    private static async Task RemoveDemoUsersAsync(AccountsDbContext db)
+    {
+        var demoUsers = await db.UserAccounts
+            .Where(u => DemoUserEmails.Contains(u.Email))
+            .ToListAsync();
+        if (demoUsers.Count == 0)
+            return;
+
+        db.UserAccounts.RemoveRange(demoUsers);
+        await db.SaveChangesAsync();
+    }
+
+    private static async Task RemoveNonCharitySampleCompaniesAsync(AccountsDbContext db)
+    {
+        var sampleCompanies = await db.Companies
+            .Where(c => c.CroNumber != null && NonCharitySampleCompanyCroNumbers.Contains(c.CroNumber))
+            .ToListAsync();
+        if (sampleCompanies.Count == 0)
+            return;
+
+        var sampleCompanyIds = sampleCompanies.Select(c => c.Id).ToArray();
+        var samplePeriodIds = await db.AccountingPeriods
+            .Where(p => sampleCompanyIds.Contains(p.CompanyId))
+            .Select(p => p.Id)
+            .ToArrayAsync();
+        var sampleCategoryIds = await db.AccountCategories
+            .Where(c => c.CompanyId.HasValue && sampleCompanyIds.Contains(c.CompanyId.Value))
+            .Select(c => c.Id)
+            .ToArrayAsync();
+        var openingBalances = await db.OpeningBalances
+            .Where(o => samplePeriodIds.Contains(o.PeriodId) || sampleCategoryIds.Contains(o.AccountCategoryId))
+            .ToListAsync();
+        if (openingBalances.Count > 0)
+        {
+            db.OpeningBalances.RemoveRange(openingBalances);
+            await db.SaveChangesAsync();
+        }
+
+        db.Companies.RemoveRange(sampleCompanies);
+        await db.SaveChangesAsync();
+    }
+
+    private static async Task EnsureUserCompanyAccessAsync(AccountsDbContext db, UserAccount user, int companyId)
+    {
+        await db.SaveChangesAsync();
+
+        var exists = await db.UserCompanyAccesses
+            .AnyAsync(a => a.UserId == user.Id && a.CompanyId == companyId);
+        if (exists) return;
+
+        db.UserCompanyAccesses.Add(new UserCompanyAccess
+        {
+            UserId = user.Id,
+            CompanyId = companyId
+        });
     }
 
     private static void SetPassword(UserAccount user, string password)

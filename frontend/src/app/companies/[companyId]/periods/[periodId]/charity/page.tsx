@@ -27,13 +27,17 @@ import {
   getSofa,
   getTrusteesReport,
   getFundBalances,
+  getFilingWorkflowStatus,
   createFundBalance,
   deleteFundBalance,
+  recordCharityReportGenerated,
+  updateCharityFilingStatus,
   type Company,
   type AccountingPeriod,
   type SofaData,
   type TrusteesReportData,
   type FundBalance,
+  type CharityFilingStatus,
 } from "@/lib/api";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { PeriodWorkspaceSkeleton } from "@/components/Skeleton";
@@ -60,7 +64,10 @@ export default function CharityReportingPage({
   const [sofa, setSofa] = useState<SofaData | null>(null);
   const [tar, setTar] = useState<TrusteesReportData | null>(null);
   const [funds, setFunds] = useState<FundBalance[]>([]);
+  const [filingStatus, setFilingStatus] = useState<CharityFilingStatus | null>(null);
   const [loading, setLoading] = useState(true);
+  const [updatingWorkflow, setUpdatingWorkflow] = useState<string | null>(null);
+  const [annualReturnReference, setAnnualReturnReference] = useState("");
 
   // Add fund form
   const [showAddFund, setShowAddFund] = useState(false);
@@ -89,6 +96,11 @@ export default function CharityReportingPage({
       try { const s = await getSofa(cId, pId); setSofa(s); } catch {}
       try { const t = await getTrusteesReport(cId, pId); setTar(t); } catch {}
       try { const f = await getFundBalances(cId, pId); setFunds(f); } catch {}
+      try {
+        const status = await getFilingWorkflowStatus(cId, pId);
+        setFilingStatus(status.charity);
+        setAnnualReturnReference(status.charity.annualReturnReference ?? "");
+      } catch {}
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to load data");
     } finally {
@@ -133,6 +145,19 @@ export default function CharityReportingPage({
     }
   }
 
+  async function updateWorkflow(action: string, run: () => Promise<unknown>, success: string) {
+    setUpdatingWorkflow(action);
+    try {
+      await run();
+      toast.success(success);
+      loadData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update annual return workflow");
+    } finally {
+      setUpdatingWorkflow(null);
+    }
+  }
+
   if (loading) return <PeriodWorkspaceSkeleton />;
 
   return (
@@ -162,6 +187,92 @@ export default function CharityReportingPage({
           {period ? `${new Date(period.periodStart).toLocaleDateString("en-IE")} to ${new Date(period.periodEnd).toLocaleDateString("en-IE")}` : ""}
         </p>
       </div>
+
+      {company?.isCharitableOrganisation && (
+        <Card className="mb-6 shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
+          <Card.Header>
+            <div className="flex flex-wrap items-center justify-between gap-3 w-full">
+              <div>
+                <Card.Title className="text-gray-900 dark:text-gray-100">Annual Return Workflow</Card.Title>
+                <Card.Description>Charities Regulator filing package</Card.Description>
+              </div>
+              <Chip size="sm" variant="soft" color={filingStatus?.status === "Accepted" ? "success" : filingStatus?.status === "Submitted" ? "accent" : filingStatus?.status === "Approved" ? "warning" : "default"}>
+                {filingStatus?.status ?? "NotStarted"}
+              </Chip>
+            </div>
+          </Card.Header>
+          <Card.Content>
+            <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => updateWorkflow("sofa", () => recordCharityReportGenerated(cId, pId, "sofa"), "SoFA marked as generated")}
+                  disabled={filingStatus?.sofaGenerated || updatingWorkflow !== null}
+                  className="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2 text-left text-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-neutral-700 dark:hover:bg-neutral-800"
+                >
+                  <span className="font-medium text-gray-900 dark:text-gray-100">SoFA generated</span>
+                  <Chip size="sm" variant="soft" color={filingStatus?.sofaGenerated ? "success" : "warning"}>{filingStatus?.sofaGenerated ? "Done" : "Open"}</Chip>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updateWorkflow("tar", () => recordCharityReportGenerated(cId, pId, "trustees-report"), "Trustees' Annual Report marked as generated")}
+                  disabled={filingStatus?.trusteesReportGenerated || updatingWorkflow !== null}
+                  className="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2 text-left text-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-neutral-700 dark:hover:bg-neutral-800"
+                >
+                  <span className="font-medium text-gray-900 dark:text-gray-100">Trustees&apos; report generated</span>
+                  <Chip size="sm" variant="soft" color={filingStatus?.trusteesReportGenerated ? "success" : "warning"}>{filingStatus?.trusteesReportGenerated ? "Done" : "Open"}</Chip>
+                </button>
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Annual return reference</label>
+                  <input
+                    className={inputClass}
+                    value={annualReturnReference}
+                    onChange={(event) => setAnnualReturnReference(event.target.value)}
+                    placeholder="CRA annual return reference"
+                    aria-label="Charities Regulator annual return reference"
+                  />
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {filingStatus?.status === "NotStarted" || filingStatus?.status === "PackageGenerated" ? (
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    isDisabled={updatingWorkflow !== null || !filingStatus?.sofaGenerated || !filingStatus?.trusteesReportGenerated}
+                    onPress={() => updateWorkflow("approve", () => updateCharityFilingStatus(cId, pId, { status: "Approved" }), "Charity annual return approved")}
+                  >
+                    {updatingWorkflow === "approve" ? <Spinner size="sm" /> : "Approve"}
+                  </Button>
+                ) : filingStatus?.status === "Approved" ? (
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    isDisabled={updatingWorkflow !== null}
+                    onPress={() => {
+                      const reference = annualReturnReference.trim();
+                      if (!reference) { toast.error("Annual return reference is required"); return; }
+                      updateWorkflow("submit", () => updateCharityFilingStatus(cId, pId, { status: "Submitted", annualReturnReference: reference }), "Charity annual return submitted");
+                    }}
+                  >
+                    {updatingWorkflow === "submit" ? <Spinner size="sm" /> : "Submit"}
+                  </Button>
+                ) : filingStatus?.status === "Submitted" ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    isDisabled={updatingWorkflow !== null}
+                    onPress={() => updateWorkflow("accept", () => updateCharityFilingStatus(cId, pId, { status: "Accepted" }), "Charity annual return accepted")}
+                  >
+                    {updatingWorkflow === "accept" ? <Spinner size="sm" /> : "Accept"}
+                  </Button>
+                ) : filingStatus?.status === "Accepted" ? (
+                  <Chip size="sm" variant="soft" color="success">Accepted</Chip>
+                ) : null}
+              </div>
+            </div>
+          </Card.Content>
+        </Card>
+      )}
 
       {/* Tab Navigation */}
       <div className="flex gap-1 border-b border-gray-200 dark:border-neutral-700 mb-6 no-print">
