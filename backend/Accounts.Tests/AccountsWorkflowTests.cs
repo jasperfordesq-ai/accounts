@@ -2673,6 +2673,33 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task Ixbrl_ProfitAndLossIncludesInterestAndProfitBeforeTax()
+    {
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var sales = AddCategory(db, period.CompanyId, "4000", "Sales / Revenue", AccountCategoryType.Income);
+        var bankCharges = AddCategory(db, period.CompanyId, "6900", "Bank Charges & Interest", AccountCategoryType.Expense);
+        var bank = new BankAccount { CompanyId = period.CompanyId, Name = "Current Account", OpeningBalance = 0m };
+        db.BankAccounts.Add(bank);
+        await db.SaveChangesAsync();
+        db.ImportedTransactions.AddRange(
+            new ImportedTransaction { BankAccountId = bank.Id, PeriodId = period.Id, Date = new DateOnly(2025, 3, 1), Description = "Sales", Amount = 10_000m, CategoryId = sales.Id },
+            new ImportedTransaction { BankAccountId = bank.Id, PeriodId = period.Id, Date = new DateOnly(2025, 3, 2), Description = "Bank interest", Amount = -500m, CategoryId = bankCharges.Id });
+        await db.SaveChangesAsync();
+
+        var statements = new FinancialStatementsService(db);
+        var bytes = await new IxbrlService(db, statements).GenerateIxbrlAsync(period.CompanyId, period.Id);
+        var xhtml = System.Text.Encoding.UTF8.GetString(bytes);
+
+        // The filed P&L must show interest payable and a profit-before-tax subtotal so it
+        // reconciles: operating profit 10,000 - interest 500 = profit before tax 9,500.
+        Assert.Contains("core:InterestPayableSimilarChargesFinanceCosts", xhtml);
+        Assert.Contains("core:ProfitLossOnOrdinaryActivitiesBeforeTax", xhtml);
+        Assert.Contains("Profit before taxation", xhtml);
+        Assert.Contains(">9500<", xhtml);
+    }
+
+    [Fact]
     public async Task FilingWorkflow_MarkGeneratedEndpointCannotSatisfyCroDocumentReadiness()
     {
         var databaseName = Guid.NewGuid().ToString();

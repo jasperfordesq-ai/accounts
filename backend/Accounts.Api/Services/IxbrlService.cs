@@ -124,8 +124,13 @@ public class IxbrlService(AccountsDbContext db, FinancialStatementsService state
         AddIxbrlRow(sb, "Turnover", "core:TurnoverGrossRevenue", pl.Turnover, contextRef: "current");
         AddIxbrlRow(sb, "Cost of sales", "core:CostSales", -pl.CostOfSales, contextRef: "current");
         AddIxbrlRow(sb, "Gross profit", "core:GrossProfitLoss", pl.GrossProfit, bold: true, contextRef: "current");
+        if (pl.OtherIncome != 0)
+            AddIxbrlRow(sb, "Other operating income", "core:OtherOperatingIncome", pl.OtherIncome, contextRef: "current");
         AddIxbrlRow(sb, "Administrative expenses", "core:AdministrativeExpenses", -pl.TotalOverheads, contextRef: "current");
         AddIxbrlRow(sb, "Operating profit", "core:OperatingProfitLoss", pl.OperatingProfit, bold: true, contextRef: "current");
+        if (pl.InterestPayable != 0)
+            AddIxbrlRow(sb, "Interest payable and similar charges", "core:InterestPayableSimilarChargesFinanceCosts", -pl.InterestPayable, contextRef: "current");
+        AddIxbrlRow(sb, "Profit before taxation", "core:ProfitLossOnOrdinaryActivitiesBeforeTax", pl.ProfitBeforeTax, bold: true, contextRef: "current");
         AddIxbrlRow(sb, "Tax on profit", "core:TaxTaxCreditOnProfitOrLossOnOrdinaryActivities", -pl.TaxCharge, contextRef: "current");
         AddIxbrlRow(sb, "Profit for the year", "core:ProfitLossForPeriod", pl.ProfitAfterTax, bold: true, contextRef: "current");
         sb.AppendLine("</table>");
