@@ -14,6 +14,7 @@ public class FinancialStatementsService(AccountsDbContext db)
         decimal Turnover,
         decimal CostOfSales,
         decimal GrossProfit,
+        decimal OtherIncome,
         List<ExpenseLine> Overheads,
         decimal TotalOverheads,
         decimal OperatingProfit,
@@ -289,14 +290,22 @@ public class FinancialStatementsService(AccountsDbContext db)
         var costOfSales = GetExpenseTotal("5");
         var grossProfit = turnover - costOfSales;
 
+        // Income earned outside turnover (non-4xxx income categories, e.g. rent or interest)
+        // is reported as other income rather than netted into overheads or dropped, so it is
+        // included in profit before tax (and taxed correctly, including the 25% non-trading rate).
+        var otherIncome = categories
+            .Where(c => c.Type == AccountCategoryType.Income && !c.Code.StartsWith("4"))
+            .Sum(IncomeAmount);
+
         var overheads = categories
-            .Where(c => (c.Code.StartsWith("6") && !c.Code.StartsWith("69")) || c.Code.StartsWith("7"))
+            .Where(c => c.Type == AccountCategoryType.Expense
+                && ((c.Code.StartsWith("6") && !c.Code.StartsWith("69")) || c.Code.StartsWith("7")))
             .Select(c => new ExpenseLine(c.Code, c.Name, ExpenseAmount(c)))
             .Where(e => e.Amount != 0)
             .ToList();
 
         var totalOverheads = overheads.Sum(o => o.Amount);
-        var operatingProfit = grossProfit - totalOverheads;
+        var operatingProfit = grossProfit + otherIncome - totalOverheads;
 
         var interestPayable = GetExpenseTotal("69"); // Bank charges & interest
 
@@ -323,7 +332,7 @@ public class FinancialStatementsService(AccountsDbContext db)
 
         var profitAfterTax = profitBeforeTax - corpTax;
 
-        return new ProfitAndLoss(turnover, costOfSales, grossProfit, overheads, totalOverheads,
+        return new ProfitAndLoss(turnover, costOfSales, grossProfit, otherIncome, overheads, totalOverheads,
             operatingProfit, interestPayable, profitBeforeTax, corpTax, profitAfterTax,
             yearEndAdjustments, totalYearEndAdjustments);
     }

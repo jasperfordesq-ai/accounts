@@ -1235,6 +1235,38 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task ProfitAndLoss_IncludesNonTurnoverIncomeAsOtherIncomeAndTaxesIt()
+    {
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var sales = AddCategory(db, period.CompanyId, "4000", "Sales / Revenue", AccountCategoryType.Income);
+        var rental = AddCategory(db, period.CompanyId, "8000", "Rental income", AccountCategoryType.Income);
+        rental.IsNonTradingIncome = true;
+        var bank = new BankAccount { CompanyId = period.CompanyId, Name = "Current Account", OpeningBalance = 0m };
+        db.BankAccounts.Add(bank);
+        await db.SaveChangesAsync();
+
+        // Trading sales (4xxx turnover) plus rental income coded outside turnover (8xxx).
+        db.ImportedTransactions.AddRange(
+            new ImportedTransaction { BankAccountId = bank.Id, PeriodId = period.Id, Date = new DateOnly(2025, 3, 1), Description = "Trading sales", Amount = 10_000m, CategoryId = sales.Id },
+            new ImportedTransaction { BankAccountId = bank.Id, PeriodId = period.Id, Date = new DateOnly(2025, 3, 2), Description = "Rent received", Amount = 4_000m, CategoryId = rental.Id });
+        await db.SaveChangesAsync();
+
+        var statements = new FinancialStatementsService(db);
+        var pl = await statements.GetProfitAndLossAsync(period.CompanyId, period.Id);
+
+        Assert.Equal(10_000m, pl.Turnover);        // only 4xxx counts as turnover
+        Assert.Equal(4_000m, pl.OtherIncome);      // 8xxx rental is other income, not dropped
+        Assert.Equal(14_000m, pl.ProfitBeforeTax); // both reach profit before tax
+
+        // The non-turnover, non-trading income is taxed at 25%, the trading balance at 12.5%.
+        var tax = await new TaxComputationService(db, statements).ComputeAsync(period.CompanyId, period.Id);
+        Assert.Equal(14_000m, tax.TaxableProfit);
+        Assert.Equal(1_250m, tax.CorporationTaxAt125);
+        Assert.Equal(1_000m, tax.CorporationTaxAt25);
+    }
+
+    [Fact]
     public async Task LoanSnapshots_ForFutureEffectiveLoansDoNotLeakIntoCurrentPeriodReporting()
     {
         await using var db = CreateDbContext();
