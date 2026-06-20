@@ -3125,6 +3125,74 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task Ixbrl_EmitsPriorYearComparativesEntityMetadataAndWellFormedXml()
+    {
+        // BL-08 / BL-09: the filed iXBRL must carry prior-year comparatives and entity/report
+        // metadata, parse as well-formed XML, and tag values that equal the statement figures.
+        await using var db = CreateDbContext();
+        var company = new Company
+        {
+            LegalName = "Comparatives Limited",
+            CroNumber = "445566",
+            CompanyType = CompanyType.Private,
+            IncorporationDate = new DateOnly(2024, 1, 1),
+            ArdMonth = 12,
+            IsTrading = true,
+            RegisteredOfficeAddress1 = "1 Main Street",
+            RegisteredOfficeCity = "Dublin",
+            RegisteredOfficeCounty = "Dublin"
+        };
+        db.Companies.Add(company);
+        await db.SaveChangesAsync();
+
+        var priorPeriod = new AccountingPeriod { CompanyId = company.Id, PeriodStart = new DateOnly(2024, 1, 1), PeriodEnd = new DateOnly(2024, 12, 31), IsFirstYear = true };
+        var currentPeriod = new AccountingPeriod { CompanyId = company.Id, PeriodStart = new DateOnly(2025, 1, 1), PeriodEnd = new DateOnly(2025, 12, 31), IsFirstYear = false };
+        db.AccountingPeriods.AddRange(priorPeriod, currentPeriod);
+        var sales = AddCategory(db, company.Id, "4000", "Sales / Revenue", AccountCategoryType.Income);
+        var bank = new BankAccount { CompanyId = company.Id, Name = "Current Account", OpeningBalance = 0m };
+        db.BankAccounts.Add(bank);
+        await db.SaveChangesAsync();
+
+        db.ImportedTransactions.AddRange(
+            new ImportedTransaction { BankAccountId = bank.Id, PeriodId = priorPeriod.Id, Date = new DateOnly(2024, 6, 1), Description = "Prior sales", Amount = 6_000m, CategoryId = sales.Id },
+            new ImportedTransaction { BankAccountId = bank.Id, PeriodId = currentPeriod.Id, Date = new DateOnly(2025, 6, 1), Description = "Current sales", Amount = 9_000m, CategoryId = sales.Id });
+        await db.SaveChangesAsync();
+
+        var statements = new FinancialStatementsService(db);
+        var xhtml = Encoding.UTF8.GetString(await new IxbrlService(db, statements).GenerateIxbrlAsync(company.Id, currentPeriod.Id));
+
+        // Well-formed XML: DOCTYPE tolerated, no undeclared HTML entities such as &nbsp;.
+        var settings = new System.Xml.XmlReaderSettings { DtdProcessing = System.Xml.DtdProcessing.Ignore };
+        using var reader = System.Xml.XmlReader.Create(new StringReader(xhtml), settings);
+        var doc = System.Xml.Linq.XDocument.Load(reader);
+
+        // Prior-year comparatives.
+        Assert.Contains("xbrli:context id=\"prior\"", xhtml);
+        Assert.Contains("xbrli:context id=\"priorInstant\"", xhtml);
+        Assert.Contains("contextRef=\"prior\"", xhtml);
+
+        // Entity/report metadata.
+        Assert.Contains("bus:EntityCurrentLegalOrRegisteredName", xhtml);
+        Assert.Contains("bus:StartDateForPeriodCoveredByReport", xhtml);
+        Assert.Contains("Comparatives Limited", xhtml);
+
+        // Tagged values equal the statement figures (current and prior).
+        var currentBs = await statements.GetBalanceSheetAsync(company.Id, currentPeriod.Id);
+        var currentPl = await statements.GetProfitAndLossAsync(company.Id, currentPeriod.Id);
+        var priorPl = await statements.GetProfitAndLossAsync(company.Id, priorPeriod.Id);
+
+        System.Xml.Linq.XNamespace ix = "http://www.xbrl.org/2013/inlineXBRL";
+        decimal Fact(string concept, string ctx) =>
+            decimal.Parse(doc.Descendants(ix + "nonFraction")
+                .Single(e => (string?)e.Attribute("name") == concept && (string?)e.Attribute("contextRef") == ctx).Value,
+                System.Globalization.CultureInfo.InvariantCulture);
+
+        Assert.Equal(Math.Round(currentPl.Turnover, 0), Fact("core:TurnoverGrossRevenue", "current"));
+        Assert.Equal(Math.Round(currentBs.NetAssets, 0), Fact("core:NetAssetsLiabilities", "instant"));
+        Assert.Equal(Math.Round(priorPl.Turnover, 0), Fact("core:TurnoverGrossRevenue", "prior"));
+    }
+
+    [Fact]
     public async Task FilingWorkflow_MarkGeneratedEndpointCannotSatisfyCroDocumentReadiness()
     {
         var databaseName = Guid.NewGuid().ToString();

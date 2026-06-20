@@ -50,6 +50,22 @@ public class IxbrlService(AccountsDbContext db, FinancialStatementsService state
         var bs = await statementsService.GetBalanceSheetAsync(period.CompanyId, periodId);
         var pl = await statementsService.GetProfitAndLossAsync(period.CompanyId, periodId);
 
+        // Prior-year comparatives (BL-08). ROS/CRO reject a single-year instance; the filed iXBRL
+        // must carry a comparative column tagged against prior-period contexts.
+        var priorPeriod = await db.AccountingPeriods
+            .Where(p => p.CompanyId == period.CompanyId && p.PeriodEnd < period.PeriodStart)
+            .OrderByDescending(p => p.PeriodEnd)
+            .FirstOrDefaultAsync();
+        FinancialStatementsService.BalanceSheet? priorBs = null;
+        FinancialStatementsService.ProfitAndLoss? priorPl = null;
+        if (priorPeriod != null)
+        {
+            try { priorBs = await statementsService.GetBalanceSheetAsync(period.CompanyId, priorPeriod.Id); } catch { /* prior period not computable — file current year only */ }
+            try { priorPl = await statementsService.GetProfitAndLossAsync(period.CompanyId, priorPeriod.Id); } catch { }
+        }
+        var hasPrior = priorPeriod != null && priorBs != null && priorPl != null;
+        if (!hasPrior) { priorBs = null; priorPl = null; }
+
         var sb = new StringBuilder();
         sb.AppendLine("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
         sb.AppendLine("<!DOCTYPE html>");
@@ -84,6 +100,17 @@ public class IxbrlService(AccountsDbContext db, FinancialStatementsService state
         sb.AppendLine($"  <xbrli:entity><xbrli:identifier scheme=\"http://www.cro.ie/\">{Escape(company.CroNumber ?? "")}</xbrli:identifier></xbrli:entity>");
         sb.AppendLine($"  <xbrli:period><xbrli:instant>{period.PeriodEnd:yyyy-MM-dd}</xbrli:instant></xbrli:period>");
         sb.AppendLine("</xbrli:context>");
+        if (hasPrior)
+        {
+            sb.AppendLine($"<xbrli:context id=\"prior\" xmlns:xbrli=\"http://www.xbrl.org/2003/instance\">");
+            sb.AppendLine($"  <xbrli:entity><xbrli:identifier scheme=\"http://www.cro.ie/\">{Escape(company.CroNumber ?? "")}</xbrli:identifier></xbrli:entity>");
+            sb.AppendLine($"  <xbrli:period><xbrli:startDate>{priorPeriod!.PeriodStart:yyyy-MM-dd}</xbrli:startDate><xbrli:endDate>{priorPeriod.PeriodEnd:yyyy-MM-dd}</xbrli:endDate></xbrli:period>");
+            sb.AppendLine("</xbrli:context>");
+            sb.AppendLine($"<xbrli:context id=\"priorInstant\" xmlns:xbrli=\"http://www.xbrl.org/2003/instance\">");
+            sb.AppendLine($"  <xbrli:entity><xbrli:identifier scheme=\"http://www.cro.ie/\">{Escape(company.CroNumber ?? "")}</xbrli:identifier></xbrli:entity>");
+            sb.AppendLine($"  <xbrli:period><xbrli:instant>{priorPeriod.PeriodEnd:yyyy-MM-dd}</xbrli:instant></xbrli:period>");
+            sb.AppendLine("</xbrli:context>");
+        }
         sb.AppendLine("<xbrli:unit id=\"EUR\" xmlns:xbrli=\"http://www.xbrl.org/2003/instance\"><xbrli:measure>iso4217:EUR</xbrli:measure></xbrli:unit>");
         sb.AppendLine("</ix:resources>");
         sb.AppendLine("</ix:hidden>");
@@ -96,43 +123,52 @@ public class IxbrlService(AccountsDbContext db, FinancialStatementsService state
         if (!string.IsNullOrEmpty(company.CroNumber))
             sb.AppendLine($"<p>Company Registration Number: <ix:nonNumeric name=\"ie-common:CompanyRegistrationNumber\" contextRef=\"instant\">{Escape(company.CroNumber)}</ix:nonNumeric></p>");
 
+        // Entity and report metadata (BL-09) — tagged so the instance carries the filer identity and
+        // the period it covers, not just the financial figures.
+        sb.AppendLine($"<p>Entity: <ix:nonNumeric name=\"bus:EntityCurrentLegalOrRegisteredName\" contextRef=\"instant\">{Escape(company.LegalName)}</ix:nonNumeric></p>");
+        sb.AppendLine($"<p>Period of report: <ix:nonNumeric name=\"bus:StartDateForPeriodCoveredByReport\" contextRef=\"current\">{period.PeriodStart:yyyy-MM-dd}</ix:nonNumeric> to <ix:nonNumeric name=\"bus:EndDateForPeriodCoveredByReport\" contextRef=\"current\">{period.PeriodEnd:yyyy-MM-dd}</ix:nonNumeric></p>");
+
         // Balance Sheet
         sb.AppendLine("<h2>Balance Sheet</h2>");
         sb.AppendLine($"<p>as at {period.PeriodEnd:dd MMMM yyyy}</p>");
         sb.AppendLine("<table>");
-        AddIxbrlRow(sb, "Tangible fixed assets", "core:TangibleFixedAssets", bs.FixedAssets.Total);
-        AddIxbrlRow(sb, "Stock", "core:Stocks", bs.CurrentAssets.Stock);
-        AddIxbrlRow(sb, "Debtors", "core:Debtors", bs.CurrentAssets.Debtors + bs.CurrentAssets.Prepayments);
-        AddIxbrlRow(sb, "Cash at bank and in hand", "core:CashBankInHand", bs.CurrentAssets.Cash);
-        AddIxbrlRow(sb, "Total current assets", "core:CurrentAssets", bs.CurrentAssets.Total, true);
-        AddIxbrlRow(sb, "Creditors: due within one year", "core:CreditorsAmountsFallingDueWithinOneYear", -bs.CreditorsWithinYear.Total);
-        AddIxbrlRow(sb, "Net current assets", "core:NetCurrentAssetsLiabilities", bs.NetCurrentAssets, true);
-        AddIxbrlRow(sb, "Total assets less current liabilities", "core:TotalAssetsLessCurrentLiabilities", bs.TotalAssetsLessCurrentLiabilities, true);
+        if (hasPrior)
+            sb.AppendLine($"<tr class=\"bold\"><td></td><td class=\"amount\">{period.PeriodEnd:yyyy}</td><td class=\"amount\">{priorPeriod!.PeriodEnd:yyyy}</td></tr>");
+        AddIxbrlRow(sb, "Tangible fixed assets", "core:TangibleFixedAssets", bs.FixedAssets.Total, priorAmount: priorBs?.FixedAssets.Total);
+        AddIxbrlRow(sb, "Stock", "core:Stocks", bs.CurrentAssets.Stock, priorAmount: priorBs?.CurrentAssets.Stock);
+        AddIxbrlRow(sb, "Debtors", "core:Debtors", bs.CurrentAssets.Debtors + bs.CurrentAssets.Prepayments, priorAmount: priorBs != null ? priorBs.CurrentAssets.Debtors + priorBs.CurrentAssets.Prepayments : null);
+        AddIxbrlRow(sb, "Cash at bank and in hand", "core:CashBankInHand", bs.CurrentAssets.Cash, priorAmount: priorBs?.CurrentAssets.Cash);
+        AddIxbrlRow(sb, "Total current assets", "core:CurrentAssets", bs.CurrentAssets.Total, true, priorAmount: priorBs?.CurrentAssets.Total);
+        AddIxbrlRow(sb, "Creditors: due within one year", "core:CreditorsAmountsFallingDueWithinOneYear", -bs.CreditorsWithinYear.Total, priorAmount: priorBs != null ? -priorBs.CreditorsWithinYear.Total : null);
+        AddIxbrlRow(sb, "Net current assets", "core:NetCurrentAssetsLiabilities", bs.NetCurrentAssets, true, priorAmount: priorBs?.NetCurrentAssets);
+        AddIxbrlRow(sb, "Total assets less current liabilities", "core:TotalAssetsLessCurrentLiabilities", bs.TotalAssetsLessCurrentLiabilities, true, priorAmount: priorBs?.TotalAssetsLessCurrentLiabilities);
         if (bs.CreditorsAfterYear.Total > 0)
-            AddIxbrlRow(sb, "Creditors: due after one year", "core:CreditorsAmountsFallingDueAfterOneYear", -bs.CreditorsAfterYear.Total);
-        AddIxbrlRow(sb, "Net assets", "core:NetAssetsLiabilities", bs.NetAssets, true);
-        sb.AppendLine("<tr><td colspan=\"2\">&nbsp;</td></tr>");
-        AddIxbrlRow(sb, "Share capital", "core:CalledUpShareCapital", bs.CapitalAndReserves.ShareCapital);
-        AddIxbrlRow(sb, "Profit and loss account", "core:ProfitLossAccountReserve", bs.CapitalAndReserves.RetainedEarnings);
-        AddIxbrlRow(sb, "Shareholders' funds", "core:ShareholderFunds", bs.CapitalAndReserves.Total, true);
+            AddIxbrlRow(sb, "Creditors: due after one year", "core:CreditorsAmountsFallingDueAfterOneYear", -bs.CreditorsAfterYear.Total, priorAmount: priorBs != null ? -priorBs.CreditorsAfterYear.Total : null);
+        AddIxbrlRow(sb, "Net assets", "core:NetAssetsLiabilities", bs.NetAssets, true, priorAmount: priorBs?.NetAssets);
+        sb.AppendLine("<tr><td colspan=\"3\">&#160;</td></tr>");
+        AddIxbrlRow(sb, "Share capital", "core:CalledUpShareCapital", bs.CapitalAndReserves.ShareCapital, priorAmount: priorBs?.CapitalAndReserves.ShareCapital);
+        AddIxbrlRow(sb, "Profit and loss account", "core:ProfitLossAccountReserve", bs.CapitalAndReserves.RetainedEarnings, priorAmount: priorBs?.CapitalAndReserves.RetainedEarnings);
+        AddIxbrlRow(sb, "Shareholders' funds", "core:ShareholderFunds", bs.CapitalAndReserves.Total, true, priorAmount: priorBs?.CapitalAndReserves.Total);
         sb.AppendLine("</table>");
 
         // P&L
         sb.AppendLine("<h2>Profit and Loss Account</h2>");
         sb.AppendLine($"<p>for the year ended {period.PeriodEnd:dd MMMM yyyy}</p>");
         sb.AppendLine("<table>");
-        AddIxbrlRow(sb, "Turnover", "core:TurnoverGrossRevenue", pl.Turnover, contextRef: "current");
-        AddIxbrlRow(sb, "Cost of sales", "core:CostSales", -pl.CostOfSales, contextRef: "current");
-        AddIxbrlRow(sb, "Gross profit", "core:GrossProfitLoss", pl.GrossProfit, bold: true, contextRef: "current");
+        if (hasPrior)
+            sb.AppendLine($"<tr class=\"bold\"><td></td><td class=\"amount\">{period.PeriodEnd:yyyy}</td><td class=\"amount\">{priorPeriod!.PeriodEnd:yyyy}</td></tr>");
+        AddIxbrlRow(sb, "Turnover", "core:TurnoverGrossRevenue", pl.Turnover, contextRef: "current", priorAmount: priorPl?.Turnover, priorContextRef: "prior");
+        AddIxbrlRow(sb, "Cost of sales", "core:CostSales", -pl.CostOfSales, contextRef: "current", priorAmount: priorPl != null ? -priorPl.CostOfSales : null, priorContextRef: "prior");
+        AddIxbrlRow(sb, "Gross profit", "core:GrossProfitLoss", pl.GrossProfit, bold: true, contextRef: "current", priorAmount: priorPl?.GrossProfit, priorContextRef: "prior");
         if (pl.OtherIncome != 0)
-            AddIxbrlRow(sb, "Other operating income", "core:OtherOperatingIncome", pl.OtherIncome, contextRef: "current");
-        AddIxbrlRow(sb, "Administrative expenses", "core:AdministrativeExpenses", -pl.TotalOverheads, contextRef: "current");
-        AddIxbrlRow(sb, "Operating profit", "core:OperatingProfitLoss", pl.OperatingProfit, bold: true, contextRef: "current");
+            AddIxbrlRow(sb, "Other operating income", "core:OtherOperatingIncome", pl.OtherIncome, contextRef: "current", priorAmount: priorPl?.OtherIncome, priorContextRef: "prior");
+        AddIxbrlRow(sb, "Administrative expenses", "core:AdministrativeExpenses", -pl.TotalOverheads, contextRef: "current", priorAmount: priorPl != null ? -priorPl.TotalOverheads : null, priorContextRef: "prior");
+        AddIxbrlRow(sb, "Operating profit", "core:OperatingProfitLoss", pl.OperatingProfit, bold: true, contextRef: "current", priorAmount: priorPl?.OperatingProfit, priorContextRef: "prior");
         if (pl.InterestPayable != 0)
-            AddIxbrlRow(sb, "Interest payable and similar charges", "core:InterestPayableSimilarChargesFinanceCosts", -pl.InterestPayable, contextRef: "current");
-        AddIxbrlRow(sb, "Profit before taxation", "core:ProfitLossOnOrdinaryActivitiesBeforeTax", pl.ProfitBeforeTax, bold: true, contextRef: "current");
-        AddIxbrlRow(sb, "Tax on profit", "core:TaxTaxCreditOnProfitOrLossOnOrdinaryActivities", -pl.TaxCharge, contextRef: "current");
-        AddIxbrlRow(sb, "Profit for the year", "core:ProfitLossForPeriod", pl.ProfitAfterTax, bold: true, contextRef: "current");
+            AddIxbrlRow(sb, "Interest payable and similar charges", "core:InterestPayableSimilarChargesFinanceCosts", -pl.InterestPayable, contextRef: "current", priorAmount: priorPl != null ? -priorPl.InterestPayable : null, priorContextRef: "prior");
+        AddIxbrlRow(sb, "Profit before taxation", "core:ProfitLossOnOrdinaryActivitiesBeforeTax", pl.ProfitBeforeTax, bold: true, contextRef: "current", priorAmount: priorPl?.ProfitBeforeTax, priorContextRef: "prior");
+        AddIxbrlRow(sb, "Tax on profit", "core:TaxTaxCreditOnProfitOrLossOnOrdinaryActivities", -pl.TaxCharge, contextRef: "current", priorAmount: priorPl != null ? -priorPl.TaxCharge : null, priorContextRef: "prior");
+        AddIxbrlRow(sb, "Profit for the year", "core:ProfitLossForPeriod", pl.ProfitAfterTax, bold: true, contextRef: "current", priorAmount: priorPl?.ProfitAfterTax, priorContextRef: "prior");
         sb.AppendLine("</table>");
 
         sb.AppendLine("</body>");
@@ -141,15 +177,22 @@ public class IxbrlService(AccountsDbContext db, FinancialStatementsService state
         return Encoding.UTF8.GetBytes(sb.ToString());
     }
 
-    private static void AddIxbrlRow(StringBuilder sb, string label, string concept, decimal amount, bool bold = false, string contextRef = "instant")
+    private static void AddIxbrlRow(StringBuilder sb, string label, string concept, decimal amount, bool bold = false, string contextRef = "instant", decimal? priorAmount = null, string priorContextRef = "priorInstant")
     {
         var cls = bold ? " class=\"bold\"" : "";
-        var factValue = Math.Round(amount, 0).ToString(CultureInfo.InvariantCulture);
-        var displayValue = amount < 0 ? $"({Math.Abs(amount):N0})" : $"{amount:N0}";
         sb.AppendLine($"<tr{cls}>");
         sb.AppendLine($"  <td>{label}</td>");
-        sb.AppendLine($"  <td class=\"amount\"><ix:nonFraction name=\"{concept}\" contextRef=\"{contextRef}\" unitRef=\"EUR\" decimals=\"0\" format=\"ixt:num-dot-decimal\" title=\"{displayValue}\">{factValue}</ix:nonFraction></td>");
+        AppendFactCell(sb, concept, amount, contextRef);
+        if (priorAmount.HasValue)
+            AppendFactCell(sb, concept, priorAmount.Value, priorContextRef);
         sb.AppendLine("</tr>");
+    }
+
+    private static void AppendFactCell(StringBuilder sb, string concept, decimal amount, string contextRef)
+    {
+        var factValue = Math.Round(amount, 0).ToString(CultureInfo.InvariantCulture);
+        var displayValue = amount < 0 ? $"({Math.Abs(amount):N0})" : $"{amount:N0}";
+        sb.AppendLine($"  <td class=\"amount\"><ix:nonFraction name=\"{concept}\" contextRef=\"{contextRef}\" unitRef=\"EUR\" decimals=\"0\" format=\"ixt:num-dot-decimal\" title=\"{displayValue}\">{factValue}</ix:nonFraction></td>");
     }
 
     private static string Escape(string s) => System.Security.SecurityElement.Escape(s) ?? s;
