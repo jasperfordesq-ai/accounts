@@ -52,7 +52,9 @@ Backend auth endpoints are proxy-only in production. Do not expose `/api/auth/lo
 
 Set every required variable before running `docker compose -f compose.production.yml config --quiet`, the migration job, or the production stack. CI sample values are not production secrets.
 
-Sensitive values are mounted as Docker secrets under `/run/secrets`. Put each raw secret in a root-readable file outside the repository, set the matching `*_FILE` variable to that path, and keep those files out of terminal history, logs, and backups that are not approved for secret material.
+Sensitive values are mounted as Docker secrets under `/run/secrets`. Put each raw secret in a file outside the repository, set the matching `*_FILE` variable to that path, and keep those files out of terminal history, logs, and backups that are not approved for secret material.
+
+The containers run as a non-root user and, in non-swarm `docker compose`, the in-container secret keeps the host file's permissions (the `mode:` field is swarm-only). Each secret file must therefore be readable by that user: keep the secrets directory `0700` and the secret files `0444`. A `0600` file owned by the host user makes the migration, API, and frontend containers fail at startup with `Permission denied` on `/run/secrets/...`.
 
 Do not run plain `docker compose -f compose.production.yml config` with production secrets. The non-quiet render can still print secret file paths into terminal scrollback or CI logs.
 
