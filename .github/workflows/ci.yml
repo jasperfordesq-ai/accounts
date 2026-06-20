@@ -94,7 +94,6 @@ jobs:
       TRUST_PROXY_HEADERS: "true"
       FRONTEND_PORT: "3000"
       NO_PROXY: accounts-smoke.local,127.0.0.1,localhost
-      no_proxy: accounts-smoke.local,127.0.0.1,localhost
       BOOTSTRAP_TENANT_NAME: CI Firm
       BOOTSTRAP_TENANT_SLUG: ci-firm
       BOOTSTRAP_OWNER_EMAIL: owner@example.ie
@@ -193,7 +192,6 @@ jobs:
       TRUST_PROXY_HEADERS: "true"
       FRONTEND_PORT: "3000"
       NO_PROXY: accounts-smoke.local,127.0.0.1,localhost
-      no_proxy: accounts-smoke.local,127.0.0.1,localhost
       BOOTSTRAP_TENANT_NAME: CI Firm
       BOOTSTRAP_TENANT_SLUG: ci-firm
       BOOTSTRAP_OWNER_EMAIL: owner@example.ie
