@@ -12730,6 +12730,20 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public void ApiKeyRotationRunbook_DocumentsHashAndZeroDowntimeRotation()
+    {
+        // BL-30: ops need a documented rotation procedure for the single service API key.
+        var runbookPath = Path.Combine(RepositoryRoot(), "Docs", "operations", "api-key-rotation.md");
+        Assert.True(File.Exists(runbookPath), "API key rotation runbook should exist for operations (BL-30).");
+        var runbook = File.ReadAllText(runbookPath);
+        Assert.Contains("ACCOUNTS_API_KEY_HASH", runbook);
+        Assert.Contains("ACCOUNTS_API_KEY_FILE", runbook);
+        Assert.Contains("sha256", runbook, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ApiAccess__Keys", runbook);
+        Assert.Contains("Rollback", runbook);
+    }
+
+    [Fact]
     public void FrontendRouteHandlers_ShareRuntimeHstsHeaderGate()
     {
         var root = RepositoryRoot();
