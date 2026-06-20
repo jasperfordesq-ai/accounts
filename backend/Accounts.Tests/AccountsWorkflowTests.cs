@@ -1184,6 +1184,99 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task CapitalAllowances_ClaimPersistedWhenAdjustmentsGenerated()
+    {
+        // BL-06: generating a period's adjustments records the actual wear-and-tear claim per asset,
+        // so later periods can read the real cumulative claim instead of re-estimating it.
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        db.FixedAssets.Add(new FixedAsset
+        {
+            CompanyId = period.CompanyId,
+            Name = "Laptop fleet",
+            Category = "Computer Equipment",
+            Cost = 8_000m,
+            AcquisitionDate = new DateOnly(2025, 1, 15),
+            UsefulLifeYears = 4,
+            DepreciationMethod = DepreciationMethod.StraightLine
+        });
+        await db.SaveChangesAsync();
+
+        await new AdjustmentService(db).GenerateAutoAdjustmentsAsync(period.CompanyId, period.Id);
+
+        var claim = await db.CapitalAllowanceClaims.SingleAsync(c => c.PeriodId == period.Id);
+        Assert.Equal(1_000m, claim.Claim);   // 8000 * 12.5%, full year
+        Assert.Equal(8_000m, claim.Cost);
+    }
+
+    [Fact]
+    public async Task CapitalAllowances_CapCumulativeClaimUsingPersistedPriorClaims()
+    {
+        // BL-06: prior claims come from persisted records, not re-estimated from period length or
+        // depreciation entries. An asset already 7,500/8,000 claimed leaves only 500 this period,
+        // even with no depreciation entries from which the old code could re-derive the prior claim.
+        await using var db = CreateDbContext();
+        var company = new Company
+        {
+            LegalName = "Capital Allowance Limited",
+            CroNumber = "778899",
+            CompanyType = CompanyType.Private,
+            IncorporationDate = new DateOnly(2018, 1, 1),
+            ArdMonth = 12,
+            IsTrading = true,
+            RegisteredOfficeAddress1 = "1 Main Street",
+            RegisteredOfficeCity = "Dublin",
+            RegisteredOfficeCounty = "Dublin"
+        };
+        db.Companies.Add(company);
+        await db.SaveChangesAsync();
+
+        var priorPeriod = new AccountingPeriod
+        {
+            CompanyId = company.Id,
+            PeriodStart = new DateOnly(2024, 1, 1),
+            PeriodEnd = new DateOnly(2024, 12, 31),
+            IsFirstYear = false
+        };
+        var currentPeriod = new AccountingPeriod
+        {
+            CompanyId = company.Id,
+            PeriodStart = new DateOnly(2025, 1, 1),
+            PeriodEnd = new DateOnly(2025, 12, 31),
+            IsFirstYear = false
+        };
+        db.AccountingPeriods.AddRange(priorPeriod, currentPeriod);
+        var asset = new FixedAsset
+        {
+            CompanyId = company.Id,
+            Name = "Machine",
+            Category = "Plant & Machinery",
+            Cost = 8_000m,
+            AcquisitionDate = new DateOnly(2018, 6, 1),
+            UsefulLifeYears = 4,
+            DepreciationMethod = DepreciationMethod.StraightLine
+        };
+        db.FixedAssets.Add(asset);
+        await db.SaveChangesAsync();
+
+        // 7,500 already claimed in a prior period — deliberately with no depreciation entries.
+        db.CapitalAllowanceClaims.Add(new CapitalAllowanceClaim
+        {
+            AssetId = asset.Id,
+            PeriodId = priorPeriod.Id,
+            Cost = 8_000m,
+            Claim = 7_500m
+        });
+        await db.SaveChangesAsync();
+
+        var ct1 = await new TaxComputationService(db, new FinancialStatementsService(db))
+            .GetCt1SupportDataAsync(company.Id, currentPeriod.Id);
+
+        // Only 500 of cost remains, so the claim is capped at 500, not the full-year 1,000.
+        Assert.Equal(500m, ct1.CapitalAllowances);
+    }
+
+    [Fact]
     public async Task TaxComputation_SurfacesTradingLossInsteadOfDiscardingIt()
     {
         await using var db = CreateDbContext();

@@ -172,7 +172,17 @@ public class TaxComputationService(AccountsDbContext db, FinancialStatementsServ
         );
     }
 
-    private async Task<decimal> ComputeCapitalAllowancesAsync(int companyId, DateOnly periodStart, DateOnly periodEnd)
+    public record CapitalAllowanceClaimResult(int AssetId, decimal Cost, decimal Claim);
+
+    private async Task<decimal> ComputeCapitalAllowancesAsync(int companyId, DateOnly periodStart, DateOnly periodEnd) =>
+        (await ComputeCapitalAllowanceClaimsAsync(companyId, periodStart, periodEnd)).Sum(c => c.Claim);
+
+    // Per-asset wear and tear allowance for the period, capped so the cumulative claim never
+    // exceeds 100% of cost. Crucially, the "already allowed" figure is read from the persisted
+    // per-asset claims of prior periods (CapitalAllowanceClaims), NOT re-estimated from period
+    // length or from depreciation entries — capital allowances run for eight years regardless of
+    // the accounting depreciation life, so the actual cumulative claim cannot be re-derived (BL-06).
+    public async Task<List<CapitalAllowanceClaimResult>> ComputeCapitalAllowanceClaimsAsync(int companyId, DateOnly periodStart, DateOnly periodEnd)
     {
         var qualifyingAssets = await db.FixedAssets
             .Where(a => a.CompanyId == companyId
@@ -185,24 +195,51 @@ public class TaxComputationService(AccountsDbContext db, FinancialStatementsServ
         // A single accounting period never attracts more than one full year's allowance.
         var periodFraction = PeriodYearFraction(periodStart, periodEnd);
 
-        var capitalAllowances = 0m;
+        var results = new List<CapitalAllowanceClaimResult>();
         foreach (var asset in qualifyingAssets)
         {
-            // Fraction of cost already allowed in prior periods, each pro-rated by its own
-            // length, so the cumulative wear and tear is capped at 100% of cost (8 full years).
-            var priorPeriods = await db.DepreciationEntries
-                .Where(d => d.AssetId == asset.Id && d.Period.PeriodEnd < periodStart)
-                .Select(d => new { d.Period.PeriodStart, d.Period.PeriodEnd })
-                .ToListAsync();
+            // Allowance actually claimed against this asset in prior periods.
+            var priorClaims = await db.CapitalAllowanceClaims
+                .Where(c => c.AssetId == asset.Id && c.Period.PeriodEnd < periodStart)
+                .SumAsync(c => c.Claim);
 
-            var priorFractionOfCost = priorPeriods.Sum(p => 0.125m * PeriodYearFraction(p.PeriodStart, p.PeriodEnd));
-            var remainingFractionOfCost = Math.Max(0m, 1m - priorFractionOfCost);
-            var thisPeriodFractionOfCost = Math.Min(0.125m * periodFraction, remainingFractionOfCost);
+            var remainingCost = Math.Max(0m, asset.Cost - priorClaims);
+            var thisPeriodClaim = Math.Min(Math.Round(asset.Cost * 0.125m * periodFraction, 2), remainingCost);
 
-            capitalAllowances += asset.Cost * thisPeriodFractionOfCost;
+            if (thisPeriodClaim > 0)
+                results.Add(new CapitalAllowanceClaimResult(asset.Id, asset.Cost, thisPeriodClaim));
         }
 
-        return Math.Round(capitalAllowances, 2);
+        return results;
+    }
+
+    // Records the wear-and-tear allowance claimed against each qualifying asset this period, so
+    // future periods can read the actual cumulative claim instead of re-estimating it (BL-06).
+    // Called when a period's accounts/adjustments are generated.
+    public async Task PersistCapitalAllowanceClaimsAsync(int companyId, int periodId)
+    {
+        var period = await db.AccountingPeriods
+            .FirstOrDefaultAsync(p => p.Id == periodId && p.CompanyId == companyId)
+            ?? throw new ResourceNotFoundException($"Period {periodId} not found");
+
+        var existing = await db.CapitalAllowanceClaims
+            .Where(c => c.PeriodId == periodId)
+            .ToListAsync();
+        db.CapitalAllowanceClaims.RemoveRange(existing);
+
+        var claims = await ComputeCapitalAllowanceClaimsAsync(companyId, period.PeriodStart, period.PeriodEnd);
+        foreach (var claim in claims)
+        {
+            db.CapitalAllowanceClaims.Add(new CapitalAllowanceClaim
+            {
+                AssetId = claim.AssetId,
+                PeriodId = periodId,
+                Cost = claim.Cost,
+                Claim = claim.Claim
+            });
+        }
+
+        await db.SaveChangesAsync();
     }
 
     // Length of an accounting period as a fraction of a 12-month year (capped at 1.0),

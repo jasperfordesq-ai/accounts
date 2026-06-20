@@ -36,6 +36,7 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
     public DbSet<Creditor> Creditors => Set<Creditor>();
     public DbSet<FixedAsset> FixedAssets => Set<FixedAsset>();
     public DbSet<DepreciationEntry> DepreciationEntries => Set<DepreciationEntry>();
+    public DbSet<CapitalAllowanceClaim> CapitalAllowanceClaims => Set<CapitalAllowanceClaim>();
     public DbSet<Inventory> Inventories => Set<Inventory>();
     public DbSet<Loan> Loans => Set<Loan>();
     public DbSet<LoanBalanceSnapshot> LoanBalanceSnapshots => Set<LoanBalanceSnapshot>();
@@ -303,6 +304,18 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
             e.HasOne(d => d.Asset).WithMany(a => a.DepreciationEntries).HasForeignKey(d => d.AssetId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(d => d.Period).WithMany(p => p.DepreciationEntries).HasForeignKey(d => d.PeriodId).OnDelete(DeleteBehavior.Cascade);
             e.HasIndex(d => new { d.AssetId, d.PeriodId }).IsUnique();
+        });
+
+        // CapitalAllowanceClaim
+        modelBuilder.Entity<CapitalAllowanceClaim>(e =>
+        {
+            e.ToTable("capital_allowance_claims");
+            e.HasKey(c => c.Id);
+            e.Property(c => c.Cost).HasColumnType("decimal(18,2)");
+            e.Property(c => c.Claim).HasColumnType("decimal(18,2)");
+            e.HasOne(c => c.Asset).WithMany().HasForeignKey(c => c.AssetId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(c => c.Period).WithMany().HasForeignKey(c => c.PeriodId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(c => new { c.AssetId, c.PeriodId }).IsUnique();
         });
 
         // Inventory

@@ -273,6 +273,11 @@ public class AdjustmentService(AccountsDbContext db)
         db.Adjustments.AddRange(adjustments);
         await db.SaveChangesAsync();
 
+        // Record the actual capital allowance claimed against each asset this period so future
+        // periods read the real cumulative claim rather than re-estimating it (BL-06).
+        await new TaxComputationService(db, new FinancialStatementsService(db))
+            .PersistCapitalAllowanceClaimsAsync(companyId, periodId);
+
         // Calculate summary
         var allAdjustments = await db.Adjustments.Where(a => a.PeriodId == periodId).ToListAsync();
         return new AdjustmentSummary(
