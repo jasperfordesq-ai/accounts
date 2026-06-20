@@ -11743,7 +11743,7 @@ public class AccountsWorkflowTests
         Assert.Contains("\"127.0.0.1:${FRONTEND_PORT:-3000}:3000\"", compose);
         Assert.Contains("AllowedHosts: \"${ACCOUNTS_ALLOWED_HOSTS:?set ACCOUNTS_ALLOWED_HOSTS};api\"", compose);
         Assert.Contains("curl --fail --header 'Host: api' http://localhost:8080/health/ready", compose);
-        Assert.Contains("wget -qO- http://localhost:3000/health/ready", compose);
+        Assert.Contains("wget -qO- http://127.0.0.1:3000/health/ready", compose);
         Assert.DoesNotContain("wget -qO- http://localhost:3000/login", compose);
         Assert.Contains("condition: service_healthy", compose);
         Assert.DoesNotContain("accounts_dev", compose);
