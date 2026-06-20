@@ -237,6 +237,24 @@ public class FinancialStatementsService(AccountsDbContext db)
         return await GetProfitAndLossForPeriodAsync(periodId);
     }
 
+    // Income earned otherwise than from a trade (categories flagged IsNonTradingIncome),
+    // measured with the same posting logic as the P&L, for the 25% corporation tax rate.
+    public virtual async Task<decimal> GetNonTradingIncomeAsync(int companyId, int periodId)
+    {
+        await AssertPeriodBelongsToCompanyAsync(companyId, periodId);
+        var categories = await db.AccountCategories
+            .Where(c => c.CompanyId == companyId || (c.IsSystem && c.CompanyId == null))
+            .ToListAsync();
+        var movements = await GetAccountMovementsAsync(periodId, categories);
+        return categories
+            .Where(c => c.Type == AccountCategoryType.Income && c.IsNonTradingIncome)
+            .Sum(c =>
+            {
+                var movement = movements.GetValueOrDefault(c.Id);
+                return movement == null ? 0m : movement.Credit - movement.Debit;
+            });
+    }
+
     private async Task<ProfitAndLoss> GetProfitAndLossForPeriodAsync(int periodId)
     {
         var period = await db.AccountingPeriods.Include(p => p.Company).FirstAsync(p => p.Id == periodId);

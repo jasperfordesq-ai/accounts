@@ -1209,6 +1209,32 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task TaxComputation_AppliesTwentyFivePercentToNonTradingIncome()
+    {
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var trading = AddCategory(db, period.CompanyId, "4000", "Sales / Revenue", AccountCategoryType.Income);
+        var rental = AddCategory(db, period.CompanyId, "4500", "Rental income", AccountCategoryType.Income);
+        rental.IsNonTradingIncome = true;
+        var bank = new BankAccount { CompanyId = period.CompanyId, Name = "Current Account", OpeningBalance = 0m };
+        db.BankAccounts.Add(bank);
+        await db.SaveChangesAsync();
+
+        // 10,000 trading income (12.5%) + 4,000 non-trading rental income (25%).
+        db.ImportedTransactions.AddRange(
+            new ImportedTransaction { BankAccountId = bank.Id, PeriodId = period.Id, Date = new DateOnly(2025, 3, 1), Description = "Trading sales", Amount = 10_000m, CategoryId = trading.Id },
+            new ImportedTransaction { BankAccountId = bank.Id, PeriodId = period.Id, Date = new DateOnly(2025, 3, 2), Description = "Rent received", Amount = 4_000m, CategoryId = rental.Id });
+        await db.SaveChangesAsync();
+
+        var tax = await new TaxComputationService(db, new FinancialStatementsService(db)).ComputeAsync(period.CompanyId, period.Id);
+
+        Assert.Equal(14_000m, tax.TaxableProfit);
+        Assert.Equal(1_250m, tax.CorporationTaxAt125); // 10,000 trading @ 12.5%
+        Assert.Equal(1_000m, tax.CorporationTaxAt25);  // 4,000 non-trading @ 25% (s.21A TCA 1997)
+        Assert.Equal(2_250m, tax.TotalCorporationTax);
+    }
+
+    [Fact]
     public async Task LoanSnapshots_ForFutureEffectiveLoansDoNotLeakIntoCurrentPeriodReporting()
     {
         await using var db = CreateDbContext();

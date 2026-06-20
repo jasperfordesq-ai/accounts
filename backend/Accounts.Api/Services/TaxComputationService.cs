@@ -96,12 +96,14 @@ public class TaxComputationService(AccountsDbContext db, FinancialStatementsServ
         var tradingLossAvailable = Math.Max(0m, -taxableProfitBeforeRelief);
         var taxableProfit = Math.Max(0m, taxableProfitBeforeRelief);
 
-        // Irish corporation tax rates (2024):
-        // 12.5% on trading income
-        // 25% on non-trading/passive income
-        // For simplicity, assume all trading income
-        var taxAt125 = Math.Round(taxableProfit * 0.125m, 2);
-        var taxAt25 = 0m; // Would apply to investment income
+        // Irish corporation tax: 12.5% on trading income, 25% on non-trading/passive income
+        // (Case III/IV/V, such as rent or deposit interest; s.21A TCA 1997). Split the taxable
+        // profit by the non-trading income earned in the period; the balance is trading profit.
+        var nonTradingIncome = await statementsService.GetNonTradingIncomeAsync(companyId, periodId);
+        var nonTradingTaxable = Math.Clamp(nonTradingIncome, 0m, taxableProfit);
+        var tradingTaxable = taxableProfit - nonTradingTaxable;
+        var taxAt125 = Math.Round(tradingTaxable * 0.125m, 2);
+        var taxAt25 = Math.Round(nonTradingTaxable * 0.25m, 2);
         var totalTax = taxAt125 + taxAt25;
 
         // Preliminary tax paid
@@ -116,7 +118,9 @@ public class TaxComputationService(AccountsDbContext db, FinancialStatementsServ
             ? $"Trading loss of €{tradingLossAvailable:N2} available to carry forward against future trading profits (s.396(1) TCA 1997)."
             : taxableProfit == 0
                 ? "No taxable profit and no trading loss for the period."
-                : $"Corporation tax computed at 12.5% trading rate. Preliminary tax of €{prelimTax:N2} already paid.";
+                : nonTradingTaxable > 0
+                    ? $"Corporation tax: 12.5% on trading profit and 25% on non-trading income of €{nonTradingTaxable:N2} (s.21A TCA 1997). Preliminary tax of €{prelimTax:N2} already paid."
+                    : $"Corporation tax computed at 12.5% trading rate. Preliminary tax of €{prelimTax:N2} already paid.";
 
         return new TaxComputation(accountingProfit, adjustments, taxableProfit, tradingLossAvailable, taxAt125, taxAt25, totalTax, prelimTax, balanceDue, notes);
     }
