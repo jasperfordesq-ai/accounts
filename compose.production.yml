@@ -17,6 +17,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+      start_period: 40s
 
   migrate:
     image: "${ACCOUNTS_API_IMAGE:?set ACCOUNTS_API_IMAGE}"
@@ -93,6 +94,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+      start_period: 40s
 
   frontend:
     image: "${ACCOUNTS_FRONTEND_IMAGE:?set ACCOUNTS_FRONTEND_IMAGE}"
@@ -117,6 +119,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+      start_period: 40s
 
 volumes:
   accounts_production_data:

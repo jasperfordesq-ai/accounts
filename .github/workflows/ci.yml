@@ -257,7 +257,7 @@ jobs:
           docker build -f Dockerfile.frontend --build-arg API_URL=http://api:8080 --tag "$ACCOUNTS_FRONTEND_IMAGE" .
 
       - name: Start production stack
-        run: docker compose -f compose.production.yml up -d --wait --wait-timeout 180
+        run: docker compose -f compose.production.yml up -d --wait --wait-timeout 300
 
       - name: Map local HTTPS smoke hostname
         run: echo "127.0.0.1 accounts-smoke.local" | sudo tee -a /etc/hosts

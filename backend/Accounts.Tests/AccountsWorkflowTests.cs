@@ -12042,7 +12042,7 @@ public class AccountsWorkflowTests
         Assert.Contains("Build production smoke images", productionSmokeJob);
         Assert.Contains("docker build -f Dockerfile.backend --tag \"$ACCOUNTS_API_IMAGE\" .", productionSmokeJob);
         Assert.Contains("docker build -f Dockerfile.frontend --build-arg API_URL=http://api:8080 --tag \"$ACCOUNTS_FRONTEND_IMAGE\" .", productionSmokeJob);
-        Assert.Contains("docker compose -f compose.production.yml up -d --wait --wait-timeout 180", productionSmokeJob);
+        Assert.Contains("docker compose -f compose.production.yml up -d --wait --wait-timeout 300", productionSmokeJob);
         Assert.DoesNotContain("docker compose -f compose.production.yml up -d --build", productionSmokeJob);
         Assert.Contains("127.0.0.1 accounts-smoke.local", productionSmokeJob);
         Assert.Contains("accounts-production-smoke-ingress", productionSmokeJob);
