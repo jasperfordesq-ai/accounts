@@ -1277,6 +1277,79 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task Depreciation_ReducingBalanceFullyWritesDownByEndOfUsefulLife()
+    {
+        // BL-21: a reducing-balance asset must be fully written down by the end of its useful life,
+        // not leave an indefinite reducing-balance residual.
+        await using var db = CreateDbContext();
+        var company = new Company
+        {
+            LegalName = "Reducing Balance Limited",
+            CroNumber = "112233",
+            CompanyType = CompanyType.Private,
+            IncorporationDate = new DateOnly(2025, 1, 1),
+            ArdMonth = 12,
+            IsTrading = true,
+            RegisteredOfficeAddress1 = "1 Main Street",
+            RegisteredOfficeCity = "Dublin",
+            RegisteredOfficeCounty = "Dublin"
+        };
+        db.Companies.Add(company);
+        await db.SaveChangesAsync();
+
+        var periods = new List<AccountingPeriod>();
+        for (var year = 2025; year <= 2027; year++)
+            periods.Add(new AccountingPeriod { CompanyId = company.Id, PeriodStart = new DateOnly(year, 1, 1), PeriodEnd = new DateOnly(year, 12, 31), IsFirstYear = year == 2025 });
+        db.AccountingPeriods.AddRange(periods);
+        var asset = new FixedAsset
+        {
+            CompanyId = company.Id,
+            Name = "Van",
+            Category = "Motor Vehicles",
+            Cost = 8_000m,
+            AcquisitionDate = new DateOnly(2025, 1, 1),
+            UsefulLifeYears = 3,
+            DepreciationMethod = DepreciationMethod.ReducingBalance
+        };
+        db.FixedAssets.Add(asset);
+        await db.SaveChangesAsync();
+
+        var service = new AdjustmentService(db);
+        foreach (var p in periods)
+            await service.GenerateAutoAdjustmentsAsync(company.Id, p.Id);
+
+        var finalEntry = await db.DepreciationEntries.SingleAsync(d => d.AssetId == asset.Id && d.PeriodId == periods[2].Id);
+        Assert.Equal(0m, finalEntry.ClosingNbv);
+        var totalCharge = await db.DepreciationEntries.Where(d => d.AssetId == asset.Id).SumAsync(d => d.Charge);
+        Assert.Equal(8_000m, totalCharge);
+    }
+
+    [Fact]
+    public async Task EquityChanges_FirstYearShowsIncorporationCapitalAsOpeningNotIssuedInYear()
+    {
+        // BL-22: capital subscribed at incorporation (on the period start date) is the opening balance
+        // of the statement of changes in equity, not mis-stated as issued during the first year.
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        db.ShareCapitals.Add(new ShareCapital
+        {
+            CompanyId = period.CompanyId,
+            ShareClass = "Ordinary",
+            NumberIssued = 100,
+            NominalValue = 1m,
+            TotalValue = 100m,
+            IssueDate = period.PeriodStart
+        });
+        await db.SaveChangesAsync();
+
+        var equity = await new FinancialStatementsService(db).GetEquityChangesAsync(period.CompanyId, period.Id);
+
+        Assert.Equal(100m, equity.OpeningShareCapital);
+        Assert.Equal(0m, equity.SharesIssued);
+        Assert.Equal(100m, equity.ClosingShareCapital);
+    }
+
+    [Fact]
     public async Task TaxComputation_SurfacesTradingLossInsteadOfDiscardingIt()
     {
         await using var db = CreateDbContext();
@@ -12471,6 +12544,41 @@ public class AccountsWorkflowTests
         Assert.Contains("matcher", proxy);
         Assert.DoesNotContain("process.env.NODE_ENV === \"production\"", proxy);
         Assert.DoesNotContain("script-src 'self' 'unsafe-inline'", proxy);
+    }
+
+    [Fact]
+    public void SecurityHeaders_EmitCspOnApiAndHstsOverHttps()
+    {
+        // BL-31: the backend (not just the frontend proxy) now emits a Content-Security-Policy on
+        // /api responses and HSTS over HTTPS, as defence in depth for direct API access.
+        var apiHttps = new DefaultHttpContext();
+        apiHttps.Request.Scheme = "https";
+        apiHttps.Request.Path = "/api/companies";
+        SecurityHeadersMiddleware.ApplyTo(apiHttps);
+        Assert.Equal("default-src 'none'; frame-ancestors 'none'; base-uri 'none'", apiHttps.Response.Headers["Content-Security-Policy"].ToString());
+        Assert.Contains("max-age=", apiHttps.Response.Headers["Strict-Transport-Security"].ToString());
+        Assert.Equal("nosniff", apiHttps.Response.Headers["X-Content-Type-Options"].ToString());
+
+        // Plain HTTP, non-/api: no HSTS (don't advertise over http) and no API CSP.
+        var plain = new DefaultHttpContext();
+        plain.Request.Scheme = "http";
+        plain.Request.Path = "/health";
+        SecurityHeadersMiddleware.ApplyTo(plain);
+        Assert.False(plain.Response.Headers.ContainsKey("Strict-Transport-Security"));
+        Assert.False(plain.Response.Headers.ContainsKey("Content-Security-Policy"));
+    }
+
+    [Fact]
+    public void RateLimitClientKey_IgnoresForwardedForUnlessExplicitlyTrusted()
+    {
+        // BL-31: a spoofable X-Forwarded-For must not partition the rate limiter unless the deployment
+        // has explicitly opted in (behind a trusted proxy); otherwise an attacker rotates XFF to evade it.
+        var context = new DefaultHttpContext();
+        context.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("203.0.113.7");
+        context.Request.Headers["X-Forwarded-For"] = "10.0.0.1, 198.51.100.9";
+
+        Assert.Equal("203.0.113.7", RateLimitClientKey.FromHttpContext(context, trustForwardedFor: false));
+        Assert.Equal("10.0.0.1", RateLimitClientKey.FromHttpContext(context, trustForwardedFor: true));
     }
 
     [Fact]
