@@ -303,6 +303,31 @@ public class NotesDisclosureService(AccountsDbContext db)
             notes.Add(new NotesDisclosure { PeriodId = periodId, NoteNumber = num++, Title = "Going Concern", Content = "The directors have a reasonable expectation that the company has adequate resources to continue in operational existence for the foreseeable future. The financial statements have been prepared on the going concern basis.", IsRequired = true, IsIncluded = true });
         }
 
+        // Medium/Full regimes require a fuller disclosure set than small companies (BL-13). These
+        // notes are required by the regime, so they render even when the underlying amount is nil,
+        // each with an explicit statement.
+        if (regime == ElectedRegime.Medium || regime == ElectedRegime.Full)
+        {
+            var pl = await new FinancialStatementsService(db).GetProfitAndLossAsync(companyId, periodId);
+
+            var turnoverContent = "Turnover represents the amounts derived from the provision of goods and services, "
+                + "stated net of value added tax, that fall within the company's ordinary activities.\n\n"
+                + $"Turnover for the financial year: €{pl.Turnover:N0}";
+            if (pl.OtherIncome != 0)
+                turnoverContent += $"\nOther operating income: €{pl.OtherIncome:N0}";
+            notes.Add(new NotesDisclosure { PeriodId = periodId, NoteNumber = num++, Title = "Turnover", Content = turnoverContent, IsRequired = true, IsIncluded = true });
+
+            var taxContent = $"The tax charge for the financial year is €{pl.TaxCharge:N0}.\n\n"
+                + "Corporation tax is provided on the company's taxable profits: trading profits are charged at 12.5% "
+                + "and non-trading (passive) income at 25% (s.21A TCA 1997). Capital allowances are claimed in place of "
+                + "depreciation in arriving at taxable profits.";
+            notes.Add(new NotesDisclosure { PeriodId = periodId, NoteNumber = num++, Title = "Tax on Profit on Ordinary Activities", Content = taxContent, IsRequired = true, IsIncluded = true });
+
+            notes.Add(new NotesDisclosure { PeriodId = periodId, NoteNumber = num++, Title = "Financial Instruments", Content = "The company's financial instruments comprise cash and cash equivalents, trade and other debtors, and trade and other creditors. These are basic financial instruments measured at amortised cost in accordance with Sections 11 and 12 of FRS 102. The company does not hold or issue derivative financial instruments.", IsRequired = true, IsIncluded = true });
+
+            notes.Add(new NotesDisclosure { PeriodId = periodId, NoteNumber = num++, Title = "Capital Commitments", Content = "There were no material capital commitments authorised or contracted for at the balance sheet date that have not been provided for in these financial statements.", IsRequired = true, IsIncluded = true });
+        }
+
         // Note: Approval
         notes.Add(new NotesDisclosure { PeriodId = periodId, NoteNumber = num++, Title = "Approval of Financial Statements", Content = $"The financial statements were approved and authorised for issue by the Board of Directors on {DateTime.Now:dd MMMM yyyy}.", IsRequired = true, IsIncluded = true });
 

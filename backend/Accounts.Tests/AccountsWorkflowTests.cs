@@ -1945,6 +1945,36 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task Notes_MediumRegimeAddsFullerDisclosureSetBeyondSmall()
+    {
+        // BL-13: Medium/Full regimes require notes a small company does not — turnover analysis, tax
+        // on profit, financial instruments and capital commitments — rendered even when nil.
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        db.FilingRegimes.Add(new FilingRegime
+        {
+            PeriodId = period.Id,
+            ElectedRegime = ElectedRegime.Medium,
+            CanUseMicro = false,
+            CanFileAbridged = false,
+            AuditExempt = false
+        });
+        await db.SaveChangesAsync();
+
+        var mediumNotes = await new NotesDisclosureService(db).GenerateNotesAsync(period.CompanyId, period.Id);
+        foreach (var title in new[] { "Turnover", "Tax on Profit on Ordinary Activities", "Financial Instruments", "Capital Commitments" })
+            Assert.Contains(mediumNotes, n => n.Title == title);
+
+        // The same company on the small regime does not get the Medium/Full-only notes.
+        var regime = await db.FilingRegimes.SingleAsync(r => r.PeriodId == period.Id);
+        regime.ElectedRegime = ElectedRegime.Small;
+        await db.SaveChangesAsync();
+        var smallNotes = await new NotesDisclosureService(db).GenerateNotesAsync(period.CompanyId, period.Id);
+        Assert.DoesNotContain(smallNotes, n => n.Title == "Financial Instruments");
+        Assert.DoesNotContain(smallNotes, n => n.Title == "Capital Commitments");
+    }
+
+    [Fact]
     public void ApprovalPack_IncludesProfitAndLossForSmallAbridgedButCroPackDoesNot()
     {
         Assert.True(DocumentGeneratorService.ShouldIncludeProfitAndLoss(ElectedRegime.SmallAbridged, DocumentPackagePurpose.StatutoryApproval));
