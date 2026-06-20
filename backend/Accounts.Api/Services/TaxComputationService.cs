@@ -81,7 +81,7 @@ public class TaxComputationService(AccountsDbContext db, FinancialStatementsServ
 
         if (capitalAllowances > 0)
         {
-            adjustments.Add(new TaxAdjustment("Deduct: Capital allowances (12.5%)", -capitalAllowances, "Wear and tear allowances — s.284 TCA 1997, 8-year straight line"));
+            adjustments.Add(new TaxAdjustment("Deduct: Capital allowances", -capitalAllowances, "Wear and tear allowances — s.284 TCA 1997, 12.5% straight line over 8 years, pro-rated for short accounting periods"));
         }
 
         var taxableProfit = accountingProfit;
@@ -155,18 +155,37 @@ public class TaxComputationService(AccountsDbContext db, FinancialStatementsServ
                 && (a.DisposalDate == null || a.DisposalDate > periodEnd))
             .ToListAsync();
 
+        // Wear and tear is 12.5% of cost for a 12-month accounting period, reduced
+        // proportionately for a period of less than 12 months (s.284(3A) TCA 1997).
+        // A single accounting period never attracts more than one full year's allowance.
+        var periodFraction = PeriodYearFraction(periodStart, periodEnd);
+
         var capitalAllowances = 0m;
         foreach (var asset in qualifyingAssets)
         {
-            // Each prior-period depreciation entry represents a year of capital allowances claimed.
-            var priorYearsClaimed = await db.DepreciationEntries
+            // Fraction of cost already allowed in prior periods, each pro-rated by its own
+            // length, so the cumulative wear and tear is capped at 100% of cost (8 full years).
+            var priorPeriods = await db.DepreciationEntries
                 .Where(d => d.AssetId == asset.Id && d.Period.PeriodEnd < periodStart)
-                .CountAsync();
+                .Select(d => new { d.Period.PeriodStart, d.Period.PeriodEnd })
+                .ToListAsync();
 
-            if (priorYearsClaimed < 8)
-                capitalAllowances += asset.Cost * 0.125m;
+            var priorFractionOfCost = priorPeriods.Sum(p => 0.125m * PeriodYearFraction(p.PeriodStart, p.PeriodEnd));
+            var remainingFractionOfCost = Math.Max(0m, 1m - priorFractionOfCost);
+            var thisPeriodFractionOfCost = Math.Min(0.125m * periodFraction, remainingFractionOfCost);
+
+            capitalAllowances += asset.Cost * thisPeriodFractionOfCost;
         }
 
         return Math.Round(capitalAllowances, 2);
+    }
+
+    // Length of an accounting period as a fraction of a 12-month year (capped at 1.0),
+    // used to pro-rate wear and tear allowances for short accounting periods.
+    private static decimal PeriodYearFraction(DateOnly start, DateOnly end)
+    {
+        var days = end.DayNumber - start.DayNumber + 1;
+        if (days <= 0) return 0m;
+        return Math.Min(1m, days / 365m);
     }
 }

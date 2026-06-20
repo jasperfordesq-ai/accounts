@@ -92,6 +92,11 @@ dotnet ef migrations add <Name> --output-dir Data/Migrations
 
 > Build output is routed to `.dotnet-artifacts/` by `backend/Directory.Build.props` because
 > Windows WDAC blocks running DLLs (incl. QuestPDF) from the repo path. CI uses the same `Accounts.slnx`.
+>
+> WDAC still blocks a **freshly rebuilt** `Accounts.Api.dll` at test runtime even under `.dotnet-artifacts/`
+> (error `0x800711C7`) — so after changing backend code, run tests with artifacts redirected outside the
+> repo tree: `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art`. CI (Linux) is
+> unaffected and remains the source of truth.
 
 ## Database
 

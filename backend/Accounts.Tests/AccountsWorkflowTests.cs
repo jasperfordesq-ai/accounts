@@ -1087,6 +1087,78 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task CapitalAllowances_AreProRatedForShortAccountingPeriod()
+    {
+        await using var db = CreateDbContext();
+        var company = new Company
+        {
+            LegalName = "Short Period Limited",
+            CroNumber = "654321",
+            CompanyType = CompanyType.Private,
+            IncorporationDate = new DateOnly(2025, 1, 1),
+            ArdMonth = 6,
+            IsTrading = true,
+            RegisteredOfficeAddress1 = "1 Main Street",
+            RegisteredOfficeCity = "Dublin",
+            RegisteredOfficeCounty = "Dublin"
+        };
+        db.Companies.Add(company);
+        await db.SaveChangesAsync();
+
+        // First accounting period of 181 days (1 Jan – 30 Jun 2025), shorter than 12 months.
+        var shortPeriod = new AccountingPeriod
+        {
+            CompanyId = company.Id,
+            PeriodStart = new DateOnly(2025, 1, 1),
+            PeriodEnd = new DateOnly(2025, 6, 30),
+            IsFirstYear = true
+        };
+        db.AccountingPeriods.Add(shortPeriod);
+        db.FixedAssets.Add(new FixedAsset
+        {
+            CompanyId = company.Id,
+            Name = "Laptop fleet",
+            Category = "Computer Equipment",
+            Cost = 8_000m,
+            AcquisitionDate = new DateOnly(2025, 1, 15),
+            UsefulLifeYears = 4,
+            DepreciationMethod = DepreciationMethod.StraightLine
+        });
+        await db.SaveChangesAsync();
+
+        var ct1 = await new TaxComputationService(db, new FinancialStatementsService(db))
+            .GetCt1SupportDataAsync(company.Id, shortPeriod.Id);
+
+        // s.284 TCA: 8000 * 12.5% * (181/365) = 495.89, not the full-year 1000.
+        Assert.Equal(495.89m, ct1.CapitalAllowances);
+        Assert.True(ct1.CapitalAllowances < 1_000m);
+    }
+
+    [Fact]
+    public async Task CapitalAllowances_FullTwelveMonthPeriodGivesFullWearAndTear()
+    {
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true); // 1 Jan – 31 Dec 2025
+        db.FixedAssets.Add(new FixedAsset
+        {
+            CompanyId = period.CompanyId,
+            Name = "Laptop fleet",
+            Category = "Computer Equipment",
+            Cost = 8_000m,
+            AcquisitionDate = new DateOnly(2025, 1, 15),
+            UsefulLifeYears = 4,
+            DepreciationMethod = DepreciationMethod.StraightLine
+        });
+        await db.SaveChangesAsync();
+
+        var ct1 = await new TaxComputationService(db, new FinancialStatementsService(db))
+            .GetCt1SupportDataAsync(period.CompanyId, period.Id);
+
+        // A full 12-month period attracts the full 12.5% wear and tear: 8000 * 12.5% = 1000.
+        Assert.Equal(1_000m, ct1.CapitalAllowances);
+    }
+
+    [Fact]
     public async Task LoanSnapshots_ForFutureEffectiveLoansDoNotLeakIntoCurrentPeriodReporting()
     {
         await using var db = CreateDbContext();
