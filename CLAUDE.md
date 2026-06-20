@@ -25,12 +25,12 @@ accounts/
 │   ├── Directory.Build.props       # Routes build output to ../.dotnet-artifacts (WDAC workaround)
 │   └── Accounts.Api/
 │       ├── Program.cs              # Minimal API setup, middleware pipeline, core endpoint mappings
-│       ├── Entities/               # 43 entity classes + Enums.cs (incl. Tenant, UserAccount, UserCompanyAccess)
+│       ├── Entities/               # 44 entity classes + Enums.cs (incl. Tenant, UserAccount, UserCompanyAccess, CapitalAllowanceClaim)
 │       ├── Data/
-│       │   ├── AccountsDbContext.cs       # 42 DbSets, full OnModelCreating config
+│       │   ├── AccountsDbContext.cs       # 43 DbSets, full OnModelCreating config
 │       │   ├── SeedData.cs                # Sample companies + demo tenant/role users (dev only)
 │       │   ├── DesignTimeDbContextFactory.cs
-│       │   └── Migrations/                # 18 EF migrations
+│       │   └── Migrations/                # 19 EF migrations
 │       ├── Services/               # 35 services (business logic + auth/security)
 │       ├── Middleware/             # 10 middleware (security headers, auth, CSRF, tenant, RBAC, audit, locks)
 │       ├── Rules/                  # Configurable legal thresholds + auth/session/API-access/audit config
@@ -64,7 +64,7 @@ accounts/
 ```bash
 # Backend build + test (solution is Accounts.slnx, the XML solution format)
 cd backend && dotnet build Accounts.slnx
-cd backend && dotnet test Accounts.slnx        # 461 tests (2 Postgres-only tests skip on InMemory)
+cd backend && dotnet test Accounts.slnx        # 507 tests (2 Postgres-only tests skip on InMemory)
 
 # Frontend build / lint / unit checks
 cd frontend && npm run build
@@ -106,7 +106,7 @@ dotnet ef migrations add <Name> --output-dir Data/Migrations
 - All enums stored as text (not int) for readability
 - snake_case table names, decimal(18,2) for money
 
-## Entities (43 classes, 42 tables)
+## Entities (44 classes, 43 tables)
 
 | Group | Tables |
 |-------|--------|
@@ -115,7 +115,7 @@ dotnet ef migrations add <Name> --output-dir Data/Migrations
 | Periods | accounting_periods, size_classifications, filing_regimes |
 | Filing | cro_filing_packages, revenue_filing_packages |
 | Banking | bank_accounts, import_batches, imported_transactions, transaction_rules, account_categories |
-| Year-End | debtors, creditors, fixed_assets, depreciation_entries, inventories, loans, director_loans, payroll_summaries, tax_balances, dividends |
+| Year-End | debtors, creditors, fixed_assets, depreciation_entries, capital_allowance_claims, inventories, loans, director_loans, payroll_summaries, tax_balances, dividends |
 | Adjustments | adjustments |
 | Reports | reports, notes_disclosures |
 | Equity | share_capitals |
@@ -295,13 +295,13 @@ The platform enforces firm-user identity and tenant isolation as the production 
 
 | Metric | Count |
 |--------|-------|
-| Backend .cs files | 148 |
-| Entity classes | 43 (+Enums) |
+| Backend .cs files | 149 |
+| Entity classes | 44 (+Enums) |
 | Services | 35 |
 | Middleware | 10 |
-| EF migrations | 18 |
+| EF migrations | 19 |
 | API endpoints | ~110 |
-| Backend tests | 463 (461 pass, 2 Postgres-only skipped) |
+| Backend tests | 507 (505 pass, 2 Postgres-only skipped) |
 | Frontend routes | 11 |
 | Frontend .tsx/.ts files | 37 |
 | Docker services | 3 (api + db + frontend) |
