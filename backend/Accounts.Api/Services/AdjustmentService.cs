@@ -82,10 +82,11 @@ public class AdjustmentService(AccountsDbContext db)
             decimal openingNbv = asset.Cost;
 
             // Check for prior depreciation
-            var lastEntry = await db.DepreciationEntries
+            var priorEntries = await db.DepreciationEntries
                 .Where(d => d.AssetId == asset.Id && d.Period.PeriodEnd < period.PeriodStart)
                 .OrderByDescending(d => d.Period.PeriodEnd)
-                .FirstOrDefaultAsync();
+                .ToListAsync();
+            var lastEntry = priorEntries.FirstOrDefault();
 
             if (lastEntry != null)
                 openingNbv = lastEntry.ClosingNbv;
@@ -95,7 +96,14 @@ public class AdjustmentService(AccountsDbContext db)
             if (asset.DepreciationMethod == DepreciationMethod.StraightLine)
                 annualCharge = asset.Cost / asset.UsefulLifeYears;
             else // Reducing balance (typically 25%)
+            {
                 annualCharge = openingNbv * (1m / asset.UsefulLifeYears);
+                // In the final year of the asset's useful life, write off the remaining book value so a
+                // reducing-balance asset is fully depreciated by the end of its life rather than leaving
+                // an indefinite residual (BL-21).
+                if (priorEntries.Count + 1 >= asset.UsefulLifeYears)
+                    annualCharge = openingNbv;
+            }
 
             // Don't depreciate below zero
             annualCharge = Math.Min(annualCharge, openingNbv);
