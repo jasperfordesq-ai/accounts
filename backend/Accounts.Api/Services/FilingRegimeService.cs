@@ -127,7 +127,7 @@ public class FilingRegimeService
         };
     }
 
-    private static List<string> GetRequiredStatements(ElectedRegime regime, CompanySizeClass sizeClass)
+    public static List<string> GetRequiredStatements(ElectedRegime regime, CompanySizeClass sizeClass)
     {
         return regime switch
         {

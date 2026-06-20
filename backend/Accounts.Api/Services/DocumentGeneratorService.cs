@@ -35,6 +35,16 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
         var pl = await statementsService.GetProfitAndLossAsync(companyId, periodId);
         var auditExempt = period.FilingRegime?.AuditExempt == true;
 
+        // Medium/Full regimes additionally require a Cash Flow Statement and a Statement of Changes
+        // in Equity (FilingRegimeService.GetRequiredStatements).
+        FinancialStatementsService.CashFlowStatement? cashFlow = null;
+        FinancialStatementsService.EquityChanges? equityChanges = null;
+        if (IncludesCashFlowAndEquity(regime))
+        {
+            cashFlow = await statementsService.GetCashFlowStatementAsync(companyId, periodId);
+            equityChanges = await statementsService.GetEquityChangesAsync(companyId, periodId);
+        }
+
         // Get prior year balance sheet if available
         FinancialStatementsService.BalanceSheet? priorBs = null;
         var priorPeriod = await db.AccountingPeriods
@@ -83,6 +93,14 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
                             col.Item().PageBreak();
                         }
 
+                        // Independent Auditor's Report — required when the company is not availing of
+                        // audit exemption. Rendered as a template for the appointed auditor to complete.
+                        if (!auditExempt)
+                        {
+                            ComposeAuditorsReport(col, company, period);
+                            col.Item().PageBreak();
+                        }
+
                         // Balance Sheet
                         ComposeBalanceSheet(col, company, period, balanceSheet, priorBs, directors);
 
@@ -92,6 +110,15 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
                         if (ShouldIncludeProfitAndLoss(regime, purpose))
                         {
                             ComposeProfitAndLoss(col, company, period, pl);
+                            col.Item().PageBreak();
+                        }
+
+                        // Cash Flow Statement + Statement of Changes in Equity (Medium/Full)
+                        if (cashFlow != null && equityChanges != null)
+                        {
+                            ComposeCashFlowStatement(col, company, period, cashFlow);
+                            col.Item().PageBreak();
+                            ComposeStatementOfChangesInEquity(col, company, period, equityChanges);
                             col.Item().PageBreak();
                         }
 
@@ -374,6 +401,173 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
 
     public static bool ShouldIncludeAuditExemptionStatement(ElectedRegime regime, bool auditExempt) =>
         auditExempt && (regime == ElectedRegime.Micro || regime == ElectedRegime.Small || regime == ElectedRegime.SmallAbridged);
+
+    // Medium/Full regimes additionally render a Cash Flow Statement and a Statement of Changes in
+    // Equity (FilingRegimeService.GetRequiredStatements).
+    public static bool IncludesCashFlowAndEquity(ElectedRegime regime) =>
+        regime == ElectedRegime.Medium || regime == ElectedRegime.Full;
+
+    // The primary-statement section headings the accounts package renders for a regime. Kept in step
+    // with the composition flow above and with FilingRegimeService.GetRequiredStatements; exposed for
+    // testing so the rendered section set can be asserted without parsing the PDF.
+    public static List<string> GetIncludedPrimaryStatements(ElectedRegime regime, DocumentPackagePurpose purpose, bool auditExempt)
+    {
+        var sections = new List<string>();
+        if (regime != ElectedRegime.Micro)
+            sections.Add("Directors' Report");
+        if (!auditExempt)
+            sections.Add("Independent Auditor's Report");
+        sections.Add("Balance Sheet");
+        if (ShouldIncludeProfitAndLoss(regime, purpose))
+            sections.Add("Profit and Loss Account");
+        if (IncludesCashFlowAndEquity(regime))
+        {
+            sections.Add("Cash Flow Statement");
+            sections.Add("Statement of Changes in Equity");
+        }
+        sections.Add("Notes to the Financial Statements");
+        return sections;
+    }
+
+    private static void ComposeAuditorsReport(ColumnDescriptor col, Company company, AccountingPeriod period)
+    {
+        col.Item().Text("INDEPENDENT AUDITOR'S REPORT").Bold().FontSize(14);
+        col.Item().Text($"to the members of {company.LegalName}").FontSize(10).Italic();
+        col.Item().PaddingTop(8).Background(Colors.Grey.Lighten4).Border(1).BorderColor(Colors.Grey.Lighten1).Padding(8)
+            .Text("TEMPLATE — to be completed and signed by the appointed statutory auditor. This company is not availing of audit exemption, so an audit report is required before the financial statements are approved and filed. The wording below is a standard template only; it is not an audit opinion and must be reviewed, completed and signed by a Registered Auditor.")
+            .FontSize(8).FontColor(Colors.Grey.Darken2).Italic();
+
+        col.Item().PaddingTop(10).Text("Opinion").Bold().FontSize(10);
+        col.Item().Text($"We have audited the financial statements of {company.LegalName} for the financial year ended {period.PeriodEnd:dd MMMM yyyy}, which comprise the Profit and Loss Account, the Balance Sheet, the Cash Flow Statement, the Statement of Changes in Equity and the related notes, including a summary of significant accounting policies. The financial reporting framework that has been applied in their preparation is Irish law and FRS 102 \"The Financial Reporting Standard applicable in the UK and Republic of Ireland\".").FontSize(9);
+        col.Item().PaddingTop(6).Text("In our opinion the financial statements: give a true and fair view of the assets, liabilities and financial position of the company as at the financial year end date and of its profit or loss for the financial year then ended; have been properly prepared in accordance with FRS 102; and have been properly prepared in accordance with the requirements of the Companies Act 2014. [To be confirmed by the auditor.]").FontSize(9);
+
+        col.Item().PaddingTop(10).Text("Basis for Opinion").Bold().FontSize(10);
+        col.Item().Text("We conducted our audit in accordance with International Standards on Auditing (Ireland) (ISAs (Ireland)) and applicable law. Our responsibilities under those standards are further described in the Auditor's Responsibilities section of our report. We are independent of the company in accordance with the ethical requirements that are relevant to our audit of the financial statements in Ireland, including the Ethical Standard issued by IAASA, and we have fulfilled our other ethical responsibilities in accordance with these requirements.").FontSize(9);
+
+        col.Item().PaddingTop(10).Text("Respective Responsibilities of Directors and Auditor").Bold().FontSize(10);
+        col.Item().Text("As explained more fully in the Statement of Directors' Responsibilities, the directors are responsible for the preparation of the financial statements and for being satisfied that they give a true and fair view. Our objectives are to obtain reasonable assurance about whether the financial statements as a whole are free from material misstatement, whether due to fraud or error, and to issue an auditor's report that includes our opinion.").FontSize(9);
+
+        col.Item().PaddingTop(20).Text("___________________________");
+        col.Item().Text("[Name of Statutory Auditor]").Bold().FontSize(9);
+        col.Item().Text("Statutory Auditor").FontSize(9);
+        col.Item().Text("for and on behalf of [Firm name and address]").FontSize(9);
+        col.Item().PaddingTop(6).Text("Date: ___________________").FontSize(9);
+    }
+
+    private static void ComposeCashFlowStatement(ColumnDescriptor col, Company company, AccountingPeriod period, FinancialStatementsService.CashFlowStatement cf)
+    {
+        col.Item().Text("CASH FLOW STATEMENT").Bold().FontSize(14);
+        col.Item().Text($"for the financial year ended {period.PeriodEnd:dd MMMM yyyy}").FontSize(10).Italic();
+
+        col.Item().PaddingTop(15).Table(table =>
+        {
+            table.ColumnsDefinition(columns =>
+            {
+                columns.RelativeColumn(4);
+                columns.ConstantColumn(110);
+            });
+
+            uint row = 1;
+            table.Cell().Row(row).Column(2).AlignRight().Text("€").Bold().FontSize(9);
+
+            row++; table.Cell().Row(row).Column(1).Text("Cash flows from operating activities").FontSize(9).Bold();
+
+            row++; table.Cell().Row(row).Column(1).PaddingLeft(15).Text("Operating profit").FontSize(9);
+            table.Cell().Row(row).Column(2).AlignRight().Text(FormatEuro(cf.OperatingProfit)).FontSize(9);
+
+            foreach (var adj in cf.OperatingAdjustments)
+            {
+                row++; table.Cell().Row(row).Column(1).PaddingLeft(15).Text(adj.Description).FontSize(9);
+                table.Cell().Row(row).Column(2).AlignRight().Text(FormatEuro(adj.Amount)).FontSize(9);
+            }
+
+            row++; table.Cell().Row(row).Column(1).PaddingLeft(15).Text("Tax paid").FontSize(9);
+            table.Cell().Row(row).Column(2).AlignRight().Text(FormatEuro(-cf.TaxPaid)).FontSize(9);
+
+            row++; table.Cell().Row(row).Column(1).Text("Net cash generated from operating activities").FontSize(9).Bold();
+            table.Cell().Row(row).Column(2).AlignRight().BorderTop(1).Text(FormatEuro(cf.NetCashFromOperating)).FontSize(9).Bold();
+
+            row++; table.Cell().Row(row).Column(1).PaddingTop(6).Text("Cash flows from investing activities").FontSize(9).Bold();
+            row++; table.Cell().Row(row).Column(1).PaddingLeft(15).Text("Purchase of tangible fixed assets").FontSize(9);
+            table.Cell().Row(row).Column(2).AlignRight().Text(FormatEuro(-cf.CapitalExpenditurePurchases)).FontSize(9);
+            row++; table.Cell().Row(row).Column(1).PaddingLeft(15).Text("Proceeds from disposal of fixed assets").FontSize(9);
+            table.Cell().Row(row).Column(2).AlignRight().Text(FormatEuro(cf.CapitalExpenditureDisposals)).FontSize(9);
+            row++; table.Cell().Row(row).Column(1).Text("Net cash used in investing activities").FontSize(9).Bold();
+            table.Cell().Row(row).Column(2).AlignRight().BorderTop(1).Text(FormatEuro(cf.NetCashFromInvesting)).FontSize(9).Bold();
+
+            row++; table.Cell().Row(row).Column(1).PaddingTop(6).Text("Cash flows from financing activities").FontSize(9).Bold();
+            row++; table.Cell().Row(row).Column(1).PaddingLeft(15).Text("New loan drawdowns").FontSize(9);
+            table.Cell().Row(row).Column(2).AlignRight().Text(FormatEuro(cf.LoanDrawdowns)).FontSize(9);
+            row++; table.Cell().Row(row).Column(1).PaddingLeft(15).Text("Repayment of borrowings").FontSize(9);
+            table.Cell().Row(row).Column(2).AlignRight().Text(FormatEuro(-cf.LoanRepayments)).FontSize(9);
+            row++; table.Cell().Row(row).Column(1).PaddingLeft(15).Text("Dividends paid").FontSize(9);
+            table.Cell().Row(row).Column(2).AlignRight().Text(FormatEuro(-cf.DividendsPaid)).FontSize(9);
+            row++; table.Cell().Row(row).Column(1).Text("Net cash from financing activities").FontSize(9).Bold();
+            table.Cell().Row(row).Column(2).AlignRight().BorderTop(1).Text(FormatEuro(cf.NetCashFromFinancing)).FontSize(9).Bold();
+
+            row++; table.Cell().Row(row).Column(1).PaddingTop(6).Text("Net increase/(decrease) in cash and cash equivalents").FontSize(9).Bold();
+            table.Cell().Row(row).Column(2).AlignRight().Text(FormatEuro(cf.NetIncreaseInCash)).FontSize(9).Bold();
+            row++; table.Cell().Row(row).Column(1).Text("Cash and cash equivalents at beginning of year").FontSize(9);
+            table.Cell().Row(row).Column(2).AlignRight().Text(FormatEuro(cf.OpeningCash)).FontSize(9);
+            row++; table.Cell().Row(row).Column(1).Text("Cash and cash equivalents at end of year").FontSize(9).Bold();
+            table.Cell().Row(row).Column(2).AlignRight().BorderTop(1).BorderBottom(2).Text(FormatEuro(cf.ClosingCash)).FontSize(9).Bold();
+        });
+    }
+
+    private static void ComposeStatementOfChangesInEquity(ColumnDescriptor col, Company company, AccountingPeriod period, FinancialStatementsService.EquityChanges eq)
+    {
+        col.Item().Text("STATEMENT OF CHANGES IN EQUITY").Bold().FontSize(14);
+        col.Item().Text($"for the financial year ended {period.PeriodEnd:dd MMMM yyyy}").FontSize(10).Italic();
+
+        col.Item().PaddingTop(15).Table(table =>
+        {
+            table.ColumnsDefinition(columns =>
+            {
+                columns.RelativeColumn(4);
+                columns.ConstantColumn(80);
+                columns.ConstantColumn(90);
+                columns.ConstantColumn(80);
+            });
+
+            uint row = 1;
+            table.Cell().Row(row).Column(2).AlignRight().Text("Share capital €").Bold().FontSize(8);
+            table.Cell().Row(row).Column(3).AlignRight().Text("Retained earnings €").Bold().FontSize(8);
+            table.Cell().Row(row).Column(4).AlignRight().Text("Total €").Bold().FontSize(8);
+
+            row++;
+            table.Cell().Row(row).Column(1).Text("Balance at beginning of year").FontSize(9);
+            table.Cell().Row(row).Column(2).AlignRight().Text(FormatEuro(eq.OpeningShareCapital)).FontSize(9);
+            table.Cell().Row(row).Column(3).AlignRight().Text(FormatEuro(eq.OpeningRetainedEarnings)).FontSize(9);
+            table.Cell().Row(row).Column(4).AlignRight().Text(FormatEuro(eq.OpeningTotal)).FontSize(9);
+
+            row++;
+            table.Cell().Row(row).Column(1).Text("Profit for the financial year").FontSize(9);
+            table.Cell().Row(row).Column(3).AlignRight().Text(FormatEuro(eq.ProfitForYear)).FontSize(9);
+            table.Cell().Row(row).Column(4).AlignRight().Text(FormatEuro(eq.ProfitForYear)).FontSize(9);
+
+            if (eq.SharesIssued != 0)
+            {
+                row++;
+                table.Cell().Row(row).Column(1).Text("Issue of share capital").FontSize(9);
+                table.Cell().Row(row).Column(2).AlignRight().Text(FormatEuro(eq.SharesIssued)).FontSize(9);
+                table.Cell().Row(row).Column(4).AlignRight().Text(FormatEuro(eq.SharesIssued)).FontSize(9);
+            }
+
+            if (eq.DividendsPaid != 0)
+            {
+                row++;
+                table.Cell().Row(row).Column(1).Text("Dividends paid").FontSize(9);
+                table.Cell().Row(row).Column(3).AlignRight().Text(FormatEuro(-eq.DividendsPaid)).FontSize(9);
+                table.Cell().Row(row).Column(4).AlignRight().Text(FormatEuro(-eq.DividendsPaid)).FontSize(9);
+            }
+
+            row++;
+            table.Cell().Row(row).Column(1).Text("Balance at end of year").FontSize(9).Bold();
+            table.Cell().Row(row).Column(2).AlignRight().BorderTop(1).BorderBottom(2).Text(FormatEuro(eq.ClosingShareCapital)).FontSize(9).Bold();
+            table.Cell().Row(row).Column(3).AlignRight().BorderTop(1).BorderBottom(2).Text(FormatEuro(eq.ClosingRetainedEarnings)).FontSize(9).Bold();
+            table.Cell().Row(row).Column(4).AlignRight().BorderTop(1).BorderBottom(2).Text(FormatEuro(eq.ClosingTotal)).FontSize(9).Bold();
+        });
+    }
 
     public static bool ShouldIncludeProfitAndLoss(ElectedRegime regime, DocumentPackagePurpose purpose) =>
         regime != ElectedRegime.Micro

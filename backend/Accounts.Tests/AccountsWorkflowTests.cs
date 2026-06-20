@@ -1854,6 +1854,96 @@ public class AccountsWorkflowTests
         Assert.False(DocumentGeneratorService.ShouldIncludeAuditExemptionStatement(ElectedRegime.Medium, auditExempt: true));
     }
 
+    [Theory]
+    [InlineData(ElectedRegime.Medium)]
+    [InlineData(ElectedRegime.Full)]
+    public void AccountsPackage_MediumAndFullIncludeEveryRequiredPrimaryStatement(ElectedRegime regime)
+    {
+        // BL-02 / BL-03: Medium and Full packages must render a Cash Flow Statement, a Statement of
+        // Changes in Equity and an Auditor's Report — the sections the Small PDF omitted. The rendered
+        // section set must cover every primary statement the filing regime requires.
+        var rendered = DocumentGeneratorService.GetIncludedPrimaryStatements(regime, DocumentPackagePurpose.StatutoryApproval, auditExempt: false);
+        Assert.Contains("Cash Flow Statement", rendered);
+        Assert.Contains("Statement of Changes in Equity", rendered);
+        Assert.Contains("Independent Auditor's Report", rendered);
+        Assert.Contains("Profit and Loss Account", rendered);
+        Assert.Contains("Balance Sheet", rendered);
+
+        // Cross-check against the regime contract: every required primary statement is covered.
+        var required = FilingRegimeService.GetRequiredStatements(regime, CompanySizeClass.Medium);
+        foreach (var heading in new[] { "Cash Flow Statement", "Statement of Changes in Equity", "Auditor's Report" })
+        {
+            Assert.Contains(required, r => r.Contains(heading, StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(rendered, r => r.Contains(heading, StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    [Fact]
+    public void AccountsPackage_SmallAuditExemptOmitsCashFlowEquityAndAuditorsReport()
+    {
+        // BL-02 / BL-03 negative: the small audit-exempt package must NOT carry the Medium/Full-only
+        // sections, and an audit-exempt company gets no auditor's report.
+        var rendered = DocumentGeneratorService.GetIncludedPrimaryStatements(ElectedRegime.Small, DocumentPackagePurpose.StatutoryApproval, auditExempt: true);
+        Assert.DoesNotContain("Cash Flow Statement", rendered);
+        Assert.DoesNotContain("Statement of Changes in Equity", rendered);
+        Assert.DoesNotContain("Independent Auditor's Report", rendered);
+    }
+
+    [Fact]
+    public void AccountsPackage_AuditorsReportTogglesWithAuditExemption()
+    {
+        // BL-03: the auditor's report is present exactly when the company is not audit-exempt.
+        var audited = DocumentGeneratorService.GetIncludedPrimaryStatements(ElectedRegime.Medium, DocumentPackagePurpose.StatutoryApproval, auditExempt: false);
+        var exempt = DocumentGeneratorService.GetIncludedPrimaryStatements(ElectedRegime.Medium, DocumentPackagePurpose.StatutoryApproval, auditExempt: true);
+        Assert.Contains("Independent Auditor's Report", audited);
+        Assert.DoesNotContain("Independent Auditor's Report", exempt);
+    }
+
+    [Fact]
+    public async Task MediumAccountsPdf_RendersExtraStatementsAndIsLargerThanSmall()
+    {
+        // BL-18: the Medium PDF actually generates past the readiness gate (so the new section
+        // composers don't throw) and, carrying the extra statements, is larger than the small PDF
+        // for the same underlying data.
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var regime = new FilingRegime
+        {
+            PeriodId = period.Id,
+            ElectedRegime = ElectedRegime.Medium,
+            CanUseMicro = false,
+            CanFileAbridged = false,
+            AuditExempt = false
+        };
+        db.FilingRegimes.Add(regime);
+        db.NotesDisclosures.Add(new NotesDisclosure
+        {
+            PeriodId = period.Id,
+            NoteNumber = 1,
+            Title = "Approval of Financial Statements",
+            Content = "Approved by the directors.",
+            IsRequired = true,
+            IsIncluded = true
+        });
+        await db.SaveChangesAsync();
+        await MakePeriodReadyForCroDocumentsAsync(db, period);
+
+        var documents = new DocumentGeneratorService(db, new FinancialStatementsService(db));
+
+        var mediumPdf = await documents.GenerateAccountsPackageAsync(period.CompanyId, period.Id);
+        Assert.NotEmpty(mediumPdf);
+
+        // Regenerate the same data as a small audit-exempt pack (no cash flow, SOCIE or auditor's report).
+        regime.ElectedRegime = ElectedRegime.Small;
+        regime.AuditExempt = true;
+        await db.SaveChangesAsync();
+        var smallPdf = await documents.GenerateAccountsPackageAsync(period.CompanyId, period.Id);
+        Assert.NotEmpty(smallPdf);
+
+        Assert.True(mediumPdf.Length > smallPdf.Length,
+            $"Expected the Medium pack ({mediumPdf.Length} bytes) to be larger than the small pack ({smallPdf.Length} bytes) because it carries the cash flow, equity and auditor's report sections.");
+    }
+
     [Fact]
     public void ApprovalPack_IncludesProfitAndLossForSmallAbridgedButCroPackDoesNot()
     {
