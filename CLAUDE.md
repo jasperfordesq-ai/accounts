@@ -21,42 +21,40 @@ Multi-company web application that replaces the traditional year-end accountant 
 ```
 accounts/
 ├── backend/
-│   ├── Accounts.sln
+│   ├── Accounts.slnx               # XML solution (Api + Tests); used by `dotnet` and CI
+│   ├── Directory.Build.props       # Routes build output to ../.dotnet-artifacts (WDAC workaround)
 │   └── Accounts.Api/
-│       ├── Program.cs              # Minimal API setup + core endpoint mappings
-│       ├── Entities/               # 27 entity classes + Enums.cs
+│       ├── Program.cs              # Minimal API setup, middleware pipeline, core endpoint mappings
+│       ├── Entities/               # 43 entity classes + Enums.cs (incl. Tenant, UserAccount, UserCompanyAccess)
 │       ├── Data/
-│       │   ├── AccountsDbContext.cs       # 26 DbSets, full OnModelCreating config
-│       │   ├── SeedData.cs                # 3 sample companies (micro/small/medium)
+│       │   ├── AccountsDbContext.cs       # 42 DbSets, full OnModelCreating config
+│       │   ├── SeedData.cs                # Sample companies + demo tenant/role users (dev only)
 │       │   ├── DesignTimeDbContextFactory.cs
-│       │   └── Migrations/
-│       ├── Services/               # 11 business logic services
-│       ├── Middleware/              # Global exception handler
-│       ├── Rules/                  # Configurable legal threshold config
-│       └── Endpoints/              # 7 endpoint group files + registration
+│       │   └── Migrations/                # 18 EF migrations
+│       ├── Services/               # 35 services (business logic + auth/security)
+│       ├── Middleware/             # 10 middleware (security headers, auth, CSRF, tenant, RBAC, audit, locks)
+│       ├── Rules/                  # Configurable legal thresholds + auth/session/API-access/audit config
+│       └── Endpoints/              # 13 endpoint group files + registration
 ├── frontend/
 │   ├── next.config.ts
 │   └── src/
 │       ├── app/                    # Next.js App Router pages
 │       │   ├── page.tsx            # Dashboard — company listing
-│       │   ├── layout.tsx          # Root layout with HeroUI providers
-│       │   ├── providers.tsx       # HeroUI RouterProvider
-│       │   ├── companies/
-│       │   │   ├── new/page.tsx    # 4-step onboarding wizard
-│       │   │   └── [id]/page.tsx   # Company detail + period management
-│       │   └── companies/[companyId]/periods/[periodId]/
-│       │       ├── page.tsx        # Period workspace (6 tabs)
-│       │       ├── year-end/       # Year-end questionnaire (9 sections)
-│       │       ├── classify/       # Size classification interview
-│       │       ├── statements/     # Financial statements preview (TB, P&L, BS, Tax)
-│       │       └── notes/          # Notes disclosure management
-│       ├── components/
-│       │   └── AppNavbar.tsx       # HeroUI navbar
-│       └── lib/
-│           └── api.ts              # Typed API layer (native fetch, 70+ functions)
-├── compose.yml                     # Docker: api (5090) + postgres (5433) + frontend (3000)
+│       │   ├── login/page.tsx      # Firm staff login
+│       │   ├── change-password/    # Self-service password change
+│       │   ├── health/, health/ready/   # Liveness + readiness routes
+│       │   ├── api/[...path]/route.ts    # Server-side proxy: injects API key, forwards cookies
+│       │   ├── companies/[id], companies/new, .../periods/[periodId]/{year-end,classify,statements,notes,charity}
+│       ├── components/             # AppNavbar, AuthProvider (session + route guard), ErrorBoundary, ...
+│       └── lib/                    # api.ts (typed client), auth.ts, proxy helpers, validation
+├── scripts/                        # PowerShell: backup/restore Postgres, production smoke, image verify
+├── deploy/caddy/Caddyfile.example  # Reverse-proxy / HTTPS ingress example
+├── .github/workflows/ci.yml        # CI: backend build+test, frontend lint/type/test/build, prod smoke
+├── compose.yml                     # Local Docker: api (5090) + postgres (5433) + frontend (3000)
+├── compose.production.yml          # Production stack (secret files, hardened config)
 ├── Dockerfile.backend
 ├── Dockerfile.frontend
+├── LOCAL_SETUP.md                  # Local run + seeded admin instructions
 ├── REQUIREMENTS.md                 # Full product requirements
 └── CLAUDE.md
 ```
@@ -64,19 +62,22 @@ accounts/
 ## Development Commands
 
 ```bash
-# Backend build
-cd backend && dotnet build
+# Backend build + test (solution is Accounts.slnx, the XML solution format)
+cd backend && dotnet build Accounts.slnx
+cd backend && dotnet test Accounts.slnx        # 461 tests (2 Postgres-only tests skip on InMemory)
 
-# Frontend build
+# Frontend build / lint / unit checks
 cd frontend && npm run build
+cd frontend && npm run lint
+cd frontend && npm run test:readiness && npm run test:proxy && npm run test:auth
 
-# Run backend locally (needs PostgreSQL on port 5433)
+# Run backend locally (needs PostgreSQL on port 5433) — see LOCAL_SETUP.md
 cd backend/Accounts.Api && dotnet run
 
 # Run frontend dev server
 cd frontend && npm run dev
 
-# Docker (full stack)
+# Docker (full local stack)
 docker compose up -d
 
 # EF Core migrations
@@ -86,21 +87,26 @@ dotnet ef migrations add <Name> --output-dir Data/Migrations
 # API: port 5090 (Docker) or 5080 (dotnet run)
 # Swagger: http://localhost:5090/swagger (dev only)
 # Frontend: http://localhost:3000 (Next.js)
+# Health: /health (liveness), /health/ready (readiness)
 ```
+
+> Build output is routed to `.dotnet-artifacts/` by `backend/Directory.Build.props` because
+> Windows WDAC blocks running DLLs (incl. QuestPDF) from the repo path. CI uses the same `Accounts.slnx`.
 
 ## Database
 
 - PostgreSQL 16.4 on port 5433 (host) / 5432 (container)
-- Database: `accounts`, User: `accounts`, Password: `accounts_dev`
-- Auto-migrates on startup + seeds 3 sample companies
+- Database: `accounts`, User: `accounts`, Password: `accounts_dev` (**dev only** — production rejects this password and demo seed)
+- Dev auto-migrates + seeds demo data; in production both are gated off by `ProductionSafetyService` and run via a controlled release step
 - All enums stored as text (not int) for readability
 - snake_case table names, decimal(18,2) for money
 
-## Entities (27 classes, 29 tables)
+## Entities (43 classes, 42 tables)
 
 | Group | Tables |
 |-------|--------|
-| Company | companies, company_officers |
+| Tenancy & Users | tenants, user_accounts, user_company_accesses |
+| Company | companies (tenant-scoped via `TenantId`), company_officers |
 | Periods | accounting_periods, size_classifications, filing_regimes |
 | Filing | cro_filing_packages, revenue_filing_packages |
 | Banking | bank_accounts, import_batches, imported_transactions, transaction_rules, account_categories |
@@ -110,7 +116,9 @@ dotnet ef migrations add <Name> --output-dir Data/Migrations
 | Equity | share_capitals |
 | Audit | audit_logs |
 
-## Services (11)
+## Services (35)
+
+Core accounting/statutory services:
 
 | Service | Purpose |
 |---------|---------|
@@ -125,8 +133,33 @@ dotnet ef migrations add <Name> --output-dir Data/Migrations
 | TaxComputationService | Corporation tax bridge (12.5% trading), capital allowances, CT1 support |
 | IxbrlService | Inline XBRL financial statements (FRC Irish FRS-102 taxonomy) |
 | NotesDisclosureService | Auto-generates regime-aware notes (policies, assets, debtors, creditors, share capital, staff, directors) |
+| DeadlineService / FilingWorkflowService | Filing deadlines (Irish public holidays), CRO/Revenue filing workflow + status gates |
+| DirectorLoanComplianceService / DirectorsReportService / CharityReportingService | s.236 director-loan checks, directors' report, charity/SORP reporting |
 
-## API Endpoints (~90 total)
+Auth, security & platform services:
+
+| Service | Purpose |
+|---------|---------|
+| AuthService | Login, PBKDF2-SHA256 (210k) verify, HMAC-signed sessions, lockout, session revocation, password change |
+| PasswordVerifier / PasswordHasher | Constant-time password hashing/verification (enumeration- and timing-safe) |
+| AuthContext / AuthenticatedIdentity | Reads the authenticated principal; derives reviewer display name + audit user id |
+| RoleAuthorizationService | Central role→permission rules (Owner / Accountant / Reviewer / Client) |
+| ApiAccessService | Service-to-service API-key guard with per-company scoping + roles |
+| BootstrapOwnerService / BootstrapOwnerPasswordPolicy | First-run owner/tenant bootstrap from secret config |
+| AuditIntegrityCheckpointService / AuditLogIntegrity | Tamper-evident audit log (signed checkpoints) |
+| ProductionSafetyService | Fail-fast validation that blocks unsafe production startup config |
+
+## API Endpoints (~110 total)
+
+### Authentication (4)
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | /api/auth/login | Sign in; sets HTTP-only session + CSRF cookies |
+| POST | /api/auth/logout | Clear session |
+| GET | /api/auth/me | Current signed-in user + tenant |
+| POST | /api/auth/change-password | Self-service password change (rotates session) |
+
+### Core (Program.cs + PeriodStatusEndpoint)
 
 ### Core (14 — Program.cs)
 | Method | Path | Description |
@@ -179,10 +212,13 @@ Full CRUD for: debtors, creditors, fixed assets, inventory, loans, director loan
 | GET | .../revenue/ct1-support | CT1 form support data |
 | GET | .../revenue/ixbrl | Download iXBRL financial statements |
 
-## Frontend Pages (9 routes)
+## Frontend Pages (11 routes)
 
 | Route | Purpose |
 |-------|---------|
+| `/login` | Firm staff login (email + password) |
+| `/change-password` | Self-service password change |
+| `/health`, `/health/ready` | Liveness + readiness probes |
 | `/` | Dashboard — company cards with filing status + quick stats |
 | `/companies/new` | 4-step onboarding wizard (legal, structure, address, officers) |
 | `/companies/[id]` | Company detail with officers, info cards, period management |
@@ -191,17 +227,39 @@ Full CRUD for: debtors, creditors, fixed assets, inventory, loans, director loan
 | `.../classify` | Size classification interview — input figures, run 2-of-3 test, select regime |
 | `.../statements` | Financial statements preview — TB, P&L, BS, Tax Computation in browser |
 | `.../notes` | Notes disclosure management — auto-generate, edit, toggle, add custom |
+| `.../charity` | Charity / SORP reporting workspace |
 
 ## Architecture Patterns
 
-- **Frontend**: Next.js 16 App Router with HeroUI v3 components (Button, Card, Chip, Tabs, TextField, Checkbox, ProgressBar, Spinner)
+- **Frontend**: Next.js 16 App Router with HeroUI v3 components; `AuthProvider` holds session state and guards routes; a server-side proxy route (`app/api/[...path]/route.ts`) injects the service API key and forwards session cookies
 - **Backend**: Minimal API with endpoint groups in Endpoints/ files
 - **ORM**: EF Core with primary constructor DbContext
-- **DI**: Service + DI pattern (all 11 services registered as scoped)
-- **Error handling**: Global ExceptionMiddleware (400 for business rules, 500 for server errors)
+- **DI**: Service + DI pattern (services scoped; `ApiAccessService`/`ProductionSafetyService` singletons)
+- **Error handling**: Global ExceptionMiddleware (400 for business rules, 404 for not-found, 500 for server errors)
 - **Migrations**: Design-time factory (WDAC blocks QuestPDF.dll at design time)
 - **Serialization**: JSON camelCase (ASP.NET Core default), enums as text in DB
-- **CORS**: Configured for frontend dev server
+- **CORS**: AllowAnyOrigin in dev; explicit `AllowedOrigins` (HTTPS-only) enforced in production
+
+## Authentication, Authorization & Security
+
+The platform enforces firm-user identity and tenant isolation as the production access-control foundation.
+
+- **Two guards**: `ApiAccessMiddleware` (service-to-service API key, per-company scope) **and** signed user sessions (`UserSessionMiddleware`). The frontend proxy injects the API key; the browser carries the session cookie.
+- **Sessions**: HTTP-only, `Secure` outside dev, HMAC-SHA256-signed cookie. Payload binds `SessionVersion` + `PasswordLastChangedAt`, so a password change or explicit revoke invalidates all existing sessions. Timing-safe signature comparison.
+- **Passwords**: PBKDF2-SHA256 @ 210k iterations; constant-time verify; account lockout after 5 failures in 15 min; ≥20-char policy with mixed character classes.
+- **CSRF**: `CsrfProtectionMiddleware` double-submit — a session-bound token must match both the `X-CSRF-Token` header and the CSRF cookie on every mutating `/api` request.
+- **Tenancy**: every company is `TenantId`-scoped. `TenantAccessMiddleware` returns **404 (not 403)** for cross-tenant company IDs (no existence disclosure) and also honours per-user `UserCompanyAccess`.
+- **Roles** (`RoleAuthorizationService`): `Owner` (all), `Accountant` (working papers), `Reviewer` (approve/review/finalise/filing), `Client` (read-only). Backend is the source of truth; the UI only hides ineligible actions.
+- **Audit**: `AuditTrailMiddleware` + tamper-evident `AuditIntegrityCheckpointService` (signed checkpoints). Audit identity comes from the authenticated principal, never caller-supplied names.
+- **Fail-fast**: `ProductionSafetyService.ThrowIfUnsafe()` runs at startup and blocks boot on unsafe config (dev DB password, demo seed, non-HTTPS/localhost origins, wildcard hosts, weak/committed session key, insecure cookies, missing bootstrap-owner secrets).
+
+## Production Deployment
+
+- **Stack**: `compose.production.yml` (api + db + frontend) behind a reverse proxy — see `deploy/caddy/Caddyfile.example` for HTTPS ingress.
+- **Secrets via files/env** (never committed): `POSTGRES_PASSWORD_FILE`, `ACCOUNTS_CONNECTION_STRING_FILE`, `AUTH_SESSION_SIGNING_KEY_FILE`, `AUDIT_INTEGRITY_SIGNING_KEY_FILE`, `ACCOUNTS_API_KEY_FILE`/`ACCOUNTS_API_KEY_HASH`, `BOOTSTRAP_OWNER_PASSWORD_FILE`; plus `ACCOUNTS_ALLOWED_HOSTS`, `ACCOUNTS_ALLOWED_ORIGIN`, `TRUST_PROXY_HEADERS`, `BOOTSTRAP_TENANT_*`/`BOOTSTRAP_OWNER_*`.
+- **First run**: `BootstrapOwnerService` creates the initial tenant + Owner from secret config; migrations run as a controlled step (not auto-migrate).
+- **Ops scripts** (`scripts/`): `backup-postgres.ps1`, `restore-postgres.ps1`, `verify-postgres-backup.ps1`, `smoke-production.ps1`, `verify-production-compose-images.ps1`.
+- **CI** (`.github/workflows/ci.yml`): backend build+test, frontend type-check/lint/unit-tests/build, production compose validation, and a full HTTPS production-stack smoke + backup/restore drill.
 
 ## Seed Data (3 companies)
 
@@ -223,20 +281,21 @@ Full CRUD for: debtors, creditors, fixed assets, inventory, loans, director loan
 
 ## Known Issues
 
-- Windows WDAC blocks QuestPDF.dll — use DesignTimeDbContextFactory for migrations
+- Windows WDAC blocks running DLLs (incl. QuestPDF.dll) from the repo path — build output is routed to `.dotnet-artifacts/` via `backend/Directory.Build.props`; use DesignTimeDbContextFactory for migrations
 - NuGet SSL intermittent failures — add packages to .csproj directly and restore
+- 2 Postgres-only audit integration tests are skipped under the InMemory provider (they run against real Postgres in the production-smoke CI job)
 
 ## Project Stats
 
 | Metric | Count |
 |--------|-------|
-| Backend .cs files | 58 |
-| Entity classes | 27 (+Enums) |
-| Services | 11 |
-| API endpoints | ~90 |
-| Frontend routes | 9 |
-| Frontend .tsx/.ts files | 12 |
-| API client functions | 70+ |
-| Seed companies | 3 (micro/small/medium) |
-| EF migrations | 2 |
+| Backend .cs files | 148 |
+| Entity classes | 43 (+Enums) |
+| Services | 35 |
+| Middleware | 10 |
+| EF migrations | 18 |
+| API endpoints | ~110 |
+| Backend tests | 463 (461 pass, 2 Postgres-only skipped) |
+| Frontend routes | 11 |
+| Frontend .tsx/.ts files | 37 |
 | Docker services | 3 (api + db + frontend) |
