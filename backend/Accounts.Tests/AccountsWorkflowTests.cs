@@ -3952,6 +3952,136 @@ public class AccountsWorkflowTests
         Assert.Empty(await db.ImportedTransactions.ToListAsync());
     }
 
+    [Theory]
+    [InlineData("Posted Account, Posted Transactions Date, Description, Debit Amount, Credit Amount, Balance", "AIB")]
+    [InlineData("Date, Transaction Details, Amount, Balance - Bank of Ireland", "BOI")]
+    [InlineData("Type, Started Date, Completed Date, Description, Amount, Balance", "Revolut")]
+    [InlineData("id, created, amount, currency, description, balance_transaction", "Stripe")]
+    [InlineData("Date, Description, Amount", "Generic")]
+    public async Task ImportService_DetectsBankFormatFromHeader(string header, string expected)
+    {
+        // BL-14: the AIB/BOI/Revolut/Stripe auto-detection was completely untested.
+        await using var db = CreateDbContext();
+        var service = new ImportService(db, Options.Create(new ImportLimitConfig()));
+        Assert.Equal(expected, service.DetectFormat(header).Name);
+    }
+
+    [Fact]
+    public async Task ImportService_AutoDetectsRevolutAndParsesColumnsPerMapping()
+    {
+        // BL-14: end-to-end proof that auto-detection picks the format and reads each column per the
+        // detected mapping (Revolut: date col 0 yyyy-MM-dd, description col 1, amount col 2).
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var bank = new BankAccount { CompanyId = period.CompanyId, Name = "Revolut", OpeningBalance = 0m };
+        db.BankAccounts.Add(bank);
+        await db.SaveChangesAsync();
+
+        var csv = "Started Date,Description,Amount,Balance\n2025-03-01,Coffee shop,-4.50,995.50\n2025-03-02,Client payment,1200.00,2195.50\n";
+        var service = new ImportService(db, Options.Create(new ImportLimitConfig()));
+
+        var result = await service.ImportCsvAsync(
+            period.CompanyId, bank.Id, period.Id,
+            new MemoryStream(Encoding.UTF8.GetBytes(csv)), "revolut.csv");
+
+        Assert.Equal(2, result.ImportedRows);
+        var txns = await db.ImportedTransactions.Where(t => t.BankAccountId == bank.Id).OrderBy(t => t.Date).ToListAsync();
+        Assert.Equal(new DateOnly(2025, 3, 1), txns[0].Date);
+        Assert.Equal("Coffee shop", txns[0].Description);
+        Assert.Equal(-4.50m, txns[0].Amount);
+        Assert.Equal(1_200.00m, txns[1].Amount);
+
+        // Re-importing the identical file detects every row as a duplicate.
+        var second = await service.ImportCsvAsync(
+            period.CompanyId, bank.Id, period.Id,
+            new MemoryStream(Encoding.UTF8.GetBytes(csv)), "revolut.csv");
+        Assert.Equal(2, second.DuplicatesSkipped);
+        Assert.Equal(0, second.ImportedRows);
+    }
+
+    [Fact]
+    public async Task CategoryService_SeedsDefaultIrishChartOfAccounts()
+    {
+        // BL-17: the default chart of accounts was untested.
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var cats = await new CategoryService(db).SeedDefaultCategoriesAsync(period.CompanyId);
+
+        Assert.True(cats.Count >= 50, $"expected a full chart of accounts, got {cats.Count}");
+        Assert.All(cats, c => Assert.Equal(period.CompanyId, c.CompanyId));
+        Assert.Contains(cats, c => c.Code == "4000" && c.Type == AccountCategoryType.Income);
+        Assert.Contains(cats, c => c.Code == "1400" && c.Type == AccountCategoryType.Asset);
+        Assert.Contains(cats, c => c.Code == "2000" && c.Type == AccountCategoryType.Liability);
+        Assert.Contains(cats, c => c.Code == "3000" && c.Type == AccountCategoryType.Equity);
+        Assert.Contains(cats, c => c.Code == "7000" && c.TaxTreatment == TaxTreatment.NonDeductible);
+
+        // Re-seeding is idempotent — it returns the existing set without duplicating.
+        var again = await new CategoryService(db).SeedDefaultCategoriesAsync(period.CompanyId);
+        Assert.Equal(cats.Count, again.Count);
+        Assert.Equal(cats.Count, await db.AccountCategories.CountAsync(c => c.CompanyId == period.CompanyId));
+    }
+
+    [Fact]
+    public async Task CategoryService_AutoCategorisesByRuleThenFuzzyNameWithConfidence()
+    {
+        // BL-17: confidence-scored auto-categorisation was untested.
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var service = new CategoryService(db);
+        var cats = await service.SeedDefaultCategoriesAsync(period.CompanyId);
+        var rent = cats.Single(c => c.Code == "6100");
+
+        // A matching transaction rule wins with high (0.85) confidence.
+        db.TransactionRules.Add(new TransactionRule { CompanyId = period.CompanyId, Pattern = "ACME LANDLORD", CategoryId = rent.Id, Priority = 1 });
+        await db.SaveChangesAsync();
+        var ruled = await service.AutoCategoriseAsync(period.CompanyId, "Payment to ACME LANDLORD Ltd");
+        Assert.Equal(rent.Id, ruled.categoryId);
+        Assert.Equal(0.85m, ruled.confidence);
+
+        // No rule: fall back to a fuzzy category-name match at lower (0.5) confidence.
+        var fuzzy = await service.AutoCategoriseAsync(period.CompanyId, "Monthly insurance premium");
+        Assert.NotNull(fuzzy.categoryId);
+        Assert.Equal(0.5m, fuzzy.confidence);
+
+        // Nothing matches: no category, zero confidence.
+        var none = await service.AutoCategoriseAsync(period.CompanyId, "zzzz qqqq");
+        Assert.Null(none.categoryId);
+        Assert.Equal(0m, none.confidence);
+    }
+
+    [Theory]
+    [InlineData(999, false)]   // below 10% of net assets
+    [InlineData(1000, false)]  // exactly 10% does not exceed (the coded test is strict >)
+    [InlineData(1001, true)]   // above 10% triggers the SAP requirement
+    public async Task DirectorLoanCompliance_TenPercentNetAssetsThresholdBoundary(decimal closingBalance, bool exceeds)
+    {
+        // BL-16: boundary test for the 10%-of-net-assets director-loan threshold. Net assets are
+        // pinned to €10,000 so the threshold is exactly €1,000.
+        // NOTE: the code names this s.239 (and the warning cites s.239); the docs say s.236. This test
+        // asserts the coded s.239 behaviour — the section discrepancy is flagged for legal confirmation.
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var sales = AddCategory(db, period.CompanyId, "4000", "Sales / Revenue", AccountCategoryType.Income);
+        var bank = new BankAccount { CompanyId = period.CompanyId, Name = "Current", OpeningBalance = 0m };
+        db.BankAccounts.Add(bank);
+        var director = await db.CompanyOfficers.FirstAsync(o => o.CompanyId == period.CompanyId && o.Role == OfficerRole.Director);
+        await db.SaveChangesAsync();
+
+        db.ImportedTransactions.Add(new ImportedTransaction { BankAccountId = bank.Id, PeriodId = period.Id, Date = new DateOnly(2025, 3, 1), Description = "Sales", Amount = 10_000m, CategoryId = sales.Id });
+        db.DirectorLoans.Add(new DirectorLoan { PeriodId = period.Id, DirectorId = director.Id, OpeningBalance = 0m, Advances = closingBalance, Repayments = 0m, ClosingBalance = closingBalance, IsDocumented = true });
+        await db.SaveChangesAsync();
+
+        var result = await new DirectorLoanComplianceService(db, new FinancialStatementsService(db))
+            .GetComplianceStatusAsync(period.CompanyId, period.Id);
+
+        Assert.Equal(10_000m, result.NetAssets);
+        Assert.Equal(1_000m, result.ThresholdAmount);
+        Assert.Equal(exceeds, result.ExceedsThreshold);
+        Assert.Equal(exceeds, result.SapRequired);
+        if (exceeds)
+            Assert.Contains("s.239", result.Warning);
+    }
+
     [Fact]
     public async Task ImportCsv_RejectsCallerCompanyMismatchBeforeImporting()
     {

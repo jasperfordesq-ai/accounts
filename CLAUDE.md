@@ -289,7 +289,7 @@ The platform enforces firm-user identity and tenant isolation as the production 
 
 - Windows WDAC blocks running DLLs (incl. QuestPDF.dll) from the repo path — build output is routed to `.dotnet-artifacts/` via `backend/Directory.Build.props`; use DesignTimeDbContextFactory for migrations
 - NuGet SSL intermittent failures — add packages to .csproj directly and restore
-- 2 Postgres-only audit integration tests are skipped under the InMemory provider (they run against real Postgres in the production-smoke CI job)
+- 2 Postgres-only audit integration tests are skipped under the InMemory provider; they run against a real PostgreSQL service in the CI `Backend` job (`ACCOUNTS_POSTGRES_TEST_CONNECTION`) and in the production-smoke CI job
 
 ## Project Stats
 
