@@ -1091,8 +1091,10 @@ public class FinancialStatementsService(AccountsDbContext db)
         }
         else
         {
-            // First year — opening share capital is the current capital (issued at incorporation)
-            openingShareCapital = 0m;
+            // First year — capital subscribed at incorporation (issued on or before the period start)
+            // is the opening balance, so it is not mis-stated as "issued during the year" and the
+            // statement of changes in equity agrees with the balance sheet (BL-22).
+            openingShareCapital = await GetShareCapitalAtAsync(companyId, period.PeriodStart);
         }
 
         var openingTotal = openingShareCapital + openingRetainedEarnings;
