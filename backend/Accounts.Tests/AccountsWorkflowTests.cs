@@ -1159,6 +1159,31 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task TaxComputation_SurfacesTradingLossInsteadOfDiscardingIt()
+    {
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var salesCat = AddCategory(db, period.CompanyId, "4000", "Sales / Revenue", AccountCategoryType.Income);
+        var expenseCat = AddCategory(db, period.CompanyId, "6000", "Office costs", AccountCategoryType.Expense);
+        var bank = new BankAccount { CompanyId = period.CompanyId, Name = "Current Account", OpeningBalance = 0m };
+        db.BankAccounts.Add(bank);
+        await db.SaveChangesAsync();
+
+        // Loss-making period: 1,000 income vs 5,000 expense => 4,000 trading loss.
+        db.ImportedTransactions.AddRange(
+            new ImportedTransaction { BankAccountId = bank.Id, PeriodId = period.Id, Date = new DateOnly(2025, 3, 1), Description = "Sale", Amount = 1_000m, CategoryId = salesCat.Id },
+            new ImportedTransaction { BankAccountId = bank.Id, PeriodId = period.Id, Date = new DateOnly(2025, 3, 2), Description = "Office cost", Amount = -5_000m, CategoryId = expenseCat.Id });
+        await db.SaveChangesAsync();
+
+        var tax = await new TaxComputationService(db, new FinancialStatementsService(db)).ComputeAsync(period.CompanyId, period.Id);
+
+        Assert.Equal(0m, tax.TaxableProfit);
+        Assert.Equal(0m, tax.TotalCorporationTax);
+        Assert.Equal(4_000m, tax.TradingLossAvailable);
+        Assert.Contains("carry forward", tax.Notes, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task LoanSnapshots_ForFutureEffectiveLoansDoNotLeakIntoCurrentPeriodReporting()
     {
         await using var db = CreateDbContext();

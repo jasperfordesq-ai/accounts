@@ -10,6 +10,7 @@ public class TaxComputationService(AccountsDbContext db, FinancialStatementsServ
         decimal AccountingProfit,
         List<TaxAdjustment> Adjustments,
         decimal TaxableProfit,
+        decimal TradingLossAvailable,
         decimal CorporationTaxAt125,
         decimal CorporationTaxAt25,
         decimal TotalCorporationTax,
@@ -36,7 +37,8 @@ public class TaxComputationService(AccountsDbContext db, FinancialStatementsServ
         decimal TotalDirectorsFees,
         decimal TotalEmployeeCosts,
         decimal DepreciationCharged,
-        decimal CapitalAllowances
+        decimal CapitalAllowances,
+        decimal TradingLossAvailable
     );
 
     public async Task<TaxComputation> ComputeAsync(int companyId, int periodId)
@@ -84,11 +86,15 @@ public class TaxComputationService(AccountsDbContext db, FinancialStatementsServ
             adjustments.Add(new TaxAdjustment("Deduct: Capital allowances", -capitalAllowances, "Wear and tear allowances — s.284 TCA 1997, 12.5% straight line over 8 years, pro-rated for short accounting periods"));
         }
 
-        var taxableProfit = accountingProfit;
+        var taxableProfitBeforeRelief = accountingProfit;
         foreach (var adj in adjustments)
-            taxableProfit += adj.Amount;
+            taxableProfitBeforeRelief += adj.Amount;
 
-        taxableProfit = Math.Max(0, taxableProfit); // Can't be negative for tax calc (losses carried forward separately)
+        // A negative result is a trading loss, not a negative tax charge: the charge is computed
+        // on nil profit and the loss is available to carry forward against future trading profits
+        // (s.396(1) TCA 1997). Surface the loss rather than silently dropping it.
+        var tradingLossAvailable = Math.Max(0m, -taxableProfitBeforeRelief);
+        var taxableProfit = Math.Max(0m, taxableProfitBeforeRelief);
 
         // Irish corporation tax rates (2024):
         // 12.5% on trading income
@@ -106,11 +112,13 @@ public class TaxComputationService(AccountsDbContext db, FinancialStatementsServ
 
         var balanceDue = totalTax - prelimTax;
 
-        var notes = taxableProfit == 0
-            ? "No taxable profit — losses may be available for carry forward under s.396 TCA 1997."
-            : $"Corporation tax computed at 12.5% trading rate. Preliminary tax of \u20ac{prelimTax:N2} already paid.";
+        var notes = tradingLossAvailable > 0
+            ? $"Trading loss of €{tradingLossAvailable:N2} available to carry forward against future trading profits (s.396(1) TCA 1997)."
+            : taxableProfit == 0
+                ? "No taxable profit and no trading loss for the period."
+                : $"Corporation tax computed at 12.5% trading rate. Preliminary tax of €{prelimTax:N2} already paid.";
 
-        return new TaxComputation(accountingProfit, adjustments, taxableProfit, taxAt125, taxAt25, totalTax, prelimTax, balanceDue, notes);
+        return new TaxComputation(accountingProfit, adjustments, taxableProfit, tradingLossAvailable, taxAt125, taxAt25, totalTax, prelimTax, balanceDue, notes);
     }
 
     public async Task<Ct1SupportData> GetCt1SupportDataAsync(int companyId, int periodId)
@@ -143,7 +151,8 @@ public class TaxComputationService(AccountsDbContext db, FinancialStatementsServ
             payroll?.GrossWages ?? 0,
             payroll != null ? payroll.GrossWages + payroll.EmployerPrsi + payroll.PensionContributions : 0,
             depCharged,
-            capitalAllowances
+            capitalAllowances,
+            computation.TradingLossAvailable
         );
     }
 
