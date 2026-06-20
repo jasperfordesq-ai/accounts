@@ -129,7 +129,7 @@ jobs:
             local path="$secrets_dir/$file_name"
             echo "::add-mask::$value"
             printf '%s' "$value" > "$path"
-            chmod 600 "$path"
+            chmod 0444 "$path"
             printf '%s=%s\n' "$env_name" "$path" >> "$GITHUB_ENV"
           }
 
@@ -227,7 +227,7 @@ jobs:
             local path="$secrets_dir/$file_name"
             echo "::add-mask::$value"
             printf '%s' "$value" > "$path"
-            chmod 600 "$path"
+            chmod 0444 "$path"
             printf '%s=%s\n' "$env_name" "$path" >> "$GITHUB_ENV"
           }
 

@@ -121,6 +121,10 @@ services:
 volumes:
   accounts_production_data:
 
+# Secret files are bind-mounted read-only into the containers, which run as a
+# non-root user. In plain (non-swarm) docker compose the in-container file keeps
+# the host file permissions, so each *_FILE secret must be readable by that user:
+# keep the secrets directory mode 0700 and the secret files mode 0444.
 secrets:
   postgres_password:
     file: "${POSTGRES_PASSWORD_FILE:?set POSTGRES_PASSWORD_FILE}"

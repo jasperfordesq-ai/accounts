@@ -257,6 +257,7 @@ The platform enforces firm-user identity and tenant isolation as the production 
 
 - **Stack**: `compose.production.yml` (api + db + frontend) behind a reverse proxy — see `deploy/caddy/Caddyfile.example` for HTTPS ingress.
 - **Secrets via files/env** (never committed): `POSTGRES_PASSWORD_FILE`, `ACCOUNTS_CONNECTION_STRING_FILE`, `AUTH_SESSION_SIGNING_KEY_FILE`, `AUDIT_INTEGRITY_SIGNING_KEY_FILE`, `ACCOUNTS_API_KEY_FILE`/`ACCOUNTS_API_KEY_HASH`, `BOOTSTRAP_OWNER_PASSWORD_FILE`; plus `ACCOUNTS_ALLOWED_HOSTS`, `ACCOUNTS_ALLOWED_ORIGIN`, `TRUST_PROXY_HEADERS`, `BOOTSTRAP_TENANT_*`/`BOOTSTRAP_OWNER_*`.
+- **Secret file permissions**: containers run as a non-root user and bind-mount the `*_FILE` secrets read-only. In non-swarm `docker compose` the in-container file keeps the host file's mode, so secret files must be readable by that user — keep the secrets directory `0700` and the secret files `0444`.
 - **First run**: `BootstrapOwnerService` creates the initial tenant + Owner from secret config; migrations run as a controlled step (not auto-migrate).
 - **Ops scripts** (`scripts/`): `backup-postgres.ps1`, `restore-postgres.ps1`, `verify-postgres-backup.ps1`, `smoke-production.ps1`, `verify-production-compose-images.ps1`.
 - **CI** (`.github/workflows/ci.yml`): backend build+test, frontend type-check/lint/unit-tests/build, production compose validation, and a full HTTPS production-stack smoke + backup/restore drill.
