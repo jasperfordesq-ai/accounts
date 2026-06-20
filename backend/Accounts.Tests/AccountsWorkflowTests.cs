@@ -1350,6 +1350,95 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task Adjustments_PrepaymentIncreasesProfitAndShowsAsCurrentAsset()
+    {
+        // BL-32: figure-level proof that a prepayment increases profit (defers an expense) and is
+        // carried as a current asset.
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        db.Debtors.Add(new Debtor { PeriodId = period.Id, Name = "Insurance prepaid", Amount = 600m, Type = DebtorType.Prepayment });
+        await db.SaveChangesAsync();
+
+        await new AdjustmentService(db).GenerateAutoAdjustmentsAsync(period.CompanyId, period.Id);
+
+        var prepaymentAdj = await db.Adjustments.SingleAsync(a => a.PeriodId == period.Id && a.Description.Contains("Prepayment", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(600m, prepaymentAdj.ImpactOnProfit);
+        var bs = await new FinancialStatementsService(db).GetBalanceSheetAsync(period.CompanyId, period.Id);
+        Assert.Equal(600m, bs.CurrentAssets.Prepayments);
+    }
+
+    [Fact]
+    public async Task BalanceSheet_IncludesPayeAndRctTaxBalancesInCreditors()
+    {
+        // BL-32: PAYE/PRSI and RCT liabilities are creditors falling due within one year.
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        db.TaxBalances.AddRange(
+            new TaxBalance { PeriodId = period.Id, TaxType = TaxType.Paye, Liability = 500m, Paid = 0m, Balance = 500m },
+            new TaxBalance { PeriodId = period.Id, TaxType = TaxType.Rct, Liability = 300m, Paid = 0m, Balance = 300m });
+        await db.SaveChangesAsync();
+
+        var bs = await new FinancialStatementsService(db).GetBalanceSheetAsync(period.CompanyId, period.Id);
+        Assert.Equal(800m, bs.CreditorsWithinYear.TaxCreditors);
+    }
+
+    [Fact]
+    public async Task ProfitAndLoss_TreatsCapexAsCapitalNotRevenueExpense()
+    {
+        // BL-32: a fixed-asset purchase coded to an asset account is capital — it does not reduce
+        // profit; only the depreciation charge does.
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var cats = await new CategoryService(db).SeedDefaultCategoriesAsync(period.CompanyId);
+        int Cat(string code) => cats.Single(c => c.Code == code).Id;
+        var bank = new BankAccount { CompanyId = period.CompanyId, Name = "Current", OpeningBalance = 0m };
+        db.BankAccounts.Add(bank);
+        await db.SaveChangesAsync();
+        db.ImportedTransactions.AddRange(
+            new ImportedTransaction { BankAccountId = bank.Id, PeriodId = period.Id, Date = new DateOnly(2025, 2, 1), Description = "Sales", Amount = 10_000m, CategoryId = Cat("4000") },
+            new ImportedTransaction { BankAccountId = bank.Id, PeriodId = period.Id, Date = new DateOnly(2025, 3, 1), Description = "Laptop purchase", Amount = -2_000m, CategoryId = Cat("0050") });
+        await db.SaveChangesAsync();
+
+        var pl = await new FinancialStatementsService(db).GetProfitAndLossAsync(period.CompanyId, period.Id);
+        Assert.Equal(10_000m, pl.Turnover);
+        Assert.Equal(0m, pl.TotalOverheads);
+        Assert.Equal(10_000m, pl.OperatingProfit);
+    }
+
+    [Fact]
+    public async Task BalanceSheet_RollsPriorPeriodProfitIntoOpeningRetainedEarnings()
+    {
+        // BL-32: retained earnings brought forward equal the prior period's profit after tax.
+        await using var db = CreateDbContext();
+        var company = new Company
+        {
+            LegalName = "Roll Forward Limited",
+            CroNumber = "556677",
+            CompanyType = CompanyType.Private,
+            IncorporationDate = new DateOnly(2024, 1, 1),
+            ArdMonth = 12,
+            IsTrading = true,
+            RegisteredOfficeAddress1 = "1 Main Street",
+            RegisteredOfficeCity = "Dublin",
+            RegisteredOfficeCounty = "Dublin"
+        };
+        db.Companies.Add(company);
+        await db.SaveChangesAsync();
+        var prior = new AccountingPeriod { CompanyId = company.Id, PeriodStart = new DateOnly(2024, 1, 1), PeriodEnd = new DateOnly(2024, 12, 31), IsFirstYear = true };
+        var current = new AccountingPeriod { CompanyId = company.Id, PeriodStart = new DateOnly(2025, 1, 1), PeriodEnd = new DateOnly(2025, 12, 31), IsFirstYear = false };
+        db.AccountingPeriods.AddRange(prior, current);
+        var sales = AddCategory(db, company.Id, "4000", "Sales / Revenue", AccountCategoryType.Income);
+        var bank = new BankAccount { CompanyId = company.Id, Name = "Current", OpeningBalance = 0m };
+        db.BankAccounts.Add(bank);
+        await db.SaveChangesAsync();
+        db.ImportedTransactions.Add(new ImportedTransaction { BankAccountId = bank.Id, PeriodId = prior.Id, Date = new DateOnly(2024, 6, 1), Description = "Prior sales", Amount = 5_000m, CategoryId = sales.Id });
+        await db.SaveChangesAsync();
+
+        var bs = await new FinancialStatementsService(db).GetBalanceSheetAsync(company.Id, current.Id);
+        Assert.Equal(5_000m, bs.CapitalAndReserves.OpeningRetainedEarnings);
+    }
+
+    [Fact]
     public async Task TaxComputation_SurfacesTradingLossInsteadOfDiscardingIt()
     {
         await using var db = CreateDbContext();
