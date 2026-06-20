@@ -340,6 +340,12 @@ jobs:
           docker compose -f compose.production.yml ps
           docker compose -f compose.production.yml logs --no-color --tail=200
           docker logs accounts-production-smoke-ingress 2>/dev/null || true
+          echo "=== frontend /health/ready (published port) ==="
+          curl -s -i --max-time 10 "http://127.0.0.1:${FRONTEND_PORT:-3000}/health/ready" || true
+          echo ""
+          echo "=== api /api/companies with service key (from frontend container) ==="
+          docker compose -f compose.production.yml exec -T frontend sh -c 'wget -S -O- --header="X-Accounts-Api-Key: $(cat /run/secrets/accounts_api_key)" http://api:8080/api/companies 2>&1' || true
+          echo ""
 
       - name: Stop production stack
         if: always()
