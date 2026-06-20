@@ -1235,6 +1235,44 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task TaxComputation_TradingLossDoesNotShelterNonTradingIncomeFrom25Percent()
+    {
+        // BL-04: a trading loss must not silently absorb passive (Case III/V) income. Absent an
+        // elected s.396A claim, the non-trading income is charged at 25% in full and the trading
+        // loss is surfaced for carry-forward — taxing in the high-stakes (do-not-under-tax) direction.
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var trading = AddCategory(db, period.CompanyId, "4000", "Sales / Revenue", AccountCategoryType.Income);
+        var expense = AddCategory(db, period.CompanyId, "6000", "Office costs", AccountCategoryType.Expense);
+        var rental = AddCategory(db, period.CompanyId, "4500", "Rental income", AccountCategoryType.Income);
+        rental.IsNonTradingIncome = true;
+        var bank = new BankAccount { CompanyId = period.CompanyId, Name = "Current Account", OpeningBalance = 0m };
+        db.BankAccounts.Add(bank);
+        await db.SaveChangesAsync();
+
+        // Trading: 1,000 sales vs 11,000 costs => 10,000 trading loss.
+        // Non-trading: 4,000 rental profit, which must remain taxable at 25%.
+        db.ImportedTransactions.AddRange(
+            new ImportedTransaction { BankAccountId = bank.Id, PeriodId = period.Id, Date = new DateOnly(2025, 3, 1), Description = "Trading sales", Amount = 1_000m, CategoryId = trading.Id },
+            new ImportedTransaction { BankAccountId = bank.Id, PeriodId = period.Id, Date = new DateOnly(2025, 3, 2), Description = "Office costs", Amount = -11_000m, CategoryId = expense.Id },
+            new ImportedTransaction { BankAccountId = bank.Id, PeriodId = period.Id, Date = new DateOnly(2025, 3, 3), Description = "Rent received", Amount = 4_000m, CategoryId = rental.Id });
+        await db.SaveChangesAsync();
+
+        var tax = await new TaxComputationService(db, new FinancialStatementsService(db)).ComputeAsync(period.CompanyId, period.Id);
+
+        // The 4,000 of passive income is taxed at 25% even though the trade is loss-making.
+        Assert.Equal(1_000m, tax.CorporationTaxAt25);
+        Assert.Equal(0m, tax.CorporationTaxAt125);
+        Assert.Equal(1_000m, tax.TotalCorporationTax);
+        // The full 10,000 trading loss is carried forward — the rental does not reduce it.
+        Assert.Equal(10_000m, tax.TradingLossAvailable);
+        // Only the non-trading income is taxable this period.
+        Assert.Equal(4_000m, tax.TaxableProfit);
+        Assert.Contains("25%", tax.Notes);
+        Assert.Contains("carry forward", tax.Notes, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task ProfitAndLoss_IncludesNonTurnoverIncomeAsOtherIncomeAndTaxesIt()
     {
         await using var db = CreateDbContext();

@@ -86,22 +86,27 @@ public class TaxComputationService(AccountsDbContext db, FinancialStatementsServ
             adjustments.Add(new TaxAdjustment("Deduct: Capital allowances", -capitalAllowances, "Wear and tear allowances — s.284 TCA 1997, 12.5% straight line over 8 years, pro-rated for short accounting periods"));
         }
 
-        var taxableProfitBeforeRelief = accountingProfit;
-        foreach (var adj in adjustments)
-            taxableProfitBeforeRelief += adj.Amount;
-
-        // A negative result is a trading loss, not a negative tax charge: the charge is computed
-        // on nil profit and the loss is available to carry forward against future trading profits
-        // (s.396(1) TCA 1997). Surface the loss rather than silently dropping it.
-        var tradingLossAvailable = Math.Max(0m, -taxableProfitBeforeRelief);
-        var taxableProfit = Math.Max(0m, taxableProfitBeforeRelief);
-
-        // Irish corporation tax: 12.5% on trading income, 25% on non-trading/passive income
-        // (Case III/IV/V, such as rent or deposit interest; s.21A TCA 1997). Split the taxable
-        // profit by the non-trading income earned in the period; the balance is trading profit.
+        // Irish corporation tax runs two separate computations: trading income (Case I) at 12.5%
+        // and non-trading/passive income (Case III/IV/V — rent, deposit interest) at 25% under
+        // s.21A TCA 1997. They must be kept apart: a trading loss is set against trading profits
+        // only, and absent an elected claim it does NOT shelter passive income from the 25% charge.
         var nonTradingIncome = await statementsService.GetNonTradingIncomeAsync(companyId, periodId);
-        var nonTradingTaxable = Math.Clamp(nonTradingIncome, 0m, taxableProfit);
-        var tradingTaxable = taxableProfit - nonTradingTaxable;
+
+        // Case I trading result: accounting profit excluding the non-trading income, after the
+        // trading adjustments (depreciation add-back, disallowables, capital allowances).
+        var tradingProfitBeforeRelief = accountingProfit - nonTradingIncome;
+        foreach (var adj in adjustments)
+            tradingProfitBeforeRelief += adj.Amount;
+
+        // A negative trading result is a loss, not a negative tax charge. It is carried forward
+        // against future trading profits (s.396(1) TCA 1997). It is NOT automatically set against
+        // this period's passive income — auto-applying loss relief (s.396A) would under-tax the
+        // filing, so the passive income is charged in full and the loss is surfaced for carry-forward.
+        var tradingLossAvailable = Math.Max(0m, -tradingProfitBeforeRelief);
+        var tradingTaxable = Math.Max(0m, tradingProfitBeforeRelief);
+        var nonTradingTaxable = Math.Max(0m, nonTradingIncome);
+        var taxableProfit = tradingTaxable + nonTradingTaxable;
+
         var taxAt125 = Math.Round(tradingTaxable * 0.125m, 2);
         var taxAt25 = Math.Round(nonTradingTaxable * 0.25m, 2);
         var totalTax = taxAt125 + taxAt25;
@@ -114,13 +119,20 @@ public class TaxComputationService(AccountsDbContext db, FinancialStatementsServ
 
         var balanceDue = totalTax - prelimTax;
 
-        var notes = tradingLossAvailable > 0
-            ? $"Trading loss of €{tradingLossAvailable:N2} available to carry forward against future trading profits (s.396(1) TCA 1997)."
-            : taxableProfit == 0
-                ? "No taxable profit and no trading loss for the period."
-                : nonTradingTaxable > 0
-                    ? $"Corporation tax: 12.5% on trading profit and 25% on non-trading income of €{nonTradingTaxable:N2} (s.21A TCA 1997). Preliminary tax of €{prelimTax:N2} already paid."
-                    : $"Corporation tax computed at 12.5% trading rate. Preliminary tax of €{prelimTax:N2} already paid.";
+        // A trading loss and a 25% charge on passive income can co-exist, so describe each stream
+        // that applies rather than assuming a single outcome.
+        var noteParts = new List<string>();
+        if (nonTradingTaxable > 0)
+            noteParts.Add($"Non-trading income of €{nonTradingTaxable:N2} charged at 25% (s.21A TCA 1997).");
+        if (tradingTaxable > 0)
+            noteParts.Add($"Trading profit of €{tradingTaxable:N2} charged at the 12.5% trading rate.");
+        if (tradingLossAvailable > 0)
+            noteParts.Add($"Trading loss of €{tradingLossAvailable:N2} available to carry forward against future trading profits (s.396(1) TCA 1997).");
+        if (noteParts.Count == 0)
+            noteParts.Add("No taxable profit and no trading loss for the period.");
+        if (prelimTax > 0)
+            noteParts.Add($"Preliminary tax of €{prelimTax:N2} already paid.");
+        var notes = string.Join(" ", noteParts);
 
         return new TaxComputation(accountingProfit, adjustments, taxableProfit, tradingLossAvailable, taxAt125, taxAt25, totalTax, prelimTax, balanceDue, notes);
     }
