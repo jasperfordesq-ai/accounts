@@ -1439,6 +1439,43 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task FixedAssets_PeriodMembershipRespectsAcquisitionAndDisposalBoundaries()
+    {
+        // BL-27: an asset is in the balance sheet if acquired on or before the period end and not
+        // disposed on or before it. Test the exact-date boundaries.
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true); // ends 2025-12-31
+        db.FixedAssets.AddRange(
+            new FixedAsset { CompanyId = period.CompanyId, Name = "Acquired on year-end", Category = "Equipment", Cost = 1_000m, AcquisitionDate = new DateOnly(2025, 12, 31), UsefulLifeYears = 5, DepreciationMethod = DepreciationMethod.StraightLine },
+            new FixedAsset { CompanyId = period.CompanyId, Name = "Acquired after year-end", Category = "Equipment", Cost = 2_000m, AcquisitionDate = new DateOnly(2026, 1, 1), UsefulLifeYears = 5, DepreciationMethod = DepreciationMethod.StraightLine },
+            new FixedAsset { CompanyId = period.CompanyId, Name = "Disposed on year-end", Category = "Equipment", Cost = 4_000m, AcquisitionDate = new DateOnly(2025, 1, 1), DisposalDate = new DateOnly(2025, 12, 31), UsefulLifeYears = 5, DepreciationMethod = DepreciationMethod.StraightLine },
+            new FixedAsset { CompanyId = period.CompanyId, Name = "Disposed after year-end", Category = "Equipment", Cost = 8_000m, AcquisitionDate = new DateOnly(2025, 1, 1), DisposalDate = new DateOnly(2026, 1, 1), UsefulLifeYears = 5, DepreciationMethod = DepreciationMethod.StraightLine });
+        await db.SaveChangesAsync();
+
+        var bs = await new FinancialStatementsService(db).GetBalanceSheetAsync(period.CompanyId, period.Id);
+        // Included: acquired-on-year-end (1,000) + disposed-after-year-end (8,000). Excluded: future
+        // acquisition and disposed-on-year-end.
+        Assert.Equal(9_000m, bs.FixedAssets.Categories.Sum(c => c.Cost));
+    }
+
+    [Fact]
+    public async Task ShareCapital_PeriodMembershipRespectsIssueAndCancellationBoundaries()
+    {
+        // BL-27: share capital is in existence at the period end if issued on or before it and not
+        // cancelled on or before it.
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        db.ShareCapitals.AddRange(
+            new ShareCapital { CompanyId = period.CompanyId, ShareClass = "On year-end", NumberIssued = 100, NominalValue = 1m, TotalValue = 100m, IssueDate = new DateOnly(2025, 12, 31) },
+            new ShareCapital { CompanyId = period.CompanyId, ShareClass = "After year-end", NumberIssued = 200, NominalValue = 1m, TotalValue = 200m, IssueDate = new DateOnly(2026, 1, 1) },
+            new ShareCapital { CompanyId = period.CompanyId, ShareClass = "Cancelled on year-end", NumberIssued = 50, NominalValue = 1m, TotalValue = 50m, IssueDate = new DateOnly(2025, 1, 1), CancelledDate = new DateOnly(2025, 12, 31) });
+        await db.SaveChangesAsync();
+
+        var bs = await new FinancialStatementsService(db).GetBalanceSheetAsync(period.CompanyId, period.Id);
+        Assert.Equal(100m, bs.CapitalAndReserves.ShareCapital);
+    }
+
+    [Fact]
     public async Task TaxComputation_SurfacesTradingLossInsteadOfDiscardingIt()
     {
         await using var db = CreateDbContext();
@@ -6348,6 +6385,28 @@ public class AccountsWorkflowTests
         await middleware.InvokeAsync(context, Options.Create(new AuthSessionConfig()));
 
         Assert.True(nextCalled);
+    }
+
+    [Fact]
+    public async Task TenantIsolation_CompanyAndPeriodAccessIsScopedToCallersTenant()
+    {
+        // BL-10: behavioural guard that company/period access is filtered to the caller's tenant at the
+        // data-access query layer, so a cross-tenant id is invisible (the endpoint then returns 404).
+        await using var db = CreateDbContext();
+        var companyA = new Company { TenantId = 1, LegalName = "Tenant A Ltd", CroNumber = "100001", CompanyType = CompanyType.Private, IncorporationDate = new DateOnly(2025, 1, 1), ArdMonth = 12, RegisteredOfficeAddress1 = "1 A Street", RegisteredOfficeCity = "Dublin", RegisteredOfficeCounty = "Dublin" };
+        var companyB = new Company { TenantId = 2, LegalName = "Tenant B Ltd", CroNumber = "100002", CompanyType = CompanyType.Private, IncorporationDate = new DateOnly(2025, 1, 1), ArdMonth = 12, RegisteredOfficeAddress1 = "1 B Street", RegisteredOfficeCity = "Cork", RegisteredOfficeCounty = "Cork" };
+        db.Companies.AddRange(companyA, companyB);
+        await db.SaveChangesAsync();
+        var periodB = new AccountingPeriod { CompanyId = companyB.Id, PeriodStart = new DateOnly(2025, 1, 1), PeriodEnd = new DateOnly(2025, 12, 31), IsFirstYear = true };
+        db.AccountingPeriods.Add(periodB);
+        await db.SaveChangesAsync();
+
+        var tenantAContext = new DefaultHttpContext();
+        tenantAContext.Items[AuthContext.ItemKey] = new AuthenticatedUser(7, 1, "Firm A", "owner@a.ie", "Owner", "Owner");
+
+        Assert.True(await CompanyEndpointAccess.CanAccessCompanyAsync(tenantAContext, db, companyA.Id));
+        Assert.False(await CompanyEndpointAccess.CanAccessCompanyAsync(tenantAContext, db, companyB.Id));
+        Assert.False(await CompanyEndpointAccess.CanAccessCompanyPeriodAsync(tenantAContext, db, companyB.Id, periodB.Id));
     }
 
     [Theory]
