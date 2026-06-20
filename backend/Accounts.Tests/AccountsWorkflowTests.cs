@@ -843,6 +843,31 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task BalanceSheet_AccrualDueAfterYearIsNotDoubleCounted()
+    {
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        db.Creditors.Add(new Creditor
+        {
+            PeriodId = period.Id,
+            Name = "Long-term accrual",
+            Amount = 1_000m,
+            Type = CreditorType.Accrual,
+            DueWithinYear = false
+        });
+        await db.SaveChangesAsync();
+
+        var balanceSheet = await new FinancialStatementsService(db).GetBalanceSheetAsync(period.CompanyId, period.Id);
+
+        // A non-current accrual belongs only in creditors due after more than one year,
+        // not also in accruals due within the year.
+        Assert.Equal(0m, balanceSheet.CreditorsWithinYear.Accruals);
+        Assert.Equal(1_000m, balanceSheet.CreditorsAfterYear.Other);
+        // Counted once across the two creditor sections, not twice.
+        Assert.Equal(1_000m, balanceSheet.CreditorsWithinYear.Total + balanceSheet.CreditorsAfterYear.Total);
+    }
+
+    [Fact]
     public async Task BalanceSheet_GroupsFixedAssetDepreciationPerAssetNotPerCategoryTotal()
     {
         await using var db = CreateDbContext();

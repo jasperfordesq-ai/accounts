@@ -608,8 +608,8 @@ public class FinancialStatementsService(AccountsDbContext db)
 
         // Creditors within year
         var tradeCreditors = await db.Creditors.Where(c => c.PeriodId == periodId && c.Type == CreditorType.Trade && c.DueWithinYear).SumAsync(c => c.Amount);
-        var accruals = await db.Creditors.Where(c => c.PeriodId == periodId && c.Type == CreditorType.Accrual).SumAsync(c => c.Amount);
-        var taxCreditors = await db.Creditors.Where(c => c.PeriodId == periodId && c.Type == CreditorType.Tax).SumAsync(c => c.Amount);
+        var accruals = await db.Creditors.Where(c => c.PeriodId == periodId && c.Type == CreditorType.Accrual && c.DueWithinYear).SumAsync(c => c.Amount);
+        var taxCreditors = await db.Creditors.Where(c => c.PeriodId == periodId && c.Type == CreditorType.Tax && c.DueWithinYear).SumAsync(c => c.Amount);
         // Add tax balances
         var taxLiabilities = await db.TaxBalances.Where(t => t.PeriodId == periodId).SumAsync(t => t.Balance);
         taxCreditors += taxLiabilities;
