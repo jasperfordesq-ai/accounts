@@ -1463,6 +1463,83 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task Adjustments_AccrueLoanInterestAndKeepBalanceSheetBalanced()
+    {
+        // BL-07: the engine accrues interest on outstanding loans. It posts an interest expense and a
+        // matching accrual liability, so the balance sheet stays balanced.
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var companyId = period.CompanyId;
+        var categories = await new CategoryService(db).SeedDefaultCategoriesAsync(companyId);
+        int Cat(string code) => categories.Single(c => c.Code == code).Id;
+
+        db.ShareCapitals.Add(new ShareCapital { CompanyId = companyId, ShareClass = "Ordinary", NumberIssued = 100, NominalValue = 1m, TotalValue = 100m, IssueDate = new DateOnly(2025, 1, 1) });
+        var bank = new BankAccount { CompanyId = companyId, Name = "Current Account", OpeningBalance = 100m, OpeningBalanceDate = new DateOnly(2025, 1, 1) };
+        db.BankAccounts.Add(bank);
+        await db.SaveChangesAsync();
+
+        // €10,000 loan drawn (cash in, coded to the loan liability so it is outside the P&L), 5% rate.
+        db.ImportedTransactions.Add(new ImportedTransaction { BankAccountId = bank.Id, PeriodId = period.Id, Date = new DateOnly(2025, 1, 2), Description = "Loan drawdown", Amount = 10_000m, CategoryId = Cat("2700") });
+        db.Loans.Add(new Loan
+        {
+            CompanyId = companyId,
+            Lender = "Bank of Ireland",
+            OriginalAmount = 10_000m,
+            Balance = 10_000m,
+            InterestRate = 5m,
+            DueWithinYear = 0m,
+            DueAfterYear = 10_000m,
+            DrawdownDate = new DateOnly(2025, 1, 2),
+            BalanceAsOfDate = period.PeriodEnd
+        });
+        await db.SaveChangesAsync();
+
+        await new AdjustmentService(db).GenerateAutoAdjustmentsAsync(companyId, period.Id);
+
+        // The interest accrual exists as a creditor and as an interest expense adjustment of €500.
+        var interestAccrual = await db.Creditors.SingleAsync(c => c.PeriodId == period.Id && c.Name.Contains("interest", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(500m, interestAccrual.Amount); // 10,000 * 5% * full year
+        Assert.Equal(CreditorType.Accrual, interestAccrual.Type);
+        Assert.Contains(await db.Adjustments.Where(a => a.PeriodId == period.Id).ToListAsync(),
+            a => a.Description.Contains("interest", StringComparison.OrdinalIgnoreCase) && a.ImpactOnProfit == -500m);
+
+        var balanceSheet = await new FinancialStatementsService(db).GetBalanceSheetAsync(companyId, period.Id);
+        Assert.Equal(0m, balanceSheet.CapitalAndReserves.UnexplainedDifference);
+        Assert.True(balanceSheet.Balances);
+        Assert.Equal(500m, balanceSheet.CreditorsWithinYear.Accruals);
+    }
+
+    [Fact]
+    public async Task Adjustments_ReclassifyOverdrawnDirectorLoanAsReceivable()
+    {
+        // BL-07: an overdrawn director's loan account (director owes the company) is reclassified to a
+        // receivable. The adjustment is P&L-neutral — it only moves a balance between presentation accounts.
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var director = await db.CompanyOfficers.FirstAsync(o => o.CompanyId == period.CompanyId && o.Role == OfficerRole.Director);
+        db.DirectorLoans.Add(new DirectorLoan
+        {
+            PeriodId = period.Id,
+            DirectorId = director.Id,
+            OpeningBalance = 0m,
+            Advances = 3_000m,
+            Repayments = 0m,
+            ClosingBalance = 3_000m
+        });
+        await db.SaveChangesAsync();
+
+        await new AdjustmentService(db).GenerateAutoAdjustmentsAsync(period.CompanyId, period.Id);
+
+        var reclass = await db.Adjustments.SingleAsync(a =>
+            a.PeriodId == period.Id && a.Description.Contains("Director loan reclassification", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(3_000m, reclass.Amount);
+        Assert.Equal(0m, reclass.ImpactOnProfit);
+        Assert.NotNull(reclass.DebitCategoryId);
+        Assert.NotNull(reclass.CreditCategoryId);
+        Assert.NotEqual(reclass.DebitCategoryId, reclass.CreditCategoryId);
+    }
+
+    [Fact]
     public async Task ProfitAndLoss_IncludesNonTurnoverIncomeAsOtherIncomeAndTaxesIt()
     {
         await using var db = CreateDbContext();
