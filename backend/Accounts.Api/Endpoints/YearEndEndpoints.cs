@@ -169,6 +169,8 @@ public static class YearEndEndpoints
 
         dividends.MapPost("/", CreateDividendEndpointAsync);
 
+        dividends.MapPut("/{id:int}", UpdateDividendEndpointAsync);
+
         dividends.MapDelete("/{id:int}", DeleteDividendEndpointAsync);
 
         // ===== YEAR-END SUMMARY (read-only overview) =====
@@ -1509,6 +1511,38 @@ public static class YearEndEndpoints
             DividendSnapshot(input),
             AuditUserId(context));
         return Results.Created($"/api/companies/{companyId}/periods/{periodId}/dividends/{input.Id}", input);
+    }
+
+    public static async Task<IResult> UpdateDividendEndpointAsync(
+        int companyId,
+        int periodId,
+        int id,
+        Dividend input,
+        AccountsDbContext db,
+        AuditService audit,
+        HttpContext context)
+    {
+        if (await RequirePeriodWriteAccessAsync(db, companyId, periodId, context) is { } denied)
+            return denied;
+
+        var item = await db.Dividends.FirstOrDefaultAsync(d => d.Id == id && d.PeriodId == periodId);
+        if (item == null) return Results.NotFound();
+
+        var oldValue = DividendSnapshot(item);
+        item.Amount = input.Amount;
+        item.DateDeclared = input.DateDeclared;
+        item.DatePaid = input.DatePaid;
+        await db.SaveChangesAsync();
+        await audit.LogAsync(
+            companyId,
+            periodId,
+            "Dividend",
+            item.Id,
+            AuditEventCodes.DividendUpdated,
+            oldValue,
+            DividendSnapshot(item),
+            AuditUserId(context));
+        return Results.Ok(item);
     }
 
     public static async Task<IResult> DeleteDividendEndpointAsync(

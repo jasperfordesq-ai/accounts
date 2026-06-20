@@ -89,12 +89,15 @@ export function dispatchSessionExpired(returnTo = currentBrowserPath()) {
 // --- Core fetch with retry, timeout, structured errors ---
 
 class ApiError extends Error {
-  constructor(
-    public status: number,
-    public statusText: string,
-    public body: string,
-  ) {
+  status: number;
+  statusText: string;
+  body: string;
+
+  constructor(status: number, statusText: string, body: string) {
     super(ApiError.formatMessage(status, body));
+    this.status = status;
+    this.statusText = statusText;
+    this.body = body;
     this.name = "ApiError";
   }
 
@@ -918,6 +921,187 @@ export const deleteDividend = (companyId: number, periodId: number, id: number) 
   apiFetch<void>(`/api/companies/${companyId}/periods/${periodId}/dividends/${id}`, {
     method: "DELETE",
   });
+export const updateDividend = (
+  companyId: number,
+  periodId: number,
+  id: number,
+  data: Dividend,
+) =>
+  apiFetch<Dividend>(`/api/companies/${companyId}/periods/${periodId}/dividends/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+
+// === Year-end row updates (BL-25) ===
+export const updateDebtor = (companyId: number, periodId: number, id: number, data: Debtor) =>
+  apiFetch<Debtor>(`/api/companies/${companyId}/periods/${periodId}/debtors/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+export const updateCreditor = (companyId: number, periodId: number, id: number, data: Creditor) =>
+  apiFetch<Creditor>(`/api/companies/${companyId}/periods/${periodId}/creditors/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+export const updateFixedAsset = (companyId: number, id: number, data: FixedAsset) =>
+  apiFetch<FixedAsset>(`/api/companies/${companyId}/fixed-assets/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+export const updateInventory = (
+  companyId: number,
+  periodId: number,
+  id: number,
+  data: InventoryItem,
+) =>
+  apiFetch<InventoryItem>(`/api/companies/${companyId}/periods/${periodId}/inventory/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+
+// === Loans (company-scoped) — BL-05 ===
+export interface Loan {
+  id?: number;
+  companyId?: number;
+  lender: string;
+  originalAmount: number;
+  balance: number;
+  drawdownDate?: string;
+  balanceAsOfDate?: string;
+  interestRate: number;
+  isDirectorLoan: boolean;
+  dueWithinYear: number;
+  dueAfterYear: number;
+}
+
+export const getLoans = (companyId: number) =>
+  apiFetch<Loan[]>(`/api/companies/${companyId}/loans`);
+export const createLoan = (companyId: number, data: Loan) =>
+  apiFetch<Loan>(`/api/companies/${companyId}/loans`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+export const updateLoan = (companyId: number, id: number, data: Loan) =>
+  apiFetch<Loan>(`/api/companies/${companyId}/loans/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+export const deleteLoan = (companyId: number, id: number) =>
+  apiFetch<void>(`/api/companies/${companyId}/loans/${id}`, { method: "DELETE" });
+
+// === Loan balance snapshots (per period) — BL-05 ===
+export interface LoanBalanceSnapshot {
+  id?: number;
+  loanId: number;
+  periodId?: number;
+  openingBalance: number;
+  drawdowns: number;
+  repayments: number;
+  closingBalance: number;
+  dueWithinYear: number;
+  dueAfterYear: number;
+}
+
+export const getLoanSnapshots = (companyId: number, periodId: number) =>
+  apiFetch<LoanBalanceSnapshot[]>(
+    `/api/companies/${companyId}/periods/${periodId}/loan-balance-snapshots`,
+  );
+export const createLoanSnapshot = (
+  companyId: number,
+  periodId: number,
+  data: LoanBalanceSnapshot,
+) =>
+  apiFetch<LoanBalanceSnapshot>(
+    `/api/companies/${companyId}/periods/${periodId}/loan-balance-snapshots`,
+    { method: "POST", body: JSON.stringify(data) },
+  );
+export const updateLoanSnapshot = (
+  companyId: number,
+  periodId: number,
+  id: number,
+  data: LoanBalanceSnapshot,
+) =>
+  apiFetch<LoanBalanceSnapshot>(
+    `/api/companies/${companyId}/periods/${periodId}/loan-balance-snapshots/${id}`,
+    { method: "PUT", body: JSON.stringify(data) },
+  );
+export const deleteLoanSnapshot = (companyId: number, periodId: number, id: number) =>
+  apiFetch<void>(
+    `/api/companies/${companyId}/periods/${periodId}/loan-balance-snapshots/${id}`,
+    { method: "DELETE" },
+  );
+
+// === Director loans (per period) — BL-05 ===
+export interface DirectorLoanRow {
+  id?: number;
+  periodId?: number;
+  directorId: number;
+  openingBalance: number;
+  advances: number;
+  repayments: number;
+  closingBalance: number;
+  interestRate: number;
+  interestCharged: number;
+  isDocumented: boolean;
+  loanTerms?: string;
+  maxBalanceDuringYear: number;
+}
+
+export const getDirectorLoans = (companyId: number, periodId: number) =>
+  apiFetch<DirectorLoanRow[]>(
+    `/api/companies/${companyId}/periods/${periodId}/director-loans`,
+  );
+export const createDirectorLoan = (
+  companyId: number,
+  periodId: number,
+  data: DirectorLoanRow,
+) =>
+  apiFetch<DirectorLoanRow>(`/api/companies/${companyId}/periods/${periodId}/director-loans`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+export const updateDirectorLoan = (
+  companyId: number,
+  periodId: number,
+  id: number,
+  data: DirectorLoanRow,
+) =>
+  apiFetch<DirectorLoanRow>(
+    `/api/companies/${companyId}/periods/${periodId}/director-loans/${id}`,
+    { method: "PUT", body: JSON.stringify(data) },
+  );
+export const deleteDirectorLoan = (companyId: number, periodId: number, id: number) =>
+  apiFetch<void>(`/api/companies/${companyId}/periods/${periodId}/director-loans/${id}`, {
+    method: "DELETE",
+  });
+
+// === Share capital (company-scoped) — BL-05 ===
+export interface ShareCapital {
+  id?: number;
+  companyId?: number;
+  shareClass: string;
+  nominalValue: number;
+  numberIssued: number;
+  totalValue: number;
+  isFullyPaid: boolean;
+  issueDate?: string;
+  cancelledDate?: string;
+}
+
+export const getShareCapital = (companyId: number) =>
+  apiFetch<ShareCapital[]>(`/api/companies/${companyId}/share-capital`);
+export const createShareCapital = (companyId: number, data: ShareCapital) =>
+  apiFetch<ShareCapital>(`/api/companies/${companyId}/share-capital`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+export const updateShareCapital = (companyId: number, id: number, data: ShareCapital) =>
+  apiFetch<ShareCapital>(`/api/companies/${companyId}/share-capital/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+export const deleteShareCapital = (companyId: number, id: number) =>
+  apiFetch<void>(`/api/companies/${companyId}/share-capital/${id}`, { method: "DELETE" });
 
 // Inventory
 export const getInventory = (companyId: number, periodId: number) =>

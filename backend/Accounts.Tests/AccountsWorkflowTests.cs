@@ -9421,6 +9421,40 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task UpdateDividend_PersistsChangesAndLogsAudit()
+    {
+        // BL-25: dividends gained an update (PUT) endpoint so a recorded dividend can be corrected
+        // in place rather than deleted and re-created.
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var audit = new AuditService(db);
+        var context = AuthenticatedRequest(
+            "Accountant",
+            HttpMethods.Put,
+            $"/api/companies/{period.CompanyId}/periods/{period.Id}/dividends/1");
+
+        db.Dividends.Add(new Dividend { PeriodId = period.Id, Amount = 1_000m, DateDeclared = new DateOnly(2025, 6, 1) });
+        await db.SaveChangesAsync();
+        var dividend = await db.Dividends.SingleAsync(d => d.PeriodId == period.Id);
+
+        await YearEndEndpoints.UpdateDividendEndpointAsync(
+            period.CompanyId,
+            period.Id,
+            dividend.Id,
+            new Dividend { Amount = 1_500m, DateDeclared = new DateOnly(2025, 6, 1), DatePaid = new DateOnly(2025, 7, 1) },
+            db,
+            audit,
+            context);
+
+        var updated = await db.Dividends.SingleAsync(d => d.Id == dividend.Id);
+        Assert.Equal(1_500m, updated.Amount);
+        Assert.Equal(new DateOnly(2025, 7, 1), updated.DatePaid);
+        Assert.Contains(
+            await db.AuditLogs.ToListAsync(),
+            a => a.EntityType == "Dividend" && a.Action == AuditEventCodes.DividendUpdated);
+    }
+
+    [Fact]
     public async Task YearEndEvidence_LogsPayrollDividendAndGoingConcernAudits()
     {
         await using var db = CreateDbContext();

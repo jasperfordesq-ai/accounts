@@ -53,6 +53,7 @@ public static class AuditEventCodes
     public const string InventoryDeleted = "InventoryDeleted";
     public const string PayrollSummaryUpserted = "PayrollSummaryUpserted";
     public const string DividendCreated = "DividendCreated";
+    public const string DividendUpdated = "DividendUpdated";
     public const string DividendDeleted = "DividendDeleted";
     public const string GoingConcernUpdated = "GoingConcernUpdated";
     public const string TaxBalanceUpserted = "TaxBalanceUpserted";

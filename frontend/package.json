@@ -16,7 +16,8 @@
     "lint": "eslint",
     "test:readiness": "node --experimental-strip-types scripts/verify-readiness.mjs",
     "test:proxy": "node --experimental-strip-types scripts/verify-api-proxy.mjs",
-    "test:auth": "node --experimental-strip-types scripts/verify-auth-session.mjs"
+    "test:auth": "node --experimental-strip-types scripts/verify-auth-session.mjs",
+    "test:api-client": "node --experimental-strip-types scripts/verify-api-client.mjs"
   },
   "dependencies": {
     "@heroui/react": "3.0.1",
