@@ -1273,6 +1273,103 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task BalanceSheet_MixedCashAccrualScenario_BalancesWithZeroUnexplainedDifference()
+    {
+        // BL-01: a realistic mixed cash/accrual set must reconcile. Net assets are built from the
+        // entity tables (debtors/creditors/stock/fixed assets/loans) + bank cash, while reserves come
+        // from the P&L. The auto-adjustment engine posts the accrual contras (trade debtors -> turnover,
+        // trade creditors/accruals -> expense, prepayments, stock, depreciation) that keep the two sides
+        // in step, so UnexplainedDifference must be exactly zero.
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var companyId = period.CompanyId;
+
+        var categories = await new CategoryService(db).SeedDefaultCategoriesAsync(companyId);
+        int Cat(string code) => categories.Single(c => c.Code == code).Id;
+
+        // Share capital of €100 funded by an opening bank balance of €100 (cash the members paid in).
+        db.ShareCapitals.Add(new ShareCapital
+        {
+            CompanyId = companyId,
+            ShareClass = "Ordinary",
+            NumberIssued = 100,
+            NominalValue = 1m,
+            TotalValue = 100m,
+            IssueDate = new DateOnly(2025, 1, 1)
+        });
+        var bank = new BankAccount
+        {
+            CompanyId = companyId,
+            Name = "Current Account",
+            OpeningBalance = 100m,
+            OpeningBalanceDate = new DateOnly(2025, 1, 1)
+        };
+        db.BankAccounts.Add(bank);
+        await db.SaveChangesAsync();
+
+        // Cash movements: +10,000 trading sales, -3,000 rent, -4,000 capex (asset — outside the P&L),
+        // +5,000 loan drawdown. Capex and loan are coded to balance-sheet categories, so they move cash
+        // without touching profit.
+        db.ImportedTransactions.AddRange(
+            new ImportedTransaction { BankAccountId = bank.Id, PeriodId = period.Id, Date = new DateOnly(2025, 2, 1), Description = "Sales", Amount = 10_000m, CategoryId = Cat("4000") },
+            new ImportedTransaction { BankAccountId = bank.Id, PeriodId = period.Id, Date = new DateOnly(2025, 3, 1), Description = "Rent", Amount = -3_000m, CategoryId = Cat("6100") },
+            new ImportedTransaction { BankAccountId = bank.Id, PeriodId = period.Id, Date = new DateOnly(2025, 4, 1), Description = "Plant purchase", Amount = -4_000m, CategoryId = Cat("0020") },
+            new ImportedTransaction { BankAccountId = bank.Id, PeriodId = period.Id, Date = new DateOnly(2025, 5, 1), Description = "Bank loan drawdown", Amount = 5_000m, CategoryId = Cat("2600") });
+
+        // Accrual-basis facts entered as year-end entity rows.
+        db.Debtors.AddRange(
+            new Debtor { PeriodId = period.Id, Name = "Customer X", Amount = 2_000m, Type = DebtorType.Trade },
+            new Debtor { PeriodId = period.Id, Name = "Insurance prepaid", Amount = 300m, Type = DebtorType.Prepayment });
+        db.Creditors.AddRange(
+            new Creditor { PeriodId = period.Id, Name = "Supplier Y", Amount = 1_500m, Type = CreditorType.Trade, DueWithinYear = true },
+            new Creditor { PeriodId = period.Id, Name = "Accountancy fees", Amount = 500m, Type = CreditorType.Accrual, DueWithinYear = true });
+        db.Inventories.Add(new Inventory { PeriodId = period.Id, Description = "Closing stock", Value = 800m, ValuationMethod = ValuationMethod.Cost });
+
+        // Fixed asset matching the €4,000 capex, depreciated straight-line over 4 years (€1,000/yr).
+        db.FixedAssets.Add(new FixedAsset
+        {
+            CompanyId = companyId,
+            Name = "Plant",
+            Category = "Plant & Machinery",
+            Cost = 4_000m,
+            AcquisitionDate = new DateOnly(2025, 4, 1),
+            UsefulLifeYears = 4,
+            DepreciationMethod = DepreciationMethod.StraightLine
+        });
+
+        // Loan: €5,000 drawn in-period, €1,000 due within a year and €4,000 after.
+        db.Loans.Add(new Loan
+        {
+            CompanyId = companyId,
+            Lender = "Bank",
+            OriginalAmount = 5_000m,
+            Balance = 5_000m,
+            DueWithinYear = 1_000m,
+            DueAfterYear = 4_000m,
+            DrawdownDate = new DateOnly(2025, 5, 1),
+            BalanceAsOfDate = period.PeriodEnd
+        });
+        await db.SaveChangesAsync();
+
+        await new AdjustmentService(db).GenerateAutoAdjustmentsAsync(companyId, period.Id);
+
+        var balanceSheet = await new FinancialStatementsService(db).GetBalanceSheetAsync(companyId, period.Id);
+
+        // The whole point of BL-01: a correct mixed cash/accrual set balances exactly.
+        Assert.Equal(0m, balanceSheet.CapitalAndReserves.UnexplainedDifference);
+        Assert.True(balanceSheet.Balances);
+
+        // Headline figures match the hand-computed scenario.
+        Assert.Equal(7_200m, balanceSheet.NetAssets);
+        Assert.Equal(7_200m, balanceSheet.CapitalAndReserves.Total);
+        Assert.Equal(100m, balanceSheet.CapitalAndReserves.ShareCapital);
+        Assert.Equal(7_100m, balanceSheet.CapitalAndReserves.RetainedEarnings);
+        Assert.Equal(2_000m, balanceSheet.CurrentAssets.Debtors);
+        Assert.Equal(1_500m, balanceSheet.CreditorsWithinYear.TradeCreditors);
+        Assert.Equal(3_000m, balanceSheet.FixedAssets.Total);
+    }
+
+    [Fact]
     public async Task ProfitAndLoss_IncludesNonTurnoverIncomeAsOtherIncomeAndTaxesIt()
     {
         await using var db = CreateDbContext();

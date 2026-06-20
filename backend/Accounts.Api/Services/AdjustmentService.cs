@@ -115,6 +115,37 @@ public class AdjustmentService(AccountsDbContext db)
             });
         }
 
+        // 2b. Trade debtor recognition (BL-01).
+        // A trade debtor is income earned but not yet received in cash. The P&L is driven by bank
+        // transactions, so it never sees that income; meanwhile the balance sheet already carries the
+        // debtor as a current asset. Recognise the income (turnover) with the debtor as the contra so
+        // the reserves side moves in step with the net-assets side and the sheet reconciles.
+        // (Trade debtors only — Other debtors have an ambiguous contra and need a manual adjustment.)
+        var tradeDebtorsId = await GetOrCreateCategoryIdAsync(companyId, "1100", "Trade Debtors", AccountCategoryType.Asset, TaxTreatment.Other);
+        var salesId = await GetOrCreateCategoryIdAsync(companyId, "4000", "Sales / Revenue", AccountCategoryType.Income, TaxTreatment.Deductible);
+        var tradeDebtors = await db.Debtors
+            .Where(d => d.PeriodId == periodId && d.Type == DebtorType.Trade)
+            .ToListAsync();
+
+        foreach (var debtor in tradeDebtors)
+        {
+            adjustments.Add(new Adjustment
+            {
+                PeriodId = periodId,
+                Description = $"Trade debtor — {debtor.Name}",
+                DebitCategoryId = tradeDebtorsId,
+                CreditCategoryId = salesId,
+                Amount = debtor.Amount,
+                Source = AdjustmentSource.Auto,
+                Reason = "Income earned but not yet received, recognised as turnover with a trade receivable",
+                LegalBasis = "FRS 102 Section 23 / Accruals concept",
+                ImpactOnProfit = debtor.Amount, // recognises income = increases profit
+                ImpactOnAssets = debtor.Amount,
+                IsAuto = true,
+                CreatedBy = "System"
+            });
+        }
+
         // 3. Accrual adjustments (creditors of type Accrual)
         var accruals = await db.Creditors
             .Where(c => c.PeriodId == periodId && c.Type == CreditorType.Accrual)
@@ -133,6 +164,35 @@ public class AdjustmentService(AccountsDbContext db)
                 Reason = "Expense incurred but not yet invoiced/paid",
                 LegalBasis = "FRS 102 Section 2 / Accruals concept",
                 ImpactOnProfit = -acc.Amount,
+                ImpactOnAssets = 0,
+                IsAuto = true,
+                CreatedBy = "System"
+            });
+        }
+
+        // 3b. Trade creditor recognition (BL-01).
+        // A trade creditor is an expense incurred but not yet paid. Like an accrual, the cash-basis
+        // P&L has not seen it, while the balance sheet already carries the payable. Recognise the
+        // expense with the creditor as the contra so net assets and reserves stay reconciled.
+        // (Trade creditors only — Other creditors have an ambiguous contra and need a manual entry.)
+        var tradeCreditorsId = await GetOrCreateCategoryIdAsync(companyId, "2000", "Trade Creditors", AccountCategoryType.Liability, TaxTreatment.Other);
+        var tradeCreditors = await db.Creditors
+            .Where(c => c.PeriodId == periodId && c.Type == CreditorType.Trade)
+            .ToListAsync();
+
+        foreach (var tradeCreditor in tradeCreditors)
+        {
+            adjustments.Add(new Adjustment
+            {
+                PeriodId = periodId,
+                Description = $"Trade creditor — {tradeCreditor.Name}",
+                DebitCategoryId = await GetExpenseCategoryForDescriptionAsync(companyId, tradeCreditor.Name),
+                CreditCategoryId = tradeCreditorsId,
+                Amount = tradeCreditor.Amount,
+                Source = AdjustmentSource.Auto,
+                Reason = "Expense incurred but not yet paid, recognised with a trade payable",
+                LegalBasis = "FRS 102 Section 2 / Accruals concept",
+                ImpactOnProfit = -tradeCreditor.Amount,
                 ImpactOnAssets = 0,
                 IsAuto = true,
                 CreatedBy = "System"
