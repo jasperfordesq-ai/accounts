@@ -290,14 +290,30 @@ jobs:
             sleep 1
           done
 
-          test -f .tmp/production-smoke-caddy/data/caddy/pki/authorities/local/root.crt
+          # Caddy stores its local CA under a root-owned 0700 dir that the
+          # non-root runner cannot traverse on the host mount. Read it from the
+          # container (root) instead, waiting for the CA to be issued.
+          for attempt in {1..30}; do
+            if docker exec accounts-production-smoke-ingress test -f /data/caddy/pki/authorities/local/root.crt; then
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              echo "Caddy local CA root.crt was not created" >&2
+              docker exec accounts-production-smoke-ingress ls -laR /data/caddy/pki 2>&1 | head -40 || true
+              docker logs accounts-production-smoke-ingress
+              exit 1
+            fi
+            sleep 1
+          done
+          docker exec accounts-production-smoke-ingress cat /data/caddy/pki/authorities/local/root.crt > .tmp/production-smoke-caddy/caddy-local-root.crt
+          test -s .tmp/production-smoke-caddy/caddy-local-root.crt
 
       - name: Trust Caddy local CA
         shell: bash
         run: |
           set -euo pipefail
 
-          sudo cp .tmp/production-smoke-caddy/data/caddy/pki/authorities/local/root.crt /usr/local/share/ca-certificates/accounts-production-smoke-caddy.crt
+          sudo cp .tmp/production-smoke-caddy/caddy-local-root.crt /usr/local/share/ca-certificates/accounts-production-smoke-caddy.crt
           sudo update-ca-certificates
           curl --fail --silent --show-error https://accounts-smoke.local/health/ready >/dev/null
 
