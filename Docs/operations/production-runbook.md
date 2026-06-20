@@ -71,6 +71,7 @@ Do not run plain `docker compose -f compose.production.yml config` with producti
 | `TRUST_PROXY_HEADERS` | Set to `true` only when the trusted ingress overwrites forwarded headers and clients cannot bypass it; required by the API when `RateLimits__TrustForwardedFor=true`. |
 | `BOOTSTRAP_TENANT_NAME`, `BOOTSTRAP_TENANT_SLUG` | Initial firm tenant created by the controlled migration/bootstrap job. |
 | `BOOTSTRAP_OWNER_EMAIL`, `BOOTSTRAP_OWNER_DISPLAY_NAME`, `BOOTSTRAP_OWNER_PASSWORD_FILE` | Initial owner account and Docker secret file path for the initial password; `BOOTSTRAP_OWNER_PASSWORD_FILE` must contain a password of at least 20 characters and include upper case, lower case, number, and symbol characters. Rotate the password at first login. |
+| `BOOTSTRAP_OWNER_MUST_CHANGE_PASSWORD` | Optional; defaults to `true`. When `true` the bootstrap owner must change the password at first sign-in before any other API access is allowed. |
 
 Generate independent session and audit secrets:
 
