@@ -342,6 +342,12 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
             row++; table.Cell().Row(row).Column(1).Text("Gross profit").FontSize(9).Bold();
             table.Cell().Row(row).Column(2).AlignRight().BorderTop(1).Text(FormatEuro(pl.GrossProfit)).FontSize(9).Bold();
 
+            if (pl.OtherIncome != 0)
+            {
+                row++; table.Cell().Row(row).Column(1).PaddingTop(8).Text("Other operating income").FontSize(9);
+                table.Cell().Row(row).Column(2).PaddingTop(8).AlignRight().Text(FormatEuro(pl.OtherIncome)).FontSize(9);
+            }
+
             row++; table.Cell().Row(row).Column(1).PaddingTop(8).Text("Administrative expenses").FontSize(9);
             table.Cell().Row(row).Column(2).PaddingTop(8).AlignRight().Text(FormatEuro(-pl.TotalOverheads)).FontSize(9);
 
