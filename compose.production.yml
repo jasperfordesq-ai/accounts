@@ -15,9 +15,9 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 40s
+      timeout: 15s
+      retries: 12
+      start_period: 60s
 
   migrate:
     image: "${ACCOUNTS_API_IMAGE:?set ACCOUNTS_API_IMAGE}"
@@ -92,9 +92,9 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "curl --fail --header 'Host: api' http://localhost:8080/health/ready >/dev/null 2>&1 || exit 1"]
       interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 40s
+      timeout: 15s
+      retries: 12
+      start_period: 60s
 
   frontend:
     image: "${ACCOUNTS_FRONTEND_IMAGE:?set ACCOUNTS_FRONTEND_IMAGE}"
@@ -117,9 +117,9 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health/ready >/dev/null 2>&1 || exit 1"]
       interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 40s
+      timeout: 15s
+      retries: 12
+      start_period: 60s
 
 volumes:
   accounts_production_data:
