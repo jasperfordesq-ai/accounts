@@ -445,8 +445,22 @@ public static class YearEndEndpoints
         if (input.Debit > 0 && input.Credit > 0)
             return Results.BadRequest(new { error = "Enter either a debit or a credit opening balance, not both." });
 
-        if (!await AccountCategoryAvailableToCompanyAsync(db, companyId, categoryId))
+        var category = await db.AccountCategories
+            .FirstOrDefaultAsync(c => c.Id == categoryId
+                && (c.CompanyId == companyId || (c.IsSystem && c.CompanyId == null)));
+        if (category is null)
             return Results.BadRequest(new { error = "Account category is not available for this company." });
+
+        // accounting-opening-balance-pl-accounts: an opening balance on an income/expense account folds
+        // a brought-forward figure into the current year's turnover or expenses (what a mid-year
+        // migration does), silently mis-stating the P&L. Brought-forward profit/loss belongs in retained
+        // earnings; opening balances are only valid on balance-sheet accounts.
+        if (category.Type is AccountCategoryType.Income or AccountCategoryType.Expense)
+            return Results.BadRequest(new
+            {
+                error = "Opening balances cannot be posted to income or expense accounts. "
+                    + "Carry the brought-forward profit or loss to retained earnings instead."
+            });
 
         var balance = await db.OpeningBalances
             .FirstOrDefaultAsync(o => o.PeriodId == periodId && o.AccountCategoryId == categoryId);

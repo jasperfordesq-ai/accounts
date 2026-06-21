@@ -11065,6 +11065,54 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task UpsertOpeningBalance_RejectsIncomeAndExpenseAccountsButAllowsBalanceSheetAccounts()
+    {
+        // accounting-opening-balance-pl-accounts: an opening balance on a 4xxx/5xxx/6xxx income or
+        // expense code folds a brought-forward figure into current-year turnover/expenses. The upsert
+        // must reject it with a clean 400 and store nothing; a balance-sheet account is still accepted.
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var income = AddCategory(db, period.CompanyId, "4000", "Sales / Revenue", AccountCategoryType.Income);
+        var expense = AddCategory(db, period.CompanyId, "5000", "Cost of sales", AccountCategoryType.Expense);
+        var retainedEarnings = AddCategory(db, period.CompanyId, "3100", "Retained earnings", AccountCategoryType.Equity);
+        await db.SaveChangesAsync();
+        var audit = new AuditService(db);
+
+        IStatusCodeHttpResult StatusOf(IResult result) => Assert.IsAssignableFrom<IStatusCodeHttpResult>(result);
+
+        var incomeResult = await YearEndEndpoints.UpsertOpeningBalanceEndpointAsync(
+            period.CompanyId, period.Id, income.Id,
+            new OpeningBalanceInput(0m, 10_000m, "Opening sales (wrong account)", null, true),
+            db, audit,
+            AuthenticatedRequest("Accountant", HttpMethods.Put,
+                $"/api/companies/{period.CompanyId}/periods/{period.Id}/opening-balances/{income.Id}"));
+        var expenseResult = await YearEndEndpoints.UpsertOpeningBalanceEndpointAsync(
+            period.CompanyId, period.Id, expense.Id,
+            new OpeningBalanceInput(10_000m, 0m, "Opening expense (wrong account)", null, true),
+            db, audit,
+            AuthenticatedRequest("Accountant", HttpMethods.Put,
+                $"/api/companies/{period.CompanyId}/periods/{period.Id}/opening-balances/{expense.Id}"));
+
+        Assert.Equal(StatusCodes.Status400BadRequest, StatusOf(incomeResult).StatusCode);
+        Assert.Equal(StatusCodes.Status400BadRequest, StatusOf(expenseResult).StatusCode);
+        // Nothing persisted for the income/expense codes, so turnover/expenses are untouched.
+        Assert.Empty(await db.OpeningBalances.ToListAsync());
+        Assert.DoesNotContain("OpeningBalance", (await db.AuditLogs.ToListAsync()).Select(a => a.EntityType));
+
+        // A balance-sheet account (retained earnings) is still accepted.
+        var equityResult = await YearEndEndpoints.UpsertOpeningBalanceEndpointAsync(
+            period.CompanyId, period.Id, retainedEarnings.Id,
+            new OpeningBalanceInput(0m, 10_000m, "Opening retained earnings per prior accounts", null, true),
+            db, audit,
+            AuthenticatedRequest("Accountant", HttpMethods.Put,
+                $"/api/companies/{period.CompanyId}/periods/{period.Id}/opening-balances/{retainedEarnings.Id}"));
+        Assert.Equal(StatusCodes.Status200OK, StatusOf(equityResult).StatusCode);
+        var stored = Assert.Single(await db.OpeningBalances.ToListAsync());
+        Assert.Equal(retainedEarnings.Id, stored.AccountCategoryId);
+        Assert.Equal(10_000m, stored.Credit);
+    }
+
+    [Fact]
     public async Task YearEndEvidence_DeniesReviewerPreparationWriteWithoutApiAccessService()
     {
         await using var db = CreateDbContext();

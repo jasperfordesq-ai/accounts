@@ -123,3 +123,11 @@ Any later regression below this line is attributable to this session's changes.
   the existing backend test harness. Remaining work: add a Vitest/RTL config + smoke tests (year-end
   sections render; add-debtor form POSTs path/method/payload/CSRF; filing tab per-status button).
 
+### Phase 1 — Make the money correct and self-consistent
+- **`accounting-opening-balance-pl-accounts`** (**P0**) ✅ — `UpsertOpeningBalanceEndpointAsync` now
+  rejects an opening balance posted to an income/expense account (`AccountCategory.Type` Income/Expense)
+  with a clean 400 and stores nothing — a brought-forward figure on a 4xxx/5xxx/6xxx code would fold into
+  current-year turnover/expenses. Balance-sheet accounts (e.g. retained earnings) still accepted. Test
+  `UpsertOpeningBalance_RejectsIncomeAndExpenseAccountsButAllowsBalanceSheetAccounts`. Full suite
+  **516 pass / 3 skip**.
+
