@@ -120,7 +120,7 @@ public class ImportService(AccountsDbContext db, IOptions<ImportLimitConfig>? im
                 }
 
                 var dateStr = CleanCsvField(fields[mapping.DateColumn]);
-                var description = CleanCsvField(fields[mapping.DescriptionColumn]);
+                var description = NeutraliseCsvText(fields[mapping.DescriptionColumn]);
                 var amountStr = CleanCsvField(fields[mapping.AmountColumn]);
 
                 if (!DateOnly.TryParseExact(dateStr, mapping.DateFormat, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date) &&
@@ -152,7 +152,7 @@ public class ImportService(AccountsDbContext db, IOptions<ImportLimitConfig>? im
 
                 string? reference = null;
                 if (mapping.ReferenceColumn.HasValue && mapping.ReferenceColumn >= 0 && fields.Length > mapping.ReferenceColumn)
-                    reference = CleanCsvField(fields[mapping.ReferenceColumn.Value]);
+                    reference = NeutraliseCsvText(fields[mapping.ReferenceColumn.Value]);
 
                 // Duplicate detection
                 var hash = ComputeHash(date, amount, description);
@@ -253,6 +253,24 @@ public class ImportService(AccountsDbContext db, IOptions<ImportLimitConfig>? im
     }
 
     private static string CleanCsvField(string? value) => value?.Trim() ?? string.Empty;
+
+    // Characters that make a spreadsheet treat a cell as a formula. A bank memo/reference that
+    // begins with one of these is a CSV-injection vector: e.g. =HYPERLINK("http://evil",...) in a
+    // description executes when a user later exports the imported transactions to Excel/Sheets.
+    private static readonly char[] CsvFormulaTriggers = ['=', '+', '-', '@', '\t', '\r', '\n'];
+
+    // Neutralise spreadsheet formula-injection in free-text fields that are stored verbatim and may
+    // later be exported. If the field begins with a formula trigger, prefix an apostrophe so the
+    // spreadsheet treats it as literal text (OWASP CSV-injection mitigation). Numeric/date fields are
+    // parsed to typed values with CleanCsvField (never stored raw), so they keep trim-only cleaning
+    // and a legitimate leading-minus amount like "-12.50" still parses correctly.
+    private static string NeutraliseCsvText(string? value)
+    {
+        var cleaned = CleanCsvField(value);
+        if (cleaned.Length > 0 && Array.IndexOf(CsvFormulaTriggers, cleaned[0]) >= 0)
+            return "'" + cleaned;
+        return cleaned;
+    }
 
     private sealed record CsvImportRows(string[] Header, List<CsvImportRow> Rows);
 

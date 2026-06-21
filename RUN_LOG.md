@@ -69,3 +69,36 @@ Any later regression below this line is attributable to this session's changes.
   `has-pending-model-changes` clean (no model changes this run).
 - Guarantees: **G1, G2, G3, G5, G6, G7 met (each test-proven); G4 met at the trust layer, UI forms
   deferred.** See `DAILY_REVIEW.md`.
+
+---
+
+# Finish Run Log — 2026-06-21 (PLATFORM_AUDIT backlog)
+
+Branch: `daily/finish-2026-06-21` (off `daily/trust-2026-06-21`)
+Goal: close the P0/P1 backlog in `PLATFORM_AUDIT_2026-06-21.md`, phase by phase, each item proven by a
+test I saw pass. One item per commit. Not merged — left for review.
+
+## Baseline (green, recorded so any regression is attributable)
+- **Backend**: `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art` →
+  **511 passed, 2 skipped, 513 total** (exit 0, 40 s). The 2 skips are the Postgres-only audit
+  durability tests (InMemory provider — expected; they run on real Postgres in CI).
+- **Frontend**: prior run left `npm test` / `lint` / `tsc --noEmit` / `build` green (re-verified before
+  any frontend edit this run).
+
+Any later regression below this line is attributable to this session's changes.
+
+## Items
+<!-- One line per item: id — what changed — test added — result -->
+- **`ops-backend-vuln-scan`** (P1) ✅ — `backend/Directory.Build.props` now enables NuGetAudit
+  (mode=all, level=low) and promotes NU1901-NU1904 to errors via `WarningsAsErrors`, so a
+  vulnerable backend package (direct/transitive) fails `dotnet restore backend/Accounts.slnx` in CI
+  instead of shipping green. No current packages vulnerable (`dotnet list package --vulnerable` →
+  none). Test `BackendBuild_FailsCiOnVulnerableNuGetPackages`. Full suite **512 pass / 2 skip**.
+  Commit `54eeb2f`.
+- **`import-csv-formula-injection`** (P2, done early — small + security-relevant) ✅ — `ImportService`
+  neutralises spreadsheet formula-injection in stored bank memo/reference text: a field starting with
+  `= + - @` (or leading tab/CR/LF) gets an apostrophe prefix (OWASP CSV-injection mitigation). Numeric/
+  date fields keep trim-only `CleanCsvField`, so a legit negative amount `-12.50` still parses. Test
+  `ImportCsv_NeutralisesSpreadsheetFormulaInjectionInStoredText` (proves triggers neutralised, ordinary
+  text unchanged, negative amount still posts).
+

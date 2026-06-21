@@ -4804,6 +4804,57 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task ImportCsv_NeutralisesSpreadsheetFormulaInjectionInStoredText()
+    {
+        // import-csv-formula-injection: a bank memo/reference that begins with = + - @ (or a leading
+        // tab/CR/LF) is a CSV-injection vector — it executes as a formula when the imported
+        // transactions are later exported to Excel/Sheets. Stored text must be neutralised, while
+        // numeric fields (incl. a legitimate negative amount) must still parse.
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var bankAccount = new BankAccount
+        {
+            CompanyId = period.CompanyId,
+            Name = "Current Account",
+            OpeningBalance = 0m
+        };
+        db.BankAccounts.Add(bankAccount);
+        await db.SaveChangesAsync();
+
+        // Columns: Date(0), Description(1), Reference(2), Amount(3).
+        var csvText =
+            "Date,Description,Reference,Amount\n" +
+            "01/01/2025,=1+2,@evil,100\n" +
+            "02/01/2025,Normal payment,REF123,-12.50\n" +
+            "03/01/2025,-Refund issued,+447700,5\n";
+        using var csv = new MemoryStream(Encoding.UTF8.GetBytes(csvText));
+        var mapping = new ImportService.ColumnMapping(
+            DateColumn: 0, DescriptionColumn: 1, AmountColumn: 3, BalanceColumn: null, ReferenceColumn: 2);
+        var service = new ImportService(db, Options.Create(new ImportLimitConfig()));
+
+        var result = await service.ImportCsvAsync(period.CompanyId, bankAccount.Id, period.Id, csv, "bank.csv", mapping);
+
+        Assert.Equal(3, result.ImportedRows);
+        var txns = await db.ImportedTransactions.OrderBy(t => t.Date).ToListAsync();
+        Assert.Equal(3, txns.Count);
+
+        // Formula triggers in stored text are neutralised with a leading apostrophe.
+        Assert.Equal("'=1+2", txns[0].Description);
+        Assert.Equal("'@evil", txns[0].Reference);
+        Assert.Equal(100m, txns[0].Amount);
+
+        // Ordinary text is stored unchanged; the negative AMOUNT is parsed, not neutralised.
+        Assert.Equal("Normal payment", txns[1].Description);
+        Assert.Equal("REF123", txns[1].Reference);
+        Assert.Equal(-12.50m, txns[1].Amount);
+
+        // Leading '-' and '+' in stored text are neutralised even though they are valid number signs.
+        Assert.Equal("'-Refund issued", txns[2].Description);
+        Assert.Equal("'+447700", txns[2].Reference);
+        Assert.Equal(5m, txns[2].Amount);
+    }
+
+    [Fact]
     public async Task ImportCsv_WarningsDoNotEchoRawCsvFieldValues()
     {
         await using var db = CreateDbContext();
