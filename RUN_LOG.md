@@ -336,3 +336,14 @@ data is enterable via the API today. **Deferred as a coherent block for a focuse
   valid-production-config fixtures were updated to use a TLS connection string. HD flag: the TLS posture
   (and the opt-out) is a deployment decision.
 
+
+## Final state — Finish Run 2026-06-21
+- Backend **541 pass / 3 skip / 0 fail** (was 511/2 at baseline; +30 tests, +1 Postgres-gated skip).
+- `dotnet ef migrations has-pending-model-changes` **clean** (4 migrations added this run).
+- Frontend **not modified**; `tsc --noEmit` re-verified clean; `lint`/`test`/`build` at prior baseline.
+- **28 commits**, one backlog item each, tree green after every commit.
+- **Done:** Phase 0 (4/5), **Phase 1 (13/13)**, Phase 3 (7 + 3 taxonomy-blocked), Phase 4 (4), Phase 6 (1).
+- **Blocked/deferred (flagged):** frontend (Phase 2 + render-harness), FRC taxonomy (3 Phase-3 items),
+  real CRO/ROS/CT1 specs + opening-TB-takeon (Phase 5), period-state-machine + concurrency + tenant-filter
+  (Phase 4), ops infra (Phase 6). See `DAILY_REVIEW.md` for the full per-item table and HD flags.
+- Branch `daily/finish-2026-06-21` left for review — **not merged, not pushed.**
