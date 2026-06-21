@@ -176,5 +176,10 @@ Any later regression below this line is attributable to this session's changes.
   cash-flow does not reconcile to BS cash for **accrual** companies (year-end balances entered as
   standalone figures) — deferred because it is entangled with the deeper "make the indirect cash-flow
   reconcile to the entered accrual balances" model and would otherwise flag the artificially-constructed
-  Small golden-path fixture. Added to backlog as `accounting-cashflow-accrual-reconciliation`.
+  Small golden-path fixture. Added to backlog as `accounting-cashflow-accrual-reconciliation`. Commit `bf87a36`.
+- **`tests-multiyear-balance-asserted`** (P1, L) ✅ — the BS-level proof (`UnexplainedDifference==0 &&
+  Balances` for years 2 & 3, no manual openings) is the multi-year cash test above; added a complementary
+  **readiness-level** proof `Readiness_MultiYearPeriodBalancesWithoutManualOpeningRows` (a year-2 period
+  with no manual opening rows → `readiness.BalanceSheetBalances == true` and no "Balance sheet does not
+  balance" warning). Test-only; fails on the pre-movement-basis code, passes after it.
 

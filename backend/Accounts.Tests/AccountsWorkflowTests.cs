@@ -1626,6 +1626,39 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task Readiness_MultiYearPeriodBalancesWithoutManualOpeningRows()
+    {
+        // tests-multiyear-balance-asserted: a year-2 period with NO manual opening rows must be seen as
+        // balanced by the readiness gate (BalanceSheetBalances == true, no "does not balance" warning)
+        // and have UnexplainedDifference == 0 — this fails on the pre-movement-basis code.
+        await using var db = CreateDbContext();
+        var period2025 = await SeedCompanyPeriodAsync(db, isFirstYear: false);
+        var companyId = period2025.CompanyId;
+        var period2024 = new AccountingPeriod { CompanyId = companyId, PeriodStart = new DateOnly(2024, 1, 1), PeriodEnd = new DateOnly(2024, 12, 31), IsFirstYear = true };
+        db.AccountingPeriods.Add(period2024);
+        var categories = await new CategoryService(db).SeedDefaultCategoriesAsync(companyId);
+        int Cat(string code) => categories.Single(c => c.Code == code).Id;
+        var bank = new BankAccount { CompanyId = companyId, Name = "Current Account", OpeningBalance = 0m };
+        db.BankAccounts.Add(bank);
+        await db.SaveChangesAsync();
+        db.ImportedTransactions.AddRange(
+            new ImportedTransaction { BankAccountId = bank.Id, PeriodId = period2024.Id, Date = new DateOnly(2024, 6, 1), Description = "2024 sales", Amount = 3_000m, CategoryId = Cat("4000") },
+            new ImportedTransaction { BankAccountId = bank.Id, PeriodId = period2024.Id, Date = new DateOnly(2024, 7, 1), Description = "2024 costs", Amount = -800m, CategoryId = Cat("6500") },
+            new ImportedTransaction { BankAccountId = bank.Id, PeriodId = period2025.Id, Date = new DateOnly(2025, 6, 1), Description = "2025 sales", Amount = 2_500m, CategoryId = Cat("4000") },
+            new ImportedTransaction { BankAccountId = bank.Id, PeriodId = period2025.Id, Date = new DateOnly(2025, 7, 1), Description = "2025 costs", Amount = -600m, CategoryId = Cat("6500") });
+        await db.SaveChangesAsync();
+
+        var statements = new FinancialStatementsService(db);
+        var bs2025 = await statements.GetBalanceSheetAsync(companyId, period2025.Id);
+        var readiness2025 = await statements.GetReadinessScoreAsync(companyId, period2025.Id);
+
+        Assert.Equal(0m, bs2025.CapitalAndReserves.UnexplainedDifference);
+        Assert.True(bs2025.Balances);
+        Assert.True(readiness2025.BalanceSheetBalances);
+        Assert.DoesNotContain(readiness2025.Warnings, w => w.Contains("Balance sheet does not balance"));
+    }
+
+    [Fact]
     public async Task BalanceSheet_MultiYearCashOnMovementBasis_CarriesPriorYearsAndBalances()
     {
         // accounting-multiyear-cash-movement-basis: year-2+ cash must carry forward prior years' net
