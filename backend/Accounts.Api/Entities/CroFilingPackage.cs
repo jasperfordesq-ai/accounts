@@ -21,6 +21,14 @@ public class CroFilingPackage
     public bool SignaturePageGenerated { get; set; }
     public bool PaymentCompleted { get; set; }
 
+    // signing-approval-chain: the director/secretary who approved/signed the statements, captured at
+    // approval. Submission is blocked until both are present, so there is always a recorded signing
+    // authority behind a filing. SignedPdfPath retains the executed/e-signed pack when available.
+    public string? SignedByDirector { get; set; }
+    public string? SignedBySecretary { get; set; }
+    public DateTime? SignedAt { get; set; }
+    public string? SignedPdfPath { get; set; }
+
     // Navigation
     [JsonIgnore]
     public AccountingPeriod Period { get; set; } = null!;

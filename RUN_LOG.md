@@ -275,5 +275,20 @@ data is enterable via the API today. **Deferred as a coherent block for a focuse
 - **`filing-abridged-cro-directors-report`** (P1, S) ✅ — the SmallAbridged CRO filing pack now includes
   the directors' report (its own doc-comment said "balance sheet + notes + directors' report") driven
   from `DirectorsReportService`; the micro CRO pack still omits it. Test
-  `AbridgedSmallCroPack_IncludesDirectorsReportButMicroDoesNot`.
+  `AbridgedSmallCroPack_IncludesDirectorsReportButMicroDoesNot`. Commit `c9275c8`.
+- **`filing-ixbrl-namespace-taxonomy-pin`** (P1, M, HD) ⏸ **FLAGGED/BLOCKED** — the real FRC Irish FRS
+  taxonomy release date + the `core:`/`ie-FRS-102` prefix reconciliation are external real-world facts
+  (the current `TaxonomyDate 2026-01-01` is a placeholder). Per the guardrails I will NOT guess the
+  taxonomy version/URIs. Needs the real FRC taxonomy spec to pin. The regime branch (P0) is done; this
+  taxonomy pinning is the remaining piece.
+- **`filing-ixbrl-tagging-completeness`** (P1, L, HD) ⏸ **FLAGGED/BLOCKED (same external dependency)** —
+  tagging the FRS mandatory-minimum concept set requires the exact FRC concept names/namespaces; guessing
+  them risks an invalid instance. Flagged for the real taxonomy spec.
+- **`tests-ixbrl-structural-validation`** (P2, L, HD) ⏸ **FLAGGED** — depends on a curated FRS-102/105
+  concept allow-list from the real taxonomy; deferred with the two items above.
+- **`signing-approval-chain`** (P1, M, HD) ✅ — new `CroFilingPackage.SignedByDirector`/`SignedBySecretary`/
+  `SignedAt`/`SignedPdfPath` (migration `AddCroSignatories`). The director/secretary signatories are
+  captured at CRO approval (from the active officers), and CRO submission is blocked until both are
+  present. Test `CroSubmission_CapturesSignatoriesAtApprovalAndBlocksWithoutThem`. (E-signature artefact
+  retention scaffolded via `SignedPdfPath`; the upload/e-sign integration is a follow-up.)
 

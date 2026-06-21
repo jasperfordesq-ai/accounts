@@ -4976,6 +4976,38 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task CroSubmission_CapturesSignatoriesAtApprovalAndBlocksWithoutThem()
+    {
+        // signing-approval-chain: the director/secretary signatories are captured at approval and CRO
+        // submission is blocked until both are present.
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        db.FilingRegimes.Add(new FilingRegime { PeriodId = period.Id, ElectedRegime = ElectedRegime.Micro, CanUseMicro = true, CanFileAbridged = true, AuditExempt = true });
+        db.NotesDisclosures.Add(new NotesDisclosure { PeriodId = period.Id, NoteNumber = 1, Title = "Approval of Financial Statements", Content = "Approved by the directors.", IsRequired = true, IsIncluded = true });
+        await db.SaveChangesAsync();
+        await MakePeriodReadyForCroDocumentsAsync(db, period);
+
+        var statements = new FinancialStatementsService(db);
+        var workflow = new FilingWorkflowService(db, statements, new IxbrlService(db, statements));
+        await workflow.RecordCroDocumentGeneratedAsync(period.CompanyId, period.Id, "accounts");
+        await workflow.RecordCroDocumentGeneratedAsync(period.CompanyId, period.Id, "signature");
+
+        // Approval captures the director and secretary signatories (from SeedCompanyPeriodAsync).
+        var approved = await workflow.UpdateCroStatusAsync(period.CompanyId, period.Id, FilingStatus.Approved, "Reviewer");
+        Assert.Equal("A Director", approved.SignedByDirector);
+        Assert.Equal("B Secretary", approved.SignedBySecretary);
+        Assert.NotNull(approved.SignedAt);
+
+        // Clearing the signatories blocks submission.
+        approved.SignedByDirector = null;
+        approved.SignedBySecretary = null;
+        await db.SaveChangesAsync();
+        var error = await Assert.ThrowsAsync<BusinessRuleException>(() =>
+            workflow.UpdateCroStatusAsync(period.CompanyId, period.Id, FilingStatus.Submitted, "Reviewer", submissionReference: "CORE-2026-0002"));
+        Assert.Contains("signatories", error.Message);
+    }
+
+    [Fact]
     public async Task FilingWorkflow_RejectsCroSubmissionWithoutCoreReferenceBeforeMutatingPackage()
     {
         await using var db = CreateDbContext();

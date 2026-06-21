@@ -174,6 +174,16 @@ public class FilingWorkflowService(
             var statusSnapshot = await GetStatusAsync(companyId, periodId);
             if (statusSnapshot.BlockingIssues.Count > 0)
                 throw new BusinessRuleException($"Cannot approve CRO filing while blockers remain: {string.Join("; ", statusSnapshot.BlockingIssues.Distinct())}");
+
+            // signing-approval-chain: capture the director/secretary signatories at approval so the
+            // as-filed record retains a recorded signing authority behind the filing.
+            var activeOfficers = await db.CompanyOfficers
+                .Where(o => o.CompanyId == companyId && o.ResignedDate == null)
+                .ToListAsync();
+            pkg.SignedByDirector ??= activeOfficers.FirstOrDefault(o => o.Role == OfficerRole.Director)?.Name;
+            pkg.SignedBySecretary ??= activeOfficers
+                .FirstOrDefault(o => o.Role == OfficerRole.Secretary || o.Role == OfficerRole.CompanySecretary)?.Name;
+            pkg.SignedAt ??= DateTime.UtcNow;
         }
 
         if (status == FilingStatus.Submitted)
@@ -182,6 +192,9 @@ public class FilingWorkflowService(
                 throw new BusinessRuleException("Approve the CRO filing pack before marking it as submitted to CORE.");
             if (!pkg.AccountsPdfGenerated || !pkg.SignaturePageGenerated)
                 throw new BusinessRuleException("Generate the CRO filing pack and signature page before submission.");
+            // signing-approval-chain: a filing must carry a recorded director and secretary signatory.
+            if (string.IsNullOrWhiteSpace(pkg.SignedByDirector) || string.IsNullOrWhiteSpace(pkg.SignedBySecretary))
+                throw new BusinessRuleException("Record the director and company secretary signatories before submitting the CRO filing.");
 
             coreSubmissionReference = NormalizeFilingReference(submissionReference ?? pkg.CroSubmissionReference, "CORE submission reference");
 
