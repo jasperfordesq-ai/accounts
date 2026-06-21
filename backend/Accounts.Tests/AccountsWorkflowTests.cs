@@ -1458,6 +1458,58 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task Readiness_WarnsWhenEnteredCorporationTaxDivergesFromComputation()
+    {
+        // accounting-pl-tax-charge-unreconciled: the entered CT liability is the P&L tax charge but was
+        // never reconciled to the CT computation. Readiness must warn (which blocks final outputs) when
+        // they diverge by more than €1, and the warning must clear once the entered figure matches.
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var companyId = period.CompanyId;
+        var categories = await new CategoryService(db).SeedDefaultCategoriesAsync(companyId);
+        int Cat(string code) => categories.Single(c => c.Code == code).Id;
+        var bank = new BankAccount { CompanyId = companyId, Name = "Current Account", OpeningBalance = 0m };
+        db.BankAccounts.Add(bank);
+        await db.SaveChangesAsync();
+        db.ImportedTransactions.Add(new ImportedTransaction
+        {
+            BankAccountId = bank.Id,
+            PeriodId = period.Id,
+            Date = new DateOnly(2025, 6, 1),
+            Description = "Sales invoice INV001",
+            Amount = 1_000m,
+            CategoryId = Cat("4000")
+        });
+        await db.SaveChangesAsync();
+
+        var statements = new FinancialStatementsService(db);
+        var computedCt = (await new TaxComputationService(db, statements).ComputeAsync(companyId, period.Id)).TotalCorporationTax;
+
+        // Enter a CT liability that diverges from the computation by > €1.
+        db.TaxBalances.Add(new TaxBalance
+        {
+            PeriodId = period.Id,
+            TaxType = TaxType.CorporationTax,
+            Liability = computedCt + 100m,
+            Paid = 0m,
+            Balance = computedCt + 100m
+        });
+        await db.SaveChangesAsync();
+
+        var divergent = await statements.GetReadinessScoreAsync(companyId, period.Id);
+        Assert.Contains(divergent.Warnings, w => w.Contains("does not match the corporation tax computation"));
+
+        // Correct the entered figure to match the computation — the warning clears.
+        var ct = await db.TaxBalances.SingleAsync(t => t.PeriodId == period.Id && t.TaxType == TaxType.CorporationTax);
+        ct.Liability = computedCt;
+        ct.Balance = computedCt;
+        await db.SaveChangesAsync();
+
+        var reconciled = await statements.GetReadinessScoreAsync(companyId, period.Id);
+        Assert.DoesNotContain(reconciled.Warnings, w => w.Contains("does not match the corporation tax computation"));
+    }
+
+    [Fact]
     public async Task ProfitAndLoss_TreatsCapexAsCapitalNotRevenueExpense()
     {
         // BL-32: a fixed-asset purchase coded to an asset account is capital — it does not reduce

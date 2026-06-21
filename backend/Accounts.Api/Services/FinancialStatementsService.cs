@@ -820,6 +820,29 @@ public class FinancialStatementsService(AccountsDbContext db)
         var hasTax = await db.TaxBalances.AnyAsync(t => t.PeriodId == periodId);
         if (hasTax || reviewed.Contains("tax")) completedChecks++; else missing.Add("Tax balances not reviewed");
 
+        // accounting-pl-tax-charge-unreconciled [HUMAN DECISION flagged]: the P&L tax charge reads the
+        // entered CorporationTax liability and is never reconciled to the CT computation, so equity /
+        // SOCIE / iXBRL / CT1 can silently disagree. When a CT figure has been entered, compare it to
+        // TaxComputationService and warn (which blocks final outputs) if they diverge by more than €1.
+        var enteredCorporationTax = await db.TaxBalances
+            .Where(t => t.PeriodId == periodId && t.TaxType == TaxType.CorporationTax)
+            .Select(t => (decimal?)t.Liability)
+            .FirstOrDefaultAsync();
+        if (enteredCorporationTax is { } enteredCt)
+        {
+            try
+            {
+                var computedCt = (await new TaxComputationService(db, this).ComputeAsync(companyId, periodId)).TotalCorporationTax;
+                if (Math.Abs(enteredCt - computedCt) > 1m)
+                    warnings.Add(
+                        $"Entered corporation tax ({enteredCt:C}) does not match the corporation tax computation ({computedCt:C}). Reconcile the tax charge before filing.");
+            }
+            catch
+            {
+                // Computation unavailable (e.g. incomplete data) — the tax-balances checks already nudge.
+            }
+        }
+
         // 12. Dividends reviewed?
         var hasDividends = await db.Dividends.AnyAsync(d => d.PeriodId == periodId);
         if (hasDividends || reviewed.Contains("dividends")) completedChecks++;

@@ -141,5 +141,11 @@ Any later regression below this line is attributable to this session's changes.
   the P&L tax charge + CT computation; 0 tests/UI use `Creditors.Type==Tax`), so the tax-creditor line is
   now `Σ TaxBalances.Balance` only and the redundant tax-creditor rows are excluded. Test
   `BalanceSheet_DoesNotDoubleCountTaxCreditorAndTaxBalance` (€125 in both sources → tax creditor €125 not
-  €250, `UnexplainedDifference==0`). Full suite **518 pass / 3 skip**. Commit pending.
+  €250, `UnexplainedDifference==0`). Full suite **518 pass / 3 skip**. Commit `443eb93`.
+- **`accounting-pl-tax-charge-unreconciled`** (P1, **HUMAN DECISION flagged**) ✅ — readiness now
+  reconciles the entered CorporationTax liability (the P&L tax charge) against `TaxComputationService`:
+  when a CT figure is entered and diverges from the computed total by > €1, a warning is added that
+  blocks final outputs ("does not match the corporation tax computation"). Clears once the entered
+  figure matches. Test `Readiness_WarnsWhenEnteredCorporationTaxDivergesFromComputation`. Golden paths
+  (which don't enter CT) unaffected. Full suite **519 pass / 3 skip**.
 
