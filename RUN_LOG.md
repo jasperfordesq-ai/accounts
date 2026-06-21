@@ -300,3 +300,9 @@ data is enterable via the API today. **Deferred as a coherent block for a focuse
   (the L document-generation half, SORP-tier dependent) — the SoFA/TAR data objects exist (JSON today);
   the PDF rendering is the follow-up.
 
+### Phase 4 — Data safety, integrity and tenant backstop
+- **`data-list-transactions-pagesize-cap`** (P2, S) ✅ — `ListTransactionsEndpointAsync` now clamps the
+  page size to a 200 cap (and the page index to ≥1), so an unbounded `pageSize` cannot pull every row
+  into memory (a memory/DoS vector); the effective `page`/`pageSize` are returned in the response. Test
+  `ListTransactions_ClampsPageSizeToCapAgainstMemoryDos` (250 rows, pageSize 100,000 → 200 returned).
+

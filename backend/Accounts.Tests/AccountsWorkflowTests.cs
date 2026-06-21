@@ -10938,6 +10938,31 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task ListTransactions_ClampsPageSizeToCapAgainstMemoryDos()
+    {
+        // data-list-transactions-pagesize-cap: an unbounded pageSize would pull every row into memory.
+        // The page size is clamped to a 200 cap.
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var bank = new BankAccount { CompanyId = period.CompanyId, Name = "Current account", OpeningBalance = 0m };
+        db.BankAccounts.Add(bank);
+        await db.SaveChangesAsync();
+        for (var i = 0; i < 250; i++)
+            db.ImportedTransactions.Add(new ImportedTransaction { BankAccountId = bank.Id, PeriodId = period.Id, Date = period.PeriodStart.AddDays(i % 300), Description = $"txn {i}", Amount = 1m });
+        await db.SaveChangesAsync();
+
+        var result = await BankingEndpoints.ListTransactionsEndpointAsync(
+            period.CompanyId, period.Id, db,
+            AuthenticatedRequest("Owner", HttpMethods.Get, $"/api/companies/{period.CompanyId}/periods/{period.Id}/transactions"),
+            1, 100_000, null, null, null, null);
+
+        var payload = Assert.IsAssignableFrom<IValueHttpResult>(result).Value!;
+        var items = Assert.IsAssignableFrom<List<ImportedTransaction>>(payload.GetType().GetProperty("items")!.GetValue(payload));
+        Assert.Equal(200, items.Count); // clamped to the 200 cap, not 250
+        Assert.Equal(200, (int)payload.GetType().GetProperty("pageSize")!.GetValue(payload)!);
+    }
+
+    [Fact]
     public async Task YearEndEvidence_LogsReceivablePayableAndInventoryAudits()
     {
         await using var db = CreateDbContext();

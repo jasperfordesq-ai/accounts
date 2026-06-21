@@ -272,16 +272,22 @@ public static class BankingEndpoints
         if (!string.IsNullOrWhiteSpace(search))
             query = query.Where(t => t.Description.Contains(search));
 
+        // data-list-transactions-pagesize-cap: clamp the page size (and page) so an unbounded
+        // pageSize cannot pull every row into memory (a memory/DoS vector). Cap at 200 per page.
+        const int maxPageSize = 200;
+        var safePageSize = Math.Clamp(pageSize ?? 50, 1, maxPageSize);
+        var safePage = Math.Max(page ?? 1, 1);
+
         var total = await query.CountAsync();
         var items = await query
             .OrderByDescending(t => t.Date)
-            .Skip(((page ?? 1) - 1) * (pageSize ?? 50))
-            .Take(pageSize ?? 50)
+            .Skip((safePage - 1) * safePageSize)
+            .Take(safePageSize)
             .ToListAsync();
 
         await HydrateAvailableCategoriesAsync(db, companyId, items);
 
-        return Results.Ok(new { total, items });
+        return Results.Ok(new { total, items, page = safePage, pageSize = safePageSize });
     }
 
     public static async Task<IResult> BulkCategoriseTransactionsEndpointAsync(
