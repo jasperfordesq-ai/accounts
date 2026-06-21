@@ -8781,8 +8781,7 @@ public class AccountsWorkflowTests
             "backend/Accounts.Api/Endpoints/DocumentEndpoints.cs",
             "backend/Accounts.Api/Endpoints/RevenueEndpoints.cs",
             "backend/Accounts.Api/Endpoints/FilingWorkflowEndpoints.cs",
-            "backend/Accounts.Api/Endpoints/CharityEndpoints.cs",
-            "backend/Accounts.Api/Endpoints/YearEndEndpoints.cs"
+            "backend/Accounts.Api/Endpoints/CharityEndpoints.cs"
         };
 
         foreach (var relativePath in endpointFiles)
@@ -8791,6 +8790,11 @@ public class AccountsWorkflowTests
             Assert.DoesNotContain("catch (Exception ex)", source);
             Assert.DoesNotContain("error = ex.Message", source);
         }
+
+        // YearEndEndpoints is a partial class split across YearEnd*.cs — guard every part.
+        var yearEndSource = YearEndEndpointsSource();
+        Assert.DoesNotContain("catch (Exception ex)", yearEndSource);
+        Assert.DoesNotContain("error = ex.Message", yearEndSource);
     }
 
     [Fact]
@@ -12928,10 +12932,23 @@ public class AccountsWorkflowTests
             && parameters[0] == typeof(int));
     }
 
+    // YearEndEndpoints is a partial class split across Endpoints/YearEnd*.cs. Source-structure guards
+    // must read the whole partial class (all parts + the input/validator classes), not a single file,
+    // so they keep their teeth after the split.
+    private static string YearEndEndpointsSource() =>
+        string.Join(
+            "\n",
+            Directory
+                .EnumerateFiles(
+                    Path.Combine(RepositoryRoot(), "backend", "Accounts.Api", "Endpoints"),
+                    "YearEnd*.cs")
+                .OrderBy(path => path, StringComparer.Ordinal)
+                .Select(File.ReadAllText));
+
     [Fact]
     public void NotesEndpoints_UseCompanyAwareGenerationAndReads()
     {
-        var source = File.ReadAllText(Path.Combine(RepositoryRoot(), "backend", "Accounts.Api", "Endpoints", "YearEndEndpoints.cs"));
+        var source = YearEndEndpointsSource();
 
         Assert.Contains("GenerateNotesAsync(companyId, periodId)", source);
         Assert.DoesNotContain("GenerateNotesAsync(periodId)", source);
@@ -12941,9 +12958,7 @@ public class AccountsWorkflowTests
     [Fact]
     public void YearEndPeriodReadEndpoints_UseExplicitPeriodOwnershipGuards()
     {
-        var source = File
-            .ReadAllText(Path.Combine(RepositoryRoot(), "backend", "Accounts.Api", "Endpoints", "YearEndEndpoints.cs"))
-            .Replace("\r\n", "\n");
+        var source = YearEndEndpointsSource().Replace("\r\n", "\n");
 
         var guardedListReads = new (string Marker, string[] Fragments)[]
         {
@@ -17659,7 +17674,7 @@ public class AccountsWorkflowTests
     public void CompanyAccountingEndpoints_RequireEffectiveDatesForPeriodScopedSharedRecords()
     {
         var bankingEndpoints = File.ReadAllText(Path.Combine(RepositoryRoot(), "backend", "Accounts.Api", "Endpoints", "BankingEndpoints.cs"));
-        var yearEndEndpoints = File.ReadAllText(Path.Combine(RepositoryRoot(), "backend", "Accounts.Api", "Endpoints", "YearEndEndpoints.cs"));
+        var yearEndEndpoints = YearEndEndpointsSource();
 
         Assert.Contains("BankingEndpointInputs.ValidateBankAccount", bankingEndpoints);
         Assert.Contains("OpeningBalanceDate is null", bankingEndpoints);
