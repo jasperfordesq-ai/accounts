@@ -1661,6 +1661,331 @@ public class AccountsWorkflowTests
         Assert.Equal(3_000m, balanceSheet.FixedAssets.Total);
     }
 
+    // ----------------------------------------------------------------------------------------------
+    // Golden-path end-to-end tests (Trust guarantee #1). Each drives the WHOLE pipeline with the real
+    // services — onboard -> import a real CSV -> categorise -> year-end facts -> generate adjustments ->
+    // statements that BALANCE -> accounts PDF -> iXBRL — for a shipped regime, and proves the period
+    // clears the readiness gate so the final outputs actually generate.
+    // ----------------------------------------------------------------------------------------------
+
+    [Fact]
+    public async Task GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl()
+    {
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var companyId = period.CompanyId;
+
+        var categories = await new CategoryService(db).SeedDefaultCategoriesAsync(companyId);
+        int Cat(string code) => categories.Single(c => c.Code == code).Id;
+
+        // Onboarding: €500 share capital subscribed at incorporation, funded by the opening bank
+        // balance. The matching opening-balance entry keeps the opening trial balance in step.
+        db.ShareCapitals.Add(new ShareCapital
+        {
+            CompanyId = companyId,
+            ShareClass = "Ordinary",
+            NumberIssued = 500,
+            NominalValue = 1m,
+            TotalValue = 500m,
+            IssueDate = period.PeriodStart
+        });
+        var bank = new BankAccount
+        {
+            CompanyId = companyId,
+            Name = "Current Account",
+            OpeningBalance = 500m,
+            OpeningBalanceDate = period.PeriodStart
+        };
+        db.BankAccounts.Add(bank);
+        db.SizeClassifications.Add(new SizeClassification
+        {
+            PeriodId = period.Id,
+            Turnover = 6_500m,
+            BalanceSheetTotal = 6_250m,
+            AvgEmployees = 1
+        });
+        await db.SaveChangesAsync();
+
+        db.OpeningBalances.Add(new OpeningBalance
+        {
+            PeriodId = period.Id,
+            AccountCategoryId = Cat("3000"),
+            Credit = 500m,
+            SourceNote = "Share capital subscribed at incorporation",
+            EnteredBy = "Accounts reviewer",
+            Reviewed = true,
+            ReviewedBy = "Accounts reviewer",
+            ReviewedAt = DateTime.UtcNow
+        });
+        // Categorisation rules so the import auto-codes every row (no manual tidy-up needed).
+        db.TransactionRules.AddRange(
+            new TransactionRule { CompanyId = companyId, Pattern = "Sales", CategoryId = Cat("4000"), Priority = 1 },
+            new TransactionRule { CompanyId = companyId, Pattern = "Office", CategoryId = Cat("6500"), Priority = 2 },
+            new TransactionRule { CompanyId = companyId, Pattern = "Light", CategoryId = Cat("6300"), Priority = 3 });
+        await db.SaveChangesAsync();
+
+        // Import a real bank-statement CSV through the real ImportService (generic format).
+        var csv = MakeGenericCsv(
+            ("01/03/2025", "Sales invoice INV001", 4_000m),
+            ("10/06/2025", "Sales invoice INV002", 2_500m),
+            ("15/04/2025", "Office Supplies purchase", -300m),
+            ("20/09/2025", "Light and Heat ESB", -450m));
+        var import = await new ImportService(db).ImportCsvAsync(
+            companyId, bank.Id, period.Id, new MemoryStream(Encoding.UTF8.GetBytes(csv)), "statement.csv");
+
+        Assert.Equal(4, import.ImportedRows);
+        Assert.Equal(4, import.AutoCategorised);
+        Assert.Equal(0, import.DuplicatesSkipped);
+
+        // Year-end questionnaire — a nil-trading micro with no debtors/creditors/etc. confirms each section.
+        db.YearEndReviewConfirmations.AddRange(
+            NilReview(period.Id, "debtors"), NilReview(period.Id, "creditors"),
+            NilReview(period.Id, "payroll"), NilReview(period.Id, "tax"),
+            NilReview(period.Id, "dividends"), NilReview(period.Id, "post-balance-sheet-events"),
+            NilReview(period.Id, "related-parties"), NilReview(period.Id, "contingent-liabilities"),
+            NilReview(period.Id, "going-concern"));
+        await db.SaveChangesAsync();
+
+        var emit = await ClassifyAdjustNotesAndEmitAsync(db, companyId, period.Id, ElectedRegime.Micro);
+
+        // Regime is Micro, audit-exempt.
+        Assert.Equal(ElectedRegime.Micro, emit.Regime.Regime);
+        Assert.True(emit.Regime.AuditExempt);
+
+        // Readiness gate is fully satisfied — nothing missing, nothing warned, balance sheet balances.
+        Assert.Empty(emit.Readiness.MissingItems);
+        Assert.Empty(emit.Readiness.Warnings);
+        Assert.True(emit.Readiness.BalanceSheetBalances);
+        Assert.Equal(100, emit.Readiness.FilingReadinessPercent);
+
+        // Money is correct and the statements BALANCE.
+        Assert.True(emit.BalanceSheet.Balances);
+        Assert.Equal(0m, emit.BalanceSheet.CapitalAndReserves.UnexplainedDifference);
+        Assert.Equal(6_250m, emit.BalanceSheet.NetAssets);
+        Assert.Equal(500m, emit.BalanceSheet.CapitalAndReserves.ShareCapital);
+        Assert.Equal(5_750m, emit.BalanceSheet.CapitalAndReserves.ProfitForYear);
+        Assert.Equal(6_250m, emit.BalanceSheet.CurrentAssets.Cash);
+
+        // P&L stage runs and reconciles to the worked figures.
+        Assert.Equal(6_500m, emit.ProfitAndLoss.Turnover);
+        Assert.Equal(5_750m, emit.ProfitAndLoss.ProfitAfterTax);
+
+        // The accounts PDF generated past the readiness gate and is a real PDF.
+        Assert.True(emit.Pdf.Length > 1_000);
+        Assert.Equal("%PDF", Encoding.ASCII.GetString(emit.Pdf, 0, 4));
+
+        // The iXBRL is well-formed XML carrying the entity name.
+        AssertWellFormedXml(emit.Ixbrl);
+        Assert.Contains("Example Micro Limited", emit.Ixbrl);
+    }
+
+    [Fact]
+    public async Task GoldenPath_SmallAuditExemptCompany_MixedAccrualSetBalancesThroughPdfAndIxbrl()
+    {
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var companyId = period.CompanyId;
+        // A small audit-exempt LTD that owns assets, holds stock and has a bank loan.
+        var company = await db.Companies.FirstAsync(c => c.Id == companyId);
+        company.LegalName = "Connacht Digital Solutions Limited";
+        company.OwnsAssets = true;
+        company.HasStock = true;
+        company.HasBorrowings = true;
+        await db.SaveChangesAsync();
+
+        var categories = await new CategoryService(db).SeedDefaultCategoriesAsync(companyId);
+        int Cat(string code) => categories.Single(c => c.Code == code).Id;
+
+        db.ShareCapitals.Add(new ShareCapital
+        {
+            CompanyId = companyId,
+            ShareClass = "Ordinary",
+            NumberIssued = 100,
+            NominalValue = 1m,
+            TotalValue = 100m,
+            IssueDate = period.PeriodStart
+        });
+        var bank = new BankAccount
+        {
+            CompanyId = companyId,
+            Name = "Current Account",
+            OpeningBalance = 100m,
+            OpeningBalanceDate = period.PeriodStart
+        };
+        db.BankAccounts.Add(bank);
+        // Size-classification interview is input-driven (REQUIREMENTS §B); these are representative
+        // Small-company figures, independent of the worked demo ledger below.
+        db.SizeClassifications.Add(new SizeClassification
+        {
+            PeriodId = period.Id,
+            Turnover = 2_000_000m,
+            BalanceSheetTotal = 1_200_000m,
+            AvgEmployees = 25
+        });
+        await db.SaveChangesAsync();
+
+        db.OpeningBalances.Add(new OpeningBalance
+        {
+            PeriodId = period.Id,
+            AccountCategoryId = Cat("3000"),
+            Credit = 100m,
+            SourceNote = "Share capital subscribed at incorporation",
+            EnteredBy = "Accounts reviewer",
+            Reviewed = true,
+            ReviewedBy = "Accounts reviewer",
+            ReviewedAt = DateTime.UtcNow
+        });
+        db.TransactionRules.AddRange(
+            new TransactionRule { CompanyId = companyId, Pattern = "Sales", CategoryId = Cat("4000"), Priority = 1 },
+            new TransactionRule { CompanyId = companyId, Pattern = "Rent", CategoryId = Cat("6100"), Priority = 2 },
+            new TransactionRule { CompanyId = companyId, Pattern = "Plant", CategoryId = Cat("0020"), Priority = 3 },
+            new TransactionRule { CompanyId = companyId, Pattern = "Loan", CategoryId = Cat("2600"), Priority = 4 });
+        await db.SaveChangesAsync();
+
+        // Cash movements: +10,000 trading, -3,000 rent, -4,000 capex (asset — outside the P&L),
+        // +5,000 loan drawdown. Capex and loan are coded to balance-sheet categories.
+        var csv = MakeGenericCsv(
+            ("01/02/2025", "Sales receipts", 10_000m),
+            ("01/03/2025", "Rent paid", -3_000m),
+            ("01/04/2025", "Plant and machinery purchase", -4_000m),
+            ("01/05/2025", "Bank Loan drawdown", 5_000m));
+        var import = await new ImportService(db).ImportCsvAsync(
+            companyId, bank.Id, period.Id, new MemoryStream(Encoding.UTF8.GetBytes(csv)), "aib-statement.csv");
+        Assert.Equal(4, import.ImportedRows);
+        Assert.Equal(4, import.AutoCategorised);
+
+        // Accrual-basis year-end facts entered as entity rows.
+        db.Debtors.AddRange(
+            new Debtor { PeriodId = period.Id, Name = "Customer X", Amount = 2_000m, Type = DebtorType.Trade },
+            new Debtor { PeriodId = period.Id, Name = "Insurance prepaid", Amount = 300m, Type = DebtorType.Prepayment });
+        db.Creditors.AddRange(
+            new Creditor { PeriodId = period.Id, Name = "Supplier Y", Amount = 1_500m, Type = CreditorType.Trade, DueWithinYear = true },
+            new Creditor { PeriodId = period.Id, Name = "Accountancy fees", Amount = 500m, Type = CreditorType.Accrual, DueWithinYear = true });
+        db.Inventories.Add(new Inventory { PeriodId = period.Id, Description = "Closing stock", Value = 800m, ValuationMethod = ValuationMethod.Cost });
+        db.FixedAssets.Add(new FixedAsset
+        {
+            CompanyId = companyId,
+            Name = "Plant",
+            Category = "Plant & Machinery",
+            Cost = 4_000m,
+            AcquisitionDate = new DateOnly(2025, 4, 1),
+            UsefulLifeYears = 4,
+            DepreciationMethod = DepreciationMethod.StraightLine
+        });
+        db.Loans.Add(new Loan
+        {
+            CompanyId = companyId,
+            Lender = "Bank",
+            OriginalAmount = 5_000m,
+            Balance = 5_000m,
+            DueWithinYear = 1_000m,
+            DueAfterYear = 4_000m,
+            DrawdownDate = new DateOnly(2025, 5, 1),
+            BalanceAsOfDate = period.PeriodEnd
+        });
+        db.YearEndReviewConfirmations.AddRange(
+            NilReview(period.Id, "payroll"), NilReview(period.Id, "tax"),
+            NilReview(period.Id, "dividends"), NilReview(period.Id, "post-balance-sheet-events"),
+            NilReview(period.Id, "related-parties"), NilReview(period.Id, "contingent-liabilities"),
+            NilReview(period.Id, "going-concern"));
+        await db.SaveChangesAsync();
+
+        var emit = await ClassifyAdjustNotesAndEmitAsync(db, companyId, period.Id, ElectedRegime.Small);
+
+        // Small audit-exempt regime.
+        Assert.Equal(ElectedRegime.Small, emit.Regime.Regime);
+        Assert.True(emit.Regime.AuditExempt);
+
+        // Readiness gate satisfied across the richer year-end set.
+        Assert.Empty(emit.Readiness.MissingItems);
+        Assert.Empty(emit.Readiness.Warnings);
+        Assert.True(emit.Readiness.BalanceSheetBalances);
+
+        // The mixed cash/accrual set BALANCES exactly.
+        Assert.True(emit.BalanceSheet.Balances);
+        Assert.Equal(0m, emit.BalanceSheet.CapitalAndReserves.UnexplainedDifference);
+        Assert.Equal(7_200m, emit.BalanceSheet.NetAssets);
+        Assert.Equal(100m, emit.BalanceSheet.CapitalAndReserves.ShareCapital);
+        Assert.Equal(7_100m, emit.BalanceSheet.CapitalAndReserves.RetainedEarnings);
+        Assert.Equal(3_000m, emit.BalanceSheet.FixedAssets.Total);
+
+        // PDF generates past the gate; iXBRL is well-formed.
+        Assert.True(emit.Pdf.Length > 1_000);
+        Assert.Equal("%PDF", Encoding.ASCII.GetString(emit.Pdf, 0, 4));
+        AssertWellFormedXml(emit.Ixbrl);
+        Assert.Contains("Connacht Digital Solutions Limited", emit.Ixbrl);
+    }
+
+    private sealed record GoldenPathEmission(
+        byte[] Pdf,
+        string Ixbrl,
+        FilingRegimeService.FilingRequirements Regime,
+        FinancialStatementsService.ReadinessScore Readiness,
+        FinancialStatementsService.BalanceSheet BalanceSheet,
+        FinancialStatementsService.ProfitAndLoss ProfitAndLoss);
+
+    // Shared tail of the golden path: classify -> determine regime -> generate + approve adjustments ->
+    // generate notes -> compute statements -> generate the accounts PDF and iXBRL. The PDF call itself
+    // asserts final-output readiness, so this only succeeds when the whole pipeline is filing-ready.
+    private static async Task<GoldenPathEmission> ClassifyAdjustNotesAndEmitAsync(
+        AccountsDbContext db, int companyId, int periodId, ElectedRegime electedRegime)
+    {
+        await new SizeClassificationService(db, Options.Create(new SizeThresholdConfig()))
+            .ClassifyAsync(companyId, periodId);
+        var regime = await new FilingRegimeService(db).DetermineAsync(companyId, periodId, electedRegime);
+        await new AdjustmentService(db).GenerateAutoAdjustmentsAsync(companyId, periodId);
+
+        // A nil-adjustment period still needs at least one adjustment row for the readiness check.
+        if (!await db.Adjustments.AnyAsync(a => a.PeriodId == periodId))
+        {
+            db.Adjustments.Add(new Adjustment
+            {
+                PeriodId = periodId,
+                Description = "No year-end adjustment required",
+                Amount = 0m,
+                ImpactOnProfit = 0m,
+                Source = AdjustmentSource.Manual,
+                CreatedBy = "Accounts reviewer"
+            });
+            await db.SaveChangesAsync();
+        }
+        // Reviewer approves all proposed adjustments.
+        foreach (var adj in await db.Adjustments.Where(a => a.PeriodId == periodId && a.ApprovedAt == null).ToListAsync())
+        {
+            adj.ApprovedBy = "Accounts reviewer";
+            adj.ApprovedAt = DateTime.UtcNow;
+        }
+        await db.SaveChangesAsync();
+
+        await new NotesDisclosureService(db).GenerateNotesAsync(companyId, periodId);
+
+        var statements = new FinancialStatementsService(db);
+        var readiness = await statements.GetReadinessScoreAsync(companyId, periodId);
+        var bs = await statements.GetBalanceSheetAsync(companyId, periodId);
+        var pl = await statements.GetProfitAndLossAsync(companyId, periodId);
+        var pdf = await new DocumentGeneratorService(db, statements).GenerateAccountsPackageAsync(companyId, periodId);
+        var ixbrl = Encoding.UTF8.GetString(await new IxbrlService(db, statements).GenerateIxbrlAsync(companyId, periodId));
+        return new GoldenPathEmission(pdf, ixbrl, regime, readiness, bs, pl);
+    }
+
+    private static string MakeGenericCsv(params (string Date, string Description, decimal Amount)[] rows)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("Date,Description,Amount");
+        foreach (var row in rows)
+            sb.AppendLine($"{row.Date},{row.Description},{row.Amount.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)}");
+        return sb.ToString();
+    }
+
+    private static void AssertWellFormedXml(string xhtml)
+    {
+        // DOCTYPE tolerated; no undeclared HTML entities. Throws if the iXBRL is not well-formed XML.
+        var settings = new System.Xml.XmlReaderSettings { DtdProcessing = System.Xml.DtdProcessing.Ignore };
+        using var reader = System.Xml.XmlReader.Create(new StringReader(xhtml), settings);
+        var doc = System.Xml.Linq.XDocument.Load(reader);
+        Assert.NotNull(doc.Root);
+    }
+
     [Fact]
     public async Task Adjustments_AccrueLoanInterestAndKeepBalanceSheetBalanced()
     {
