@@ -10938,6 +10938,36 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task CreateCategory_ValidatesAndIgnoresOverPostedIdentityAndSystemFlag()
+    {
+        // data-input-validation-breadth: the category create must reject blank/over-long text and a
+        // cross-company ParentId, and must ignore a client-supplied Id / IsSystem (over-posting).
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var companyId = period.CompanyId;
+        var otherPeriod = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var foreignParent = AddCategory(db, otherPeriod.CompanyId, "9999", "Other company", AccountCategoryType.Asset);
+        await db.SaveChangesAsync();
+
+        // Blank code/name is rejected.
+        var blank = new AccountCategory { Code = "  ", Name = "", Type = AccountCategoryType.Expense };
+        Assert.NotNull(await CategoryInputs.ValidateAndNormalizeAsync(db, companyId, blank));
+
+        // A ParentId from another company is rejected.
+        var crossParent = new AccountCategory { Code = "6001", Name = "Sub", Type = AccountCategoryType.Expense, ParentId = foreignParent.Id };
+        Assert.NotNull(await CategoryInputs.ValidateAndNormalizeAsync(db, companyId, crossParent));
+
+        // A valid category is normalised: client Id and IsSystem are ignored; CompanyId is forced.
+        var input = new AccountCategory { Id = 4242, Code = "  6500 ", Name = "  Office costs ", Type = AccountCategoryType.Expense, IsSystem = true, CompanyId = 99999 };
+        Assert.Null(await CategoryInputs.ValidateAndNormalizeAsync(db, companyId, input));
+        Assert.Equal(0, input.Id);
+        Assert.False(input.IsSystem);
+        Assert.Equal(companyId, input.CompanyId);
+        Assert.Equal("6500", input.Code);
+        Assert.Equal("Office costs", input.Name);
+    }
+
+    [Fact]
     public async Task DeleteCompany_BlockedWhenFinancialDataExistsWithoutTypedConfirmation()
     {
         // data-company-soft-delete: a company holding financial data cannot be cascade-wiped without a

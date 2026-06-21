@@ -313,4 +313,17 @@ data is enterable via the API today. **Deferred as a coherent block for a focuse
   `DeleteCompany_BlockedWhenFinancialDataExistsWithoutTypedConfirmation`. HD flag: the team may prefer
   true soft-delete + an EF global filter for recoverability — the block+confirm is the conservative
   default that needs no global-filter change (so it can't accidentally hide rows from existing queries).
+- **`data-input-validation-breadth`** (P2, M — category-create slice) ✅ — the account-category create
+  bound the raw entity, so a client could over-post `Id`/`IsSystem` (claim a privileged system category)
+  or send a blank/over-long Code/Name or a cross-company `ParentId`. New testable
+  `CategoryInputs.ValidateAndNormalizeAsync` validates Code/Name (required + length) and the ParentId
+  (same-company), and ignores client `Id`/`IsSystem` (forcing `CompanyId`). Test
+  `CreateCategory_ValidatesAndIgnoresOverPostedIdentityAndSystemFlag`. (The year-end disclosure creates —
+  note/related-party/contingent/post-balance-event — already reset client Id and validate; this closes
+  the category gap.)
+- **`data-period-status-state-machine`** (P2, M, HD) ⏸ **DEFERRED (flagged)** — enforcing the legal
+  transition table (Draft→Filed must pass Finalised) would change the documented one-step "file" flow and
+  break multiple existing Draft→Filed tests; the exact legal table is an HD design decision. The reopen
+  guard (Owner + ≥10-char reason) is already enforced, and every Finalised/Filed transition is already
+  gated by the readiness/consistency checks. Deferred for the user's design decision.
 

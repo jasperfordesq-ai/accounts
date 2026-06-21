@@ -138,7 +138,9 @@ public static class BankingEndpoints
             if (EndpointRequestAuthorization.AuthorizeCurrentRequest(context, apiAccess) is { } denied)
                 return denied;
 
-            input.CompanyId = companyId;
+            if (await CategoryInputs.ValidateAndNormalizeAsync(db, companyId, input) is { } validationProblem)
+                return validationProblem;
+
             db.AccountCategories.Add(input);
             await db.SaveChangesAsync();
             return Results.Created($"/api/companies/{companyId}/categories/{input.Id}", input);
@@ -555,6 +557,42 @@ public static class BankingEndpointInputs
             (null, { } value) => value,
             ({ } a, { } b) => a <= b ? a : b
         };
+}
+
+public static class CategoryInputs
+{
+    // data-input-validation-breadth: the category create bound the raw entity, so a client could
+    // over-post Id/IsSystem (claiming a privileged system category) and supply an empty/over-long Code
+    // or Name, or a ParentId from another company. Validate and normalise before persisting.
+    public static async Task<IResult?> ValidateAndNormalizeAsync(AccountsDbContext db, int companyId, AccountCategory input)
+    {
+        var errors = new Dictionary<string, string[]>();
+        var code = input.Code?.Trim() ?? "";
+        var name = input.Name?.Trim() ?? "";
+        if (code.Length == 0) errors["code"] = ["Code is required."];
+        else if (code.Length > 20) errors["code"] = ["Code must be 20 characters or fewer."];
+        if (name.Length == 0) errors["name"] = ["Name is required."];
+        else if (name.Length > 200) errors["name"] = ["Name must be 200 characters or fewer."];
+
+        if (input.ParentId is { } parentId)
+        {
+            var parentAvailable = await db.AccountCategories
+                .AnyAsync(c => c.Id == parentId && (c.CompanyId == companyId || (c.IsSystem && c.CompanyId == null)));
+            if (!parentAvailable)
+                errors["parentId"] = ["Parent category must belong to the same company."];
+        }
+
+        if (errors.Count > 0)
+            return Results.ValidationProblem(errors);
+
+        // Ignore client-supplied identity and the system flag (over-posting / privilege escalation).
+        input.Id = 0;
+        input.IsSystem = false;
+        input.CompanyId = companyId;
+        input.Code = code;
+        input.Name = name;
+        return null;
+    }
 }
 
 public static class TransactionRuleInputs
