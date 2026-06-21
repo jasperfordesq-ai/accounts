@@ -1495,6 +1495,34 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task AdjustmentRegeneration_BlockedWhenALaterPeriodIsFinalisedOrFiled()
+    {
+        // accounting-depreciation-regeneration-order: regenerating an earlier period would drift the
+        // depreciation/CA roll-forward of a later period that is already finalised or filed. Block it.
+        await using var db = CreateDbContext();
+        var period2024 = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var companyId = period2024.CompanyId;
+        // Re-date the seeded period to 2024 and add a later 2025 period.
+        period2024.PeriodStart = new DateOnly(2024, 1, 1);
+        period2024.PeriodEnd = new DateOnly(2024, 12, 31);
+        var period2025 = new AccountingPeriod { CompanyId = companyId, PeriodStart = new DateOnly(2025, 1, 1), PeriodEnd = new DateOnly(2025, 12, 31), IsFirstYear = false, Status = PeriodStatus.Filed };
+        db.AccountingPeriods.Add(period2025);
+        await db.SaveChangesAsync();
+
+        var service = new AdjustmentService(db);
+
+        // Regenerating the earlier (2024) period is blocked while 2025 is filed.
+        var error = await Assert.ThrowsAsync<BusinessRuleException>(() => service.GenerateAutoAdjustmentsAsync(companyId, period2024.Id));
+        Assert.Contains("later period is already finalised or filed", error.Message);
+
+        // Reopen the later period -> regenerating the earlier one is allowed again.
+        period2025.Status = PeriodStatus.Draft;
+        await db.SaveChangesAsync();
+        var summary = await service.GenerateAutoAdjustmentsAsync(companyId, period2024.Id);
+        Assert.NotNull(summary);
+    }
+
+    [Fact]
     public async Task Ixbrl_SubtotalsCrossAddFromRoundedComponents()
     {
         // accounting-ixbrl-rounding-subtotals: tagged subtotals must equal the sum of their rounded

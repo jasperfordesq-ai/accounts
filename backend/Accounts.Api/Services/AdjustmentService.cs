@@ -19,6 +19,17 @@ public class AdjustmentService(AccountsDbContext db)
             .FirstOrDefaultAsync(p => p.Id == periodId && p.CompanyId == companyId)
             ?? throw new ResourceNotFoundException($"Period {periodId} not found");
 
+        // accounting-depreciation-regeneration-order: regenerating an earlier period rolls new closing
+        // NBVs (and capital-allowance claim counts) forward, so it would silently drift a later period
+        // that is already Finalised or Filed and could push cumulative depreciation over cost. Block the
+        // regeneration rather than corrupt a locked period; the later period must be reopened first.
+        var lockedLaterPeriodExists = await db.AccountingPeriods.AnyAsync(p => p.CompanyId == companyId
+            && p.PeriodEnd > period.PeriodEnd
+            && (p.Status == PeriodStatus.Finalised || p.Status == PeriodStatus.Filed));
+        if (lockedLaterPeriodExists)
+            throw new BusinessRuleException(
+                "Cannot regenerate adjustments for this period because a later period is already finalised or filed. Reopen the later period first.");
+
         // Remove previous auto-adjustments for this period
         var existingAuto = await db.Adjustments.Where(a => a.PeriodId == periodId && a.IsAuto).ToListAsync();
         db.Adjustments.RemoveRange(existingAuto);

@@ -207,5 +207,12 @@ Any later regression below this line is attributable to this session's changes.
   each fact was `Math.Round` independently, so e.g. `round(0.4)+round(0.4)=0` could disagree with a
   separately-rounded total of `round(0.8)=1` — a ROS/CRO calc-check reject. Test
   `Ixbrl_SubtotalsCrossAddFromRoundedComponents` (Stock 0.40 + Cash 0.40 → Total current assets ==
-  Stock+Debtors+Cash). Whole-euro test data is unchanged.
+  Stock+Debtors+Cash). Whole-euro test data is unchanged. Commit `3dc4186`.
+- **`accounting-depreciation-regeneration-order`** (P2, L — safe slice: block, not recompute-forward) ✅
+  — `GenerateAutoAdjustmentsAsync` now blocks regenerating a period's adjustments when a **later** period
+  of the same company is Finalised or Filed, because rolling new closing NBVs / CA claim counts forward
+  would silently drift the locked period and could push cumulative depreciation over cost. Test
+  `AdjustmentRegeneration_BlockedWhenALaterPeriodIsFinalisedOrFiled` (blocked while 2025 Filed; allowed
+  after reopening). The conservative *block* default is shipped; *recompute-forward* of later periods is
+  logged as a future enhancement. (Maps to 400 via BusinessRuleException; the audit suggested 409 — noted.)
 
