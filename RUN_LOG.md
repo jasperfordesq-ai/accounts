@@ -181,5 +181,15 @@ Any later regression below this line is attributable to this session's changes.
   Balances` for years 2 & 3, no manual openings) is the multi-year cash test above; added a complementary
   **readiness-level** proof `Readiness_MultiYearPeriodBalancesWithoutManualOpeningRows` (a year-2 period
   with no manual opening rows → `readiness.BalanceSheetBalances == true` and no "Balance sheet does not
-  balance" warning). Test-only; fails on the pre-movement-basis code, passes after it.
+  balance" warning). Test-only; fails on the pre-movement-basis code, passes after it. Commit `8ebe7fd`.
+- **`validation-pre-filing-consistency-pass`** (P1, M — safe slice) ✅ — added a single explicit
+  consistency pass `GetPreFilingConsistencyIssuesAsync(companyId, periodId)` returning specific issues
+  (empty == consistent): BS balances; reserves and share capital tie between the balance sheet and the
+  statement of changes in equity; entered CT reconciles to the CT computation. Test
+  `PreFilingConsistency_PassesWhenConsistentAndReportsCorporationTaxDivergence` (consistent → empty;
+  CT-divergent → reports the tax issue with reserves/share-capital still tied). ⚠️ The BS-balance and
+  CT-tie already block final outputs via readiness; the reserves/share-capital cross-ties are surfaced
+  by this method but NOT yet wired to hard-block, because BS and SOCIE genuinely diverge on opening-
+  balance edge cases (first-year opening RE via a 3100 opening balance; share capital via a 3000 opening
+  balance vs a ShareCapital row) — wiring them to block waits on `onboarding-opening-trial-balance-takeon`.
 

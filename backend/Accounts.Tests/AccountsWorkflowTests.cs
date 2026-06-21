@@ -1458,6 +1458,43 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task PreFilingConsistency_PassesWhenConsistentAndReportsCorporationTaxDivergence()
+    {
+        // validation-pre-filing-consistency-pass: one consistency pass over the primary statements. A
+        // consistent set returns no issues; a set whose entered CT diverges from the CT computation
+        // reports a specific issue (reserves and share capital still tie between BS and SOCIE).
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var companyId = period.CompanyId;
+        var categories = await new CategoryService(db).SeedDefaultCategoriesAsync(companyId);
+        int Cat(string code) => categories.Single(c => c.Code == code).Id;
+        db.ShareCapitals.Add(new ShareCapital { CompanyId = companyId, ShareClass = "Ordinary", NumberIssued = 100, NominalValue = 1m, TotalValue = 100m, IssueDate = period.PeriodStart });
+        var bank = new BankAccount { CompanyId = companyId, Name = "Current Account", OpeningBalance = 100m, OpeningBalanceDate = period.PeriodStart };
+        db.BankAccounts.Add(bank);
+        await db.SaveChangesAsync();
+        db.OpeningBalances.Add(new OpeningBalance { PeriodId = period.Id, AccountCategoryId = Cat("3000"), Credit = 100m, EnteredBy = "r", Reviewed = true });
+        db.ImportedTransactions.Add(new ImportedTransaction { BankAccountId = bank.Id, PeriodId = period.Id, Date = new DateOnly(2025, 6, 1), Description = "Sales invoice", Amount = 1_000m, CategoryId = Cat("4000") });
+        await db.SaveChangesAsync();
+
+        var statements = new FinancialStatementsService(db);
+
+        // Consistent set (no CT entered): no consistency issues.
+        var consistent = await statements.GetPreFilingConsistencyIssuesAsync(companyId, period.Id);
+        Assert.Empty(consistent);
+
+        // Enter a CT that diverges from the computation -> a specific issue is reported.
+        var computedCt = (await new TaxComputationService(db, statements).ComputeAsync(companyId, period.Id)).TotalCorporationTax;
+        db.TaxBalances.Add(new TaxBalance { PeriodId = period.Id, TaxType = TaxType.CorporationTax, Liability = computedCt + 250m, Paid = 0m, Balance = computedCt + 250m });
+        await db.SaveChangesAsync();
+
+        var divergent = await statements.GetPreFilingConsistencyIssuesAsync(companyId, period.Id);
+        Assert.Contains(divergent, i => i.Contains("does not match the corporation tax computation"));
+        // Reserves and share capital still tie between the balance sheet and SOCIE.
+        Assert.DoesNotContain(divergent, i => i.Contains("Reserves disagree"));
+        Assert.DoesNotContain(divergent, i => i.Contains("Share capital disagrees"));
+    }
+
+    [Fact]
     public async Task Readiness_WarnsWhenEnteredCorporationTaxDivergesFromComputation()
     {
         // accounting-pl-tax-charge-unreconciled: the entered CT liability is the P&L tax charge but was

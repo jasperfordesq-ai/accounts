@@ -967,6 +967,48 @@ public class FinancialStatementsService(AccountsDbContext db)
         return blockers.Distinct().Take(10).ToList();
     }
 
+    // validation-pre-filing-consistency-pass: one explicit internal-consistency pass over the primary
+    // statements, returning specific issues (empty == consistent). Aggregates the cross-statement ties
+    // that must hold before a set is filed: the balance sheet balances; reserves and share capital agree
+    // between the balance sheet and the statement of changes in equity; and the entered corporation tax
+    // reconciles to the CT computation. (The balance-sheet-balance and CT-tie checks already block final
+    // outputs via readiness; the reserves/share-capital cross-ties are surfaced here explicitly.)
+    public async Task<List<string>> GetPreFilingConsistencyIssuesAsync(int companyId, int periodId)
+    {
+        await AssertPeriodBelongsToCompanyAsync(companyId, periodId);
+        var issues = new List<string>();
+
+        var bs = await GetBalanceSheetForPeriodAsync(periodId);
+        if (!bs.Balances)
+            issues.Add($"Balance sheet does not balance. Unexplained difference: {bs.CapitalAndReserves.UnexplainedDifference:C}.");
+
+        var equity = await GetEquityChangesForPeriodAsync(periodId);
+        if (Math.Abs(bs.CapitalAndReserves.RetainedEarnings - equity.ClosingRetainedEarnings) > 0.01m)
+            issues.Add($"Reserves disagree between the balance sheet ({bs.CapitalAndReserves.RetainedEarnings:C}) and the statement of changes in equity ({equity.ClosingRetainedEarnings:C}).");
+        if (Math.Abs(bs.CapitalAndReserves.ShareCapital - equity.ClosingShareCapital) > 0.01m)
+            issues.Add($"Share capital disagrees between the balance sheet ({bs.CapitalAndReserves.ShareCapital:C}) and the statement of changes in equity ({equity.ClosingShareCapital:C}).");
+
+        var enteredCorporationTax = await db.TaxBalances
+            .Where(t => t.PeriodId == periodId && t.TaxType == TaxType.CorporationTax)
+            .Select(t => (decimal?)t.Liability)
+            .FirstOrDefaultAsync();
+        if (enteredCorporationTax is { } enteredCt)
+        {
+            try
+            {
+                var computedCt = (await new TaxComputationService(db, this).ComputeAsync(companyId, periodId)).TotalCorporationTax;
+                if (Math.Abs(enteredCt - computedCt) > 1m)
+                    issues.Add($"Entered corporation tax ({enteredCt:C}) does not match the corporation tax computation ({computedCt:C}).");
+            }
+            catch
+            {
+                // Computation unavailable — other checks cover incomplete data.
+            }
+        }
+
+        return issues;
+    }
+
     public async Task AssertFinalOutputReadinessAsync(int companyId, int periodId, string outputName)
     {
         var blockers = await GetFinalOutputReadinessBlockersAsync(companyId, periodId);
