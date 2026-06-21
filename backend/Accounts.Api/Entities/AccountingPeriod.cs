@@ -28,6 +28,11 @@ public class AccountingPeriod
     // every prior year's P&L (O(n^2) and subject to retroactive drift). Null until finalised.
     public decimal? ClosingRetainedEarnings { get; set; }
 
+    // filing-approval-date-persisted: the board-approval date stamped on the statutory outputs (PDF,
+    // signature page, notes). Persisted so it stays fixed across regenerations instead of defaulting to
+    // DateTime.Now at render. Captured at finalisation (or set explicitly); null while in draft.
+    public DateOnly? ApprovalDate { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     // Navigation

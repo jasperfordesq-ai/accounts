@@ -249,4 +249,12 @@ data is enterable via the API today. **Deferred as a coherent block for a focuse
   `Ixbrl_OmitsProfitAndLossForMicroAndAbridgedButIncludesForSmall`. ⚠️ FLAG: the FRS-105-vs-FRS-102
   `schemaRef`/namespace switch is NOT yet branched — that needs the real FRC Irish taxonomy release and is
   the `filing-ixbrl-namespace-taxonomy-pin` item.
+- **`filing-approval-date-persisted`** (P1, M, **HUMAN DECISION flagged**) ✅ — new
+  `AccountingPeriod.ApprovalDate` column (migration `AddPeriodApprovalDate`). The board-approval date is
+  captured at finalisation (`PeriodStatusUpdate` gains an optional `ApprovalDate`; defaults to the
+  finalise date) and the DocumentGenerator stamps the persisted date on the directors' report, balance
+  sheet, statutory statement, notes and signature page (`ApprovalDateText`) instead of `DateTime.Now` at
+  render — so regenerating reproduces the same date. Drafts still fall back to today. Test
+  `ApprovalDate_PersistedAtFinalisationAndStampedOnSignaturePage` (board date 15 Jan 2026 persisted and
+  stamped, not the render date). HD flag: who sets the board date (explicit vs finalise-date default).
 

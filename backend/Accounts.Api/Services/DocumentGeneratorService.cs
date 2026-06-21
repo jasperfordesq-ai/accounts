@@ -209,8 +209,15 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
         col.Item().PaddingTop(30).Text("___________________________");
         if (directors.Count > 0) col.Item().Text(directors[0].Name).Bold();
         col.Item().Text("Director");
-        col.Item().PaddingTop(10).Text($"Date: {DateTime.Now:dd MMMM yyyy}");
+        col.Item().PaddingTop(10).Text($"Date: {ApprovalDateText(period)}");
     }
+
+    // filing-approval-date-persisted: stamp the persisted board-approval date when set, so regenerating a
+    // finalised period reproduces the same date instead of DateTime.Now. Drafts fall back to today.
+    private static string ApprovalDateText(AccountingPeriod period) =>
+        period.ApprovalDate is { } approved
+            ? approved.ToString("dd MMMM yyyy", System.Globalization.CultureInfo.CurrentCulture)
+            : $"{DateTime.Now:dd MMMM yyyy}";
 
     private static void ComposeBalanceSheet(ColumnDescriptor col, Company company, AccountingPeriod period,
         FinancialStatementsService.BalanceSheet bs, FinancialStatementsService.BalanceSheet? priorBs, List<CompanyOfficer> directors)
@@ -305,7 +312,7 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
                 });
             }
         });
-        col.Item().PaddingTop(10).Text($"Date: {DateTime.Now:dd MMMM yyyy}").FontSize(9);
+        col.Item().PaddingTop(10).Text($"Date: {ApprovalDateText(period)}").FontSize(9);
     }
 
     private static void AddBsSection(TableDescriptor table, ref uint row, string title, bool bold)
@@ -636,7 +643,7 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
                 });
             }
         });
-        col.Item().PaddingTop(10).Text($"Date: {DateTime.Now:dd MMMM yyyy}").FontSize(9);
+        col.Item().PaddingTop(10).Text($"Date: {ApprovalDateText(period)}").FontSize(9);
     }
 
     private static void ComposeNotes(ColumnDescriptor col, Company company, AccountingPeriod period, ElectedRegime regime,
@@ -707,7 +714,7 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
 
         // Note: Approval
         col.Item().PaddingTop(15).Text($"{noteNum}. APPROVAL OF FINANCIAL STATEMENTS").Bold().FontSize(10);
-        col.Item().PaddingTop(5).Text($"The financial statements were approved and authorised for issue by the Board of Directors on {DateTime.Now:dd MMMM yyyy}.").FontSize(9);
+        col.Item().PaddingTop(5).Text($"The financial statements were approved and authorised for issue by the Board of Directors on {ApprovalDateText(period)}.").FontSize(9);
 
         // Custom notes
         foreach (var note in notes)
@@ -917,7 +924,7 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
         await AssertFinalDocumentReadinessAsync(companyId, periodId, "CRO signature page");
 
         var regime = period.FilingRegime.ElectedRegime;
-        var approvalDate = DateTime.UtcNow;
+        var approvalDate = ApprovalDateText(period);
 
         var document = Document.Create(doc =>
         {
@@ -970,7 +977,7 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
                         });
                     }
 
-                    col.Item().PaddingTop(30).Text($"Date of approval: {approvalDate:dd MMMM yyyy}").FontSize(10);
+                    col.Item().PaddingTop(30).Text($"Date of approval: {approvalDate}").FontSize(10);
                 });
             });
         });

@@ -455,7 +455,7 @@ app.MapAllEndpoints();
 
 app.Run();
 
-public record PeriodStatusUpdate(Accounts.Api.Entities.PeriodStatus Status, string? LockedBy, string? ReopenReason);
+public record PeriodStatusUpdate(Accounts.Api.Entities.PeriodStatus Status, string? LockedBy, string? ReopenReason, DateOnly? ApprovalDate = null);
 
 public static class DatabaseConnectionConfig
 {

@@ -1520,6 +1520,38 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task ApprovalDate_PersistedAtFinalisationAndStampedOnSignaturePage()
+    {
+        // filing-approval-date-persisted: the board-approval date is persisted at finalisation and
+        // stamped on the outputs, so regenerating later reproduces the same date (not DateTime.Now).
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        db.FilingRegimes.Add(new FilingRegime { PeriodId = period.Id, ElectedRegime = ElectedRegime.Micro, CanUseMicro = true, CanFileAbridged = true, AuditExempt = true });
+        db.NotesDisclosures.Add(new NotesDisclosure { PeriodId = period.Id, NoteNumber = 1, Title = "Approval of Financial Statements", Content = "Approved by the directors.", IsRequired = true, IsIncluded = true });
+        await db.SaveChangesAsync();
+        await MakePeriodReadyForCroDocumentsAsync(db, period);
+
+        var statements = new FinancialStatementsService(db);
+        var context = AuthenticatedRequest("Reviewer", HttpMethods.Put, $"/api/companies/{period.CompanyId}/periods/{period.Id}/status");
+        var boardDate = new DateOnly(2026, 1, 15);
+
+        var result = await PeriodStatusEndpoint.UpdateAsync(
+            period.CompanyId, period.Id,
+            new PeriodStatusUpdate(PeriodStatus.Finalised, null, null, boardDate),
+            db, new AuditService(db), statements, context, DisabledApiAccess());
+
+        Assert.Equal(StatusCodes.Status200OK, ResultStatusCode(result));
+        var reloaded = await db.AccountingPeriods.AsNoTracking().SingleAsync(p => p.Id == period.Id);
+        Assert.Equal(boardDate, reloaded.ApprovalDate);
+
+        // The persisted board-approval date is stamped on the signature page, not the render date.
+        var documents = new DocumentGeneratorService(db, statements);
+        var signaturePage = ExtractPdfText(await documents.GenerateSignaturePageAsync(period.CompanyId, period.Id));
+        Assert.Contains("15 January 2026", signaturePage);
+        Assert.DoesNotContain(DateTime.Now.ToString("dd MMMM yyyy", System.Globalization.CultureInfo.CurrentCulture), signaturePage);
+    }
+
+    [Fact]
     public async Task Finalising_PersistsClosingReservesSnapshot()
     {
         // accounting-retained-earnings-snapshot: finalising a period captures its closing reserves so a

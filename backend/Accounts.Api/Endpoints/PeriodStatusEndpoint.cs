@@ -41,6 +41,10 @@ public static class PeriodStatusEndpoint
             // later period reads a fixed opening-reserves figure rather than recomputing prior-year P&L.
             var snapshotBalanceSheet = await statements.GetBalanceSheetAsync(companyId, id);
             period.ClosingRetainedEarnings = snapshotBalanceSheet.CapitalAndReserves.RetainedEarnings;
+
+            // filing-approval-date-persisted: fix the board-approval date at finalisation (if not already
+            // set) so every regenerated output stamps the same date instead of DateTime.Now at render.
+            period.ApprovalDate ??= update.ApprovalDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
         }
         if (update.Status is PeriodStatus.Filed)
             await AssertFilingObligationsRecordedAsync(db, companyId, id);
