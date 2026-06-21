@@ -400,3 +400,33 @@ Any later regression below this line is attributable to this session's changes.
   company's director officers; closing/max derived; compliance summary refreshed on save. Render test
   3/3: `POST /api/companies/7/periods/3/director-loans` with payload + CSRF; no-directors case blocked.
   Commit `add057d`.
+- **`frontend-role-gating` (P2)** ✅ — the three money-entry surfaces consume `canWrite` (wired from
+  `useAuth().canWriteWorkingPapers`): when false the add form + per-row delete controls become a
+  read-only notice; figures stay visible. Backend `RoleAuthorizationService` stays authoritative.
+  Render test 4/4 (each surface hides controls for read-only; default keeps them). Commit `d75f109`.
+  FLAG (scope): exhaustive gating of the legacy ~2,440-line period page / filing tab (approve-adjustment,
+  finalise/file) is a larger sweep left as follow-up; the backend already rejects those for ineligible roles.
+- **`frontend-inline-edit-yearend` (P2)** ✅ — share-capital / loans / director-loan rows are now
+  editable via the existing `update*` clients (PUT), preserving the row id + audit continuity (no
+  delete + re-add). Single-form `editingId` pattern; derived fields (share total, loan due-split,
+  director-loan closing/max) recompute on edit. Render test 3/3: each edits via `PUT .../{id}` with CSRF
+  and issues no POST. Commit `4e47a2c`.
+- **`frontend-unsaved-changes-guard` (P2)** ✅ — adopt the shared `useUnsavedChanges` hook across
+  notes (was inlined), classify (size figures dirty until "Run classification" saves), charity
+  (in-progress fund entry), and year-end (payroll panel differs from saved). Render test on the shared
+  hook 3/3 (no listener clean; added when dirty, removed when clean; handler cancels unload). Commit `e2119ed`.
+- **`tests-csv-real-export-fixtures` (P1, HD)** BLOCKED/FLAGGED — needs real anonymised AIB/BOI/
+  Revolut/Stripe CSV exports (a real-world fact I will not fabricate). Carried over from prior runs; the
+  coded parser behaviour is already tested.
+
+## Final state — Frontend Trust Run 2026-06-21
+- **Frontend**: `npm test` (13 unit + 22 render across 7 files + node verifiers) green; `npm run lint`
+  clean; `npx tsc --noEmit` clean; `npm run build` exit 0.
+- **Backend**: unchanged except the pre-flight CI fix (one test file). InMemory suite 541 pass / 3 skip
+  / 0 fail; the golden-path Postgres test verified 2/2 on real local Postgres.
+- **9 commits** (CI fix + harness + 3 P0/P1 entry UIs + 3 P2 + 1 RUN_LOG doc), one item each, tree green
+  after every commit.
+- **Phase 2 complete**: every P0/P1 closed + render-proven; all three P2 closed + render-proven; the one
+  remaining Phase 2 item (`tests-csv-real-export-fixtures`) is genuinely blocked on real-world CSV samples.
+- Branch `daily/frontend-trust-2026-06-21` left for review — not merged, not pushed. FLAG: merging this
+  branch is what turns CI on `main` green again (the Postgres golden-path FK fix lives here).
