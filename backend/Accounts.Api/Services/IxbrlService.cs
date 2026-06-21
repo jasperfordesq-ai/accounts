@@ -128,27 +128,31 @@ public class IxbrlService(AccountsDbContext db, FinancialStatementsService state
         sb.AppendLine($"<p>Entity: <ix:nonNumeric name=\"bus:EntityCurrentLegalOrRegisteredName\" contextRef=\"instant\">{Escape(company.LegalName)}</ix:nonNumeric></p>");
         sb.AppendLine($"<p>Period of report: <ix:nonNumeric name=\"bus:StartDateForPeriodCoveredByReport\" contextRef=\"current\">{period.PeriodStart:yyyy-MM-dd}</ix:nonNumeric> to <ix:nonNumeric name=\"bus:EndDateForPeriodCoveredByReport\" contextRef=\"current\">{period.PeriodEnd:yyyy-MM-dd}</ix:nonNumeric></p>");
 
+        // Rounded projections so the tagged subtotals cross-add against their rounded components.
+        var rbs = RoundBalanceSheet(bs);
+        var rpbs = priorBs != null ? RoundBalanceSheet(priorBs) : null;
+
         // Balance Sheet
         sb.AppendLine("<h2>Balance Sheet</h2>");
         sb.AppendLine($"<p>as at {period.PeriodEnd:dd MMMM yyyy}</p>");
         sb.AppendLine("<table>");
         if (hasPrior)
             sb.AppendLine($"<tr class=\"bold\"><td></td><td class=\"amount\">{period.PeriodEnd:yyyy}</td><td class=\"amount\">{priorPeriod!.PeriodEnd:yyyy}</td></tr>");
-        AddIxbrlRow(sb, "Tangible fixed assets", "core:TangibleFixedAssets", bs.FixedAssets.Total, priorAmount: priorBs?.FixedAssets.Total);
-        AddIxbrlRow(sb, "Stock", "core:Stocks", bs.CurrentAssets.Stock, priorAmount: priorBs?.CurrentAssets.Stock);
-        AddIxbrlRow(sb, "Debtors", "core:Debtors", bs.CurrentAssets.Debtors + bs.CurrentAssets.Prepayments, priorAmount: priorBs != null ? priorBs.CurrentAssets.Debtors + priorBs.CurrentAssets.Prepayments : null);
-        AddIxbrlRow(sb, "Cash at bank and in hand", "core:CashBankInHand", bs.CurrentAssets.Cash, priorAmount: priorBs?.CurrentAssets.Cash);
-        AddIxbrlRow(sb, "Total current assets", "core:CurrentAssets", bs.CurrentAssets.Total, true, priorAmount: priorBs?.CurrentAssets.Total);
-        AddIxbrlRow(sb, "Creditors: due within one year", "core:CreditorsAmountsFallingDueWithinOneYear", -bs.CreditorsWithinYear.Total, priorAmount: priorBs != null ? -priorBs.CreditorsWithinYear.Total : null);
-        AddIxbrlRow(sb, "Net current assets", "core:NetCurrentAssetsLiabilities", bs.NetCurrentAssets, true, priorAmount: priorBs?.NetCurrentAssets);
-        AddIxbrlRow(sb, "Total assets less current liabilities", "core:TotalAssetsLessCurrentLiabilities", bs.TotalAssetsLessCurrentLiabilities, true, priorAmount: priorBs?.TotalAssetsLessCurrentLiabilities);
-        if (bs.CreditorsAfterYear.Total > 0)
-            AddIxbrlRow(sb, "Creditors: due after one year", "core:CreditorsAmountsFallingDueAfterOneYear", -bs.CreditorsAfterYear.Total, priorAmount: priorBs != null ? -priorBs.CreditorsAfterYear.Total : null);
-        AddIxbrlRow(sb, "Net assets", "core:NetAssetsLiabilities", bs.NetAssets, true, priorAmount: priorBs?.NetAssets);
+        AddIxbrlRow(sb, "Tangible fixed assets", "core:TangibleFixedAssets", rbs.FixedAssets, priorAmount: rpbs?.FixedAssets);
+        AddIxbrlRow(sb, "Stock", "core:Stocks", rbs.Stock, priorAmount: rpbs?.Stock);
+        AddIxbrlRow(sb, "Debtors", "core:Debtors", rbs.Debtors, priorAmount: rpbs?.Debtors);
+        AddIxbrlRow(sb, "Cash at bank and in hand", "core:CashBankInHand", rbs.Cash, priorAmount: rpbs?.Cash);
+        AddIxbrlRow(sb, "Total current assets", "core:CurrentAssets", rbs.CurrentAssetsTotal, true, priorAmount: rpbs?.CurrentAssetsTotal);
+        AddIxbrlRow(sb, "Creditors: due within one year", "core:CreditorsAmountsFallingDueWithinOneYear", -rbs.CreditorsWithin, priorAmount: rpbs != null ? -rpbs.CreditorsWithin : null);
+        AddIxbrlRow(sb, "Net current assets", "core:NetCurrentAssetsLiabilities", rbs.NetCurrentAssets, true, priorAmount: rpbs?.NetCurrentAssets);
+        AddIxbrlRow(sb, "Total assets less current liabilities", "core:TotalAssetsLessCurrentLiabilities", rbs.TotalAssetsLessCurrent, true, priorAmount: rpbs?.TotalAssetsLessCurrent);
+        if (rbs.CreditorsAfter > 0)
+            AddIxbrlRow(sb, "Creditors: due after one year", "core:CreditorsAmountsFallingDueAfterOneYear", -rbs.CreditorsAfter, priorAmount: rpbs != null ? -rpbs.CreditorsAfter : null);
+        AddIxbrlRow(sb, "Net assets", "core:NetAssetsLiabilities", rbs.NetAssets, true, priorAmount: rpbs?.NetAssets);
         sb.AppendLine("<tr><td colspan=\"3\">&#160;</td></tr>");
-        AddIxbrlRow(sb, "Share capital", "core:CalledUpShareCapital", bs.CapitalAndReserves.ShareCapital, priorAmount: priorBs?.CapitalAndReserves.ShareCapital);
-        AddIxbrlRow(sb, "Profit and loss account", "core:ProfitLossAccountReserve", bs.CapitalAndReserves.RetainedEarnings, priorAmount: priorBs?.CapitalAndReserves.RetainedEarnings);
-        AddIxbrlRow(sb, "Shareholders' funds", "core:ShareholderFunds", bs.CapitalAndReserves.Total, true, priorAmount: priorBs?.CapitalAndReserves.Total);
+        AddIxbrlRow(sb, "Share capital", "core:CalledUpShareCapital", rbs.ShareCapital, priorAmount: rpbs?.ShareCapital);
+        AddIxbrlRow(sb, "Profit and loss account", "core:ProfitLossAccountReserve", rbs.RetainedEarnings, priorAmount: rpbs?.RetainedEarnings);
+        AddIxbrlRow(sb, "Shareholders' funds", "core:ShareholderFunds", rbs.ShareholdersFunds, true, priorAmount: rpbs?.ShareholdersFunds);
         sb.AppendLine("</table>");
 
         // P&L
@@ -157,18 +161,20 @@ public class IxbrlService(AccountsDbContext db, FinancialStatementsService state
         sb.AppendLine("<table>");
         if (hasPrior)
             sb.AppendLine($"<tr class=\"bold\"><td></td><td class=\"amount\">{period.PeriodEnd:yyyy}</td><td class=\"amount\">{priorPeriod!.PeriodEnd:yyyy}</td></tr>");
-        AddIxbrlRow(sb, "Turnover", "core:TurnoverGrossRevenue", pl.Turnover, contextRef: "current", priorAmount: priorPl?.Turnover, priorContextRef: "prior");
-        AddIxbrlRow(sb, "Cost of sales", "core:CostSales", -pl.CostOfSales, contextRef: "current", priorAmount: priorPl != null ? -priorPl.CostOfSales : null, priorContextRef: "prior");
-        AddIxbrlRow(sb, "Gross profit", "core:GrossProfitLoss", pl.GrossProfit, bold: true, contextRef: "current", priorAmount: priorPl?.GrossProfit, priorContextRef: "prior");
-        if (pl.OtherIncome != 0)
-            AddIxbrlRow(sb, "Other operating income", "core:OtherOperatingIncome", pl.OtherIncome, contextRef: "current", priorAmount: priorPl?.OtherIncome, priorContextRef: "prior");
-        AddIxbrlRow(sb, "Administrative expenses", "core:AdministrativeExpenses", -pl.TotalOverheads, contextRef: "current", priorAmount: priorPl != null ? -priorPl.TotalOverheads : null, priorContextRef: "prior");
-        AddIxbrlRow(sb, "Operating profit", "core:OperatingProfitLoss", pl.OperatingProfit, bold: true, contextRef: "current", priorAmount: priorPl?.OperatingProfit, priorContextRef: "prior");
-        if (pl.InterestPayable != 0)
-            AddIxbrlRow(sb, "Interest payable and similar charges", "core:InterestPayableSimilarChargesFinanceCosts", -pl.InterestPayable, contextRef: "current", priorAmount: priorPl != null ? -priorPl.InterestPayable : null, priorContextRef: "prior");
-        AddIxbrlRow(sb, "Profit before taxation", "core:ProfitLossOnOrdinaryActivitiesBeforeTax", pl.ProfitBeforeTax, bold: true, contextRef: "current", priorAmount: priorPl?.ProfitBeforeTax, priorContextRef: "prior");
-        AddIxbrlRow(sb, "Tax on profit", "core:TaxTaxCreditOnProfitOrLossOnOrdinaryActivities", -pl.TaxCharge, contextRef: "current", priorAmount: priorPl != null ? -priorPl.TaxCharge : null, priorContextRef: "prior");
-        AddIxbrlRow(sb, "Profit for the year", "core:ProfitLossForPeriod", pl.ProfitAfterTax, bold: true, contextRef: "current", priorAmount: priorPl?.ProfitAfterTax, priorContextRef: "prior");
+        var rpl = RoundProfitAndLoss(pl);
+        var rppl = priorPl != null ? RoundProfitAndLoss(priorPl) : null;
+        AddIxbrlRow(sb, "Turnover", "core:TurnoverGrossRevenue", rpl.Turnover, contextRef: "current", priorAmount: rppl?.Turnover, priorContextRef: "prior");
+        AddIxbrlRow(sb, "Cost of sales", "core:CostSales", -rpl.CostOfSales, contextRef: "current", priorAmount: rppl != null ? -rppl.CostOfSales : null, priorContextRef: "prior");
+        AddIxbrlRow(sb, "Gross profit", "core:GrossProfitLoss", rpl.GrossProfit, bold: true, contextRef: "current", priorAmount: rppl?.GrossProfit, priorContextRef: "prior");
+        if (rpl.OtherIncome != 0)
+            AddIxbrlRow(sb, "Other operating income", "core:OtherOperatingIncome", rpl.OtherIncome, contextRef: "current", priorAmount: rppl?.OtherIncome, priorContextRef: "prior");
+        AddIxbrlRow(sb, "Administrative expenses", "core:AdministrativeExpenses", -rpl.TotalOverheads, contextRef: "current", priorAmount: rppl != null ? -rppl.TotalOverheads : null, priorContextRef: "prior");
+        AddIxbrlRow(sb, "Operating profit", "core:OperatingProfitLoss", rpl.OperatingProfit, bold: true, contextRef: "current", priorAmount: rppl?.OperatingProfit, priorContextRef: "prior");
+        if (rpl.InterestPayable != 0)
+            AddIxbrlRow(sb, "Interest payable and similar charges", "core:InterestPayableSimilarChargesFinanceCosts", -rpl.InterestPayable, contextRef: "current", priorAmount: rppl != null ? -rppl.InterestPayable : null, priorContextRef: "prior");
+        AddIxbrlRow(sb, "Profit before taxation", "core:ProfitLossOnOrdinaryActivitiesBeforeTax", rpl.ProfitBeforeTax, bold: true, contextRef: "current", priorAmount: rppl?.ProfitBeforeTax, priorContextRef: "prior");
+        AddIxbrlRow(sb, "Tax on profit", "core:TaxTaxCreditOnProfitOrLossOnOrdinaryActivities", -rpl.TaxCharge, contextRef: "current", priorAmount: rppl != null ? -rppl.TaxCharge : null, priorContextRef: "prior");
+        AddIxbrlRow(sb, "Profit for the year", "core:ProfitLossForPeriod", rpl.ProfitAfterTax, bold: true, contextRef: "current", priorAmount: rppl?.ProfitAfterTax, priorContextRef: "prior");
         sb.AppendLine("</table>");
 
         sb.AppendLine("</body>");
@@ -193,6 +199,60 @@ public class IxbrlService(AccountsDbContext db, FinancialStatementsService state
         var factValue = Math.Round(amount, 0).ToString(CultureInfo.InvariantCulture);
         var displayValue = amount < 0 ? $"({Math.Abs(amount):N0})" : $"{amount:N0}";
         sb.AppendLine($"  <td class=\"amount\"><ix:nonFraction name=\"{concept}\" contextRef=\"{contextRef}\" unitRef=\"EUR\" decimals=\"0\" format=\"ixt:num-dot-decimal\" title=\"{displayValue}\">{factValue}</ix:nonFraction></td>");
+    }
+
+    // accounting-ixbrl-rounding-subtotals: round each leaf first, then derive every subtotal from the
+    // ROUNDED leaves, so the tagged subtotals cross-add against their components (a ROS/CRO calc-check
+    // rejects an instance whose subtotal != sum of its rounded children). Previously each fact was
+    // rounded independently from the unrounded statement figures, so e.g. round(0.4)+round(0.4)=0 could
+    // disagree with a separately-rounded total of round(0.8)=1.
+    private sealed record RoundedBalanceSheet(
+        decimal FixedAssets, decimal Stock, decimal Debtors, decimal Cash, decimal CurrentAssetsTotal,
+        decimal CreditorsWithin, decimal NetCurrentAssets, decimal TotalAssetsLessCurrent,
+        decimal CreditorsAfter, decimal NetAssets, decimal ShareCapital, decimal RetainedEarnings,
+        decimal ShareholdersFunds);
+
+    private static decimal RoundEuro(decimal value) => Math.Round(value, 0, MidpointRounding.AwayFromZero);
+
+    private static RoundedBalanceSheet RoundBalanceSheet(FinancialStatementsService.BalanceSheet bs)
+    {
+        var fixedAssets = RoundEuro(bs.FixedAssets.Total);
+        var stock = RoundEuro(bs.CurrentAssets.Stock);
+        var debtors = RoundEuro(bs.CurrentAssets.Debtors + bs.CurrentAssets.Prepayments);
+        var cash = RoundEuro(bs.CurrentAssets.Cash);
+        var currentAssetsTotal = stock + debtors + cash;
+        var creditorsWithin = RoundEuro(bs.CreditorsWithinYear.Total);
+        var netCurrentAssets = currentAssetsTotal - creditorsWithin;
+        var totalAssetsLessCurrent = fixedAssets + netCurrentAssets;
+        var creditorsAfter = RoundEuro(bs.CreditorsAfterYear.Total);
+        var netAssets = totalAssetsLessCurrent - creditorsAfter;
+        var shareCapital = RoundEuro(bs.CapitalAndReserves.ShareCapital);
+        var retainedEarnings = RoundEuro(bs.CapitalAndReserves.RetainedEarnings);
+        var shareholdersFunds = shareCapital + retainedEarnings;
+        return new RoundedBalanceSheet(fixedAssets, stock, debtors, cash, currentAssetsTotal,
+            creditorsWithin, netCurrentAssets, totalAssetsLessCurrent, creditorsAfter, netAssets,
+            shareCapital, retainedEarnings, shareholdersFunds);
+    }
+
+    private sealed record RoundedProfitAndLoss(
+        decimal Turnover, decimal CostOfSales, decimal GrossProfit, decimal OtherIncome,
+        decimal TotalOverheads, decimal OperatingProfit, decimal InterestPayable, decimal ProfitBeforeTax,
+        decimal TaxCharge, decimal ProfitAfterTax);
+
+    private static RoundedProfitAndLoss RoundProfitAndLoss(FinancialStatementsService.ProfitAndLoss pl)
+    {
+        var turnover = RoundEuro(pl.Turnover);
+        var costOfSales = RoundEuro(pl.CostOfSales);
+        var grossProfit = turnover - costOfSales;
+        var otherIncome = RoundEuro(pl.OtherIncome);
+        var totalOverheads = RoundEuro(pl.TotalOverheads);
+        var operatingProfit = grossProfit + otherIncome - totalOverheads;
+        var interestPayable = RoundEuro(pl.InterestPayable);
+        var profitBeforeTax = operatingProfit - interestPayable;
+        var taxCharge = RoundEuro(pl.TaxCharge);
+        var profitAfterTax = profitBeforeTax - taxCharge;
+        return new RoundedProfitAndLoss(turnover, costOfSales, grossProfit, otherIncome, totalOverheads,
+            operatingProfit, interestPayable, profitBeforeTax, taxCharge, profitAfterTax);
     }
 
     private static string Escape(string s) => System.Security.SecurityElement.Escape(s) ?? s;

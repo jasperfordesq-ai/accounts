@@ -200,5 +200,12 @@ Any later regression below this line is attributable to this session's changes.
   1300/2200 control accounts — needs a real VAT-return spec to confirm the convention. **PAYE deferred**
   (logged as `accounting-paye-payroll-source-reconciliation`): `PayrollSummary` has no employee
   PAYE/PRSI-withheld field, so an entered PAYE balance cannot be reconciled to payroll without a model
-  extension. Golden paths (no VAT/PAYE entered) unaffected.
+  extension. Golden paths (no VAT/PAYE entered) unaffected. Commit `92d8f9b`.
+- **`accounting-ixbrl-rounding-subtotals`** (P2) ✅ — the iXBRL now rounds each leaf to whole euros first
+  and derives every subtotal from the ROUNDED components (RoundBalanceSheet / RoundProfitAndLoss), so
+  tagged subtotals cross-add against their children for both the current and prior columns. Previously
+  each fact was `Math.Round` independently, so e.g. `round(0.4)+round(0.4)=0` could disagree with a
+  separately-rounded total of `round(0.8)=1` — a ROS/CRO calc-check reject. Test
+  `Ixbrl_SubtotalsCrossAddFromRoundedComponents` (Stock 0.40 + Cash 0.40 → Total current assets ==
+  Stock+Debtors+Cash). Whole-euro test data is unchanged.
 

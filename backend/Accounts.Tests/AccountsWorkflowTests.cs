@@ -1495,6 +1495,38 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task Ixbrl_SubtotalsCrossAddFromRoundedComponents()
+    {
+        // accounting-ixbrl-rounding-subtotals: tagged subtotals must equal the sum of their rounded
+        // components. With Stock 0.40 and Cash 0.40, independent rounding gives Stock=0, Cash=0 but a
+        // separately-rounded Total current assets of round(0.80)=1 — a ROS/CRO calc-check reject.
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var companyId = period.CompanyId;
+        var categories = await new CategoryService(db).SeedDefaultCategoriesAsync(companyId);
+        int Cat(string code) => categories.Single(c => c.Code == code).Id;
+        var bank = new BankAccount { CompanyId = companyId, Name = "Current Account", OpeningBalance = 0m };
+        db.BankAccounts.Add(bank);
+        db.Inventories.Add(new Inventory { PeriodId = period.Id, Description = "Stock", Value = 0.40m, ValuationMethod = ValuationMethod.Cost });
+        await db.SaveChangesAsync();
+        db.ImportedTransactions.Add(new ImportedTransaction { BankAccountId = bank.Id, PeriodId = period.Id, Date = new DateOnly(2025, 6, 1), Description = "Receipt", Amount = 0.40m, CategoryId = Cat("4000") });
+        await db.SaveChangesAsync();
+
+        var statements = new FinancialStatementsService(db);
+        var ixbrl = Encoding.UTF8.GetString(await new IxbrlService(db, statements).GenerateIxbrlAsync(companyId, period.Id));
+
+        int Fact(string concept)
+        {
+            var m = Regex.Match(ixbrl, $"name=\"{Regex.Escape(concept)}\" contextRef=\"instant\"[^>]*>(-?\\d+)<");
+            Assert.True(m.Success, $"iXBRL fact {concept} not found");
+            return int.Parse(m.Groups[1].Value);
+        }
+
+        // The Total current assets subtotal cross-adds with its rounded components.
+        Assert.Equal(Fact("core:Stocks") + Fact("core:Debtors") + Fact("core:CashBankInHand"), Fact("core:CurrentAssets"));
+    }
+
+    [Fact]
     public async Task Readiness_WarnsWhenEnteredVatDoesNotReconcileToControlAccounts()
     {
         // accounting-vat-paye-reconciliation: an entered VAT figure must reconcile to the VAT control
