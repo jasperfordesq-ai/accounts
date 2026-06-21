@@ -1439,6 +1439,57 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task BalanceSheet_MultiYearRetainedEarningsRollForwardAccumulatesProfitsLessDividends()
+    {
+        // G2 (money correct over multiple years): reserves brought forward across a three-year chain
+        // accumulate prior profits and subtract prior dividends. Proves the roll-forward figure
+        // (BL-20/BL-32) is correct year on year, including the dividend reduction.
+        await using var db = CreateDbContext();
+        var company = new Company
+        {
+            LegalName = "Roll Forward Chain Limited",
+            CroNumber = "778899",
+            CompanyType = CompanyType.Private,
+            IncorporationDate = new DateOnly(2023, 1, 1),
+            ArdMonth = 12,
+            IsTrading = true,
+            RegisteredOfficeAddress1 = "1 Main Street",
+            RegisteredOfficeCity = "Dublin",
+            RegisteredOfficeCounty = "Dublin"
+        };
+        db.Companies.Add(company);
+        await db.SaveChangesAsync();
+
+        var y2023 = new AccountingPeriod { CompanyId = company.Id, PeriodStart = new DateOnly(2023, 1, 1), PeriodEnd = new DateOnly(2023, 12, 31), IsFirstYear = true };
+        var y2024 = new AccountingPeriod { CompanyId = company.Id, PeriodStart = new DateOnly(2024, 1, 1), PeriodEnd = new DateOnly(2024, 12, 31), IsFirstYear = false };
+        var y2025 = new AccountingPeriod { CompanyId = company.Id, PeriodStart = new DateOnly(2025, 1, 1), PeriodEnd = new DateOnly(2025, 12, 31), IsFirstYear = false };
+        db.AccountingPeriods.AddRange(y2023, y2024, y2025);
+        var sales = AddCategory(db, company.Id, "4000", "Sales / Revenue", AccountCategoryType.Income);
+        var bank = new BankAccount { CompanyId = company.Id, Name = "Current", OpeningBalance = 0m };
+        db.BankAccounts.Add(bank);
+        await db.SaveChangesAsync();
+
+        // Profits: 2023 +5,000, 2024 +3,000, 2025 +2,000. A €1,000 dividend is paid in 2024.
+        db.ImportedTransactions.AddRange(
+            new ImportedTransaction { BankAccountId = bank.Id, PeriodId = y2023.Id, Date = new DateOnly(2023, 6, 1), Description = "2023 sales", Amount = 5_000m, CategoryId = sales.Id },
+            new ImportedTransaction { BankAccountId = bank.Id, PeriodId = y2024.Id, Date = new DateOnly(2024, 6, 1), Description = "2024 sales", Amount = 3_000m, CategoryId = sales.Id },
+            new ImportedTransaction { BankAccountId = bank.Id, PeriodId = y2025.Id, Date = new DateOnly(2025, 6, 1), Description = "2025 sales", Amount = 2_000m, CategoryId = sales.Id });
+        db.Dividends.Add(new Dividend { PeriodId = y2024.Id, Amount = 1_000m, DateDeclared = new DateOnly(2024, 12, 1), DatePaid = new DateOnly(2024, 12, 15) });
+        await db.SaveChangesAsync();
+
+        var statements = new FinancialStatementsService(db);
+        var bs2024 = await statements.GetBalanceSheetAsync(company.Id, y2024.Id);
+        var bs2025 = await statements.GetBalanceSheetAsync(company.Id, y2025.Id);
+
+        // Opening reserves carried into 2024 = 2023 profit.
+        Assert.Equal(5_000m, bs2024.CapitalAndReserves.OpeningRetainedEarnings);
+        // Opening reserves carried into 2025 = 2023 profit + 2024 profit - 2024 dividend.
+        Assert.Equal(7_000m, bs2025.CapitalAndReserves.OpeningRetainedEarnings);
+        // Closing reserves at end of 2025 = brought forward 7,000 + 2025 profit 2,000.
+        Assert.Equal(9_000m, bs2025.CapitalAndReserves.RetainedEarnings);
+    }
+
+    [Fact]
     public async Task FixedAssets_PeriodMembershipRespectsAcquisitionAndDisposalBoundaries()
     {
         // BL-27: an asset is in the balance sheet if acquired on or before the period end and not
