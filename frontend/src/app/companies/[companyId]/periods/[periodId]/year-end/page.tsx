@@ -32,6 +32,7 @@ import { toast } from "sonner";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { LoansManager } from "@/components/LoansManager";
 import { DirectorLoansManager, type DirectorOption } from "@/components/DirectorLoansManager";
+import { useAuth } from "@/components/AuthProvider";
 import { PeriodWorkspaceSkeleton } from "@/components/Skeleton";
 import {
   getCompany,
@@ -201,6 +202,7 @@ export default function YearEndQuestionnairePage({
   const { companyId, periodId } = use(params);
   const cId = Number(companyId);
   const pId = Number(periodId);
+  const { canWriteWorkingPapers } = useAuth();
 
   const [company, setCompany] = useState<Company | null>(null);
   const [period, setPeriod] = useState<AccountingPeriod | null>(null);
@@ -1181,7 +1183,7 @@ export default function YearEndQuestionnairePage({
           reviewSaving={savingReviewKey === "loans"}
           onConfirmReview={() => handleConfirmReview("loans", loanCount === 0 ? "Confirmed the company has no loans or borrowings outstanding at year-end." : undefined)}
         >
-          <LoansManager companyId={cId} periodEnd={period?.periodEnd} onCountChange={setLoanCount} />
+          <LoansManager companyId={cId} periodEnd={period?.periodEnd} canWrite={canWriteWorkingPapers} onCountChange={setLoanCount} />
         </Section>
 
         {/* 6. Payroll */}
@@ -1486,6 +1488,7 @@ export default function YearEndQuestionnairePage({
               companyId={cId}
               periodId={pId}
               directors={directorOptions}
+              canWrite={canWriteWorkingPapers}
               onCountChange={setDirectorLoanCount}
               onSaved={refreshDirectorLoanCompliance}
             />

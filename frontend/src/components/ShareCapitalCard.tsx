@@ -32,7 +32,13 @@ const emptyForm: ShareCapital = {
  * recorded share capital a non-CLG company is a readiness blocker, so this is the only way firm staff
  * can reach a correct balance sheet for a company with real equity.
  */
-export function ShareCapitalCard({ companyId }: { companyId: number }) {
+export function ShareCapitalCard({
+  companyId,
+  canWrite = true,
+}: {
+  companyId: number;
+  canWrite?: boolean;
+}) {
   const [shares, setShares] = useState<ShareCapital[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<ShareCapital>(emptyForm);
@@ -133,14 +139,16 @@ export function ShareCapitalCard({ companyId }: { companyId: number }) {
                       <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                         {formatCurrency(s.totalValue)}
                       </span>
-                      <button
-                        type="button"
-                        onClick={() => s.id && handleDelete(s.id)}
-                        className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400"
-                        aria-label={`Delete ${s.shareClass} share capital`}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      {canWrite && (
+                        <button
+                          type="button"
+                          onClick={() => s.id && handleDelete(s.id)}
+                          className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400"
+                          aria-label={`Delete ${s.shareClass} share capital`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -152,6 +160,12 @@ export function ShareCapitalCard({ companyId }: { companyId: number }) {
               </p>
             )}
 
+            {!canWrite ? (
+              <p className="text-xs text-gray-400 dark:text-gray-500 italic">
+                Your role has read-only access to share capital.
+              </p>
+            ) : (
+            <>
             <div className="grid grid-cols-12 gap-3 items-end">
               <div className="col-span-3">
                 <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Share Class</label>
@@ -226,6 +240,8 @@ export function ShareCapitalCard({ companyId }: { companyId: number }) {
                 {saving ? <Spinner size="sm" /> : <><Plus className="w-4 h-4 mr-1" /> Issue Shares</>}
               </Button>
             </div>
+            </>
+            )}
           </>
         )}
       </CardContent>

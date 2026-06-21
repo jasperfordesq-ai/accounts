@@ -15,6 +15,7 @@ import { Pencil, Save, X } from "lucide-react";
 import { getCompany, updateCompany, deleteCompany, createPeriod, deleteOfficer, updateOfficer, createOfficer, getCharityInfo, saveCharityInfo, type Company, type Officer, type CharityInfo } from "@/lib/api";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { ShareCapitalCard } from "@/components/ShareCapitalCard";
+import { useAuth } from "@/components/AuthProvider";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { CompanyDetailSkeleton } from "@/components/Skeleton";
 import { formatCompanyType, formatDateIE, formatPeriodRange } from "@/lib/format";
@@ -22,6 +23,7 @@ import { formatCompanyType, formatDateIE, formatPeriodRange } from "@/lib/format
 export default function CompanyDetailPage({ params }: { params: Promise<{ companyId: string }> }) {
   const { companyId: id } = use(params);
   const router = useRouter();
+  const { canWriteWorkingPapers } = useAuth();
   const [company, setCompany] = useState<Company | null>(null);
   const [loading, setLoading] = useState(true);
   const [showNewPeriod, setShowNewPeriod] = useState(false);
@@ -688,7 +690,7 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ compan
       )}
 
       {/* Share Capital (company-scoped equity) */}
-      <ShareCapitalCard companyId={company.id} />
+      <ShareCapitalCard companyId={company.id} canWrite={canWriteWorkingPapers} />
 
       {/* Accounting Periods */}
       <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">

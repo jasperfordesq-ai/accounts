@@ -46,12 +46,14 @@ export function DirectorLoansManager({
   companyId,
   periodId,
   directors,
+  canWrite = true,
   onCountChange,
   onSaved,
 }: {
   companyId: number;
   periodId: number;
   directors: DirectorOption[];
+  canWrite?: boolean;
   onCountChange?: (count: number) => void;
   onSaved?: () => void;
 }) {
@@ -160,20 +162,27 @@ export function DirectorLoansManager({
                 <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                   {formatCurrency(r.closingBalance)}
                 </span>
-                <button
-                  type="button"
-                  onClick={() => r.id && handleDelete(r.id)}
-                  className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400"
-                  aria-label={`Delete director loan for ${directorName(r.directorId)}`}
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                {canWrite && (
+                  <button
+                    type="button"
+                    onClick={() => r.id && handleDelete(r.id)}
+                    className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400"
+                    aria-label={`Delete director loan for ${directorName(r.directorId)}`}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             </div>
           ))}
         </div>
       )}
 
+      {!canWrite ? (
+        <p className="text-xs text-gray-400 dark:text-gray-500 italic">
+          Your role has read-only access to director loans.
+        </p>
+      ) : (
       <div className="space-y-3">
         <div className="grid grid-cols-12 gap-3 items-end">
           <div className="col-span-4">
@@ -283,6 +292,7 @@ export function DirectorLoansManager({
           </Button>
         </div>
       </div>
+      )}
     </div>
   );
 }
