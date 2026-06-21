@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState, useEffect, useCallback } from "react";
+import { use, useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import {
   Button,
@@ -33,6 +33,7 @@ import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { LoansManager } from "@/components/LoansManager";
 import { DirectorLoansManager, type DirectorOption } from "@/components/DirectorLoansManager";
 import { useAuth } from "@/components/AuthProvider";
+import { useUnsavedChanges } from "@/lib/useUnsavedChanges";
 import { PeriodWorkspaceSkeleton } from "@/components/Skeleton";
 import {
   getCompany,
@@ -254,6 +255,18 @@ export default function YearEndQuestionnairePage({
   const directorOptions: DirectorOption[] = (company?.officers ?? [])
     .filter((o) => o.role === "Director" && typeof o.id === "number")
     .map((o) => ({ id: o.id as number, name: o.name }));
+
+  // Unsaved-changes guard: the payroll panel has an explicit Save, so an edited-but-unsaved payroll
+  // figure would be lost on navigation (shared guard across notes/year-end/classify/charity). The
+  // row-based sections persist on add, so they are not part of the dirty signal.
+  const payrollDirty = useMemo(() => {
+    const saved = payroll ?? { grossWages: 0, employerPrsi: 0, pensionContributions: 0, staffCount: 0 };
+    return payrollForm.grossWages !== saved.grossWages
+      || payrollForm.employerPrsi !== saved.employerPrsi
+      || payrollForm.pensionContributions !== saved.pensionContributions
+      || payrollForm.staffCount !== saved.staffCount;
+  }, [payroll, payrollForm]);
+  useUnsavedChanges(payrollDirty);
 
   const [newPbseDesc, setNewPbseDesc] = useState("");
   const [newPbseDate, setNewPbseDate] = useState("");

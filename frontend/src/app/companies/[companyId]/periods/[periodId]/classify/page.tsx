@@ -12,6 +12,7 @@ import { ArrowLeft, CheckCircle2, AlertTriangle, Scale } from "lucide-react";
 import { toast } from "sonner";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { PeriodWorkspaceSkeleton } from "@/components/Skeleton";
+import { useUnsavedChanges } from "@/lib/useUnsavedChanges";
 import {
   getCompany,
   getPeriod,
@@ -90,6 +91,11 @@ export default function ClassifyPage({
   const [avgEmployees, setAvgEmployees] = useState<number>(0);
   const [priorYearClass, setPriorYearClass] = useState<string>("");
 
+  // Unsaved-changes guard: the size figures are only persisted when "Run classification" saves them
+  // (shared guard across notes/year-end/classify/charity).
+  const [dirty, setDirty] = useState(false);
+  useUnsavedChanges(dirty);
+
   // Result state
   const [result, setResult] = useState<ClassificationResult | null>(null);
   const [classifying, setClassifying] = useState(false);
@@ -137,6 +143,7 @@ export default function ClassifyPage({
         setSelectedRegime(periodData.filingRegime.electedRegime);
         setRegimeConfirmed(true);
       }
+      setDirty(false);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to load classification data");
     } finally {
@@ -161,6 +168,7 @@ export default function ClassifyPage({
         avgEmployees,
         priorYearClass: priorYearClass || undefined,
       });
+      setDirty(false);
       const classResult = await runClassification(cId, pId);
       setResult(classResult);
       if (classResult.availableRegimes.length > 0) {
@@ -253,7 +261,7 @@ export default function ClassifyPage({
                 className={inputClass}
                 placeholder="0.00"
                 value={turnover || ""}
-                onChange={(e) => setTurnover(Number(e.target.value))}
+                onChange={(e) => { setTurnover(Number(e.target.value)); setDirty(true); }}
               />
             </div>
             <div>
@@ -265,7 +273,7 @@ export default function ClassifyPage({
                 className={inputClass}
                 placeholder="0.00"
                 value={balanceSheetTotal || ""}
-                onChange={(e) => setBalanceSheetTotal(Number(e.target.value))}
+                onChange={(e) => { setBalanceSheetTotal(Number(e.target.value)); setDirty(true); }}
               />
             </div>
             <div>
@@ -277,7 +285,7 @@ export default function ClassifyPage({
                 className={inputClass}
                 placeholder="0"
                 value={avgEmployees || ""}
-                onChange={(e) => setAvgEmployees(Number(e.target.value))}
+                onChange={(e) => { setAvgEmployees(Number(e.target.value)); setDirty(true); }}
               />
             </div>
             <div>
@@ -287,7 +295,7 @@ export default function ClassifyPage({
               <select
                 className={inputClass}
                 value={priorYearClass}
-                onChange={(e) => setPriorYearClass(e.target.value)}
+                onChange={(e) => { setPriorYearClass(e.target.value); setDirty(true); }}
                 title="Prior Year Classification"
                 aria-label="Prior Year Classification"
               >

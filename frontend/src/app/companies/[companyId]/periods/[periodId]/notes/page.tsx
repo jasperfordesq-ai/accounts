@@ -34,6 +34,7 @@ import {
   type AccountingPeriod,
   type NotesDisclosure,
 } from "@/lib/api";
+import { useUnsavedChanges } from "@/lib/useUnsavedChanges";
 
 const inputClass =
   "w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-colors";
@@ -67,14 +68,9 @@ export default function NotesPage({
   // Local edits tracking (noteId -> edited content)
   const [editedContent, setEditedContent] = useState<Record<number, string>>({});
 
-  // Warn user before leaving with unsaved edits
+  // Warn user before leaving with unsaved edits (shared guard, see useUnsavedChanges).
   const hasUnsavedEdits = useMemo(() => Object.keys(editedContent).length > 0, [editedContent]);
-  useEffect(() => {
-    if (!hasUnsavedEdits) return;
-    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
-    window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
-  }, [hasUnsavedEdits]);
+  useUnsavedChanges(hasUnsavedEdits);
 
   const loadData = useCallback(async () => {
     setLoading(true);

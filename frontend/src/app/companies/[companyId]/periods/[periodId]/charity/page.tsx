@@ -41,6 +41,7 @@ import {
 } from "@/lib/api";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { PeriodWorkspaceSkeleton } from "@/components/Skeleton";
+import { useUnsavedChanges } from "@/lib/useUnsavedChanges";
 
 function eur(amount: number): string {
   return new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" }).format(amount);
@@ -82,6 +83,10 @@ export default function CharityReportingPage({
 
   // Active tab
   const [activeTab, setActiveTab] = useState<"sofa" | "funds" | "tar">("sofa");
+
+  // Unsaved-changes guard: an in-progress (unsaved) fund entry would be lost on navigation
+  // (shared guard across notes/year-end/classify/charity).
+  useUnsavedChanges(showAddFund && newFundName.trim().length > 0);
 
   const loadData = useCallback(async () => {
     setLoading(true);
