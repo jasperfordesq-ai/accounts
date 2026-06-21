@@ -54,6 +54,18 @@ public class CharityReportingService(AccountsDbContext db)
     }
 
     /// <summary>
+    /// filing-charity-pdf-and-reconciliation: the SoFA total funds carried forward must reconcile to
+    /// the balance-sheet net assets. A mismatch means the fund accounting and the statutory balance
+    /// sheet disagree and must be corrected before filing.
+    /// </summary>
+    public async Task<SofaReconciliation> ReconcileSofaToNetAssetsAsync(int companyId, int periodId, decimal balanceSheetNetAssets)
+    {
+        var sofa = await GenerateSofaAsync(companyId, periodId);
+        var difference = decimal.Round(sofa.TotalClosingFunds - balanceSheetNetAssets, 2);
+        return new SofaReconciliation(sofa.TotalClosingFunds, balanceSheetNetAssets, difference, Math.Abs(difference) <= 0.01m);
+    }
+
+    /// <summary>
     /// Generate Trustees' Annual Report (TAR) data.
     /// </summary>
     public async Task<TrusteesReportData> GenerateTarAsync(int companyId, int periodId)
@@ -130,6 +142,8 @@ public class CharityReportingService(AccountsDbContext db)
 }
 
 public record FundLine(string FundName, string FundType, decimal OpeningBalance, decimal IncomingResources, decimal ResourcesExpended, decimal Transfers, decimal GainsLosses, decimal ClosingBalance);
+
+public record SofaReconciliation(decimal TotalClosingFunds, decimal BalanceSheetNetAssets, decimal Difference, bool Reconciles);
 
 public record SofaData(
     List<FundLine> UnrestrictedFunds,

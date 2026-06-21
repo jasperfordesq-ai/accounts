@@ -1520,6 +1520,31 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task CharitySofa_ReconcilesToBalanceSheetNetAssets()
+    {
+        // filing-charity-pdf-and-reconciliation: the SoFA total closing funds must reconcile to the
+        // balance-sheet net assets; a mismatch is surfaced as an unreconciled difference.
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        db.FundBalances.AddRange(
+            new FundBalance { PeriodId = period.Id, FundName = "General", FundType = "Unrestricted", OpeningBalance = 1_000m, IncomingResources = 5_000m, ResourcesExpended = 1_000m, ClosingBalance = 5_000m },
+            new FundBalance { PeriodId = period.Id, FundName = "Grant", FundType = "Restricted", OpeningBalance = 0m, IncomingResources = 2_000m, ResourcesExpended = 2_000m, ClosingBalance = 0m });
+        await db.SaveChangesAsync();
+        var service = new CharityReportingService(db);
+
+        // Total closing funds = 5,000. Reconciles when net assets match.
+        var matched = await service.ReconcileSofaToNetAssetsAsync(period.CompanyId, period.Id, 5_000m);
+        Assert.True(matched.Reconciles);
+        Assert.Equal(0m, matched.Difference);
+        Assert.Equal(5_000m, matched.TotalClosingFunds);
+
+        // A mismatch is surfaced and does not reconcile.
+        var mismatched = await service.ReconcileSofaToNetAssetsAsync(period.CompanyId, period.Id, 4_200m);
+        Assert.False(mismatched.Reconciles);
+        Assert.Equal(800m, mismatched.Difference);
+    }
+
+    [Fact]
     public async Task AbridgedSmallCroPack_IncludesDirectorsReportButMicroDoesNot()
     {
         // filing-abridged-cro-directors-report: the SmallAbridged CRO pack includes the directors'
@@ -16168,6 +16193,7 @@ public class AccountsWorkflowTests
         builder.Services.AddScoped<AccountingWriteGuard>();
         builder.Services.AddScoped<AuditService>();
         builder.Services.AddScoped<CharityReportingService>();
+        builder.Services.AddScoped<FinancialStatementsService>(); // for charity SoFA reconciliation route
 
         await using var app = builder.Build();
         int tenantId;

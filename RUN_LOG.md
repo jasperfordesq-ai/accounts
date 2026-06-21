@@ -291,4 +291,12 @@ data is enterable via the API today. **Deferred as a coherent block for a focuse
   captured at CRO approval (from the active officers), and CRO submission is blocked until both are
   present. Test `CroSubmission_CapturesSignatoriesAtApprovalAndBlocksWithoutThem`. (E-signature artefact
   retention scaffolded via `SignedPdfPath`; the upload/e-sign integration is a follow-up.)
+- **`filing-charity-pdf-and-reconciliation`** (P1, L, HD — reconciliation slice) ✅ (reconciliation; PDF
+  flagged) — added `CharityReportingService.ReconcileSofaToNetAssetsAsync` + a `SofaReconciliation`
+  record + an additive `GET .../charity/sofa/reconciliation` endpoint that ties the SoFA total closing
+  funds to the balance-sheet net assets and surfaces the difference (so the UI can block/warn on a
+  mismatch). Test `CharitySofa_ReconcilesToBalanceSheetNetAssets` (reconciles at match; 800 difference
+  at mismatch). ⏸ **Remaining (logged):** the QuestPDF Trustees' Annual Report + fund-column SoFA PDF
+  (the L document-generation half, SORP-tier dependent) — the SoFA/TAR data objects exist (JSON today);
+  the PDF rendering is the follow-up.
 

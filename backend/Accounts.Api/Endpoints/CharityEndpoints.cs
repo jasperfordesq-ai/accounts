@@ -32,6 +32,18 @@ public static class CharityEndpoints
             return Results.Ok(sofa);
         });
 
+        // filing-charity-pdf-and-reconciliation: the SoFA total funds must reconcile to the balance-sheet
+        // net assets; this surfaces the difference so the UI can block/warn on a mismatch.
+        periodGroup.MapGet("/sofa/reconciliation", async (int companyId, int periodId, CharityReportingService service, FinancialStatementsService statements, AccountsDbContext db, HttpContext context) =>
+        {
+            if (!await CompanyEndpointAccess.CanAccessCompanyPeriodAsync(context, db, companyId, periodId))
+                return Results.NotFound();
+
+            var balanceSheet = await statements.GetBalanceSheetAsync(companyId, periodId);
+            var reconciliation = await service.ReconcileSofaToNetAssetsAsync(companyId, periodId, balanceSheet.NetAssets);
+            return Results.Ok(reconciliation);
+        });
+
         periodGroup.MapGet("/trustees-report", async (int companyId, int periodId, CharityReportingService service, AccountsDbContext db, HttpContext context) =>
         {
             if (!await CompanyEndpointAccess.CanAccessCompanyPeriodAsync(context, db, companyId, periodId))
