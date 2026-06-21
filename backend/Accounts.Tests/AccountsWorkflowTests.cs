@@ -1828,6 +1828,15 @@ public class AccountsWorkflowTests
         // The iXBRL is well-formed XML carrying the entity name.
         AssertWellFormedXml(emit.Ixbrl);
         Assert.Contains("Example Micro Limited", emit.Ixbrl);
+
+        // tests-pdf-content-verified: parse the PDF text (not just the %PDF header) and assert the
+        // real figures/names/wording — company legal name, the period-end date, the computed
+        // net-assets total, and the micro s.280D statutory statement.
+        var pdfText = ExtractPdfText(emit.Pdf);
+        Assert.Contains("Example Micro Limited", pdfText);
+        Assert.Contains(period.PeriodEnd.ToString("dd MMMM yyyy"), pdfText);
+        Assert.Contains(emit.BalanceSheet.NetAssets.ToString("N0"), pdfText); // 6,250 == computed BalanceSheet
+        Assert.Contains("280D", pdfText);
     }
 
     [Fact]
@@ -1965,6 +1974,13 @@ public class AccountsWorkflowTests
         Assert.Equal("%PDF", Encoding.ASCII.GetString(emit.Pdf, 0, 4));
         AssertWellFormedXml(emit.Ixbrl);
         Assert.Contains("Connacht Digital Solutions Limited", emit.Ixbrl);
+
+        // tests-pdf-content-verified: the parsed PDF carries the legal name, period-end date and the
+        // computed net-assets total for the richer accrual-basis small company.
+        var pdfText = ExtractPdfText(emit.Pdf);
+        Assert.Contains("Connacht Digital Solutions Limited", pdfText);
+        Assert.Contains(period.PeriodEnd.ToString("dd MMMM yyyy"), pdfText);
+        Assert.Contains(emit.BalanceSheet.NetAssets.ToString("N0"), pdfText); // 7,200 == computed BalanceSheet
     }
 
     private sealed record GoldenPathEmission(
@@ -2017,6 +2033,19 @@ public class AccountsWorkflowTests
         var pdf = await new DocumentGeneratorService(db, statements).GenerateAccountsPackageAsync(companyId, periodId);
         var ixbrl = Encoding.UTF8.GetString(await new IxbrlService(db, statements).GenerateIxbrlAsync(companyId, periodId));
         return new GoldenPathEmission(pdf, ixbrl, regime, readiness, bs, pl);
+    }
+
+    // Extract the rendered text from a generated PDF so tests can assert on real figures, names and
+    // statutory wording (tests-pdf-content-verified), not just the %PDF magic bytes. PdfPig is pure
+    // managed (no native deps), so this runs on Linux CI. GetWords() reconstructs words from glyphs;
+    // joining them with single spaces yields stable, kerning-independent tokens to match against.
+    private static string ExtractPdfText(byte[] pdf)
+    {
+        using var document = UglyToad.PdfPig.PdfDocument.Open(pdf);
+        var sb = new StringBuilder();
+        foreach (var page in document.GetPages())
+            sb.Append(' ').Append(string.Join(' ', page.GetWords().Select(w => w.Text)));
+        return sb.ToString();
     }
 
     private static string MakeGenericCsv(params (string Date, string Description, decimal Amount)[] rows)
@@ -2462,6 +2491,43 @@ public class AccountsWorkflowTests
         Assert.NotEmpty(approvalPack);
         Assert.NotEmpty(croPack);
         Assert.NotEqual(approvalPack.Length, croPack.Length);
+    }
+
+    [Fact]
+    public async Task AbridgedSmallCroPack_PdfContainsSection352WordingNameAndPeriodEnd()
+    {
+        // tests-pdf-content-verified (abridged branch): a SmallAbridged CRO filing pack must carry the
+        // s.352 abridged-filing exemption wording, the company legal name and the period-end date.
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        db.FilingRegimes.Add(new FilingRegime
+        {
+            PeriodId = period.Id,
+            ElectedRegime = ElectedRegime.SmallAbridged,
+            CanUseMicro = false,
+            CanFileAbridged = true,
+            AuditExempt = true
+        });
+        db.NotesDisclosures.Add(new NotesDisclosure
+        {
+            PeriodId = period.Id,
+            NoteNumber = 1,
+            Title = "Approval of Financial Statements",
+            Content = "Approved by the directors.",
+            IsRequired = true,
+            IsIncluded = true
+        });
+        await db.SaveChangesAsync();
+        await MakePeriodReadyForCroDocumentsAsync(db, period);
+
+        var statements = new FinancialStatementsService(db);
+        var documents = new DocumentGeneratorService(db, statements);
+        var croPack = await documents.GenerateCroFilingPackAsync(period.CompanyId, period.Id);
+
+        var pdfText = ExtractPdfText(croPack);
+        Assert.Contains("Example Micro Limited", pdfText);
+        Assert.Contains(period.PeriodEnd.ToString("dd MMMM yyyy"), pdfText);
+        Assert.Contains("352", pdfText); // s.352 Companies Act 2014 abridged-filing exemption
     }
 
     [Fact]

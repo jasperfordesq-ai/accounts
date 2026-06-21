@@ -100,5 +100,11 @@ Any later regression below this line is attributable to this session's changes.
   `= + - @` (or leading tab/CR/LF) gets an apostrophe prefix (OWASP CSV-injection mitigation). Numeric/
   date fields keep trim-only `CleanCsvField`, so a legit negative amount `-12.50` still parses. Test
   `ImportCsv_NeutralisesSpreadsheetFormulaInjectionInStoredText` (proves triggers neutralised, ordinary
-  text unchanged, negative amount still posts).
+  text unchanged, negative amount still posts). Commit `166030d`.
+- **`tests-pdf-content-verified`** (P1) ✅ — added `PdfPig` (pure-managed) to the test project + an
+  `ExtractPdfText` helper, then asserted real PDF *content* (not just `%PDF` bytes): the Micro and Small
+  golden-path tests now assert company legal name, period-end date and the computed net-assets total
+  (`NetAssets.ToString("N0")` == BalanceSheet) appear in the rendered PDF, plus the micro **s.280D**
+  statement; a new `AbridgedSmallCroPack_PdfContainsSection352WordingNameAndPeriodEnd` proves the
+  abridged CRO pack carries the **s.352** wording. PdfPig restored cleanly. Tests pass.
 
