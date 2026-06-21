@@ -166,5 +166,15 @@ Any later regression below this line is attributable to this session's changes.
   prior years' cash and balance with no manual opening rows. Test
   `BalanceSheet_MultiYearCashOnMovementBasis_CarriesPriorYearsAndBalances` (3-year chain, bank opening 0,
   cash 800 → 1,700 → 2,700 cumulative, `UnexplainedDifference==0` in years 2 & 3). Full suite
-  **522 pass / 3 skip**.
+  **522 pass / 3 skip**. Commit `0ef00f5`.
+- **`accounting-cashflow-vs-bs-cash-tie`** (P1, L — **safe slice**) ✅ — the cash-flow opening cash now
+  carries forward prior years' net movement (bank openings + cumulative prior-period transactions, all
+  bank accounts), on the same movement basis as the balance sheet. So the cash-flow closing cash
+  (`opening + net increase`) ties to the balance-sheet cash for a cash-consistent set across years.
+  Test `CashFlow_ClosingCashTiesToBalanceSheetCashAcrossYears` (2-year, 2-account: opening 1,600 → closing
+  2,800 == BS cash). ⚠️ **Remaining (logged):** a readiness *divergence warning* when the indirect
+  cash-flow does not reconcile to BS cash for **accrual** companies (year-end balances entered as
+  standalone figures) — deferred because it is entangled with the deeper "make the indirect cash-flow
+  reconcile to the entered accrual balances" model and would otherwise flag the artificially-constructed
+  Small golden-path fixture. Added to backlog as `accounting-cashflow-accrual-reconciliation`.
 

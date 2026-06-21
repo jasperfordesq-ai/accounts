@@ -1087,14 +1087,27 @@ public class FinancialStatementsService(AccountsDbContext db)
 
         var netIncreaseInCash = netCashFromOperating + netCashFromInvesting + netCashFromFinancing;
 
-        // Opening cash = sum of bank opening balances
-        var bankAccounts = await db.BankAccounts
-            .Where(b => b.CompanyId == companyId
-                && b.OpeningBalance != 0
-                && b.OpeningBalanceDate != null
-                && b.OpeningBalanceDate <= period.PeriodStart)
+        // Opening cash on the same movement basis as the balance sheet (accounting-cashflow-vs-bs-cash-
+        // tie): the bank opening balances that apply at the period start PLUS the cumulative net movement
+        // of every PRIOR period. Previously this used only the bank opening balances, so for year-2+ the
+        // cash-flow's closing cash (opening + net increase) drifted from the balance-sheet cash by all
+        // the prior years' movement. Now they tie for a cash-consistent set.
+        var priorPeriodIds = await db.AccountingPeriods
+            .Where(p => p.CompanyId == companyId && p.PeriodEnd < period.PeriodStart)
+            .Select(p => p.Id)
             .ToListAsync();
-        var openingCash = bankAccounts.Where(b => BankOpeningApplies(b, period.PeriodStart)).Sum(b => b.OpeningBalance);
+        var allBankAccounts = await db.BankAccounts.Where(b => b.CompanyId == companyId).ToListAsync();
+        decimal openingCash = 0;
+        foreach (var bank in allBankAccounts)
+        {
+            var priorMovement = priorPeriodIds.Count == 0
+                ? 0m
+                : await db.ImportedTransactions
+                    .Where(t => t.BankAccountId == bank.Id && t.PeriodId != null
+                        && priorPeriodIds.Contains(t.PeriodId.Value) && !t.IsDuplicate)
+                    .SumAsync(t => t.Amount);
+            openingCash += (BankOpeningApplies(bank, period.PeriodStart) ? bank.OpeningBalance : 0) + priorMovement;
+        }
         var closingCash = openingCash + netIncreaseInCash;
 
         return new CashFlowStatement(

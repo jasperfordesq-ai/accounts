@@ -165,6 +165,11 @@ human/business/legal decision (implement the conservative default + flag — do 
 
 ---
 
+## Discovered during the finish run (logged, not in the original 59)
+| id | Sev | Eff | HD | Title / acceptance |
+|----|-----|-----|----|--------------------|
+| `accounting-cashflow-accrual-reconciliation` | P2 | L | ✓ | **Reconcile the indirect cash-flow to the balance-sheet cash for accrual companies.** The cash-flow opening cash now carries forward prior-period movement and the closing cash ties to BS cash for a *cash-consistent* set (`accounting-cashflow-vs-bs-cash-tie`). But when year-end debtors/creditors/stock are entered as standalone balances that are not reflected in bank transactions, the indirect `netIncreaseInCash` does not equal the actual cash movement, so a strict readiness "closing cash != BS cash" warning would (correctly) fire on those sets — including the artificially-constructed Small golden-path fixture. Resolve the accrual model (or make the fixture cash-consistent) then add the readiness divergence warning. |
+
 ## Counts
 - Raw findings: **96** · Confirmed P0/P1: **67** · Dropped (false-positive/overstated): **5** · P2: **24** · Missing categories: **17**
 - Backlog after dedupe: **59 items** — ~5 P0, ~38 P1, ~16 P2.

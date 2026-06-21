@@ -1587,6 +1587,45 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task CashFlow_ClosingCashTiesToBalanceSheetCashAcrossYears()
+    {
+        // accounting-cashflow-vs-bs-cash-tie: the cash-flow closing cash must reconcile to the balance
+        // sheet cash. For year-2+ the cash-flow opening cash now carries forward prior years' movement
+        // (multi-account), so closing cash ties to the balance-sheet cash for a cash-consistent set.
+        await using var db = CreateDbContext();
+        var period2025 = await SeedCompanyPeriodAsync(db, isFirstYear: false);
+        var companyId = period2025.CompanyId;
+        var period2024 = new AccountingPeriod { CompanyId = companyId, PeriodStart = new DateOnly(2024, 1, 1), PeriodEnd = new DateOnly(2024, 12, 31), IsFirstYear = true };
+        db.AccountingPeriods.Add(period2024);
+        var categories = await new CategoryService(db).SeedDefaultCategoriesAsync(companyId);
+        int Cat(string code) => categories.Single(c => c.Code == code).Id;
+        // Two bank accounts to exercise multi-account aggregation.
+        var bankA = new BankAccount { CompanyId = companyId, Name = "Account A", OpeningBalance = 0m };
+        var bankB = new BankAccount { CompanyId = companyId, Name = "Account B", OpeningBalance = 0m };
+        db.BankAccounts.AddRange(bankA, bankB);
+        await db.SaveChangesAsync();
+
+        void AddTxn(BankAccount bank, int periodId, DateOnly date, decimal amount, string code) =>
+            db.ImportedTransactions.Add(new ImportedTransaction { BankAccountId = bank.Id, PeriodId = periodId, Date = date, Description = "txn", Amount = amount, CategoryId = Cat(code) });
+
+        AddTxn(bankA, period2024.Id, new DateOnly(2024, 6, 1), 2_000m, "4000");
+        AddTxn(bankB, period2024.Id, new DateOnly(2024, 7, 1), -400m, "6500");
+        AddTxn(bankA, period2025.Id, new DateOnly(2025, 6, 1), 1_500m, "4000");
+        AddTxn(bankB, period2025.Id, new DateOnly(2025, 7, 1), -300m, "6500");
+        await db.SaveChangesAsync();
+
+        var statements = new FinancialStatementsService(db);
+        var bs2025 = await statements.GetBalanceSheetAsync(companyId, period2025.Id);
+        var cf2025 = await statements.GetCashFlowStatementAsync(companyId, period2025.Id);
+
+        // Opening cash carries forward 2024's net movement (2,000 - 400 = 1,600).
+        Assert.Equal(1_600m, cf2025.OpeningCash);
+        // Closing cash ties to the balance-sheet cash (1,600 + 1,500 - 300 = 2,800).
+        Assert.Equal(2_800m, bs2025.CurrentAssets.Cash);
+        Assert.Equal(bs2025.CurrentAssets.Cash, cf2025.ClosingCash);
+    }
+
+    [Fact]
     public async Task BalanceSheet_MultiYearCashOnMovementBasis_CarriesPriorYearsAndBalances()
     {
         // accounting-multiyear-cash-movement-basis: year-2+ cash must carry forward prior years' net
