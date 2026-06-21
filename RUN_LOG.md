@@ -59,3 +59,13 @@ Any later regression below this line is attributable to this session's changes.
   existing readiness/proxy/auth/api-client verifiers. CI now runs `npm test` (one step) — which also
   brings the previously CI-orphaned `test:api-client` into CI. `npm test`, `lint`, `tsc --noEmit` all
   green.
+- **G5 fix** ✅ — the G5 CI edit (replacing 3 frontend steps with `npm test`) broke the backend
+  `ContinuousIntegrationWorkflow_RunsBackendFrontendAndProductionConfigGates` guard (it asserted the
+  old step names). Updated the guard to assert CI runs `npm test` and that `package.json`'s `test`
+  aggregate still chains every sub-suite. **511 pass / 2 skip** (green). Commit `a209aa1`.
+
+## Final state
+- Backend **511 pass / 2 skip / 0 fail**; frontend `npm test` + `lint` + `tsc` + `build` green;
+  `has-pending-model-changes` clean (no model changes this run).
+- Guarantees: **G1, G2, G3, G5, G6, G7 met (each test-proven); G4 met at the trust layer, UI forms
+  deferred.** See `DAILY_REVIEW.md`.
