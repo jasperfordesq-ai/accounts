@@ -31,6 +31,7 @@ import {
 import { toast } from "sonner";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { LoansManager } from "@/components/LoansManager";
+import { DirectorLoansManager, type DirectorOption } from "@/components/DirectorLoansManager";
 import { PeriodWorkspaceSkeleton } from "@/components/Skeleton";
 import {
   getCompany,
@@ -237,7 +238,20 @@ export default function YearEndQuestionnairePage({
   const [goingConcernNote, setGoingConcernNote] = useState("");
   const [directorLoanCompliance, setDirectorLoanCompliance] = useState<DirectorLoanCompliance | null>(null);
   const [loanCount, setLoanCount] = useState(0);
+  const [directorLoanCount, setDirectorLoanCount] = useState(0);
   const [reviewConfirmations, setReviewConfirmations] = useState<Record<string, YearEndReviewConfirmation>>({});
+
+  const refreshDirectorLoanCompliance = useCallback(async () => {
+    try {
+      setDirectorLoanCompliance(await getDirectorLoanCompliance(cId, pId));
+    } catch {
+      // compliance is best-effort; the editable rows still reflect what was saved
+    }
+  }, [cId, pId]);
+
+  const directorOptions: DirectorOption[] = (company?.officers ?? [])
+    .filter((o) => o.role === "Director" && typeof o.id === "number")
+    .map((o) => ({ id: o.id as number, name: o.name }));
 
   const [newPbseDesc, setNewPbseDesc] = useState("");
   const [newPbseDate, setNewPbseDate] = useState("");
@@ -645,7 +659,7 @@ export default function YearEndQuestionnairePage({
     sectionIsComplete("fixed-assets", fixedAssets.length > 0),
     sectionIsComplete("inventory", inventory.length > 0),
     sectionIsComplete("loans", loanCount > 0),
-    sectionIsComplete("director-loans", directorLoanCompliance !== null),
+    sectionIsComplete("director-loans", directorLoanCount > 0),
     sectionIsComplete("payroll", payroll !== null),
     sectionIsComplete("tax", taxBalances.length > 0),
     sectionIsComplete("dividends", dividends.length > 0),
@@ -1420,93 +1434,62 @@ export default function YearEndQuestionnairePage({
           title="Director Loans"
           subtitle="Are there any loans between directors and the company?"
           icon={UserCheck}
-          completed={directorLoanCompliance !== null}
+          completed={directorLoanCount > 0}
           review={reviewConfirmations["director-loans"]}
           reviewSaving={savingReviewKey === "director-loans"}
-          onConfirmReview={() => handleConfirmReview("director-loans", "Director loan position reviewed for the period.")}
+          onConfirmReview={() => handleConfirmReview("director-loans", directorLoanCount === 0 ? "Confirmed there are no loans between the directors and the company in the period." : undefined)}
         >
-          {directorLoanCompliance ? (
-            <div className="space-y-4">
-              {/* Warning banner */}
-              {directorLoanCompliance.warning && (
-                <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 p-3">
-                  <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
-                    {directorLoanCompliance.warning}
-                  </p>
-                </div>
-              )}
+          <div className="space-y-4">
+            {/* s.236 / overdrawn-DLA compliance summary, recomputed as rows are entered */}
+            {directorLoanCompliance && directorLoanCompliance.loans.length > 0 && (
+              <div className="space-y-4">
+                {directorLoanCompliance.warning && (
+                  <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 p-3">
+                    <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+                      {directorLoanCompliance.warning}
+                    </p>
+                  </div>
+                )}
 
-              {/* Summary cards */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="rounded-lg border border-gray-200 dark:border-neutral-700 p-3 dark:bg-neutral-800/50">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Total Loans</p>
-                  <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(directorLoanCompliance.totalDirectorLoans)}</p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="rounded-lg border border-gray-200 dark:border-neutral-700 p-3 dark:bg-neutral-800/50">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Total Loans</p>
+                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(directorLoanCompliance.totalDirectorLoans)}</p>
+                  </div>
+                  <div className="rounded-lg border border-gray-200 dark:border-neutral-700 p-3 dark:bg-neutral-800/50">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Net Assets</p>
+                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(directorLoanCompliance.netAssets)}</p>
+                  </div>
+                  <div className="rounded-lg border border-gray-200 dark:border-neutral-700 p-3 dark:bg-neutral-800/50">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">10% Threshold</p>
+                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(directorLoanCompliance.thresholdAmount)}</p>
+                  </div>
+                  <div className="rounded-lg border border-gray-200 dark:border-neutral-700 p-3 dark:bg-neutral-800/50">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Status</p>
+                    <Chip variant="soft" size="sm" color={directorLoanCompliance.exceedsThreshold ? "danger" : "success"}>
+                      {directorLoanCompliance.exceedsThreshold ? "Exceeds Threshold" : "Within Limits"}
+                    </Chip>
+                  </div>
                 </div>
-                <div className="rounded-lg border border-gray-200 dark:border-neutral-700 p-3 dark:bg-neutral-800/50">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Net Assets</p>
-                  <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(directorLoanCompliance.netAssets)}</p>
-                </div>
-                <div className="rounded-lg border border-gray-200 dark:border-neutral-700 p-3 dark:bg-neutral-800/50">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">10% Threshold</p>
-                  <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(directorLoanCompliance.thresholdAmount)}</p>
-                </div>
-                <div className="rounded-lg border border-gray-200 dark:border-neutral-700 p-3 dark:bg-neutral-800/50">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Status</p>
-                  <Chip variant="soft" size="sm" color={directorLoanCompliance.exceedsThreshold ? "danger" : "success"}>
-                    {directorLoanCompliance.exceedsThreshold ? "Exceeds Threshold" : "Within Limits"}
-                  </Chip>
-                </div>
+
+                {directorLoanCompliance.sapRequired && (
+                  <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 p-3">
+                    <p className="text-sm font-medium text-red-800 dark:text-red-300">
+                      Shareholder Approval Process (SAP) required under s.239 Companies Act 2014
+                    </p>
+                  </div>
+                )}
               </div>
+            )}
 
-              {directorLoanCompliance.sapRequired && (
-                <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 p-3">
-                  <p className="text-sm font-medium text-red-800 dark:text-red-300">
-                    Shareholder Approval Process (SAP) required under s.239 Companies Act 2014
-                  </p>
-                </div>
-              )}
-
-              {/* Loans table */}
-              {directorLoanCompliance.loans.length > 0 && (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-gray-200 dark:border-neutral-700">
-                        <th className="text-left py-2 px-2 text-xs font-medium text-gray-500 dark:text-gray-400">Director</th>
-                        <th className="text-right py-2 px-2 text-xs font-medium text-gray-500 dark:text-gray-400">Opening</th>
-                        <th className="text-right py-2 px-2 text-xs font-medium text-gray-500 dark:text-gray-400">Max During Year</th>
-                        <th className="text-right py-2 px-2 text-xs font-medium text-gray-500 dark:text-gray-400">Closing</th>
-                        <th className="text-right py-2 px-2 text-xs font-medium text-gray-500 dark:text-gray-400">Interest</th>
-                        <th className="text-center py-2 px-2 text-xs font-medium text-gray-500 dark:text-gray-400">Documented</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {directorLoanCompliance.loans.map((loan) => (
-                        <tr key={loan.id} className="border-b border-gray-100 dark:border-neutral-800">
-                          <td className="py-2 px-2 text-gray-900 dark:text-gray-100">{loan.directorName}</td>
-                          <td className="py-2 px-2 text-right text-gray-900 dark:text-gray-100">{formatCurrency(loan.openingBalance)}</td>
-                          <td className="py-2 px-2 text-right text-gray-900 dark:text-gray-100">{formatCurrency(loan.maxDuringYear)}</td>
-                          <td className="py-2 px-2 text-right text-gray-900 dark:text-gray-100">{formatCurrency(loan.closingBalance)}</td>
-                          <td className="py-2 px-2 text-right text-gray-900 dark:text-gray-100">{formatCurrency(loan.interestCharged)}</td>
-                          <td className="py-2 px-2 text-center">
-                            <Chip variant="soft" size="sm" color={loan.isDocumented ? "success" : "warning"}>
-                              {loan.isDocumented ? "Yes" : "No"}
-                            </Chip>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="rounded-lg bg-gray-50 dark:bg-neutral-800 p-4 text-center">
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                No director loan compliance data available. Add director loans in Company Setup first.
-              </p>
-            </div>
-          )}
+            <DirectorLoansManager
+              companyId={cId}
+              periodId={pId}
+              directors={directorOptions}
+              onCountChange={setDirectorLoanCount}
+              onSaved={refreshDirectorLoanCompliance}
+            />
+          </div>
         </Section>
 
         {/* 10. Post-Balance Sheet Events */}
