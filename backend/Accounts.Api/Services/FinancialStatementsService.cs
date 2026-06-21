@@ -714,6 +714,12 @@ public class FinancialStatementsService(AccountsDbContext db)
         if (priorPeriod == null)
             return 0m;
 
+        // accounting-retained-earnings-snapshot: prefer the fixed closing-reserves figure captured when
+        // the prior period was finalised, instead of recursively recomputing its (and every earlier
+        // year's) P&L — which is O(n^2) and drifts if an earlier year is later edited.
+        if (priorPeriod.ClosingRetainedEarnings is { } snapshot)
+            return snapshot;
+
         var priorProfit = (await GetProfitAndLossForPeriodAsync(priorPeriod.Id)).ProfitAfterTax;
         // Only paid dividends reduce prior-year reserves carried forward (see reserves note above).
         var priorDividends = await db.Dividends

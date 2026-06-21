@@ -1495,6 +1495,58 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task OpeningRetainedEarnings_PrefersPersistedClosingReservesSnapshot()
+    {
+        // accounting-retained-earnings-snapshot: a later period reads the prior period's persisted
+        // closing-reserves snapshot instead of recomputing prior-year P&L. Proven by a snapshot value
+        // that deliberately differs from what recomputation would produce.
+        await using var db = CreateDbContext();
+        var period2025 = await SeedCompanyPeriodAsync(db, isFirstYear: false);
+        var companyId = period2025.CompanyId;
+        var period2024 = new AccountingPeriod { CompanyId = companyId, PeriodStart = new DateOnly(2024, 1, 1), PeriodEnd = new DateOnly(2024, 12, 31), IsFirstYear = true, ClosingRetainedEarnings = 4_242m };
+        db.AccountingPeriods.Add(period2024);
+        var categories = await new CategoryService(db).SeedDefaultCategoriesAsync(companyId);
+        int Cat(string code) => categories.Single(c => c.Code == code).Id;
+        var bank = new BankAccount { CompanyId = companyId, Name = "Current Account", OpeningBalance = 0m };
+        db.BankAccounts.Add(bank);
+        await db.SaveChangesAsync();
+        // 2024 transactions would recompute to a profit of 1,000 — but the snapshot (4,242) must win.
+        db.ImportedTransactions.Add(new ImportedTransaction { BankAccountId = bank.Id, PeriodId = period2024.Id, Date = new DateOnly(2024, 6, 1), Description = "2024 sales", Amount = 1_000m, CategoryId = Cat("4000") });
+        await db.SaveChangesAsync();
+
+        var statements = new FinancialStatementsService(db);
+        var bs2025 = await statements.GetBalanceSheetAsync(companyId, period2025.Id);
+        Assert.Equal(4_242m, bs2025.CapitalAndReserves.OpeningRetainedEarnings);
+    }
+
+    [Fact]
+    public async Task Finalising_PersistsClosingReservesSnapshot()
+    {
+        // accounting-retained-earnings-snapshot: finalising a period captures its closing reserves so a
+        // later period can read a fixed opening-reserves figure.
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        db.FilingRegimes.Add(new FilingRegime { PeriodId = period.Id, ElectedRegime = ElectedRegime.Micro, CanUseMicro = true, CanFileAbridged = true, AuditExempt = true });
+        db.NotesDisclosures.Add(new NotesDisclosure { PeriodId = period.Id, NoteNumber = 1, Title = "Approval of Financial Statements", Content = "Approved by the directors.", IsRequired = true, IsIncluded = true });
+        await db.SaveChangesAsync();
+        await MakePeriodReadyForCroDocumentsAsync(db, period);
+
+        var statements = new FinancialStatementsService(db);
+        var bs = await statements.GetBalanceSheetAsync(period.CompanyId, period.Id);
+        Assert.True(bs.Balances);
+
+        var context = AuthenticatedRequest("Reviewer", HttpMethods.Put, $"/api/companies/{period.CompanyId}/periods/{period.Id}/status");
+        var result = await PeriodStatusEndpoint.UpdateAsync(
+            period.CompanyId, period.Id,
+            new PeriodStatusUpdate(PeriodStatus.Finalised, null, null),
+            db, new AuditService(db), statements, context, DisabledApiAccess());
+
+        Assert.Equal(StatusCodes.Status200OK, ResultStatusCode(result));
+        var reloaded = await db.AccountingPeriods.AsNoTracking().SingleAsync(p => p.Id == period.Id);
+        Assert.Equal(bs.CapitalAndReserves.RetainedEarnings, reloaded.ClosingRetainedEarnings);
+    }
+
+    [Fact]
     public async Task AdjustmentRegeneration_BlockedWhenALaterPeriodIsFinalisedOrFiled()
     {
         // accounting-depreciation-regeneration-order: regenerating an earlier period would drift the

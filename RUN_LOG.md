@@ -215,4 +215,13 @@ Any later regression below this line is attributable to this session's changes.
   `AdjustmentRegeneration_BlockedWhenALaterPeriodIsFinalisedOrFiled` (blocked while 2025 Filed; allowed
   after reopening). The conservative *block* default is shipped; *recompute-forward* of later periods is
   logged as a future enhancement. (Maps to 400 via BusinessRuleException; the audit suggested 409 — noted.)
+  Commit `9427342`.
+- **`accounting-retained-earnings-snapshot`** (P2, **HUMAN DECISION flagged**) ✅ — new
+  `AccountingPeriod.ClosingRetainedEarnings` column (migration `AddClosingRetainedEarningsSnapshot`).
+  Finalising/filing a period captures its closing reserves; the roll-forward (`GetOpeningRetainedEarnings`)
+  now prefers a prior period's persisted snapshot over recursively recomputing prior-year P&L (was O(n²)
+  and drifted if an earlier year was edited). An explicit 3100 opening balance still takes precedence.
+  Tests `OpeningRetainedEarnings_PrefersPersistedClosingReservesSnapshot` (snapshot 4,242 wins over a
+  recomputation that would give 1,000) and `Finalising_PersistsClosingReservesSnapshot` (finalise writes
+  the snapshot == BS retained earnings). `has-pending-model-changes` clean.
 

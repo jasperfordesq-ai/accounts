@@ -36,6 +36,11 @@ public static class PeriodStatusEndpoint
                 ? "accounts filing"
                 : "accounts finalisation";
             await statements.AssertFinalOutputReadinessAsync(companyId, id, outputName);
+
+            // accounting-retained-earnings-snapshot: capture the closing reserves at finalisation so a
+            // later period reads a fixed opening-reserves figure rather than recomputing prior-year P&L.
+            var snapshotBalanceSheet = await statements.GetBalanceSheetAsync(companyId, id);
+            period.ClosingRetainedEarnings = snapshotBalanceSheet.CapitalAndReserves.RetainedEarnings;
         }
         if (update.Status is PeriodStatus.Filed)
             await AssertFilingObligationsRecordedAsync(db, companyId, id);

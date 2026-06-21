@@ -23,6 +23,11 @@ public class AccountingPeriod
     public bool GoingConcernConfirmed { get; set; } = true;
     public string? GoingConcernNote { get; set; }
 
+    // accounting-retained-earnings-snapshot: closing reserves captured when the period is finalised/
+    // filed, so a later period reads a fixed opening-reserves figure instead of recursively recomputing
+    // every prior year's P&L (O(n^2) and subject to retroactive drift). Null until finalised.
+    public decimal? ClosingRetainedEarnings { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     // Navigation
