@@ -10937,6 +10937,94 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task YearEndFigureInputs_RejectBadFiguresWithCleanBadRequestAndNoCorruption()
+    {
+        // G3 (customer inputs are safe): a fat-fingered negative amount, blank name or zero useful life
+        // must fail with a clear 400 — never a 500, never a silently corrupted year-end figure.
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var audit = new AuditService(db);
+        var writeGuard = new AccountingWriteGuard(db);
+        DefaultHttpContext Ctx() => AuthenticatedRequest("Accountant", HttpMethods.Post,
+            $"/api/companies/{period.CompanyId}/periods/{period.Id}/year-end");
+
+        var badDebtor = await YearEndEndpoints.CreateDebtorEndpointAsync(
+            period.CompanyId, period.Id,
+            new Debtor { Name = "Customer", Amount = -100m, Type = DebtorType.Trade },
+            db, audit, Ctx());
+        Assert.Equal(StatusCodes.Status400BadRequest, ResultStatusCode(badDebtor));
+        Assert.Empty(await db.Debtors.Where(d => d.PeriodId == period.Id).ToListAsync());
+
+        var badCreditor = await YearEndEndpoints.CreateCreditorEndpointAsync(
+            period.CompanyId, period.Id,
+            new Creditor { Name = "   ", Amount = 50m, Type = CreditorType.Trade },
+            db, audit, Ctx());
+        Assert.Equal(StatusCodes.Status400BadRequest, ResultStatusCode(badCreditor));
+        Assert.Empty(await db.Creditors.Where(c => c.PeriodId == period.Id).ToListAsync());
+
+        var badInventory = await YearEndEndpoints.CreateInventoryEndpointAsync(
+            period.CompanyId, period.Id,
+            new Inventory { Description = "Stock", Value = -5m, ValuationMethod = ValuationMethod.Cost },
+            db, audit, Ctx());
+        Assert.Equal(StatusCodes.Status400BadRequest, ResultStatusCode(badInventory));
+        Assert.Empty(await db.Inventories.Where(i => i.PeriodId == period.Id).ToListAsync());
+
+        var badDividend = await YearEndEndpoints.CreateDividendEndpointAsync(
+            period.CompanyId, period.Id,
+            new Dividend { Amount = -1m },
+            db, audit, Ctx());
+        Assert.Equal(StatusCodes.Status400BadRequest, ResultStatusCode(badDividend));
+        Assert.Empty(await db.Dividends.Where(d => d.PeriodId == period.Id).ToListAsync());
+
+        // Zero useful life would otherwise be silently skipped by the depreciation engine.
+        var badLifeAsset = await YearEndEndpoints.CreateFixedAssetEndpointAsync(
+            period.CompanyId,
+            new FixedAsset { Name = "Van", Category = "Motor Vehicles", Cost = 10_000m, AcquisitionDate = period.PeriodStart, UsefulLifeYears = 0 },
+            db, writeGuard, audit, Ctx());
+        Assert.Equal(StatusCodes.Status400BadRequest, ResultStatusCode(badLifeAsset));
+
+        var badCostAsset = await YearEndEndpoints.CreateFixedAssetEndpointAsync(
+            period.CompanyId,
+            new FixedAsset { Name = "Van", Category = "Motor Vehicles", Cost = -10_000m, AcquisitionDate = period.PeriodStart, UsefulLifeYears = 4 },
+            db, writeGuard, audit, Ctx());
+        Assert.Equal(StatusCodes.Status400BadRequest, ResultStatusCode(badCostAsset));
+
+        var badDisposalAsset = await YearEndEndpoints.CreateFixedAssetEndpointAsync(
+            period.CompanyId,
+            new FixedAsset { Name = "Van", Category = "Motor Vehicles", Cost = 10_000m, AcquisitionDate = period.PeriodEnd, DisposalDate = period.PeriodStart, UsefulLifeYears = 4 },
+            db, writeGuard, audit, Ctx());
+        Assert.Equal(StatusCodes.Status400BadRequest, ResultStatusCode(badDisposalAsset));
+
+        Assert.Empty(await db.FixedAssets.Where(a => a.CompanyId == period.CompanyId).ToListAsync());
+
+        // Nothing was persisted, so no audit rows were written for any rejected input.
+        Assert.Empty(await db.AuditLogs.Where(a =>
+            a.EntityType == "Debtor" || a.EntityType == "Creditor" || a.EntityType == "Inventory"
+            || a.EntityType == "Dividend" || a.EntityType == "FixedAsset").ToListAsync());
+    }
+
+    [Fact]
+    public async Task YearEndCreate_IgnoresClientSuppliedIdentityToPreventOverPosting()
+    {
+        // G3: a create must not let the client choose the primary key (entity over-posting).
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var audit = new AuditService(db);
+        var context = AuthenticatedRequest("Accountant", HttpMethods.Post,
+            $"/api/companies/{period.CompanyId}/periods/{period.Id}/debtors");
+
+        var created = await YearEndEndpoints.CreateDebtorEndpointAsync(
+            period.CompanyId, period.Id,
+            new Debtor { Id = 4242, Name = "Customer", Amount = 100m, Type = DebtorType.Trade },
+            db, audit, context);
+
+        Assert.Equal(StatusCodes.Status201Created, ResultStatusCode(created));
+        var debtor = await db.Debtors.SingleAsync(d => d.PeriodId == period.Id);
+        Assert.NotEqual(4242, debtor.Id);
+        Assert.Equal(period.Id, debtor.PeriodId);
+    }
+
+    [Fact]
     public async Task YearEndEvidenceSemanticAudits_RejectPeriodFromDifferentCompanyWithoutAudit()
     {
         await using var db = CreateDbContext();

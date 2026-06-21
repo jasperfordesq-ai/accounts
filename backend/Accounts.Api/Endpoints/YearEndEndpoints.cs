@@ -600,6 +600,9 @@ public static class YearEndEndpoints
         if (await RequireCompanyWriteAccessAsync(db, companyId, context) is { } denied)
             return denied;
 
+        if (YearEndFigureInputs.ForFixedAsset(input) is { } invalid)
+            return invalid;
+
         if (await writeGuard.BlockIfCompanyAccountingLockedAsync(companyId, input.AcquisitionDate) is { } blocked)
             return blocked;
 
@@ -634,6 +637,9 @@ public static class YearEndEndpoints
 
         var item = await db.FixedAssets.FirstOrDefaultAsync(a => a.Id == id && a.CompanyId == companyId);
         if (item == null) return Results.NotFound();
+
+        if (YearEndFigureInputs.ForFixedAsset(input) is { } invalid)
+            return invalid;
 
         var oldValue = FixedAssetSnapshot(item);
         var effectiveDate = BankingEndpointInputs.Earliest(item.AcquisitionDate, input.AcquisitionDate);
@@ -1185,6 +1191,10 @@ public static class YearEndEndpoints
         if (await RequirePeriodWriteAccessAsync(db, companyId, periodId, context) is { } denied)
             return denied;
 
+        if (YearEndFigureInputs.ForDebtor(input) is { } invalid)
+            return invalid;
+
+        input.Id = 0;
         input.PeriodId = periodId;
         db.Debtors.Add(input);
         await db.SaveChangesAsync();
@@ -1214,6 +1224,9 @@ public static class YearEndEndpoints
 
         var item = await db.Debtors.FirstOrDefaultAsync(d => d.Id == id && d.PeriodId == periodId);
         if (item == null) return Results.NotFound();
+
+        if (YearEndFigureInputs.ForDebtor(input) is { } invalid)
+            return invalid;
 
         var oldValue = DebtorSnapshot(item);
         item.Name = input.Name;
@@ -1273,6 +1286,10 @@ public static class YearEndEndpoints
         if (await RequirePeriodWriteAccessAsync(db, companyId, periodId, context) is { } denied)
             return denied;
 
+        if (YearEndFigureInputs.ForCreditor(input) is { } invalid)
+            return invalid;
+
+        input.Id = 0;
         input.PeriodId = periodId;
         db.Creditors.Add(input);
         await db.SaveChangesAsync();
@@ -1302,6 +1319,9 @@ public static class YearEndEndpoints
 
         var item = await db.Creditors.FirstOrDefaultAsync(c => c.Id == id && c.PeriodId == periodId);
         if (item == null) return Results.NotFound();
+
+        if (YearEndFigureInputs.ForCreditor(input) is { } invalid)
+            return invalid;
 
         var oldValue = CreditorSnapshot(item);
         item.Name = input.Name;
@@ -1362,6 +1382,10 @@ public static class YearEndEndpoints
         if (await RequirePeriodWriteAccessAsync(db, companyId, periodId, context) is { } denied)
             return denied;
 
+        if (YearEndFigureInputs.ForInventory(input) is { } invalid)
+            return invalid;
+
+        input.Id = 0;
         input.PeriodId = periodId;
         db.Inventories.Add(input);
         await db.SaveChangesAsync();
@@ -1391,6 +1415,9 @@ public static class YearEndEndpoints
 
         var item = await db.Inventories.FirstOrDefaultAsync(i => i.Id == id && i.PeriodId == periodId);
         if (item == null) return Results.NotFound();
+
+        if (YearEndFigureInputs.ForInventory(input) is { } invalid)
+            return invalid;
 
         var oldValue = InventorySnapshot(item);
         item.Description = input.Description;
@@ -1498,6 +1525,10 @@ public static class YearEndEndpoints
         if (await RequirePeriodWriteAccessAsync(db, companyId, periodId, context) is { } denied)
             return denied;
 
+        if (YearEndFigureInputs.ForDividend(input) is { } invalid)
+            return invalid;
+
+        input.Id = 0;
         input.PeriodId = periodId;
         db.Dividends.Add(input);
         await db.SaveChangesAsync();
@@ -1527,6 +1558,9 @@ public static class YearEndEndpoints
 
         var item = await db.Dividends.FirstOrDefaultAsync(d => d.Id == id && d.PeriodId == periodId);
         if (item == null) return Results.NotFound();
+
+        if (YearEndFigureInputs.ForDividend(input) is { } invalid)
+            return invalid;
 
         var oldValue = DividendSnapshot(item);
         item.Amount = input.Amount;
@@ -2288,6 +2322,65 @@ public static class ShareCapitalInputs
         if (input.CancelledDate is not null && input.CancelledDate < input.IssueDate)
             return Results.BadRequest(new { error = "Share cancellation date cannot be before the issue date." });
 
+        return null;
+    }
+}
+
+// Guards the figure-bearing year-end rows (debtors/creditors/inventory/fixed assets/dividends) so a
+// customer fat-fingering a negative amount, a blank description or a zero useful life gets a clear 400
+// instead of a silently corrupted balance sheet or a downstream 500 (G3 — customer inputs are safe).
+public static class YearEndFigureInputs
+{
+    public static IResult? ForDebtor(Debtor input)
+    {
+        if (string.IsNullOrWhiteSpace(input.Name))
+            return Results.BadRequest(new { error = "Debtor name is required." });
+        if (input.Amount < 0)
+            return Results.BadRequest(new { error = "Debtor amount cannot be negative." });
+        return null;
+    }
+
+    public static IResult? ForCreditor(Creditor input)
+    {
+        if (string.IsNullOrWhiteSpace(input.Name))
+            return Results.BadRequest(new { error = "Creditor name is required." });
+        if (input.Amount < 0)
+            return Results.BadRequest(new { error = "Creditor amount cannot be negative." });
+        return null;
+    }
+
+    public static IResult? ForInventory(Inventory input)
+    {
+        if (string.IsNullOrWhiteSpace(input.Description))
+            return Results.BadRequest(new { error = "Inventory description is required." });
+        if (input.Value < 0)
+            return Results.BadRequest(new { error = "Inventory value cannot be negative." });
+        return null;
+    }
+
+    public static IResult? ForFixedAsset(FixedAsset input)
+    {
+        if (string.IsNullOrWhiteSpace(input.Name))
+            return Results.BadRequest(new { error = "Fixed asset name is required." });
+        if (string.IsNullOrWhiteSpace(input.Category))
+            return Results.BadRequest(new { error = "Fixed asset category is required." });
+        if (input.Cost < 0)
+            return Results.BadRequest(new { error = "Fixed asset cost cannot be negative." });
+        if (input.UsefulLifeYears < 1)
+            return Results.BadRequest(new { error = "Fixed asset useful life must be at least one year." });
+        if (input.DisposalProceeds is < 0)
+            return Results.BadRequest(new { error = "Fixed asset disposal proceeds cannot be negative." });
+        if (input.DisposalDate is { } disposal && disposal < input.AcquisitionDate)
+            return Results.BadRequest(new { error = "Fixed asset disposal date cannot be before the acquisition date." });
+        return null;
+    }
+
+    public static IResult? ForDividend(Dividend input)
+    {
+        if (input.Amount < 0)
+            return Results.BadRequest(new { error = "Dividend amount cannot be negative." });
+        if (input.DateDeclared is { } declared && input.DatePaid is { } paid && paid < declared)
+            return Results.BadRequest(new { error = "Dividend payment date cannot be before the declaration date." });
         return null;
     }
 }
