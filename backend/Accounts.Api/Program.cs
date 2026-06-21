@@ -314,24 +314,7 @@ companies.MapPut("/{id:int}", async (int id, CompanyInput input, HttpContext con
     return Results.Ok(company);
 });
 
-companies.MapDelete("/{id:int}", async (int id, HttpContext context, ApiAccessService apiAccess, AccountsDbContext db, AccountingWriteGuard writeGuard) =>
-{
-    if (!await CompanyEndpointAccess.CanAccessCompanyAsync(context, db, id))
-        return Results.NotFound();
-
-    if (EndpointRequestAuthorization.AuthorizeCurrentRequest(context, apiAccess) is { } denied)
-        return denied;
-
-    var company = await db.Companies.FirstOrDefaultAsync(c => c.Id == id);
-    if (company is null) return Results.NotFound();
-
-    if (await writeGuard.BlockIfCompanyMasterDataLockedAsync(id) is { } blocked)
-        return blocked;
-
-    db.Companies.Remove(company);
-    await db.SaveChangesAsync();
-    return Results.NoContent();
-});
+companies.MapDelete("/{id:int}", Accounts.Api.Endpoints.CompanyDeletionEndpoint.DeleteAsync);
 
 // Officers endpoints
 var officers = app.MapGroup("/api/companies/{companyId:int}/officers").WithTags("Officers");

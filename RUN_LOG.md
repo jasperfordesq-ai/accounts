@@ -305,4 +305,12 @@ data is enterable via the API today. **Deferred as a coherent block for a focuse
   page size to a 200 cap (and the page index to ≥1), so an unbounded `pageSize` cannot pull every row
   into memory (a memory/DoS vector); the effective `page`/`pageSize` are returned in the response. Test
   `ListTransactions_ClampsPageSizeToCapAgainstMemoryDos` (250 rows, pageSize 100,000 → 200 returned).
+- **`data-company-soft-delete`** (P1, M, HD — conservative "block + typed confirmation" path) ✅ — the
+  company DELETE handler was extracted to a testable `CompanyDeletionEndpoint.DeleteAsync` and now blocks
+  an irreversible cascade-wipe when any period holds financial data (transactions / debtors / creditors /
+  tax / CRO or Revenue filing) unless the caller resends with `confirmName` equal to the exact legal
+  name; an empty company still deletes freely. Test
+  `DeleteCompany_BlockedWhenFinancialDataExistsWithoutTypedConfirmation`. HD flag: the team may prefer
+  true soft-delete + an EF global filter for recoverability — the block+confirm is the conservative
+  default that needs no global-filter change (so it can't accidentally hide rows from existing queries).
 

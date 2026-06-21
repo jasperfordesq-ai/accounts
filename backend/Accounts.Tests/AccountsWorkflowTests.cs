@@ -10938,6 +10938,41 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task DeleteCompany_BlockedWhenFinancialDataExistsWithoutTypedConfirmation()
+    {
+        // data-company-soft-delete: a company holding financial data cannot be cascade-wiped without a
+        // typed confirmation (the exact legal name); an empty company deletes freely.
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var companyId = period.CompanyId;
+        var company = await db.Companies.FirstAsync(c => c.Id == companyId);
+        var bank = new BankAccount { CompanyId = companyId, Name = "Current account", OpeningBalance = 0m };
+        db.BankAccounts.Add(bank);
+        await db.SaveChangesAsync();
+        db.ImportedTransactions.Add(new ImportedTransaction { BankAccountId = bank.Id, PeriodId = period.Id, Date = period.PeriodStart, Description = "Receipt", Amount = 100m });
+        await db.SaveChangesAsync();
+        var writeGuard = new AccountingWriteGuard(db);
+
+        // No confirmation -> blocked, company preserved.
+        var blocked = await CompanyDeletionEndpoint.DeleteAsync(companyId, null,
+            AuthenticatedRequest("Owner", HttpMethods.Delete, $"/api/companies/{companyId}"), DisabledApiAccess(), db, writeGuard);
+        Assert.Equal(StatusCodes.Status400BadRequest, ResultStatusCode(blocked));
+        Assert.NotNull(await db.Companies.FindAsync(companyId));
+
+        // Exact legal name confirmation -> deleted.
+        var deleted = await CompanyDeletionEndpoint.DeleteAsync(companyId, company.LegalName,
+            AuthenticatedRequest("Owner", HttpMethods.Delete, $"/api/companies/{companyId}"), DisabledApiAccess(), db, writeGuard);
+        Assert.Equal(StatusCodes.Status204NoContent, ResultStatusCode(deleted));
+        Assert.Null(await db.Companies.FindAsync(companyId));
+
+        // An empty company (no financial data) deletes without confirmation.
+        var emptyPeriod = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var emptyDelete = await CompanyDeletionEndpoint.DeleteAsync(emptyPeriod.CompanyId, null,
+            AuthenticatedRequest("Owner", HttpMethods.Delete, $"/api/companies/{emptyPeriod.CompanyId}"), DisabledApiAccess(), db, new AccountingWriteGuard(db));
+        Assert.Equal(StatusCodes.Status204NoContent, ResultStatusCode(emptyDelete));
+    }
+
+    [Fact]
     public async Task ListTransactions_ClampsPageSizeToCapAgainstMemoryDos()
     {
         // data-list-transactions-pagesize-cap: an unbounded pageSize would pull every row into memory.
@@ -15353,12 +15388,17 @@ public class AccountsWorkflowTests
         var periodStatusEndpoint = File
             .ReadAllText(Path.Combine(root, "backend", "Accounts.Api", "Endpoints", "PeriodStatusEndpoint.cs"))
             .Replace("\r\n", "\n");
-        var guardedCoreEndpoints = source + "\n" + periodStatusEndpoint;
+        // The company DELETE handler is extracted to a named method (like PeriodStatusEndpoint.UpdateAsync).
+        var companyDeletionEndpoint = File
+            .ReadAllText(Path.Combine(root, "backend", "Accounts.Api", "Endpoints", "CompanyDeletionEndpoint.cs"))
+            .Replace("\r\n", "\n");
+        var guardedCoreEndpoints = source + "\n" + periodStatusEndpoint + "\n" + companyDeletionEndpoint;
 
         Assert.Contains("CompanyEndpointAccess.CanAccessCompanyAsync", guardedCoreEndpoints);
         Assert.Contains("CompanyListQuery.ForContext(context, db.Companies)", source);
+        Assert.Contains("CompanyDeletionEndpoint.DeleteAsync", source);
         Assert.True(
-            Regex.Matches(source, "CompanyEndpointAccess\\.CanAccessCompanyAsync\\(context, db, id\\)").Count >= 3,
+            Regex.Matches(guardedCoreEndpoints, "CompanyEndpointAccess\\.CanAccessCompanyAsync\\(context, db, id\\)").Count >= 3,
             "Company get, update, and delete endpoints should guard direct company access.");
         Assert.True(
             Regex.Matches(guardedCoreEndpoints, "CompanyEndpointAccess\\.CanAccessCompanyAsync\\(context, db, companyId\\)").Count >= 8,
@@ -15598,18 +15638,22 @@ public class AccountsWorkflowTests
         var periodStatusEndpoint = File
             .ReadAllText(Path.Combine(root, "backend", "Accounts.Api", "Endpoints", "PeriodStatusEndpoint.cs"))
             .Replace("\r\n", "\n");
-        var guardedCoreEndpoints = source + "\n" + periodStatusEndpoint;
+        // The company DELETE handler is extracted to a named method (like PeriodStatusEndpoint.UpdateAsync).
+        var companyDeletionEndpoint = File
+            .ReadAllText(Path.Combine(root, "backend", "Accounts.Api", "Endpoints", "CompanyDeletionEndpoint.cs"))
+            .Replace("\r\n", "\n");
+        var guardedCoreEndpoints = source + "\n" + periodStatusEndpoint + "\n" + companyDeletionEndpoint;
 
         Assert.Contains("EndpointRequestAuthorization.AuthorizeCurrentRequest", guardedCoreEndpoints);
         Assert.True(
             Regex.Matches(guardedCoreEndpoints, "EndpointRequestAuthorization\\.AuthorizeCurrentRequest\\(context, apiAccess\\)").Count >= 8,
             "Core company write endpoints should guard direct API and role authorization.");
 
+        // companies.MapDelete is wired to the extracted CompanyDeletionEndpoint.DeleteAsync, checked below.
         foreach (var marker in new[]
         {
             "companies.MapPost",
             "companies.MapPut",
-            "companies.MapDelete",
             "officers.MapPost",
             "officers.MapPut",
             "officers.MapDelete",
@@ -15623,11 +15667,14 @@ public class AccountsWorkflowTests
         Assert.Contains("periods.MapPut(\"/{id:int}/status\", PeriodStatusEndpoint.UpdateAsync)", source);
         Assert.Contains("ApiAccessService apiAccess", periodStatusEndpoint);
         Assert.Contains("EndpointRequestAuthorization.AuthorizeCurrentRequest(context, apiAccess)", periodStatusEndpoint);
+        Assert.Contains("CompanyDeletionEndpoint.DeleteAsync", source);
+        Assert.Contains("ApiAccessService apiAccess", companyDeletionEndpoint);
+        Assert.Contains("EndpointRequestAuthorization.AuthorizeCurrentRequest(context, apiAccess)", companyDeletionEndpoint);
+        AssertOccursBefore(companyDeletionEndpoint, "CompanyEndpointAccess.CanAccessCompanyAsync(context, db, id)", "EndpointRequestAuthorization.AuthorizeCurrentRequest(context, apiAccess)");
 
         foreach (var marker in new[]
         {
-            "companies.MapPut",
-            "companies.MapDelete"
+            "companies.MapPut"
         })
         {
             var snippet = EndpointSnippet(source, marker);
