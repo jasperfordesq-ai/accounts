@@ -17,7 +17,9 @@
     "test:readiness": "node --experimental-strip-types scripts/verify-readiness.mjs",
     "test:proxy": "node --experimental-strip-types scripts/verify-api-proxy.mjs",
     "test:auth": "node --experimental-strip-types scripts/verify-auth-session.mjs",
-    "test:api-client": "node --experimental-strip-types scripts/verify-api-client.mjs"
+    "test:api-client": "node --experimental-strip-types scripts/verify-api-client.mjs",
+    "test:unit": "node --test --experimental-strip-types \"tests/*.test.mjs\"",
+    "test": "npm run test:unit && npm run test:readiness && npm run test:proxy && npm run test:auth && npm run test:api-client"
   },
   "dependencies": {
     "@heroui/react": "3.0.1",

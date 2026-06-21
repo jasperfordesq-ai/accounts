@@ -76,14 +76,8 @@ jobs:
       - name: Lint frontend
         run: npm run lint
 
-      - name: Test frontend readiness proxy
-        run: npm run test:readiness
-
-      - name: Test frontend API proxy redaction
-        run: npm run test:proxy
-
-      - name: Test frontend auth session state
-        run: npm run test:auth
+      - name: Test frontend (unit + readiness/proxy/auth/api-client)
+        run: npm test
 
       - name: Generate ephemeral frontend build API key
         shell: bash
