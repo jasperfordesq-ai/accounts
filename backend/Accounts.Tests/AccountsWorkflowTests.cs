@@ -1575,6 +1575,42 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task Ixbrl_OmitsProfitAndLossForMicroAndAbridgedButIncludesForSmall()
+    {
+        // filing-ixbrl-regime-taxonomy-branch: a micro (FRS 105) or abridged company must NOT publish a
+        // profit and loss account — only Small/Medium/Full do. Publishing a full public P&L for
+        // Micro/Abridged is illegal.
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var companyId = period.CompanyId;
+        db.FilingRegimes.Add(new FilingRegime { PeriodId = period.Id, ElectedRegime = ElectedRegime.Micro, CanUseMicro = true, AuditExempt = true });
+        await db.SaveChangesAsync();
+        var service = new IxbrlService(db, new FinancialStatementsService(db));
+
+        var microIxbrl = Encoding.UTF8.GetString(await service.GenerateIxbrlAsync(companyId, period.Id));
+        Assert.DoesNotContain("Profit and Loss Account", microIxbrl);
+        Assert.DoesNotContain("core:TurnoverGrossRevenue", microIxbrl);
+        Assert.Contains("No profit and loss account is published", microIxbrl);
+        Assert.Contains("Balance Sheet", microIxbrl); // balance sheet still present
+        AssertWellFormedXml(microIxbrl);
+
+        // Small -> the P&L is published.
+        var regime = await db.FilingRegimes.SingleAsync(r => r.PeriodId == period.Id);
+        regime.ElectedRegime = ElectedRegime.Small;
+        await db.SaveChangesAsync();
+        var smallIxbrl = Encoding.UTF8.GetString(await service.GenerateIxbrlAsync(companyId, period.Id));
+        Assert.Contains("Profit and Loss Account", smallIxbrl);
+        Assert.Contains("core:TurnoverGrossRevenue", smallIxbrl);
+
+        // SmallAbridged -> balance-sheet only, no P&L.
+        regime.ElectedRegime = ElectedRegime.SmallAbridged;
+        await db.SaveChangesAsync();
+        var abridgedIxbrl = Encoding.UTF8.GetString(await service.GenerateIxbrlAsync(companyId, period.Id));
+        Assert.DoesNotContain("core:TurnoverGrossRevenue", abridgedIxbrl);
+        AssertWellFormedXml(abridgedIxbrl);
+    }
+
+    [Fact]
     public async Task Ixbrl_SubtotalsCrossAddFromRoundedComponents()
     {
         // accounting-ixbrl-rounding-subtotals: tagged subtotals must equal the sum of their rounded

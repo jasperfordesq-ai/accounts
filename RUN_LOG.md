@@ -223,5 +223,30 @@ Any later regression below this line is attributable to this session's changes.
   and drifted if an earlier year was edited). An explicit 3100 opening balance still takes precedence.
   Tests `OpeningRetainedEarnings_PrefersPersistedClosingReservesSnapshot` (snapshot 4,242 wins over a
   recomputation that would give 1,000) and `Finalising_PersistsClosingReservesSnapshot` (finalise writes
-  the snapshot == BS retained earnings). `has-pending-model-changes` clean.
+  the snapshot == BS retained earnings). `has-pending-model-changes` clean. Commit `faa6218`.
+
+**✅ Phase 1 COMPLETE — all 13 money-correctness items closed (5 P0/P1-equivalent + ... all P0/P1 + 3 P2).**
+
+### Phase 2 — Make all the money enterable ⏸ DEFERRED (frontend block, logged)
+The Phase 2 P0/P1 items (`frontend-loans-no-ui`, `frontend-share-capital-no-ui`,
+`frontend-director-loans-no-entry`, `frontend-inline-edit-yearend`, `frontend-role-gating`,
+`frontend-unsaved-changes-guard`) are all UI work on the ~1,911-line year-end and ~2,440-line period
+Next-16 client components. Their acceptance criteria require proving the rendered form *issues the
+expected POST* — which needs the deferred `frontend-render-harness` (Vitest/RTL) and/or a running Next-16
+dev server. In this backend-focused autonomous session I can only verify frontend changes via
+build/lint/tsc, so landing the forms would not be *provably* correct and risks the currently-green
+frontend. The backend already fully supports these entities (tested CRUD + typed `api.ts` client), so the
+data is enterable via the API today. **Deferred as a coherent block for a focused frontend session.**
+- **`tests-csv-real-export-fixtures`** (P1, HD) ⏸ **FLAGGED/BLOCKED** — needs real anonymised AIB/BOI/
+  Revolut/Stripe CSV exports (a real-world fact I cannot fabricate). Per the guardrails, flagged rather
+  than guessed. The coded parser behaviour is already tested (incl. the new CSV-injection test).
+
+### Phase 3 — Regime-correct, legally-dated statutory outputs
+- **`filing-ixbrl-regime-taxonomy-branch`** (**P0**, L, **HUMAN DECISION flagged**) ✅ (P&L-omission core)
+  — the iXBRL now omits the Profit and Loss Account for **Micro (FRS 105)** and **SmallAbridged** regimes
+  (publishing a full public P&L for them is illegal); Small/Medium/Full (and an undetermined regime) still
+  publish it. A regime-appropriate "no P&L published" note replaces the section. Test
+  `Ixbrl_OmitsProfitAndLossForMicroAndAbridgedButIncludesForSmall`. ⚠️ FLAG: the FRS-105-vs-FRS-102
+  `schemaRef`/namespace switch is NOT yet branched — that needs the real FRC Irish taxonomy release and is
+  the `filing-ixbrl-namespace-taxonomy-pin` item.
 

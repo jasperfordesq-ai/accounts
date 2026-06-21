@@ -1,6 +1,7 @@
 using System.Text;
 using System.Globalization;
 using Accounts.Api.Data;
+using Accounts.Api.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace Accounts.Api.Services;
@@ -155,6 +156,20 @@ public class IxbrlService(AccountsDbContext db, FinancialStatementsService state
         AddIxbrlRow(sb, "Shareholders' funds", "core:ShareholderFunds", rbs.ShareholdersFunds, true, priorAmount: rpbs?.ShareholdersFunds);
         sb.AppendLine("</table>");
 
+        // filing-ixbrl-regime-taxonomy-branch: a micro (FRS 105) or abridged company does NOT publish a
+        // profit and loss account — these are balance-sheet-led statements, and publishing a full public
+        // P&L for Micro/Abridged is illegal. Only Small / Medium / Full (and an undetermined regime, which
+        // defaults to the full statutory presentation) include the P&L. [HUMAN DECISION flagged: the exact
+        // FRS-105 vs FRS-102 taxonomy/schemaRef switch is handled by filing-ixbrl-namespace-taxonomy-pin
+        // and needs the real FRC Irish taxonomy release — the schemaRef here is not yet branched.]
+        var electedRegime = period.FilingRegime?.ElectedRegime;
+        var omitProfitAndLoss = electedRegime is ElectedRegime.Micro or ElectedRegime.SmallAbridged;
+        if (omitProfitAndLoss)
+        {
+            sb.AppendLine($"<p>No profit and loss account is published with these {(electedRegime == ElectedRegime.Micro ? "micro (FRS 105)" : "abridged")} financial statements.</p>");
+        }
+        else
+        {
         // P&L
         sb.AppendLine("<h2>Profit and Loss Account</h2>");
         sb.AppendLine($"<p>for the year ended {period.PeriodEnd:dd MMMM yyyy}</p>");
@@ -176,6 +191,7 @@ public class IxbrlService(AccountsDbContext db, FinancialStatementsService state
         AddIxbrlRow(sb, "Tax on profit", "core:TaxTaxCreditOnProfitOrLossOnOrdinaryActivities", -rpl.TaxCharge, contextRef: "current", priorAmount: rppl != null ? -rppl.TaxCharge : null, priorContextRef: "prior");
         AddIxbrlRow(sb, "Profit for the year", "core:ProfitLossForPeriod", rpl.ProfitAfterTax, bold: true, contextRef: "current", priorAmount: rppl?.ProfitAfterTax, priorContextRef: "prior");
         sb.AppendLine("</table>");
+        }
 
         sb.AppendLine("</body>");
         sb.AppendLine("</html>");
