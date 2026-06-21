@@ -38,6 +38,12 @@ services:
       AuditIntegrity__SigningKeys__0__SigningKey_FILE: /run/secrets/audit_integrity_signing_key
       DatabaseStartup__AutoMigrateOnStartup: "false"
       DatabaseStartup__SeedDemoData: "false"
+      # The api/migrate -> db hop stays on the private compose network (db is never published);
+      # external TLS is terminated at the reverse-proxy ingress (see deploy/caddy). The bundled
+      # postgres image is not configured for TLS, so opt out of the require-TLS-to-db guard for this
+      # deliberately-private link. Override the connection string with SSL Mode=Require (and drop this)
+      # if your Postgres is reachable over an untrusted network.
+      DatabaseStartup__AllowInsecureDatabaseConnection: "true"
       AllowedHosts: "${ACCOUNTS_ALLOWED_HOSTS:?set ACCOUNTS_ALLOWED_HOSTS};api"
       AllowedOrigins__0: "${ACCOUNTS_ALLOWED_ORIGIN:?set ACCOUNTS_ALLOWED_ORIGIN}"
       RateLimits__TrustForwardedFor: "true"
@@ -76,6 +82,9 @@ services:
       AuditIntegrity__SigningKeys__0__SigningKey_FILE: /run/secrets/audit_integrity_signing_key
       DatabaseStartup__AutoMigrateOnStartup: "false"
       DatabaseStartup__SeedDemoData: "false"
+      # See the migrate service: the api -> db hop stays on the private compose network, so opt out of
+      # the require-TLS-to-db guard for this deliberately-private link (external TLS is at the ingress).
+      DatabaseStartup__AllowInsecureDatabaseConnection: "true"
       AllowedHosts: "${ACCOUNTS_ALLOWED_HOSTS:?set ACCOUNTS_ALLOWED_HOSTS};api"
       AllowedOrigins__0: "${ACCOUNTS_ALLOWED_ORIGIN:?set ACCOUNTS_ALLOWED_ORIGIN}"
       RateLimits__TrustForwardedFor: "true"
