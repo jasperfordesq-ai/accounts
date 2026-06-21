@@ -257,4 +257,12 @@ data is enterable via the API today. **Deferred as a coherent block for a focuse
   render — so regenerating reproduces the same date. Drafts still fall back to today. Test
   `ApprovalDate_PersistedAtFinalisationAndStampedOnSignaturePage` (board date 15 Jan 2026 persisted and
   stamped, not the render date). HD flag: who sets the board date (explicit vs finalise-date default).
+- **`filing-auditor-report-blocks-final`** (P1, M, **HUMAN DECISION flagged**) ✅ — new
+  `AccountingPeriod.AuditorsReportReceived`/`AuditorsReportReference` columns (migration
+  `AddAuditorsReportReceived`). `GetFinalOutputReadinessBlockersAsync` now blocks all final outputs
+  (accounts PDF / iXBRL / CRO pack / signature page) for a non-audit-exempt entity until a signed
+  auditor's report is attached; audit-exempt entities are unaffected. Test
+  `FinalOutputs_BlockedForNonAuditExemptEntityUntilAuditorsReportAttached` (Medium blocked → attach →
+  generates). Updated the existing Medium-PDF test to attach the report. HD flag: the auditor engagement/
+  report attachment workflow (a bool+reference is the conservative scaffold).
 

@@ -1002,6 +1002,16 @@ public class FinancialStatementsService(AccountsDbContext db)
         blockers.AddRange(readiness.MissingItems);
         blockers.AddRange(readiness.Warnings);
 
+        // filing-auditor-report-blocks-final: a non-audit-exempt entity must have a signed auditor's
+        // report attached before any final statutory output (PDF / iXBRL / CRO pack / signature page)
+        // generates. Audit-exempt entities (most micro/small companies) are unaffected.
+        var period = await db.AccountingPeriods
+            .Include(p => p.FilingRegime)
+            .AsNoTracking()
+            .FirstAsync(p => p.Id == periodId);
+        if (period.FilingRegime is { AuditExempt: false } && !period.AuditorsReportReceived)
+            blockers.Add("a signed auditor's report has not been attached (the company is not audit-exempt)");
+
         return blockers.Distinct().Take(10).ToList();
     }
 

@@ -1520,6 +1520,36 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task FinalOutputs_BlockedForNonAuditExemptEntityUntilAuditorsReportAttached()
+    {
+        // filing-auditor-report-blocks-final: a non-audit-exempt (e.g. Medium) entity must not generate
+        // final statutory outputs until a signed auditor's report is attached.
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        db.FilingRegimes.Add(new FilingRegime { PeriodId = period.Id, ElectedRegime = ElectedRegime.Medium, CanUseMicro = false, CanFileAbridged = false, AuditExempt = false });
+        db.NotesDisclosures.Add(new NotesDisclosure { PeriodId = period.Id, NoteNumber = 1, Title = "Approval of Financial Statements", Content = "Approved by the directors.", IsRequired = true, IsIncluded = true });
+        await db.SaveChangesAsync();
+        await MakePeriodReadyForCroDocumentsAsync(db, period);
+
+        var statements = new FinancialStatementsService(db);
+        var documents = new DocumentGeneratorService(db, statements);
+
+        // Blocked while no auditor's report is attached.
+        var blockers = await statements.GetFinalOutputReadinessBlockersAsync(period.CompanyId, period.Id);
+        Assert.Contains(blockers, b => b.Contains("auditor's report has not been attached"));
+        var error = await Assert.ThrowsAsync<BusinessRuleException>(() => documents.GenerateAccountsPackageAsync(period.CompanyId, period.Id));
+        Assert.Contains("auditor's report has not been attached", error.Message);
+
+        // Attach the signed auditor's report -> final outputs generate.
+        period.AuditorsReportReceived = true;
+        period.AuditorsReportReference = "AUD-2025-001";
+        await db.SaveChangesAsync();
+        var unblocked = await statements.GetFinalOutputReadinessBlockersAsync(period.CompanyId, period.Id);
+        Assert.DoesNotContain(unblocked, b => b.Contains("auditor's report has not been attached"));
+        Assert.NotEmpty(await documents.GenerateAccountsPackageAsync(period.CompanyId, period.Id));
+    }
+
+    [Fact]
     public async Task ApprovalDate_PersistedAtFinalisationAndStampedOnSignaturePage()
     {
         // filing-approval-date-persisted: the board-approval date is persisted at finalisation and
@@ -3191,6 +3221,9 @@ public class AccountsWorkflowTests
         });
         await db.SaveChangesAsync();
         await MakePeriodReadyForCroDocumentsAsync(db, period);
+        // A non-audit-exempt entity must attach a signed auditor's report before final outputs generate.
+        period.AuditorsReportReceived = true;
+        await db.SaveChangesAsync();
 
         var documents = new DocumentGeneratorService(db, new FinancialStatementsService(db));
 

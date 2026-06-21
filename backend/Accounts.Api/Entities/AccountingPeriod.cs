@@ -33,6 +33,11 @@ public class AccountingPeriod
     // DateTime.Now at render. Captured at finalisation (or set explicitly); null while in draft.
     public DateOnly? ApprovalDate { get; set; }
 
+    // filing-auditor-report-blocks-final: set when a signed auditor's report has been attached. A
+    // non-audit-exempt entity cannot generate final statutory outputs until this is recorded.
+    public bool AuditorsReportReceived { get; set; }
+    public string? AuditorsReportReference { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     // Navigation
