@@ -1,5 +1,15 @@
 <Project>
   <PropertyGroup>
     <ArtifactsPath>$(MSBuildThisFileDirectory)../.dotnet-artifacts</ArtifactsPath>
+
+    <!-- Fail the build (and CI's restore step) on any vulnerable NuGet package, direct or
+         transitive. The backend parses untrusted CSV and handles auth/crypto, so a known-vulnerable
+         dependency must block green, not ship silently. NuGetAudit emits NU1901-NU1904 during
+         restore; promoting them to errors turns `dotnet restore backend/Accounts.slnx` into the
+         gate. `all` audits transitive packages too; `low` reports every advisory severity. -->
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <NuGetAuditLevel>low</NuGetAuditLevel>
+    <WarningsAsErrors>$(WarningsAsErrors);NU1901;NU1902;NU1903;NU1904</WarningsAsErrors>
   </PropertyGroup>
 </Project>

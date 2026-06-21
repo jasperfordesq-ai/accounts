@@ -13724,6 +13724,31 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public void BackendBuild_FailsCiOnVulnerableNuGetPackages()
+    {
+        // ops-backend-vuln-scan: the backend parses untrusted CSV and handles auth/crypto, so a
+        // known-vulnerable NuGet dependency (direct or transitive) must fail the build instead of
+        // shipping green. NuGetAudit emits NU1901-NU1904 during `dotnet restore`; Directory.Build.props
+        // promotes them to errors so CI's restore step is the gate. CI already audits npm but not NuGet.
+        var propsPath = Path.Combine(RepositoryRoot(), "backend", "Directory.Build.props");
+        Assert.True(File.Exists(propsPath), "backend/Directory.Build.props must exist to host the NuGet audit gate.");
+        var props = File.ReadAllText(propsPath);
+
+        Assert.Contains("<NuGetAudit>true</NuGetAudit>", props);
+        // Audit transitive packages too, at every advisory severity.
+        Assert.Contains("<NuGetAuditMode>all</NuGetAuditMode>", props);
+        Assert.Contains("<NuGetAuditLevel>low</NuGetAuditLevel>", props);
+        // Every NuGet vulnerability warning code must be promoted to an error.
+        foreach (var code in new[] { "NU1901", "NU1902", "NU1903", "NU1904" })
+            Assert.Contains(code, props);
+        Assert.Matches(@"<WarningsAsErrors>.*NU1901.*NU1902.*NU1903.*NU1904.*</WarningsAsErrors>", props);
+
+        // CI restores the solution before testing, so the audit gate runs on every push/PR.
+        var workflow = File.ReadAllText(Path.Combine(RepositoryRoot(), ".github", "workflows", "ci.yml"));
+        Assert.Contains("dotnet restore backend/Accounts.slnx", WorkflowJob(workflow, "backend"));
+    }
+
+    [Fact]
     public void ProductionCompose_UsesImmutableImageReferencesInsteadOfBuildContexts()
     {
         var compose = File.ReadAllText(Path.Combine(RepositoryRoot(), "compose.production.yml"));
