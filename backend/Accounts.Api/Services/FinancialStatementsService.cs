@@ -852,6 +852,38 @@ public class FinancialStatementsService(AccountsDbContext db)
             }
         }
 
+        // accounting-vat-paye-reconciliation [HUMAN DECISION flagged — assumes VAT is posted to the VAT
+        // control accounts (1300 VAT Receivable / 2200 VAT Payable); needs a real VAT-return spec to
+        // confirm the convention]. When a VAT figure is entered, reconcile it to the source: net output
+        // VAT (credit movement on VAT Payable) less input VAT (debit movement on VAT Receivable). Warn
+        // (blocks final outputs) when they diverge, so an unreconciled VAT figure cannot be filed.
+        var enteredVat = await db.TaxBalances
+            .Where(t => t.PeriodId == periodId && t.TaxType == TaxType.Vat)
+            .Select(t => (decimal?)t.Liability)
+            .FirstOrDefaultAsync();
+        if (enteredVat is { } vat)
+        {
+            var vatCategories = await db.AccountCategories
+                .Where(c => c.CompanyId == companyId || (c.IsSystem && c.CompanyId == null))
+                .ToListAsync();
+            var vatMovements = await GetAccountMovementsAsync(periodId, vatCategories);
+            decimal CategoryNetCredit(string code)
+            {
+                var cat = vatCategories.FirstOrDefault(c => c.Code == code);
+                return cat != null && vatMovements.TryGetValue(cat.Id, out var m) ? m.Credit - m.Debit : 0m;
+            }
+            // Output VAT = net credit on VAT Payable; input VAT = net debit on VAT Receivable.
+            var vatFromSource = CategoryNetCredit("2200") + CategoryNetCredit("1300");
+            if (Math.Abs(vat - vatFromSource) > 1m)
+                warnings.Add(
+                    $"Entered VAT ({vat:C}) does not reconcile to the VAT control accounts ({vatFromSource:C}). Reconcile VAT to the underlying transactions before filing.");
+        }
+
+        // PAYE/PRSI reconciliation is FLAGGED, not implemented: PayrollSummary records only GrossWages,
+        // EmployerPrsi, PensionContributions and StaffCount — there is no employee PAYE/PRSI withheld
+        // field, so an entered PAYE TaxBalance cannot be reconciled precisely to payroll source data
+        // without extending the payroll model. Tracked as accounting-paye-payroll-source-reconciliation.
+
         // 12. Dividends reviewed?
         var hasDividends = await db.Dividends.AnyAsync(d => d.PeriodId == periodId);
         if (hasDividends || reviewed.Contains("dividends")) completedChecks++;

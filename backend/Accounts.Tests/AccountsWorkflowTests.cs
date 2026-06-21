@@ -1495,6 +1495,38 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task Readiness_WarnsWhenEnteredVatDoesNotReconcileToControlAccounts()
+    {
+        // accounting-vat-paye-reconciliation: an entered VAT figure must reconcile to the VAT control
+        // accounts (output VAT on 2200 less input VAT on 1300). Readiness warns (blocks final outputs)
+        // when they diverge, and the warning clears once the entered figure matches the source.
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var companyId = period.CompanyId;
+        var categories = await new CategoryService(db).SeedDefaultCategoriesAsync(companyId);
+        int Cat(string code) => categories.Single(c => c.Code == code).Id;
+        var bank = new BankAccount { CompanyId = companyId, Name = "Current Account", OpeningBalance = 0m };
+        db.BankAccounts.Add(bank);
+        await db.SaveChangesAsync();
+        // Output VAT collected: credit VAT Payable (2200) by 230.
+        db.ImportedTransactions.Add(new ImportedTransaction { BankAccountId = bank.Id, PeriodId = period.Id, Date = new DateOnly(2025, 6, 1), Description = "VAT on sales", Amount = 230m, CategoryId = Cat("2200") });
+        db.TaxBalances.Add(new TaxBalance { PeriodId = period.Id, TaxType = TaxType.Vat, Liability = 230m, Paid = 0m, Balance = 230m });
+        await db.SaveChangesAsync();
+
+        var statements = new FinancialStatementsService(db);
+        var reconciled = await statements.GetReadinessScoreAsync(companyId, period.Id);
+        Assert.DoesNotContain(reconciled.Warnings, w => w.Contains("does not reconcile to the VAT control accounts"));
+
+        // Diverge the entered VAT from the source -> warning fires.
+        var vatBalance = await db.TaxBalances.SingleAsync(t => t.PeriodId == period.Id && t.TaxType == TaxType.Vat);
+        vatBalance.Liability = 500m;
+        vatBalance.Balance = 500m;
+        await db.SaveChangesAsync();
+        var divergent = await statements.GetReadinessScoreAsync(companyId, period.Id);
+        Assert.Contains(divergent.Warnings, w => w.Contains("does not reconcile to the VAT control accounts"));
+    }
+
+    [Fact]
     public async Task Readiness_WarnsWhenEnteredCorporationTaxDivergesFromComputation()
     {
         // accounting-pl-tax-charge-unreconciled: the entered CT liability is the P&L tax charge but was

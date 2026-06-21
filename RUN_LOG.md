@@ -192,4 +192,13 @@ Any later regression below this line is attributable to this session's changes.
   by this method but NOT yet wired to hard-block, because BS and SOCIE genuinely diverge on opening-
   balance edge cases (first-year opening RE via a 3100 opening balance; share capital via a 3000 opening
   balance vs a ShareCapital row) — wiring them to block waits on `onboarding-opening-trial-balance-takeon`.
+  Commit `a68f3ab`.
+- **`accounting-vat-paye-reconciliation`** (P1, L, **HUMAN DECISION flagged**) ✅ (VAT side; PAYE flagged)
+  — when a VAT figure is entered, readiness reconciles it to the VAT control accounts (output VAT on
+  2200 net of input VAT on 1300) and warns (blocks final outputs) on divergence > €1. Test
+  `Readiness_WarnsWhenEnteredVatDoesNotReconcileToControlAccounts`. ⚠️ FLAG: assumes VAT is posted to the
+  1300/2200 control accounts — needs a real VAT-return spec to confirm the convention. **PAYE deferred**
+  (logged as `accounting-paye-payroll-source-reconciliation`): `PayrollSummary` has no employee
+  PAYE/PRSI-withheld field, so an entered PAYE balance cannot be reconciled to payroll without a model
+  extension. Golden paths (no VAT/PAYE entered) unaffected.
 
