@@ -1520,6 +1520,31 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task AbridgedSmallCroPack_IncludesDirectorsReportButMicroDoesNot()
+    {
+        // filing-abridged-cro-directors-report: the SmallAbridged CRO pack includes the directors'
+        // report (its doc-comment says so); the micro CRO pack does not.
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var regime = new FilingRegime { PeriodId = period.Id, ElectedRegime = ElectedRegime.SmallAbridged, CanFileAbridged = true, AuditExempt = true };
+        db.FilingRegimes.Add(regime);
+        db.NotesDisclosures.Add(new NotesDisclosure { PeriodId = period.Id, NoteNumber = 1, Title = "Approval of Financial Statements", Content = "Approved by the directors.", IsRequired = true, IsIncluded = true });
+        await db.SaveChangesAsync();
+        await MakePeriodReadyForCroDocumentsAsync(db, period);
+
+        var documents = new DocumentGeneratorService(db, new FinancialStatementsService(db));
+        var abridged = ExtractPdfText(await documents.GenerateCroFilingPackAsync(period.CompanyId, period.Id));
+        Assert.Contains("DIRECTORS' REPORT", abridged);
+
+        // Micro CRO pack omits the directors' report.
+        regime.ElectedRegime = ElectedRegime.Micro;
+        regime.CanUseMicro = true;
+        await db.SaveChangesAsync();
+        var micro = ExtractPdfText(await documents.GenerateCroFilingPackAsync(period.CompanyId, period.Id));
+        Assert.DoesNotContain("DIRECTORS' REPORT", micro);
+    }
+
+    [Fact]
     public async Task DirectorsReport_UsesServiceWordingForDormantAndAuditExemption()
     {
         // filing-directors-report-from-service: the PDF directors' report is driven from

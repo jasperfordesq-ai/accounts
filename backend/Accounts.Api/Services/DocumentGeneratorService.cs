@@ -791,6 +791,12 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
             .Where(o => o.Role == OfficerRole.Director && o.ResignedDate == null)
             .ToList();
 
+        // filing-abridged-cro-directors-report: the SmallAbridged CRO pack includes the directors'
+        // report (balance sheet + notes + directors' report, no P&L); micro does not.
+        DirectorsReportService.DirectorsReportData? directorsReport = regime == ElectedRegime.SmallAbridged
+            ? await new DirectorsReportService(db, statementsService).GenerateAsync(company.Id, period.Id)
+            : null;
+
         FinancialStatementsService.BalanceSheet? priorBs = null;
         var priorPeriod = await db.AccountingPeriods
             .Where(p => p.CompanyId == company.Id && p.PeriodEnd < period.PeriodStart)
@@ -831,6 +837,12 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
                     col.Item().PageBreak();
 
                     ComposeCompanyIdentification(col, company);
+                    if (directorsReport != null)
+                    {
+                        col.Item().PageBreak();
+                        ComposeDirectorsReport(col, period, directors, directorsReport);
+                    }
+                    col.Item().PageBreak();
                     ComposeBalanceSheet(col, company, period, balanceSheet, priorBs, directors);
                     ComposeCroFilingStatements(col, company, regime, balanceSheet, period.FilingRegime?.AuditExempt == true);
 

@@ -272,4 +272,8 @@ data is enterable via the API today. **Deferred as a coherent block for a focuse
   information statement **only when the company is not audit-exempt**. Test
   `DirectorsReport_UsesServiceWordingForDormantAndAuditExemption` (dormant company → "dormant", not
   "normal trading activities"; audit-exempt → no audit-info statement).
+- **`filing-abridged-cro-directors-report`** (P1, S) ✅ — the SmallAbridged CRO filing pack now includes
+  the directors' report (its own doc-comment said "balance sheet + notes + directors' report") driven
+  from `DirectorsReportService`; the micro CRO pack still omits it. Test
+  `AbridgedSmallCroPack_IncludesDirectorsReportButMicroDoesNot`.
 
