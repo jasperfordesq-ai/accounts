@@ -4,10 +4,10 @@ import { useCallback, useEffect, useState } from "react";
 import {
   Card, CardContent, CardHeader, CardTitle, Button, Chip, Spinner,
 } from "@heroui/react";
-import { Coins, Plus, Trash2 } from "lucide-react";
+import { Coins, Pencil, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import {
-  getShareCapital, createShareCapital, deleteShareCapital, type ShareCapital,
+  getShareCapital, createShareCapital, updateShareCapital, deleteShareCapital, type ShareCapital,
 } from "@/lib/api";
 
 const inputClass =
@@ -42,6 +42,7 @@ export function ShareCapitalCard({
   const [shares, setShares] = useState<ShareCapital[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<ShareCapital>(emptyForm);
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
@@ -60,22 +61,38 @@ export function ShareCapitalCard({
   const totalIssued = shares.reduce((sum, s) => sum + s.totalValue, 0);
   const previewTotal = form.nominalValue * form.numberIssued;
 
-  async function handleAdd() {
+  function startEdit(s: ShareCapital) {
+    setEditingId(s.id ?? null);
+    setForm({ ...s });
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setForm(emptyForm);
+  }
+
+  async function handleSubmit() {
     if (!form.shareClass.trim()) { toast.error("Share class is required"); return; }
     if (!form.issueDate) { toast.error("Issue date is required"); return; }
     if (form.numberIssued <= 0) { toast.error("Number of shares issued must be greater than zero"); return; }
     if (form.nominalValue < 0) { toast.error("Nominal value cannot be negative"); return; }
     setSaving(true);
     try {
-      const created = await createShareCapital(companyId, {
-        ...form,
-        totalValue: previewTotal,
-      });
-      setShares((prev) => [...prev, created]);
+      const payload = { ...form, totalValue: previewTotal };
+      if (editingId != null) {
+        // PUT preserves the row id and audit continuity (no delete + re-add).
+        const updated = await updateShareCapital(companyId, editingId, payload);
+        setShares((prev) => prev.map((s) => (s.id === editingId ? updated : s)));
+        toast.success("Share capital updated");
+      } else {
+        const created = await createShareCapital(companyId, payload);
+        setShares((prev) => [...prev, created]);
+        toast.success("Share capital recorded");
+      }
+      setEditingId(null);
       setForm(emptyForm);
-      toast.success("Share capital recorded");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to record share capital");
+      toast.error(err instanceof Error ? err.message : "Failed to save share capital");
     } finally {
       setSaving(false);
     }
@@ -140,14 +157,24 @@ export function ShareCapitalCard({
                         {formatCurrency(s.totalValue)}
                       </span>
                       {canWrite && (
-                        <button
-                          type="button"
-                          onClick={() => s.id && handleDelete(s.id)}
-                          className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400"
-                          aria-label={`Delete ${s.shareClass} share capital`}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => startEdit(s)}
+                            className="text-gray-400 hover:text-emerald-600 dark:text-gray-500 dark:hover:text-emerald-400"
+                            aria-label={`Edit ${s.shareClass} share capital`}
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => s.id && handleDelete(s.id)}
+                            className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400"
+                            aria-label={`Delete ${s.shareClass} share capital`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </>
                       )}
                     </div>
                   </div>
@@ -231,14 +258,23 @@ export function ShareCapitalCard({
               <span className="text-xs text-gray-500 dark:text-gray-400">
                 Total value: <span className="font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(previewTotal)}</span>
               </span>
-              <Button
-                variant="primary"
-                size="sm"
-                onPress={handleAdd}
-                isDisabled={saving}
-              >
-                {saving ? <Spinner size="sm" /> : <><Plus className="w-4 h-4 mr-1" /> Issue Shares</>}
-              </Button>
+              <div className="flex items-center gap-2">
+                {editingId != null && (
+                  <Button variant="ghost" size="sm" onPress={cancelEdit} isDisabled={saving}>
+                    <X className="w-4 h-4 mr-1" /> Cancel
+                  </Button>
+                )}
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onPress={handleSubmit}
+                  isDisabled={saving}
+                >
+                  {saving ? <Spinner size="sm" /> : editingId != null
+                    ? <>Save changes</>
+                    : <><Plus className="w-4 h-4 mr-1" /> Issue Shares</>}
+                </Button>
+              </div>
             </div>
             </>
             )}

@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Button, Chip, Spinner } from "@heroui/react";
-import { Plus, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import {
-  getDirectorLoans, createDirectorLoan, deleteDirectorLoan, type DirectorLoanRow,
+  getDirectorLoans, createDirectorLoan, updateDirectorLoan, deleteDirectorLoan, type DirectorLoanRow,
 } from "@/lib/api";
 
 const inputClass =
@@ -60,6 +60,7 @@ export function DirectorLoansManager({
   const [rows, setRows] = useState<DirectorLoanRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<DirectorLoanRow>(() => emptyForm(directors[0]?.id ?? 0));
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
 
   const publishCount = useCallback(
@@ -86,24 +87,43 @@ export function DirectorLoansManager({
   const closingBalance = form.openingBalance + form.advances - form.repayments;
   const maxDuringYear = form.maxBalanceDuringYear || Math.max(form.openingBalance, closingBalance);
 
-  async function handleAdd() {
+  function startEdit(r: DirectorLoanRow) {
+    setEditingId(r.id ?? null);
+    setForm({ ...r });
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setForm(emptyForm(directors[0]?.id ?? 0));
+  }
+
+  async function handleSubmit() {
     if (!form.directorId) { toast.error("Select the director"); return; }
     setSaving(true);
     try {
-      const created = await createDirectorLoan(companyId, periodId, {
+      const payload = {
         ...form,
         closingBalance,
         maxBalanceDuringYear: maxDuringYear,
         loanTerms: form.loanTerms?.trim() ? form.loanTerms.trim() : undefined,
-      });
-      const next = [...rows, created];
-      setRows(next);
-      publishCount(next);
+      };
+      if (editingId != null) {
+        // PUT preserves the row id and audit continuity (no delete + re-add).
+        const updated = await updateDirectorLoan(companyId, periodId, editingId, payload);
+        setRows((prev) => prev.map((r) => (r.id === editingId ? updated : r)));
+        toast.success("Director loan updated");
+      } else {
+        const created = await createDirectorLoan(companyId, periodId, payload);
+        const next = [...rows, created];
+        setRows(next);
+        publishCount(next);
+        toast.success("Director loan recorded");
+      }
+      setEditingId(null);
       setForm(emptyForm(directors[0]?.id ?? 0));
-      toast.success("Director loan recorded");
       onSaved?.();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to record director loan");
+      toast.error(err instanceof Error ? err.message : "Failed to save director loan");
     } finally {
       setSaving(false);
     }
@@ -163,14 +183,24 @@ export function DirectorLoansManager({
                   {formatCurrency(r.closingBalance)}
                 </span>
                 {canWrite && (
-                  <button
-                    type="button"
-                    onClick={() => r.id && handleDelete(r.id)}
-                    className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400"
-                    aria-label={`Delete director loan for ${directorName(r.directorId)}`}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => startEdit(r)}
+                      className="text-gray-400 hover:text-emerald-600 dark:text-gray-500 dark:hover:text-emerald-400"
+                      aria-label={`Edit director loan for ${directorName(r.directorId)}`}
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => r.id && handleDelete(r.id)}
+                      className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400"
+                      aria-label={`Delete director loan for ${directorName(r.directorId)}`}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </>
                 )}
               </div>
             </div>
@@ -286,9 +316,16 @@ export function DirectorLoansManager({
             </span>
           </div>
         </div>
-        <div className="flex items-center justify-end">
-          <Button variant="primary" size="sm" onPress={handleAdd} isDisabled={saving}>
-            {saving ? <Spinner size="sm" /> : <><Plus className="w-4 h-4 mr-1" /> Add Director Loan</>}
+        <div className="flex items-center justify-end gap-2">
+          {editingId != null && (
+            <Button variant="ghost" size="sm" onPress={cancelEdit} isDisabled={saving}>
+              <X className="w-4 h-4 mr-1" /> Cancel
+            </Button>
+          )}
+          <Button variant="primary" size="sm" onPress={handleSubmit} isDisabled={saving}>
+            {saving ? <Spinner size="sm" /> : editingId != null
+              ? <>Save changes</>
+              : <><Plus className="w-4 h-4 mr-1" /> Add Director Loan</>}
           </Button>
         </div>
       </div>

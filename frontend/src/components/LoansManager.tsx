@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Button, Chip, Spinner } from "@heroui/react";
-import { Plus, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
-import { getLoans, createLoan, deleteLoan, type Loan } from "@/lib/api";
+import { getLoans, createLoan, updateLoan, deleteLoan, type Loan } from "@/lib/api";
 
 const inputClass =
   "w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors";
@@ -48,6 +48,7 @@ export function LoansManager({
   const [loans, setLoans] = useState<Loan[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<Loan>(() => emptyForm(periodEnd));
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
 
   const publishCount = useCallback(
@@ -72,7 +73,17 @@ export function LoansManager({
 
   const dueAfterYear = Math.max(0, form.balance - form.dueWithinYear);
 
-  async function handleAdd() {
+  function startEdit(l: Loan) {
+    setEditingId(l.id ?? null);
+    setForm({ ...l });
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setForm(emptyForm(periodEnd));
+  }
+
+  async function handleSubmit() {
     if (!form.lender.trim()) { toast.error("Lender is required"); return; }
     if (!form.drawdownDate) { toast.error("Drawdown date is required"); return; }
     if (!form.balanceAsOfDate) { toast.error("Balance as-of date is required"); return; }
@@ -86,14 +97,23 @@ export function LoansManager({
     }
     setSaving(true);
     try {
-      const created = await createLoan(companyId, { ...form, dueAfterYear });
-      const next = [...loans, created];
-      setLoans(next);
-      publishCount(next);
+      const payload = { ...form, dueAfterYear };
+      if (editingId != null) {
+        // PUT preserves the loan id and audit continuity (no delete + re-add).
+        const updated = await updateLoan(companyId, editingId, payload);
+        setLoans((prev) => prev.map((l) => (l.id === editingId ? updated : l)));
+        toast.success("Loan updated");
+      } else {
+        const created = await createLoan(companyId, payload);
+        const next = [...loans, created];
+        setLoans(next);
+        publishCount(next);
+        toast.success("Loan recorded");
+      }
+      setEditingId(null);
       setForm(emptyForm(periodEnd));
-      toast.success("Loan recorded");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to record loan");
+      toast.error(err instanceof Error ? err.message : "Failed to save loan");
     } finally {
       setSaving(false);
     }
@@ -146,14 +166,24 @@ export function LoansManager({
                   {formatCurrency(l.balance)}
                 </span>
                 {canWrite && (
-                  <button
-                    type="button"
-                    onClick={() => l.id && handleDelete(l.id)}
-                    className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400"
-                    aria-label={`Delete loan from ${l.lender}`}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => startEdit(l)}
+                      className="text-gray-400 hover:text-emerald-600 dark:text-gray-500 dark:hover:text-emerald-400"
+                      aria-label={`Edit loan from ${l.lender}`}
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => l.id && handleDelete(l.id)}
+                      className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400"
+                      aria-label={`Delete loan from ${l.lender}`}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </>
                 )}
               </div>
             </div>
@@ -263,9 +293,18 @@ export function LoansManager({
             />
             Loan from a director
           </label>
-          <Button variant="primary" size="sm" onPress={handleAdd} isDisabled={saving}>
-            {saving ? <Spinner size="sm" /> : <><Plus className="w-4 h-4 mr-1" /> Add Loan</>}
-          </Button>
+          <div className="flex items-center gap-2">
+            {editingId != null && (
+              <Button variant="ghost" size="sm" onPress={cancelEdit} isDisabled={saving}>
+                <X className="w-4 h-4 mr-1" /> Cancel
+              </Button>
+            )}
+            <Button variant="primary" size="sm" onPress={handleSubmit} isDisabled={saving}>
+              {saving ? <Spinner size="sm" /> : editingId != null
+                ? <>Save changes</>
+                : <><Plus className="w-4 h-4 mr-1" /> Add Loan</>}
+            </Button>
+          </div>
         </div>
       </div>
       )}
