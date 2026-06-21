@@ -96,10 +96,17 @@ public sealed class FilingGoldenPathPostgresIntegrationTests : IAsyncLifetime
 
     private static async Task RunGoldenFilingPathAsync(AccountsDbContext db)
     {
-        // --- Onboard: company + first accounting period -----------------------------------------
+        // --- Onboard: tenant + company + first accounting period --------------------------------
+        // A real PostgreSQL schema enforces FK_companies_tenants_TenantId, so the owning tenant must
+        // exist before the company is inserted (the EF InMemory provider does not enforce FKs, which
+        // previously let a hard-coded TenantId = 1 pass locally but fail on the real-Postgres CI run).
+        var tenant = new Tenant { Name = "Filing Path Firm", Slug = "filing-path-firm" };
+        db.Tenants.Add(tenant);
+        await db.SaveChangesAsync();
+
         var company = new Company
         {
-            TenantId = 1,
+            TenantId = tenant.Id,
             LegalName = "Postgres Filing Path Limited",
             CroNumber = Guid.NewGuid().ToString("N")[..12],
             CompanyType = CompanyType.Private,
