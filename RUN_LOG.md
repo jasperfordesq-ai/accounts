@@ -347,3 +347,56 @@ data is enterable via the API today. **Deferred as a coherent block for a focuse
   real CRO/ROS/CT1 specs + opening-TB-takeon (Phase 5), period-state-machine + concurrency + tenant-filter
   (Phase 4), ops infra (Phase 6). See `DAILY_REVIEW.md` for the full per-item table and HD flags.
 - Branch `daily/finish-2026-06-21` left for review — **not merged, not pushed.**
+
+---
+
+# Frontend Trust Run Log — 2026-06-21 (PLATFORM_AUDIT Phase 2 — make all the money enterable)
+
+Branch: `daily/frontend-trust-2026-06-21` (off `main`).
+Goal: close the Phase 2 P0/P1 entry-UI backlog in `PLATFORM_AUDIT_2026-06-21.md`, enabled by the
+deferred Phase 0 render harness. Each item proven by a render test I saw pass; one item per commit.
+Not merged — left for review.
+
+## Pre-flight
+- **Branch `refactor/architecture-2026-06-21`**: already fast-forward-merged into `main` (main HEAD
+  `e33649a` == the refactor branch tip). Nothing to rebase; the branch can be deleted. Decision resolved.
+- **CI was RED on `main`** (last two pushes failed). Root cause: the Postgres-gated golden filing-path
+  test hard-coded `TenantId = 1` on the company; EF InMemory ignores FKs so the `[Fact]` twin passed
+  locally, but the real-Postgres `[PostgresFact]` in CI violated `FK_companies_tenants_TenantId`. Fixed
+  as the first commit (seed a tenant). **The fix makes CI green once this branch merges; main itself is
+  still red until then (guardrail forbids committing to main).**
+
+## Baseline (green, recorded so any regression is attributable)
+- **Backend** (`dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$TEMP/accts-inmem`, InMemory):
+  **541 pass / 3 skip / 0 fail** (1m12s). The 3 skips are Postgres-only; I verified the golden-path
+  Postgres test passes against a real local PostgreSQL 16.4 after the CI fix (2/2).
+- **Frontend**: `npm test` (13 unit pass), `npm run lint` clean, `npx tsc --noEmit` clean, `npm run
+  build` exit 0.
+
+Any later regression below this line is attributable to this session's changes.
+
+## Items
+<!-- One line per item: id — what changed — test — result -->
+- **`tests-ci-filing-path-on-postgres` (CI fix, pre-flight)** ✅ — seed a `Tenant` before the company in
+  `FilingGoldenPathPostgresIntegrationTests` so the real-Postgres FK is satisfied. Verified 2/2 (InMemory
+  + real local Postgres). Commit `6986b09`.
+- **`frontend-render-harness` (P1)** ✅ — Vitest + @testing-library/react + jsdom wired via
+  `npm run test:render`, chained into `npm test` (CI runs it through the existing Frontend job step — no
+  `ci.yml` change, so the CI-structure guard test stays green). jsdom setup polyfills matchMedia /
+  ResizeObserver / IntersectionObserver / pointer-capture / scrollIntoView so HeroUI v3 (React Aria) +
+  framer-motion render and a Button fires `onPress` under user-event. Shared `installFetchMock` +
+  `setCsrfCookie` helpers record the real `@/lib/api` request (path/method/payload + `X-CSRF-Token`).
+  Smoke test 3/3. Commit `d442d61`.
+- **`frontend-share-capital-no-ui` (P0)** ✅ — company-scoped `ShareCapitalCard` on the company detail
+  page (alongside Officers). Issued shares feed BS share capital / SOCIE / the Share Capital note. Render
+  test 3/3: form renders, submit issues `POST /api/companies/7/share-capital` with payload + CSRF, missing
+  fields issue no POST. Commit `1f5bd3a`.
+- **`frontend-loans-no-ui` (P0)** ✅ — `LoansManager` replaces the year-end Loans section's "managed in
+  Company Setup" dead-end. DueWithin/DueAfter split derived from balance so it cross-adds; balanceAsOfDate
+  defaults to period end. Render test 3/3: `POST /api/companies/7/loans` with payload + derived split +
+  CSRF; as-of-before-drawdown issues no POST. Commit `dd675c4`.
+- **`frontend-director-loans-no-entry` (P1)** ✅ — `DirectorLoansManager` (period-scoped) makes director
+  loans enterable, so s.236 / overdrawn-DLA compliance can actually fire; director dropdown from the
+  company's director officers; closing/max derived; compliance summary refreshed on save. Render test
+  3/3: `POST /api/companies/7/periods/3/director-loans` with payload + CSRF; no-directors case blocked.
+  Commit `add057d`.
