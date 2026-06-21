@@ -13595,9 +13595,7 @@ public class AccountsWorkflowTests
         Assert.Contains("npm audit --audit-level=moderate", frontendJob);
         Assert.Contains("npm run lint", frontendJob);
         Assert.Contains("npx tsc --noEmit --incremental false", frontendJob);
-        Assert.Contains("npm run test:readiness", frontendJob);
-        Assert.Contains("npm run test:proxy", frontendJob);
-        Assert.Contains("npm run test:auth", frontendJob);
+        Assert.Contains("npm test", frontendJob);
         Assert.Contains("npm run build", frontendJob);
         Assert.Contains("API_URL", frontendJob);
         Assert.Contains("ACCOUNTS_API_KEY", frontendJob);
@@ -13605,6 +13603,12 @@ public class AccountsWorkflowTests
         Assert.Contains("::add-mask::", frontendJob);
         Assert.Contains("GITHUB_ENV", frontendJob);
         Assert.DoesNotContain("ACCOUNTS_API_KEY: ", frontendJob);
+
+        // CI runs the whole frontend suite through `npm test`; that aggregate must keep chaining every
+        // gate (unit harness + readiness + proxy + auth + api-client) so none can silently drop from CI.
+        var frontendPackageJson = File.ReadAllText(Path.Combine(RepositoryRoot(), "frontend", "package.json"));
+        foreach (var suite in new[] { "test:unit", "test:readiness", "test:proxy", "test:auth", "test:api-client" })
+            Assert.Contains(suite, frontendPackageJson);
 
         var productionConfigJob = WorkflowJob(workflow, "production-config");
         Assert.Contains("actions/checkout", productionConfigJob);
