@@ -1664,6 +1664,15 @@ public static class YearEndEndpoints
         if (await RequirePeriodWriteAccessAsync(db, companyId, periodId, context) is { } denied)
             return denied;
 
+        // accounting-tax-balance-internal-consistency: the triple must be self-consistent. A verbatim
+        // inconsistent triple (e.g. Balance != Liability - Paid) mis-states creditors and profit-after-
+        // tax downstream. Liability and Paid are amounts and cannot be negative; the outstanding Balance
+        // must equal Liability - Paid (a negative Balance is a legitimate overpayment / refund due).
+        if (input.Liability < 0 || input.Paid < 0)
+            return Results.BadRequest(new { error = "Tax liability and amount paid must not be negative." });
+        if (Math.Abs(input.Balance - (input.Liability - input.Paid)) > 0.005m)
+            return Results.BadRequest(new { error = "Tax balance must equal liability minus amount paid." });
+
         var item = await db.TaxBalances.FirstOrDefaultAsync(t => t.PeriodId == periodId && t.TaxType == taxType);
         var wasCreated = item is null;
         var oldValue = item is null ? null : TaxBalanceSnapshot(item);

@@ -11113,6 +11113,46 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task UpsertTaxBalance_RejectsInconsistentOrNegativeTriple()
+    {
+        // accounting-tax-balance-internal-consistency: the upsert previously stored the triple verbatim,
+        // so Balance != Liability - Paid (or a negative liability/paid) mis-stated creditors and
+        // profit-after-tax. The endpoint must reject an inconsistent/negative triple and accept a
+        // consistent one (including a legitimate overpayment producing a negative Balance).
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var audit = new AuditService(db);
+        IStatusCodeHttpResult StatusOf(IResult r) => Assert.IsAssignableFrom<IStatusCodeHttpResult>(r);
+        HttpContext Ctx() => AuthenticatedRequest("Accountant", HttpMethods.Put,
+            $"/api/companies/{period.CompanyId}/periods/{period.Id}/tax-balances/CorporationTax");
+
+        var inconsistent = await YearEndEndpoints.UpsertTaxBalanceEndpointAsync(
+            period.CompanyId, period.Id, TaxType.CorporationTax,
+            new TaxBalance { Liability = 1_000m, Paid = 200m, Balance = 900m }, db, audit, Ctx());
+        var negative = await YearEndEndpoints.UpsertTaxBalanceEndpointAsync(
+            period.CompanyId, period.Id, TaxType.CorporationTax,
+            new TaxBalance { Liability = -50m, Paid = 0m, Balance = -50m }, db, audit, Ctx());
+
+        Assert.Equal(StatusCodes.Status400BadRequest, StatusOf(inconsistent).StatusCode);
+        Assert.Equal(StatusCodes.Status400BadRequest, StatusOf(negative).StatusCode);
+        Assert.Empty(await db.TaxBalances.ToListAsync());
+
+        // A consistent triple (Balance == Liability - Paid) persists.
+        var consistent = await YearEndEndpoints.UpsertTaxBalanceEndpointAsync(
+            period.CompanyId, period.Id, TaxType.CorporationTax,
+            new TaxBalance { Liability = 1_000m, Paid = 200m, Balance = 800m }, db, audit, Ctx());
+        Assert.Equal(StatusCodes.Status200OK, StatusOf(consistent).StatusCode);
+        Assert.Equal(800m, (await db.TaxBalances.SingleAsync()).Balance);
+
+        // An overpayment (refund due) is consistent and allowed: -20 == 100 - 120.
+        var overpaid = await YearEndEndpoints.UpsertTaxBalanceEndpointAsync(
+            period.CompanyId, period.Id, TaxType.CorporationTax,
+            new TaxBalance { Liability = 100m, Paid = 120m, Balance = -20m }, db, audit, Ctx());
+        Assert.Equal(StatusCodes.Status200OK, StatusOf(overpaid).StatusCode);
+        Assert.Equal(-20m, (await db.TaxBalances.SingleAsync()).Balance);
+    }
+
+    [Fact]
     public async Task YearEndEvidence_DeniesReviewerPreparationWriteWithoutApiAccessService()
     {
         await using var db = CreateDbContext();

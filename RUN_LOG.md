@@ -129,5 +129,10 @@ Any later regression below this line is attributable to this session's changes.
   with a clean 400 and stores nothing — a brought-forward figure on a 4xxx/5xxx/6xxx code would fold into
   current-year turnover/expenses. Balance-sheet accounts (e.g. retained earnings) still accepted. Test
   `UpsertOpeningBalance_RejectsIncomeAndExpenseAccountsButAllowsBalanceSheetAccounts`. Full suite
-  **516 pass / 3 skip**.
+  **516 pass / 3 skip**. Commit `c071708`.
+- **`accounting-tax-balance-internal-consistency`** (P1) ✅ — `UpsertTaxBalanceEndpointAsync` now
+  validates the triple before storing: `Liability`/`Paid` non-negative and `Balance == Liability − Paid`
+  (within €0.005); a negative `Balance` is allowed as a legitimate overpayment/refund. An inconsistent
+  triple previously stored verbatim, mis-stating creditors and profit-after-tax. Test
+  `UpsertTaxBalance_RejectsInconsistentOrNegativeTriple`. Full suite **517 pass / 3 skip**.
 
