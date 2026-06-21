@@ -41,6 +41,14 @@ public class ProductionSafetyService(
             failures.Add("DefaultConnection appears to use the development database password outside development.");
         }
 
+        // crypto-tls-to-db: outside development the DB connection must require TLS (sslmode
+        // require/verify-ca/verify-full), so accounting data is not sent to PostgreSQL in clear text.
+        if (!string.IsNullOrWhiteSpace(connectionString) && !dbStartup.AllowInsecureDatabaseConnection
+            && !DatabaseConnectionRequiresTls(connectionString))
+        {
+            failures.Add("DefaultConnection must require TLS outside development (set SSL Mode=Require, VerifyCA or VerifyFull), or set DatabaseStartup:AllowInsecureDatabaseConnection=true deliberately.");
+        }
+
         if (allowedOrigins.Length == 0)
             failures.Add("AllowedOrigins must be explicitly configured outside development.");
 
@@ -90,6 +98,22 @@ public class ProductionSafetyService(
         var failures = Validate();
         if (failures.Count > 0)
             throw new InvalidOperationException("Unsafe production configuration: " + string.Join(" ", failures));
+    }
+
+    // crypto-tls-to-db: a connection requires TLS only when its SSL mode is Require / VerifyCA /
+    // VerifyFull. A missing or weaker mode (Disable/Allow/Prefer) does not guarantee an encrypted link.
+    private static bool DatabaseConnectionRequiresTls(string connectionString)
+    {
+        try
+        {
+            var builder = new Npgsql.NpgsqlConnectionStringBuilder(connectionString);
+            return builder.SslMode is Npgsql.SslMode.Require or Npgsql.SslMode.VerifyCA or Npgsql.SslMode.VerifyFull;
+        }
+        catch
+        {
+            // Unparseable connection string — fail safe (treat as not TLS-required).
+            return false;
+        }
     }
 
     private static IReadOnlyList<string> ValidateBootstrapOwner(BootstrapOwnerConfig bootstrap)

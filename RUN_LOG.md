@@ -327,3 +327,12 @@ data is enterable via the API today. **Deferred as a coherent block for a focuse
   guard (Owner + ≥10-char reason) is already enforced, and every Finalised/Filed transition is already
   gated by the readiness/consistency checks. Deferred for the user's design decision.
 
+### Phase 6 — Operate it without an engineer
+- **`crypto-tls-to-db`** (P2, M, HD) ✅ — `ProductionSafetyService` now fails fast at boot outside
+  Development when the DB connection does not require TLS (SSL Mode Require/VerifyCA/VerifyFull), so
+  accounting data is never sent to PostgreSQL in clear text. New `DatabaseStartup:AllowInsecureDatabaseConnection`
+  opt-out for a deliberately-unencrypted private link. Test
+  `ProductionSafety_RequiresDatabaseTlsOutsideDevelopmentUnlessExplicitlyAllowed`; the existing
+  valid-production-config fixtures were updated to use a TLS connection string. HD flag: the TLS posture
+  (and the opt-out) is a deployment decision.
+

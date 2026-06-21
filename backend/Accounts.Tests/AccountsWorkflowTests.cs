@@ -6134,7 +6134,7 @@ public class AccountsWorkflowTests
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["AllowedHosts"] = "accounts.example.ie",
-                ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password",
+                ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password;SSL Mode=Require",
                 ["AllowedOrigins:0"] = "https://accounts.example.ie",
                 ["AuthSession:SigningKey"] = StrongSessionSigningKey()
             })
@@ -6220,7 +6220,7 @@ public class AccountsWorkflowTests
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["AllowedHosts"] = "accounts.example.ie",
-                ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password",
+                ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password;SSL Mode=Require",
                 ["AllowedOrigins:0"] = "https://accounts.example.ie",
                 ["AuthSession:SigningKey"] = StrongSessionSigningKey()
             })
@@ -6280,7 +6280,7 @@ public class AccountsWorkflowTests
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["AllowedHosts"] = "accounts.example.ie",
-                ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password",
+                ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password;SSL Mode=Require",
                 ["AllowedOrigins:0"] = "https://accounts.example.ie",
                 ["AuthSession:SigningKey"] = StrongSessionSigningKey()
             })
@@ -6324,13 +6324,64 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public void ProductionSafety_RequiresDatabaseTlsOutsideDevelopmentUnlessExplicitlyAllowed()
+    {
+        // crypto-tls-to-db: outside development the DB connection must require TLS; an opt-out flag
+        // allows an unencrypted link deliberately.
+        IConfiguration Config(string connectionString) => new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["AllowedHosts"] = "accounts.example.ie",
+                ["ConnectionStrings:DefaultConnection"] = connectionString,
+                ["AllowedOrigins:0"] = "https://accounts.example.ie",
+                ["AuthSession:SigningKey"] = StrongSessionSigningKey()
+            })
+            .Build();
+
+        ProductionSafetyService Build(string connectionString, bool allowInsecure)
+        {
+            var config = Config(connectionString);
+            return new ProductionSafetyService(
+                new TestEnvironment("Staging"),
+                config,
+                Options.Create(new DatabaseStartupConfig { AutoMigrateOnStartup = false, SeedDemoData = false, AllowInsecureDatabaseConnection = allowInsecure }),
+                AuthSessionOptions(config),
+                new ApiAccessService(
+                    Options.Create(new ApiAccessConfig
+                    {
+                        Enabled = true,
+                        RequireInProduction = true,
+                        Keys = [new ApiAccessKeyConfig { Name = "Production firm", KeyHash = ApiAccessService.HashKey("real-secret") }]
+                    }),
+                    new TestEnvironment("Staging")),
+                Options.Create(AuditIntegrityCheckpointOptions()),
+                Options.Create(new BootstrapOwnerConfig
+                {
+                    Enabled = true,
+                    TenantName = "Production Firm",
+                    TenantSlug = "production-firm",
+                    OwnerEmail = "owner@example.ie",
+                    OwnerDisplayName = "Owner User",
+                    OwnerInitialPassword = "Correct Horse Battery Staple 1!"
+                }));
+        }
+
+        // No SSL mode -> blocked.
+        Assert.Contains(Build("Host=db;Password=secure-prod-password", allowInsecure: false).Validate(), f => f.Contains("must require TLS"));
+        // Secure SSL mode -> not blocked.
+        Assert.DoesNotContain(Build("Host=db;Password=secure-prod-password;SSL Mode=VerifyFull", allowInsecure: false).Validate(), f => f.Contains("must require TLS"));
+        // Explicit opt-out -> not blocked even without TLS.
+        Assert.DoesNotContain(Build("Host=db;Password=secure-prod-password", allowInsecure: true).Validate(), f => f.Contains("must require TLS"));
+    }
+
+    [Fact]
     public void ProductionSafety_BlocksMissingAuditIntegritySigningKeyInProduction()
     {
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["AllowedHosts"] = "accounts.example.ie",
-                ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password",
+                ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password;SSL Mode=Require",
                 ["AllowedOrigins:0"] = "https://accounts.example.ie",
                 ["AuthSession:SigningKey"] = StrongSessionSigningKey()
             })
@@ -6410,7 +6461,7 @@ public class AccountsWorkflowTests
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["AllowedHosts"] = "accounts.example.ie",
-                ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password",
+                ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password;SSL Mode=Require",
                 ["AllowedOrigins:0"] = "https://accounts.example.ie",
                 ["AuthSession:SigningKey"] = StrongSessionSigningKey(),
                 ["RateLimits:TrustForwardedFor"] = "true",
@@ -6453,7 +6504,7 @@ public class AccountsWorkflowTests
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["AllowedHosts"] = "accounts.example.ie",
-                ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password",
+                ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password;SSL Mode=Require",
                 ["AllowedOrigins:0"] = "https://accounts.example.ie",
                 ["AuthSession:SigningKey"] = StrongSessionSigningKey(),
                 ["RateLimits:TrustForwardedFor"] = "true"
@@ -6497,7 +6548,7 @@ public class AccountsWorkflowTests
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["AllowedHosts"] = " ",
-                ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password",
+                ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password;SSL Mode=Require",
                 ["AllowedOrigins:0"] = "https://accounts.example.ie",
                 ["AuthSession:SigningKey"] = StrongSessionSigningKey()
             })
@@ -6540,7 +6591,7 @@ public class AccountsWorkflowTests
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["AllowedHosts"] = "*",
-                ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password",
+                ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password;SSL Mode=Require",
                 ["AllowedOrigins:0"] = "https://accounts.example.ie",
                 ["AuthSession:SigningKey"] = StrongSessionSigningKey()
             })
@@ -6583,7 +6634,7 @@ public class AccountsWorkflowTests
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["AllowedHosts"] = "accounts.example.ie",
-                ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password",
+                ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password;SSL Mode=Require",
                 ["AllowedOrigins:0"] = "http://accounts.example.ie",
                 ["AuthSession:SigningKey"] = StrongSessionSigningKey()
             })
@@ -6625,7 +6676,7 @@ public class AccountsWorkflowTests
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password",
+                ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password;SSL Mode=Require",
                 ["AllowedOrigins:0"] = "https://accounts.example.ie",
                 ["AuthSession:SigningKey"] = new string('a', 64)
             })
@@ -6667,7 +6718,7 @@ public class AccountsWorkflowTests
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password",
+                ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password;SSL Mode=Require",
                 ["AllowedOrigins:0"] = "https://accounts.example.ie",
                 ["AuthSession:SigningKey"] = "not-a-base64-session-secret-value!!!!!"
             })
@@ -6709,7 +6760,7 @@ public class AccountsWorkflowTests
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password",
+                ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password;SSL Mode=Require",
                 ["AllowedOrigins:0"] = "https://accounts.example.ie",
                 ["AuthSession:SigningKey"] = DevelopmentSessionSigningKey()
             })
@@ -6752,7 +6803,7 @@ public class AccountsWorkflowTests
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["AllowedHosts"] = "accounts.example.ie",
-                ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password",
+                ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password;SSL Mode=Require",
                 ["AllowedOrigins:0"] = "https://accounts.example.ie",
                 ["AuthSession:SigningKey"] = StrongSessionSigningKey()
             })
@@ -6793,7 +6844,7 @@ public class AccountsWorkflowTests
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["AllowedHosts"] = "accounts.example.ie",
-                ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password",
+                ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password;SSL Mode=Require",
                 ["AllowedOrigins:0"] = "https://accounts.example.ie",
                 ["AuthSession:SigningKey"] = StrongSessionSigningKeyBase64Url()
             })
@@ -6835,7 +6886,7 @@ public class AccountsWorkflowTests
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password",
+                ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password;SSL Mode=Require",
                 ["AllowedOrigins:0"] = "https://accounts.example.ie",
                 ["AuthSession:SigningKey"] = StrongSessionSigningKey(),
                 ["AuthSession:ExpiryMinutes"] = expiryMinutes.ToString()
@@ -6877,7 +6928,7 @@ public class AccountsWorkflowTests
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password",
+                ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password;SSL Mode=Require",
                 ["AllowedOrigins:0"] = "https://accounts.example.ie",
                 ["AuthSession:SigningKey"] = StrongSessionSigningKey(),
                 ["AuthSession:SecureCookiesInProduction"] = "false"
