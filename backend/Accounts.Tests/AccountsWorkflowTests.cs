@@ -1510,6 +1510,83 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task BalanceSheet_NoShareCapital_HasNoPlugAndBlocksReadinessExceptForCLG()
+    {
+        // accounting-share-capital-and-dividends-reserves: a company with no recorded share capital must
+        // report €0 (not a fabricated €1 plug) and be blocked at readiness — unless it is a company
+        // limited by guarantee, which legitimately has no share capital.
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true); // CompanyType.Private by default
+        var statements = new FinancialStatementsService(db);
+
+        var bs = await statements.GetBalanceSheetAsync(period.CompanyId, period.Id);
+        Assert.Equal(0m, bs.CapitalAndReserves.ShareCapital); // no €1 plug
+
+        var readiness = await statements.GetReadinessScoreAsync(period.CompanyId, period.Id);
+        Assert.Contains("Share capital not recorded", readiness.MissingItems);
+
+        var company = await db.Companies.FirstAsync(c => c.Id == period.CompanyId);
+        company.CompanyType = CompanyType.CompanyLimitedByGuarantee;
+        await db.SaveChangesAsync();
+        var clgReadiness = await statements.GetReadinessScoreAsync(period.CompanyId, period.Id);
+        Assert.DoesNotContain("Share capital not recorded", clgReadiness.MissingItems);
+    }
+
+    [Fact]
+    public async Task Dividends_ProposedDoesNotReduceReserves_PaidDoes()
+    {
+        // accounting-share-capital-and-dividends-reserves: a proposed (DatePaid == null) dividend must
+        // NOT reduce reserves; once paid, it reduces reserves consistently with the financing cash-flow.
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var companyId = period.CompanyId;
+        var categories = await new CategoryService(db).SeedDefaultCategoriesAsync(companyId);
+        int Cat(string code) => categories.Single(c => c.Code == code).Id;
+        db.ShareCapitals.Add(new ShareCapital
+        {
+            CompanyId = companyId,
+            ShareClass = "Ordinary",
+            NumberIssued = 100,
+            NominalValue = 1m,
+            TotalValue = 100m,
+            IssueDate = period.PeriodStart
+        });
+        var bank = new BankAccount { CompanyId = companyId, Name = "Current Account", OpeningBalance = 100m, OpeningBalanceDate = period.PeriodStart };
+        db.BankAccounts.Add(bank);
+        await db.SaveChangesAsync();
+        db.OpeningBalances.Add(new OpeningBalance { PeriodId = period.Id, AccountCategoryId = Cat("3000"), Credit = 100m, EnteredBy = "r", Reviewed = true });
+        db.ImportedTransactions.Add(new ImportedTransaction
+        {
+            BankAccountId = bank.Id,
+            PeriodId = period.Id,
+            Date = new DateOnly(2025, 6, 1),
+            Description = "Sales invoice INV001",
+            Amount = 1_000m,
+            CategoryId = Cat("4000")
+        });
+        await db.SaveChangesAsync();
+
+        var statements = new FinancialStatementsService(db);
+        var baseline = await statements.GetBalanceSheetAsync(companyId, period.Id);
+        Assert.Equal(1_000m, baseline.CapitalAndReserves.RetainedEarnings);
+
+        // Proposed (unpaid) dividend: reserves and the dividends-paid figure are unchanged.
+        var dividend = new Dividend { PeriodId = period.Id, Amount = 400m, DateDeclared = new DateOnly(2025, 12, 1) };
+        db.Dividends.Add(dividend);
+        await db.SaveChangesAsync();
+        var proposed = await statements.GetBalanceSheetAsync(companyId, period.Id);
+        Assert.Equal(0m, proposed.CapitalAndReserves.DividendsPaid);
+        Assert.Equal(1_000m, proposed.CapitalAndReserves.RetainedEarnings);
+
+        // Once paid, it reduces reserves.
+        dividend.DatePaid = new DateOnly(2025, 12, 20);
+        await db.SaveChangesAsync();
+        var paid = await statements.GetBalanceSheetAsync(companyId, period.Id);
+        Assert.Equal(400m, paid.CapitalAndReserves.DividendsPaid);
+        Assert.Equal(600m, paid.CapitalAndReserves.RetainedEarnings);
+    }
+
+    [Fact]
     public async Task ProfitAndLoss_TreatsCapexAsCapitalNotRevenueExpense()
     {
         // BL-32: a fixed-asset purchase coded to an asset account is capital — it does not reduce
@@ -2837,7 +2914,9 @@ public class AccountsWorkflowTests
         var error = await Assert.ThrowsAsync<BusinessRuleException>(() => documents.GenerateCroFilingPackAsync(period.CompanyId, period.Id));
 
         Assert.Contains("Cannot generate final CRO filing pack", error.Message);
-        Assert.Contains("balance sheet does not balance", error.Message);
+        // €1 share-capital plug removed: an empty company's balance sheet now correctly balances at 0,
+        // so assert a still-guaranteed open blocker instead (size classification is the first one).
+        Assert.Contains("Size classification not completed", error.Message);
     }
 
     [Fact]
@@ -2860,7 +2939,9 @@ public class AccountsWorkflowTests
         var error = await Assert.ThrowsAsync<BusinessRuleException>(() => documents.GenerateSignaturePageAsync(period.CompanyId, period.Id));
 
         Assert.Contains("Cannot generate final CRO signature page", error.Message);
-        Assert.Contains("balance sheet does not balance", error.Message);
+        // €1 share-capital plug removed: an empty company's balance sheet now correctly balances at 0,
+        // so assert a still-guaranteed open blocker instead (size classification is the first one).
+        Assert.Contains("Size classification not completed", error.Message);
     }
 
     [Fact]
@@ -2924,7 +3005,9 @@ public class AccountsWorkflowTests
             : await Assert.ThrowsAsync<BusinessRuleException>(() => documents.GenerateAgmApprovalPackAsync(period.CompanyId, period.Id));
 
         Assert.Contains($"Cannot generate final {packageName}", error.Message);
-        Assert.Contains("balance sheet does not balance", error.Message);
+        // €1 share-capital plug removed: an empty company's balance sheet now correctly balances at 0,
+        // so assert a still-guaranteed open blocker instead (size classification is the first one).
+        Assert.Contains("Size classification not completed", error.Message);
         Assert.Contains("No transactions imported", error.Message);
     }
 
@@ -8268,7 +8351,9 @@ public class AccountsWorkflowTests
         var error = await Assert.ThrowsAsync<BusinessRuleException>(async () => await task);
 
         Assert.Contains("Cannot generate final iXBRL", error.Message);
-        Assert.Contains("balance sheet does not balance", error.Message);
+        // €1 share-capital plug removed: an empty company's balance sheet now correctly balances at 0,
+        // so assert a still-guaranteed open blocker instead (size classification is the first one).
+        Assert.Contains("Size classification not completed", error.Message);
         Assert.Contains("Internal iXBRL checks have not passed", error.Message);
     }
 

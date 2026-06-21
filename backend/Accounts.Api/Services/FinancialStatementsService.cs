@@ -665,14 +665,17 @@ public class FinancialStatementsService(AccountsDbContext db)
 
         // Capital and reserves are computed independently from equity movements.
         // Any difference is surfaced instead of being hidden inside retained earnings.
+        // accounting-share-capital-and-dividends-reserves: report the actual issued share capital with
+        // no €1 plug. A missing figure is surfaced as 0 (and as a readiness blocker / "not recorded"
+        // note) rather than fabricated, so the unexplained difference stays honest.
         var closingShareCapital = await GetShareCapitalAtAsync(companyId, period.PeriodEnd);
         var openingShareCapital = await GetOpeningEquityBalanceAsync(periodId, "3000");
-        var shareCapital = closingShareCapital != 0
-            ? closingShareCapital
-            : openingShareCapital != 0 ? openingShareCapital : 1m;
+        var shareCapital = closingShareCapital != 0 ? closingShareCapital : openingShareCapital;
         var openingRetainedEarnings = await GetOpeningRetainedEarningsAsync(period);
         var profitForYear = (await GetProfitAndLossForPeriodAsync(periodId)).ProfitAfterTax;
-        var dividendsPaid = await db.Dividends.Where(d => d.PeriodId == periodId).SumAsync(d => d.Amount);
+        // Only dividends actually paid reduce reserves; a proposed (DatePaid == null) dividend must not.
+        // This keeps reserves consistent with the financing cash-flow, which also counts paid dividends.
+        var dividendsPaid = await db.Dividends.Where(d => d.PeriodId == periodId && d.DatePaid != null).SumAsync(d => d.Amount);
         var retainedEarnings = openingRetainedEarnings + profitForYear - dividendsPaid;
         var totalCapital = shareCapital + retainedEarnings;
         var unexplainedDifference = netAssets - totalCapital;
@@ -707,8 +710,9 @@ public class FinancialStatementsService(AccountsDbContext db)
             return 0m;
 
         var priorProfit = (await GetProfitAndLossForPeriodAsync(priorPeriod.Id)).ProfitAfterTax;
+        // Only paid dividends reduce prior-year reserves carried forward (see reserves note above).
         var priorDividends = await db.Dividends
-            .Where(d => d.PeriodId == priorPeriod.Id)
+            .Where(d => d.PeriodId == priorPeriod.Id && d.DatePaid != null)
             .SumAsync(d => d.Amount);
         var earlierOpening = await GetOpeningRetainedEarningsAsync(priorPeriod);
 
@@ -847,6 +851,18 @@ public class FinancialStatementsService(AccountsDbContext db)
         var hasDividends = await db.Dividends.AnyAsync(d => d.PeriodId == periodId);
         if (hasDividends || reviewed.Contains("dividends")) completedChecks++;
         else missing.Add("Dividends not reviewed");
+
+        // accounting-share-capital-and-dividends-reserves: a share-capital company must have its issued
+        // share capital recorded (no €1 plug). Block final outputs when none is recorded — except a
+        // company limited by guarantee, which legitimately has no share capital.
+        if (period.Company.CompanyType != CompanyType.CompanyLimitedByGuarantee)
+        {
+            var recordedShareCapital = await GetShareCapitalAtAsync(companyId, period.PeriodEnd);
+            if (recordedShareCapital == 0)
+                recordedShareCapital = await GetOpeningEquityBalanceAsync(periodId, "3000");
+            if (recordedShareCapital == 0)
+                missing.Add("Share capital not recorded");
+        }
 
         // 13. Other statutory disclosures reviewed?
         var hasPostBalanceSheetEvents = await db.PostBalanceSheetEvents.AnyAsync(e => e.PeriodId == periodId);
@@ -1095,9 +1111,9 @@ public class FinancialStatementsService(AccountsDbContext db)
         var period = await db.AccountingPeriods.Include(p => p.Company).FirstAsync(p => p.Id == periodId);
         var companyId = period.CompanyId;
 
-        // Current share capital
+        // Current share capital — actual issued value, no €1 plug
+        // (accounting-share-capital-and-dividends-reserves).
         var closingShareCapital = await GetShareCapitalAtAsync(companyId, period.PeriodEnd);
-        if (closingShareCapital == 0) closingShareCapital = 1m; // Default nominal
 
         // Prior period for opening balances
         var priorPeriod = await db.AccountingPeriods
@@ -1110,8 +1126,6 @@ public class FinancialStatementsService(AccountsDbContext db)
         if (priorPeriod != null)
         {
             openingShareCapital = await GetShareCapitalAtAsync(companyId, priorPeriod.PeriodEnd);
-            if (openingShareCapital == 0) openingShareCapital = 1m;
-
             openingRetainedEarnings = await GetOpeningRetainedEarningsAsync(period);
         }
         else
@@ -1128,9 +1142,9 @@ public class FinancialStatementsService(AccountsDbContext db)
         var pl = await GetProfitAndLossForPeriodAsync(periodId);
         var profitForYear = pl.ProfitAfterTax;
 
-        // Dividends paid in period
+        // Dividends paid in period — only paid dividends move reserves (a proposed dividend does not).
         var dividendsPaid = await db.Dividends
-            .Where(d => d.PeriodId == periodId)
+            .Where(d => d.PeriodId == periodId && d.DatePaid != null)
             .SumAsync(d => d.Amount);
 
         // Shares issued = difference in share capital

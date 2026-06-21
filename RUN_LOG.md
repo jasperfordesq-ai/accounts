@@ -147,5 +147,16 @@ Any later regression below this line is attributable to this session's changes.
   when a CT figure is entered and diverges from the computed total by > €1, a warning is added that
   blocks final outputs ("does not match the corporation tax computation"). Clears once the entered
   figure matches. Test `Readiness_WarnsWhenEnteredCorporationTaxDivergesFromComputation`. Golden paths
-  (which don't enter CT) unaffected. Full suite **519 pass / 3 skip**.
+  (which don't enter CT) unaffected. Full suite **519 pass / 3 skip**. Commit `83b58d1`.
+- **`accounting-share-capital-and-dividends-reserves`** (P1, **HUMAN DECISION flagged**) ✅ — removed the
+  €1 share-capital plug from the balance sheet AND the statement of changes in equity (share capital now
+  reports its actual issued value, 0 if none); the share-capital note states "No share capital has been
+  recorded" instead of fabricating a "1 Ordinary share". A non-CLG company with no recorded share
+  capital is now a readiness blocker ("Share capital not recorded"); a company limited by guarantee is
+  correctly exempt. Proposed (DatePaid==null) dividends no longer reduce reserves anywhere (BS, SOCIE,
+  opening-RE roll-forward) — consistent with the financing cash-flow, which already counts only paid
+  dividends. Tests `BalanceSheet_NoShareCapital_HasNoPlugAndBlocksReadinessExceptForCLG`,
+  `Dividends_ProposedDoesNotReduceReserves_PaidDoes`. Updated 5 block-tests whose "balance sheet does
+  not balance" assertion encoded the old plug bug (an empty company now correctly balances at 0; they
+  assert another guaranteed-open blocker). Full suite green.
 

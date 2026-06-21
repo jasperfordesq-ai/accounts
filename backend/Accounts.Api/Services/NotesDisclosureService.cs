@@ -200,9 +200,11 @@ public class NotesDisclosureService(AccountsDbContext db)
                 && s.IssueDate <= period.PeriodEnd
                 && (s.CancelledDate == null || s.CancelledDate > period.PeriodEnd))
             .ToListAsync();
+        // accounting-share-capital-and-dividends-reserves: state the truth when no share capital is
+        // recorded instead of fabricating a "1 Ordinary share" plug.
         var scContent = shareCapitals.Count > 0
             ? string.Join("\n", shareCapitals.Select(s => $"Authorised and issued: {s.NumberIssued} {s.ShareClass} shares of \u20ac{s.NominalValue:N2} each, fully paid: \u20ac{s.TotalValue:N0}"))
-            : "Authorised and issued: 1 Ordinary share of \u20ac1.00, fully paid: \u20ac1";
+            : "No share capital has been recorded for this company.";
         notes.Add(new NotesDisclosure { PeriodId = periodId, NoteNumber = num++, Title = "Share Capital", Content = scContent, IsRequired = true, IsIncluded = true });
 
         // Note: Staff numbers (if employer)
