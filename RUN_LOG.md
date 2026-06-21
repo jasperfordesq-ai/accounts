@@ -134,5 +134,12 @@ Any later regression below this line is attributable to this session's changes.
   validates the triple before storing: `Liability`/`Paid` non-negative and `Balance == Liability − Paid`
   (within €0.005); a negative `Balance` is allowed as a legitimate overpayment/refund. An inconsistent
   triple previously stored verbatim, mis-stating creditors and profit-after-tax. Test
-  `UpsertTaxBalance_RejectsInconsistentOrNegativeTriple`. Full suite **517 pass / 3 skip**.
+  `UpsertTaxBalance_RejectsInconsistentOrNegativeTriple`. Full suite **517 pass / 3 skip**. Commit `5ea57d6`.
+- **`accounting-tax-creditor-double-count`** (P1, **HUMAN DECISION flagged**) ✅ — the balance sheet
+  summed the same tax liability twice (`Creditors.Type==Tax` rows **and** `TaxBalances.Balance`).
+  **Decision (conservative default, flagged):** `TaxBalances` is the single source of tax owed (it drives
+  the P&L tax charge + CT computation; 0 tests/UI use `Creditors.Type==Tax`), so the tax-creditor line is
+  now `Σ TaxBalances.Balance` only and the redundant tax-creditor rows are excluded. Test
+  `BalanceSheet_DoesNotDoubleCountTaxCreditorAndTaxBalance` (€125 in both sources → tax creditor €125 not
+  €250, `UnexplainedDifference==0`). Full suite **518 pass / 3 skip**. Commit pending.
 

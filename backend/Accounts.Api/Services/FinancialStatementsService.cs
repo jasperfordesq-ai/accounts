@@ -636,10 +636,12 @@ public class FinancialStatementsService(AccountsDbContext db)
         // Creditors within year
         var tradeCreditors = await db.Creditors.Where(c => c.PeriodId == periodId && c.Type == CreditorType.Trade && c.DueWithinYear).SumAsync(c => c.Amount);
         var accruals = await db.Creditors.Where(c => c.PeriodId == periodId && c.Type == CreditorType.Accrual && c.DueWithinYear).SumAsync(c => c.Amount);
-        var taxCreditors = await db.Creditors.Where(c => c.PeriodId == periodId && c.Type == CreditorType.Tax && c.DueWithinYear).SumAsync(c => c.Amount);
-        // Add tax balances
-        var taxLiabilities = await db.TaxBalances.Where(t => t.PeriodId == periodId).SumAsync(t => t.Balance);
-        taxCreditors += taxLiabilities;
+        // accounting-tax-creditor-double-count [HUMAN DECISION flagged: single source of tax truth].
+        // TaxBalances is the single source of tax owed — it drives the P&L tax charge and the CT
+        // computation. Previously the same liability was summed twice: once from Creditors.Type==Tax
+        // rows AND once from TaxBalances.Balance. Tax owed is taken from TaxBalances only; tax recorded
+        // by a reviewer belongs in the year-end Tax section, not as a free-text creditor row.
+        var taxCreditors = await db.TaxBalances.Where(t => t.PeriodId == periodId).SumAsync(t => t.Balance);
         var otherCreditorsWithin = await db.Creditors.Where(c => c.PeriodId == periodId && c.Type == CreditorType.Other && c.DueWithinYear).SumAsync(c => c.Amount);
         // Add loan portions due within year
         var loanSnapshots = await GetLoanSnapshotsForPeriodAsync(companyId, periodId, period.PeriodStart, period.PeriodEnd);

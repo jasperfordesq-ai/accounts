@@ -1383,6 +1383,81 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task BalanceSheet_DoesNotDoubleCountTaxCreditorAndTaxBalance()
+    {
+        // accounting-tax-creditor-double-count [HUMAN DECISION: TaxBalances is the single source of tax].
+        // The same €125 CT liability is recorded BOTH as a TaxBalance and (redundantly) as a
+        // Creditors.Type==Tax row. Tax owed is taken from TaxBalances only, so the tax-creditor line is
+        // €125 (not €250) and the balance sheet still balances.
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var companyId = period.CompanyId;
+        var categories = await new CategoryService(db).SeedDefaultCategoriesAsync(companyId);
+        int Cat(string code) => categories.Single(c => c.Code == code).Id;
+
+        db.ShareCapitals.Add(new ShareCapital
+        {
+            CompanyId = companyId,
+            ShareClass = "Ordinary",
+            NumberIssued = 100,
+            NominalValue = 1m,
+            TotalValue = 100m,
+            IssueDate = period.PeriodStart
+        });
+        var bank = new BankAccount
+        {
+            CompanyId = companyId,
+            Name = "Current Account",
+            OpeningBalance = 100m,
+            OpeningBalanceDate = period.PeriodStart
+        };
+        db.BankAccounts.Add(bank);
+        await db.SaveChangesAsync();
+
+        db.OpeningBalances.Add(new OpeningBalance
+        {
+            PeriodId = period.Id,
+            AccountCategoryId = Cat("3000"),
+            Credit = 100m,
+            SourceNote = "Share capital subscribed at incorporation",
+            EnteredBy = "Accounts reviewer",
+            Reviewed = true
+        });
+        db.ImportedTransactions.Add(new ImportedTransaction
+        {
+            BankAccountId = bank.Id,
+            PeriodId = period.Id,
+            Date = new DateOnly(2025, 6, 1),
+            Description = "Sales invoice INV001",
+            Amount = 1_000m,
+            CategoryId = Cat("4000")
+        });
+        db.TaxBalances.Add(new TaxBalance
+        {
+            PeriodId = period.Id,
+            TaxType = TaxType.CorporationTax,
+            Liability = 125m,
+            Paid = 0m,
+            Balance = 125m
+        });
+        db.Creditors.Add(new Creditor
+        {
+            PeriodId = period.Id,
+            Name = "Corporation tax payable",
+            Amount = 125m,
+            Type = CreditorType.Tax,
+            DueWithinYear = true
+        });
+        await db.SaveChangesAsync();
+
+        var bs = await new FinancialStatementsService(db).GetBalanceSheetAsync(companyId, period.Id);
+
+        Assert.Equal(125m, bs.CreditorsWithinYear.TaxCreditors); // X, not 2X
+        Assert.Equal(0m, bs.CapitalAndReserves.UnexplainedDifference);
+        Assert.True(bs.Balances);
+    }
+
+    [Fact]
     public async Task ProfitAndLoss_TreatsCapexAsCapitalNotRevenueExpense()
     {
         // BL-32: a fixed-asset purchase coded to an asset account is capital — it does not reduce
