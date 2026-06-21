@@ -106,5 +106,20 @@ Any later regression below this line is attributable to this session's changes.
   golden-path tests now assert company legal name, period-end date and the computed net-assets total
   (`NetAssets.ToString("N0")` == BalanceSheet) appear in the rendered PDF, plus the micro **s.280D**
   statement; a new `AbridgedSmallCroPack_PdfContainsSection352WordingNameAndPeriodEnd` proves the
-  abridged CRO pack carries the **s.352** wording. PdfPig restored cleanly. Tests pass.
+  abridged CRO pack carries the **s.352** wording. PdfPig restored cleanly. Tests pass. Commit `6f1a0a2`.
+- **`tests-ci-filing-path-on-postgres`** (P1) ✅ — new `FilingGoldenPathPostgresIntegrationTests`: a
+  shared `RunGoldenFilingPathAsync` body drives onboard → real-CSV import → categorise → year-end nil
+  facts → classify → Micro regime → adjustments → notes → statements → accounts PDF → iXBRL, asserting
+  `UnexplainedDifference==0`, NetAssets 600, a `%PDF`-prefixed PDF and well-formed iXBRL. Runs on a real
+  PostgreSQL service in CI (`[PostgresFact]`, gated on `ACCOUNTS_POSTGRES_TEST_CONNECTION`) **and** on
+  InMemory (`[Fact]`) so the logic is proven locally. ⚠️ No local Postgres available, so the
+  Postgres variant is **CI-verified only** (InMemory twin green locally; identical body).
+- **`frontend-render-harness`** (P1) ⏸ **DEFERRED (logged, tree kept green).** Requires installing
+  Vitest + @testing-library/react + jsdom and rendering the ~1,900-line year-end / ~2,440-line period
+  Next-16 client components (HeroUI v3 + React Aria + `next/navigation`) — a large infra lift with real
+  risk to the currently-green `npm run build` / `npm test` / CI and little local verifiability under the
+  Next-16 breaking-change constraints (`frontend/AGENTS.md`). Deferring it (rather than risk a red tree)
+  to invest the session in Phase 1 money correctness, which is the trust core and is fully provable with
+  the existing backend test harness. Remaining work: add a Vitest/RTL config + smoke tests (year-end
+  sections render; add-debtor form POSTs path/method/payload/CSRF; filing tab per-status button).
 
