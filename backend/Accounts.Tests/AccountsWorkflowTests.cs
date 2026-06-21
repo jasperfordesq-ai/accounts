@@ -14523,7 +14523,8 @@ public class AccountsWorkflowTests
         }
 
         Assert.Contains("FileBackedConfiguration.AddFileBackedEnvironmentVariables(builder.Configuration)", program);
-        Assert.Contains("_FILE", program);
+        var hostingConfig = File.ReadAllText(Path.Combine(root, "backend", "Accounts.Api", "HostingConfiguration.cs"));
+        Assert.Contains("_FILE", hostingConfig);
         Assert.Contains("readServerSecret", proxyRoute);
         Assert.Contains("readServerSecret", readyHelper);
     }
@@ -14533,7 +14534,7 @@ public class AccountsWorkflowTests
     {
         var root = RepositoryRoot();
         var compose = File.ReadAllText(Path.Combine(root, "compose.production.yml"));
-        var program = File.ReadAllText(Path.Combine(root, "backend", "Accounts.Api", "Program.cs"));
+        var program = File.ReadAllText(Path.Combine(root, "backend", "Accounts.Api", "Endpoints", "SystemEndpoints.cs"));
         var apiService = ServiceBlock(compose, "api", "frontend");
 
         Assert.Contains("BootstrapOwner__TenantSlug: \"${BOOTSTRAP_TENANT_SLUG:?set BOOTSTRAP_TENANT_SLUG}\"", apiService);
@@ -14617,7 +14618,7 @@ public class AccountsWorkflowTests
     [Fact]
     public void HealthEndpoints_ExposeLivenessAndDatabaseReadiness()
     {
-        var program = File.ReadAllText(Path.Combine(RepositoryRoot(), "backend", "Accounts.Api", "Program.cs"));
+        var program = File.ReadAllText(Path.Combine(RepositoryRoot(), "backend", "Accounts.Api", "Endpoints", "SystemEndpoints.cs"));
 
         Assert.Contains("MapGet(\"/health/live\"", program);
         Assert.Contains("MapGet(\"/health/ready\"", program);
@@ -15479,7 +15480,7 @@ public class AccountsWorkflowTests
     {
         var root = RepositoryRoot();
         var source = File
-            .ReadAllText(Path.Combine(root, "backend", "Accounts.Api", "Program.cs"))
+            .ReadAllText(Path.Combine(root, "backend", "Accounts.Api", "Endpoints", "CompanyEndpoints.cs"))
             .Replace("\r\n", "\n");
         var periodStatusEndpoint = File
             .ReadAllText(Path.Combine(root, "backend", "Accounts.Api", "Endpoints", "PeriodStatusEndpoint.cs"))
@@ -15729,7 +15730,7 @@ public class AccountsWorkflowTests
     {
         var root = RepositoryRoot();
         var source = File
-            .ReadAllText(Path.Combine(root, "backend", "Accounts.Api", "Program.cs"))
+            .ReadAllText(Path.Combine(root, "backend", "Accounts.Api", "Endpoints", "CompanyEndpoints.cs"))
             .Replace("\r\n", "\n");
         var periodStatusEndpoint = File
             .ReadAllText(Path.Combine(root, "backend", "Accounts.Api", "Endpoints", "PeriodStatusEndpoint.cs"))
@@ -15796,7 +15797,7 @@ public class AccountsWorkflowTests
         {
             var start = source.IndexOf(marker, StringComparison.Ordinal);
             Assert.True(start >= 0, $"Expected to find endpoint marker {marker}.");
-            var nextMap = Regex.Match(source[start..], @"\n(?:companies|officers|periods)\.Map(?:Get|Post|Put|Delete)", RegexOptions.None, TimeSpan.FromSeconds(1));
+            var nextMap = Regex.Match(source[start..], @"\n\s*(?:companies|officers|periods)\.Map(?:Get|Post|Put|Delete)", RegexOptions.None, TimeSpan.FromSeconds(1));
             var end = nextMap.Success && nextMap.Index > 0
                 ? start + nextMap.Index
                 : source.IndexOf("\n\n//", start, StringComparison.Ordinal);
@@ -17620,7 +17621,7 @@ public class AccountsWorkflowTests
     [Fact]
     public void HealthReadiness_FailsWhenMigrationsOrOwnerBootstrapAreMissing()
     {
-        var program = File.ReadAllText(Path.Combine(RepositoryRoot(), "backend", "Accounts.Api", "Program.cs"));
+        var program = File.ReadAllText(Path.Combine(RepositoryRoot(), "backend", "Accounts.Api", "Endpoints", "SystemEndpoints.cs"));
 
         Assert.Contains("GetPendingMigrationsAsync", program);
         Assert.Contains("UserAccounts", program);
@@ -18151,7 +18152,7 @@ public class AccountsWorkflowTests
     public void PeriodStatusEndpoint_IsMappedAndChecksReadinessBeforeMutatingStatus()
     {
         var root = RepositoryRoot();
-        var program = File.ReadAllText(Path.Combine(root, "backend", "Accounts.Api", "Program.cs"));
+        var program = File.ReadAllText(Path.Combine(root, "backend", "Accounts.Api", "Endpoints", "CompanyEndpoints.cs"));
         var endpoint = File.ReadAllText(Path.Combine(root, "backend", "Accounts.Api", "Endpoints", "PeriodStatusEndpoint.cs"));
 
         Assert.Contains("periods.MapPut(\"/{id:int}/status\", PeriodStatusEndpoint.UpdateAsync)", program);
