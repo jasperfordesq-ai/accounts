@@ -64,6 +64,11 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
         var directors = company.Officers.Where(o => o.Role == OfficerRole.Director && o.ResignedDate == null).ToList();
         var secretary = company.Officers.FirstOrDefault(o => o.Role == OfficerRole.Secretary && o.ResignedDate == null);
 
+        // filing-directors-report-from-service: drive the PDF directors' report from DirectorsReportService
+        // (dormant wording when not trading, dividend disclosure, audit-info statement only when audited)
+        // instead of hardcoded boilerplate that falsely states a dormant company traded.
+        var directorsReport = await new DirectorsReportService(db, statementsService).GenerateAsync(companyId, periodId);
+
         return Document.Create(container =>
         {
             container.Page(page =>
@@ -89,7 +94,7 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
                         // Directors' Report (unless micro)
                         if (regime != ElectedRegime.Micro)
                         {
-                            ComposeDirectorsReport(col, company, period, directors, pl);
+                            ComposeDirectorsReport(col, period, directors, directorsReport);
                             col.Item().PageBreak();
                         }
 
@@ -177,22 +182,23 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
         });
     }
 
-    private static void ComposeDirectorsReport(ColumnDescriptor col, Company company, AccountingPeriod period, List<CompanyOfficer> directors, FinancialStatementsService.ProfitAndLoss pl)
+    private static void ComposeDirectorsReport(ColumnDescriptor col, AccountingPeriod period, List<CompanyOfficer> directors, DirectorsReportService.DirectorsReportData report)
     {
         col.Item().Text("DIRECTORS' REPORT").Bold().FontSize(14);
         col.Item().Text($"for the financial year ended {period.PeriodEnd:dd MMMM yyyy}").FontSize(10).Italic();
         col.Item().PaddingTop(10).Text(t =>
         {
             t.Span("The directors present their report and the financial statements of ");
-            t.Span(company.LegalName).Bold();
+            t.Span(report.CompanyName).Bold();
             t.Span($" for the financial year ended {period.PeriodEnd:dd MMMM yyyy}.");
         });
 
+        // Driven from DirectorsReportService: dormant wording when not trading, dividend disclosure.
         col.Item().PaddingTop(10).Text("Principal Activities").Bold();
-        col.Item().Text("The principal activity of the company during the financial year was its normal trading activities. There were no significant changes in the nature of the company's principal activities during the financial year.");
+        col.Item().Text(report.PrincipalActivities);
 
         col.Item().PaddingTop(10).Text("Results and Dividends").Bold();
-        col.Item().Text($"The profit for the financial year after providing for corporation tax amounted to \u20ac{pl.ProfitAfterTax:N0}.");
+        col.Item().Text(report.ResultsAndDividends);
 
         col.Item().PaddingTop(10).Text("Directors").Bold();
         col.Item().Text("The directors who held office during the financial year were:");
@@ -200,10 +206,26 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
             col.Item().PaddingLeft(20).Text($"\u2022 {d.Name}");
 
         col.Item().PaddingTop(10).Text("Accounting Records").Bold();
-        col.Item().Text("The directors acknowledge their responsibilities under Sections 281 to 285 of the Companies Act 2014 to keep adequate accounting records for the company.");
+        col.Item().Text(report.AccountingRecordsStatement);
 
-        col.Item().PaddingTop(10).Text("Statement on Relevant Audit Information").Bold();
-        col.Item().Text("Each of the persons who are directors at the time when this Directors' Report is approved has confirmed that, so far as that director is aware, there is no relevant audit information of which the company's auditors are unaware, and the director has taken all the steps that ought to have been taken as a director in order to be aware of any relevant audit information and to establish that the company's auditors are aware of that information.");
+        if (!string.IsNullOrWhiteSpace(report.GoingConcernStatement))
+        {
+            col.Item().PaddingTop(10).Text("Going Concern").Bold();
+            col.Item().Text(report.GoingConcernStatement);
+        }
+
+        if (!string.IsNullOrWhiteSpace(report.PostBalanceSheetEvents))
+        {
+            col.Item().PaddingTop(10).Text("Events Since the Balance Sheet Date").Bold();
+            col.Item().Text(report.PostBalanceSheetEvents);
+        }
+
+        // Statement on relevant audit information \u2014 only when the company is NOT audit-exempt.
+        if (!string.IsNullOrWhiteSpace(report.AuditInformationStatement))
+        {
+            col.Item().PaddingTop(10).Text("Statement on Relevant Audit Information").Bold();
+            col.Item().Text(report.AuditInformationStatement);
+        }
 
         col.Item().PaddingTop(20).Text("Signed on behalf of the Board:").Italic();
         col.Item().PaddingTop(30).Text("___________________________");

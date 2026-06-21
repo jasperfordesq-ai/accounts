@@ -265,4 +265,11 @@ data is enterable via the API today. **Deferred as a coherent block for a focuse
   `FinalOutputs_BlockedForNonAuditExemptEntityUntilAuditorsReportAttached` (Medium blocked → attach →
   generates). Updated the existing Medium-PDF test to attach the report. HD flag: the auditor engagement/
   report attachment workflow (a bool+reference is the conservative scaffold).
+- **`filing-directors-report-from-service`** (P1, M) ✅ — the PDF directors' report is now driven from
+  `DirectorsReportService.GenerateAsync` instead of hardcoded boilerplate that falsely stated a dormant
+  company "traded": it uses the service's dormant-aware principal activities, dividend-aware results
+  wording, going-concern/post-balance-sheet sections when present, and renders the relevant-audit-
+  information statement **only when the company is not audit-exempt**. Test
+  `DirectorsReport_UsesServiceWordingForDormantAndAuditExemption` (dormant company → "dormant", not
+  "normal trading activities"; audit-exempt → no audit-info statement).
 

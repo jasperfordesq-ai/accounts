@@ -1520,6 +1520,33 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task DirectorsReport_UsesServiceWordingForDormantAndAuditExemption()
+    {
+        // filing-directors-report-from-service: the PDF directors' report is driven from
+        // DirectorsReportService — dormant wording when not trading (not the false "normal trading
+        // activities"), and the relevant-audit-information statement only when the company is NOT
+        // audit-exempt.
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var company = await db.Companies.FirstAsync(c => c.Id == period.CompanyId);
+        company.IsTrading = false; // dormant
+        db.FilingRegimes.Add(new FilingRegime { PeriodId = period.Id, ElectedRegime = ElectedRegime.Small, CanUseMicro = false, CanFileAbridged = false, AuditExempt = true });
+        db.NotesDisclosures.Add(new NotesDisclosure { PeriodId = period.Id, NoteNumber = 1, Title = "Approval of Financial Statements", Content = "Approved by the directors.", IsRequired = true, IsIncluded = true });
+        await db.SaveChangesAsync();
+        await MakePeriodReadyForCroDocumentsAsync(db, period);
+
+        var statements = new FinancialStatementsService(db);
+        var documents = new DocumentGeneratorService(db, statements);
+        var pdfText = ExtractPdfText(await documents.GenerateAccountsPackageAsync(period.CompanyId, period.Id));
+
+        // Dormant wording, not the false hardcoded "normal trading activities".
+        Assert.Contains("dormant", pdfText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("normal trading activities", pdfText);
+        // Audit-exempt -> no relevant-audit-information statement.
+        Assert.DoesNotContain("Relevant Audit Information", pdfText);
+    }
+
+    [Fact]
     public async Task FinalOutputs_BlockedForNonAuditExemptEntityUntilAuditorsReportAttached()
     {
         // filing-auditor-report-blocks-final: a non-audit-exempt (e.g. Medium) entity must not generate
