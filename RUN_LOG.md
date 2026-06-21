@@ -158,5 +158,13 @@ Any later regression below this line is attributable to this session's changes.
   dividends. Tests `BalanceSheet_NoShareCapital_HasNoPlugAndBlocksReadinessExceptForCLG`,
   `Dividends_ProposedDoesNotReduceReserves_PaidDoes`. Updated 5 block-tests whose "balance sheet does
   not balance" assertion encoded the old plug bug (an empty company now correctly balances at 0; they
-  assert another guaranteed-open blocker). Full suite green.
+  assert another guaranteed-open blocker). Full suite green. Commit `55f6509`.
+- **`accounting-multiyear-cash-movement-basis`** (P1, **XL** — prior runs deferred this as an architecture
+  fork) ✅ — balance-sheet cash is now on a true movement basis: closing cash = bank opening balance +
+  the **cumulative** net transaction movement across this period AND every prior period (using
+  `periodsToDate`), not just the current period's transactions. Year-2+ balance sheets now carry forward
+  prior years' cash and balance with no manual opening rows. Test
+  `BalanceSheet_MultiYearCashOnMovementBasis_CarriesPriorYearsAndBalances` (3-year chain, bank opening 0,
+  cash 800 → 1,700 → 2,700 cumulative, `UnexplainedDifference==0` in years 2 & 3). Full suite
+  **522 pass / 3 skip**.
 

@@ -1587,6 +1587,60 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task BalanceSheet_MultiYearCashOnMovementBasis_CarriesPriorYearsAndBalances()
+    {
+        // accounting-multiyear-cash-movement-basis: year-2+ cash must carry forward prior years' net
+        // movement, not just the current period's transactions. 3-year chain, bank opening 0, no manual
+        // opening rows -> each year's cash == cumulative net movement AND the balance sheet balances.
+        await using var db = CreateDbContext();
+        var period2025 = await SeedCompanyPeriodAsync(db, isFirstYear: false);
+        var companyId = period2025.CompanyId;
+        var period2023 = new AccountingPeriod { CompanyId = companyId, PeriodStart = new DateOnly(2023, 1, 1), PeriodEnd = new DateOnly(2023, 12, 31), IsFirstYear = true };
+        var period2024 = new AccountingPeriod { CompanyId = companyId, PeriodStart = new DateOnly(2024, 1, 1), PeriodEnd = new DateOnly(2024, 12, 31), IsFirstYear = false };
+        db.AccountingPeriods.AddRange(period2023, period2024);
+        var categories = await new CategoryService(db).SeedDefaultCategoriesAsync(companyId);
+        int Cat(string code) => categories.Single(c => c.Code == code).Id;
+        var bank = new BankAccount { CompanyId = companyId, Name = "Current Account", OpeningBalance = 0m };
+        db.BankAccounts.Add(bank);
+        await db.SaveChangesAsync();
+
+        void AddTxn(int periodId, DateOnly date, string desc, decimal amount, string code) =>
+            db.ImportedTransactions.Add(new ImportedTransaction
+            {
+                BankAccountId = bank.Id,
+                PeriodId = periodId,
+                Date = date,
+                Description = desc,
+                Amount = amount,
+                CategoryId = Cat(code)
+            });
+
+        AddTxn(period2023.Id, new DateOnly(2023, 6, 1), "Sales invoice", 1_000m, "4000");
+        AddTxn(period2023.Id, new DateOnly(2023, 7, 1), "Office supplies", -200m, "6500");
+        AddTxn(period2024.Id, new DateOnly(2024, 6, 1), "Sales invoice", 1_200m, "4000");
+        AddTxn(period2024.Id, new DateOnly(2024, 7, 1), "Office supplies", -300m, "6500");
+        AddTxn(period2025.Id, new DateOnly(2025, 6, 1), "Sales invoice", 1_500m, "4000");
+        AddTxn(period2025.Id, new DateOnly(2025, 7, 1), "Office supplies", -500m, "6500");
+        await db.SaveChangesAsync();
+
+        var statements = new FinancialStatementsService(db);
+        var bs2023 = await statements.GetBalanceSheetAsync(companyId, period2023.Id);
+        var bs2024 = await statements.GetBalanceSheetAsync(companyId, period2024.Id);
+        var bs2025 = await statements.GetBalanceSheetAsync(companyId, period2025.Id);
+
+        // Cash accumulates the net movement of every period to date.
+        Assert.Equal(800m, bs2023.CurrentAssets.Cash);
+        Assert.Equal(1_700m, bs2024.CurrentAssets.Cash);   // 800 + 900
+        Assert.Equal(2_700m, bs2025.CurrentAssets.Cash);   // 800 + 900 + 1000
+
+        // The year-2 and year-3 balance sheets balance with no manual opening rows.
+        Assert.Equal(0m, bs2024.CapitalAndReserves.UnexplainedDifference);
+        Assert.Equal(0m, bs2025.CapitalAndReserves.UnexplainedDifference);
+        Assert.True(bs2024.Balances);
+        Assert.True(bs2025.Balances);
+    }
+
+    [Fact]
     public async Task ProfitAndLoss_TreatsCapexAsCapitalNotRevenueExpense()
     {
         // BL-32: a fixed-asset purchase coded to an asset account is capital — it does not reduce

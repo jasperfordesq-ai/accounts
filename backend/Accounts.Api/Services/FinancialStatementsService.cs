@@ -618,7 +618,12 @@ public class FinancialStatementsService(AccountsDbContext db)
         var otherDebtors = await db.Debtors.Where(d => d.PeriodId == periodId && d.Type == DebtorType.Other).SumAsync(d => d.Amount);
         var totalDebtors = tradeDebtors + otherDebtors;
 
-        // Cash at bank -- sum bank account balances (simplified: opening + net transactions)
+        // Cash at bank, on a true movement basis (accounting-multiyear-cash-movement-basis):
+        // closing cash = bank opening balance + the CUMULATIVE net transaction movement across this
+        // period AND every prior period (not just this period's transactions). Summing only the current
+        // period dropped prior years' cash, so year-2+ balance sheets silently mis-balanced unless a
+        // human re-keyed opening balances.
+        var periodIdsToDate = periodsToDate.ToList();
         var bankAccounts = await db.BankAccounts
             .Where(b => b.CompanyId == companyId)
             .ToListAsync();
@@ -626,7 +631,7 @@ public class FinancialStatementsService(AccountsDbContext db)
         foreach (var bank in bankAccounts)
         {
             var netTxns = await db.ImportedTransactions
-                .Where(t => t.BankAccountId == bank.Id && t.PeriodId == periodId && !t.IsDuplicate)
+                .Where(t => t.BankAccountId == bank.Id && t.PeriodId != null && periodIdsToDate.Contains(t.PeriodId.Value) && !t.IsDuplicate)
                 .SumAsync(t => t.Amount);
             cash += (BankOpeningApplies(bank, period.PeriodEnd) ? bank.OpeningBalance : 0) + netTxns;
         }
