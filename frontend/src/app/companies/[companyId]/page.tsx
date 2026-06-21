@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { Pencil, Save, X } from "lucide-react";
 import { getCompany, updateCompany, deleteCompany, createPeriod, deleteOfficer, updateOfficer, createOfficer, getCharityInfo, saveCharityInfo, type Company, type Officer, type CharityInfo } from "@/lib/api";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
+import { ShareCapitalCard } from "@/components/ShareCapitalCard";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { CompanyDetailSkeleton } from "@/components/Skeleton";
 import { formatCompanyType, formatDateIE, formatPeriodRange } from "@/lib/format";
@@ -685,6 +686,9 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ compan
           </CardContent>
         </Card>
       )}
+
+      {/* Share Capital (company-scoped equity) */}
+      <ShareCapitalCard companyId={company.id} />
 
       {/* Accounting Periods */}
       <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
