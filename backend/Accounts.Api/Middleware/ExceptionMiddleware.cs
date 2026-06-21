@@ -13,26 +13,36 @@ public class ExceptionMiddleware(RequestDelegate next, ILogger<ExceptionMiddlewa
         }
         catch (ResourceNotFoundException ex)
         {
-            logger.LogWarning(ex, "Resource not found");
-            context.Response.StatusCode = 404;
-            context.Response.ContentType = "application/json";
-            await context.Response.WriteAsync(JsonSerializer.Serialize(new { error = ex.Message }));
+            // Expected business outcome — log at Warning with the correlation id for traceability.
+            logger.LogWarning(ex, "Resource not found handling {Method} {Path} (correlationId {CorrelationId})",
+                context.Request.Method, context.Request.Path, context.TraceIdentifier);
+            await WriteErrorAsync(context, 404, ex.Message);
         }
         catch (BusinessRuleException ex)
         {
-            logger.LogWarning(ex, "Business rule violation");
-            context.Response.StatusCode = 400;
-            context.Response.ContentType = "application/json";
-            await context.Response.WriteAsync(JsonSerializer.Serialize(new { error = ex.Message }));
+            logger.LogWarning(ex, "Business rule violation handling {Method} {Path} (correlationId {CorrelationId})",
+                context.Request.Method, context.Request.Path, context.TraceIdentifier);
+            await WriteErrorAsync(context, 400, ex.Message);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Unhandled exception");
-            context.Response.StatusCode = 500;
-            context.Response.ContentType = "application/json";
+            // Unexpected — log at Error with the exception (full detail, server-side only), the request
+            // method/path, and the correlation id so a support ticket can be triaged without a repro.
+            logger.LogError(ex, "Unhandled exception handling {Method} {Path} (correlationId {CorrelationId})",
+                context.Request.Method, context.Request.Path, context.TraceIdentifier);
+
+            // Outside Development the client message is generic so no exception detail (which may carry
+            // connection strings, secrets or PII) leaks; the correlation id is the safe triage handle.
             var env = context.RequestServices.GetService<IHostEnvironment>();
             var message = env?.IsDevelopment() == true ? ex.Message : "An internal error occurred. Please try again.";
-            await context.Response.WriteAsync(JsonSerializer.Serialize(new { error = message }));
+            await WriteErrorAsync(context, 500, message);
         }
+    }
+
+    private static async Task WriteErrorAsync(HttpContext context, int statusCode, string message)
+    {
+        context.Response.StatusCode = statusCode;
+        context.Response.ContentType = "application/json";
+        await context.Response.WriteAsync(JsonSerializer.Serialize(new { error = message, correlationId = context.TraceIdentifier }));
     }
 }

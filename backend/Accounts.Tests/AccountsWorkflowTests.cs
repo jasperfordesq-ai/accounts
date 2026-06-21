@@ -1987,6 +1987,50 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task ExceptionMiddleware_LogsCorrelationIdAndDoesNotLeakSecretsInProduction()
+    {
+        // G6 (failures diagnosable): an unhandled error must be triageable from a support ticket
+        // without a repro — the response carries a correlation id that also appears in the server log,
+        // while no exception detail (which may carry secrets/PII) leaks to the client in production.
+        var logger = new CapturingLogger<ExceptionMiddleware>();
+        const string secret = "Server=db;Password=hunter2-SECRET";
+        RequestDelegate next = _ => throw new InvalidOperationException(secret);
+        var middleware = new ExceptionMiddleware(next, logger);
+
+        var context = new DefaultHttpContext();
+        context.Request.Method = "POST";
+        context.Request.Path = "/api/companies/1/periods/2/adjustments/generate";
+        context.TraceIdentifier = "corr-id-7f3a";
+        var services = new ServiceCollection();
+        services.AddSingleton<IHostEnvironment>(new TestEnvironment("Production"));
+        context.RequestServices = services.BuildServiceProvider();
+        using var body = new MemoryStream();
+        context.Response.Body = body;
+
+        await middleware.InvokeAsync(context);
+
+        Assert.Equal(500, context.Response.StatusCode);
+
+        body.Position = 0;
+        var responseJson = await new StreamReader(body).ReadToEndAsync();
+        using var payload = JsonDocument.Parse(responseJson);
+        // Client gets the correlation id and a generic message — never the exception or secret.
+        Assert.Equal("corr-id-7f3a", payload.RootElement.GetProperty("correlationId").GetString());
+        Assert.Equal("An internal error occurred. Please try again.", payload.RootElement.GetProperty("error").GetString());
+        Assert.DoesNotContain("hunter2", responseJson);
+        Assert.DoesNotContain(secret, responseJson);
+
+        // Server log is enough to triage: Error level, the request method+path, the same correlation id,
+        // and the full exception (the secret is allowed server-side).
+        var logged = Assert.Single(logger.Entries, e => e.Level == LogLevel.Error);
+        Assert.Contains("corr-id-7f3a", logged.Message);
+        Assert.Contains("POST", logged.Message);
+        Assert.Contains("/api/companies/1/periods/2/adjustments/generate", logged.Message);
+        Assert.NotNull(logged.Exception);
+        Assert.Contains(secret, logged.Exception!.Message);
+    }
+
+    [Fact]
     public async Task Adjustments_AccrueLoanInterestAndKeepBalanceSheetBalanced()
     {
         // BL-07: the engine accrues interest on outstanding loans. It posts an interest expense and a
@@ -17411,6 +17455,17 @@ public class AccountsWorkflowTests
         public string ApplicationName { get; set; } = "Accounts.Tests";
         public string ContentRootPath { get; set; } = Directory.GetCurrentDirectory();
         public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
+    }
+
+    private sealed record CapturedLog(LogLevel Level, string Message, Exception? Exception);
+
+    private sealed class CapturingLogger<T> : ILogger<T>
+    {
+        public List<CapturedLog> Entries { get; } = [];
+        public IDisposable BeginScope<TState>(TState state) where TState : notnull => NullLogger.Instance.BeginScope(state);
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+            => Entries.Add(new CapturedLog(logLevel, formatter(state, exception), exception));
     }
 
     private sealed class FailingIxbrlService(AccountsDbContext db, FinancialStatementsService statementsService) : IxbrlService(db, statementsService)
