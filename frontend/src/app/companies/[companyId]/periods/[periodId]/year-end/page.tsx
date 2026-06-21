@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
+import { LoansManager } from "@/components/LoansManager";
 import { PeriodWorkspaceSkeleton } from "@/components/Skeleton";
 import {
   getCompany,
@@ -235,6 +236,7 @@ export default function YearEndQuestionnairePage({
   const [goingConcernConfirmed, setGoingConcernConfirmed] = useState(true);
   const [goingConcernNote, setGoingConcernNote] = useState("");
   const [directorLoanCompliance, setDirectorLoanCompliance] = useState<DirectorLoanCompliance | null>(null);
+  const [loanCount, setLoanCount] = useState(0);
   const [reviewConfirmations, setReviewConfirmations] = useState<Record<string, YearEndReviewConfirmation>>({});
 
   const [newPbseDesc, setNewPbseDesc] = useState("");
@@ -642,7 +644,7 @@ export default function YearEndQuestionnairePage({
     sectionIsComplete("creditors", creditors.length > 0),
     sectionIsComplete("fixed-assets", fixedAssets.length > 0),
     sectionIsComplete("inventory", inventory.length > 0),
-    sectionIsComplete("loans", false),
+    sectionIsComplete("loans", loanCount > 0),
     sectionIsComplete("director-loans", directorLoanCompliance !== null),
     sectionIsComplete("payroll", payroll !== null),
     sectionIsComplete("tax", taxBalances.length > 0),
@@ -1160,16 +1162,12 @@ export default function YearEndQuestionnairePage({
           title="Loans & Borrowings"
           subtitle="Does the company have any loans or borrowings outstanding?"
           icon={Landmark}
-          completed={false}
+          completed={loanCount > 0}
           review={reviewConfirmations["loans"]}
           reviewSaving={savingReviewKey === "loans"}
-          onConfirmReview={() => handleConfirmReview("loans", "Loans and borrowings reviewed for this company.")}
+          onConfirmReview={() => handleConfirmReview("loans", loanCount === 0 ? "Confirmed the company has no loans or borrowings outstanding at year-end." : undefined)}
         >
-          <div className="rounded-lg bg-gray-50 dark:bg-neutral-800 p-4 text-center">
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              Loan data is managed in the Company Setup section. Any existing loans linked to this company will appear in the year-end summary automatically.
-            </p>
-          </div>
+          <LoansManager companyId={cId} periodEnd={period?.periodEnd} onCountChange={setLoanCount} />
         </Section>
 
         {/* 6. Payroll */}
