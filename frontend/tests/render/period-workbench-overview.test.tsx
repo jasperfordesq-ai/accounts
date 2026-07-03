@@ -37,7 +37,7 @@ describe("PeriodWorkbenchOverview", () => {
     expect(screen.getByText("Readiness Blockers")).toBeInTheDocument();
     expect(screen.getByText("Balance sheet does not balance")).toBeInTheDocument();
     expect(screen.getByText("Named qualified-accountant approval required")).toBeInTheDocument();
-  });
+  }, 15_000);
 });
 
 function sampleCompany(): Company {

@@ -9114,15 +9114,16 @@ public class AccountsWorkflowTests
     [Fact]
     public void PeriodWorkspace_LabelsIxbrlActionAsInternalChecks()
     {
-        var page = File.ReadAllText(Path.Combine(
-            RepositoryRoot(),
-            "frontend/src/app/companies/[companyId]/periods/[periodId]/page.tsx"));
+        var root = RepositoryRoot();
+        var page = File.ReadAllText(Path.Combine(root, "frontend/src/app/companies/[companyId]/periods/[periodId]/page.tsx"));
+        var reviewCentre = File.ReadAllText(Path.Combine(root, "frontend/src/components/period/FilingReviewCentre.tsx"));
+        var source = page + reviewCentre;
 
-        Assert.Contains("Run iXBRL Checks", page);
-        Assert.Contains("result.ixbrlInternalChecksPassed", page);
-        Assert.Contains("Internal iXBRL checks passed; external ROS validation is still required", page);
-        Assert.DoesNotContain("toast.success(\"iXBRL validation passed\")", page);
-        Assert.DoesNotContain(">Validate iXBRL<", page);
+        Assert.Contains("Run iXBRL Checks", source);
+        Assert.Contains("result.ixbrlInternalChecksPassed", source);
+        Assert.Contains("Internal iXBRL checks passed; external ROS validation is still required", source);
+        Assert.DoesNotContain("toast.success(\"iXBRL validation passed\")", source);
+        Assert.DoesNotContain(">Validate iXBRL<", source);
     }
 
     [Fact]
@@ -9150,13 +9151,16 @@ public class AccountsWorkflowTests
     {
         var root = RepositoryRoot();
         var page = File.ReadAllText(Path.Combine(root, "frontend/src/app/companies/[companyId]/periods/[periodId]/page.tsx"));
+        var reviewCentre = File.ReadAllText(Path.Combine(root, "frontend/src/components/period/FilingReviewCentre.tsx"));
+        var source = page + reviewCentre;
         var api = File.ReadAllText(Path.Combine(root, "frontend/src/lib/api.ts"));
 
         Assert.Contains("submissionReference?: string", api);
-        Assert.Contains("croSubmissionReference", page);
-        Assert.Contains("CORE submission reference", page);
-        Assert.Contains("CORE submission reference is required", page);
-        Assert.Contains("submissionReference: coreReference", page);
+        Assert.Contains("croSubmissionReference", source);
+        Assert.Contains("CORE submission reference", source);
+        Assert.Contains("CORE submission reference is required", source);
+        Assert.Contains("onMarkCroSubmitted(croSubmissionReference.trim())", source);
+        Assert.Contains("status: \"Submitted\", submissionReference", source);
     }
 
     [Fact]

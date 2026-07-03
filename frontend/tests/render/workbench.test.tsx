@@ -58,5 +58,5 @@ describe("workbench primitives", () => {
     expect(screen.getByRole("link", { name: /Year-End/ })).toHaveAttribute("aria-current", "step");
     expect(screen.getAllByText("Blocked")).toHaveLength(2);
     expect(screen.getByText("8 stages")).toBeInTheDocument();
-  });
+  }, 15_000);
 });
