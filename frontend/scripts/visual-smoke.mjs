@@ -230,6 +230,7 @@ async function discoverRoutes(page, baseUrl) {
 
   return {
     dashboard: "/",
+    readiness: "/production-readiness",
     company: companyHref,
     period: periodHref,
     filing: periodHref,
@@ -311,6 +312,7 @@ async function run() {
 
         const routeSpecs = [
           { name: "dashboard", href: routes.dashboard, expectedText: "Production Readiness" },
+          { name: "production-readiness", href: routes.readiness, expectedText: "Production Readiness Checklist" },
           { name: "company-detail", href: routes.company, expectedText: "Accounting Periods" },
           { name: "period-workspace", href: routes.period, expectedText: "Filing readiness" },
           { name: "filing-review", href: routes.filing, expectedText: "Filing readiness profile", openFilingTab: true },

@@ -1,10 +1,12 @@
 import {
+  ArrowRight,
   CheckCircle2,
   FileCheck2,
   Scale,
   ShieldCheck,
   TriangleAlert,
 } from "lucide-react";
+import Link from "next/link";
 import type { ReactNode } from "react";
 import type { ProductionReadinessReport } from "@/lib/api";
 import { DataTable, ReviewPanel, StatusBadge } from "@/components/workbench";
@@ -47,7 +49,18 @@ export function ProductionReadinessPanel({
     <ReviewPanel
       title="Production Readiness"
       description="Evidence that the platform can be trusted, and the gates that still require professional control."
-      actions={<StatusBadge tone={statusTone}>{formatStatus(report.overallStatus)}</StatusBadge>}
+      actions={
+        <>
+          <StatusBadge tone={statusTone}>{formatStatus(report.overallStatus)}</StatusBadge>
+          <Link
+            href="/production-readiness"
+            className="inline-flex min-h-7 items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--surface-subtle)] px-2.5 text-xs font-semibold text-[var(--foreground)] hover:border-[var(--ring)]"
+          >
+            Open checklist
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </>
+      }
     >
       <div className="grid gap-3 md:grid-cols-4">
         <ReadinessMetric
