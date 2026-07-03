@@ -25,7 +25,7 @@
     "test:api-client": "node --experimental-strip-types scripts/verify-api-client.mjs",
     "test:visual": "node scripts/visual-smoke.mjs",
     "test:unit": "node --test --experimental-strip-types \"tests/*.test.mjs\"",
-    "test:render": "vitest run",
+    "test:render": "vitest run --pool=forks --maxWorkers=1 --minWorkers=1",
     "test": "npm run test:unit && npm run test:render && npm run test:readiness && npm run test:proxy && npm run test:auth && npm run test:api-client"
   },
   "dependencies": {
