@@ -98,6 +98,7 @@ import { FilingReviewCentre } from "@/components/period/FilingReviewCentre";
 import { FilingDeadlinesPanel } from "@/components/period/FilingDeadlinesPanel";
 import { PeriodAuditTrailPanel } from "@/components/period/PeriodAuditTrailPanel";
 import { FilingOutputsPanel } from "@/components/period/FilingOutputsPanel";
+import { StatutoryWarningsPanel } from "@/components/period/StatutoryWarningsPanel";
 import { formatPeriodRange } from "@/lib/format";
 
 function formatCurrency(amount: number): string {
@@ -1988,24 +1989,7 @@ export default function PeriodWorkspacePage({
               onReferenceMissing={toast.error}
             />
 
-            {/* Audit Exemption Jeopardy Warning */}
-            {jeopardy?.warning && (
-              <div className={`rounded-lg px-4 py-3 text-sm ${jeopardy.hasLostExemption ? "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400" : "bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400"}`}>
-                {jeopardy.warning}
-              </div>
-            )}
-
-            {/* s.307 Director Loan Disclosure */}
-            {section307Note && (
-              <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
-                <Card.Header>
-                  <Card.Title className="text-gray-900 dark:text-gray-100">s.307 Director Loan Disclosure</Card.Title>
-                </Card.Header>
-                <Card.Content>
-                  <pre className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-sans">{section307Note}</pre>
-                </Card.Content>
-              </Card>
-            )}
+            <StatutoryWarningsPanel jeopardy={jeopardy} section307Note={section307Note} />
 
             <FilingOutputsPanel
               filingRegimeReady={Boolean(period?.filingRegime)}
