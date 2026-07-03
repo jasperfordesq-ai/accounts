@@ -15409,6 +15409,82 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task CompanyDashboardRows_ProjectLatestPeriodAndAssignedReviewer()
+    {
+        await using var db = CreateDbContext();
+        var tenant = await SeedTenantAsync(db, name: "Tenant A", slug: "tenant-a");
+        var otherTenant = await SeedTenantAsync(db, name: "Tenant B", slug: "tenant-b");
+        var company = await SeedTenantCompanyAsync(db, tenant.Id, "Assigned Client Limited");
+        company.IsGroupMember = true;
+        var unassignedCompany = await SeedTenantCompanyAsync(db, tenant.Id, "Unassigned Client Limited");
+        var hiddenCompany = await SeedTenantCompanyAsync(db, otherTenant.Id, "Hidden Client Limited");
+        var priorPeriod = new AccountingPeriod
+        {
+            CompanyId = company.Id,
+            PeriodStart = new DateOnly(2025, 1, 1),
+            PeriodEnd = new DateOnly(2025, 12, 31),
+            Status = PeriodStatus.Filed
+        };
+        var latestPeriod = new AccountingPeriod
+        {
+            CompanyId = company.Id,
+            PeriodStart = new DateOnly(2026, 1, 1),
+            PeriodEnd = new DateOnly(2026, 12, 31),
+            Status = PeriodStatus.Review,
+            IsFirstYear = false,
+            MemberAuditNoticeReceived = true,
+            MemberAuditNoticeDate = new DateOnly(2026, 4, 1),
+            GoingConcernConfirmed = true
+        };
+        db.AccountingPeriods.AddRange(priorPeriod, latestPeriod);
+        await db.SaveChangesAsync();
+
+        var reviewer = await SeedUserAsync(db, tenant, "reviewer@example.ie", "Correct Horse Battery Staple 1!", role: "Reviewer");
+        reviewer.DisplayName = "Niamh Reviewer";
+        var accountant = await SeedUserAsync(db, tenant, "accountant@example.ie", "Correct Horse Battery Staple 1!", role: "Accountant");
+        accountant.DisplayName = "Aine Accountant";
+        var inactiveReviewer = await SeedUserAsync(db, tenant, "inactive@example.ie", "Correct Horse Battery Staple 1!", isActive: false, role: "Reviewer");
+        inactiveReviewer.DisplayName = "Inactive Reviewer";
+        var crossTenantReviewer = await SeedUserAsync(db, otherTenant, "cross@example.ie", "Correct Horse Battery Staple 1!", role: "Reviewer");
+        crossTenantReviewer.DisplayName = "A Cross Tenant Reviewer";
+        db.UserCompanyAccesses.AddRange(
+            new UserCompanyAccess { UserId = reviewer.Id, CompanyId = company.Id },
+            new UserCompanyAccess { UserId = accountant.Id, CompanyId = company.Id },
+            new UserCompanyAccess { UserId = inactiveReviewer.Id, CompanyId = company.Id },
+            new UserCompanyAccess { UserId = crossTenantReviewer.Id, CompanyId = company.Id });
+        await db.SaveChangesAsync();
+
+        var context = new DefaultHttpContext();
+        context.Items[AuthContext.ItemKey] = new AuthenticatedUser(
+            UserId: 1,
+            TenantId: tenant.Id,
+            TenantName: tenant.Name,
+            Email: "owner@tenant-a.test",
+            DisplayName: "Tenant A Owner",
+            Role: "Owner");
+
+        var rows = await CompanyDashboardRows
+            .ForContext(context, db)
+            .ToListAsync();
+
+        Assert.DoesNotContain(rows, row => row.Id == hiddenCompany.Id);
+        var assignedRow = Assert.Single(rows, row => row.Id == company.Id);
+        Assert.True(assignedRow.IsGroupMember);
+        Assert.Equal(2, assignedRow.PeriodCount);
+        Assert.Equal("Niamh Reviewer", assignedRow.AssignedReviewerName);
+        Assert.Equal("reviewer@example.ie", assignedRow.AssignedReviewerEmail);
+        Assert.NotNull(assignedRow.LatestPeriod);
+        Assert.Equal(latestPeriod.Id, assignedRow.LatestPeriod!.Id);
+        Assert.Equal(PeriodStatus.Review, assignedRow.LatestPeriod.Status);
+        Assert.Equal(new DateOnly(2026, 12, 31), assignedRow.LatestPeriod.PeriodEnd);
+
+        var unassignedRow = Assert.Single(rows, row => row.Id == unassignedCompany.Id);
+        Assert.Null(unassignedRow.AssignedReviewerName);
+        Assert.Null(unassignedRow.AssignedReviewerEmail);
+        Assert.Null(unassignedRow.LatestPeriod);
+    }
+
+    [Fact]
     public async Task CompanyEndpointAccess_UsesCompanyListPolicyForDirectHandlerGuards()
     {
         await using var db = CreateDbContext();
@@ -15495,7 +15571,7 @@ public class AccountsWorkflowTests
         var guardedCoreEndpoints = source + "\n" + periodStatusEndpoint + "\n" + companyDeletionEndpoint;
 
         Assert.Contains("CompanyEndpointAccess.CanAccessCompanyAsync", guardedCoreEndpoints);
-        Assert.Contains("CompanyListQuery.ForContext(context, db.Companies)", source);
+        Assert.Contains("CompanyDashboardRows", source);
         Assert.Contains("CompanyDeletionEndpoint.DeleteAsync", source);
         Assert.True(
             Regex.Matches(guardedCoreEndpoints, "CompanyEndpointAccess\\.CanAccessCompanyAsync\\(context, db, id\\)").Count >= 3,

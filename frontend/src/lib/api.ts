@@ -260,6 +260,9 @@ export interface Company {
   isInsuranceUndertaking: boolean;
   isPensionFund: boolean;
   isCharitableOrganisation: boolean;
+  assignedReviewerName?: string;
+  assignedReviewerEmail?: string;
+  latestPeriod?: AccountingPeriod;
   officers?: Officer[];
   periods?: AccountingPeriod[];
   periodCount?: number;

@@ -24,7 +24,9 @@ describe("AccountantDashboardQueue", () => {
     expect(screen.getByText("Connacht Visual Limited")).toBeInTheDocument();
     expect(screen.getByText("CRO due 10 Jul 2026")).toBeInTheDocument();
     expect(screen.getByText("Due soon")).toBeInTheDocument();
-    expect(screen.getAllByText("Unassigned")).toHaveLength(3);
+    expect(screen.getByText("Niamh Reviewer")).toBeInTheDocument();
+    expect(screen.getByText("niamh.reviewer@example.ie")).toBeInTheDocument();
+    expect(screen.getAllByText("Unassigned")).toHaveLength(2);
     expect(screen.getByRole("link", { name: "Open filing" })).toHaveAttribute("href", "/companies/7/periods/3");
 
     expect(screen.getByText("Atlantic Public Limited Company")).toBeInTheDocument();
@@ -63,25 +65,25 @@ function sampleCompany(): Company {
     isInsuranceUndertaking: false,
     isPensionFund: false,
     isCharitableOrganisation: false,
-    periods: [
-      {
-        id: 3,
-        companyId: 7,
-        periodStart: "2026-01-01",
-        periodEnd: "2026-12-31",
-        status: "Review",
-        isFirstYear: false,
-        memberAuditNoticeReceived: false,
-        goingConcernConfirmed: true,
-        sizeClassification: {
-          id: 1,
-          turnover: 700000,
-          balanceSheetTotal: 300000,
-          avgEmployees: 8,
-          calculatedClass: "Micro",
-        },
+    assignedReviewerName: "Niamh Reviewer",
+    assignedReviewerEmail: "niamh.reviewer@example.ie",
+    latestPeriod: {
+      id: 3,
+      companyId: 7,
+      periodStart: "2026-01-01",
+      periodEnd: "2026-12-31",
+      status: "Review",
+      isFirstYear: false,
+      memberAuditNoticeReceived: false,
+      goingConcernConfirmed: true,
+      sizeClassification: {
+        id: 1,
+        turnover: 700000,
+        balanceSheetTotal: 300000,
+        avgEmployees: 8,
+        calculatedClass: "Micro",
       },
-    ],
+    },
   };
 }
 
@@ -91,14 +93,14 @@ function unsupportedCompany(): Company {
     id: 8,
     legalName: "Atlantic Public Limited Company",
     companyType: "PublicLimitedCompany",
-    periods: [
-      {
-        ...sampleCompany().periods![0],
-        id: 4,
-        companyId: 8,
-        status: "Review",
-      },
-    ],
+    assignedReviewerName: undefined,
+    assignedReviewerEmail: undefined,
+    latestPeriod: {
+      ...sampleCompany().latestPeriod!,
+      id: 4,
+      companyId: 8,
+      status: "Review",
+    },
   };
 }
 
@@ -107,6 +109,9 @@ function noPeriodCompany(): Company {
     ...sampleCompany(),
     id: 9,
     legalName: "New Client Limited",
+    assignedReviewerName: undefined,
+    assignedReviewerEmail: undefined,
+    latestPeriod: undefined,
     periods: [],
     periodCount: 0,
   };

@@ -13,14 +13,9 @@ public static class CompanyEndpoints
 
         companies.MapGet("/", async (HttpContext context, AccountsDbContext db) =>
         {
-            var query = CompanyListQuery.ForContext(context, db.Companies);
-
-            return await query.Select(c => new
-            {
-                c.Id, c.LegalName, c.TradingName, c.CroNumber, c.CompanyType,
-                c.IsTrading, c.IsDormant, c.CreatedAt,
-                PeriodCount = c.Periods.Count
-            }).ToListAsync();
+            return await CompanyDashboardRows
+                .ForContext(context, db)
+                .ToListAsync();
         });
 
         companies.MapGet("/{id:int}", async (int id, HttpContext context, AccountsDbContext db) =>
