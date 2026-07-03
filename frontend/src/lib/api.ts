@@ -1548,6 +1548,7 @@ export interface GoldenFilingCorpusScenario {
   companyScope: string;
   expectedOutcome: string;
   coverageStatus: string;
+  evidenceTestNames: string[];
   assertions: string[];
 }
 

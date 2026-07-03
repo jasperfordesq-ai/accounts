@@ -74,11 +74,21 @@ export function ProductionReadinessPanel({
 
       <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)]">
         <DataTable
-          columns={["Golden scenario", "Scope", "Outcome", "Status"]}
+          columns={["Golden scenario", "Scope", "Outcome", "Evidence tests", "Status"]}
           rows={report.goldenFilingCorpus.map((scenario) => [
             <span key="label" className="font-medium">{scenario.label}</span>,
             <span key="scope" className="text-[var(--muted-foreground)]">{scenario.companyScope}</span>,
             <span key="outcome" className="text-[var(--muted-foreground)]">{formatStatus(scenario.expectedOutcome)}</span>,
+            <div key="evidence" className="max-w-md space-y-1 whitespace-normal">
+              {scenario.evidenceTestNames.map((testName) => (
+                <code
+                  key={testName}
+                  className="block break-all rounded border border-[var(--border)] bg-[var(--surface-subtle)] px-2 py-1 text-[11px] text-[var(--muted-foreground)]"
+                >
+                  {testName}
+                </code>
+              ))}
+            </div>,
             <StatusBadge key="status" tone={scenario.coverageStatus === "covered" ? "good" : "warn"}>
               {formatStatus(scenario.coverageStatus)}
             </StatusBadge>,

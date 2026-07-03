@@ -11,6 +11,7 @@ describe("ProductionReadinessPanel", () => {
     expect(screen.getByText("Review required")).toBeInTheDocument();
     expect(screen.getByText("Micro LTD")).toBeInTheDocument();
     expect(screen.getByText("CLG charity")).toBeInTheDocument();
+    expect(screen.getByText("AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl")).toBeInTheDocument();
     expect(screen.getByText("No direct CRO/ROS submission automation")).toBeInTheDocument();
     expect(screen.getByText("Revenue accepted iXBRL taxonomies")).toBeInTheDocument();
   });
@@ -49,6 +50,7 @@ function sampleReport(): ProductionReadinessReport {
         companyScope: "Private company limited by shares",
         expectedOutcome: "generated-pack",
         coverageStatus: "covered",
+        evidenceTestNames: ["AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl"],
         assertions: ["PDF text", "iXBRL parse"],
       },
       {
@@ -57,6 +59,7 @@ function sampleReport(): ProductionReadinessReport {
         companyScope: "Company limited by guarantee",
         expectedOutcome: "generated-pack-with-charity-gates",
         coverageStatus: "covered",
+        evidenceTestNames: ["FilingGoldenCorpusScenarioTests.GoldenCorpus_ClgCharity_EmitsAccountsIxbrlAndSourceBackedCharityReadiness"],
         assertions: ["charity evidence"],
       },
     ],

@@ -15,6 +15,7 @@ public sealed record GoldenFilingCorpusScenario(
     string CompanyScope,
     string ExpectedOutcome,
     string CoverageStatus,
+    IReadOnlyList<string> EvidenceTestNames,
     IReadOnlyList<string> Assertions);
 
 public sealed record OperationalGate(
@@ -87,6 +88,9 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "generated-pack",
             "covered",
             [
+                "AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl"
+            ],
+            [
                 "classification selects Micro",
                 "readiness has no missing items",
                 "balance sheet balances",
@@ -100,6 +104,9 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "generated-pack",
             "covered",
             [
+                "AccountsWorkflowTests.GoldenPath_SmallAuditExemptCompany_MixedAccrualSetBalancesThroughPdfAndIxbrl"
+            ],
+            [
                 "classification selects Small",
                 "mixed cash/accrual facts reconcile",
                 "PDF text includes legal name and net assets",
@@ -112,6 +119,9 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "generated-pack-with-charity-gates",
             "covered",
             [
+                "FilingGoldenCorpusScenarioTests.GoldenCorpus_ClgCharity_EmitsAccountsIxbrlAndSourceBackedCharityReadiness"
+            ],
+            [
                 "CLG remains in the supported company scope",
                 "charity number evidence is required",
                 "SoFA and trustees report evidence are required",
@@ -123,6 +133,9 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "Medium company or non-audit-exempt filing",
             "manual-handoff",
             "covered",
+            [
+                "FilingGoldenCorpusScenarioTests.GoldenCorpus_MediumAuditRequired_BlocksFinalOutputsAndRequiresManualHandoffUntilAuditorEvidence"
+            ],
             [
                 "audit report evidence is mandatory",
                 "normal filing approval is blocked until auditor evidence exists",
