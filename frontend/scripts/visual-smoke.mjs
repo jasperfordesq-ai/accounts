@@ -110,17 +110,123 @@ async function firstHref(page, selector, label) {
   return href;
 }
 
+async function optionalFirstHref(page, selector) {
+  return page.locator(selector).evaluateAll((links) => {
+    const element = links.find((link) => link instanceof HTMLAnchorElement);
+    return element instanceof HTMLAnchorElement ? element.getAttribute("href") : null;
+  });
+}
+
+async function apiJson(page, pathName, { method = "GET", body } = {}) {
+  return page.evaluate(async ({ requestPath, requestMethod, requestBody }) => {
+    const headers = new Headers({ "Content-Type": "application/json" });
+    const unsafeMethod = !["GET", "HEAD", "OPTIONS", "TRACE"].includes(requestMethod.toUpperCase());
+
+    if (unsafeMethod) {
+      const csrfCookie = document.cookie
+        .split(";")
+        .map((part) => part.trim())
+        .find((part) => part.startsWith("accounts_csrf="));
+      if (!csrfCookie) throw new Error("Missing accounts_csrf cookie for visual smoke fixture setup.");
+      headers.set("X-CSRF-Token", decodeURIComponent(csrfCookie.slice("accounts_csrf=".length)));
+    }
+
+    const response = await fetch(requestPath, {
+      method: requestMethod,
+      headers,
+      body: requestBody === undefined ? undefined : JSON.stringify(requestBody),
+      credentials: "include",
+    });
+    const text = await response.text();
+
+    if (!response.ok) {
+      throw new Error(`${requestMethod} ${requestPath} failed with ${response.status}: ${text}`);
+    }
+
+    return text ? JSON.parse(text) : null;
+  }, { requestPath: pathName, requestMethod: method, requestBody: body });
+}
+
+async function createSmokeCompany(page) {
+  const company = await apiJson(page, "/api/companies", {
+    method: "POST",
+    body: {
+      legalName: "CI Visual Accounts Limited",
+      tradingName: "Visual Smoke",
+      croNumber: "999999",
+      taxReference: "999999T",
+      companyType: "Private",
+      incorporationDate: "2024-01-01",
+      financialYearStartMonth: 1,
+      ardMonth: 9,
+      registeredOfficeAddress1: "1 Visual Street",
+      registeredOfficeCity: "Dublin",
+      registeredOfficeCounty: "Dublin",
+      registeredOfficeEircode: "D02 X285",
+      isGroupMember: false,
+      isHolding: false,
+      isInvestment: false,
+      isSubsidiary: false,
+      isDormant: false,
+      isTrading: true,
+      isVatRegistered: false,
+      isEmployer: false,
+      hasStock: false,
+      ownsAssets: false,
+      hasBorrowings: false,
+      hasDirectorLoans: false,
+      isListedSecurities: false,
+      isCreditInstitution: false,
+      isInsuranceUndertaking: false,
+      isPensionFund: false,
+      isCharitableOrganisation: false,
+    },
+  });
+
+  await apiJson(page, `/api/companies/${company.id}/officers`, {
+    method: "POST",
+    body: {
+      name: "CI Visual Director",
+      role: "Director",
+      appointedDate: "2024-01-01",
+    },
+  });
+
+  const period = await apiJson(page, `/api/companies/${company.id}/periods`, {
+    method: "POST",
+    body: {
+      periodStart: "2024-01-01",
+      periodEnd: "2024-12-31",
+      isFirstYear: true,
+      memberAuditNoticeReceived: false,
+      goingConcernConfirmed: true,
+    },
+  });
+
+  return {
+    companyHref: `/companies/${company.id}`,
+    periodHref: `/companies/${company.id}/periods/${period.id}`,
+  };
+}
+
 async function discoverRoutes(page, baseUrl) {
   await expect(mainText(page, "Production Readiness")).toBeVisible({ timeout: 30_000 });
-  const companyHref = await firstHref(
+  let companyHref = await optionalFirstHref(
     page,
     'a[href^="/companies/"]:not([href="/companies/new"]):not([href*="/periods/"])',
-    "company detail",
   );
+  let periodHref = null;
+
+  if (!companyHref) {
+    const smokeCompany = await createSmokeCompany(page);
+    companyHref = smokeCompany.companyHref;
+    periodHref = smokeCompany.periodHref;
+  }
+
   await page.goto(toAbsoluteUrl(baseUrl, companyHref), { waitUntil: "domcontentloaded" });
   await page.waitForLoadState("networkidle", { timeout: 30_000 }).catch(() => {});
   await expect(mainText(page, "Accounting Periods")).toBeVisible({ timeout: 30_000 });
-  const periodHref = await firstHref(page, 'a[href*="/periods/"]', "period workspace");
+  periodHref ??= await firstHref(page, 'a[href*="/periods/"]', "period workspace");
 
   return {
     dashboard: "/",
