@@ -5,10 +5,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Card,
-  Button, Chip
+  Button
 } from "@heroui/react";
 import {
-  Building2, Plus, Trash2, Heart
+  Building2, Trash2
 } from "lucide-react";
 import { toast } from "sonner";
 import { Pencil, Save } from "lucide-react";
@@ -21,6 +21,7 @@ import { CompanyDetailSkeleton } from "@/components/Skeleton";
 import { CompanyPeriodsWorkbench } from "@/components/company/CompanyPeriodsWorkbench";
 import { CompanyStatutoryProfile } from "@/components/company/CompanyStatutoryProfile";
 import { CompanyOfficersPanel } from "@/components/company/CompanyOfficersPanel";
+import { CompanyCharityInfoPanel } from "@/components/company/CompanyCharityInfoPanel";
 
 export default function CompanyDetailPage({ params }: { params: Promise<{ companyId: string }> }) {
   const { companyId: id } = use(params);
@@ -387,178 +388,21 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ compan
         />
       </div>
 
-      {/* Charity Info Card */}
+      {/* Charity reporting */}
       {company.isCharitableOrganisation && (
-        <Card className="bg-white dark:bg-neutral-900 shadow-sm border border-gray-200 dark:border-neutral-700 mb-8">
-          <Card.Header className="flex flex-row items-center justify-between">
-            <Card.Title className="flex items-center gap-2 text-gray-900 dark:text-gray-100">
-              <Heart className="w-4 h-4 text-pink-500" />
-              Charity Info
-            </Card.Title>
-            {!editingCharity && (
-              <Button variant="outline" size="sm" onPress={startEditingCharity}>
-                <Pencil className="w-3.5 h-3.5" />
-                Edit
-              </Button>
-            )}
-          </Card.Header>
-          <Card.Content>
-            {editingCharity ? (
-              <div className="space-y-4 animate-fade-in">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Charity Number</label>
-                    <input
-                      type="text"
-                      className="w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500"
-                      value={charityForm.charityNumber || ""}
-                      onChange={(e) => setCharityForm({ ...charityForm, charityNumber: e.target.value })}
-                      placeholder="e.g. CHY12345"
-                      aria-label="Charity number"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Gross Income</label>
-                    <input
-                      type="number"
-                      className="w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500"
-                      value={charityForm.grossIncome || ""}
-                      onChange={(e) => setCharityForm({ ...charityForm, grossIncome: Number(e.target.value) })}
-                      placeholder="0.00"
-                      aria-label="Gross income"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Charitable Objectives</label>
-                  <textarea
-                    className="w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500 min-h-[80px]"
-                    value={charityForm.charitableObjectives || ""}
-                    onChange={(e) => setCharityForm({ ...charityForm, charitableObjectives: e.target.value })}
-                    placeholder="Describe the charity's objects..."
-                    aria-label="Charitable objectives"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Principal Activities</label>
-                  <textarea
-                    className="w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500 min-h-[80px]"
-                    value={charityForm.principalActivities || ""}
-                    onChange={(e) => setCharityForm({ ...charityForm, principalActivities: e.target.value })}
-                    placeholder="Describe the charity's principal activities..."
-                    aria-label="Principal activities"
-                  />
-                </div>
-                <div className="space-y-3">
-                  <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                    <input
-                      type="checkbox"
-                      checked={charityForm.governanceCodeCompliant}
-                      onChange={(e) => setCharityForm({ ...charityForm, governanceCodeCompliant: e.target.checked })}
-                      className="rounded border-gray-300 dark:border-neutral-600 text-emerald-600 focus:ring-emerald-500"
-                    />
-                    Governance Code Compliant
-                  </label>
-                  <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                    <input
-                      type="checkbox"
-                      checked={charityForm.trusteeRemunerationPaid}
-                      onChange={(e) => setCharityForm({ ...charityForm, trusteeRemunerationPaid: e.target.checked })}
-                      className="rounded border-gray-300 dark:border-neutral-600 text-emerald-600 focus:ring-emerald-500"
-                    />
-                    Trustee Remuneration Paid
-                  </label>
-                  {charityForm.trusteeRemunerationPaid && (
-                    <div className="ml-6">
-                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Remuneration Amount</label>
-                      <input
-                        type="number"
-                        className="w-48 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500"
-                        value={charityForm.trusteeRemunerationAmount || ""}
-                        onChange={(e) => setCharityForm({ ...charityForm, trusteeRemunerationAmount: Number(e.target.value) })}
-                        placeholder="0.00"
-                        aria-label="Trustee remuneration amount"
-                      />
-                    </div>
-                  )}
-                  <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                    <input
-                      type="checkbox"
-                      checked={charityForm.hasInternationalTransfers}
-                      onChange={(e) => setCharityForm({ ...charityForm, hasInternationalTransfers: e.target.checked })}
-                      className="rounded border-gray-300 dark:border-neutral-600 text-emerald-600 focus:ring-emerald-500"
-                    />
-                    International Transfers
-                  </label>
-                </div>
-                <div className="flex items-center gap-2 justify-end pt-2">
-                  <Button variant="ghost" size="sm" onPress={() => setEditingCharity(false)} isDisabled={savingCharity}>
-                    Cancel
-                  </Button>
-                  <Button variant="primary" size="sm" onPress={handleSaveCharity} isDisabled={savingCharity}>
-                    <Save className="w-3.5 h-3.5" />
-                    {savingCharity ? "Saving..." : "Save Charity Info"}
-                  </Button>
-                </div>
-              </div>
-            ) : charityInfo ? (
-              <div className="space-y-3 text-sm">
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  <div>
-                    <span className="text-gray-500 dark:text-gray-400">Charity No:</span>{" "}
-                    <span className="font-medium text-gray-900 dark:text-gray-100">{charityInfo.charityNumber || "\u2014"}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-500 dark:text-gray-400">SORP Tier:</span>{" "}
-                    <Chip size="sm" color={charityInfo.sorpTier === 1 ? "success" : "warning"} variant="soft">
-                      Tier {charityInfo.sorpTier}
-                    </Chip>
-                  </div>
-                  <div>
-                    <span className="text-gray-500 dark:text-gray-400">Gross Income:</span>{" "}
-                    <span className="font-medium text-gray-900 dark:text-gray-100">
-                      {new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" }).format(charityInfo.grossIncome)}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-gray-500 dark:text-gray-400">Governance Code:</span>{" "}
-                    <Chip size="sm" color={charityInfo.governanceCodeCompliant ? "success" : "default"} variant="soft">
-                      {charityInfo.governanceCodeCompliant ? "Compliant" : "Not confirmed"}
-                    </Chip>
-                  </div>
-                </div>
-                {charityInfo.charitableObjectives && (
-                  <div>
-                    <span className="text-gray-500 dark:text-gray-400">Objectives:</span>{" "}
-                    <span className="text-gray-900 dark:text-gray-100">{charityInfo.charitableObjectives}</span>
-                  </div>
-                )}
-                {charityInfo.trusteeRemunerationPaid && (
-                  <div>
-                    <span className="text-gray-500 dark:text-gray-400">Trustee Remuneration:</span>{" "}
-                    <span className="font-medium text-gray-900 dark:text-gray-100">
-                      {new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" }).format(charityInfo.trusteeRemunerationAmount)}
-                    </span>
-                  </div>
-                )}
-                {charityInfo.hasInternationalTransfers && (
-                  <Chip size="sm" color="warning" variant="soft">International Transfers</Chip>
-                )}
-              </div>
-            ) : (
-              <div className="py-4 text-center">
-                <Heart className="w-8 h-8 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
-                <p className="text-gray-400 dark:text-gray-500 text-sm mb-3">
-                  No charity info recorded yet.
-                </p>
-                <Button variant="primary" size="sm" onPress={startEditingCharity}>
-                  <Plus className="w-3.5 h-3.5" />
-                  Add Charity Info
-                </Button>
-              </div>
-            )}
-          </Card.Content>
-        </Card>
+        <div className="mb-8">
+          <CompanyCharityInfoPanel
+            charityInfo={charityInfo}
+            charityForm={charityForm}
+            editing={editingCharity}
+            saving={savingCharity}
+            canWrite={canWriteWorkingPapers}
+            onStartEdit={startEditingCharity}
+            onCancelEdit={() => setEditingCharity(false)}
+            onSave={handleSaveCharity}
+            onFormChange={setCharityForm}
+          />
+        </div>
       )}
 
       {/* Share Capital (company-scoped equity) */}

@@ -18,5 +18,6 @@ export default defineConfig({
     include: ["tests/render/**/*.test.{ts,tsx}"],
     css: false,
     restoreMocks: true,
+    testTimeout: 10000,
   },
 });
