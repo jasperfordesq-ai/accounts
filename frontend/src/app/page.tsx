@@ -31,6 +31,7 @@ import { DashboardSkeleton } from "@/components/Skeleton";
 import { formatCompanyType, formatDateIE } from "@/lib/format";
 import { useAuth } from "@/components/AuthProvider";
 import { ProductionReadinessPanel } from "@/components/ProductionReadinessPanel";
+import { AccountantDashboardQueue } from "@/components/dashboard/AccountantDashboardQueue";
 
 export default function Dashboard() {
   const { isOwner } = useAuth();
@@ -150,6 +151,10 @@ export default function Dashboard() {
 
       <div className="mb-8">
         <ProductionReadinessPanel report={readinessReport} error={readinessError} />
+      </div>
+
+      <div className="mb-8">
+        <AccountantDashboardQueue companies={filtered} deadlines={deadlines} />
       </div>
 
       {/* Quick Stats Bar */}
