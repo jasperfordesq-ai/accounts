@@ -1555,6 +1555,17 @@ export interface GoldenFilingCorpusScenario {
   assertions: string[];
 }
 
+export interface StatutoryRuleMatrixEntry {
+  code: string;
+  companyScope: string;
+  sizeOrRegime: string;
+  supportLevel: string;
+  requiredEvidence: string[];
+  requiredOutputs: string[];
+  manualHandoffGates: string[];
+  sources: LegalSourceReference[];
+}
+
 export interface OperationalGate {
   code: string;
   label: string;
@@ -1581,6 +1592,7 @@ export interface ProductionReadinessReport {
   sourceLawSnapshot: SourceLawSnapshot;
   areas: ProductionReadinessArea[];
   goldenFilingCorpus: GoldenFilingCorpusScenario[];
+  statutoryRuleMatrix: StatutoryRuleMatrixEntry[];
   manualHandoffPaths: string[];
   operationalGates: OperationalGate[];
   assuranceActions: ProductionReadinessAssuranceAction[];

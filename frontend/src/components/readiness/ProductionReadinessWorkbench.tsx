@@ -19,6 +19,7 @@ import {
 
 export function ProductionReadinessWorkbench({ report }: { report: ProductionReadinessReport }) {
   const assuranceActions = report.assuranceActions ?? [];
+  const statutoryRuleMatrix = report.statutoryRuleMatrix ?? [];
   const hardenedAreas = report.areas.filter((area) => area.status === "hardened").length;
   const coveredScenarios = report.goldenFilingCorpus.filter((scenario) => scenario.coverageStatus === "covered").length;
   const enforcedGates = report.operationalGates.filter((gate) => gate.status === "enforced").length;
@@ -65,6 +66,27 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
             <StatusBadge key="status" tone={action.status === "complete" ? "good" : action.status === "in-progress" ? "info" : "warn"}>
               {formatStatus(action.status)}
             </StatusBadge>,
+          ])}
+        />
+      </ReviewPanel>
+
+      <ReviewPanel
+        title="Statutory rules matrix"
+        description="Accountant-readable filing paths, required evidence, outputs, fail-closed gates, and source references for the supported and unsupported Irish company workflows."
+        actions={<StatusBadge tone="info">{statutoryRuleMatrix.length} paths</StatusBadge>}
+      >
+        <DataTable
+          columns={["Company path", "Regime", "Evidence", "Outputs", "Gates", "Sources"]}
+          rows={statutoryRuleMatrix.map((row) => [
+            <div key="path" className="min-w-44 whitespace-normal">
+              <p className="font-medium">{row.companyScope}</p>
+              <StatusBadge tone={supportTone(row.supportLevel)}>{formatStatus(row.supportLevel)}</StatusBadge>
+            </div>,
+            <span key="regime" className="whitespace-normal text-[var(--muted-foreground)]">{row.sizeOrRegime}</span>,
+            <CompactList key="evidence" items={row.requiredEvidence} />,
+            <CompactList key="outputs" items={row.requiredOutputs} />,
+            <CompactList key="gates" items={row.manualHandoffGates} />,
+            <SourceLinkList key="sources" sources={row.sources} />,
           ])}
         />
       </ReviewPanel>
@@ -234,6 +256,38 @@ function AssertionList({ items }: { items: string[] }) {
   );
 }
 
+function CompactList({ items }: { items: string[] }) {
+  return (
+    <ul className="max-w-md space-y-1 whitespace-normal text-xs leading-5 text-[var(--muted-foreground)]">
+      {items.map((item) => (
+        <li key={item} className="flex items-start gap-1.5">
+          <FileCheck2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-300" />
+          <span>{item}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function SourceLinkList({ sources }: { sources: ProductionReadinessReport["sourceLawSnapshot"]["sources"] }) {
+  return (
+    <div className="flex max-w-xs flex-wrap gap-1.5 whitespace-normal">
+      {sources.map((source) => (
+        <a
+          key={source.sourceId}
+          href={source.url}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface-subtle)] px-2 py-1 text-[11px] font-medium text-[var(--foreground)] hover:border-[var(--ring)]"
+        >
+          {source.title}
+          <ExternalLink className="h-3 w-3 shrink-0" />
+        </a>
+      ))}
+    </div>
+  );
+}
+
 function EmptyLine({ label }: { label: string }) {
   return <p className="text-sm text-[var(--muted-foreground)]">{label}</p>;
 }
@@ -249,6 +303,14 @@ function toneIconClass(tone: "good" | "warn" | "bad" | "info" | "default") {
 function priorityTone(priority: string) {
   if (priority === "critical") return "bad";
   if (priority === "high") return "warn";
+  return "default";
+}
+
+function supportTone(supportLevel: string) {
+  if (supportLevel === "supported") return "good";
+  if (supportLevel === "supported-with-review") return "info";
+  if (supportLevel === "manual-handoff") return "warn";
+  if (supportLevel === "unsupported") return "bad";
   return "default";
 }
 

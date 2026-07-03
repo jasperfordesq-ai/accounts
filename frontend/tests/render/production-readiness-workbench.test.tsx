@@ -27,6 +27,15 @@ describe("ProductionReadinessWorkbench", () => {
     expect(screen.getByText("Qualified accountant sign-off")).toBeInTheDocument();
     expect(screen.getByText("Light/dark visual regression")).toBeInTheDocument();
     expect(screen.getByText(/Sentry production error routing configured and reviewed/)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Statutory rules matrix" })).toBeInTheDocument();
+    expect(screen.getByText("LTD micro")).toBeInTheDocument();
+    expect(screen.getByText("CLG charity")).toBeInTheDocument();
+    expect(screen.getByText("Medium audit-required")).toBeInTheDocument();
+    expect(screen.getByText("Unsupported regulated/group")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "CRO financial statements requirements" })).toHaveAttribute(
+      "href",
+      "https://cro.ie/",
+    );
   });
 });
 
@@ -110,6 +119,76 @@ function sampleReport(): ProductionReadinessReport {
         status: "required",
         detail: "Runtime errors must be visible before real filings are processed.",
         evidenceRequired: "Sentry production error routing configured and reviewed.",
+      },
+    ],
+    statutoryRuleMatrix: [
+      {
+        code: "ltd-micro",
+        companyScope: "LTD micro",
+        sizeOrRegime: "Micro / FRS 105",
+        supportLevel: "supported",
+        requiredEvidence: ["size classification", "director and secretary"],
+        requiredOutputs: ["micro accounts PDF", "iXBRL"],
+        manualHandoffGates: ["qualified accountant review"],
+        sources: [
+          {
+            sourceId: "cro-financial-statements-requirements",
+            title: "CRO financial statements requirements",
+            effectiveDate: "2026-07-03",
+            url: "https://cro.ie/",
+          },
+        ],
+      },
+      {
+        code: "clg-charity",
+        companyScope: "CLG charity",
+        sizeOrRegime: "Small / charity annual return",
+        supportLevel: "supported-with-review",
+        requiredEvidence: ["charity number", "SoFA"],
+        requiredOutputs: ["accounts PDF", "charity annual return support"],
+        manualHandoffGates: ["charity annual return review"],
+        sources: [
+          {
+            sourceId: "charities-regulator-annual-report",
+            title: "Charities Regulator annual report guidance",
+            effectiveDate: "2026-07-03",
+            url: "https://www.charitiesregulator.ie/",
+          },
+        ],
+      },
+      {
+        code: "medium-audit-required",
+        companyScope: "Medium audit-required",
+        sizeOrRegime: "Medium / full accounts",
+        supportLevel: "manual-handoff",
+        requiredEvidence: ["signed auditor report"],
+        requiredOutputs: ["full accounts pack"],
+        manualHandoffGates: ["auditor handoff required"],
+        sources: [
+          {
+            sourceId: "frc-frs-102",
+            title: "FRC FRS 102 current edition and amendments",
+            effectiveDate: "2026-07-03",
+            url: "https://www.frc.org.uk/",
+          },
+        ],
+      },
+      {
+        code: "unsupported-regulated-group",
+        companyScope: "Unsupported regulated/group",
+        sizeOrRegime: "Regulated, group or public company",
+        supportLevel: "unsupported",
+        requiredEvidence: ["manual professional ownership"],
+        requiredOutputs: ["manual handoff record"],
+        manualHandoffGates: ["fail closed before filing workflow"],
+        sources: [
+          {
+            sourceId: "cro-group-company",
+            title: "CRO group company financial statements requirements",
+            effectiveDate: "2026-07-03",
+            url: "https://cro.ie/group",
+          },
+        ],
       },
     ],
   };

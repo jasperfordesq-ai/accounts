@@ -18,6 +18,16 @@ public sealed record GoldenFilingCorpusScenario(
     IReadOnlyList<string> EvidenceTestNames,
     IReadOnlyList<string> Assertions);
 
+public sealed record StatutoryRuleMatrixEntry(
+    string Code,
+    string CompanyScope,
+    string SizeOrRegime,
+    string SupportLevel,
+    IReadOnlyList<string> RequiredEvidence,
+    IReadOnlyList<string> RequiredOutputs,
+    IReadOnlyList<string> ManualHandoffGates,
+    IReadOnlyList<LegalSourceReference> Sources);
+
 public sealed record OperationalGate(
     string Code,
     string Label,
@@ -42,6 +52,7 @@ public sealed record ProductionReadinessReport(
     SourceLawSnapshot SourceLawSnapshot,
     IReadOnlyList<ProductionReadinessArea> Areas,
     IReadOnlyList<GoldenFilingCorpusScenario> GoldenFilingCorpus,
+    IReadOnlyList<StatutoryRuleMatrixEntry> StatutoryRuleMatrix,
     IReadOnlyList<string> ManualHandoffPaths,
     IReadOnlyList<OperationalGate> OperationalGates,
     IReadOnlyList<ProductionReadinessAssuranceAction> AssuranceActions);
@@ -61,6 +72,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             IrishStatutoryRuleSources.BuildSnapshot(),
             BuildAreas(),
             BuildGoldenCorpus(),
+            BuildStatutoryRuleMatrix(),
             BuildManualHandoffPaths(),
             BuildOperationalGates(),
             BuildAssuranceActions());
@@ -151,6 +163,166 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 "audit report evidence is mandatory",
                 "normal filing approval is blocked until auditor evidence exists",
                 "manual professional handoff is exposed in readiness"
+            ])
+    ];
+
+    private static IReadOnlyList<StatutoryRuleMatrixEntry> BuildStatutoryRuleMatrix() =>
+    [
+        new(
+            "ltd-micro",
+            "LTD micro",
+            "Micro / FRS 105",
+            "supported",
+            [
+                "Micro size classification completed and no micro exclusions apply",
+                "Active director and company secretary recorded",
+                "Named qualified-accountant review recorded",
+                "External ROS/iXBRL validation evidence recorded before Revenue use"
+            ],
+            [
+                "Micro entity financial statements PDF",
+                "CRO certification/signature page",
+                "Revenue iXBRL financial statements package",
+                "CT1 support and tax computation evidence"
+            ],
+            [
+                "Fail closed if micro exclusions, group context, regulated status or missing signatories are detected",
+                "Manual professional review required before real filing use"
+            ],
+            [
+                IrishStatutoryRuleSources.CroFinancialStatementsRequirements,
+                IrishStatutoryRuleSources.FrcFrs105,
+                IrishStatutoryRuleSources.RevenueIxbrlOverview,
+                IrishStatutoryRuleSources.RevenueAcceptedTaxonomies
+            ]),
+        new(
+            "ltd-small-abridged",
+            "LTD small abridged",
+            "Small / abridged FRS 102",
+            "supported",
+            [
+                "Small size classification completed under two-of-three rules",
+                "Abridgement eligibility and audit exemption confirmed",
+                "Director and secretary evidence recorded",
+                "Named qualified-accountant review recorded"
+            ],
+            [
+                "Small or abridged financial statements PDF",
+                "Required statutory statements and notes",
+                "CRO certification/signature page",
+                "Revenue iXBRL and CT1 support pack"
+            ],
+            [
+                "Fail closed if audit exemption is lost, member audit notice applies, or abridgement is not available",
+                "External ROS/iXBRL validation remains a manual evidence gate"
+            ],
+            [
+                IrishStatutoryRuleSources.CroFinancialStatementsRequirements,
+                IrishStatutoryRuleSources.FrcFrs102,
+                IrishStatutoryRuleSources.RevenueIxbrlContents,
+                IrishStatutoryRuleSources.RevenueAcceptedTaxonomies
+            ]),
+        new(
+            "dac-small",
+            "DAC small",
+            "Small / FRS 102",
+            "supported",
+            [
+                "DAC company type and size classification recorded",
+                "Audit exemption and filing regime confirmed",
+                "Director and secretary evidence recorded",
+                "Named qualified-accountant review recorded"
+            ],
+            [
+                "Small company financial statements PDF",
+                "Directors' report evidence",
+                "CRO certification/signature page",
+                "Revenue iXBRL and CT1 support pack"
+            ],
+            [
+                "Manual handoff if audit is required, regulated exclusions apply, or group context is present",
+                "No direct CRO/ROS submission automation"
+            ],
+            [
+                IrishStatutoryRuleSources.CroFinancialStatementsRequirements,
+                IrishStatutoryRuleSources.FrcFrs102,
+                IrishStatutoryRuleSources.RevenueIxbrlOverview
+            ]),
+        new(
+            "clg-charity",
+            "CLG charity",
+            "CLG / charity annual return",
+            "supported-with-review",
+            [
+                "CLG company type recorded",
+                "Charity number and charity profile completed",
+                "SoFA and trustees' annual report evidence generated",
+                "Named qualified-accountant or charity reviewer approval recorded"
+            ],
+            [
+                "CLG financial statements PDF",
+                "Charity SoFA",
+                "Trustees' annual report support",
+                "Revenue iXBRL package where corporation tax filing applies"
+            ],
+            [
+                "Charity annual return must be manually reviewed before use",
+                "Manual handoff required for complex charity governance, restricted funds or regulator-specific queries"
+            ],
+            [
+                IrishStatutoryRuleSources.CroGuaranteeCompany,
+                IrishStatutoryRuleSources.CharitiesRegulatorAnnualReport,
+                IrishStatutoryRuleSources.FrcFrs102
+            ]),
+        new(
+            "medium-audit-required",
+            "Medium audit-required",
+            "Medium / full FRS 102",
+            "manual-handoff",
+            [
+                "Medium size classification completed",
+                "Signed auditor report evidence recorded",
+                "Full financial statements and directors' report evidence reviewed",
+                "Named qualified-accountant and auditor handoff recorded"
+            ],
+            [
+                "Full accounts support pack",
+                "Audit report evidence record",
+                "Revenue iXBRL and CT1 support pack"
+            ],
+            [
+                "Final outputs remain blocked until signed auditor report evidence is recorded",
+                "Manual professional handoff required before approval or submission states"
+            ],
+            [
+                IrishStatutoryRuleSources.CroFinancialStatementsRequirements,
+                IrishStatutoryRuleSources.FrcFrs102,
+                IrishStatutoryRuleSources.RevenueIxbrlOverview
+            ]),
+        new(
+            "unsupported-regulated-group",
+            "Unsupported regulated/group",
+            "PLC, regulated, unlimited variants, group/holding/subsidiary",
+            "unsupported",
+            [
+                "Manual professional ownership recorded",
+                "Reason for unsupported path captured",
+                "External specialist review evidence retained outside automated filing workflow"
+            ],
+            [
+                "Manual handoff record",
+                "Evidence checklist export only; no automated final filing pack approval"
+            ],
+            [
+                "Fail closed before filing workflow approval",
+                "Direct CRO/ROS submission remains unsupported",
+                "Specialist accountant or auditor must complete the statutory filing outside the automated path"
+            ],
+            [
+                IrishStatutoryRuleSources.CroFinancialStatementsRequirements,
+                IrishStatutoryRuleSources.CroGroupCompany,
+                IrishStatutoryRuleSources.CroUnlimitedCompany,
+                IrishStatutoryRuleSources.FrcFrs102
             ])
     ];
 

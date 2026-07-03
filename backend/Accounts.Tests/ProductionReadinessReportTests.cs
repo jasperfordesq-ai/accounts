@@ -111,6 +111,47 @@ public class ProductionReadinessReportTests
         });
     }
 
+    [Fact]
+    public async Task ProductionReadinessReport_IncludesSourceBackedStatutoryRulesMatrix()
+    {
+        await using var db = CreateDbContext();
+        var report = await new ProductionReadinessReportService(db).GetReportAsync();
+
+        Assert.Contains(report.StatutoryRuleMatrix, row =>
+            row.Code == "ltd-micro"
+            && row.CompanyScope.Contains("LTD", StringComparison.OrdinalIgnoreCase)
+            && row.SizeOrRegime.Contains("Micro", StringComparison.OrdinalIgnoreCase)
+            && row.SupportLevel == "supported");
+        Assert.Contains(report.StatutoryRuleMatrix, row =>
+            row.Code == "ltd-small-abridged"
+            && row.RequiredOutputs.Any(output => output.Contains("abridged", StringComparison.OrdinalIgnoreCase)));
+        Assert.Contains(report.StatutoryRuleMatrix, row =>
+            row.Code == "dac-small"
+            && row.CompanyScope.Contains("DAC", StringComparison.OrdinalIgnoreCase)
+            && row.SupportLevel == "supported");
+        Assert.Contains(report.StatutoryRuleMatrix, row =>
+            row.Code == "clg-charity"
+            && row.CompanyScope.Contains("CLG charity", StringComparison.OrdinalIgnoreCase)
+            && row.ManualHandoffGates.Any(gate => gate.Contains("charity annual return", StringComparison.OrdinalIgnoreCase)));
+        Assert.Contains(report.StatutoryRuleMatrix, row =>
+            row.Code == "medium-audit-required"
+            && row.SupportLevel == "manual-handoff"
+            && row.RequiredEvidence.Any(evidence => evidence.Contains("auditor", StringComparison.OrdinalIgnoreCase)));
+        Assert.Contains(report.StatutoryRuleMatrix, row =>
+            row.Code == "unsupported-regulated-group"
+            && row.SupportLevel == "unsupported"
+            && row.ManualHandoffGates.Any(gate => gate.Contains("fail closed", StringComparison.OrdinalIgnoreCase)));
+
+        Assert.All(report.StatutoryRuleMatrix, row =>
+        {
+            Assert.NotEmpty(row.RequiredEvidence);
+            Assert.NotEmpty(row.RequiredOutputs);
+            Assert.NotEmpty(row.ManualHandoffGates);
+            Assert.NotEmpty(row.Sources);
+            Assert.All(row.Sources, source => Assert.StartsWith("https://", source.Url));
+        });
+    }
+
     private static AccountsDbContext CreateDbContext()
     {
         var options = new DbContextOptionsBuilder<AccountsDbContext>()

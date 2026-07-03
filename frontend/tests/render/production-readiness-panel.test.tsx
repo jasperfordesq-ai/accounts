@@ -65,6 +65,25 @@ function sampleReport(): ProductionReadinessReport {
         assertions: ["charity evidence"],
       },
     ],
+    statutoryRuleMatrix: [
+      {
+        code: "ltd-micro",
+        companyScope: "LTD micro",
+        sizeOrRegime: "Micro / FRS 105",
+        supportLevel: "supported",
+        requiredEvidence: ["size classification"],
+        requiredOutputs: ["micro accounts PDF"],
+        manualHandoffGates: ["qualified accountant review"],
+        sources: [
+          {
+            sourceId: "cro-financial-statements-requirements",
+            title: "CRO financial statements requirements",
+            effectiveDate: "2026-07-03",
+            url: "https://cro.ie/",
+          },
+        ],
+      },
+    ],
     manualHandoffPaths: ["PLC and public-company workflows"],
     operationalGates: [
       {
