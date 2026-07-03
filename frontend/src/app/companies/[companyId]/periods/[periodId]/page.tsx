@@ -95,6 +95,7 @@ import { PeriodWorkspaceSkeleton } from "@/components/Skeleton";
 import { WorkbenchHeader } from "@/components/workbench";
 import { PeriodWorkbenchOverview } from "@/components/period/PeriodWorkbenchOverview";
 import { FilingReviewCentre } from "@/components/period/FilingReviewCentre";
+import { FilingDeadlinesPanel } from "@/components/period/FilingDeadlinesPanel";
 import { formatPeriodRange } from "@/lib/format";
 
 function formatCurrency(amount: number): string {
@@ -531,6 +532,23 @@ export default function PeriodWorkspacePage({
       toast.error(err instanceof Error ? err.message : "Failed to delete transaction rule");
     } finally {
       setDeletingRuleId(null);
+    }
+  }
+
+  async function handleMarkDeadlineFiled(deadline: FilingDeadline, filingReference?: string) {
+    setMarkingFiledId(deadline.id);
+    try {
+      await markFiled(cId, pId, {
+        deadlineType: deadline.deadlineType,
+        filedDate: new Date().toISOString().split("T")[0],
+        ...(filingReference ? { filingReference } : {}),
+      });
+      toast.success(`${deadline.deadlineType} filing marked as complete`);
+      await loadData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to mark as filed");
+    } finally {
+      setMarkingFiledId(null);
     }
   }
 
@@ -1953,80 +1971,20 @@ export default function PeriodWorkspacePage({
               }}
             />
 
-            {/* Filing Deadlines */}
-            {deadlinesList.length > 0 && (
-              <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
-                <Card.Header>
-                  <Card.Title className="text-gray-900 dark:text-gray-100">Filing Deadlines</Card.Title>
-                </Card.Header>
-                <Card.Content>
-                  <div className="space-y-3">
-                    {deadlinesList.map((d) => (
-                      <div key={d.id} className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-neutral-700 px-4 py-3">
-                        <div>
-                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{d.deadlineType} Filing</p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">Due: {new Date(d.dueDate).toLocaleDateString("en-IE")}</p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          {d.filedDate ? (
-                            <Chip size="sm" variant="soft" color={d.isLate ? "danger" : "success"}>
-                              Filed {new Date(d.filedDate).toLocaleDateString("en-IE")} {d.isLate ? `(${d.penaltyAmount > 0 ? `\u20AC${d.penaltyAmount} penalty` : "Late"})` : ""}
-                            </Chip>
-                          ) : (
-                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                              {(d.deadlineType === "Revenue" || d.deadlineType === "Charity") && (
-                                <input
-                                  aria-label={d.deadlineType === "Revenue" ? "Revenue ROS or CT1 filing reference" : "Charities Regulator annual return reference"}
-                                  title={d.deadlineType === "Revenue" ? "Revenue ROS or CT1 filing reference" : "Charities Regulator annual return reference"}
-                                  value={filingReferences[d.id] ?? (d.deadlineType === "Revenue" ? filingStatus?.revenue.ct1Reference : filingStatus?.charity.annualReturnReference ?? d.filingReference) ?? ""}
-                                  onChange={(event) => setFilingReferences((current) => ({
-                                    ...current,
-                                    [d.id]: event.target.value,
-                                  }))}
-                                  className="h-9 w-52 max-w-full rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 dark:border-neutral-700 dark:bg-neutral-950 dark:text-gray-100 dark:focus:border-emerald-500 dark:focus:ring-emerald-900/40"
-                                  placeholder={d.deadlineType === "Revenue" ? "ROS/CT1 reference" : "Annual return reference"}
-                                />
-                              )}
-                              <Button variant="outline" size="sm" isDisabled={markingFiledId === d.id} onPress={async () => {
-                                const filingReference = d.deadlineType === "Revenue"
-                                  ? (filingReferences[d.id] ?? filingStatus?.revenue.ct1Reference ?? "").trim()
-                                  : d.deadlineType === "Charity"
-                                    ? (filingReferences[d.id] ?? filingStatus?.charity.annualReturnReference ?? d.filingReference ?? "").trim()
-                                  : undefined;
-                                if (d.deadlineType === "Revenue" && !filingReference) {
-                                  toast.error("Revenue filing reference is required");
-                                  return;
-                                }
-                                if (d.deadlineType === "Charity" && !filingReference) {
-                                  toast.error("Charity annual return reference is required");
-                                  return;
-                                }
-                                setMarkingFiledId(d.id);
-                                try {
-                                  await markFiled(cId, pId, {
-                                    deadlineType: d.deadlineType,
-                                    filedDate: new Date().toISOString().split("T")[0],
-                                    ...(filingReference ? { filingReference } : {}),
-                                  });
-                                  toast.success(`${d.deadlineType} filing marked as complete`);
-                                  loadData();
-                                } catch (err) {
-                                  toast.error(err instanceof Error ? err.message : "Failed to mark as filed");
-                                } finally {
-                                  setMarkingFiledId(null);
-                                }
-                              }}>
-                                {markingFiledId === d.id ? <Spinner size="sm" /> : "Mark as Filed"}
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </Card.Content>
-              </Card>
-            )}
+            <FilingDeadlinesPanel
+              deadlines={deadlinesList}
+              filingStatus={filingStatus}
+              filingReferences={filingReferences}
+              markingFiledId={markingFiledId}
+              onFilingReferenceChange={(deadlineId, value) => {
+                setFilingReferences((current) => ({
+                  ...current,
+                  [deadlineId]: value,
+                }));
+              }}
+              onMarkFiled={handleMarkDeadlineFiled}
+              onReferenceMissing={toast.error}
+            />
 
             {/* Audit Exemption Jeopardy Warning */}
             {jeopardy?.warning && (

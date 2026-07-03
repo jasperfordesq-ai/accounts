@@ -9131,19 +9131,24 @@ public class AccountsWorkflowTests
     {
         var root = RepositoryRoot();
         var page = File.ReadAllText(Path.Combine(root, "frontend/src/app/companies/[companyId]/periods/[periodId]/page.tsx"));
+        var deadlinesPanel = File.ReadAllText(Path.Combine(root, "frontend/src/components/period/FilingDeadlinesPanel.tsx"));
+        var source = page + deadlinesPanel;
         var api = File.ReadAllText(Path.Combine(root, "frontend/src/lib/api.ts"));
         var endpoint = File.ReadAllText(Path.Combine(root, "backend/Accounts.Api/Endpoints/DeadlineEndpoints.cs"));
 
         Assert.Contains("filingReference?: string", api);
         Assert.Contains("string? FilingReference", endpoint);
         Assert.Contains("input.FilingReference", endpoint);
-        Assert.Contains("Revenue ROS or CT1 filing reference", page);
-        Assert.Contains("ROS/CT1 reference", page);
-        Assert.Contains("Revenue filing reference is required", page);
-        Assert.Contains("Charities Regulator annual return reference", page);
-        Assert.Contains("Annual return reference", page);
-        Assert.Contains("Charity annual return reference is required", page);
-        Assert.Contains("filingReference }", page);
+        Assert.Contains("<FilingDeadlinesPanel", page);
+        Assert.Contains("handleMarkDeadlineFiled", page);
+        Assert.Contains("Revenue ROS or CT1 filing reference", source);
+        Assert.Contains("ROS/CT1 reference", source);
+        Assert.Contains("Revenue filing reference is required", source);
+        Assert.Contains("Charities Regulator annual return reference", source);
+        Assert.Contains("Annual return reference", source);
+        Assert.Contains("Charity annual return reference is required", source);
+        Assert.Contains("onMarkFiled(deadline, normalisedReference || undefined)", deadlinesPanel);
+        Assert.Contains("filingReference ? { filingReference }", page);
     }
 
     [Fact]
