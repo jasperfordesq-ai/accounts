@@ -5,10 +5,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Card,
-  Button, Chip, TextField, Input, Label, Checkbox
+  Button, Chip
 } from "@heroui/react";
 import {
-  Building2, Users, Calendar, Plus, Trash2, ArrowRight, MapPin, Heart
+  Building2, Users, Plus, Trash2, MapPin, Heart
 } from "lucide-react";
 import { toast } from "sonner";
 import { Pencil, Save, X } from "lucide-react";
@@ -18,7 +18,8 @@ import { ShareCapitalCard } from "@/components/ShareCapitalCard";
 import { useAuth } from "@/components/AuthProvider";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { CompanyDetailSkeleton } from "@/components/Skeleton";
-import { formatCompanyType, formatDateIE, formatPeriodRange } from "@/lib/format";
+import { CompanyPeriodsWorkbench } from "@/components/company/CompanyPeriodsWorkbench";
+import { formatCompanyType, formatDateIE } from "@/lib/format";
 
 export default function CompanyDetailPage({ params }: { params: Promise<{ companyId: string }> }) {
   const { companyId: id } = use(params);
@@ -237,16 +238,6 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ compan
       toast.error(err instanceof Error ? err.message : "Failed to add officer");
     } finally {
       setSavingOfficer(false);
-    }
-  };
-
-  const statusColor = (status: string) => {
-    switch (status) {
-      case "Draft": return "default" as const;
-      case "Review": return "accent" as const;
-      case "Finalised": return "success" as const;
-      case "Filed": return "success" as const;
-      default: return "default" as const;
     }
   };
 
@@ -692,89 +683,21 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ compan
       {/* Share Capital (company-scoped equity) */}
       <ShareCapitalCard companyId={company.id} canWrite={canWriteWorkingPapers} />
 
-      {/* Accounting Periods */}
-      <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
-        <Card.Header className="flex flex-row items-center justify-between">
-          <Card.Title className="flex items-center gap-2 text-gray-900 dark:text-gray-100">
-            <Calendar className="w-4 h-4 text-gray-400" />
-            Accounting Periods
-          </Card.Title>
-          <Button variant="primary" size="sm" onPress={() => setShowNewPeriod(true)}>
-            <Plus className="w-3.5 h-3.5" />
-            New Period
-          </Button>
-        </Card.Header>
-
-        {showNewPeriod && (
-          <div className="px-6 py-4 bg-emerald-50 dark:bg-emerald-900/20 border-b border-emerald-100 dark:border-emerald-800/30 flex flex-wrap items-end gap-4 animate-slide-down">
-            <TextField className="w-44" value={periodStart} onChange={setPeriodStart}>
-              <Label>Period Start</Label>
-              <Input type="date" />
-            </TextField>
-            <TextField className="w-44" value={periodEnd} onChange={setPeriodEnd}>
-              <Label>Period End</Label>
-              <Input type="date" />
-            </TextField>
-            <Checkbox isSelected={isFirstYear} onChange={setIsFirstYear}>
-              First year
-            </Checkbox>
-            <Button
-              variant="primary"
-              size="sm"
-              onPress={handleCreatePeriod}
-              isDisabled={creatingPeriod}
-            >
-              {creatingPeriod ? "Creating..." : "Create"}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onPress={() => setShowNewPeriod(false)}
-            >
-              Cancel
-            </Button>
-          </div>
-        )}
-
-        <Card.Content>
-          {company.periods && company.periods.length > 0 ? (
-            <div className="divide-y divide-gray-100 dark:divide-neutral-700">
-              {company.periods.map((period) => (
-                <Link
-                  key={period.id}
-                  href={`/companies/${company.id}/periods/${period.id}`}
-                  className="flex items-center justify-between py-4 hover:bg-gray-50 dark:hover:bg-neutral-800/50 px-2 rounded-lg group transition-colors"
-                >
-                  <div className="flex items-center gap-4">
-                    <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                      {formatPeriodRange(period.periodStart, period.periodEnd)}
-                    </span>
-                    {period.isFirstYear && (
-                      <Chip size="sm" color="warning" variant="soft">First Year</Chip>
-                    )}
-                    <Chip size="sm" color={statusColor(period.status)} variant="soft">
-                      {period.status}
-                    </Chip>
-                    {period.sizeClassification && (
-                      <span className="text-xs text-gray-400 dark:text-gray-500">
-                        Size: {period.sizeClassification.calculatedClass}
-                      </span>
-                    )}
-                  </div>
-                  <ArrowRight className="w-4 h-4 text-gray-300 dark:text-gray-600 group-hover:text-emerald-500 transition-colors" />
-                </Link>
-              ))}
-            </div>
-          ) : (
-            <div className="py-12 text-center">
-              <Calendar className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-              <p className="text-gray-400 dark:text-gray-500 text-sm">
-                No accounting periods yet. Create one to start preparing accounts.
-              </p>
-            </div>
-          )}
-        </Card.Content>
-      </Card>
+      <CompanyPeriodsWorkbench
+        company={company}
+        showNewPeriod={showNewPeriod}
+        periodStart={periodStart}
+        periodEnd={periodEnd}
+        isFirstYear={isFirstYear}
+        creatingPeriod={creatingPeriod}
+        canWrite={canWriteWorkingPapers}
+        onShowNewPeriod={() => setShowNewPeriod(true)}
+        onCancelNewPeriod={() => setShowNewPeriod(false)}
+        onPeriodStartChange={setPeriodStart}
+        onPeriodEndChange={setPeriodEnd}
+        onFirstYearChange={setIsFirstYear}
+        onCreatePeriod={handleCreatePeriod}
+      />
 
       {/* Delete Confirmation Modal */}
       <ConfirmModal
