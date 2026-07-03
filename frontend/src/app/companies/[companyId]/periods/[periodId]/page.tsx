@@ -97,6 +97,7 @@ import { PeriodWorkbenchOverview } from "@/components/period/PeriodWorkbenchOver
 import { FilingReviewCentre } from "@/components/period/FilingReviewCentre";
 import { FilingDeadlinesPanel } from "@/components/period/FilingDeadlinesPanel";
 import { PeriodAuditTrailPanel } from "@/components/period/PeriodAuditTrailPanel";
+import { FilingOutputsPanel } from "@/components/period/FilingOutputsPanel";
 import { formatPeriodRange } from "@/lib/format";
 
 function formatCurrency(amount: number): string {
@@ -2006,76 +2007,22 @@ export default function PeriodWorkspacePage({
               </Card>
             )}
 
-            <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
-              <Card.Header>
-                <Card.Title className="text-gray-900 dark:text-gray-100">Download Documents</Card.Title>
-                <Card.Description>Download the final accounts package and iXBRL filing documents</Card.Description>
-              </Card.Header>
-              <Card.Content>
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <button type="button" onClick={() => downloadDocument(agmPackUrl, "AGM pack")} disabled={downloadingDocument !== null} className="flex flex-col items-center gap-3 rounded-xl border-2 border-gray-200 p-8 text-center transition-all hover:border-emerald-400 hover:bg-emerald-50/30 disabled:cursor-wait disabled:opacity-70 dark:border-neutral-700 dark:hover:border-emerald-600 dark:hover:bg-emerald-900/10 group">
-                    <FileText className="w-12 h-12 text-gray-400 dark:text-gray-500 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors" />
-                    <div className="text-center">
-                      <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">AGM Pack</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Full statutory accounts for AGM approval</p>
-                    </div>
-                    <span className="inline-flex h-9 items-center gap-2 rounded-md border border-gray-300 px-3 text-sm font-medium text-gray-700 dark:border-neutral-600 dark:text-gray-200">
-                      {downloadingDocument === "AGM pack" ? <Spinner size="sm" /> : <Download className="w-4 h-4" />}
-                      Download PDF
-                    </span>
-                  </button>
-                  <button type="button" onClick={() => downloadDocument(croPackUrl, "CRO filing pack", "accounts", true)} disabled={downloadingDocument !== null} className={`flex flex-col items-center gap-3 rounded-xl border-2 border-gray-200 p-8 text-center transition-all dark:border-neutral-700 group ${period?.filingRegime ? "hover:border-emerald-400 hover:bg-emerald-50/30 dark:hover:border-emerald-600 dark:hover:bg-emerald-900/10 disabled:cursor-wait disabled:opacity-70" : "cursor-not-allowed opacity-60"}`}>
-                    <FileText className="w-12 h-12 text-gray-400 dark:text-gray-500 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors" />
-                    <div className="text-center">
-                      <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">CRO Filing Pack</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Abridged accounts for CRO filing</p>
-                    </div>
-                    <span className="inline-flex h-9 items-center gap-2 rounded-md border border-gray-300 px-3 text-sm font-medium text-gray-700 dark:border-neutral-600 dark:text-gray-200">
-                      {downloadingDocument === "CRO filing pack" ? <Spinner size="sm" /> : <Download className="w-4 h-4" />}
-                      Download PDF
-                    </span>
-                  </button>
-                  <button type="button" onClick={() => downloadDocument(sigPageUrl, "signature page", "signature", true)} disabled={downloadingDocument !== null} className={`flex flex-col items-center gap-3 rounded-xl border-2 border-gray-200 p-8 text-center transition-all dark:border-neutral-700 group ${period?.filingRegime ? "hover:border-emerald-400 hover:bg-emerald-50/30 dark:hover:border-emerald-600 dark:hover:bg-emerald-900/10 disabled:cursor-wait disabled:opacity-70" : "cursor-not-allowed opacity-60"}`}>
-                    <FileText className="w-12 h-12 text-gray-400 dark:text-gray-500 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors" />
-                    <div className="text-center">
-                      <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Signature Page</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Typeset signatures for CRO (s.347)</p>
-                    </div>
-                    <span className="inline-flex h-9 items-center gap-2 rounded-md border border-gray-300 px-3 text-sm font-medium text-gray-700 dark:border-neutral-600 dark:text-gray-200">
-                      {downloadingDocument === "signature page" ? <Spinner size="sm" /> : <Download className="w-4 h-4" />}
-                      Download PDF
-                    </span>
-                  </button>
-                  <button type="button" onClick={() => downloadDocument(ixbrlUrl, "iXBRL filing", undefined, false, "xhtml")} disabled={downloadingDocument !== null} className="flex flex-col items-center gap-3 rounded-xl border-2 border-gray-200 p-8 text-center transition-all hover:border-emerald-400 hover:bg-emerald-50/30 disabled:cursor-wait disabled:opacity-70 dark:border-neutral-700 dark:hover:border-emerald-600 dark:hover:bg-emerald-900/10 group">
-                    <FileText className="w-12 h-12 text-gray-400 dark:text-gray-500 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors" />
-                    <div className="text-center">
-                      <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">iXBRL Filing</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">For Revenue Online Service (ROS) submission</p>
-                    </div>
-                    <span className="inline-flex h-9 items-center gap-2 rounded-md border border-gray-300 px-3 text-sm font-medium text-gray-700 dark:border-neutral-600 dark:text-gray-200">
-                      {downloadingDocument === "iXBRL filing" ? <Spinner size="sm" /> : <Download className="w-4 h-4" />}
-                      Download iXBRL
-                    </span>
-                  </button>
-                </div>
-              </Card.Content>
-            </Card>
-
-            <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
-              <Card.Header>
-                <Card.Title className="text-gray-900 dark:text-gray-100">Filing Checklist</Card.Title>
-              </Card.Header>
-              <Card.Content>
-                <div className="space-y-3">
-                  <ChecklistItem label="All transactions imported and categorised" done={transactionTotal > 0 && uncategorisedCount === 0} />
-                  <ChecklistItem label="Year-end adjustments generated and reviewed" done={adjSummary != null && adjSummary.pendingApproval === 0 && (adjSummary.autoGenerated + adjSummary.manual) > 0} />
-                  <ChecklistItem label="Balance sheet balances" done={readiness?.balanceSheetBalances ?? false} />
-                  <ChecklistItem label="Filing readiness at 100%" done={(readiness?.filingReadinessPercent ?? 0) >= 100} />
-                  <ChecklistItem label="CRO accounts PDF generated" done={filingStatus?.cro.accountsPdfReady ?? false} />
-                  <ChecklistItem label="CRO filing pack and signature page generated" done={(filingStatus?.cro.accountsPdfReady ?? false) && (filingStatus?.cro.signaturePageReady ?? false)} />
-                </div>
-              </Card.Content>
-            </Card>
+            <FilingOutputsPanel
+              filingRegimeReady={Boolean(period?.filingRegime)}
+              downloadingDocument={downloadingDocument}
+              checklist={{
+                transactionsCategorised: transactionTotal > 0 && uncategorisedCount === 0,
+                adjustmentsReviewed: adjSummary != null && adjSummary.pendingApproval === 0 && (adjSummary.autoGenerated + adjSummary.manual) > 0,
+                balanceSheetBalances: readiness?.balanceSheetBalances ?? false,
+                filingReadinessComplete: (readiness?.filingReadinessPercent ?? 0) >= 100,
+                accountsPdfGenerated: filingStatus?.cro.accountsPdfReady ?? false,
+                croPackAndSignatureGenerated: (filingStatus?.cro.accountsPdfReady ?? false) && (filingStatus?.cro.signaturePageReady ?? false),
+              }}
+              onDownloadAgmPack={() => downloadDocument(agmPackUrl, "AGM pack")}
+              onDownloadCroFilingPack={() => downloadDocument(croPackUrl, "CRO filing pack", "accounts", true)}
+              onDownloadSignaturePage={() => downloadDocument(sigPageUrl, "signature page", "signature", true)}
+              onDownloadIxbrl={() => downloadDocument(ixbrlUrl, "iXBRL filing", undefined, false, "xhtml")}
+            />
 
             <PeriodAuditTrailPanel auditLog={auditLog} auditTotal={auditTotal} />
 
@@ -2116,17 +2063,3 @@ function SummaryCard({ title, value, subtitle }: { title: string; value: string;
   );
 }
 
-function ChecklistItem({ label, done }: { label: string; done: boolean }) {
-  return (
-    <div className="flex items-center gap-3">
-      {done ? (
-        <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-      ) : (
-        <div className="w-5 h-5 rounded-full border-2 border-gray-300 dark:border-neutral-600 shrink-0" />
-      )}
-      <span className={`text-sm ${done ? "text-gray-900 dark:text-gray-100" : "text-gray-500 dark:text-gray-400"}`}>
-        {label}
-      </span>
-    </div>
-  );
-}
