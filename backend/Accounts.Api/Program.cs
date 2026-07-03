@@ -95,6 +95,7 @@ builder.Services.AddScoped<DirectorsReportService>();
 builder.Services.AddScoped<CharityReportingService>();
 builder.Services.AddScoped<FilingReadinessProfileService>();
 builder.Services.AddScoped<FilingWorkflowService>();
+builder.Services.AddScoped<ProductionReadinessReportService>();
 builder.Services.AddScoped<AccountingWriteGuard>();
 builder.Services.AddScoped<IPasswordVerifier, Pbkdf2PasswordVerifier>();
 builder.Services.AddScoped<AuthService>();

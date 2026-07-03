@@ -29,6 +29,7 @@ import {
   updateFixedAsset,
   updateInventory,
   updateDividend,
+  getProductionReadinessReport,
 } from "../src/lib/api.ts";
 
 const calls = [];
@@ -116,4 +117,7 @@ await expect(() => updateFixedAsset(1, 9, { name: "x", category: "Equipment", co
 await expect(() => updateInventory(1, 2, 9, { description: "x", value: 1, valuationMethod: "FIFO" }), "PUT", "/api/companies/1/periods/2/inventory/9");
 await expect(() => updateDividend(1, 2, 9, { amount: 1 }), "PUT", "/api/companies/1/periods/2/dividends/9");
 
-console.log("verify-api-client: all year-end client routes OK");
+// System assurance report
+await expect(() => getProductionReadinessReport(), "GET", "/api/system/production-readiness");
+
+console.log("verify-api-client: all checked client routes OK");

@@ -90,5 +90,14 @@ public static class SystemEndpoints
 
         app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow }))
            .WithTags("System");
+
+        app.MapGet("/api/system/production-readiness", async (
+            ProductionReadinessReportService service,
+            CancellationToken cancellationToken) =>
+        {
+            var report = await service.GetReportAsync(cancellationToken);
+            return Results.Ok(report);
+        })
+           .WithTags("System");
     }
 }

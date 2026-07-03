@@ -19,10 +19,18 @@ import {
   Search,
   X,
 } from "lucide-react";
-import { getCompanies, getUpcomingDeadline, type Company, type FilingDeadline } from "@/lib/api";
+import {
+  getCompanies,
+  getProductionReadinessReport,
+  getUpcomingDeadline,
+  type Company,
+  type FilingDeadline,
+  type ProductionReadinessReport,
+} from "@/lib/api";
 import { DashboardSkeleton } from "@/components/Skeleton";
 import { formatCompanyType, formatDateIE } from "@/lib/format";
 import { useAuth } from "@/components/AuthProvider";
+import { ProductionReadinessPanel } from "@/components/ProductionReadinessPanel";
 
 export default function Dashboard() {
   const { isOwner } = useAuth();
@@ -30,12 +38,28 @@ export default function Dashboard() {
   const [deadlines, setDeadlines] = useState<Record<number, FilingDeadline | null>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [readinessReport, setReadinessReport] = useState<ProductionReadinessReport | null>(null);
+  const [readinessError, setReadinessError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
   useEffect(() => {
-    getCompanies()
-      .then(async (data) => {
+    let active = true;
+
+    async function loadDashboard() {
+      try {
+        const [data, report] = await Promise.all([
+          getCompanies(),
+          getProductionReadinessReport().catch((err) => {
+            if (active) {
+              setReadinessError(err instanceof Error ? err.message : "Failed to load production readiness");
+            }
+            return null;
+          }),
+        ]);
+
+        if (!active) return;
         setCompanies(data);
+        setReadinessReport(report);
         // Fetch upcoming deadlines for each company
         const deadlineMap: Record<number, FilingDeadline | null> = {};
         await Promise.all(
@@ -48,10 +72,19 @@ export default function Dashboard() {
             }
           })
         );
+        if (!active) return;
         setDeadlines(deadlineMap);
-      })
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load companies"))
-      .finally(() => setLoading(false));
+      } catch (err) {
+        if (active) setError(err instanceof Error ? err.message : "Failed to load companies");
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    loadDashboard();
+    return () => {
+      active = false;
+    };
   }, []);
 
   const filtered = useMemo(() => {
@@ -114,6 +147,10 @@ export default function Dashboard() {
           {error}
         </div>
       )}
+
+      <div className="mb-8">
+        <ProductionReadinessPanel report={readinessReport} error={readinessError} />
+      </div>
 
       {/* Quick Stats Bar */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">

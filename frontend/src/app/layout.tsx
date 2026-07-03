@@ -21,7 +21,7 @@ export default async function RootLayout({
   return (
     <html lang="en" className="h-full antialiased" data-scroll-behavior="smooth" suppressHydrationWarning>
       <head>
-        <Script src="/theme-init.js" strategy="beforeInteractive" nonce={nonce} />
+        <Script src="/theme-init.js" strategy="beforeInteractive" nonce={nonce} suppressHydrationWarning />
       </head>
       <body className="min-h-full flex flex-col bg-[var(--background)] text-[var(--foreground)] transition-colors">
         <Providers>

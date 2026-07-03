@@ -1529,6 +1529,48 @@ export interface LegalSourceReference {
   url: string;
 }
 
+export interface SourceLawSnapshot {
+  snapshotDate: string;
+  snapshotVersion: string;
+  sources: LegalSourceReference[];
+}
+
+export interface ProductionReadinessArea {
+  code: string;
+  label: string;
+  status: string;
+  detail: string;
+}
+
+export interface GoldenFilingCorpusScenario {
+  code: string;
+  label: string;
+  companyScope: string;
+  expectedOutcome: string;
+  coverageStatus: string;
+  assertions: string[];
+}
+
+export interface OperationalGate {
+  code: string;
+  label: string;
+  required: boolean;
+  status: string;
+  detail: string;
+}
+
+export interface ProductionReadinessReport {
+  generatedAt: string;
+  overallStatus: string;
+  companiesInDatabase: number;
+  periodsInDatabase: number;
+  sourceLawSnapshot: SourceLawSnapshot;
+  areas: ProductionReadinessArea[];
+  goldenFilingCorpus: GoldenFilingCorpusScenario[];
+  manualHandoffPaths: string[];
+  operationalGates: OperationalGate[];
+}
+
 export interface RevenueIxbrlTaxonomySelection {
   taxonomyKey: string;
   taxonomyDate: string;
@@ -1626,6 +1668,9 @@ export const getFilingWorkflowStatus = (companyId: number, periodId: number) =>
 
 export const getFilingReadinessProfile = (companyId: number, periodId: number) =>
   apiFetch<FilingReadinessProfile>(`/api/companies/${companyId}/periods/${periodId}/filing/readiness-profile`);
+
+export const getProductionReadinessReport = () =>
+  apiFetch<ProductionReadinessReport>("/api/system/production-readiness");
 
 export const updateCroFilingStatus = (
   companyId: number,

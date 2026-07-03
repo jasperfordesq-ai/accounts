@@ -8,6 +8,11 @@ public sealed record LegalSourceReference(
     DateOnly EffectiveDate,
     string Url);
 
+public sealed record SourceLawSnapshot(
+    DateOnly SnapshotDate,
+    string SnapshotVersion,
+    IReadOnlyList<LegalSourceReference> Sources);
+
 public sealed record RevenueIxbrlTaxonomySelection(
     string TaxonomyKey,
     string TaxonomyDate,
@@ -78,6 +83,25 @@ public static class IrishStatutoryRuleSources
         "Charities Regulator annual report guidance",
         new DateOnly(2026, 7, 3),
         "https://www.charitiesregulator.ie/en/information-for-charities/annual-report-how-to-submit");
+
+    public static SourceLawSnapshot BuildSnapshot() => new(
+        new DateOnly(2026, 7, 3),
+        "irish-statutory-accounts-sources-2026-07-03",
+        All);
+
+    public static readonly IReadOnlyList<LegalSourceReference> All =
+    [
+        CroFinancialStatementsRequirements,
+        CroGuaranteeCompany,
+        CroUnlimitedCompany,
+        CroGroupCompany,
+        RevenueIxbrlOverview,
+        RevenueIxbrlContents,
+        RevenueAcceptedTaxonomies,
+        FrcFrs102,
+        FrcFrs105,
+        CharitiesRegulatorAnnualReport
+    ];
 }
 
 public static class RevenueIxbrlTaxonomySelector
