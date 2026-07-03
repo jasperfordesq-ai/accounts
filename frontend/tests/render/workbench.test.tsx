@@ -80,4 +80,22 @@ describe("workbench primitives", () => {
     expect(container.querySelector("section.min-w-0")).toBeInTheDocument();
     expect(container.querySelector(".overflow-x-auto.min-w-0")).toBeInTheDocument();
   });
+
+  it("labels each table cell so mobile card rows retain column context", () => {
+    const { container } = render(
+      <DataTable
+        columns={["Company", "Deadline", "Next action"]}
+        rows={[
+          ["CI Visual Accounts Limited", "Revenue due 23 Sept 2025", "Continue workbench"],
+        ]}
+      />,
+    );
+
+    const table = container.querySelector(".workbench-data-table");
+    expect(table).toBeInTheDocument();
+    expect(table).toHaveAttribute("data-responsive", "card");
+    expect(container.querySelector('td[data-label="Company"]')).toHaveTextContent("CI Visual Accounts Limited");
+    expect(container.querySelector('td[data-label="Deadline"]')).toHaveTextContent("Revenue due 23 Sept 2025");
+    expect(container.querySelector('td[data-label="Next action"]')).toHaveTextContent("Continue workbench");
+  });
 });

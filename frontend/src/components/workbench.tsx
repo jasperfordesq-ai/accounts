@@ -283,7 +283,10 @@ export function DataTable({
   rows: ReactNode[][];
 }) {
   return (
-    <div className="min-w-0 overflow-x-auto rounded-md border border-[var(--border)] bg-[var(--surface)]">
+    <div
+      className="workbench-data-table min-w-0 overflow-x-auto rounded-md border border-[var(--border)] bg-[var(--surface)]"
+      data-responsive="card"
+    >
       <table className="min-w-full border-collapse text-left text-sm">
         <thead className="bg-[var(--surface-subtle)] text-xs font-semibold uppercase text-[var(--muted-foreground)]">
           <tr>
@@ -298,7 +301,11 @@ export function DataTable({
           {rows.map((row, rowIndex) => (
             <tr key={rowIndex} className="hover:bg-[var(--surface-subtle)]">
               {row.map((cell, cellIndex) => (
-                <td key={cellIndex} className="px-4 py-3 align-top text-[var(--foreground)]">
+                <td
+                  key={cellIndex}
+                  data-label={columns[cellIndex] ?? ""}
+                  className="px-4 py-3 align-top text-[var(--foreground)]"
+                >
                   {cell}
                 </td>
               ))}
