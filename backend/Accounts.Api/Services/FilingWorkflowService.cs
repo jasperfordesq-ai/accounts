@@ -11,7 +11,8 @@ public class FilingWorkflowService(
     FinancialStatementsService statementsService,
     IxbrlService ixbrlService,
     AuditService? audit = null,
-    ILogger<FilingWorkflowService>? logger = null)
+    ILogger<FilingWorkflowService>? logger = null,
+    FilingReadinessProfileService? readinessProfile = null)
 {
     public record FilingWorkflowStatus(
         CroFilingStatus Cro,
@@ -171,9 +172,12 @@ public class FilingWorkflowService(
 
         if (status == FilingStatus.Approved)
         {
+            RequireNamedReviewer(by, "approving the CRO filing pack");
             var statusSnapshot = await GetStatusAsync(companyId, periodId);
             if (statusSnapshot.BlockingIssues.Count > 0)
                 throw new BusinessRuleException($"Cannot approve CRO filing while blockers remain: {string.Join("; ", statusSnapshot.BlockingIssues.Distinct())}");
+            if (readinessProfile is not null)
+                await readinessProfile.AssertCanApproveCroPackAsync(companyId, periodId);
 
             // signing-approval-chain: capture the director/secretary signatories at approval so the
             // as-filed record retains a recorded signing authority behind the filing.
@@ -199,6 +203,8 @@ public class FilingWorkflowService(
             coreSubmissionReference = NormalizeFilingReference(submissionReference ?? pkg.CroSubmissionReference, "CORE submission reference");
 
             await statementsService.AssertFinalOutputReadinessAsync(companyId, periodId, "CRO submission");
+            if (readinessProfile is not null)
+                await readinessProfile.AssertCanRecordCroSubmissionAsync(companyId, periodId);
 
             var statusSnapshot = await GetStatusAsync(companyId, periodId);
             if (statusSnapshot.BlockingIssues.Count > 0)
@@ -470,6 +476,7 @@ public class FilingWorkflowService(
 
         if (status == FilingStatus.Approved)
         {
+            RequireNamedReviewer(by, "approving the Charity annual return pack");
             await AssertCharityAnnualReturnEvidenceAsync(period, pkg);
             pkg.ApprovedBy = by;
             pkg.ApprovedAt = DateTime.UtcNow;
@@ -588,6 +595,12 @@ public class FilingWorkflowService(
         if (trimmed.Length > 200)
             throw new BusinessRuleException($"{label} must be 200 characters or fewer.");
         return trimmed;
+    }
+
+    private static void RequireNamedReviewer(string? by, string action)
+    {
+        if (string.IsNullOrWhiteSpace(by))
+            throw new BusinessRuleException($"A named qualified reviewer is required before {action}.");
     }
 
     private static bool InternalIxbrlChecksPassed(RevenueFilingPackage? pkg) =>

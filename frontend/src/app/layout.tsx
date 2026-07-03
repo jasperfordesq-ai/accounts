@@ -6,7 +6,7 @@ import { AppNavbar } from "@/components/AppNavbar";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Irish Accounts — Statutory Accounts Platform",
+  title: "Irish Accounts - Statutory Accounts Platform",
   description: "Multi-company statutory accounts production for Irish private companies",
   icons: { icon: "/favicon.ico" },
 };
@@ -19,7 +19,7 @@ export default async function RootLayout({
   const nonce = (await headers()).get("x-nonce") ?? undefined;
 
   return (
-    <html lang="en" className="h-full antialiased" suppressHydrationWarning>
+    <html lang="en" className="h-full antialiased" data-scroll-behavior="smooth" suppressHydrationWarning>
       <head>
         <Script src="/theme-init.js" strategy="beforeInteractive" nonce={nonce} />
       </head>

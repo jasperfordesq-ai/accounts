@@ -56,6 +56,7 @@ import {
   approveAdjustment,
   uploadBankCsv,
   getFilingWorkflowStatus,
+  getFilingReadinessProfile,
   validateIxbrl,
   calculateDeadlines,
   updateCroFilingStatus,
@@ -82,6 +83,7 @@ import {
   type Adjustment,
   type AdjustmentSummary,
   type FilingWorkflowStatus,
+  type FilingReadinessProfile,
   type FilingDeadline,
   type AuditExemptionJeopardy,
   type AccountCategory,
@@ -91,7 +93,17 @@ import {
 } from "@/lib/api";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { PeriodWorkspaceSkeleton } from "@/components/Skeleton";
-import { MetricStrip, ReviewPanel, WorkbenchHeader, WorkflowRail, type WorkflowItem } from "@/components/workbench";
+import {
+  EvidenceChecklist,
+  FilingActionBar,
+  MetricStrip,
+  ReviewPanel,
+  SectionHeader,
+  StatusBadge,
+  WorkbenchHeader,
+  WorkflowRail,
+  type WorkflowItem,
+} from "@/components/workbench";
 import { formatPeriodRange } from "@/lib/format";
 
 function formatCurrency(amount: number): string {
@@ -99,6 +111,18 @@ function formatCurrency(amount: number): string {
     style: "currency",
     currency: "EUR",
   }).format(amount);
+}
+
+function filingStatusTone(status?: string): "default" | "good" | "warn" | "bad" | "info" {
+  if (status === "Accepted" || status === "Filed" || status === "Approved") return "good";
+  if (status === "Submitted" || status === "PackageGenerated" || status === "ReadyForReview") return "info";
+  if (status === "Rejected" || status === "CorrectionRequired") return "bad";
+  if (status === "NotStarted" || status === "InProgress") return "warn";
+  return "default";
+}
+
+function issueKey(message: string, index: number) {
+  return `${message.slice(0, 36)}-${index}`;
 }
 
 export default function PeriodWorkspacePage({
@@ -125,6 +149,7 @@ export default function PeriodWorkspacePage({
     currency: "EUR",
   });
   const [filingStatus, setFilingStatus] = useState<FilingWorkflowStatus | null>(null);
+  const [filingReadinessProfile, setFilingReadinessProfile] = useState<FilingReadinessProfile | null>(null);
   const [deadlinesList, setDeadlinesList] = useState<FilingDeadline[]>([]);
   const [filingReferences, setFilingReferences] = useState<Record<number, string>>({});
   const [croSubmissionReference, setCroSubmissionReference] = useState("");
@@ -187,6 +212,21 @@ export default function PeriodWorkspacePage({
   const [adjFilterApproved, setAdjFilterApproved] = useState<string>("");
   const [adjFilterType, setAdjFilterType] = useState<string>("");
 
+  const refreshFilingState = useCallback(async () => {
+    const [statusResult, profileResult] = await Promise.allSettled([
+      getFilingWorkflowStatus(cId, pId),
+      getFilingReadinessProfile(cId, pId),
+    ]);
+
+    if (statusResult.status === "fulfilled") {
+      setFilingStatus(statusResult.value);
+      setCroSubmissionReference(statusResult.value.cro.submissionReference ?? "");
+    }
+    if (profileResult.status === "fulfilled") {
+      setFilingReadinessProfile(profileResult.value);
+    }
+  }, [cId, pId]);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -217,9 +257,7 @@ export default function PeriodWorkspacePage({
         // Readiness data may not be available yet
       }
       try {
-        const fs = await getFilingWorkflowStatus(cId, pId);
-        setFilingStatus(fs);
-        setCroSubmissionReference(fs.cro.submissionReference ?? "");
+        await refreshFilingState();
       } catch {
         // Filing status may not be available yet
       }
@@ -262,7 +300,7 @@ export default function PeriodWorkspacePage({
     } finally {
       setLoading(false);
     }
-  }, [cId, pId, selectedBankAccountId]);
+  }, [cId, pId, refreshFilingState, selectedBankAccountId]);
 
   const loadTransactions = useCallback(async () => {
     setLoadingTransactions(true);
@@ -584,9 +622,7 @@ export default function PeriodWorkspacePage({
 
       if (documentType && downloadDelivered) {
         try {
-          const fs = await getFilingWorkflowStatus(cId, pId);
-          setFilingStatus(fs);
-          setCroSubmissionReference(fs.cro.submissionReference ?? "");
+          await refreshFilingState();
         } catch {
           // Download still opens; the readiness panel will refresh on the next status load.
         }
@@ -1929,76 +1965,124 @@ export default function PeriodWorkspacePage({
         {/* Filing Tab */}
         <TabPanel id="filing">
           <div className="space-y-6">
-            {/* Filing Workflow Status */}
-            <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
-              <Card.Header>
-                <Card.Title className="text-gray-900 dark:text-gray-100">
-                  <Shield className="w-4 h-4 inline mr-1.5 -mt-0.5" />
-                  Filing Workflow Status
-                </Card.Title>
-                <Card.Description>CRO and Revenue filing readiness</Card.Description>
-              </Card.Header>
-              <Card.Content>
+            <ReviewPanel
+              title="Filing readiness profile"
+              description="Source-backed CRO, Revenue and accountant-review gates for this period."
+              actions={
+                <div className="flex flex-wrap items-center gap-2">
+                  <StatusBadge tone={filingReadinessProfile?.supportedPath ? "good" : "bad"}>
+                    {filingReadinessProfile?.supportedPath ? "Supported path" : "Manual handoff"}
+                  </StatusBadge>
+                  <StatusBadge tone={filingStatus?.readyToFile ? "good" : "warn"}>
+                    {filingStatus?.readyToFile ? "Workflow ready" : "Workflow open"}
+                  </StatusBadge>
+                </div>
+              }
+            >
                 {filingStatus ? (
                   <div className="space-y-4">
-                    {/* Ready / Not Ready Banner */}
-                    {filingStatus.readyToFile ? (
-                      <div className="rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 px-4 py-3 flex items-center gap-2">
-                        <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                        <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Ready to File</span>
+                    <div className="grid gap-3 lg:grid-cols-4">
+                      <div className="rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-3">
+                        <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">CRO workflow</p>
+                        <div className="mt-2"><StatusBadge tone={filingStatusTone(filingStatus.cro.status)}>{filingStatus.cro.status}</StatusBadge></div>
                       </div>
-                    ) : (
-                      <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-4 py-3 flex items-center gap-2">
-                        <AlertTriangle className="w-5 h-5 text-red-500" />
-                        <span className="text-sm font-medium text-red-700 dark:text-red-400">Not Ready to File</span>
+                      <div className="rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-3">
+                        <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Revenue workflow</p>
+                        <div className="mt-2"><StatusBadge tone={filingStatusTone(filingStatus.revenue.status)}>{filingStatus.revenue.status}</StatusBadge></div>
                       </div>
-                    )}
-
-                    {/* Status Badges */}
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">CRO:</span>
-                        <Chip size="sm" variant="soft" color={
-                          filingStatus.cro.status === "Filed" ? "success" :
-                          filingStatus.cro.status === "Rejected" ? "danger" :
-                          filingStatus.cro.status === "Submitted" ? "accent" : "warning"
-                        }>
-                          {filingStatus.cro.status}
-                        </Chip>
+                      <div className="rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-3">
+                        <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Accountant review</p>
+                        <p className="mt-2 text-sm font-medium text-[var(--foreground)]">
+                          {filingReadinessProfile?.accountantReviewState ?? "Required"}
+                        </p>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Revenue:</span>
-                        <Chip size="sm" variant="soft" color={
-                          filingStatus.revenue.status === "Filed" ? "success" :
-                          filingStatus.revenue.status === "Rejected" ? "danger" :
-                          filingStatus.revenue.status === "Submitted" ? "accent" : "warning"
-                        }>
-                          {filingStatus.revenue.status}
-                        </Chip>
+                      <div className="rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-3">
+                        <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Taxonomy</p>
+                        <p className="mt-2 text-sm font-medium text-[var(--foreground)]">
+                          {filingReadinessProfile?.revenueTaxonomy.taxonomyDate ?? "Pending"}
+                        </p>
                       </div>
                     </div>
 
-                    {/* Blocking Issues */}
-                    {filingStatus.blockingIssues.length > 0 && (
-                      <div>
-                        <h4 className="text-sm font-medium text-red-700 dark:text-red-400 mb-2">Blocking Issues</h4>
-                        <ul className="space-y-1.5">
-                          {filingStatus.blockingIssues.map((issue, i) => (
-                            <li key={i} className="flex items-start gap-2 text-sm text-red-700 dark:text-red-400">
-                              <span className="w-1.5 h-1.5 rounded-full bg-red-400 mt-1.5 shrink-0" />{issue}
+                    {filingReadinessProfile && (
+                      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
+                        <div className="space-y-3">
+                          <SectionHeader
+                            eyebrow="Required evidence"
+                            title="Professional filing gate"
+                            description="Generated outputs remain draft/recorded workflow states until the required evidence and named review are complete."
+                          />
+                          <EvidenceChecklist items={filingReadinessProfile.requiredEvidence} />
+                        </div>
+                        <div className="space-y-3">
+                          <div className="rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-4">
+                            <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Submission controls</p>
+                            <div className="mt-3 space-y-2 text-sm text-[var(--foreground)]">
+                              <div className="flex items-center justify-between gap-3">
+                                <span>Direct CRO submission</span>
+                                <StatusBadge tone={filingReadinessProfile.directCroSubmissionSupported ? "good" : "warn"}>
+                                  {filingReadinessProfile.directCroSubmissionSupported ? "Enabled" : "Recorded only"}
+                                </StatusBadge>
+                              </div>
+                              <div className="flex items-center justify-between gap-3">
+                                <span>Direct ROS submission</span>
+                                <StatusBadge tone={filingReadinessProfile.directRosSubmissionSupported ? "good" : "warn"}>
+                                  {filingReadinessProfile.directRosSubmissionSupported ? "Enabled" : "Manual"}
+                                </StatusBadge>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-4">
+                            <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Legal sources</p>
+                            <div className="mt-3 space-y-2">
+                              {filingReadinessProfile.sourceReferences.slice(0, 6).map((source) => (
+                                <a
+                                  key={source.sourceId}
+                                  href={source.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="block rounded border border-[var(--border)] px-3 py-2 text-xs font-medium text-[var(--foreground)] hover:bg-[var(--surface-subtle)]"
+                                >
+                                  {source.title}
+                                </a>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {filingReadinessProfile?.blockingIssues.length ? (
+                      <div className="rounded-md border border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950/40">
+                        <h4 className="flex items-center gap-2 text-sm font-semibold text-red-800 dark:text-red-100">
+                          <AlertTriangle className="h-4 w-4" /> Statutory blockers
+                        </h4>
+                        <ul className="mt-2 space-y-1.5">
+                          {filingReadinessProfile.blockingIssues.map((issue, i) => (
+                            <li key={issueKey(issue.message, i)} className="text-sm leading-6 text-red-800 dark:text-red-100">
+                              {issue.message}
                             </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : filingStatus.blockingIssues.length > 0 && (
+                      <div className="rounded-md border border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950/40">
+                        <h4 className="text-sm font-semibold text-red-800 dark:text-red-100">Workflow blockers</h4>
+                        <ul className="mt-2 space-y-1.5">
+                          {filingStatus.blockingIssues.map((issue, i) => (
+                            <li key={issueKey(issue, i)} className="text-sm leading-6 text-red-800 dark:text-red-100">{issue}</li>
                           ))}
                         </ul>
                       </div>
                     )}
 
                     {filingStatus.warningIssues.length > 0 && (
-                      <div>
-                        <h4 className="text-sm font-medium text-amber-700 dark:text-amber-400 mb-2">Filing Warnings</h4>
-                        <ul className="space-y-1.5">
+                      <div className="rounded-md border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/40">
+                        <h4 className="text-sm font-semibold text-amber-900 dark:text-amber-100">Filing warnings</h4>
+                        <ul className="mt-2 space-y-1.5">
                           {filingStatus.warningIssues.map((issue, i) => (
-                            <li key={i} className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-400">
-                              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 mt-1.5 shrink-0" />{issue}
+                            <li key={issueKey(issue, i)} className="text-sm leading-6 text-amber-900 dark:text-amber-100">
+                              {issue}
                             </li>
                           ))}
                         </ul>
@@ -2019,12 +2103,7 @@ export default function PeriodWorkspacePage({
                           } else {
                             toast.error(result.validationErrors || "Internal iXBRL checks need attention");
                           }
-                          // Refresh filing status
-                          try {
-                            const fs = await getFilingWorkflowStatus(cId, pId);
-                            setFilingStatus(fs);
-                            setCroSubmissionReference(fs.cro.submissionReference ?? "");
-                          } catch {}
+                          await refreshFilingState();
                         } catch (err) {
                           toast.error(err instanceof Error ? err.message : "Internal iXBRL checks need attention");
                         } finally {
@@ -2041,7 +2120,7 @@ export default function PeriodWorkspacePage({
 
                     {(filingStatus.cro.status === "Approved" || filingStatus.cro.status === "Submitted" || filingStatus.cro.status === "Accepted") && (
                       <div className="max-w-sm">
-                        <label htmlFor="cro-submission-reference" className="mb-1 block text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
+                        <label htmlFor="cro-submission-reference" className="mb-1 block text-xs font-medium uppercase text-[var(--muted-foreground)]">
                           CORE submission reference
                         </label>
                         <input
@@ -2051,20 +2130,19 @@ export default function PeriodWorkspacePage({
                           value={croSubmissionReference}
                           onChange={(event) => setCroSubmissionReference(event.target.value)}
                           disabled={filingStatus.cro.status === "Accepted"}
-                          className="h-9 w-full rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 disabled:bg-gray-100 disabled:text-gray-500 dark:border-neutral-700 dark:bg-neutral-950 dark:text-gray-100 dark:disabled:bg-neutral-800 dark:disabled:text-gray-400 dark:focus:border-emerald-500 dark:focus:ring-emerald-900/40"
+                          className="h-9 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 text-sm text-[var(--foreground)] outline-none transition focus:border-[var(--ring)] focus:ring-2 focus:ring-teal-100 disabled:bg-[var(--muted)] disabled:text-[var(--muted-foreground)] dark:focus:ring-teal-900/40"
                           placeholder="CORE-2026-0001"
                         />
                       </div>
                     )}
 
-                    {/* Filing Action Buttons */}
-                    <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-gray-200 dark:border-neutral-700">
+                    <FilingActionBar>
                       {filingStatus.cro.status === "NotStarted" || filingStatus.cro.status === "InProgress" || filingStatus.cro.status === "PackageGenerated" ? (
-                        <Button variant="primary" size="sm" isDisabled={!filingStatus.readyToFile} onPress={async () => {
+                        <Button variant="primary" size="sm" isDisabled={!filingStatus.readyToFile || filingReadinessProfile?.manualProfessionalReviewRequired === true} onPress={async () => {
                           try {
                             await updateCroFilingStatus(cId, pId, { status: "Approved" });
                             toast.success("Filing approved");
-                            const fs = await getFilingWorkflowStatus(cId, pId); setFilingStatus(fs); setCroSubmissionReference(fs.cro.submissionReference ?? "");
+                            await refreshFilingState();
                           } catch (err) { toast.error(err instanceof Error ? err.message : "Failed to approve"); }
                         }}>
                           <CheckCircle2 className="w-4 h-4 mr-1" /> Approve for Filing
@@ -2079,7 +2157,7 @@ export default function PeriodWorkspacePage({
                             }
                             await updateCroFilingStatus(cId, pId, { status: "Submitted", submissionReference: coreReference });
                             toast.success("Marked as submitted to CRO");
-                            const fs = await getFilingWorkflowStatus(cId, pId); setFilingStatus(fs); setCroSubmissionReference(fs.cro.submissionReference ?? "");
+                            await refreshFilingState();
                           } catch (err) { toast.error(err instanceof Error ? err.message : "Failed to update status"); }
                         }}>
                           <Upload className="w-4 h-4 mr-1" /> Mark as Submitted
@@ -2094,7 +2172,7 @@ export default function PeriodWorkspacePage({
                               try {
                                 await confirmCroPayment(cId, pId);
                                 toast.success("CORE payment confirmed");
-                                const fs = await getFilingWorkflowStatus(cId, pId); setFilingStatus(fs); setCroSubmissionReference(fs.cro.submissionReference ?? "");
+                                await refreshFilingState();
                               } catch (err) { toast.error(err instanceof Error ? err.message : "Failed to confirm payment"); }
                             }}>
                               Confirm CORE Payment
@@ -2104,7 +2182,7 @@ export default function PeriodWorkspacePage({
                             try {
                               await updateCroFilingStatus(cId, pId, { status: "Accepted" });
                               toast.success("CRO acceptance recorded");
-                              const fs = await getFilingWorkflowStatus(cId, pId); setFilingStatus(fs); setCroSubmissionReference(fs.cro.submissionReference ?? "");
+                              await refreshFilingState();
                             } catch (err) { toast.error(err instanceof Error ? err.message : "Failed to mark accepted"); }
                           }}>
                             Mark Accepted
@@ -2116,7 +2194,7 @@ export default function PeriodWorkspacePage({
                                 reason: "CRO send-back/correction required. Correct and redeliver within 14 days.",
                               });
                               toast.warning("Correction deadline opened");
-                              const fs = await getFilingWorkflowStatus(cId, pId); setFilingStatus(fs); setCroSubmissionReference(fs.cro.submissionReference ?? "");
+                              await refreshFilingState();
                             } catch (err) { toast.error(err instanceof Error ? err.message : "Failed to record correction"); }
                           }}>
                             Record Send-Back
@@ -2129,7 +2207,7 @@ export default function PeriodWorkspacePage({
                           Correction due {filingStatus.cro.correctionDeadline ? new Date(filingStatus.cro.correctionDeadline).toLocaleDateString("en-IE") : "within 14 days"}
                         </Chip>
                       ) : null}
-                    </div>
+                    </FilingActionBar>
                   </div>
                 ) : (
                   <div className="text-center py-8">
@@ -2138,8 +2216,7 @@ export default function PeriodWorkspacePage({
                     <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Complete the statements and generate documents first.</p>
                   </div>
                 )}
-              </Card.Content>
-            </Card>
+            </ReviewPanel>
 
             {/* Filing Deadlines */}
             {deadlinesList.length > 0 && (

@@ -8834,8 +8834,8 @@ public class AccountsWorkflowTests
 
         var xhtml = Encoding.UTF8.GetString(await service.GenerateIxbrlAsync(period.CompanyId, period.Id));
 
-        Assert.Contains("ie-FRS-102-2026-01-01.xsd", xhtml);
-        Assert.Contains("xmlns:ie-common=\"https://xbrl.frc.org.uk/ireland/common/2026-01-01\"", xhtml);
+        Assert.Contains("ie-FRS-102-2025-01-01.xsd", xhtml);
+        Assert.Contains("xmlns:ie-common=\"https://xbrl.frc.org.uk/ireland/common/2025-01-01\"", xhtml);
         Assert.Contains("name=\"core:NetAssetsLiabilities\" contextRef=\"instant\"", xhtml);
         Assert.Contains("name=\"core:TurnoverGrossRevenue\" contextRef=\"current\"", xhtml);
         Assert.Contains("name=\"core:ProfitLossForPeriod\" contextRef=\"current\"", xhtml);
@@ -14679,7 +14679,7 @@ public class AccountsWorkflowTests
         var frontendJob = WorkflowJob(workflow, "frontend");
         Assert.Contains("actions/checkout", frontendJob);
         Assert.Contains("actions/setup-node", frontendJob);
-        Assert.Contains("node-version: 22", frontendJob);
+        Assert.Contains("node-version-file: .nvmrc", frontendJob);
         Assert.Contains("cache: npm", frontendJob);
         Assert.Contains("cache-dependency-path: frontend/package-lock.json", frontendJob);
         Assert.Contains("npm ci", frontendJob);
@@ -14697,6 +14697,9 @@ public class AccountsWorkflowTests
 
         // CI runs the whole frontend suite through `npm test`; that aggregate must keep chaining every
         // gate (unit harness + readiness + proxy + auth + api-client) so none can silently drop from CI.
+        var nodeVersionFile = File.ReadAllText(Path.Combine(RepositoryRoot(), ".nvmrc")).Trim();
+        Assert.Equal("24", nodeVersionFile);
+
         var frontendPackageJson = File.ReadAllText(Path.Combine(RepositoryRoot(), "frontend", "package.json"));
         foreach (var suite in new[] { "test:unit", "test:readiness", "test:proxy", "test:auth", "test:api-client" })
             Assert.Contains(suite, frontendPackageJson);

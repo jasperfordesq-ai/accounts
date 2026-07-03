@@ -1522,6 +1522,60 @@ export interface FilingWorkflowStatus {
   readyToFile: boolean;
 }
 
+export interface LegalSourceReference {
+  sourceId: string;
+  title: string;
+  effectiveDate: string;
+  url: string;
+}
+
+export interface RevenueIxbrlTaxonomySelection {
+  taxonomyKey: string;
+  taxonomyDate: string;
+  label: string;
+  schemaRef: string;
+  acceptedByRevenue: boolean;
+  effectiveForPeriodsStartingOnOrAfter: string;
+  sources: LegalSourceReference[];
+}
+
+export interface FilingReadinessEvidenceItem {
+  code: string;
+  label: string;
+  required: boolean;
+  satisfied: boolean;
+  detail?: string;
+  sources: LegalSourceReference[];
+}
+
+export interface FilingReadinessIssue {
+  code: string;
+  severity: "blocking" | "warning" | string;
+  message: string;
+  sources: LegalSourceReference[];
+}
+
+export interface FilingReadinessProfile {
+  companyId: number;
+  periodId: number;
+  companyType: string;
+  sizeClass?: string;
+  electedRegime?: string;
+  auditExempt?: boolean;
+  supportedPath: boolean;
+  manualProfessionalReviewRequired: boolean;
+  accountantReviewRequired: boolean;
+  accountantReviewState: string;
+  directCroSubmissionSupported: boolean;
+  directRosSubmissionSupported: boolean;
+  revenueTaxonomy: RevenueIxbrlTaxonomySelection;
+  requiredEvidence: FilingReadinessEvidenceItem[];
+  blockingIssues: FilingReadinessIssue[];
+  warningIssues: FilingReadinessIssue[];
+  sourceReferences: LegalSourceReference[];
+  allowedNextActions: string[];
+}
+
 export interface AuditLogEntry {
   id: number;
   companyId?: number;
@@ -1569,6 +1623,9 @@ export interface CharityFilingStatus {
 
 export const getFilingWorkflowStatus = (companyId: number, periodId: number) =>
   apiFetch<FilingWorkflowStatus>(`/api/companies/${companyId}/periods/${periodId}/filing/status`);
+
+export const getFilingReadinessProfile = (companyId: number, periodId: number) =>
+  apiFetch<FilingReadinessProfile>(`/api/companies/${companyId}/periods/${periodId}/filing/readiness-profile`);
 
 export const updateCroFilingStatus = (
   companyId: number,

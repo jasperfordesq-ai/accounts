@@ -19,6 +19,15 @@ public static class FilingWorkflowEndpoints
             return Results.Ok(status);
         });
 
+        group.MapGet("/readiness-profile", async (int companyId, int periodId, FilingReadinessProfileService service, AccountsDbContext db, HttpContext context) =>
+        {
+            if (!await CompanyEndpointAccess.CanAccessCompanyPeriodAsync(context, db, companyId, periodId))
+                return Results.NotFound();
+
+            var profile = await service.GetProfileAsync(companyId, periodId);
+            return Results.Ok(profile);
+        });
+
         group.MapPut("/cro-status", async (int companyId, int periodId, FilingStatusInput input, FilingWorkflowService service, AccountsDbContext db, HttpContext context, ApiAccessService apiAccess) =>
         {
             if (!await CompanyEndpointAccess.CanAccessCompanyPeriodAsync(context, db, companyId, periodId))

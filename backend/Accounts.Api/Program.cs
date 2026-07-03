@@ -93,6 +93,7 @@ builder.Services.AddScoped<DeadlineService>();
 builder.Services.AddScoped<DirectorLoanComplianceService>();
 builder.Services.AddScoped<DirectorsReportService>();
 builder.Services.AddScoped<CharityReportingService>();
+builder.Services.AddScoped<FilingReadinessProfileService>();
 builder.Services.AddScoped<FilingWorkflowService>();
 builder.Services.AddScoped<AccountingWriteGuard>();
 builder.Services.AddScoped<IPasswordVerifier, Pbkdf2PasswordVerifier>();

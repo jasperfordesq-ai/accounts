@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState, use } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  Card, CardContent, CardHeader, CardTitle,
+  Card,
   Button, Chip, TextField, Input, Label, Checkbox
 } from "@heroui/react";
 import {
@@ -307,13 +307,13 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ compan
       {/* Edit Company Form */}
       {editing && (
         <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 mb-6 animate-slide-down">
-          <CardHeader>
-            <CardTitle className="text-gray-900 dark:text-gray-100 flex items-center gap-2">
+          <Card.Header>
+            <Card.Title className="text-gray-900 dark:text-gray-100 flex items-center gap-2">
               <Pencil className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
               Edit Company Details
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+            </Card.Title>
+          </Card.Header>
+          <Card.Content>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Legal Name *</label>
@@ -358,19 +358,19 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ compan
               </Button>
               <Button variant="ghost" size="sm" onPress={() => setEditing(false)}>Cancel</Button>
             </div>
-          </CardContent>
+          </Card.Content>
         </Card>
       )}
 
       {/* Info cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
         <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
-          <CardHeader>
-            <CardTitle className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">
+          <Card.Header>
+            <Card.Title className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">
               Registration
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm">
+            </Card.Title>
+          </Card.Header>
+          <Card.Content className="space-y-2 text-sm">
             <div>
               <span className="text-gray-500 dark:text-gray-400">CRO:</span>{" "}
               <span className="font-medium text-gray-900 dark:text-gray-100">
@@ -395,16 +395,16 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ compan
                 {formatDateIE(company.incorporationDate)}
               </span>
             </div>
-          </CardContent>
+          </Card.Content>
         </Card>
 
         <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
-          <CardHeader>
-            <CardTitle className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide flex items-center gap-2">
+          <Card.Header>
+            <Card.Title className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide flex items-center gap-2">
               <MapPin className="w-3.5 h-3.5" /> Address
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm space-y-1 text-gray-900 dark:text-gray-100">
+            </Card.Title>
+          </Card.Header>
+          <Card.Content className="text-sm space-y-1 text-gray-900 dark:text-gray-100">
             {company.registeredOfficeAddress1 && <div>{company.registeredOfficeAddress1}</div>}
             {company.registeredOfficeAddress2 && <div>{company.registeredOfficeAddress2}</div>}
             {company.registeredOfficeCity && <div>{company.registeredOfficeCity}</div>}
@@ -413,19 +413,19 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ compan
             {!company.registeredOfficeAddress1 && (
               <div className="text-gray-400 dark:text-gray-500 italic">No address recorded</div>
             )}
-          </CardContent>
+          </Card.Content>
         </Card>
 
         <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
-          <CardHeader>
-            <CardTitle className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide flex items-center justify-between">
+          <Card.Header>
+            <Card.Title className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide flex items-center justify-between">
               <span className="flex items-center gap-2"><Users className="w-3.5 h-3.5" /> Officers</span>
               <Button variant="ghost" size="sm" isIconOnly onPress={() => setShowAddOfficer(true)} aria-label="Add officer">
                 <Plus className="w-3.5 h-3.5" />
               </Button>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
+            </Card.Title>
+          </Card.Header>
+          <Card.Content className="space-y-2">
             {showAddOfficer && (
               <div className="flex items-center gap-2 p-2 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 animate-slide-down">
                 <input
@@ -511,26 +511,26 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ compan
                 No officers recorded
               </div>
             )}
-          </CardContent>
+          </Card.Content>
         </Card>
       </div>
 
       {/* Charity Info Card */}
       {company.isCharitableOrganisation && (
         <Card className="bg-white dark:bg-neutral-900 shadow-sm border border-gray-200 dark:border-neutral-700 mb-8">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-gray-100">
+          <Card.Header className="flex flex-row items-center justify-between">
+            <Card.Title className="flex items-center gap-2 text-gray-900 dark:text-gray-100">
               <Heart className="w-4 h-4 text-pink-500" />
               Charity Info
-            </CardTitle>
+            </Card.Title>
             {!editingCharity && (
               <Button variant="outline" size="sm" onPress={startEditingCharity}>
                 <Pencil className="w-3.5 h-3.5" />
                 Edit
               </Button>
             )}
-          </CardHeader>
-          <CardContent>
+          </Card.Header>
+          <Card.Content>
             {editingCharity ? (
               <div className="space-y-4 animate-fade-in">
                 <div className="grid grid-cols-2 gap-4">
@@ -685,7 +685,7 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ compan
                 </Button>
               </div>
             )}
-          </CardContent>
+          </Card.Content>
         </Card>
       )}
 
@@ -694,16 +694,16 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ compan
 
       {/* Accounting Periods */}
       <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-gray-100">
+        <Card.Header className="flex flex-row items-center justify-between">
+          <Card.Title className="flex items-center gap-2 text-gray-900 dark:text-gray-100">
             <Calendar className="w-4 h-4 text-gray-400" />
             Accounting Periods
-          </CardTitle>
+          </Card.Title>
           <Button variant="primary" size="sm" onPress={() => setShowNewPeriod(true)}>
             <Plus className="w-3.5 h-3.5" />
             New Period
           </Button>
-        </CardHeader>
+        </Card.Header>
 
         {showNewPeriod && (
           <div className="px-6 py-4 bg-emerald-50 dark:bg-emerald-900/20 border-b border-emerald-100 dark:border-emerald-800/30 flex flex-wrap items-end gap-4 animate-slide-down">
@@ -736,7 +736,7 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ compan
           </div>
         )}
 
-        <CardContent>
+        <Card.Content>
           {company.periods && company.periods.length > 0 ? (
             <div className="divide-y divide-gray-100 dark:divide-neutral-700">
               {company.periods.map((period) => (
@@ -773,7 +773,7 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ compan
               </p>
             </div>
           )}
-        </CardContent>
+        </Card.Content>
       </Card>
 
       {/* Delete Confirmation Modal */}

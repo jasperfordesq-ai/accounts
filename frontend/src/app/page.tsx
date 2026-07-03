@@ -4,7 +4,6 @@ import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import {
   Card,
-  CardContent,
   Chip,
   Button,
 } from "@heroui/react";
@@ -119,7 +118,7 @@ export default function Dashboard() {
       {/* Quick Stats Bar */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
-          <CardContent className="p-4">
+          <Card.Content className="p-4">
             <div className="flex items-center gap-3">
               <div className="bg-emerald-50 dark:bg-emerald-900/30 p-2 rounded-lg">
                 <Building2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
@@ -133,11 +132,11 @@ export default function Dashboard() {
                 </p>
               </div>
             </div>
-          </CardContent>
+          </Card.Content>
         </Card>
 
         <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
-          <CardContent className="p-4">
+          <Card.Content className="p-4">
             <div className="flex items-center gap-3">
               <div className="bg-blue-50 dark:bg-blue-900/30 p-2 rounded-lg">
                 <Calendar className="w-5 h-5 text-blue-600 dark:text-blue-400" />
@@ -151,11 +150,11 @@ export default function Dashboard() {
                 </p>
               </div>
             </div>
-          </CardContent>
+          </Card.Content>
         </Card>
 
         <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
-          <CardContent className="p-4">
+          <Card.Content className="p-4">
             <div className="flex items-center gap-3">
               <div className="bg-purple-50 dark:bg-purple-900/30 p-2 rounded-lg">
                 <CheckCircle2 className="w-5 h-5 text-purple-600 dark:text-purple-400" />
@@ -169,11 +168,11 @@ export default function Dashboard() {
                 </p>
               </div>
             </div>
-          </CardContent>
+          </Card.Content>
         </Card>
 
         <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
-          <CardContent className="p-4">
+          <Card.Content className="p-4">
             <div className="flex items-center gap-3">
               <div className="bg-amber-50 dark:bg-amber-900/30 p-2 rounded-lg">
                 <Clock className="w-5 h-5 text-amber-600 dark:text-amber-400" />
@@ -187,7 +186,7 @@ export default function Dashboard() {
                 </p>
               </div>
             </div>
-          </CardContent>
+          </Card.Content>
         </Card>
       </div>
 
@@ -220,7 +219,7 @@ export default function Dashboard() {
 
       {filtered.length === 0 && companies.length > 0 ? (
         <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
-          <CardContent className="text-center py-12">
+          <Card.Content className="text-center py-12">
             <Search className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
             <p className="text-sm text-gray-500 dark:text-gray-400">
               No companies match &ldquo;{search}&rdquo;
@@ -233,11 +232,11 @@ export default function Dashboard() {
             >
               Clear search
             </Button>
-          </CardContent>
+          </Card.Content>
         </Card>
       ) : filtered.length === 0 ? (
         <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
-          <CardContent className="text-center py-12">
+          <Card.Content className="text-center py-12">
             <Building2 className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
             <p className="text-gray-500 dark:text-gray-400 font-medium">
               No companies available
@@ -250,14 +249,14 @@ export default function Dashboard() {
                 </Button>
               </Link>
             )}
-          </CardContent>
+          </Card.Content>
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {filtered.map((company) => (
             <Link key={company.id} href={`/companies/${company.id}`}>
               <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 card-hover cursor-pointer h-full">
-                <CardContent className="p-5">
+                <Card.Content className="p-5">
                   <div className="flex items-start gap-3 mb-3">
                     <div className="bg-emerald-50 dark:bg-emerald-900/30 p-2.5 rounded-lg shrink-0">
                       <Building2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
@@ -321,7 +320,7 @@ export default function Dashboard() {
                       CRO: {company.croNumber}
                     </p>
                   )}
-                </CardContent>
+                </Card.Content>
               </Card>
             </Link>
           ))}

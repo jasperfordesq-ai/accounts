@@ -8,13 +8,6 @@ namespace Accounts.Api.Services;
 
 public class IxbrlService(AccountsDbContext db, FinancialStatementsService statementsService)
 {
-    private const string TaxonomyDate = "2026-01-01";
-    private const string IrishFrs102Namespace = $"https://xbrl.frc.org.uk/ireland/FRS-102/{TaxonomyDate}";
-    private const string IrishCommonNamespace = $"https://xbrl.frc.org.uk/ireland/common/{TaxonomyDate}";
-    private const string CoreFrs102Namespace = $"http://xbrl.frc.org.uk/FRS-102/{TaxonomyDate}";
-    private const string BusinessNamespace = $"http://xbrl.frc.org.uk/general/{TaxonomyDate}/business";
-    private const string SchemaRef = $"https://xbrl.frc.org.uk/ireland/FRS-102/{TaxonomyDate}/ie-FRS-102-{TaxonomyDate}.xsd";
-
     public virtual async Task<byte[]> GenerateFinalIxbrlAsync(int companyId, int periodId)
     {
         var periodBelongsToCompany = await db.AccountingPeriods
@@ -48,6 +41,11 @@ public class IxbrlService(AccountsDbContext db, FinancialStatementsService state
             ?? throw new ResourceNotFoundException($"Period {periodId} not found");
 
         var company = period.Company;
+        var taxonomy = RevenueIxbrlTaxonomySelector.Select(period.PeriodStart, period.FilingRegime?.ElectedRegime);
+        var irishFrs102Namespace = $"https://xbrl.frc.org.uk/ireland/FRS-102/{taxonomy.TaxonomyDate}";
+        var irishCommonNamespace = $"https://xbrl.frc.org.uk/ireland/common/{taxonomy.TaxonomyDate}";
+        var coreFrs102Namespace = $"http://xbrl.frc.org.uk/FRS-102/{taxonomy.TaxonomyDate}";
+        var businessNamespace = $"http://xbrl.frc.org.uk/general/{taxonomy.TaxonomyDate}/business";
         var bs = await statementsService.GetBalanceSheetAsync(period.CompanyId, periodId);
         var pl = await statementsService.GetProfitAndLossAsync(period.CompanyId, periodId);
 
@@ -75,10 +73,10 @@ public class IxbrlService(AccountsDbContext db, FinancialStatementsService state
         sb.AppendLine("      xmlns:ixt=\"http://www.xbrl.org/inlineXBRL/transformation/2020-02-12\"");
         sb.AppendLine("      xmlns:xbrli=\"http://www.xbrl.org/2003/instance\"");
         sb.AppendLine("      xmlns:iso4217=\"http://www.xbrl.org/2003/iso4217\"");
-        sb.AppendLine($"      xmlns:ie-FRS-102=\"{IrishFrs102Namespace}\"");
-        sb.AppendLine($"      xmlns:ie-common=\"{IrishCommonNamespace}\"");
-        sb.AppendLine($"      xmlns:core=\"{CoreFrs102Namespace}\"");
-        sb.AppendLine($"      xmlns:bus=\"{BusinessNamespace}\"");
+        sb.AppendLine($"      xmlns:ie-FRS-102=\"{irishFrs102Namespace}\"");
+        sb.AppendLine($"      xmlns:ie-common=\"{irishCommonNamespace}\"");
+        sb.AppendLine($"      xmlns:core=\"{coreFrs102Namespace}\"");
+        sb.AppendLine($"      xmlns:bus=\"{businessNamespace}\"");
         sb.AppendLine("      xml:lang=\"en\">");
         sb.AppendLine("<head>");
         sb.AppendLine($"<title>{Escape(company.LegalName)} \u2014 Financial Statements {period.PeriodEnd:yyyy}</title>");
@@ -90,7 +88,7 @@ public class IxbrlService(AccountsDbContext db, FinancialStatementsService state
         sb.AppendLine("<ix:header>");
         sb.AppendLine("<ix:hidden>");
         sb.AppendLine("<ix:references>");
-        sb.AppendLine($"<link:schemaRef xmlns:link=\"http://www.xbrl.org/2003/linkbase\" xlink:type=\"simple\" xlink:href=\"{SchemaRef}\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" />");
+        sb.AppendLine($"<link:schemaRef xmlns:link=\"http://www.xbrl.org/2003/linkbase\" xlink:type=\"simple\" xlink:href=\"{taxonomy.SchemaRef}\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" />");
         sb.AppendLine("</ix:references>");
         sb.AppendLine("<ix:resources>");
         sb.AppendLine($"<xbrli:context id=\"current\" xmlns:xbrli=\"http://www.xbrl.org/2003/instance\">");

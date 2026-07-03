@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  Card, CardContent, CardHeader, CardTitle, Button, Chip, Spinner,
+  Card, Button, Chip, Spinner,
 } from "@heroui/react";
 import { Coins, Pencil, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
@@ -113,18 +113,18 @@ export function ShareCapitalCard({
 
   return (
     <Card className="bg-white dark:bg-neutral-900 shadow-sm border border-gray-200 dark:border-neutral-700 mb-8">
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-gray-100">
+      <Card.Header className="flex flex-row items-center justify-between">
+        <Card.Title className="flex items-center gap-2 text-gray-900 dark:text-gray-100">
           <Coins className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
           Share Capital
-        </CardTitle>
+        </Card.Title>
         {shares.length > 0 && (
           <Chip size="sm" color="success" variant="soft">
             {formatCurrency(totalIssued)} issued
           </Chip>
         )}
-      </CardHeader>
-      <CardContent>
+      </Card.Header>
+      <Card.Content>
         {loading ? (
           <div className="py-6 flex justify-center"><Spinner size="sm" /></div>
         ) : (
@@ -280,7 +280,7 @@ export function ShareCapitalCard({
             )}
           </>
         )}
-      </CardContent>
+      </Card.Content>
     </Card>
   );
 }
