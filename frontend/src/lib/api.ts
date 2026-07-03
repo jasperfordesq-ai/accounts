@@ -1563,6 +1563,16 @@ export interface OperationalGate {
   detail: string;
 }
 
+export interface ProductionReadinessAssuranceAction {
+  code: string;
+  label: string;
+  owner: string;
+  priority: string;
+  status: string;
+  detail: string;
+  evidenceRequired: string;
+}
+
 export interface ProductionReadinessReport {
   generatedAt: string;
   overallStatus: string;
@@ -1573,6 +1583,7 @@ export interface ProductionReadinessReport {
   goldenFilingCorpus: GoldenFilingCorpusScenario[];
   manualHandoffPaths: string[];
   operationalGates: OperationalGate[];
+  assuranceActions: ProductionReadinessAssuranceAction[];
 }
 
 export interface RevenueIxbrlTaxonomySelection {

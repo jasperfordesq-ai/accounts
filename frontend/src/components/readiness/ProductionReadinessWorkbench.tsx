@@ -18,9 +18,11 @@ import {
 } from "@/components/workbench";
 
 export function ProductionReadinessWorkbench({ report }: { report: ProductionReadinessReport }) {
+  const assuranceActions = report.assuranceActions ?? [];
   const hardenedAreas = report.areas.filter((area) => area.status === "hardened").length;
   const coveredScenarios = report.goldenFilingCorpus.filter((scenario) => scenario.coverageStatus === "covered").length;
   const enforcedGates = report.operationalGates.filter((gate) => gate.status === "enforced").length;
+  const completedAssuranceActions = assuranceActions.filter((action) => action.status === "complete").length;
   const statusTone = report.overallStatus === "ready" ? "good" : "warn";
 
   return (
@@ -41,9 +43,31 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
           { label: "Companies in database", value: `${report.companiesInDatabase} companies`, tone: "default" },
           { label: "Periods in database", value: `${report.periodsInDatabase} periods`, tone: "default" },
           { label: "Hardened areas", value: `${hardenedAreas}/${report.areas.length}`, tone: hardenedAreas === report.areas.length ? "good" : "warn" },
-          { label: "Enforced gates", value: `${enforcedGates}/${report.operationalGates.length}`, tone: enforcedGates === report.operationalGates.length ? "good" : "warn" },
+          { label: "Assurance actions", value: `${completedAssuranceActions}/${assuranceActions.length}`, tone: completedAssuranceActions === assuranceActions.length ? "good" : "warn" },
         ]}
       />
+
+      <ReviewPanel
+        title="Next assurance actions"
+        description="Priority-ranked work that must be evidenced before the platform can be treated as production-ready for real statutory accounts."
+        actions={<StatusBadge tone="warn">{assuranceActions.length - completedAssuranceActions} open</StatusBadge>}
+      >
+        <DataTable
+          columns={["Action", "Owner", "Priority", "Evidence required", "Status"]}
+          rows={assuranceActions.map((action) => [
+            <div key="action" className="min-w-48 whitespace-normal">
+              <p className="font-medium">{action.label}</p>
+              <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">{action.detail}</p>
+            </div>,
+            <span key="owner" className="text-[var(--muted-foreground)]">{action.owner}</span>,
+            <StatusBadge key="priority" tone={priorityTone(action.priority)}>{formatStatus(action.priority)}</StatusBadge>,
+            <span key="evidence" className="whitespace-normal text-[var(--muted-foreground)]">{action.evidenceRequired}</span>,
+            <StatusBadge key="status" tone={action.status === "complete" ? "good" : action.status === "in-progress" ? "info" : "warn"}>
+              {formatStatus(action.status)}
+            </StatusBadge>,
+          ])}
+        />
+      </ReviewPanel>
 
       <section className="space-y-4">
         <SectionHeader
@@ -220,6 +244,12 @@ function toneIconClass(tone: "good" | "warn" | "bad" | "info" | "default") {
   if (tone === "warn") return "mt-0.5 shrink-0 text-amber-600 dark:text-amber-300";
   if (tone === "info") return "mt-0.5 shrink-0 text-sky-600 dark:text-sky-300";
   return "mt-0.5 shrink-0 text-[var(--muted-foreground)]";
+}
+
+function priorityTone(priority: string) {
+  if (priority === "critical") return "bad";
+  if (priority === "high") return "warn";
+  return "default";
 }
 
 function formatStatus(value: string) {

@@ -25,6 +25,15 @@ public sealed record OperationalGate(
     string Status,
     string Detail);
 
+public sealed record ProductionReadinessAssuranceAction(
+    string Code,
+    string Label,
+    string Owner,
+    string Priority,
+    string Status,
+    string Detail,
+    string EvidenceRequired);
+
 public sealed record ProductionReadinessReport(
     DateTime GeneratedAt,
     string OverallStatus,
@@ -34,7 +43,8 @@ public sealed record ProductionReadinessReport(
     IReadOnlyList<ProductionReadinessArea> Areas,
     IReadOnlyList<GoldenFilingCorpusScenario> GoldenFilingCorpus,
     IReadOnlyList<string> ManualHandoffPaths,
-    IReadOnlyList<OperationalGate> OperationalGates);
+    IReadOnlyList<OperationalGate> OperationalGates,
+    IReadOnlyList<ProductionReadinessAssuranceAction> AssuranceActions);
 
 public class ProductionReadinessReportService(AccountsDbContext db)
 {
@@ -52,7 +62,8 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             BuildAreas(),
             BuildGoldenCorpus(),
             BuildManualHandoffPaths(),
-            BuildOperationalGates());
+            BuildOperationalGates(),
+            BuildAssuranceActions());
     }
 
     private static IReadOnlyList<ProductionReadinessArea> BuildAreas() =>
@@ -186,5 +197,49 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             true,
             "enforced",
             "CI runs backend, frontend, dependency audit, production compose config, production stack smoke and backup restore checks.")
+    ];
+
+    private static IReadOnlyList<ProductionReadinessAssuranceAction> BuildAssuranceActions() =>
+    [
+        new(
+            "qualified-accountant-signoff",
+            "Qualified accountant sign-off",
+            "Qualified accountant",
+            "critical",
+            "required",
+            "No generated filing pack can be treated as final until a named qualified accountant has reviewed the evidence, outputs and wording.",
+            "Named qualified-accountant approval recorded against the period and linked to the generated pack."),
+        new(
+            "external-ros-validation",
+            "External ROS/iXBRL validation",
+            "Reviewer",
+            "critical",
+            "required",
+            "Internal XML parsing is not a Revenue acceptance check, so real filings need a recorded external ROS validation result.",
+            "External ROS validation evidence uploaded or referenced before any Revenue filing state is marked accepted."),
+        new(
+            "light-dark-visual-regression",
+            "Light/dark visual regression",
+            "Engineering",
+            "high",
+            "in-progress",
+            "The accountant journey needs desktop and mobile screenshots across light and dark mode before it can be called visually production-ready.",
+            "Screenshots for dashboard, company detail, period workspace and filing review in light desktop, dark desktop, light mobile and dark mobile."),
+        new(
+            "production-monitoring",
+            "Production monitoring",
+            "Operations",
+            "high",
+            "required",
+            "Runtime failures must be visible to operators before real statutory filing packs are processed.",
+            "Sentry production error routing configured and reviewed with structured log correlation."),
+        new(
+            "accountant-acceptance-walkthrough",
+            "Accountant acceptance walkthrough",
+            "Qualified accountant",
+            "high",
+            "required",
+            "A qualified accountant must take the golden scenarios through the live workflow and confirm outputs, gates and wording are professionally acceptable.",
+            "Signed acceptance note covering micro LTD, small abridged LTD, CLG charity and medium/audit-required manual handoff.")
     ];
 }

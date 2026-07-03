@@ -23,6 +23,10 @@ describe("ProductionReadinessWorkbench", () => {
       "href",
       "https://www.revenue.ie/",
     );
+    expect(screen.getByRole("heading", { name: "Next assurance actions" })).toBeInTheDocument();
+    expect(screen.getByText("Qualified accountant sign-off")).toBeInTheDocument();
+    expect(screen.getByText("Light/dark visual regression")).toBeInTheDocument();
+    expect(screen.getByText(/Sentry production error routing configured and reviewed/)).toBeInTheDocument();
   });
 });
 
@@ -77,6 +81,35 @@ function sampleReport(): ProductionReadinessReport {
         required: true,
         status: "enforced",
         detail: "Real filing packs require named professional approval before use.",
+      },
+    ],
+    assuranceActions: [
+      {
+        code: "qualified-accountant-signoff",
+        label: "Qualified accountant sign-off",
+        owner: "Qualified accountant",
+        priority: "critical",
+        status: "required",
+        detail: "No real filing pack can be treated as final until a named qualified accountant has approved it.",
+        evidenceRequired: "Named accountant approval recorded against the period.",
+      },
+      {
+        code: "light-dark-visual-regression",
+        label: "Light/dark visual regression",
+        owner: "Engineering",
+        priority: "high",
+        status: "in-progress",
+        detail: "Capture desktop and mobile screenshots for accountant routes in both themes.",
+        evidenceRequired: "Screenshot review attached to CI or release checklist.",
+      },
+      {
+        code: "production-monitoring",
+        label: "Production monitoring",
+        owner: "Operations",
+        priority: "high",
+        status: "required",
+        detail: "Runtime errors must be visible before real filings are processed.",
+        evidenceRequired: "Sentry production error routing configured and reviewed.",
       },
     ],
   };

@@ -43,6 +43,7 @@ export function ProductionReadinessPanel({
 
   const hardenedAreas = report.areas.filter((area) => area.status === "hardened").length;
   const coveredScenarios = report.goldenFilingCorpus.filter((scenario) => scenario.coverageStatus === "covered").length;
+  const nextAction = report.assuranceActions?.[0];
   const statusTone = report.overallStatus === "ready" ? "good" : "warn";
 
   return (
@@ -84,6 +85,26 @@ export function ProductionReadinessPanel({
           value={report.operationalGates.length}
         />
       </div>
+
+      {nextAction && (
+        <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase">Next assurance action</p>
+              <p className="mt-1 text-sm font-semibold">{nextAction.label}</p>
+              <p className="mt-1 text-xs leading-5">{nextAction.evidenceRequired}</p>
+            </div>
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <StatusBadge tone={nextAction.priority === "critical" ? "bad" : "warn"}>
+                {formatStatus(nextAction.priority)}
+              </StatusBadge>
+              <StatusBadge tone={nextAction.status === "complete" ? "good" : nextAction.status === "in-progress" ? "info" : "warn"}>
+                {formatStatus(nextAction.status)}
+              </StatusBadge>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)]">
         <DataTable

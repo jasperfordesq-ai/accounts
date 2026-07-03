@@ -14,6 +14,8 @@ describe("ProductionReadinessPanel", () => {
     expect(screen.getByText("AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl")).toBeInTheDocument();
     expect(screen.getByText("No direct CRO/ROS submission automation")).toBeInTheDocument();
     expect(screen.getByText("Revenue accepted iXBRL taxonomies")).toBeInTheDocument();
+    expect(screen.getByText("Qualified accountant sign-off")).toBeInTheDocument();
+    expect(screen.getByText("Named accountant approval recorded against the period.")).toBeInTheDocument();
   });
 });
 
@@ -71,6 +73,17 @@ function sampleReport(): ProductionReadinessReport {
         required: true,
         status: "enforced",
         detail: "Workflow records states only.",
+      },
+    ],
+    assuranceActions: [
+      {
+        code: "qualified-accountant-signoff",
+        label: "Qualified accountant sign-off",
+        owner: "Qualified accountant",
+        priority: "critical",
+        status: "required",
+        detail: "No real filing pack can be treated as final until a named qualified accountant has approved it.",
+        evidenceRequired: "Named accountant approval recorded against the period.",
       },
     ],
   };

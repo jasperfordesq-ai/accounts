@@ -85,6 +85,32 @@ public class ProductionReadinessReportTests
         }
     }
 
+    [Fact]
+    public async Task ProductionReadinessReport_ExposesPrioritisedAssuranceActionsForRemainingProductionWork()
+    {
+        await using var db = CreateDbContext();
+        var report = await new ProductionReadinessReportService(db).GetReportAsync();
+
+        Assert.NotEmpty(report.AssuranceActions);
+        Assert.Equal("qualified-accountant-signoff", report.AssuranceActions[0].Code);
+        Assert.Equal("critical", report.AssuranceActions[0].Priority);
+        Assert.Equal("Qualified accountant", report.AssuranceActions[0].Owner);
+        Assert.Contains(report.AssuranceActions, action =>
+            action.Code == "light-dark-visual-regression"
+            && action.Owner == "Engineering"
+            && action.Status == "in-progress");
+        Assert.Contains(report.AssuranceActions, action =>
+            action.Code == "production-monitoring"
+            && action.Priority == "high"
+            && action.EvidenceRequired.Contains("Sentry", StringComparison.OrdinalIgnoreCase));
+        Assert.All(report.AssuranceActions, action =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(action.Label));
+            Assert.False(string.IsNullOrWhiteSpace(action.Detail));
+            Assert.False(string.IsNullOrWhiteSpace(action.EvidenceRequired));
+        });
+    }
+
     private static AccountsDbContext CreateDbContext()
     {
         var options = new DbContextOptionsBuilder<AccountsDbContext>()
