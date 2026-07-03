@@ -8,10 +8,10 @@ import {
   Button, Chip
 } from "@heroui/react";
 import {
-  Building2, Users, Plus, Trash2, Heart
+  Building2, Plus, Trash2, Heart
 } from "lucide-react";
 import { toast } from "sonner";
-import { Pencil, Save, X } from "lucide-react";
+import { Pencil, Save } from "lucide-react";
 import { getCompany, updateCompany, deleteCompany, createPeriod, deleteOfficer, updateOfficer, createOfficer, getCharityInfo, saveCharityInfo, type Company, type Officer, type CharityInfo } from "@/lib/api";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { ShareCapitalCard } from "@/components/ShareCapitalCard";
@@ -20,6 +20,7 @@ import { ConfirmModal } from "@/components/ConfirmModal";
 import { CompanyDetailSkeleton } from "@/components/Skeleton";
 import { CompanyPeriodsWorkbench } from "@/components/company/CompanyPeriodsWorkbench";
 import { CompanyStatutoryProfile } from "@/components/company/CompanyStatutoryProfile";
+import { CompanyOfficersPanel } from "@/components/company/CompanyOfficersPanel";
 
 export default function CompanyDetailPage({ params }: { params: Promise<{ companyId: string }> }) {
   const { companyId: id } = use(params);
@@ -358,103 +359,32 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ compan
       </div>
 
       <div className="mb-8">
-        <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
-          <Card.Header>
-            <Card.Title className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide flex items-center justify-between">
-              <span className="flex items-center gap-2"><Users className="w-3.5 h-3.5" /> Officers</span>
-              <Button variant="ghost" size="sm" isIconOnly onPress={() => setShowAddOfficer(true)} aria-label="Add officer">
-                <Plus className="w-3.5 h-3.5" />
-              </Button>
-            </Card.Title>
-          </Card.Header>
-          <Card.Content className="space-y-2">
-            {showAddOfficer && (
-              <div className="flex items-center gap-2 p-2 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 animate-slide-down">
-                <input
-                  value={newOfficerName}
-                  onChange={(e) => setNewOfficerName(e.target.value)}
-                  placeholder="Name"
-                  className="flex-1 rounded border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-2 py-1 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-1 focus:ring-emerald-500"
-                  aria-label="New officer name"
-                  onKeyDown={(e) => { if (e.key === "Enter") handleAddOfficer(); }}
-                />
-                <select
-                  value={newOfficerRole}
-                  onChange={(e) => setNewOfficerRole(e.target.value)}
-                  className="rounded border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-2 py-1 text-sm text-gray-900 dark:text-gray-100 outline-none"
-                  aria-label="New officer role"
-                  title="New officer role"
-                >
-                  <option value="Director">Director</option>
-                  <option value="Secretary">Secretary</option>
-                  <option value="Chairperson">Chairperson</option>
-                  <option value="Shareholder">Shareholder</option>
-                </select>
-                <Button variant="primary" size="sm" isIconOnly onPress={handleAddOfficer} isDisabled={savingOfficer || !newOfficerName.trim()} aria-label="Save new officer">
-                  <Save className="w-3.5 h-3.5" />
-                </Button>
-                <Button variant="ghost" size="sm" isIconOnly onPress={() => { setShowAddOfficer(false); setNewOfficerName(""); }} aria-label="Cancel adding officer">
-                  <X className="w-3.5 h-3.5" />
-                </Button>
-              </div>
-            )}
-            {company.officers && company.officers.length > 0 ? (
-              company.officers.map((o) => (
-                <div key={o.id} className="flex items-center justify-between group text-sm">
-                  {editingOfficerId === o.id ? (
-                    <div className="flex items-center gap-2 flex-1 animate-fade-in">
-                      <input
-                        value={editOfficerName}
-                        onChange={(e) => setEditOfficerName(e.target.value)}
-                        className="flex-1 rounded border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-2 py-1 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-1 focus:ring-emerald-500"
-                        aria-label="Edit officer name"
-                        onKeyDown={(e) => { if (e.key === "Enter") handleSaveOfficer(); if (e.key === "Escape") setEditingOfficerId(null); }}
-                        autoFocus
-                      />
-                      <select
-                        value={editOfficerRole}
-                        onChange={(e) => setEditOfficerRole(e.target.value)}
-                        className="rounded border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-2 py-1 text-sm text-gray-900 dark:text-gray-100 outline-none"
-                        aria-label="Edit officer role"
-                        title="Edit officer role"
-                      >
-                        <option value="Director">Director</option>
-                        <option value="Secretary">Secretary</option>
-                        <option value="Chairperson">Chairperson</option>
-                        <option value="Shareholder">Shareholder</option>
-                      </select>
-                      <Button variant="primary" size="sm" isIconOnly onPress={handleSaveOfficer} isDisabled={savingOfficer} aria-label="Save officer">
-                        <Save className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="sm" isIconOnly onPress={() => setEditingOfficerId(null)} aria-label="Cancel editing">
-                        <X className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <>
-                      <div>
-                        <span className="font-medium text-gray-900 dark:text-gray-100">{o.name}</span>
-                        <span className="text-gray-400 dark:text-gray-500 ml-2">({o.role})</span>
-                      </div>
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button variant="ghost" size="sm" isIconOnly onPress={() => handleStartEditOfficer(o)} aria-label={`Edit ${o.name}`}>
-                          <Pencil className="w-3 h-3 text-gray-400" />
-                        </Button>
-                        <Button variant="ghost" size="sm" isIconOnly onPress={() => handleDeleteOfficer(o.id!)} aria-label={`Remove ${o.name}`}>
-                          <Trash2 className="w-3 h-3 text-red-400" />
-                        </Button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              ))
-            ) : (
-              <div className="text-sm text-gray-400 dark:text-gray-500 italic">
-                No officers recorded
-              </div>
-            )}
-          </Card.Content>
-        </Card>
+        <CompanyOfficersPanel
+          officers={company.officers}
+          showAddOfficer={showAddOfficer}
+          newOfficerName={newOfficerName}
+          newOfficerRole={newOfficerRole}
+          editingOfficerId={editingOfficerId}
+          editOfficerName={editOfficerName}
+          editOfficerRole={editOfficerRole}
+          savingOfficer={savingOfficer}
+          canWrite={canWriteWorkingPapers}
+          onShowAddOfficer={() => setShowAddOfficer(true)}
+          onNewOfficerNameChange={setNewOfficerName}
+          onNewOfficerRoleChange={setNewOfficerRole}
+          onCancelAddOfficer={() => {
+            setShowAddOfficer(false);
+            setNewOfficerName("");
+            setNewOfficerRole("Director");
+          }}
+          onAddOfficer={handleAddOfficer}
+          onStartEditOfficer={handleStartEditOfficer}
+          onEditOfficerNameChange={setEditOfficerName}
+          onEditOfficerRoleChange={setEditOfficerRole}
+          onSaveOfficer={handleSaveOfficer}
+          onCancelEditOfficer={() => setEditingOfficerId(null)}
+          onDeleteOfficer={handleDeleteOfficer}
+        />
       </div>
 
       {/* Charity Info Card */}
