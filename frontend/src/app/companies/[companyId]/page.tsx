@@ -3,15 +3,12 @@
 import { useCallback, useEffect, useState, use } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import {
-  Card,
-  Button
-} from "@heroui/react";
+import { Button } from "@heroui/react";
 import {
   Building2, Trash2
 } from "lucide-react";
 import { toast } from "sonner";
-import { Pencil, Save } from "lucide-react";
+import { Pencil } from "lucide-react";
 import { getCompany, updateCompany, deleteCompany, createPeriod, deleteOfficer, updateOfficer, createOfficer, getCharityInfo, saveCharityInfo, type Company, type Officer, type CharityInfo } from "@/lib/api";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { ShareCapitalCard } from "@/components/ShareCapitalCard";
@@ -22,6 +19,7 @@ import { CompanyPeriodsWorkbench } from "@/components/company/CompanyPeriodsWork
 import { CompanyStatutoryProfile } from "@/components/company/CompanyStatutoryProfile";
 import { CompanyOfficersPanel } from "@/components/company/CompanyOfficersPanel";
 import { CompanyCharityInfoPanel } from "@/components/company/CompanyCharityInfoPanel";
+import { CompanyIdentityEditPanel, type CompanyEditFormValues } from "@/components/company/CompanyIdentityEditPanel";
 
 export default function CompanyDetailPage({ params }: { params: Promise<{ companyId: string }> }) {
   const { companyId: id } = use(params);
@@ -50,7 +48,7 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ compan
 
   // Edit company state
   const [editing, setEditing] = useState(false);
-  const [editForm, setEditForm] = useState({
+  const [editForm, setEditForm] = useState<CompanyEditFormValues>({
     legalName: "",
     tradingName: "",
     croNumber: "",
@@ -299,60 +297,15 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ compan
 
       {/* Edit Company Form */}
       {editing && (
-        <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 mb-6 animate-slide-down">
-          <Card.Header>
-            <Card.Title className="text-gray-900 dark:text-gray-100 flex items-center gap-2">
-              <Pencil className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-              Edit Company Details
-            </Card.Title>
-          </Card.Header>
-          <Card.Content>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Legal Name *</label>
-                <input value={editForm.legalName} onChange={(e) => setEditForm({ ...editForm, legalName: e.target.value })} className="w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors" placeholder="Legal Name" aria-label="Legal Name" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Trading Name</label>
-                <input value={editForm.tradingName} onChange={(e) => setEditForm({ ...editForm, tradingName: e.target.value })} className="w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors" placeholder="Trading Name (optional)" aria-label="Trading Name" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">CRO Number</label>
-                <input value={editForm.croNumber} onChange={(e) => setEditForm({ ...editForm, croNumber: e.target.value })} className="w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors" placeholder="CRO Number" aria-label="CRO Number" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Tax Reference</label>
-                <input value={editForm.taxReference} onChange={(e) => setEditForm({ ...editForm, taxReference: e.target.value })} className="w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors" placeholder="Tax Reference" aria-label="Tax Reference" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Company Type</label>
-                <select value={editForm.companyType} onChange={(e) => setEditForm({ ...editForm, companyType: e.target.value })} className="w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors" aria-label="Company Type" title="Company Type">
-                  <option value="Private">LTD - Private company limited by shares</option>
-                  <option value="PrivateUnlimited">Unlimited company</option>
-                  <option value="DesignatedActivityCompany">DAC - Designated activity company</option>
-                  <option value="CompanyLimitedByGuarantee">CLG - Company limited by guarantee</option>
-                  <option value="PublicLimitedCompany">PLC - Public limited company</option>
-                </select>
-              </div>
-              <div className="flex items-center gap-6 pt-6">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={editForm.isTrading} onChange={(e) => setEditForm({ ...editForm, isTrading: e.target.checked })} className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500" aria-label="Is Trading" title="Is Trading" />
-                  <span className="text-sm text-gray-700 dark:text-gray-300">Trading</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={editForm.isDormant} onChange={(e) => setEditForm({ ...editForm, isDormant: e.target.checked })} className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500" aria-label="Is Dormant" title="Is Dormant" />
-                  <span className="text-sm text-gray-700 dark:text-gray-300">Dormant</span>
-                </label>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 mt-6 pt-4 border-t border-gray-100 dark:border-neutral-700">
-              <Button variant="primary" size="sm" onPress={handleSaveCompany} isDisabled={savingCompany}>
-                {savingCompany ? "Saving..." : <><Save className="w-3.5 h-3.5" /> Save Changes</>}
-              </Button>
-              <Button variant="ghost" size="sm" onPress={() => setEditing(false)}>Cancel</Button>
-            </div>
-          </Card.Content>
-        </Card>
+        <div className="mb-6 animate-slide-down">
+          <CompanyIdentityEditPanel
+            form={editForm}
+            saving={savingCompany}
+            onFormChange={setEditForm}
+            onSave={handleSaveCompany}
+            onCancel={() => setEditing(false)}
+          />
+        </div>
       )}
 
       <div className="mb-8">
