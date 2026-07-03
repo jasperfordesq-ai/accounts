@@ -8,7 +8,7 @@ import {
   Button, Chip
 } from "@heroui/react";
 import {
-  Building2, Users, Plus, Trash2, MapPin, Heart
+  Building2, Users, Plus, Trash2, Heart
 } from "lucide-react";
 import { toast } from "sonner";
 import { Pencil, Save, X } from "lucide-react";
@@ -19,7 +19,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { CompanyDetailSkeleton } from "@/components/Skeleton";
 import { CompanyPeriodsWorkbench } from "@/components/company/CompanyPeriodsWorkbench";
-import { formatCompanyType, formatDateIE } from "@/lib/format";
+import { CompanyStatutoryProfile } from "@/components/company/CompanyStatutoryProfile";
 
 export default function CompanyDetailPage({ params }: { params: Promise<{ companyId: string }> }) {
   const { companyId: id } = use(params);
@@ -353,60 +353,11 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ compan
         </Card>
       )}
 
-      {/* Info cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-        <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
-          <Card.Header>
-            <Card.Title className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">
-              Registration
-            </Card.Title>
-          </Card.Header>
-          <Card.Content className="space-y-2 text-sm">
-            <div>
-              <span className="text-gray-500 dark:text-gray-400">CRO:</span>{" "}
-              <span className="font-medium text-gray-900 dark:text-gray-100">
-                {company.croNumber || "\u2014"}
-              </span>
-            </div>
-            <div>
-              <span className="text-gray-500 dark:text-gray-400">Tax Ref:</span>{" "}
-              <span className="font-medium text-gray-900 dark:text-gray-100">
-                {company.taxReference || "\u2014"}
-              </span>
-            </div>
-            <div>
-              <span className="text-gray-500 dark:text-gray-400">Type:</span>{" "}
-              <span className="font-medium text-gray-900 dark:text-gray-100">
-                {formatCompanyType(company.companyType)}
-              </span>
-            </div>
-            <div>
-              <span className="text-gray-500 dark:text-gray-400">Incorporated:</span>{" "}
-              <span className="font-medium text-gray-900 dark:text-gray-100">
-                {formatDateIE(company.incorporationDate)}
-              </span>
-            </div>
-          </Card.Content>
-        </Card>
+      <div className="mb-8">
+        <CompanyStatutoryProfile company={company} />
+      </div>
 
-        <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
-          <Card.Header>
-            <Card.Title className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide flex items-center gap-2">
-              <MapPin className="w-3.5 h-3.5" /> Address
-            </Card.Title>
-          </Card.Header>
-          <Card.Content className="text-sm space-y-1 text-gray-900 dark:text-gray-100">
-            {company.registeredOfficeAddress1 && <div>{company.registeredOfficeAddress1}</div>}
-            {company.registeredOfficeAddress2 && <div>{company.registeredOfficeAddress2}</div>}
-            {company.registeredOfficeCity && <div>{company.registeredOfficeCity}</div>}
-            {company.registeredOfficeCounty && <div>Co. {company.registeredOfficeCounty}</div>}
-            {company.registeredOfficeEircode && <div>{company.registeredOfficeEircode}</div>}
-            {!company.registeredOfficeAddress1 && (
-              <div className="text-gray-400 dark:text-gray-500 italic">No address recorded</div>
-            )}
-          </Card.Content>
-        </Card>
-
+      <div className="mb-8">
         <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
           <Card.Header>
             <Card.Title className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide flex items-center justify-between">
