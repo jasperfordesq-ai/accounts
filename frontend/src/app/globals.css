@@ -443,10 +443,14 @@ html {
 
   .workbench-data-table tbody td {
     display: grid;
-    grid-template-columns: minmax(6.5rem, 0.42fr) minmax(0, 1fr);
+    grid-template-columns: minmax(5.5rem, 0.35fr) minmax(0, 1fr);
     gap: 0.75rem;
     border-bottom: 1px solid var(--border);
     padding: 0.75rem 0.875rem;
+  }
+
+  .workbench-data-table tbody td > * {
+    min-width: 0;
   }
 
   .workbench-data-table tbody td:last-child {
