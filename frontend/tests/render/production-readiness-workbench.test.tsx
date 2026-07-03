@@ -36,6 +36,12 @@ describe("ProductionReadinessWorkbench", () => {
       "href",
       "https://cro.ie/",
     );
+    expect(screen.getByRole("heading", { name: "Visual QA coverage" })).toBeInTheDocument();
+    expect(screen.getByText("20 screenshots")).toBeInTheDocument();
+    expect(screen.getByText("Light desktop")).toBeInTheDocument();
+    expect(screen.getByText("Dark mobile")).toBeInTheDocument();
+    expect(screen.getByText("Filing review")).toBeInTheDocument();
+    expect(screen.getByText("visual-smoke-screenshots")).toBeInTheDocument();
   });
 });
 
@@ -191,5 +197,31 @@ function sampleReport(): ProductionReadinessReport {
         ],
       },
     ],
+    visualQaCoverage: {
+      artifactName: "visual-smoke-screenshots",
+      enforcement: "ci-production-smoke",
+      expectedScreenshotCount: 20,
+      themes: ["light", "dark"],
+      viewports: [
+        { name: "desktop", width: 1440, height: 1000 },
+        { name: "mobile", width: 390, height: 844 },
+      ],
+      routes: [
+        {
+          code: "dashboard",
+          label: "Dashboard",
+          description: "Accountant queue and production readiness overview.",
+          requiredText: "Production Readiness",
+          openFilingTab: false,
+        },
+        {
+          code: "filing-review",
+          label: "Filing review",
+          description: "Period workspace filing tab.",
+          requiredText: "Filing readiness profile",
+          openFilingTab: true,
+        },
+      ],
+    },
   };
 }

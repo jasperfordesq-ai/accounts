@@ -1584,6 +1584,29 @@ export interface ProductionReadinessAssuranceAction {
   evidenceRequired: string;
 }
 
+export interface VisualQaViewport {
+  name: string;
+  width: number;
+  height: number;
+}
+
+export interface VisualQaRoute {
+  code: string;
+  label: string;
+  description: string;
+  requiredText: string;
+  openFilingTab: boolean;
+}
+
+export interface VisualQaCoverage {
+  artifactName: string;
+  enforcement: string;
+  expectedScreenshotCount: number;
+  themes: string[];
+  viewports: VisualQaViewport[];
+  routes: VisualQaRoute[];
+}
+
 export interface ProductionReadinessReport {
   generatedAt: string;
   overallStatus: string;
@@ -1596,6 +1619,7 @@ export interface ProductionReadinessReport {
   manualHandoffPaths: string[];
   operationalGates: OperationalGate[];
   assuranceActions: ProductionReadinessAssuranceAction[];
+  visualQaCoverage: VisualQaCoverage;
 }
 
 export interface RevenueIxbrlTaxonomySelection {

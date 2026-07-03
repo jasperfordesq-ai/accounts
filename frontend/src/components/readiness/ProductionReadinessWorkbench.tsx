@@ -20,6 +20,7 @@ import {
 export function ProductionReadinessWorkbench({ report }: { report: ProductionReadinessReport }) {
   const assuranceActions = report.assuranceActions ?? [];
   const statutoryRuleMatrix = report.statutoryRuleMatrix ?? [];
+  const visualQaCoverage = report.visualQaCoverage;
   const hardenedAreas = report.areas.filter((area) => area.status === "hardened").length;
   const coveredScenarios = report.goldenFilingCorpus.filter((scenario) => scenario.coverageStatus === "covered").length;
   const enforcedGates = report.operationalGates.filter((gate) => gate.status === "enforced").length;
@@ -90,6 +91,52 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
           ])}
         />
       </ReviewPanel>
+
+      {visualQaCoverage && (
+        <ReviewPanel
+          title="Visual QA coverage"
+          description="CI screenshot evidence for the accountant workbench in light and dark mode across desktop and mobile viewports."
+          actions={<StatusBadge tone="info">{visualQaCoverage.expectedScreenshotCount} screenshots</StatusBadge>}
+        >
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,0.7fr)_minmax(0,1.3fr)]">
+            <div className="space-y-3">
+              <div className="rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-3">
+                <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Artifact</p>
+                <p className="mt-1 break-all text-sm font-medium text-[var(--foreground)]">{visualQaCoverage.artifactName}</p>
+                <p className="mt-2 text-xs leading-5 text-[var(--muted-foreground)]">
+                  Enforced by {formatStatus(visualQaCoverage.enforcement)}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {visualQaCoverage.themes.flatMap((theme) =>
+                  visualQaCoverage.viewports.map((viewport) => (
+                    <StatusBadge key={`${theme}-${viewport.name}`} tone="default">
+                      {formatStatus(theme)} {viewport.name}
+                    </StatusBadge>
+                  )),
+                )}
+              </div>
+            </div>
+
+            <DataTable
+              columns={["Route", "Required text", "Viewport evidence", "Tab action"]}
+              rows={visualQaCoverage.routes.map((route) => [
+                <div key="route" className="min-w-44 whitespace-normal">
+                  <p className="font-medium">{route.label}</p>
+                  <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">{route.description}</p>
+                </div>,
+                <span key="required-text" className="whitespace-normal text-[var(--muted-foreground)]">{route.requiredText}</span>,
+                <span key="viewport-evidence" className="text-[var(--muted-foreground)]">
+                  {visualQaCoverage.themes.length * visualQaCoverage.viewports.length} screenshots
+                </span>,
+                <StatusBadge key="tab-action" tone={route.openFilingTab ? "info" : "default"}>
+                  {route.openFilingTab ? "Open filing tab" : "Initial view"}
+                </StatusBadge>,
+              ])}
+            />
+          </div>
+        </ReviewPanel>
+      )}
 
       <section className="space-y-4">
         <SectionHeader

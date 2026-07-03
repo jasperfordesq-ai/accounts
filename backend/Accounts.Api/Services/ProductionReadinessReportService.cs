@@ -44,6 +44,26 @@ public sealed record ProductionReadinessAssuranceAction(
     string Detail,
     string EvidenceRequired);
 
+public sealed record VisualQaViewport(
+    string Name,
+    int Width,
+    int Height);
+
+public sealed record VisualQaRoute(
+    string Code,
+    string Label,
+    string Description,
+    string RequiredText,
+    bool OpenFilingTab);
+
+public sealed record VisualQaCoverage(
+    string ArtifactName,
+    string Enforcement,
+    int ExpectedScreenshotCount,
+    IReadOnlyList<string> Themes,
+    IReadOnlyList<VisualQaViewport> Viewports,
+    IReadOnlyList<VisualQaRoute> Routes);
+
 public sealed record ProductionReadinessReport(
     DateTime GeneratedAt,
     string OverallStatus,
@@ -55,7 +75,8 @@ public sealed record ProductionReadinessReport(
     IReadOnlyList<StatutoryRuleMatrixEntry> StatutoryRuleMatrix,
     IReadOnlyList<string> ManualHandoffPaths,
     IReadOnlyList<OperationalGate> OperationalGates,
-    IReadOnlyList<ProductionReadinessAssuranceAction> AssuranceActions);
+    IReadOnlyList<ProductionReadinessAssuranceAction> AssuranceActions,
+    VisualQaCoverage VisualQaCoverage);
 
 public class ProductionReadinessReportService(AccountsDbContext db)
 {
@@ -75,7 +96,8 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             BuildStatutoryRuleMatrix(),
             BuildManualHandoffPaths(),
             BuildOperationalGates(),
-            BuildAssuranceActions());
+            BuildAssuranceActions(),
+            BuildVisualQaCoverage());
     }
 
     private static IReadOnlyList<ProductionReadinessArea> BuildAreas() =>
@@ -414,4 +436,55 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "A qualified accountant must take the golden scenarios through the live workflow and confirm outputs, gates and wording are professionally acceptable.",
             "Signed acceptance note covering micro LTD, small abridged LTD, CLG charity and medium/audit-required manual handoff.")
     ];
+
+    private static VisualQaCoverage BuildVisualQaCoverage()
+    {
+        var themes = new[] { "light", "dark" };
+        var viewports = new[]
+        {
+            new VisualQaViewport("desktop", 1440, 1000),
+            new VisualQaViewport("mobile", 390, 844)
+        };
+        var routes = new[]
+        {
+            new VisualQaRoute(
+                "dashboard",
+                "Dashboard",
+                "Accountant queue, blockers, deadlines and production readiness overview.",
+                "Production Readiness",
+                OpenFilingTab: false),
+            new VisualQaRoute(
+                "production-readiness",
+                "Production readiness",
+                "Assurance checklist, statutory rules matrix, source snapshot and operational gates.",
+                "Production Readiness Checklist",
+                OpenFilingTab: false),
+            new VisualQaRoute(
+                "company-detail",
+                "Company detail",
+                "Company statutory profile, officers, charity facts and accounting periods.",
+                "Accounting Periods",
+                OpenFilingTab: false),
+            new VisualQaRoute(
+                "period-workspace",
+                "Period workspace",
+                "Import, classification, year-end, statements and filing readiness overview.",
+                "Filing readiness",
+                OpenFilingTab: false),
+            new VisualQaRoute(
+                "filing-review",
+                "Filing review",
+                "Period filing tab with evidence checklist, source links, outputs and filing state.",
+                "Filing readiness profile",
+                OpenFilingTab: true)
+        };
+
+        return new VisualQaCoverage(
+            "visual-smoke-screenshots",
+            "ci-production-smoke",
+            routes.Length * themes.Length * viewports.Length,
+            themes,
+            viewports,
+            routes);
+    }
 }

@@ -152,6 +152,35 @@ public class ProductionReadinessReportTests
         });
     }
 
+    [Fact]
+    public async Task ProductionReadinessReport_DeclaresVisualQaCoverageForAccountantWorkbenchRoutes()
+    {
+        await using var db = CreateDbContext();
+        var report = await new ProductionReadinessReportService(db).GetReportAsync();
+
+        Assert.Equal("visual-smoke-screenshots", report.VisualQaCoverage.ArtifactName);
+        Assert.Equal("ci-production-smoke", report.VisualQaCoverage.Enforcement);
+        Assert.Equal(20, report.VisualQaCoverage.ExpectedScreenshotCount);
+        Assert.Equal(["light", "dark"], report.VisualQaCoverage.Themes);
+        Assert.Contains(report.VisualQaCoverage.Viewports, viewport =>
+            viewport.Name == "desktop" && viewport.Width == 1440 && viewport.Height == 1000);
+        Assert.Contains(report.VisualQaCoverage.Viewports, viewport =>
+            viewport.Name == "mobile" && viewport.Width == 390 && viewport.Height == 844);
+        Assert.Contains(report.VisualQaCoverage.Routes, route =>
+            route.Code == "dashboard" && route.RequiredText == "Production Readiness");
+        Assert.Contains(report.VisualQaCoverage.Routes, route =>
+            route.Code == "company-detail" && route.RequiredText == "Accounting Periods");
+        Assert.Contains(report.VisualQaCoverage.Routes, route =>
+            route.Code == "period-workspace" && route.RequiredText == "Filing readiness");
+        Assert.Contains(report.VisualQaCoverage.Routes, route =>
+            route.Code == "filing-review" && route.OpenFilingTab && route.RequiredText == "Filing readiness profile");
+        Assert.All(report.VisualQaCoverage.Routes, route =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(route.Label));
+            Assert.False(string.IsNullOrWhiteSpace(route.Description));
+        });
+    }
+
     private static AccountsDbContext CreateDbContext()
     {
         var options = new DbContextOptionsBuilder<AccountsDbContext>()

@@ -1,12 +1,7 @@
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { chromium, expect } from "@playwright/test";
-
-const DEFAULT_VIEWPORTS = [
-  { name: "desktop", width: 1440, height: 1000 },
-  { name: "mobile", width: 390, height: 844 },
-];
-const DEFAULT_THEMES = ["light", "dark"];
+import { visualSmokeRoutes, visualSmokeThemes, visualSmokeViewports } from "./visual-smoke-plan.mjs";
 
 function arg(name, fallback) {
   const prefix = `--${name}=`;
@@ -299,8 +294,8 @@ async function run() {
   const captures = [];
 
   try {
-    for (const viewport of DEFAULT_VIEWPORTS) {
-      for (const theme of DEFAULT_THEMES) {
+    for (const viewport of visualSmokeViewports) {
+      for (const theme of visualSmokeThemes) {
         const context = await browser.newContext({
           viewport: { width: viewport.width, height: viewport.height },
           ignoreHTTPSErrors: true,
@@ -310,13 +305,10 @@ async function run() {
         await login(page, baseUrl, email, password);
         const routes = await discoverRoutes(page, baseUrl);
 
-        const routeSpecs = [
-          { name: "dashboard", href: routes.dashboard, expectedText: "Production Readiness" },
-          { name: "production-readiness", href: routes.readiness, expectedText: "Production Readiness Checklist" },
-          { name: "company-detail", href: routes.company, expectedText: "Accounting Periods" },
-          { name: "period-workspace", href: routes.period, expectedText: "Filing readiness" },
-          { name: "filing-review", href: routes.filing, expectedText: "Filing readiness profile", openFilingTab: true },
-        ];
+        const routeSpecs = visualSmokeRoutes.map((route) => ({
+          ...route,
+          href: routes[route.routeKey],
+        }));
 
         for (const spec of routeSpecs) {
           const fileName = `${safeName(spec.name)}-${theme}-${viewport.name}.png`;

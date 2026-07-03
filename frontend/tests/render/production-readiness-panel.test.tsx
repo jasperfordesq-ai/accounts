@@ -105,5 +105,24 @@ function sampleReport(): ProductionReadinessReport {
         evidenceRequired: "Named accountant approval recorded against the period.",
       },
     ],
+    visualQaCoverage: {
+      artifactName: "visual-smoke-screenshots",
+      enforcement: "ci-production-smoke",
+      expectedScreenshotCount: 20,
+      themes: ["light", "dark"],
+      viewports: [
+        { name: "desktop", width: 1440, height: 1000 },
+        { name: "mobile", width: 390, height: 844 },
+      ],
+      routes: [
+        {
+          code: "dashboard",
+          label: "Dashboard",
+          description: "Accountant queue and production readiness overview.",
+          requiredText: "Production Readiness",
+          openFilingTab: false,
+        },
+      ],
+    },
   };
 }
