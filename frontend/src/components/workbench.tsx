@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
 import {
   AlertTriangle,
+  ArrowRight,
   CheckCircle2,
   Circle,
   CircleAlert,
@@ -14,9 +16,12 @@ type WorkflowState = "done" | "active" | "blocked" | "todo";
 type Tone = "default" | "good" | "warn" | "bad" | "info";
 
 export interface WorkflowItem {
+  id?: string;
   label: string;
   detail: string;
   state: WorkflowState;
+  href?: string;
+  icon?: ReactNode;
 }
 
 export interface EvidenceItem {
@@ -78,25 +83,71 @@ export function WorkbenchHeader({
   );
 }
 
-export function WorkflowRail({ items }: { items: WorkflowItem[] }) {
+const workflowStateLabel: Record<WorkflowState, string> = {
+  done: "Complete",
+  active: "Next",
+  blocked: "Blocked",
+  todo: "Pending",
+};
+
+const workflowStateClasses: Record<WorkflowState, string> = {
+  done: "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200",
+  active: "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-100",
+  blocked: "border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/50 dark:text-red-100",
+  todo: "border-[var(--border)] bg-[var(--surface-subtle)] text-[var(--muted-foreground)]",
+};
+
+export function WorkflowRail({ items, title = "Accounting Workflow" }: { items: WorkflowItem[]; title?: string }) {
   return (
-    <div className="mb-6 overflow-x-auto rounded-md border border-[var(--border)] bg-[var(--surface)]">
-      <div className="grid min-w-[760px] grid-cols-6 divide-x divide-[var(--border)]">
-        {items.map((item) => (
-          <div key={item.label} className="p-3">
-            <div className="flex items-center gap-2">
-              <WorkflowIcon state={item.state} />
-              <span className="text-xs font-semibold uppercase text-[var(--foreground)]">
-                {item.label}
-              </span>
-            </div>
-            <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">
-              {item.detail}
-            </p>
-          </div>
-        ))}
+    <nav aria-label={title} className="mb-6 overflow-hidden rounded-md border border-[var(--border)] bg-[var(--surface)]">
+      <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] px-4 py-3">
+        <h2 className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">{title}</h2>
+        <span className="text-xs text-[var(--muted-foreground)]">{items.length} stages</span>
       </div>
-    </div>
+      <div className="overflow-x-auto">
+        <ol className="grid auto-cols-[minmax(9rem,1fr)] grid-flow-col divide-x divide-[var(--border)]">
+          {items.map((item) => (
+            <li key={item.id ?? item.label} className="min-w-0">
+              <WorkflowRailItem item={item} />
+            </li>
+          ))}
+        </ol>
+      </div>
+    </nav>
+  );
+}
+
+function WorkflowRailItem({ item }: { item: WorkflowItem }) {
+  const content = (
+    <>
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          {item.icon ?? <WorkflowIcon state={item.state} />}
+          <span className="truncate text-xs font-semibold uppercase text-[var(--foreground)]">
+            {item.label}
+          </span>
+        </div>
+        {item.href && <ArrowRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--muted-foreground)]" />}
+      </div>
+      <p className="mt-2 min-h-10 text-xs leading-5 text-[var(--muted-foreground)]">
+        {item.detail}
+      </p>
+      <span className={`mt-3 inline-flex min-h-6 items-center rounded-full border px-2 text-[11px] font-semibold ${workflowStateClasses[item.state]}`}>
+        {workflowStateLabel[item.state]}
+      </span>
+    </>
+  );
+
+  const className = `block h-full p-3 text-left transition-colors ${item.href ? "hover:bg-[var(--surface-subtle)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-emerald-500" : ""}`;
+
+  if (!item.href) {
+    return <div className={className}>{content}</div>;
+  }
+
+  return (
+    <Link href={item.href} aria-current={item.state === "active" ? "step" : undefined} className={className}>
+      {content}
+    </Link>
   );
 }
 
