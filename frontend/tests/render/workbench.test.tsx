@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { EvidenceChecklist, StatusBadge, WorkflowRail } from "@/components/workbench";
+import { DataTable, EvidenceChecklist, ReviewPanel, StatusBadge, WorkflowRail } from "@/components/workbench";
 
 describe("workbench primitives", () => {
   it("renders evidence checklist completion and required states", () => {
@@ -59,4 +59,25 @@ describe("workbench primitives", () => {
     expect(screen.getAllByText("Blocked")).toHaveLength(2);
     expect(screen.getByText("8 stages")).toBeInTheDocument();
   }, 15_000);
+
+  it("allows dense tables inside grid panels to shrink on mobile", () => {
+    const { container } = render(
+      <div className="grid">
+        <ReviewPanel title="Evidence table">
+          <DataTable
+            columns={["Source", "Evidence"]}
+            rows={[
+              [
+                "Revenue accepted iXBRL taxonomies",
+                "AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl",
+              ],
+            ]}
+          />
+        </ReviewPanel>
+      </div>,
+    );
+
+    expect(container.querySelector("section.min-w-0")).toBeInTheDocument();
+    expect(container.querySelector(".overflow-x-auto.min-w-0")).toBeInTheDocument();
+  });
 });

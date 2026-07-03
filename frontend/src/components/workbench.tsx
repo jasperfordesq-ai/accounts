@@ -49,7 +49,7 @@ const iconToneClasses: Record<Tone, string> = {
 };
 
 export function WorkbenchShell({ children }: { children: ReactNode }) {
-  return <div className="space-y-6 text-[var(--foreground)]">{children}</div>;
+  return <div className="min-w-0 space-y-6 text-[var(--foreground)]">{children}</div>;
 }
 
 export function WorkbenchHeader({
@@ -170,7 +170,7 @@ export function ReviewPanel({
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-md border border-[var(--border)] bg-[var(--surface)] shadow-sm shadow-black/[0.03]">
+    <section className="min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface)] shadow-sm shadow-black/[0.03]">
       <header className="flex flex-col gap-3 border-b border-[var(--border)] px-4 py-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h2 className="text-sm font-semibold text-[var(--foreground)]">{title}</h2>
@@ -283,7 +283,7 @@ export function DataTable({
   rows: ReactNode[][];
 }) {
   return (
-    <div className="overflow-x-auto rounded-md border border-[var(--border)] bg-[var(--surface)]">
+    <div className="min-w-0 overflow-x-auto rounded-md border border-[var(--border)] bg-[var(--surface)]">
       <table className="min-w-full border-collapse text-left text-sm">
         <thead className="bg-[var(--surface-subtle)] text-xs font-semibold uppercase text-[var(--muted-foreground)]">
           <tr>
@@ -298,7 +298,7 @@ export function DataTable({
           {rows.map((row, rowIndex) => (
             <tr key={rowIndex} className="hover:bg-[var(--surface-subtle)]">
               {row.map((cell, cellIndex) => (
-                <td key={cellIndex} className="whitespace-nowrap px-4 py-3 text-[var(--foreground)]">
+                <td key={cellIndex} className="px-4 py-3 align-top text-[var(--foreground)]">
                   {cell}
                 </td>
               ))}
