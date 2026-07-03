@@ -2,7 +2,7 @@ import Link from "next/link";
 import { AlertTriangle, ArrowRight, CalendarClock, UserRound } from "lucide-react";
 import type { Company, FilingDeadline } from "@/lib/api";
 import { formatCompanyType, formatDateIE } from "@/lib/format";
-import { ReviewPanel, StatusBadge } from "@/components/workbench";
+import { DataTable, ReviewPanel, StatusBadge } from "@/components/workbench";
 
 interface AccountantDashboardQueueProps {
   companies: Company[];
@@ -46,64 +46,43 @@ export function AccountantDashboardQueue({
           No companies are currently visible to this user.
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-md border border-[var(--border)] bg-[var(--surface)]">
-          <table className="min-w-full border-collapse text-left text-sm">
-            <thead className="bg-[var(--surface-subtle)] text-xs font-semibold uppercase text-[var(--muted-foreground)]">
-              <tr>
-                <th className="whitespace-nowrap border-b border-[var(--border)] px-4 py-3">Company</th>
-                <th className="whitespace-nowrap border-b border-[var(--border)] px-4 py-3">Deadline</th>
-                <th className="whitespace-nowrap border-b border-[var(--border)] px-4 py-3">Blockers</th>
-                <th className="whitespace-nowrap border-b border-[var(--border)] px-4 py-3">Assigned reviewer</th>
-                <th className="whitespace-nowrap border-b border-[var(--border)] px-4 py-3">Next action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--border)]">
-              {rows.map((row) => (
-                <tr key={row.company.id} className="hover:bg-[var(--surface-subtle)]">
-                  <td className="min-w-64 px-4 py-3 align-top">
-                    <div className="font-medium text-[var(--foreground)]">{row.company.legalName}</div>
-                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--muted-foreground)]">
-                      <span>{formatCompanyType(row.company.companyType)}</span>
-                      {row.company.croNumber && <span>CRO {row.company.croNumber}</span>}
-                    </div>
-                  </td>
-                  <td className="min-w-52 px-4 py-3 align-top">
-                    <div className="flex items-start gap-2">
-                      <CalendarClock className="mt-0.5 h-4 w-4 shrink-0 text-[var(--muted-foreground)]" />
-                      <div>
-                        <p className="font-medium text-[var(--foreground)]">{row.deadlineLabel}</p>
-                        <div className="mt-1">
-                          <StatusBadge tone={row.deadlineTone}>{row.deadlineState}</StatusBadge>
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="min-w-64 px-4 py-3 align-top">
-                    <div className="flex items-start gap-2">
-                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--muted-foreground)]" />
-                      <div>
-                        <StatusBadge tone={row.blockerTone}>{row.blockerLabel}</StatusBadge>
-                        <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">{row.blockerDetail}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="min-w-44 px-4 py-3 align-top">
-                    <ReviewerBadge company={row.company} />
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3 align-top">
-                    <Link
-                      href={row.nextActionHref}
-                      className="inline-flex min-h-8 items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] px-3 text-xs font-semibold text-[var(--foreground)] hover:border-[var(--ring)]"
-                    >
-                      {row.nextActionLabel}
-                      <ArrowRight className="h-3.5 w-3.5" />
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          columns={["Company", "Deadline", "Blockers", "Assigned reviewer", "Next action"]}
+          rows={rows.map((row) => [
+            <div key="company" className="min-w-56">
+              <div className="font-medium text-[var(--foreground)]">{row.company.legalName}</div>
+              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--muted-foreground)]">
+                <span>{formatCompanyType(row.company.companyType)}</span>
+                {row.company.croNumber && <span>CRO {row.company.croNumber}</span>}
+              </div>
+            </div>,
+            <div key="deadline" className="flex min-w-44 items-start gap-2">
+              <CalendarClock className="mt-0.5 h-4 w-4 shrink-0 text-[var(--muted-foreground)]" />
+              <div>
+                <p className="font-medium text-[var(--foreground)]">{row.deadlineLabel}</p>
+                <div className="mt-1">
+                  <StatusBadge tone={row.deadlineTone}>{row.deadlineState}</StatusBadge>
+                </div>
+              </div>
+            </div>,
+            <div key="blockers" className="flex min-w-56 items-start gap-2">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--muted-foreground)]" />
+              <div>
+                <StatusBadge tone={row.blockerTone}>{row.blockerLabel}</StatusBadge>
+                <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">{row.blockerDetail}</p>
+              </div>
+            </div>,
+            <ReviewerBadge key="reviewer" company={row.company} />,
+            <Link
+              key="action"
+              href={row.nextActionHref}
+              className="inline-flex min-h-8 items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] px-3 text-xs font-semibold text-[var(--foreground)] hover:border-[var(--ring)]"
+            >
+              {row.nextActionLabel}
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>,
+          ])}
+        />
       )}
     </ReviewPanel>
   );

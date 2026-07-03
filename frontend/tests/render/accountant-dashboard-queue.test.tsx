@@ -5,7 +5,7 @@ import type { Company, FilingDeadline } from "@/lib/api";
 
 describe("AccountantDashboardQueue", () => {
   it("surfaces deadlines, blockers, reviewer ownership and next actions", () => {
-    render(
+    const { container } = render(
       <AccountantDashboardQueue
         companies={[sampleCompany(), unsupportedCompany(), noPeriodCompany()]}
         deadlines={{
@@ -20,6 +20,12 @@ describe("AccountantDashboardQueue", () => {
     expect(screen.getByText("Active production work across the firm.")).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Assigned reviewer" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Next action" })).toBeInTheDocument();
+    expect(container.querySelector(".workbench-data-table")).toHaveAttribute("data-responsive", "card");
+    expect(container.querySelector('td[data-label="Company"]')).toHaveTextContent("Connacht Visual Limited");
+    expect(container.querySelector('td[data-label="Deadline"]')).toHaveTextContent("CRO due 10 Jul 2026");
+    expect(container.querySelector('td[data-label="Blockers"]')).toHaveTextContent("No dashboard-level blockers");
+    expect(container.querySelector('td[data-label="Assigned reviewer"]')).toHaveTextContent("Niamh Reviewer");
+    expect(container.querySelector('td[data-label="Next action"]')).toHaveTextContent("Open filing");
 
     expect(screen.getByText("Connacht Visual Limited")).toBeInTheDocument();
     expect(screen.getByText("CRO due 10 Jul 2026")).toBeInTheDocument();
