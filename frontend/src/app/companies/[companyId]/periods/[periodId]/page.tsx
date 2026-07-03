@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, use, useState, useEffect, useCallback, useRef } from "react";
+import { use, useState, useEffect, useCallback, useRef } from "react";
 import {
   Button,
   Card,
@@ -96,6 +96,7 @@ import { WorkbenchHeader } from "@/components/workbench";
 import { PeriodWorkbenchOverview } from "@/components/period/PeriodWorkbenchOverview";
 import { FilingReviewCentre } from "@/components/period/FilingReviewCentre";
 import { FilingDeadlinesPanel } from "@/components/period/FilingDeadlinesPanel";
+import { PeriodAuditTrailPanel } from "@/components/period/PeriodAuditTrailPanel";
 import { formatPeriodRange } from "@/lib/format";
 
 function formatCurrency(amount: number): string {
@@ -2076,78 +2077,7 @@ export default function PeriodWorkspacePage({
               </Card.Content>
             </Card>
 
-            <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
-              <Card.Header>
-                <Card.Title className="text-gray-900 dark:text-gray-100">Period Audit Trail</Card.Title>
-                <Card.Description>Recent review actions and evidence changes for this period.</Card.Description>
-              </Card.Header>
-              <Card.Content>
-                {auditLog.length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-gray-300 dark:border-neutral-700 px-4 py-6 text-sm text-gray-500 dark:text-gray-400">
-                    No audit events recorded for this period yet.
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-gray-200 text-left text-xs uppercase text-gray-500 dark:border-neutral-700 dark:text-gray-400">
-                          <th className="py-2 pr-4">Time</th>
-                          <th className="py-2 pr-4">Action</th>
-                          <th className="py-2 pr-4">Record</th>
-                          <th className="py-2 pr-4">Reviewer</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {auditLog.map((entry) => (
-                          <Fragment key={entry.id}>
-                            <tr className="border-b border-gray-100 dark:border-neutral-800">
-                              <td className="py-2 pr-4 whitespace-nowrap text-gray-600 dark:text-gray-300">
-                                {new Date(entry.timestamp).toLocaleString("en-IE", { dateStyle: "medium", timeStyle: "short" })}
-                              </td>
-                              <td className="py-2 pr-4 font-medium text-gray-900 dark:text-gray-100">{entry.action}</td>
-                              <td className="py-2 pr-4 text-gray-600 dark:text-gray-300">{entry.entityType} #{entry.entityId}</td>
-                              <td className="py-2 pr-4 text-gray-600 dark:text-gray-300">{entry.userId || "System"}</td>
-                            </tr>
-                            {(entry.oldValueJson || entry.newValueJson) && (
-                              <tr className="border-b border-gray-100 bg-gray-50/60 dark:border-neutral-800 dark:bg-neutral-950/50">
-                                <td colSpan={4} className="px-3 py-3">
-                                  <div className="space-y-2">
-                                    <p className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Audit Details</p>
-                                    <div className="grid gap-3 md:grid-cols-2">
-                                      {entry.oldValueJson && (
-                                        <div>
-                                          <p className="mb-1 text-xs font-medium text-gray-600 dark:text-gray-300">Old value</p>
-                                          <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-all rounded-md border border-gray-200 bg-white p-3 text-xs text-gray-700 dark:border-neutral-700 dark:bg-neutral-900 dark:text-gray-200">
-                                            {formatAuditPayload(entry.oldValueJson)}
-                                          </pre>
-                                        </div>
-                                      )}
-                                      {entry.newValueJson && (
-                                        <div>
-                                          <p className="mb-1 text-xs font-medium text-gray-600 dark:text-gray-300">New value</p>
-                                          <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-all rounded-md border border-gray-200 bg-white p-3 text-xs text-gray-700 dark:border-neutral-700 dark:bg-neutral-900 dark:text-gray-200">
-                                            {formatAuditPayload(entry.newValueJson)}
-                                          </pre>
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                </td>
-                              </tr>
-                            )}
-                          </Fragment>
-                        ))}
-                      </tbody>
-                    </table>
-                    {auditTotal > auditLog.length && (
-                      <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
-                        Showing latest {auditLog.length} of {auditTotal} audit events.
-                      </p>
-                    )}
-                  </div>
-                )}
-              </Card.Content>
-            </Card>
+            <PeriodAuditTrailPanel auditLog={auditLog} auditTotal={auditTotal} />
 
             <Card className="shadow-sm border border-purple-200 dark:border-purple-800 bg-purple-50/30 dark:bg-purple-900/10">
               <Card.Content className="p-4">
@@ -2173,14 +2103,6 @@ export default function PeriodWorkspacePage({
 }
 
 /* --- Helper Components --- */
-
-function formatAuditPayload(value: string) {
-  try {
-    return JSON.stringify(JSON.parse(value), null, 2);
-  } catch {
-    return value;
-  }
-}
 
 function SummaryCard({ title, value, subtitle }: { title: string; value: string; subtitle: string }) {
   return (

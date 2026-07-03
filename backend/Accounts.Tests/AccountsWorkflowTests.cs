@@ -9224,15 +9224,17 @@ public class AccountsWorkflowTests
     [Fact]
     public void PeriodWorkspace_AuditTrailDisplaysOldAndNewPayloads()
     {
-        var page = File.ReadAllText(Path.Combine(
-            RepositoryRoot(),
-            "frontend/src/app/companies/[companyId]/periods/[periodId]/page.tsx"));
+        var root = RepositoryRoot();
+        var page = File.ReadAllText(Path.Combine(root, "frontend/src/app/companies/[companyId]/periods/[periodId]/page.tsx"));
+        var auditPanel = File.ReadAllText(Path.Combine(root, "frontend/src/components/period/PeriodAuditTrailPanel.tsx"));
+        var source = page + auditPanel;
 
         Assert.Contains("getAuditLog(cId, pId, 1, 50)", page);
-        Assert.Contains("Audit Details", page);
-        Assert.Contains("entry.oldValueJson", page);
-        Assert.Contains("entry.newValueJson", page);
-        Assert.Contains("whitespace-pre-wrap", page);
+        Assert.Contains("<PeriodAuditTrailPanel", page);
+        Assert.Contains("Audit details", source);
+        Assert.Contains("entry.oldValueJson", auditPanel);
+        Assert.Contains("entry.newValueJson", auditPanel);
+        Assert.Contains("whitespace-pre-wrap", auditPanel);
     }
 
     [Fact]
