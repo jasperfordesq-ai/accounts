@@ -1,0 +1,240 @@
+import { mkdir } from "node:fs/promises";
+import path from "node:path";
+import { chromium, expect } from "@playwright/test";
+
+const DEFAULT_VIEWPORTS = [
+  { name: "desktop", width: 1440, height: 1000 },
+  { name: "mobile", width: 390, height: 844 },
+];
+const DEFAULT_THEMES = ["light", "dark"];
+
+function arg(name, fallback) {
+  const prefix = `--${name}=`;
+  const value = process.argv.find((item) => item.startsWith(prefix));
+  return value ? value.slice(prefix.length) : process.env[name.toUpperCase().replaceAll("-", "_")] ?? fallback;
+}
+
+function requiredArg(name) {
+  const value = arg(name, "");
+  if (!value) throw new Error(`Missing required --${name}=... argument or ${name.toUpperCase().replaceAll("-", "_")} env var.`);
+  return value;
+}
+
+function normalizeBaseUrl(value) {
+  return value.replace(/\/+$/, "");
+}
+
+function safeName(value) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+}
+
+function toAbsoluteUrl(baseUrl, href) {
+  return new URL(href, `${baseUrl}/`).toString();
+}
+
+function mainText(page, text, options = {}) {
+  return page.locator("main").getByText(text, options).first();
+}
+
+async function setTheme(context, theme) {
+  await context.addInitScript((selectedTheme) => {
+    localStorage.setItem("theme", selectedTheme);
+    const applyTheme = () => {
+      document.documentElement?.classList.toggle("dark", selectedTheme === "dark");
+      window.dispatchEvent(new Event("accounts-theme-change"));
+    };
+    if (document.documentElement) {
+      applyTheme();
+    } else {
+      document.addEventListener("DOMContentLoaded", applyTheme, { once: true });
+    }
+  }, theme);
+}
+
+async function setInputValue(locator, value) {
+  await locator.evaluate((input, nextValue) => {
+    const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    valueSetter?.call(input, nextValue);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  }, value);
+}
+
+async function login(page, baseUrl, email, password) {
+  let lastFailure = "";
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    await page.goto(`${baseUrl}/login`, { waitUntil: "domcontentloaded" });
+    await page.waitForLoadState("networkidle", { timeout: 10_000 }).catch(() => {});
+
+    const dashboardHeading = mainText(page, "Dashboard", { exact: true });
+    if (!new URL(page.url()).pathname.startsWith("/login") || await dashboardHeading.isVisible().catch(() => false)) {
+      await expect(dashboardHeading).toBeVisible({ timeout: 30_000 });
+      return;
+    }
+
+    const emailInput = page.locator('input[type="email"]');
+    const passwordInput = page.locator('input[type="password"]');
+    await emailInput.waitFor({ state: "visible", timeout: 30_000 });
+    await passwordInput.waitFor({ state: "visible", timeout: 30_000 });
+    await setInputValue(emailInput, email);
+    await setInputValue(passwordInput, password);
+    const signInButton = page.getByRole("button", { name: "Sign in" });
+    await expect(signInButton).toBeEnabled({ timeout: 30_000 });
+    await signInButton.click();
+
+    try {
+      await page.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 15_000 });
+      await page.waitForLoadState("networkidle", { timeout: 30_000 }).catch(() => {});
+      await expect(mainText(page, "Dashboard", { exact: true })).toBeVisible({ timeout: 30_000 });
+      return;
+    } catch (error) {
+      const formText = await page.locator("form").innerText().catch(() => "");
+      lastFailure = `${error instanceof Error ? error.message : String(error)}\n${formText}`.trim();
+      if (attempt < 3) {
+        await page.waitForTimeout(attempt * 1_000);
+        continue;
+      }
+    }
+  }
+
+  throw new Error(`Login did not reach the dashboard after 3 attempts.\n${lastFailure}`);
+}
+
+async function firstHref(page, selector, label) {
+  const href = await page.locator(selector).evaluateAll((links) => {
+    const element = links.find((link) => link instanceof HTMLAnchorElement);
+    return element instanceof HTMLAnchorElement ? element.getAttribute("href") : null;
+  });
+  if (!href) throw new Error(`Could not find ${label} link using selector ${selector}.`);
+  return href;
+}
+
+async function discoverRoutes(page, baseUrl) {
+  await expect(mainText(page, "Production Readiness")).toBeVisible({ timeout: 30_000 });
+  const companyHref = await firstHref(
+    page,
+    'a[href^="/companies/"]:not([href="/companies/new"]):not([href*="/periods/"])',
+    "company detail",
+  );
+  await page.goto(toAbsoluteUrl(baseUrl, companyHref), { waitUntil: "domcontentloaded" });
+  await page.waitForLoadState("networkidle", { timeout: 30_000 }).catch(() => {});
+  await expect(mainText(page, "Accounting Periods")).toBeVisible({ timeout: 30_000 });
+  const periodHref = await firstHref(page, 'a[href*="/periods/"]', "period workspace");
+
+  return {
+    dashboard: "/",
+    company: companyHref,
+    period: periodHref,
+    filing: periodHref,
+  };
+}
+
+async function checkNoPageOverflow(page, routeName) {
+  const result = await page.evaluate(() => ({
+    scrollWidth: document.documentElement.scrollWidth,
+    clientWidth: document.documentElement.clientWidth,
+  }));
+  if (result.scrollWidth > result.clientWidth + 2) {
+    throw new Error(`${routeName} has page-level horizontal overflow: ${result.scrollWidth}px > ${result.clientWidth}px.`);
+  }
+}
+
+async function captureRoute({ page, routeName, href, expectedText, outputPath, openFilingTab }) {
+  const routeErrors = [];
+  const onConsole = (message) => {
+    const text = message.text();
+    const isLocalDevNonceHydrationWarning =
+      /^(localhost|127\.0\.0\.1)$/.test(new URL(page.url()).hostname) &&
+      text.includes("A tree hydrated but some attributes of the server rendered HTML didn't match") &&
+      text.includes("nonce=");
+
+    if (message.type() === "error" && !isLocalDevNonceHydrationWarning) {
+      routeErrors.push(`console: ${text}`);
+    }
+  };
+  const onPageError = (error) => routeErrors.push(`pageerror: ${error.message}`);
+  page.on("console", onConsole);
+  page.on("pageerror", onPageError);
+
+  try {
+    await page.goto(href, { waitUntil: "domcontentloaded" });
+    await page.waitForLoadState("networkidle", { timeout: 30_000 }).catch(() => {});
+
+    if (openFilingTab) {
+      const filingTab = page.getByRole("tab", { name: "Filing" });
+      await expect(filingTab).toBeVisible({ timeout: 30_000 });
+      await filingTab.click();
+    }
+
+    await expect(mainText(page, expectedText)).toBeVisible({ timeout: 30_000 });
+    await checkNoPageOverflow(page, routeName);
+    await page.screenshot({ path: outputPath, fullPage: true });
+
+    if (routeErrors.length > 0) {
+      throw new Error(`${routeName} emitted browser errors:\n${routeErrors.join("\n")}`);
+    }
+  } finally {
+    page.off("console", onConsole);
+    page.off("pageerror", onPageError);
+  }
+}
+
+async function run() {
+  const baseUrl = normalizeBaseUrl(requiredArg("base-url"));
+  const email = requiredArg("email");
+  const password = requiredArg("password");
+  const outputDir = path.resolve(arg("output-dir", "artifacts/visual-smoke"));
+  const headless = arg("headed", "false") !== "true";
+
+  await mkdir(outputDir, { recursive: true });
+  const browser = await chromium.launch({ headless });
+  const captures = [];
+
+  try {
+    for (const viewport of DEFAULT_VIEWPORTS) {
+      for (const theme of DEFAULT_THEMES) {
+        const context = await browser.newContext({
+          viewport: { width: viewport.width, height: viewport.height },
+          ignoreHTTPSErrors: true,
+        });
+        await setTheme(context, theme);
+        const page = await context.newPage();
+        await login(page, baseUrl, email, password);
+        const routes = await discoverRoutes(page, baseUrl);
+
+        const routeSpecs = [
+          { name: "dashboard", href: routes.dashboard, expectedText: "Production Readiness" },
+          { name: "company-detail", href: routes.company, expectedText: "Accounting Periods" },
+          { name: "period-workspace", href: routes.period, expectedText: "Filing readiness" },
+          { name: "filing-review", href: routes.filing, expectedText: "Filing readiness profile", openFilingTab: true },
+        ];
+
+        for (const spec of routeSpecs) {
+          const fileName = `${safeName(spec.name)}-${theme}-${viewport.name}.png`;
+          const outputPath = path.join(outputDir, fileName);
+          await captureRoute({
+            page,
+            routeName: `${spec.name}/${theme}/${viewport.name}`,
+            href: toAbsoluteUrl(baseUrl, spec.href),
+            expectedText: spec.expectedText,
+            outputPath,
+            openFilingTab: spec.openFilingTab,
+          });
+          captures.push(outputPath);
+        }
+
+        await context.close();
+      }
+    }
+  } finally {
+    await browser.close();
+  }
+
+  console.log(JSON.stringify({ ok: true, screenshots: captures }, null, 2));
+}
+
+run().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

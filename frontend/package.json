@@ -23,6 +23,7 @@
     "test:proxy": "node --experimental-strip-types scripts/verify-api-proxy.mjs",
     "test:auth": "node --experimental-strip-types scripts/verify-auth-session.mjs",
     "test:api-client": "node --experimental-strip-types scripts/verify-api-client.mjs",
+    "test:visual": "node scripts/visual-smoke.mjs",
     "test:unit": "node --test --experimental-strip-types \"tests/*.test.mjs\"",
     "test:render": "vitest run",
     "test": "npm run test:unit && npm run test:render && npm run test:readiness && npm run test:proxy && npm run test:auth && npm run test:api-client"
@@ -39,6 +40,7 @@
     "zod": "4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "1.57.0",
     "@tailwindcss/postcss": "4.3.2",
     "@testing-library/jest-dom": "6.9.1",
     "@testing-library/react": "16.3.2",

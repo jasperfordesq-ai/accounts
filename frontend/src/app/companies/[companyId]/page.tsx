@@ -268,21 +268,21 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ compan
     <div className="animate-fade-in">
       <Breadcrumbs items={[{ label: company.legalName }]} />
 
-      <div className="flex items-start justify-between mb-8">
-        <div className="flex items-center gap-3">
-          <div className="bg-emerald-50 dark:bg-emerald-900/30 p-3 rounded-xl">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-8">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="shrink-0 bg-emerald-50 dark:bg-emerald-900/30 p-3 rounded-xl">
             <Building2 className="w-7 h-7 text-emerald-600 dark:text-emerald-400" />
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+          <div className="min-w-0">
+            <h1 className="break-words text-2xl font-bold text-gray-900 dark:text-gray-100">
               {company.legalName}
             </h1>
             {company.tradingName && (
-              <p className="text-gray-500 dark:text-gray-400">t/a {company.tradingName}</p>
+              <p className="break-words text-gray-500 dark:text-gray-400">t/a {company.tradingName}</p>
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
           <Button
             variant="outline"
             size="sm"

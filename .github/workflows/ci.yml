@@ -265,6 +265,21 @@ jobs:
 
           printf 'AUDIT_INTEGRITY_ACTIVE_KEY_ID=ci-audit-%s-%s\n' "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" >> "$GITHUB_ENV"
 
+      - name: Set up Node for visual smoke
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies for visual smoke
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
       - name: Build production smoke images
         run: |
           docker build -f Dockerfile.backend --tag "$ACCOUNTS_API_IMAGE" .
@@ -339,6 +354,26 @@ jobs:
             -BaseUrl https://accounts-smoke.local `
             -Email $env:BOOTSTRAP_OWNER_EMAIL `
             -Password $bootstrapOwnerPassword
+
+      - name: Run visual smoke screenshots
+        working-directory: frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          export BASE_URL=https://accounts-smoke.local
+          export EMAIL="$BOOTSTRAP_OWNER_EMAIL"
+          export PASSWORD="$(tr -d '\r\n' < "$BOOTSTRAP_OWNER_PASSWORD_FILE")"
+
+          npm run test:visual -- --output-dir=../.tmp/visual-smoke
+
+      - name: Upload visual smoke screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-smoke-screenshots
+          path: .tmp/visual-smoke
+          if-no-files-found: ignore
 
       - name: Run production backup restore drill
         shell: pwsh
