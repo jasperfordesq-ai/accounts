@@ -1,4 +1,6 @@
 using Accounts.Api.Entities;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace Accounts.Api.Services;
 
@@ -11,6 +13,8 @@ public sealed record LegalSourceReference(
 public sealed record SourceLawSnapshot(
     DateOnly SnapshotDate,
     string SnapshotVersion,
+    string ContentHash,
+    int SourceCount,
     IReadOnlyList<LegalSourceReference> Sources);
 
 public sealed record RevenueIxbrlTaxonomySelection(
@@ -96,10 +100,36 @@ public static class IrishStatutoryRuleSources
         new DateOnly(2026, 7, 3),
         "https://www.charitiesregulator.ie/en/information-for-charities/annual-report-how-to-submit");
 
-    public static SourceLawSnapshot BuildSnapshot() => new(
-        new DateOnly(2026, 7, 3),
-        "irish-statutory-accounts-sources-2026-07-03",
-        All);
+    public static SourceLawSnapshot BuildSnapshot()
+    {
+        var sources = All;
+        return new SourceLawSnapshot(
+            new DateOnly(2026, 7, 3),
+            "irish-statutory-accounts-sources-2026-07-03",
+            ComputeContentHash(sources),
+            sources.Count,
+            sources);
+    }
+
+    public static string ComputeContentHash(IEnumerable<LegalSourceReference> sources)
+    {
+        var canonicalSourceSet = string.Join(
+            "\n",
+            sources
+                .OrderBy(source => source.SourceId, StringComparer.Ordinal)
+                .Select(source =>
+                    $"{CanonicalField(source.SourceId)}|{CanonicalField(source.Title)}|{source.EffectiveDate:yyyy-MM-dd}|{CanonicalField(source.Url)}"));
+
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(canonicalSourceSet));
+        return $"sha256:{Convert.ToHexString(hash).ToLowerInvariant()}";
+    }
+
+    private static string CanonicalField(string value) =>
+        value
+            .Replace("\\", "\\\\", StringComparison.Ordinal)
+            .Replace("|", "\\|", StringComparison.Ordinal)
+            .Replace("\r", "\\r", StringComparison.Ordinal)
+            .Replace("\n", "\\n", StringComparison.Ordinal);
 
     public static readonly IReadOnlyList<LegalSourceReference> All =
     [

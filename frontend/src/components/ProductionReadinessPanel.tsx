@@ -77,7 +77,7 @@ export function ProductionReadinessPanel({
         <ReadinessMetric
           icon={<Scale className="h-4 w-4" />}
           label="Source snapshot"
-          value={report.sourceLawSnapshot.sources.length}
+          value={report.sourceLawSnapshot.sourceCount}
         />
         <ReadinessMetric
           icon={<CheckCircle2 className="h-4 w-4" />}

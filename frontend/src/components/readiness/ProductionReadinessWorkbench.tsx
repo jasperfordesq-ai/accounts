@@ -435,8 +435,14 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
         <ReviewPanel
           title="Source-backed statutory rules"
           description={`Snapshot ${report.sourceLawSnapshot.snapshotVersion} from ${formatDate(report.sourceLawSnapshot.snapshotDate)}.`}
-          actions={<StatusBadge tone="info">{report.sourceLawSnapshot.sources.length} sources</StatusBadge>}
+          actions={<StatusBadge tone="info">{formatPinnedSources(report.sourceLawSnapshot.sourceCount)}</StatusBadge>}
         >
+          <div className="mb-3 rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-3">
+            <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Snapshot fingerprint</p>
+            <code className="mt-1 block break-all text-xs leading-5 text-[var(--foreground)]">
+              {report.sourceLawSnapshot.contentHash}
+            </code>
+          </div>
           <DataTable
             columns={["Source", "Effective date", "Reference"]}
             rows={report.sourceLawSnapshot.sources.map((source) => [
@@ -609,6 +615,10 @@ function formatDate(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return new Intl.DateTimeFormat("en-IE", { day: "2-digit", month: "short", year: "numeric" }).format(date);
+}
+
+function formatPinnedSources(count: number) {
+  return `${count} pinned source${count === 1 ? "" : "s"}`;
 }
 
 function formatDateTime(value: string) {

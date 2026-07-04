@@ -100,6 +100,8 @@ function productionReadinessReportFixture() {
     sourceLawSnapshot: {
       snapshotDate: "2026-07-03",
       snapshotVersion: "irish-statutory-accounts-sources-2026-07-03",
+      contentHash: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      sourceCount: 1,
       sources: [source("frc-frs-105", "FRC FRS 105 current edition and amendments")],
     },
     areas: [

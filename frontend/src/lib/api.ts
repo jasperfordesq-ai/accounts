@@ -1537,6 +1537,8 @@ export interface LegalSourceReference {
 export interface SourceLawSnapshot {
   snapshotDate: string;
   snapshotVersion: string;
+  contentHash: string;
+  sourceCount: number;
   sources: LegalSourceReference[];
 }
 
@@ -1684,6 +1686,8 @@ const legalSourceReferenceSchema = z.object({
 const sourceLawSnapshotSchema = z.object({
   snapshotDate: z.string().min(1),
   snapshotVersion: z.string().min(1),
+  contentHash: z.string().regex(/^sha256:[0-9a-f]{64}$/),
+  sourceCount: z.number().int().nonnegative(),
   sources: z.array(legalSourceReferenceSchema),
 });
 

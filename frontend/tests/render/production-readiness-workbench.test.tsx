@@ -76,6 +76,8 @@ describe("ProductionReadinessWorkbench", () => {
     expect(screen.getByText("Correlation id error responses")).toBeInTheDocument();
     expect(screen.getByText("Sentry-compatible")).toBeInTheDocument();
     expect(screen.getByText("Monitoring:ErrorTrackingDsn")).toBeInTheDocument();
+    expect(screen.getByText("sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")).toBeInTheDocument();
+    expect(screen.getByText("1 pinned source")).toBeInTheDocument();
   }, 20000);
 });
 
@@ -88,6 +90,8 @@ function sampleReport(): ProductionReadinessReport {
     sourceLawSnapshot: {
       snapshotDate: "2026-07-03",
       snapshotVersion: "irish-statutory-accounts-sources-2026-07-03",
+      contentHash: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      sourceCount: 1,
       sources: [
         {
           sourceId: "revenue-accepted-taxonomies",

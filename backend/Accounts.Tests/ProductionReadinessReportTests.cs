@@ -25,6 +25,36 @@ public class ProductionReadinessReportTests
             Assert.StartsWith("https://", source.Url);
             Assert.False(string.IsNullOrWhiteSpace(source.Title));
         });
+        Assert.Equal(snapshot.Sources.Count, snapshot.SourceCount);
+        Assert.Matches("^sha256:[0-9a-f]{64}$", snapshot.ContentHash);
+        Assert.Equal(
+            IrishStatutoryRuleSources.ComputeContentHash(snapshot.Sources),
+            snapshot.ContentHash);
+    }
+
+    [Fact]
+    public void SourceLawSnapshot_FingerprintIsDeterministicAndChangesWhenPinnedSourceChanges()
+    {
+        var first = new LegalSourceReference(
+            "cro-financial-statements-requirements",
+            "CRO financial statements requirements",
+            new DateOnly(2026, 7, 3),
+            "https://cro.ie/annual-return/financial-statements-requirements/");
+        var second = new LegalSourceReference(
+            "revenue-accepted-taxonomies",
+            "Revenue accepted iXBRL taxonomies",
+            new DateOnly(2025, 11, 6),
+            "https://www.revenue.ie/en/companies-and-charities/corporation-tax-for-companies/submitting-financial-statements/accepted-taxonomies.aspx");
+
+        var originalHash = IrishStatutoryRuleSources.ComputeContentHash([first, second]);
+        var reorderedHash = IrishStatutoryRuleSources.ComputeContentHash([second, first]);
+        var changedHash = IrishStatutoryRuleSources.ComputeContentHash([
+            first,
+            second with { EffectiveDate = new DateOnly(2026, 1, 1) }
+        ]);
+
+        Assert.Equal(originalHash, reorderedHash);
+        Assert.NotEqual(originalHash, changedHash);
     }
 
     [Fact]
