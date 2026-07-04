@@ -1,5 +1,5 @@
 import { Button, Chip, Spinner } from "@heroui/react";
-import { CheckCircle2, ClipboardCheck, FileText, Shield, Upload } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ClipboardCheck, FileText, Shield, Upload } from "lucide-react";
 import type {
   FilingReadinessProfile,
   FilingReadinessSignOffPacket,
@@ -196,6 +196,8 @@ export function FilingReviewCentre({
 
 function SignOffPacketPanel({ packet }: { packet: FilingReadinessSignOffPacket }) {
   const openIssueCount = packet.openBlockers.length + packet.openWarnings.length;
+  const specialistSteps = packet.steps.filter(isSpecialistSignOffStep);
+  const standardSteps = packet.steps.filter((step) => !isSpecialistSignOffStep(step));
 
   return (
     <section className="rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-4" aria-label="Accountant sign-off packet">
@@ -218,9 +220,11 @@ function SignOffPacketPanel({ packet }: { packet: FilingReadinessSignOffPacket }
         </div>
       </div>
 
+      {specialistSteps.length > 0 && <SpecialistEvidenceGates steps={specialistSteps} />}
+
       <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_18rem]">
         <ol className="grid gap-2 md:grid-cols-2">
-          {packet.steps.map((step) => (
+          {standardSteps.map((step) => (
             <SignOffStepItem key={step.code} step={step} />
           ))}
         </ol>
@@ -243,6 +247,76 @@ function SignOffPacketPanel({ packet }: { packet: FilingReadinessSignOffPacket }
   );
 }
 
+function SpecialistEvidenceGates({ steps }: { steps: FilingReadinessSignOffStep[] }) {
+  return (
+    <section
+      className="mt-4 rounded-md border border-sky-200 bg-sky-50/70 p-3 dark:border-sky-900 dark:bg-sky-950/30"
+      aria-label="Specialist evidence gates"
+    >
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <Shield className="h-4 w-4 text-sky-700 dark:text-sky-200" />
+            <p className="text-xs font-semibold uppercase text-sky-900 dark:text-sky-100">Specialist evidence gates</p>
+          </div>
+          <p className="mt-1 text-sm leading-6 text-sky-950 dark:text-sky-100">
+            Charity, audit and manual-handoff evidence that affects the filing decision.
+          </p>
+        </div>
+        <StatusBadge tone={steps.some((step) => step.state === "blocked") ? "bad" : "info"}>
+          {steps.length} specialist {steps.length === 1 ? "gate" : "gates"}
+        </StatusBadge>
+      </div>
+
+      <div className="mt-3 grid gap-3 lg:grid-cols-2">
+        {steps.map((step) => (
+          <SpecialistEvidenceGateCard key={step.code} step={step} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function SpecialistEvidenceGateCard({ step }: { step: FilingReadinessSignOffStep }) {
+  const tone = signOffStepTone(step.state);
+  const sources = uniqueSources(step.sources);
+
+  return (
+    <article className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-2">
+          {step.state === "blocked" ? (
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-300" />
+          ) : (
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" />
+          )}
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold text-[var(--foreground)]">{step.label}</h3>
+            <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">{step.detail}</p>
+          </div>
+        </div>
+        <StatusBadge tone={tone}>{formatStateLabel(step.state)}</StatusBadge>
+      </div>
+
+      {sources.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {sources.map((source) => (
+            <a
+              key={source.sourceId}
+              href={source.url}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-full border border-[var(--border)] bg-[var(--surface-subtle)] px-2.5 py-1 text-xs font-semibold text-[var(--foreground)] hover:bg-[var(--surface)]"
+            >
+              {source.title}
+            </a>
+          ))}
+        </div>
+      )}
+    </article>
+  );
+}
+
 function SignOffStepItem({ step }: { step: FilingReadinessSignOffStep }) {
   const tone = signOffStepTone(step.state);
 
@@ -255,6 +329,20 @@ function SignOffStepItem({ step }: { step: FilingReadinessSignOffStep }) {
       <p className="mt-2 text-xs leading-5 text-[var(--muted-foreground)]">{step.detail}</p>
     </li>
   );
+}
+
+function isSpecialistSignOffStep(step: FilingReadinessSignOffStep) {
+  return step.code === "charity-reporting" || step.code === "auditor-handoff";
+}
+
+function uniqueSources(sources: FilingReadinessSignOffStep["sources"]) {
+  const seen = new Set<string>();
+  return sources.filter((source) => {
+    const key = source.sourceId || source.url;
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function signOffStateTone(state: string): "default" | "good" | "warn" | "bad" | "info" {

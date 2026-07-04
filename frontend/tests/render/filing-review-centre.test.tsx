@@ -122,6 +122,68 @@ describe("FilingReviewCentre", () => {
     expect(screen.getByText("2 more blockers")).toBeInTheDocument();
     expect(screen.getByText("External ROS/iXBRL validation remains a manual evidence gate.")).toBeInTheDocument();
   });
+
+  it("surfaces specialist sign-off evidence gates with their legal sources", () => {
+    render(
+      <FilingReviewCentre
+        filingStatus={sampleWorkflowStatus({ readyToFile: false })}
+        filingReadinessProfile={sampleReadinessProfile({
+          supportedPath: true,
+          manualProfessionalReviewRequired: true,
+          signOffSteps: [
+            {
+              code: "charity-reporting",
+              label: "Charity reporting evidence",
+              state: "complete",
+              detail: "Charity number, SoFA and Trustees' Annual Report evidence are present.",
+              sources: [
+                sourceReference({
+                  sourceId: "charities-regulator-annual-report",
+                  title: "Charities Regulator annual report guidance",
+                  url: "https://www.charitiesregulator.ie/en/information-for-charities/annual-report-how-to-submit",
+                }),
+              ],
+            },
+            {
+              code: "auditor-handoff",
+              label: "Auditor handoff",
+              state: "blocked",
+              detail: "Signed auditor report evidence is required before final output generation.",
+              sources: [
+                sourceReference({
+                  sourceId: "cro-auditors-report",
+                  title: "CRO auditor's report requirements",
+                  url: "https://cro.ie/annual-return/financial-statements-requirements/auditors-report/",
+                }),
+              ],
+            },
+          ],
+        })}
+        croSubmissionReference=""
+        validatingIxbrl={false}
+        onCroSubmissionReferenceChange={vi.fn()}
+        onRunIxbrlChecks={vi.fn()}
+        onApproveForFiling={vi.fn()}
+        onMarkCroSubmitted={vi.fn()}
+        onConfirmCroPayment={vi.fn()}
+        onMarkCroAccepted={vi.fn()}
+        onRecordCroSendBack={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Specialist evidence gates")).toBeInTheDocument();
+    expect(screen.getByText("Charity reporting evidence")).toBeInTheDocument();
+    expect(screen.getByText("Auditor handoff")).toBeInTheDocument();
+    expect(screen.getByText("Signed auditor report evidence is required before final output generation.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Charities Regulator annual report guidance" })).toHaveAttribute(
+      "href",
+      "https://www.charitiesregulator.ie/en/information-for-charities/annual-report-how-to-submit",
+    );
+    expect(screen.getByRole("link", { name: "CRO auditor's report requirements" })).toHaveAttribute(
+      "href",
+      "https://cro.ie/annual-return/financial-statements-requirements/auditors-report/",
+    );
+  });
 });
 
 function sampleWorkflowStatus({
@@ -163,11 +225,13 @@ function sampleReadinessProfile({
   manualProfessionalReviewRequired,
   blockingIssues = [],
   warningIssues = [],
+  signOffSteps = [],
 }: {
   supportedPath: boolean;
   manualProfessionalReviewRequired: boolean;
   blockingIssues?: FilingReadinessProfile["blockingIssues"];
   warningIssues?: FilingReadinessProfile["warningIssues"];
+  signOffSteps?: FilingReadinessProfile["signOffPacket"]["steps"];
 }): FilingReadinessProfile {
   return {
     companyId: 7,
@@ -229,6 +293,7 @@ function sampleReadinessProfile({
           detail: "External ROS validation evidence pending",
           sources: [sourceReference()],
         },
+        ...signOffSteps,
       ],
       openBlockers: blockingIssues.map((issue) => issue.message),
       openWarnings: warningIssues.map((issue) => issue.message),
@@ -250,11 +315,12 @@ function readinessIssue(
   };
 }
 
-function sourceReference() {
+function sourceReference(overrides: Partial<{ sourceId: string; title: string; effectiveDate: string; url: string }> = {}) {
   return {
     sourceId: "cro-financial-statements-requirements",
     title: "CRO financial statements requirements",
     effectiveDate: "2026-07-03",
     url: "https://cro.ie/annual-return/financial-statements-requirements/",
+    ...overrides,
   };
 }
