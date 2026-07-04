@@ -105,6 +105,17 @@ function sampleReport(): ProductionReadinessReport {
         evidenceRequired: "Named accountant approval recorded against the period.",
       },
     ],
+    auditabilityControls: [
+      {
+        code: "who-changed-what",
+        label: "Who changed what",
+        required: true,
+        enforcement: "audit-log-integrity-chain",
+        evidenceCaptured: "Authenticated user id, timestamp, entity, action and old/new value snapshots.",
+        verification: "Hash chain verification covers each company-scoped audit row.",
+        auditEventCodes: ["AdjustmentUpdated"],
+      },
+    ],
     visualQaCoverage: {
       artifactName: "visual-smoke-screenshots",
       enforcement: "ci-production-smoke",

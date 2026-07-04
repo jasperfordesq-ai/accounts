@@ -20,6 +20,7 @@ import {
 export function ProductionReadinessWorkbench({ report }: { report: ProductionReadinessReport }) {
   const assuranceActions = report.assuranceActions ?? [];
   const statutoryRuleMatrix = report.statutoryRuleMatrix ?? [];
+  const auditabilityControls = report.auditabilityControls ?? [];
   const visualQaCoverage = report.visualQaCoverage;
   const hardenedAreas = report.areas.filter((area) => area.status === "hardened").length;
   const coveredScenarios = report.goldenFilingCorpus.filter((scenario) => scenario.coverageStatus === "covered").length;
@@ -67,6 +68,26 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
             <StatusBadge key="status" tone={action.status === "complete" ? "good" : action.status === "in-progress" ? "info" : "warn"}>
               {formatStatus(action.status)}
             </StatusBadge>,
+          ])}
+        />
+      </ReviewPanel>
+
+      <ReviewPanel
+        title="Production auditability"
+        description="Controls proving who changed data, who approved outputs, what evidence was present, what was generated, and how the audit chain is checked."
+        actions={<StatusBadge tone={auditabilityControls.every((control) => control.required) ? "good" : "warn"}>{auditabilityControls.length} controls</StatusBadge>}
+      >
+        <DataTable
+          columns={["Control", "Enforcement", "Evidence captured", "Verification", "Audit events"]}
+          rows={auditabilityControls.map((control) => [
+            <div key="control" className="min-w-48 whitespace-normal">
+              <p className="font-medium">{control.label}</p>
+              <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">{control.required ? "Required production control" : "Advisory control"}</p>
+            </div>,
+            <span key="enforcement" className="whitespace-normal text-[var(--muted-foreground)]">{control.enforcement}</span>,
+            <span key="evidence" className="whitespace-normal text-[var(--muted-foreground)]">{control.evidenceCaptured}</span>,
+            <span key="verification" className="whitespace-normal text-[var(--muted-foreground)]">{control.verification}</span>,
+            <CodeStack key="events" items={control.auditEventCodes} />,
           ])}
         />
       </ReviewPanel>

@@ -44,6 +44,15 @@ public sealed record ProductionReadinessAssuranceAction(
     string Detail,
     string EvidenceRequired);
 
+public sealed record ProductionAuditabilityControl(
+    string Code,
+    string Label,
+    bool Required,
+    string Enforcement,
+    string EvidenceCaptured,
+    string Verification,
+    IReadOnlyList<string> AuditEventCodes);
+
 public sealed record VisualQaViewport(
     string Name,
     int Width,
@@ -76,6 +85,7 @@ public sealed record ProductionReadinessReport(
     IReadOnlyList<string> ManualHandoffPaths,
     IReadOnlyList<OperationalGate> OperationalGates,
     IReadOnlyList<ProductionReadinessAssuranceAction> AssuranceActions,
+    IReadOnlyList<ProductionAuditabilityControl> AuditabilityControls,
     VisualQaCoverage VisualQaCoverage);
 
 public class ProductionReadinessReportService(AccountsDbContext db)
@@ -97,6 +107,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             BuildManualHandoffPaths(),
             BuildOperationalGates(),
             BuildAssuranceActions(),
+            BuildAuditabilityControls(),
             BuildVisualQaCoverage());
     }
 
@@ -498,6 +509,77 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "required",
             "A qualified accountant must take the golden scenarios through the live workflow and confirm outputs, gates and wording are professionally acceptable.",
             "Signed acceptance note covering micro LTD, small abridged LTD, CLG charity and medium/audit-required manual handoff.")
+    ];
+
+    private static IReadOnlyList<ProductionAuditabilityControl> BuildAuditabilityControls() =>
+    [
+        new(
+            "who-changed-what",
+            "Who changed what",
+            true,
+            "audit-log-integrity-chain",
+            "Authenticated user id, reviewer display name, request id, timestamp, entity, action, and old/new value snapshots with sensitive fields redacted.",
+            "AuditLog integrity hashes link each company-scoped entry to the previous entry; audit durability tests verify failed business writes still preserve audit rows where required.",
+            [
+                AuditEventCodes.SizeClassificationDataSaved,
+                AuditEventCodes.FilingRegimeDetermined,
+                AuditEventCodes.TransactionCategorised,
+                AuditEventCodes.AdjustmentUpdated,
+                AuditEventCodes.NoteDisclosureUpdated
+            ]),
+        new(
+            "who-approved-what",
+            "Who approved what",
+            true,
+            "workflow-gates-plus-audit-log-integrity-chain",
+            "Named reviewer/accountant identity, approval timestamps, filing status transitions, adjustment approvals, signatory evidence and the affected period.",
+            "Approval and filing-state endpoints write audit events after readiness gates have passed; final filing paths remain blocked when required evidence is missing.",
+            [
+                AuditEventCodes.AdjustmentApproved,
+                AuditEventCodes.CroFilingStatusChanged,
+                AuditEventCodes.CroPaymentConfirmed,
+                AuditEventCodes.DeadlineMarkedFiled,
+                AuditEventCodes.CharityFilingStatusChanged
+            ]),
+        new(
+            "what-was-generated",
+            "What was generated",
+            true,
+            "server-side-generation-events",
+            "Generated accounts documents, CRO signature pages, notes, charity reports, iXBRL internal checks, validation status and period linkage.",
+            "Document generation and iXBRL checks are recorded as workflow/audit events before readiness profiles expose generated outputs as satisfied evidence.",
+            [
+                AuditEventCodes.CroDocumentGenerated,
+                AuditEventCodes.IxbrlInternalCheckCompleted,
+                AuditEventCodes.NotesGenerated,
+                AuditEventCodes.CharityReportGenerated
+            ]),
+        new(
+            "what-evidence-was-present",
+            "What evidence was present",
+            true,
+            "readiness-profile-plus-audit-snapshots",
+            "Required evidence checklist state, source references, legal-gate decisions, old/new value snapshots and generated output flags at the point of review.",
+            "FilingReadinessProfile exposes blocking evidence and LegalSourceReference metadata; audit snapshots preserve the data changes that led to the generated pack.",
+            [
+                AuditEventCodes.YearEndReviewConfirmationUpdated,
+                AuditEventCodes.OpeningBalanceUpserted,
+                AuditEventCodes.ShareCapitalUpdated,
+                AuditEventCodes.TaxBalanceUpserted,
+                AuditEventCodes.CharityInfoUpdated
+            ]),
+        new(
+            "tamper-evident-chain",
+            "Tamper-evident audit chain",
+            true,
+            "audit-log-integrity-chain-and-signed-checkpoint",
+            "Previous integrity hash, current integrity hash, checkpoint key id, signed checkpoint anchor, checked-entry count and checkpoint creator identity.",
+            "AuditIntegrityService verifies hash chaining; AuditIntegrityCheckpointService signs a checkpoint over the latest company audit entry with deployment-managed signing keys.",
+            [
+                AuditEventCodes.CroFilingStatusChanged,
+                AuditEventCodes.CroDocumentGenerated,
+                AuditEventCodes.IxbrlInternalCheckCompleted
+            ])
     ];
 
     private static VisualQaCoverage BuildVisualQaCoverage()

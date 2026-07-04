@@ -1584,6 +1584,16 @@ export interface ProductionReadinessAssuranceAction {
   evidenceRequired: string;
 }
 
+export interface ProductionAuditabilityControl {
+  code: string;
+  label: string;
+  required: boolean;
+  enforcement: string;
+  evidenceCaptured: string;
+  verification: string;
+  auditEventCodes: string[];
+}
+
 export interface VisualQaViewport {
   name: string;
   width: number;
@@ -1619,6 +1629,7 @@ export interface ProductionReadinessReport {
   manualHandoffPaths: string[];
   operationalGates: OperationalGate[];
   assuranceActions: ProductionReadinessAssuranceAction[];
+  auditabilityControls: ProductionAuditabilityControl[];
   visualQaCoverage: VisualQaCoverage;
 }
 

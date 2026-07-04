@@ -42,6 +42,13 @@ describe("ProductionReadinessWorkbench", () => {
     expect(screen.getByText("Dark mobile")).toBeInTheDocument();
     expect(screen.getByText("Filing review")).toBeInTheDocument();
     expect(screen.getByText("visual-smoke-screenshots")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Production auditability" })).toBeInTheDocument();
+    expect(screen.getByText("Who changed what")).toBeInTheDocument();
+    expect(screen.getByText("Who approved what")).toBeInTheDocument();
+    expect(screen.getByText("What was generated")).toBeInTheDocument();
+    expect(screen.getByText("Tamper-evident audit chain")).toBeInTheDocument();
+    expect(screen.getByText("audit-log-integrity-chain")).toBeInTheDocument();
+    expect(screen.getByText("CroDocumentGenerated")).toBeInTheDocument();
   });
 });
 
@@ -125,6 +132,44 @@ function sampleReport(): ProductionReadinessReport {
         status: "required",
         detail: "Runtime errors must be visible before real filings are processed.",
         evidenceRequired: "Sentry production error routing configured and reviewed.",
+      },
+    ],
+    auditabilityControls: [
+      {
+        code: "who-changed-what",
+        label: "Who changed what",
+        required: true,
+        enforcement: "audit-log-integrity-chain",
+        evidenceCaptured: "Authenticated user id, timestamp, entity, action and old/new value snapshots.",
+        verification: "Hash chain verification covers each company-scoped audit row.",
+        auditEventCodes: ["AdjustmentUpdated"],
+      },
+      {
+        code: "who-approved-what",
+        label: "Who approved what",
+        required: true,
+        enforcement: "workflow-gates-plus-audit-log-integrity-chain",
+        evidenceCaptured: "Named reviewer identity, approval timestamps and filing status transitions.",
+        verification: "Approval endpoints write audit events after readiness gates pass.",
+        auditEventCodes: ["AdjustmentApproved", "CroFilingStatusChanged"],
+      },
+      {
+        code: "what-was-generated",
+        label: "What was generated",
+        required: true,
+        enforcement: "server-side-generation-events",
+        evidenceCaptured: "Generated accounts documents, iXBRL checks and period linkage.",
+        verification: "Generation events are recorded before evidence is marked satisfied.",
+        auditEventCodes: ["CroDocumentGenerated"],
+      },
+      {
+        code: "tamper-evident-chain",
+        label: "Tamper-evident audit chain",
+        required: true,
+        enforcement: "audit-log-integrity-chain-and-signed-checkpoint",
+        evidenceCaptured: "Previous hash, current hash, checkpoint key id and signed checkpoint anchor.",
+        verification: "Signed checkpoint verifies the latest company audit entry.",
+        auditEventCodes: ["IxbrlInternalCheckCompleted"],
       },
     ],
     statutoryRuleMatrix: [

@@ -114,6 +114,48 @@ public class ProductionReadinessReportTests
     }
 
     [Fact]
+    public async Task ProductionReadinessReport_DeclaresProductionAuditabilityControls()
+    {
+        await using var db = CreateDbContext();
+        var report = await new ProductionReadinessReportService(db).GetReportAsync();
+        var auditabilityProperty = report.GetType().GetProperty("AuditabilityControls");
+
+        Assert.NotNull(auditabilityProperty);
+        var controls = Assert.IsAssignableFrom<System.Collections.IEnumerable>(auditabilityProperty!.GetValue(report))
+            .Cast<object>()
+            .ToArray();
+
+        Assert.Contains(controls, control =>
+            StringProperty(control, "Code") == "who-changed-what"
+            && StringProperty(control, "Enforcement") == "audit-log-integrity-chain"
+            && StringListProperty(control, "AuditEventCodes").Contains(AuditEventCodes.AdjustmentUpdated)
+            && StringProperty(control, "EvidenceCaptured").Contains("old/new value snapshots", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(controls, control =>
+            StringProperty(control, "Code") == "who-approved-what"
+            && StringListProperty(control, "AuditEventCodes").Contains(AuditEventCodes.AdjustmentApproved)
+            && StringListProperty(control, "AuditEventCodes").Contains(AuditEventCodes.CroFilingStatusChanged)
+            && StringProperty(control, "EvidenceCaptured").Contains("named reviewer", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(controls, control =>
+            StringProperty(control, "Code") == "what-was-generated"
+            && StringListProperty(control, "AuditEventCodes").Contains(AuditEventCodes.CroDocumentGenerated)
+            && StringListProperty(control, "AuditEventCodes").Contains(AuditEventCodes.IxbrlInternalCheckCompleted)
+            && StringListProperty(control, "AuditEventCodes").Contains(AuditEventCodes.NotesGenerated));
+        Assert.Contains(controls, control =>
+            StringProperty(control, "Code") == "tamper-evident-chain"
+            && BooleanProperty(control, "Required")
+            && StringProperty(control, "Enforcement").Contains("checkpoint", StringComparison.OrdinalIgnoreCase));
+        Assert.All(controls, control =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(control, "Label")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(control, "EvidenceCaptured")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(control, "Verification")));
+        });
+        Assert.Equal(
+            controls.Length,
+            controls.Select(control => StringProperty(control, "Code")).Distinct(StringComparer.Ordinal).Count());
+    }
+
+    [Fact]
     public async Task ProductionReadinessReport_IncludesSourceBackedStatutoryRulesMatrix()
     {
         await using var db = CreateDbContext();
@@ -223,5 +265,26 @@ public class ProductionReadinessReportTests
             method!.GetCustomAttributes(typeof(FactAttribute), inherit: false).Any()
             || method.GetCustomAttributes(typeof(TheoryAttribute), inherit: false).Any(),
             $"{evidenceTestName} must point to an executable xUnit test.");
+    }
+
+    private static string StringProperty(object value, string propertyName)
+    {
+        var property = value.GetType().GetProperty(propertyName);
+        Assert.NotNull(property);
+        return Assert.IsType<string>(property!.GetValue(value));
+    }
+
+    private static bool BooleanProperty(object value, string propertyName)
+    {
+        var property = value.GetType().GetProperty(propertyName);
+        Assert.NotNull(property);
+        return Assert.IsType<bool>(property!.GetValue(value));
+    }
+
+    private static IReadOnlyList<string> StringListProperty(object value, string propertyName)
+    {
+        var property = value.GetType().GetProperty(propertyName);
+        Assert.NotNull(property);
+        return Assert.IsAssignableFrom<IEnumerable<string>>(property!.GetValue(value)).ToArray();
     }
 }
