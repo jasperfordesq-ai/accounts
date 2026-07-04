@@ -97,6 +97,15 @@ public sealed record DependencyPolicyControl(
     string Verification,
     string FailurePolicy);
 
+public sealed record DeploymentSafetyControl(
+    string Code,
+    string Label,
+    bool Required,
+    string Enforcement,
+    string EvidenceCaptured,
+    string Verification,
+    string FailurePolicy);
+
 public sealed record VisualQaViewport(
     string Name,
     int Width,
@@ -150,6 +159,7 @@ public sealed record ProductionReadinessReport(
     IReadOnlyList<ProductionAuditabilityControl> AuditabilityControls,
     IReadOnlyList<ProductionMonitoringControl> MonitoringControls,
     IReadOnlyList<DependencyPolicyControl> DependencyPolicyControls,
+    IReadOnlyList<DeploymentSafetyControl> DeploymentSafetyControls,
     VisualQaCoverage VisualQaCoverage);
 
 public class ProductionReadinessReportService(AccountsDbContext db)
@@ -169,6 +179,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
         var auditabilityControls = BuildAuditabilityControls();
         var monitoringControls = BuildMonitoringControls();
         var dependencyPolicyControls = BuildDependencyPolicyControls();
+        var deploymentSafetyControls = BuildDeploymentSafetyControls();
         var visualQaCoverage = BuildVisualQaCoverage();
         var assurancePacket = BuildAssurancePacket(
             sourceSnapshot,
@@ -196,6 +207,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             auditabilityControls,
             monitoringControls,
             dependencyPolicyControls,
+            deploymentSafetyControls,
             visualQaCoverage);
     }
 
@@ -238,7 +250,8 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "statutory-rules-coverage",
             "visual-smoke-screenshots",
             "production-operational-gates",
-            "dependency-policy-controls"
+            "dependency-policy-controls",
+            "deployment-safety-controls"
         };
         var releaseBlockers = assuranceActions
             .Where(action => action.Status != "complete")
@@ -1086,6 +1099,34 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "NuGet restore, Release test output and Release API build output prove the backend dependency graph resolves and compiles before production images are accepted.",
             ".github/workflows/ci.yml Backend job and production image build jobs.",
             "Fail the release if NuGet restore fails, Release tests fail, or the API cannot be built from the restored dependency graph.")
+    ];
+
+    private static IReadOnlyList<DeploymentSafetyControl> BuildDeploymentSafetyControls() =>
+    [
+        new(
+            "controlled-production-migrations",
+            "Controlled production migrations",
+            true,
+            "Production migrations run through dotnet Accounts.Api.dll --migrate-only before app startup; ProductionSafetyService blocks unsafe automatic startup migrations outside development.",
+            "A controlled migration-only command path applies EF migrations and bootstrap-owner setup without starting the web host, while normal production startup remains guarded by DatabaseStartup safety flags.",
+            "Program.cs handles --migrate-only; ProductionSafetyService rejects DatabaseStartup:AutoMigrateOnStartup unless AllowStartupMigrationInProduction is deliberately enabled.",
+            "Fail production startup when AutoMigrateOnStartup is enabled without explicit production approval; run migrations as a separate release step instead."),
+        new(
+            "production-demo-seed-block",
+            "Production demo seed blocking",
+            true,
+            "ProductionSafetyService rejects DatabaseStartup:SeedDemoData outside development before any database startup tasks execute.",
+            "Known sample companies, seeded demo users and preview-only accounting records cannot be inserted into a non-development database unless the process is running in development.",
+            "ProductionSafetyService validates SeedDemoData before Program.cs can call SeedData.SeedAsync.",
+            "Fail production startup if demo seed data is enabled outside development."),
+        new(
+            "backup-restore-drill",
+            "Backup restore drill",
+            true,
+            "CI production stack smoke runs scripts/backup-postgres.ps1 and scripts/verify-postgres-backup.ps1 against the production compose shape.",
+            "The release evidence includes a PostgreSQL custom-format backup dump, sha256 sidecar and backup restore verification before the production smoke job can pass.",
+            ".github/workflows/ci.yml Run production backup restore drill step invokes verify-postgres-backup after creating the dump.",
+            "Fail the release if backup creation, checksum verification or restore verification fails.")
     ];
 
     private static VisualQaCoverage BuildVisualQaCoverage()

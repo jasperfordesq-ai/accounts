@@ -229,6 +229,17 @@ function productionReadinessReportFixture() {
         failurePolicy: "Fail the release for moderate, high or critical npm advisories.",
       },
     ],
+    deploymentSafetyControls: [
+      {
+        code: "controlled-production-migrations",
+        label: "Controlled production migrations",
+        required: true,
+        enforcement: "Production migrations run through dotnet Accounts.Api.dll --migrate-only before app startup.",
+        evidenceCaptured: "CI production image contract and release runbook prove migrations are a separate controlled step.",
+        verification: "Program.cs handles --migrate-only and ProductionSafetyService blocks unsafe AutoMigrateOnStartup.",
+        failurePolicy: "Fail production startup when AutoMigrateOnStartup is enabled without explicit production approval.",
+      },
+    ],
     visualQaCoverage: {
       artifactName: "visual-smoke-screenshots",
       enforcement: "ci-production-smoke",

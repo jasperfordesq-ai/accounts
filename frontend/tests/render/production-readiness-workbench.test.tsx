@@ -80,6 +80,11 @@ describe("ProductionReadinessWorkbench", () => {
     expect(screen.getByText("Frontend dependency vulnerability audit")).toBeInTheDocument();
     expect(screen.getByText("CI action version hygiene")).toBeInTheDocument();
     expect(screen.getByText("Fail the release for moderate, high or critical npm advisories.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Deployment safety controls" })).toBeInTheDocument();
+    expect(screen.getByText("Controlled production migrations")).toBeInTheDocument();
+    expect(screen.getByText("Production demo seed blocking")).toBeInTheDocument();
+    expect(screen.getByText("Backup restore drill")).toBeInTheDocument();
+    expect(screen.getByText("Fail production startup if demo seed data is enabled outside development.")).toBeInTheDocument();
     expect(screen.getByText("sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")).toBeInTheDocument();
     expect(screen.getByText("1 pinned source")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Production assurance packet" })).toBeInTheDocument();
@@ -306,6 +311,35 @@ function sampleReport(): ProductionReadinessReport {
         evidenceCaptured: "GitHub Actions used by CI are checked for explicit version hygiene.",
         verification: ".github/workflows/ci.yml Workflow Hygiene job.",
         failurePolicy: "Fail the release if workflow actions are unpinned or bypass the hygiene verifier.",
+      },
+    ],
+    deploymentSafetyControls: [
+      {
+        code: "controlled-production-migrations",
+        label: "Controlled production migrations",
+        required: true,
+        enforcement: "Production migrations run through dotnet Accounts.Api.dll --migrate-only before app startup.",
+        evidenceCaptured: "CI production image contract and release runbook prove migrations are a separate controlled step.",
+        verification: "Program.cs handles --migrate-only and ProductionSafetyService blocks unsafe AutoMigrateOnStartup.",
+        failurePolicy: "Fail production startup when AutoMigrateOnStartup is enabled without explicit production approval.",
+      },
+      {
+        code: "production-demo-seed-block",
+        label: "Production demo seed blocking",
+        required: true,
+        enforcement: "ProductionSafetyService rejects DatabaseStartup:SeedDemoData outside development.",
+        evidenceCaptured: "Startup safety validation blocks known sample companies and demo users in production.",
+        verification: "ProductionSafetyService validates SeedDemoData before database startup tasks execute.",
+        failurePolicy: "Fail production startup if demo seed data is enabled outside development.",
+      },
+      {
+        code: "backup-restore-drill",
+        label: "Backup restore drill",
+        required: true,
+        enforcement: "CI production stack smoke runs scripts/backup-postgres.ps1 and scripts/verify-postgres-backup.ps1.",
+        evidenceCaptured: "Production backup dump, sha256 sidecar and restore verification are produced during CI.",
+        verification: ".github/workflows/ci.yml Run production backup restore drill step.",
+        failurePolicy: "Fail the release if backup creation, checksum verification or restore verification fails.",
       },
     ],
     statutoryRuleMatrix: [

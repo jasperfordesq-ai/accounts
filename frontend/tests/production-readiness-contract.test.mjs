@@ -20,6 +20,8 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.equal(parsed.monitoringControls[0].productionSafetyGate, "Monitoring:ErrorTrackingDsn");
   assert.equal(parsed.dependencyPolicyControls[0].code, "frontend-npm-audit");
   assert.equal(parsed.dependencyPolicyControls[0].failurePolicy, "Fail the release for moderate, high or critical npm advisories.");
+  assert.equal(parsed.deploymentSafetyControls[0].code, "controlled-production-migrations");
+  assert.match(parsed.deploymentSafetyControls[1].failurePolicy, /demo/i);
   assert.equal(parsed.assurancePacket.packetVersion, "production-assurance-packet-v1");
   assert.equal(parsed.assurancePacket.sourceLawSnapshotHash, "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
   assert.equal(parsed.assurancePacket.goldenCorpusCovered, 1);
@@ -172,6 +174,26 @@ function sampleReport() {
         evidenceCaptured: "npm audit report for dependencies resolved from frontend/package-lock.json.",
         verification: ".github/workflows/ci.yml Audit frontend dependencies step.",
         failurePolicy: "Fail the release for moderate, high or critical npm advisories.",
+      },
+    ],
+    deploymentSafetyControls: [
+      {
+        code: "controlled-production-migrations",
+        label: "Controlled production migrations",
+        required: true,
+        enforcement: "Production migrations run through dotnet Accounts.Api.dll --migrate-only before app startup.",
+        evidenceCaptured: "CI production image contract and release runbook prove migrations are a separate controlled step.",
+        verification: "Program.cs handles --migrate-only and ProductionSafetyService blocks unsafe AutoMigrateOnStartup.",
+        failurePolicy: "Fail production startup when AutoMigrateOnStartup is enabled without explicit production approval.",
+      },
+      {
+        code: "production-demo-seed-block",
+        label: "Production demo seed blocking",
+        required: true,
+        enforcement: "ProductionSafetyService rejects DatabaseStartup:SeedDemoData outside development.",
+        evidenceCaptured: "Startup safety validation blocks known sample companies and demo users in production.",
+        verification: "ProductionSafetyService validates SeedDemoData before database startup tasks execute.",
+        failurePolicy: "Fail production startup if demo seed data is enabled outside development.",
       },
     ],
     visualQaCoverage: {

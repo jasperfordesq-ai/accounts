@@ -491,6 +491,41 @@ public class ProductionReadinessReportTests
     }
 
     [Fact]
+    public async Task ProductionReadinessReport_DeclaresDeploymentSafetyControls()
+    {
+        await using var db = CreateDbContext();
+        var report = await new ProductionReadinessReportService(db).GetReportAsync();
+        var deploymentSafetyProperty = report.GetType().GetProperty("DeploymentSafetyControls");
+
+        Assert.NotNull(deploymentSafetyProperty);
+        var controls = Assert.IsAssignableFrom<System.Collections.IEnumerable>(deploymentSafetyProperty!.GetValue(report))
+            .Cast<object>()
+            .ToArray();
+
+        Assert.Contains(controls, control =>
+            StringProperty(control, "Code") == "controlled-production-migrations"
+            && BooleanProperty(control, "Required")
+            && StringProperty(control, "Enforcement").Contains("--migrate-only", StringComparison.Ordinal)
+            && StringProperty(control, "FailurePolicy").Contains("AutoMigrateOnStartup", StringComparison.Ordinal));
+        Assert.Contains(controls, control =>
+            StringProperty(control, "Code") == "production-demo-seed-block"
+            && StringProperty(control, "Enforcement").Contains("SeedDemoData", StringComparison.Ordinal)
+            && StringProperty(control, "FailurePolicy").Contains("demo", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(controls, control =>
+            StringProperty(control, "Code") == "backup-restore-drill"
+            && StringProperty(control, "EvidenceCaptured").Contains("backup restore", StringComparison.OrdinalIgnoreCase)
+            && StringProperty(control, "Verification").Contains("verify-postgres-backup", StringComparison.Ordinal));
+        Assert.All(controls, control =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(control, "Label")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(control, "EvidenceCaptured")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(control, "Verification")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(control, "FailurePolicy")));
+        });
+        Assert.Contains(report.AssurancePacket.EvidenceItems, item => item == "deployment-safety-controls");
+    }
+
+    [Fact]
     public async Task ProductionReadinessReport_IncludesSourceBackedStatutoryRulesMatrix()
     {
         await using var db = CreateDbContext();
