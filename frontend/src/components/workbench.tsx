@@ -71,6 +71,12 @@ export interface WorkbenchEmptyStateProps {
   actions?: ReactNode;
 }
 
+export interface PermissionDeniedPanelProps {
+  title?: string;
+  description?: ReactNode;
+  actions?: ReactNode;
+}
+
 export interface DataTableRichRow {
   id?: string | number;
   cells: ReactNode[];
@@ -231,7 +237,7 @@ export function PermissionDeniedPanel({
   title = "Permission denied",
   description = "You do not have permission to approve or submit this accounting workflow.",
   actions,
-}: WorkbenchEmptyStateProps) {
+}: PermissionDeniedPanelProps) {
   return (
     <WorkbenchStatePanel
       title={title}

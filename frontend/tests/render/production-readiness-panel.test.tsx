@@ -161,7 +161,7 @@ function sampleReport(): ProductionReadinessReport {
     visualQaCoverage: {
       artifactName: "visual-smoke-screenshots",
       enforcement: "ci-production-smoke",
-      expectedScreenshotCount: 20,
+      expectedScreenshotCount: 24,
       layoutChecks: ["browser-console-errors", "page-horizontal-overflow", "visible-text-overlap"],
       themes: ["light", "dark"],
       viewports: [
@@ -174,6 +174,13 @@ function sampleReport(): ProductionReadinessReport {
           label: "Dashboard",
           description: "Accountant queue and production readiness overview.",
           requiredText: "Production Readiness",
+          openFilingTab: false,
+        },
+        {
+          code: "workbench-preview",
+          label: "Workbench preview",
+          description: "Internal component preview for accountant workflow primitives and route states.",
+          requiredText: "Workbench Component Preview",
           openFilingTab: false,
         },
       ],

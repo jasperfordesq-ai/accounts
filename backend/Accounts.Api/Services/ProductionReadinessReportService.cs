@@ -674,7 +674,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "high",
             "in-progress",
             "The accountant journey needs desktop and mobile screenshots across light and dark mode before it can be called visually production-ready.",
-            "Screenshots for dashboard, company detail, period workspace and filing review in light desktop, dark desktop, light mobile and dark mobile."),
+            "Screenshots for dashboard, production readiness, company detail, period workspace, filing review and the workbench component preview in light desktop, dark desktop, light mobile and dark mobile."),
         new(
             "production-monitoring",
             "Production monitoring",
@@ -820,7 +820,13 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 "Filing review",
                 "Period filing tab with evidence checklist, source links, outputs and filing state.",
                 "Filing readiness profile",
-                OpenFilingTab: true)
+                OpenFilingTab: true),
+            new VisualQaRoute(
+                "workbench-preview",
+                "Workbench preview",
+                "Internal component preview for accountant workflow primitives and route states.",
+                "Workbench Component Preview",
+                OpenFilingTab: false)
         };
 
         return new VisualQaCoverage(

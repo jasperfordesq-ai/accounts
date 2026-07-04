@@ -54,6 +54,14 @@ export const visualSmokeRoutes = [
     expectedText: "Filing readiness profile",
     openFilingTab: true,
   },
+  {
+    name: "workbench-preview",
+    label: "Workbench preview",
+    description: "Internal component preview for accountant workflow primitives and route states.",
+    routeKey: "workbenchPreview",
+    expectedText: "Workbench Component Preview",
+    openFilingTab: false,
+  },
 ];
 
 export function expectedVisualSmokeScreenshotCount() {

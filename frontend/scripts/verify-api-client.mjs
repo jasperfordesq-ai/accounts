@@ -182,7 +182,7 @@ function productionReadinessReportFixture() {
     visualQaCoverage: {
       artifactName: "visual-smoke-screenshots",
       enforcement: "ci-production-smoke",
-      expectedScreenshotCount: 20,
+      expectedScreenshotCount: 24,
       layoutChecks: ["browser-console-errors", "page-horizontal-overflow", "visible-text-overlap"],
       themes: ["light", "dark"],
       viewports: [{ name: "desktop", width: 1440, height: 1000 }],
@@ -192,6 +192,13 @@ function productionReadinessReportFixture() {
           label: "Dashboard",
           description: "Accountant queue and production readiness overview.",
           requiredText: "Production Readiness",
+          openFilingTab: false,
+        },
+        {
+          code: "workbench-preview",
+          label: "Workbench preview",
+          description: "Internal component preview for accountant workflow primitives and route states.",
+          requiredText: "Workbench Component Preview",
           openFilingTab: false,
         },
       ],

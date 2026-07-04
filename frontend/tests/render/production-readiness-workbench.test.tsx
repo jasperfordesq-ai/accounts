@@ -54,7 +54,7 @@ describe("ProductionReadinessWorkbench", () => {
       "https://cro.ie/",
     );
     expect(screen.getByRole("heading", { name: "Visual QA coverage" })).toBeInTheDocument();
-    expect(screen.getByText("20 screenshots")).toBeInTheDocument();
+    expect(screen.getByText("24 screenshots")).toBeInTheDocument();
     expect(screen.getByText("Light desktop")).toBeInTheDocument();
     expect(screen.getByText("Dark mobile")).toBeInTheDocument();
     expect(screen.getByText("Visible text overlap")).toBeInTheDocument();
@@ -296,7 +296,7 @@ function sampleReport(): ProductionReadinessReport {
     visualQaCoverage: {
       artifactName: "visual-smoke-screenshots",
       enforcement: "ci-production-smoke",
-      expectedScreenshotCount: 20,
+      expectedScreenshotCount: 24,
       layoutChecks: ["browser-console-errors", "page-horizontal-overflow", "visible-text-overlap"],
       themes: ["light", "dark"],
       viewports: [
@@ -317,6 +317,13 @@ function sampleReport(): ProductionReadinessReport {
           description: "Period workspace filing tab.",
           requiredText: "Filing readiness profile",
           openFilingTab: true,
+        },
+        {
+          code: "workbench-preview",
+          label: "Workbench preview",
+          description: "Internal component preview for accountant workflow primitives and route states.",
+          requiredText: "Workbench Component Preview",
+          openFilingTab: false,
         },
       ],
     },

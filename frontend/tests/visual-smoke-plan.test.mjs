@@ -25,16 +25,27 @@ describe("visual smoke plan", () => {
         { name: "mobile", width: 390, height: 844 },
       ],
     );
-    assert.equal(expectedVisualSmokeScreenshotCount(), 20);
+    assert.equal(expectedVisualSmokeScreenshotCount(), 24);
 
     assert.deepEqual(
       visualSmokeRoutes.map((route) => route.name),
-      ["dashboard", "production-readiness", "company-detail", "period-workspace", "filing-review"],
+      [
+        "dashboard",
+        "production-readiness",
+        "company-detail",
+        "period-workspace",
+        "filing-review",
+        "workbench-preview",
+      ],
     );
     assert.equal(visualSmokeRoutes.find((route) => route.name === "filing-review")?.openFilingTab, true);
     assert.equal(
       visualSmokeRoutes.find((route) => route.name === "period-workspace")?.expectedText,
       "Filing readiness",
+    );
+    assert.equal(
+      visualSmokeRoutes.find((route) => route.name === "workbench-preview")?.expectedText,
+      "Workbench Component Preview",
     );
   });
 });

@@ -221,6 +221,7 @@ async function discoverRoutes(page, baseUrl) {
     company: companyHref,
     period: periodHref,
     filing: periodHref,
+    workbenchPreview: "/workbench-preview",
   };
 }
 

@@ -429,7 +429,7 @@ public class ProductionReadinessReportTests
 
         Assert.Equal("visual-smoke-screenshots", report.VisualQaCoverage.ArtifactName);
         Assert.Equal("ci-production-smoke", report.VisualQaCoverage.Enforcement);
-        Assert.Equal(20, report.VisualQaCoverage.ExpectedScreenshotCount);
+        Assert.Equal(24, report.VisualQaCoverage.ExpectedScreenshotCount);
         var layoutChecksProperty = report.VisualQaCoverage.GetType().GetProperty("LayoutChecks");
         Assert.NotNull(layoutChecksProperty);
         var layoutChecks = Assert.IsAssignableFrom<IEnumerable<string>>(layoutChecksProperty!.GetValue(report.VisualQaCoverage)).ToArray();
@@ -449,6 +449,8 @@ public class ProductionReadinessReportTests
             route.Code == "period-workspace" && route.RequiredText == "Filing readiness");
         Assert.Contains(report.VisualQaCoverage.Routes, route =>
             route.Code == "filing-review" && route.OpenFilingTab && route.RequiredText == "Filing readiness profile");
+        Assert.Contains(report.VisualQaCoverage.Routes, route =>
+            route.Code == "workbench-preview" && route.RequiredText == "Workbench Component Preview");
         Assert.All(report.VisualQaCoverage.Routes, route =>
         {
             Assert.False(string.IsNullOrWhiteSpace(route.Label));
