@@ -42,6 +42,15 @@ public sealed record StatutoryRuleMatrixEntry(
     IReadOnlyList<string> ManualHandoffGates,
     IReadOnlyList<LegalSourceReference> Sources);
 
+public sealed record StatutoryRulesCoverageItem(
+    string Code,
+    string RuleFamily,
+    string DecisionUnderTest,
+    string CoverageStatus,
+    IReadOnlyList<string> AutomatedVerifierNames,
+    IReadOnlyList<string> EdgeCases,
+    IReadOnlyList<LegalSourceReference> Sources);
+
 public sealed record OperationalGate(
     string Code,
     string Label,
@@ -97,6 +106,7 @@ public sealed record ProductionReadinessReport(
     IReadOnlyList<ProductionReadinessArea> Areas,
     IReadOnlyList<GoldenFilingCorpusScenario> GoldenFilingCorpus,
     IReadOnlyList<StatutoryRuleMatrixEntry> StatutoryRuleMatrix,
+    IReadOnlyList<StatutoryRulesCoverageItem> StatutoryRulesCoverage,
     IReadOnlyList<string> ManualHandoffPaths,
     IReadOnlyList<OperationalGate> OperationalGates,
     IReadOnlyList<ProductionReadinessAssuranceAction> AssuranceActions,
@@ -119,6 +129,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             BuildAreas(),
             BuildGoldenCorpus(),
             BuildStatutoryRuleMatrix(),
+            BuildStatutoryRulesCoverage(),
             BuildManualHandoffPaths(),
             BuildOperationalGates(),
             BuildAssuranceActions(),
@@ -601,6 +612,114 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 IrishStatutoryRuleSources.CroGroupCompany,
                 IrishStatutoryRuleSources.CroUnlimitedCompany,
                 IrishStatutoryRuleSources.FrcFrs102
+            ])
+    ];
+
+    private static IReadOnlyList<StatutoryRulesCoverageItem> BuildStatutoryRulesCoverage() =>
+    [
+        new(
+            "size-classification-thresholds",
+            "Size classification",
+            "Two-of-three thresholds, current/prior-year movement and first-year classification must produce the correct statutory size class before regime selection.",
+            "covered",
+            [
+                "AccountsWorkflowTests.SizeClassification_FirstYearMicro_AllowsMicroAndAuditExemption",
+                "AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl",
+                "AccountsWorkflowTests.GoldenPath_SmallAuditExemptCompany_MixedAccrualSetBalancesThroughPdfAndIxbrl",
+                "FilingGoldenCorpusScenarioTests.GoldenCorpus_MediumAuditRequired_BlocksFinalOutputsAndRequiresManualHandoffUntilAuditorEvidence"
+            ],
+            [
+                "two-of-three threshold rule",
+                "current and prior year classification rule",
+                "micro, small and medium boundary scenarios",
+                "classification must run before filing regime selection"
+            ],
+            [
+                IrishStatutoryRuleSources.CroFinancialStatementsRequirements,
+                IrishStatutoryRuleSources.CroMediumCompany
+            ]),
+        new(
+            "micro-exclusions-and-fifth-schedule",
+            "Micro exclusions and excluded entities",
+            "Micro and small-company benefits must fail closed where holding, investment, subsidiary, regulated or Fifth Schedule exclusion flags make automation unsafe.",
+            "covered",
+            [
+                "FilingReadinessProfileTests.ReadinessProfile_ForRegulatedOrGroupEntities_FailsClosed",
+                "FilingReadinessProfileTests.ReadinessProfile_ForUnsupportedCompanyTypes_FailsClosedToManualHandoff"
+            ],
+            [
+                "group, holding and subsidiary contexts",
+                "regulated and Fifth Schedule excluded entities",
+                "manual handoff when the model cannot safely apply micro or audit-exemption benefits"
+            ],
+            [
+                IrishStatutoryRuleSources.CroFinancialStatementsRequirements,
+                IrishStatutoryRuleSources.CroGroupCompany,
+                IrishStatutoryRuleSources.FrcFrs102
+            ]),
+        new(
+            "audit-exemption-loss",
+            "Audit exemption",
+            "Audit exemption must be withdrawn or blocked where repeated late CRO filings, member audit notice or medium/full filing conditions require audit evidence.",
+            "covered",
+            [
+                "AccountsWorkflowTests.FilingRegime_RecentRepeatedLateCroFilings_RemoveAuditExemption",
+                "AccountsWorkflowTests.ClassificationRoutes_EnforceRuntimePeriodRoleAndApiAuthorization",
+                "FilingGoldenCorpusScenarioTests.GoldenCorpus_MediumAuditRequired_BlocksFinalOutputsAndRequiresManualHandoffUntilAuditorEvidence"
+            ],
+            [
+                "late CRO filings remove audit exemption",
+                "member audit notice evidence is recorded through authorised routes",
+                "signed auditor report evidence required for medium or non-audit-exempt paths"
+            ],
+            [
+                IrishStatutoryRuleSources.CroFinancialStatementsRequirements,
+                IrishStatutoryRuleSources.CroMediumCompany,
+                IrishStatutoryRuleSources.CroAuditorsReport
+            ]),
+        new(
+            "required-outputs-and-filing-gates",
+            "Required outputs and filing gates",
+            "Generated accounts, CRO pack, iXBRL, CT1/tax support, notes and signatory evidence must be present before a supported path can move toward external filing.",
+            "covered",
+            [
+                "AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl",
+                "AccountsWorkflowTests.GoldenPath_SmallAuditExemptCompany_MixedAccrualSetBalancesThroughPdfAndIxbrl",
+                "FilingGoldenCorpusScenarioTests.GoldenCorpus_ClgCharity_EmitsAccountsIxbrlAndSourceBackedCharityReadiness",
+                "AccountsWorkflowTests.PeriodStatusEndpoint_RejectsFinaliseOrFileWhenReadinessBlockersRemain"
+            ],
+            [
+                "PDF text assertions",
+                "well-formed iXBRL XML assertions",
+                "tax computation and notes proof points",
+                "director, secretary, accountant-review and external ROS validation gates"
+            ],
+            [
+                IrishStatutoryRuleSources.CroFinancialStatementsRequirements,
+                IrishStatutoryRuleSources.RevenueIxbrlContents,
+                IrishStatutoryRuleSources.RevenueAcceptedTaxonomies
+            ]),
+        new(
+            "unsupported-fail-closed",
+            "Unsupported paths",
+            "PLC, unlimited variants, regulated entities, group contexts, direct CRO/ROS submission and complex claims must stop before normal approval and require manual professional handoff.",
+            "covered",
+            [
+                "FilingReadinessProfileTests.ReadinessProfile_ForUnsupportedCompanyTypes_FailsClosedToManualHandoff",
+                "FilingReadinessProfileTests.ApprovalGuard_ForUnsupportedCompanyType_BlocksNormalCroApprovalPath",
+                "FilingReadinessProfileTests.ReadinessProfile_ForRegulatedOrGroupEntities_FailsClosed"
+            ],
+            [
+                "PLC and public company paths",
+                "regulated and group contexts",
+                "direct CRO or ROS submission is not automated",
+                "manual professional handoff remains the only allowed external filing path"
+            ],
+            [
+                IrishStatutoryRuleSources.CroFinancialStatementsRequirements,
+                IrishStatutoryRuleSources.CroGroupCompany,
+                IrishStatutoryRuleSources.CroUnlimitedCompany,
+                IrishStatutoryRuleSources.RevenueIxbrlOverview
             ])
     ];
 

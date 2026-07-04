@@ -11,6 +11,9 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.equal(parsed.goldenFilingCorpus[0].evidencePack.expectedProofPoints[0].area, "pdf-text");
   assert.equal(parsed.goldenFilingCorpus[0].evidencePack.expectedProofPoints[0].required, true);
   assert.equal(parsed.goldenFilingCorpus[0].evidencePack.sourceReferences[0].sourceId, "frc-frs-105");
+  assert.equal(parsed.statutoryRulesCoverage[0].code, "size-classification-thresholds");
+  assert.equal(parsed.statutoryRulesCoverage[0].automatedVerifierNames[0], "AccountsWorkflowTests.SizeClassification_FirstYearMicro_AllowsMicroAndAuditExemption");
+  assert.equal(parsed.statutoryRulesCoverage[0].edgeCases[0], "two-of-three threshold rule");
 });
 
 test("parseProductionReadinessReport rejects missing golden corpus evidence packs", () => {
@@ -76,6 +79,17 @@ function sampleReport() {
         requiredEvidence: ["size classification"],
         requiredOutputs: ["micro accounts PDF"],
         manualHandoffGates: ["qualified accountant review"],
+        sources: [source("frc-frs-105", "FRC FRS 105 current edition and amendments")],
+      },
+    ],
+    statutoryRulesCoverage: [
+      {
+        code: "size-classification-thresholds",
+        ruleFamily: "Size classification",
+        decisionUnderTest: "Two-of-three thresholds and current/prior movement produce the statutory size class.",
+        coverageStatus: "covered",
+        automatedVerifierNames: ["AccountsWorkflowTests.SizeClassification_FirstYearMicro_AllowsMicroAndAuditExemption"],
+        edgeCases: ["two-of-three threshold rule", "current and prior year classification rule"],
         sources: [source("frc-frs-105", "FRC FRS 105 current edition and amendments")],
       },
     ],

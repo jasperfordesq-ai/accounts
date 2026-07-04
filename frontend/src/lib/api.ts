@@ -1584,6 +1584,16 @@ export interface StatutoryRuleMatrixEntry {
   sources: LegalSourceReference[];
 }
 
+export interface StatutoryRulesCoverageItem {
+  code: string;
+  ruleFamily: string;
+  decisionUnderTest: string;
+  coverageStatus: string;
+  automatedVerifierNames: string[];
+  edgeCases: string[];
+  sources: LegalSourceReference[];
+}
+
 export interface OperationalGate {
   code: string;
   label: string;
@@ -1645,6 +1655,7 @@ export interface ProductionReadinessReport {
   areas: ProductionReadinessArea[];
   goldenFilingCorpus: GoldenFilingCorpusScenario[];
   statutoryRuleMatrix: StatutoryRuleMatrixEntry[];
+  statutoryRulesCoverage: StatutoryRulesCoverageItem[];
   manualHandoffPaths: string[];
   operationalGates: OperationalGate[];
   assuranceActions: ProductionReadinessAssuranceAction[];
@@ -1704,6 +1715,16 @@ const statutoryRuleMatrixEntrySchema = z.object({
   requiredEvidence: z.array(z.string().min(1)),
   requiredOutputs: z.array(z.string().min(1)),
   manualHandoffGates: z.array(z.string().min(1)),
+  sources: z.array(legalSourceReferenceSchema),
+});
+
+const statutoryRulesCoverageItemSchema = z.object({
+  code: z.string().min(1),
+  ruleFamily: z.string().min(1),
+  decisionUnderTest: z.string().min(1),
+  coverageStatus: z.string().min(1),
+  automatedVerifierNames: z.array(z.string().min(1)),
+  edgeCases: z.array(z.string().min(1)),
   sources: z.array(legalSourceReferenceSchema),
 });
 
@@ -1768,6 +1789,7 @@ export const productionReadinessReportSchema = z.object({
   areas: z.array(productionReadinessAreaSchema),
   goldenFilingCorpus: z.array(goldenFilingCorpusScenarioSchema),
   statutoryRuleMatrix: z.array(statutoryRuleMatrixEntrySchema),
+  statutoryRulesCoverage: z.array(statutoryRulesCoverageItemSchema),
   manualHandoffPaths: z.array(z.string().min(1)),
   operationalGates: z.array(operationalGateSchema),
   assuranceActions: z.array(productionReadinessAssuranceActionSchema),

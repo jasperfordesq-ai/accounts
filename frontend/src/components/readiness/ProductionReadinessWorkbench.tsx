@@ -20,6 +20,7 @@ import {
 export function ProductionReadinessWorkbench({ report }: { report: ProductionReadinessReport }) {
   const assuranceActions = report.assuranceActions ?? [];
   const statutoryRuleMatrix = report.statutoryRuleMatrix ?? [];
+  const statutoryRulesCoverage = report.statutoryRulesCoverage ?? [];
   const auditabilityControls = report.auditabilityControls ?? [];
   const visualQaCoverage = report.visualQaCoverage;
   const hardenedAreas = report.areas.filter((area) => area.status === "hardened").length;
@@ -153,6 +154,41 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
               <CompactList key="outputs" items={row.requiredOutputs} />,
               <CompactList key="gates" items={row.manualHandoffGates} />,
               <SourceLinkList key="sources" sources={row.sources} />,
+            ],
+          }))}
+        />
+      </ReviewPanel>
+
+      <ReviewPanel
+        title="Statutory rules coverage"
+        description="Granular rule families, edge cases, executable tests, and legal sources proving the accounting engine is covered beyond the four golden paths."
+        actions={<StatusBadge tone={statutoryRulesCoverage.every((item) => item.coverageStatus === "covered") ? "good" : "warn"}>{statutoryRulesCoverage.length} rule families</StatusBadge>}
+      >
+        <DataTable
+          caption="Statutory rules coverage"
+          filterPlaceholder="Filter rule coverage"
+          emptyState="No matching statutory rule coverage"
+          columns={["Rule family", "Decision under test", "Edge cases", "Automated verifiers", "Sources", "Status"]}
+          rows={statutoryRulesCoverage.map((coverage) => ({
+            id: coverage.code,
+            tone: coverage.coverageStatus === "covered" ? "good" : "warn",
+            searchText: [
+              coverage.ruleFamily,
+              coverage.decisionUnderTest,
+              coverage.coverageStatus,
+              ...coverage.edgeCases,
+              ...coverage.automatedVerifierNames,
+              ...coverage.sources.map((source) => source.title),
+            ].join(" "),
+            cells: [
+              <span key="family" className="font-medium">{coverage.ruleFamily}</span>,
+              <span key="decision" className="whitespace-normal text-[var(--muted-foreground)]">{coverage.decisionUnderTest}</span>,
+              <CompactList key="edge-cases" items={coverage.edgeCases} />,
+              <CodeStack key="verifiers" items={coverage.automatedVerifierNames} />,
+              <SourceLinkList key="sources" sources={coverage.sources} />,
+              <StatusBadge key="status" tone={coverage.coverageStatus === "covered" ? "good" : "warn"}>
+                {formatStatus(coverage.coverageStatus)}
+              </StatusBadge>,
             ],
           }))}
         />

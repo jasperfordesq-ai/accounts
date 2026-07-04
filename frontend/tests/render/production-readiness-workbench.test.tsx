@@ -49,10 +49,13 @@ describe("ProductionReadinessWorkbench", () => {
     expect(screen.getByText("CLG charity")).toBeInTheDocument();
     expect(screen.getByText("Medium audit-required")).toBeInTheDocument();
     expect(screen.getByText("Unsupported regulated/group")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "CRO financial statements requirements" })).toHaveAttribute(
-      "href",
-      "https://cro.ie/",
-    );
+    expect(screen.getByRole("heading", { name: "Statutory rules coverage" })).toBeInTheDocument();
+    expect(screen.getByRole("searchbox", { name: "Filter Statutory rules coverage" })).toBeInTheDocument();
+    expect(screen.getByText("Size classification")).toBeInTheDocument();
+    expect(screen.getByText("two-of-three threshold rule")).toBeInTheDocument();
+    expect(screen.getByText("AccountsWorkflowTests.SizeClassification_FirstYearMicro_AllowsMicroAndAuditExemption")).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "CRO financial statements requirements" }))
+      .toEqual(expect.arrayContaining([expect.objectContaining({ href: "https://cro.ie/" })]));
     expect(screen.getByRole("heading", { name: "Visual QA coverage" })).toBeInTheDocument();
     expect(screen.getByText("24 screenshots")).toBeInTheDocument();
     expect(screen.getByText("Light desktop")).toBeInTheDocument();
@@ -289,6 +292,24 @@ function sampleReport(): ProductionReadinessReport {
             title: "CRO group company financial statements requirements",
             effectiveDate: "2026-07-03",
             url: "https://cro.ie/group",
+          },
+        ],
+      },
+    ],
+    statutoryRulesCoverage: [
+      {
+        code: "size-classification-thresholds",
+        ruleFamily: "Size classification",
+        decisionUnderTest: "Two-of-three thresholds and current/prior movement produce the statutory size class.",
+        coverageStatus: "covered",
+        automatedVerifierNames: ["AccountsWorkflowTests.SizeClassification_FirstYearMicro_AllowsMicroAndAuditExemption"],
+        edgeCases: ["two-of-three threshold rule", "current and prior year classification rule"],
+        sources: [
+          {
+            sourceId: "cro-financial-statements-requirements",
+            title: "CRO financial statements requirements",
+            effectiveDate: "2026-07-03",
+            url: "https://cro.ie/",
           },
         ],
       },

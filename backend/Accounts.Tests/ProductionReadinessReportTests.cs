@@ -422,6 +422,51 @@ public class ProductionReadinessReportTests
     }
 
     [Fact]
+    public async Task ProductionReadinessReport_ExposesGranularStatutoryRulesCoverageMappedToExecutableTests()
+    {
+        await using var db = CreateDbContext();
+        var report = await new ProductionReadinessReportService(db).GetReportAsync();
+
+        Assert.Contains(report.StatutoryRulesCoverage, coverage =>
+            coverage.Code == "size-classification-thresholds"
+            && coverage.RuleFamily == "Size classification"
+            && coverage.CoverageStatus == "covered"
+            && coverage.EdgeCases.Any(edge => edge.Contains("two-of-three", StringComparison.OrdinalIgnoreCase))
+            && coverage.EdgeCases.Any(edge => edge.Contains("current and prior", StringComparison.OrdinalIgnoreCase))
+            && coverage.Sources.Any(source => source.SourceId == IrishStatutoryRuleSources.CroFinancialStatementsRequirements.SourceId)
+            && coverage.AutomatedVerifierNames.Contains("AccountsWorkflowTests.SizeClassification_FirstYearMicro_AllowsMicroAndAuditExemption"));
+
+        Assert.Contains(report.StatutoryRulesCoverage, coverage =>
+            coverage.Code == "audit-exemption-loss"
+            && coverage.RuleFamily == "Audit exemption"
+            && coverage.CoverageStatus == "covered"
+            && coverage.EdgeCases.Any(edge => edge.Contains("late CRO filings", StringComparison.OrdinalIgnoreCase))
+            && coverage.EdgeCases.Any(edge => edge.Contains("member audit notice", StringComparison.OrdinalIgnoreCase))
+            && coverage.AutomatedVerifierNames.Contains("AccountsWorkflowTests.FilingRegime_RecentRepeatedLateCroFilings_RemoveAuditExemption"));
+
+        Assert.Contains(report.StatutoryRulesCoverage, coverage =>
+            coverage.Code == "unsupported-fail-closed"
+            && coverage.RuleFamily == "Unsupported paths"
+            && coverage.CoverageStatus == "covered"
+            && coverage.EdgeCases.Any(edge => edge.Contains("PLC", StringComparison.OrdinalIgnoreCase))
+            && coverage.EdgeCases.Any(edge => edge.Contains("regulated", StringComparison.OrdinalIgnoreCase))
+            && coverage.AutomatedVerifierNames.Contains("FilingReadinessProfileTests.ReadinessProfile_ForUnsupportedCompanyTypes_FailsClosedToManualHandoff"));
+
+        Assert.All(report.StatutoryRulesCoverage, coverage =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(coverage.Code));
+            Assert.False(string.IsNullOrWhiteSpace(coverage.RuleFamily));
+            Assert.False(string.IsNullOrWhiteSpace(coverage.DecisionUnderTest));
+            Assert.False(string.IsNullOrWhiteSpace(coverage.CoverageStatus));
+            Assert.NotEmpty(coverage.AutomatedVerifierNames);
+            Assert.NotEmpty(coverage.EdgeCases);
+            Assert.NotEmpty(coverage.Sources);
+            foreach (var verifierName in coverage.AutomatedVerifierNames)
+                AssertGoldenEvidenceTestExists(verifierName);
+        });
+    }
+
+    [Fact]
     public async Task ProductionReadinessReport_DeclaresVisualQaCoverageForAccountantWorkbenchRoutes()
     {
         await using var db = CreateDbContext();

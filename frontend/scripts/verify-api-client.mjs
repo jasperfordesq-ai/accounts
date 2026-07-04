@@ -147,6 +147,17 @@ function productionReadinessReportFixture() {
         sources: [source("frc-frs-105", "FRC FRS 105 current edition and amendments")],
       },
     ],
+    statutoryRulesCoverage: [
+      {
+        code: "size-classification-thresholds",
+        ruleFamily: "Size classification",
+        decisionUnderTest: "Two-of-three thresholds and current/prior movement produce the statutory size class.",
+        coverageStatus: "covered",
+        automatedVerifierNames: ["AccountsWorkflowTests.SizeClassification_FirstYearMicro_AllowsMicroAndAuditExemption"],
+        edgeCases: ["two-of-three threshold rule", "current and prior year classification rule"],
+        sources: [source("frc-frs-105", "FRC FRS 105 current edition and amendments")],
+      },
+    ],
     manualHandoffPaths: ["PLC and public-company workflows"],
     operationalGates: [
       {

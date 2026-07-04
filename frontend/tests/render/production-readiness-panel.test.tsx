@@ -126,6 +126,24 @@ function sampleReport(): ProductionReadinessReport {
         ],
       },
     ],
+    statutoryRulesCoverage: [
+      {
+        code: "size-classification-thresholds",
+        ruleFamily: "Size classification",
+        decisionUnderTest: "Two-of-three thresholds and current/prior movement produce the statutory size class.",
+        coverageStatus: "covered",
+        automatedVerifierNames: ["AccountsWorkflowTests.SizeClassification_FirstYearMicro_AllowsMicroAndAuditExemption"],
+        edgeCases: ["two-of-three threshold rule"],
+        sources: [
+          {
+            sourceId: "cro-financial-statements-requirements",
+            title: "CRO financial statements requirements",
+            effectiveDate: "2026-07-03",
+            url: "https://cro.ie/",
+          },
+        ],
+      },
+    ],
     manualHandoffPaths: ["PLC and public-company workflows"],
     operationalGates: [
       {
