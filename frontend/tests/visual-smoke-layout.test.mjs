@@ -49,6 +49,16 @@ describe("visual smoke layout checks", () => {
     assert.equal(issues.length, 0);
   });
 
+  it("clips text rectangles to scroll container bounds", async () => {
+    const { clipRectToBounds } = await loadLayoutModule();
+
+    assert.deepEqual(
+      clipRectToBounds(rect(12, 148, 220, 190), rect(0, 0, 240, 160)),
+      rect(12, 148, 220, 160),
+    );
+    assert.equal(clipRectToBounds(rect(12, 170, 220, 190), rect(0, 0, 240, 160)), null);
+  });
+
   it("summarizes layout issues for route failures", async () => {
     const { findOverlappingTextBlocks, formatLayoutIssues } = await loadLayoutModule();
     const issues = findOverlappingTextBlocks([
@@ -69,6 +79,7 @@ describe("visual smoke layout checks", () => {
     assert.match(script, /document\.createTreeWalker/);
     assert.match(script, /range\.getClientRects/);
     assert.match(script, /details:not\(\[open\]\)/);
+    assert.match(script, /clipRectToVisibleBounds/);
   });
 });
 
@@ -84,5 +95,16 @@ function textBlock(label, text, left, top, right, bottom) {
       width: right - left,
       height: bottom - top,
     },
+  };
+}
+
+function rect(left, top, right, bottom) {
+  return {
+    left,
+    top,
+    right,
+    bottom,
+    width: right - left,
+    height: bottom - top,
   };
 }

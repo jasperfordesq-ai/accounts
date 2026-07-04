@@ -275,17 +275,12 @@ async function checkNoTextOverlap(page, routeName) {
 
       for (const rect of Array.from(range.getClientRects())) {
         if (rect.width <= 1 || rect.height <= 1) continue;
+        const clippedRect = clipRectToVisibleBounds(toPageRect(rect), element);
+        if (!clippedRect) continue;
         blocks.push({
           label: labelFor(element, text, index),
           text,
-          rect: {
-            left: rect.left + scrollLeft,
-            top: rect.top + scrollTop,
-            right: rect.right + scrollLeft,
-            bottom: rect.bottom + scrollTop,
-            width: rect.width,
-            height: rect.height,
-          },
+          rect: clippedRect,
         });
         index += 1;
       }
@@ -298,17 +293,12 @@ async function checkNoTextOverlap(page, routeName) {
       if (text.length < 2 || !isVisiblyRendered(element)) continue;
 
       const rect = element.getBoundingClientRect();
+      const clippedRect = clipRectToVisibleBounds(toPageRect(rect), element);
+      if (!clippedRect) continue;
       blocks.push({
         label: labelFor(element, text, index),
         text,
-        rect: {
-          left: rect.left + scrollLeft,
-          top: rect.top + scrollTop,
-          right: rect.right + scrollLeft,
-          bottom: rect.bottom + scrollTop,
-          width: rect.width,
-          height: rect.height,
-        },
+        rect: clippedRect,
       });
       index += 1;
     }
@@ -325,6 +315,58 @@ async function checkNoTextOverlap(page, routeName) {
       }
 
       return "";
+    }
+
+    function clipRectToVisibleBounds(rect, element) {
+      let clippedRect = rect;
+
+      for (let current = element; current && root.contains(current); current = current.parentElement) {
+        const style = window.getComputedStyle(current);
+        if (clipsOverflow(style)) {
+          const bounds = toPageRect(current.getBoundingClientRect());
+          clippedRect = intersectRects(clippedRect, bounds);
+          if (!clippedRect) return null;
+        }
+
+        if (current === root) break;
+      }
+
+      return clippedRect;
+    }
+
+    function clipsOverflow(style) {
+      return [style.overflow, style.overflowX, style.overflowY].some((value) => (
+        value === "auto" || value === "scroll" || value === "hidden" || value === "clip"
+      ));
+    }
+
+    function intersectRects(first, second) {
+      const left = Math.max(first.left, second.left);
+      const top = Math.max(first.top, second.top);
+      const right = Math.min(first.right, second.right);
+      const bottom = Math.min(first.bottom, second.bottom);
+
+      if (right <= left || bottom <= top) return null;
+
+      return {
+        left,
+        top,
+        right,
+        bottom,
+        width: right - left,
+        height: bottom - top,
+      };
+    }
+
+    function toPageRect(rect) {
+      return {
+        left: rect.left + scrollLeft,
+        top: rect.top + scrollTop,
+        right: rect.right + scrollLeft,
+        bottom: rect.bottom + scrollTop,
+        width: rect.width,
+        height: rect.height,
+      };
     }
 
     function isVisiblyRendered(element) {

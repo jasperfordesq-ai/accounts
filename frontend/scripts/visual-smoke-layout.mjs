@@ -43,6 +43,28 @@ export function formatLayoutIssues(routeName, issues) {
   ].join("\n");
 }
 
+export function clipRectToBounds(rect, bounds) {
+  const normalizedRect = normalizeRect(rect);
+  const normalizedBounds = normalizeRect(bounds);
+  if (!normalizedRect || !normalizedBounds) return null;
+
+  const left = Math.max(normalizedRect.left, normalizedBounds.left);
+  const top = Math.max(normalizedRect.top, normalizedBounds.top);
+  const right = Math.min(normalizedRect.right, normalizedBounds.right);
+  const bottom = Math.min(normalizedRect.bottom, normalizedBounds.bottom);
+
+  if (right <= left || bottom <= top) return null;
+
+  return {
+    left,
+    top,
+    right,
+    bottom,
+    width: right - left,
+    height: bottom - top,
+  };
+}
+
 function isNearDuplicateTextBlock(first, second, overlapArea) {
   if (first.text.toLowerCase() !== second.text.toLowerCase()) return false;
 
