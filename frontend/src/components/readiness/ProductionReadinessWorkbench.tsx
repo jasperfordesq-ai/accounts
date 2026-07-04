@@ -56,19 +56,34 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
         actions={<StatusBadge tone="warn">{assuranceActions.length - completedAssuranceActions} open</StatusBadge>}
       >
         <DataTable
+          caption="Next assurance actions"
+          filterPlaceholder="Filter assurance actions"
+          emptyState="No matching assurance actions"
           columns={["Action", "Owner", "Priority", "Evidence required", "Status"]}
-          rows={assuranceActions.map((action) => [
-            <div key="action" className="min-w-48 whitespace-normal">
-              <p className="font-medium">{action.label}</p>
-              <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">{action.detail}</p>
-            </div>,
-            <span key="owner" className="text-[var(--muted-foreground)]">{action.owner}</span>,
-            <StatusBadge key="priority" tone={priorityTone(action.priority)}>{formatStatus(action.priority)}</StatusBadge>,
-            <span key="evidence" className="whitespace-normal text-[var(--muted-foreground)]">{action.evidenceRequired}</span>,
-            <StatusBadge key="status" tone={action.status === "complete" ? "good" : action.status === "in-progress" ? "info" : "warn"}>
-              {formatStatus(action.status)}
-            </StatusBadge>,
-          ])}
+          rows={assuranceActions.map((action) => ({
+            id: action.code,
+            tone: action.status === "complete" ? "good" : action.priority === "critical" ? "bad" : action.status === "in-progress" ? "info" : "warn",
+            searchText: [
+              action.label,
+              action.owner,
+              action.priority,
+              action.status,
+              action.detail,
+              action.evidenceRequired,
+            ].join(" "),
+            cells: [
+              <div key="action" className="min-w-48 whitespace-normal">
+                <p className="font-medium">{action.label}</p>
+                <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">{action.detail}</p>
+              </div>,
+              <span key="owner" className="text-[var(--muted-foreground)]">{action.owner}</span>,
+              <StatusBadge key="priority" tone={priorityTone(action.priority)}>{formatStatus(action.priority)}</StatusBadge>,
+              <span key="evidence" className="whitespace-normal text-[var(--muted-foreground)]">{action.evidenceRequired}</span>,
+              <StatusBadge key="status" tone={action.status === "complete" ? "good" : action.status === "in-progress" ? "info" : "warn"}>
+                {formatStatus(action.status)}
+              </StatusBadge>,
+            ],
+          }))}
         />
       </ReviewPanel>
 
@@ -78,17 +93,31 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
         actions={<StatusBadge tone={auditabilityControls.every((control) => control.required) ? "good" : "warn"}>{auditabilityControls.length} controls</StatusBadge>}
       >
         <DataTable
+          caption="Production auditability"
+          filterPlaceholder="Filter auditability controls"
+          emptyState="No matching auditability controls"
           columns={["Control", "Enforcement", "Evidence captured", "Verification", "Audit events"]}
-          rows={auditabilityControls.map((control) => [
-            <div key="control" className="min-w-48 whitespace-normal">
-              <p className="font-medium">{control.label}</p>
-              <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">{control.required ? "Required production control" : "Advisory control"}</p>
-            </div>,
-            <span key="enforcement" className="whitespace-normal text-[var(--muted-foreground)]">{control.enforcement}</span>,
-            <span key="evidence" className="whitespace-normal text-[var(--muted-foreground)]">{control.evidenceCaptured}</span>,
-            <span key="verification" className="whitespace-normal text-[var(--muted-foreground)]">{control.verification}</span>,
-            <CodeStack key="events" items={control.auditEventCodes} />,
-          ])}
+          rows={auditabilityControls.map((control) => ({
+            id: control.code,
+            tone: control.required ? "good" : "warn",
+            searchText: [
+              control.label,
+              control.enforcement,
+              control.evidenceCaptured,
+              control.verification,
+              ...control.auditEventCodes,
+            ].join(" "),
+            cells: [
+              <div key="control" className="min-w-48 whitespace-normal">
+                <p className="font-medium">{control.label}</p>
+                <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">{control.required ? "Required production control" : "Advisory control"}</p>
+              </div>,
+              <span key="enforcement" className="whitespace-normal text-[var(--muted-foreground)]">{control.enforcement}</span>,
+              <span key="evidence" className="whitespace-normal text-[var(--muted-foreground)]">{control.evidenceCaptured}</span>,
+              <span key="verification" className="whitespace-normal text-[var(--muted-foreground)]">{control.verification}</span>,
+              <CodeStack key="events" items={control.auditEventCodes} />,
+            ],
+          }))}
         />
       </ReviewPanel>
 
@@ -98,18 +127,34 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
         actions={<StatusBadge tone="info">{statutoryRuleMatrix.length} paths</StatusBadge>}
       >
         <DataTable
+          caption="Statutory rules matrix"
+          filterPlaceholder="Filter rules, regimes, gates or sources"
+          emptyState="No matching statutory rule paths"
           columns={["Company path", "Regime", "Evidence", "Outputs", "Gates", "Sources"]}
-          rows={statutoryRuleMatrix.map((row) => [
-            <div key="path" className="min-w-44 whitespace-normal">
-              <p className="font-medium">{row.companyScope}</p>
-              <StatusBadge tone={supportTone(row.supportLevel)}>{formatStatus(row.supportLevel)}</StatusBadge>
-            </div>,
-            <span key="regime" className="whitespace-normal text-[var(--muted-foreground)]">{row.sizeOrRegime}</span>,
-            <CompactList key="evidence" items={row.requiredEvidence} />,
-            <CompactList key="outputs" items={row.requiredOutputs} />,
-            <CompactList key="gates" items={row.manualHandoffGates} />,
-            <SourceLinkList key="sources" sources={row.sources} />,
-          ])}
+          rows={statutoryRuleMatrix.map((row) => ({
+            id: row.code,
+            tone: supportTone(row.supportLevel),
+            searchText: [
+              row.companyScope,
+              row.sizeOrRegime,
+              row.supportLevel,
+              ...row.requiredEvidence,
+              ...row.requiredOutputs,
+              ...row.manualHandoffGates,
+              ...row.sources.map((source) => source.title),
+            ].join(" "),
+            cells: [
+              <div key="path" className="min-w-44 whitespace-normal">
+                <p className="font-medium">{row.companyScope}</p>
+                <StatusBadge tone={supportTone(row.supportLevel)}>{formatStatus(row.supportLevel)}</StatusBadge>
+              </div>,
+              <span key="regime" className="whitespace-normal text-[var(--muted-foreground)]">{row.sizeOrRegime}</span>,
+              <CompactList key="evidence" items={row.requiredEvidence} />,
+              <CompactList key="outputs" items={row.requiredOutputs} />,
+              <CompactList key="gates" items={row.manualHandoffGates} />,
+              <SourceLinkList key="sources" sources={row.sources} />,
+            ],
+          }))}
         />
       </ReviewPanel>
 
@@ -140,20 +185,28 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
             </div>
 
             <DataTable
+              caption="Visual QA routes"
+              filterPlaceholder="Filter visual QA routes"
+              emptyState="No matching visual QA routes"
               columns={["Route", "Required text", "Viewport evidence", "Tab action"]}
-              rows={visualQaCoverage.routes.map((route) => [
-                <div key="route" className="min-w-44 whitespace-normal">
-                  <p className="font-medium">{route.label}</p>
-                  <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">{route.description}</p>
-                </div>,
-                <span key="required-text" className="whitespace-normal text-[var(--muted-foreground)]">{route.requiredText}</span>,
-                <span key="viewport-evidence" className="text-[var(--muted-foreground)]">
-                  {visualQaCoverage.themes.length * visualQaCoverage.viewports.length} screenshots
-                </span>,
-                <StatusBadge key="tab-action" tone={route.openFilingTab ? "info" : "default"}>
-                  {route.openFilingTab ? "Open filing tab" : "Initial view"}
-                </StatusBadge>,
-              ])}
+              rows={visualQaCoverage.routes.map((route) => ({
+                id: route.code,
+                tone: route.openFilingTab ? "info" : "default",
+                searchText: [route.label, route.description, route.requiredText, route.openFilingTab ? "filing tab" : "initial view"].join(" "),
+                cells: [
+                  <div key="route" className="min-w-44 whitespace-normal">
+                    <p className="font-medium">{route.label}</p>
+                    <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">{route.description}</p>
+                  </div>,
+                  <span key="required-text" className="whitespace-normal text-[var(--muted-foreground)]">{route.requiredText}</span>,
+                  <span key="viewport-evidence" className="text-[var(--muted-foreground)]">
+                    {visualQaCoverage.themes.length * visualQaCoverage.viewports.length} screenshots
+                  </span>,
+                  <StatusBadge key="tab-action" tone={route.openFilingTab ? "info" : "default"}>
+                    {route.openFilingTab ? "Open filing tab" : "Initial view"}
+                  </StatusBadge>,
+                ],
+              }))}
             />
           </div>
         </ReviewPanel>
@@ -167,17 +220,32 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
           actions={<StatusBadge tone={coveredScenarios === report.goldenFilingCorpus.length ? "good" : "warn"}>{coveredScenarios}/{report.goldenFilingCorpus.length} covered</StatusBadge>}
         />
         <DataTable
+          caption="Golden filing corpus"
+          filterPlaceholder="Filter golden scenarios"
+          emptyState="No matching golden filing scenarios"
           columns={["Scenario", "Company scope", "Expected outcome", "Evidence tests", "Assertions", "Status"]}
-          rows={report.goldenFilingCorpus.map((scenario) => [
-            <span key="label" className="font-medium">{scenario.label}</span>,
-            <span key="scope" className="whitespace-normal text-[var(--muted-foreground)]">{scenario.companyScope}</span>,
-            <span key="outcome" className="text-[var(--muted-foreground)]">{formatStatus(scenario.expectedOutcome)}</span>,
-            <CodeStack key="tests" items={scenario.evidenceTestNames} />,
-            <AssertionList key="assertions" items={scenario.assertions} />,
-            <StatusBadge key="status" tone={scenario.coverageStatus === "covered" ? "good" : "warn"}>
-              {formatStatus(scenario.coverageStatus)}
-            </StatusBadge>,
-          ])}
+          rows={report.goldenFilingCorpus.map((scenario) => ({
+            id: scenario.code,
+            tone: scenario.coverageStatus === "covered" ? "good" : "warn",
+            searchText: [
+              scenario.label,
+              scenario.companyScope,
+              scenario.expectedOutcome,
+              scenario.coverageStatus,
+              ...scenario.evidenceTestNames,
+              ...scenario.assertions,
+            ].join(" "),
+            cells: [
+              <span key="label" className="font-medium">{scenario.label}</span>,
+              <span key="scope" className="whitespace-normal text-[var(--muted-foreground)]">{scenario.companyScope}</span>,
+              <span key="outcome" className="text-[var(--muted-foreground)]">{formatStatus(scenario.expectedOutcome)}</span>,
+              <CodeStack key="tests" items={scenario.evidenceTestNames} />,
+              <AssertionList key="assertions" items={scenario.assertions} />,
+              <StatusBadge key="status" tone={scenario.coverageStatus === "covered" ? "good" : "warn"}>
+                {formatStatus(scenario.coverageStatus)}
+              </StatusBadge>,
+            ],
+          }))}
         />
 
         <div className="mt-5 space-y-3">
@@ -188,14 +256,28 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
             </p>
           </div>
           <DataTable
+            caption="Golden evidence pack"
+            filterPlaceholder="Filter evidence packs"
+            emptyState="No matching evidence packs"
             columns={["Scenario", "Output artifacts", "Decision gates", "Expected value checks", "Sources"]}
-            rows={report.goldenFilingCorpus.map((scenario) => [
-              <span key="scenario" className="font-medium">{scenario.label}</span>,
-              <CompactList key="artifacts" items={scenario.evidencePack.outputArtifacts} />,
-              <CompactList key="gates" items={scenario.evidencePack.decisionGates} />,
-              <CompactList key="values" items={scenario.evidencePack.expectedValueChecks} />,
-              <SourceLinkList key="sources" sources={scenario.evidencePack.sourceReferences} />,
-            ])}
+            rows={report.goldenFilingCorpus.map((scenario) => ({
+              id: `${scenario.code}-evidence`,
+              tone: scenario.coverageStatus === "covered" ? "good" : "warn",
+              searchText: [
+                scenario.label,
+                ...scenario.evidencePack.outputArtifacts,
+                ...scenario.evidencePack.decisionGates,
+                ...scenario.evidencePack.expectedValueChecks,
+                ...scenario.evidencePack.sourceReferences.map((source) => source.title),
+              ].join(" "),
+              cells: [
+                <span key="scenario" className="font-medium">{scenario.label}</span>,
+                <CompactList key="artifacts" items={scenario.evidencePack.outputArtifacts} />,
+                <CompactList key="gates" items={scenario.evidencePack.decisionGates} />,
+                <CompactList key="values" items={scenario.evidencePack.expectedValueChecks} />,
+                <SourceLinkList key="sources" sources={scenario.evidencePack.sourceReferences} />,
+              ],
+            }))}
           />
         </div>
       </section>
@@ -387,13 +469,13 @@ function toneIconClass(tone: "good" | "warn" | "bad" | "info" | "default") {
   return "mt-0.5 shrink-0 text-[var(--muted-foreground)]";
 }
 
-function priorityTone(priority: string) {
+function priorityTone(priority: string): "good" | "warn" | "bad" | "info" | "default" {
   if (priority === "critical") return "bad";
   if (priority === "high") return "warn";
   return "default";
 }
 
-function supportTone(supportLevel: string) {
+function supportTone(supportLevel: string): "good" | "warn" | "bad" | "info" | "default" {
   if (supportLevel === "supported") return "good";
   if (supportLevel === "supported-with-review") return "info";
   if (supportLevel === "manual-handoff") return "warn";

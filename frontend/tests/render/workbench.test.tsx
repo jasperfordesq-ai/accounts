@@ -1,5 +1,6 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
 import { DataTable, EvidenceChecklist, IssueDigest, ReviewPanel, StatusBadge, WorkflowRail } from "@/components/workbench";
 
 describe("workbench primitives", () => {
@@ -97,6 +98,93 @@ describe("workbench primitives", () => {
     expect(container.querySelector('td[data-label="Company"]')).toHaveTextContent("CI Visual Accounts Limited");
     expect(container.querySelector('td[data-label="Deadline"]')).toHaveTextContent("Revenue due 23 Sept 2025");
     expect(container.querySelector('td[data-label="Next action"]')).toHaveTextContent("Continue workbench");
+  });
+
+  it("filters dense tables and reports visible row counts", async () => {
+    const user = userEvent.setup();
+    render(
+      <DataTable
+        caption="Accountant deadline queue"
+        filterPlaceholder="Filter companies or blockers"
+        columns={["Company", "Status", "Next action"]}
+        rows={[
+          {
+            id: "alpha",
+            cells: ["Alpha Accounts Limited", "Blocked", "Resolve iXBRL validation"],
+            searchText: "alpha blocked ixbrl",
+          },
+          {
+            id: "bravo",
+            cells: ["Bravo Trading DAC", "Ready", "Review statements"],
+            searchText: "bravo ready statements",
+          },
+        ]}
+      />,
+    );
+
+    await user.type(screen.getByRole("searchbox", { name: "Filter Accountant deadline queue" }), "ixbrl");
+
+    expect(screen.getByText("1 of 2 rows")).toBeInTheDocument();
+    expect(screen.getByText("Alpha Accounts Limited")).toBeInTheDocument();
+    expect(screen.queryByText("Bravo Trading DAC")).not.toBeInTheDocument();
+  });
+
+  it("renders totals, warning cues, and a useful empty state", async () => {
+    const user = userEvent.setup();
+    render(
+      <DataTable
+        caption="Trial balance reconciliation"
+        filterPlaceholder="Filter trial balance"
+        columns={["Account", "Debit", "Credit", "Warning"]}
+        rows={[
+          {
+            id: "bank",
+            cells: ["Bank", "EUR 1,250", "EUR 0", "Reconciled"],
+            tone: "good",
+            searchText: "bank reconciled",
+          },
+          {
+            id: "suspense",
+            cells: ["Suspense", "EUR 0", "EUR 125", "Unreconciled balance"],
+            tone: "warn",
+            searchText: "suspense unreconciled balance",
+          },
+        ]}
+        totals={["Totals", "EUR 1,250", "EUR 125", "Difference EUR 1,125"]}
+        emptyState="No matching ledger rows"
+      />,
+    );
+
+    const rows = screen.getAllByRole("row");
+    expect(within(rows[2]).getByText("Unreconciled balance")).toBeInTheDocument();
+    expect(rows[2]).toHaveAttribute("data-tone", "warn");
+    expect(screen.getByText("Totals")).toBeInTheDocument();
+    expect(screen.getByText("Difference EUR 1,125")).toBeInTheDocument();
+
+    await user.type(screen.getByRole("searchbox", { name: "Filter Trial balance reconciliation" }), "nothing");
+
+    expect(screen.getByText("0 of 2 rows")).toBeInTheDocument();
+    expect(screen.getByText("No matching ledger rows")).toBeInTheDocument();
+  });
+
+  it("keeps generated row keys stable when legacy rows contain JSX cells", () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    try {
+      render(
+        <DataTable
+          columns={["Control", "Status"]}
+          rows={[
+            [<span key="control">Director approval</span>, <StatusBadge key="status" tone="warn">Required</StatusBadge>],
+            [<span key="control">Accountant approval</span>, <StatusBadge key="status" tone="warn">Required</StatusBadge>],
+          ]}
+        />,
+      );
+
+      expect(consoleError).not.toHaveBeenCalledWith(expect.stringContaining("Encountered two children with the same key"));
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 
   it("renders a compact issue digest with priority items and collapsed overflow", () => {

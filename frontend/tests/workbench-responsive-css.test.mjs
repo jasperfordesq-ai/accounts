@@ -11,6 +11,8 @@ describe("workbench responsive table CSS", () => {
     assert.match(css, /td::before/);
     assert.match(css, /attr\(data-label\)/);
     assert.match(css, /\.workbench-data-table tbody td > \*/);
+    assert.match(css, /\.workbench-data-table tfoot/);
+    assert.match(css, /\.workbench-data-table tfoot td::before/);
     assert.match(css, /min-width:\s*0/);
   });
 });

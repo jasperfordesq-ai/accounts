@@ -11,10 +11,13 @@ describe("ProductionReadinessWorkbench", () => {
     expect(screen.getByText("Review required")).toBeInTheDocument();
     expect(screen.getByText("3 companies")).toBeInTheDocument();
     expect(screen.getByText("4 periods")).toBeInTheDocument();
-    expect(screen.getByText("Golden filing corpus")).toBeInTheDocument();
+    expect(screen.getByRole("searchbox", { name: "Filter Next assurance actions" })).toBeInTheDocument();
+    expect(screen.getByRole("searchbox", { name: "Filter Statutory rules matrix" })).toBeInTheDocument();
+    expect(screen.getByRole("searchbox", { name: "Filter Golden filing corpus" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Golden filing corpus" })).toBeInTheDocument();
     expect(screen.getAllByText("Micro LTD")).toHaveLength(2);
     expect(screen.getByText("AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl")).toBeInTheDocument();
-    expect(screen.getByText("Golden evidence pack")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Golden evidence pack" })).toBeInTheDocument();
     expect(screen.getByText("accounts PDF text")).toBeInTheDocument();
     expect(screen.getByText("director and secretary certification")).toBeInTheDocument();
     expect(screen.getByText("well-formed iXBRL")).toBeInTheDocument();

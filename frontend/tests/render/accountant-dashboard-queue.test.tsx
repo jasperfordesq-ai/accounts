@@ -1,10 +1,12 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { AccountantDashboardQueue } from "@/components/dashboard/AccountantDashboardQueue";
 import type { Company, FilingDeadline } from "@/lib/api";
 
 describe("AccountantDashboardQueue", () => {
-  it("surfaces deadlines, blockers, reviewer ownership and next actions", () => {
+  it("surfaces deadlines, blockers, reviewer ownership and next actions", async () => {
+    const user = userEvent.setup();
     const { container } = render(
       <AccountantDashboardQueue
         companies={[sampleCompany(), unsupportedCompany(), noPeriodCompany()]}
@@ -26,6 +28,8 @@ describe("AccountantDashboardQueue", () => {
     expect(screen.getByText("1 handoff")).toBeInTheDocument();
     expect(screen.getByText("Unassigned reviewers")).toBeInTheDocument();
     expect(screen.getByText("2 unassigned")).toBeInTheDocument();
+    expect(screen.getByRole("searchbox", { name: "Filter Accountant work queue" })).toBeInTheDocument();
+    expect(screen.getByText("3 of 3 rows")).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Assigned reviewer" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Next action" })).toBeInTheDocument();
     expect(screen.getAllByRole("row")[1]).toHaveTextContent("Atlantic Public Limited Company");
@@ -59,6 +63,12 @@ describe("AccountantDashboardQueue", () => {
     expect(screen.getByText("New Client Limited")).toBeInTheDocument();
     expect(screen.getByText("No period")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Create period" })).toHaveAttribute("href", "/companies/9");
+
+    expect(screen.getAllByRole("row")[1]).toHaveAttribute("data-tone", "bad");
+    await user.type(screen.getByRole("searchbox", { name: "Filter Accountant work queue" }), "niamh");
+    expect(screen.getByText("1 of 3 rows")).toBeInTheDocument();
+    expect(screen.getByText("Connacht Visual Limited")).toBeInTheDocument();
+    expect(screen.queryByText("Atlantic Public Limited Company")).not.toBeInTheDocument();
   });
 });
 

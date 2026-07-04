@@ -1,4 +1,6 @@
-import type { ReactNode } from "react";
+"use client";
+
+import { useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -14,6 +16,7 @@ import {
 
 type WorkflowState = "done" | "active" | "blocked" | "todo";
 type Tone = "default" | "good" | "warn" | "bad" | "info";
+type DataTableRowTone = Tone;
 
 export interface WorkflowItem {
   id?: string;
@@ -40,6 +43,15 @@ export interface IssueDigestProps {
   maxPriorityItems?: number;
   className?: string;
 }
+
+export interface DataTableRichRow {
+  id?: string | number;
+  cells: ReactNode[];
+  searchText?: string;
+  tone?: DataTableRowTone;
+}
+
+type DataTableRow = ReactNode[] | DataTableRichRow;
 
 const toneClasses: Record<Tone, string> = {
   default: "border-[var(--border)] bg-[var(--surface-subtle)] text-[var(--foreground)]",
@@ -384,16 +396,55 @@ export function EvidenceChecklist({ items }: { items: EvidenceItem[] }) {
 export function DataTable({
   columns,
   rows,
+  caption,
+  filterPlaceholder,
+  emptyState = "No rows to show",
+  totals,
 }: {
   columns: string[];
-  rows: ReactNode[][];
+  rows: DataTableRow[];
+  caption?: string;
+  filterPlaceholder?: string;
+  emptyState?: ReactNode;
+  totals?: ReactNode[];
 }) {
+  const [filter, setFilter] = useState("");
+  const normalizedRows = useMemo(() => rows.map(normalizeDataTableRow), [rows]);
+  const normalizedFilter = filter.trim().toLowerCase();
+  const visibleRows = useMemo(() => {
+    if (!normalizedFilter) return normalizedRows;
+    return normalizedRows.filter((row) => row.searchText.toLowerCase().includes(normalizedFilter));
+  }, [normalizedFilter, normalizedRows]);
+  const tableLabel = caption ?? "Workbench data table";
+  const showFilter = Boolean(filterPlaceholder);
+
   return (
-    <div
-      className="workbench-data-table min-w-0 overflow-x-auto rounded-md border border-[var(--border)] bg-[var(--surface)]"
-      data-responsive="card"
-    >
-      <table className="min-w-full border-collapse text-left text-sm">
+    <div className="min-w-0 space-y-3">
+      {showFilter && (
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <label className="sr-only" htmlFor={filterId(tableLabel)}>
+            Filter {tableLabel}
+          </label>
+          <input
+            id={filterId(tableLabel)}
+            type="search"
+            value={filter}
+            onChange={(event) => setFilter(event.target.value)}
+            placeholder={filterPlaceholder}
+            aria-label={`Filter ${tableLabel}`}
+            className="min-h-10 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 text-sm text-[var(--foreground)] outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 sm:max-w-xs"
+          />
+          <p className="text-xs font-medium text-[var(--muted-foreground)]">
+            {visibleRows.length} of {normalizedRows.length} rows
+          </p>
+        </div>
+      )}
+      <div
+        className="workbench-data-table min-w-0 overflow-x-auto rounded-md border border-[var(--border)] bg-[var(--surface)]"
+        data-responsive="card"
+      >
+      <table className="min-w-full border-collapse text-left text-sm" aria-label={tableLabel}>
+        {caption && <caption className="sr-only">{caption}</caption>}
         <thead className="bg-[var(--surface-subtle)] text-xs font-semibold uppercase text-[var(--muted-foreground)]">
           <tr>
             {columns.map((column) => (
@@ -404,9 +455,13 @@ export function DataTable({
           </tr>
         </thead>
         <tbody className="divide-y divide-[var(--border)]">
-          {rows.map((row, rowIndex) => (
-            <tr key={rowIndex} className="hover:bg-[var(--surface-subtle)]">
-              {row.map((cell, cellIndex) => (
+          {visibleRows.map((row, rowIndex) => (
+            <tr
+              key={row.id ?? rowIndex}
+              data-tone={row.tone}
+              className={`hover:bg-[var(--surface-subtle)] ${dataTableRowToneClass(row.tone)}`}
+            >
+              {row.cells.map((cell, cellIndex) => (
                 <td
                   key={cellIndex}
                   data-label={columns[cellIndex] ?? ""}
@@ -417,10 +472,80 @@ export function DataTable({
               ))}
             </tr>
           ))}
+          {visibleRows.length === 0 && (
+            <tr>
+              <td colSpan={columns.length} className="px-4 py-6 text-center text-sm text-[var(--muted-foreground)]">
+                {emptyState}
+              </td>
+            </tr>
+          )}
         </tbody>
+        {totals && (
+          <tfoot className="border-t border-[var(--border)] bg-[var(--surface-subtle)] text-sm font-semibold text-[var(--foreground)]">
+            <tr>
+              {totals.map((cell, cellIndex) => (
+                <td
+                  key={cellIndex}
+                  data-label={columns[cellIndex] ?? ""}
+                  className="px-4 py-3 align-top"
+                >
+                  {cell}
+                </td>
+              ))}
+            </tr>
+          </tfoot>
+        )}
       </table>
+      </div>
     </div>
   );
+}
+
+function normalizeDataTableRow(row: DataTableRow, rowIndex: number): Required<DataTableRichRow> {
+  if (Array.isArray(row)) {
+    const fallbackId = row.map(cellText).join("|");
+    return {
+      id: `row-${rowIndex}-${fallbackId || "legacy"}`,
+      cells: row,
+      searchText: row.map(cellText).join(" "),
+      tone: "default",
+    };
+  }
+
+  const fallbackId = row.cells.map(cellText).join("|");
+  return {
+    id: row.id ?? `row-${rowIndex}-${fallbackId || "rich"}`,
+    cells: row.cells,
+    searchText: row.searchText ?? row.cells.map(cellText).join(" "),
+    tone: row.tone ?? "default",
+  };
+}
+
+function cellText(cell: ReactNode): string {
+  if (cell === null || cell === undefined || typeof cell === "boolean") return "";
+  if (typeof cell === "string" || typeof cell === "number" || typeof cell === "bigint") {
+    return String(cell);
+  }
+  return "";
+}
+
+function dataTableRowToneClass(tone: DataTableRowTone) {
+  switch (tone) {
+    case "good":
+      return "border-l-4 border-l-emerald-400";
+    case "warn":
+      return "border-l-4 border-l-amber-400 bg-amber-50/35 dark:bg-amber-950/20";
+    case "bad":
+      return "border-l-4 border-l-red-400 bg-red-50/35 dark:bg-red-950/20";
+    case "info":
+      return "border-l-4 border-l-sky-400";
+    default:
+      return "";
+  }
+}
+
+function filterId(label: string) {
+  return `filter-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "table"}`;
 }
 
 export function MoneyField({ value }: { value: number | null | undefined }) {

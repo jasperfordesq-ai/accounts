@@ -77,41 +77,49 @@ export function AccountantDashboardQueue({
             ]}
           />
           <DataTable
+            caption="Accountant work queue"
+            filterPlaceholder="Filter companies, blockers, reviewers or actions"
+            emptyState="No matching companies in the work queue"
             columns={["Company", "Deadline", "Blockers", "Assigned reviewer", "Next action"]}
-            rows={rows.map((row) => [
-              <div key="company" className="min-w-56">
-                <div className="font-medium text-[var(--foreground)]">{row.company.legalName}</div>
-                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--muted-foreground)]">
-                  <span>{formatCompanyType(row.company.companyType)}</span>
-                  {row.company.croNumber && <span>CRO {row.company.croNumber}</span>}
-                </div>
-              </div>,
-              <div key="deadline" className="flex min-w-44 items-start gap-2">
-                <CalendarClock className="mt-0.5 h-4 w-4 shrink-0 text-[var(--muted-foreground)]" />
-                <div>
-                  <p className="font-medium text-[var(--foreground)]">{row.deadlineLabel}</p>
-                  <div className="mt-1">
-                    <StatusBadge tone={row.deadlineTone}>{row.deadlineState}</StatusBadge>
+            rows={rows.map((row) => ({
+              id: row.company.id,
+              tone: queueRowTone(row),
+              searchText: queueSearchText(row),
+              cells: [
+                <div key="company" className="min-w-56">
+                  <div className="font-medium text-[var(--foreground)]">{row.company.legalName}</div>
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--muted-foreground)]">
+                    <span>{formatCompanyType(row.company.companyType)}</span>
+                    {row.company.croNumber && <span>CRO {row.company.croNumber}</span>}
                   </div>
-                </div>
-              </div>,
-              <div key="blockers" className="flex min-w-56 items-start gap-2">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--muted-foreground)]" />
-                <div>
-                  <StatusBadge tone={row.blockerTone}>{row.blockerLabel}</StatusBadge>
-                  <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">{row.blockerDetail}</p>
-                </div>
-              </div>,
-              <ReviewerBadge key="reviewer" company={row.company} />,
-              <Link
-                key="action"
-                href={row.nextActionHref}
-                className="inline-flex min-h-8 items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] px-3 text-xs font-semibold text-[var(--foreground)] hover:border-[var(--ring)]"
-              >
-                {row.nextActionLabel}
-                <ArrowRight className="h-3.5 w-3.5" />
-              </Link>,
-            ])}
+                </div>,
+                <div key="deadline" className="flex min-w-44 items-start gap-2">
+                  <CalendarClock className="mt-0.5 h-4 w-4 shrink-0 text-[var(--muted-foreground)]" />
+                  <div>
+                    <p className="font-medium text-[var(--foreground)]">{row.deadlineLabel}</p>
+                    <div className="mt-1">
+                      <StatusBadge tone={row.deadlineTone}>{row.deadlineState}</StatusBadge>
+                    </div>
+                  </div>
+                </div>,
+                <div key="blockers" className="flex min-w-56 items-start gap-2">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--muted-foreground)]" />
+                  <div>
+                    <StatusBadge tone={row.blockerTone}>{row.blockerLabel}</StatusBadge>
+                    <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">{row.blockerDetail}</p>
+                  </div>
+                </div>,
+                <ReviewerBadge key="reviewer" company={row.company} />,
+                <Link
+                  key="action"
+                  href={row.nextActionHref}
+                  className="inline-flex min-h-8 items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] px-3 text-xs font-semibold text-[var(--foreground)] hover:border-[var(--ring)]"
+                >
+                  {row.nextActionLabel}
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Link>,
+              ],
+            }))}
           />
         </div>
       )}
@@ -225,6 +233,30 @@ function queuePriority(row: QueueRow) {
   if (row.deadlineState === "Due soon" || row.blockerTone === "warn" || row.deadlineTone === "warn") return 1;
   if (row.blockerTone === "good" && row.deadlineTone === "good") return 2;
   return 3;
+}
+
+function queueRowTone(row: QueueRow): QueueTone {
+  if (row.blockerTone === "bad" || row.deadlineTone === "bad") return "bad";
+  if (row.blockerTone === "warn" || row.deadlineTone === "warn") return "warn";
+  if (row.blockerTone === "good" && row.deadlineTone === "good") return "good";
+  return "default";
+}
+
+function queueSearchText(row: QueueRow) {
+  return [
+    row.company.legalName,
+    row.company.tradingName,
+    row.company.croNumber,
+    row.company.taxReference,
+    formatCompanyType(row.company.companyType),
+    row.deadlineLabel,
+    row.deadlineState,
+    row.blockerLabel,
+    row.blockerDetail,
+    row.company.assignedReviewerName,
+    row.company.assignedReviewerEmail,
+    row.nextActionLabel,
+  ].filter(Boolean).join(" ");
 }
 
 function deadlineSortValue(row: QueueRow) {
