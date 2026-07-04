@@ -316,6 +316,8 @@ public class FilingReadinessProfileService(AccountsDbContext db)
         var signOffPacket = BuildSignOffPacket(
             supportedPath,
             manualHandoff,
+            company.IsCharitableOrganisation,
+            auditRequired,
             reviewState,
             cro,
             revenue,
@@ -419,6 +421,8 @@ public class FilingReadinessProfileService(AccountsDbContext db)
     private static FilingReadinessSignOffPacket BuildSignOffPacket(
         bool supportedPath,
         bool manualHandoff,
+        bool charityReportingRequired,
+        bool auditReportRequired,
         string reviewState,
         CroFilingPackage? cro,
         RevenueFilingPackage? revenue,
@@ -457,6 +461,8 @@ public class FilingReadinessProfileService(AccountsDbContext db)
             BuildSignOffSteps(
                 supportedPath,
                 manualHandoff,
+                charityReportingRequired,
+                auditReportRequired,
                 accountantApproved,
                 reviewState,
                 cro,
@@ -491,6 +497,8 @@ public class FilingReadinessProfileService(AccountsDbContext db)
     private static IReadOnlyList<FilingReadinessSignOffStep> BuildSignOffSteps(
         bool supportedPath,
         bool manualHandoff,
+        bool charityReportingRequired,
+        bool auditReportRequired,
         bool accountantApproved,
         string reviewState,
         CroFilingPackage? cro,
@@ -506,8 +514,8 @@ public class FilingReadinessProfileService(AccountsDbContext db)
             && EvidenceSatisfied(evidence, "ixbrl-internal-checks");
         var externalValidationComplete = revenue?.IxbrlValidated == true;
 
-        return
-        [
+        var steps = new List<FilingReadinessSignOffStep>
+        {
             new FilingReadinessSignOffStep(
                 "supported-path",
                 "Company path support",
@@ -562,7 +570,41 @@ public class FilingReadinessProfileService(AccountsDbContext db)
                         ? "Ready for named qualified-accountant approval."
                         : $"Resolve blockers before accountant approval. Current state: {reviewState}.",
                 [IrishStatutoryRuleSources.CroFinancialStatementsRequirements, IrishStatutoryRuleSources.RevenueIxbrlOverview])
-        ];
+        };
+
+        if (charityReportingRequired)
+        {
+            var charityEvidenceComplete = EvidenceSatisfied(evidence, "charity-number")
+                && EvidenceSatisfied(evidence, "charity-reports");
+            steps.Add(new FilingReadinessSignOffStep(
+                "charity-reporting",
+                "Charity reporting evidence",
+                charityEvidenceComplete ? "complete" : "blocked",
+                charityEvidenceComplete
+                    ? "Charity number, SoFA and Trustees' Annual Report evidence are present."
+                    : "Record the charity number and generate SoFA and Trustees' Annual Report evidence before charity annual-return review.",
+                [IrishStatutoryRuleSources.CharitiesRegulatorAnnualReport]));
+        }
+
+        if (auditReportRequired)
+        {
+            var auditEvidence = evidence.FirstOrDefault(item => item.Code == "audit-report");
+            var auditorEvidenceComplete = auditEvidence?.Satisfied == true;
+            steps.Add(new FilingReadinessSignOffStep(
+                "auditor-handoff",
+                "Auditor handoff",
+                auditorEvidenceComplete ? "complete" : "blocked",
+                auditorEvidenceComplete
+                    ? $"Signed auditor report evidence is recorded: {auditEvidence!.Detail}"
+                    : "Signed auditor report evidence is required before final output generation.",
+                [
+                    IrishStatutoryRuleSources.CroFinancialStatementsRequirements,
+                    IrishStatutoryRuleSources.CroMediumCompany,
+                    IrishStatutoryRuleSources.CroAuditorsReport
+                ]));
+        }
+
+        return steps;
     }
 
     private static bool EvidenceSatisfied(IReadOnlyList<FilingReadinessEvidenceItem> evidence, string code)

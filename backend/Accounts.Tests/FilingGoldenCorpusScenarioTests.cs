@@ -53,6 +53,12 @@ public class FilingGoldenCorpusScenarioTests
         Assert.Contains(profile.RequiredEvidence, e => e.Code == "charity-reports" && e.Satisfied);
         Assert.Contains(profile.SourceReferences, s => s.SourceId == IrishStatutoryRuleSources.CroGuaranteeCompany.SourceId);
         Assert.Contains(profile.SourceReferences, s => s.SourceId == IrishStatutoryRuleSources.CharitiesRegulatorAnnualReport.SourceId);
+        Assert.Equal("ready-for-external-filing", profile.SignOffPacket.State);
+        Assert.True(profile.SignOffPacket.ReadyForExternalFiling);
+        Assert.Equal("Qualified Accountant", profile.SignOffPacket.ApprovedBy);
+        var charityStep = Assert.Single(profile.SignOffPacket.Steps, step => step.Code == "charity-reporting");
+        Assert.Equal("complete", charityStep.State);
+        Assert.Contains(charityStep.Sources, s => s.SourceId == IrishStatutoryRuleSources.CharitiesRegulatorAnnualReport.SourceId);
     }
 
     [Fact]
@@ -100,6 +106,11 @@ public class FilingGoldenCorpusScenarioTests
         Assert.Contains("signed auditor's report", error.Message, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("approve-cro-pack", profile.AllowedNextActions);
         Assert.DoesNotContain("mark-cro-submitted", profile.AllowedNextActions);
+        Assert.Equal("manual-handoff", profile.SignOffPacket.State);
+        var auditorStep = Assert.Single(profile.SignOffPacket.Steps, step => step.Code == "auditor-handoff");
+        Assert.Equal("blocked", auditorStep.State);
+        Assert.Contains(auditorStep.Sources, s => s.SourceId == IrishStatutoryRuleSources.CroAuditorsReport.SourceId);
+        Assert.Contains(profile.SignOffPacket.OpenBlockers, message => message.Contains("signed auditor report", StringComparison.OrdinalIgnoreCase));
 
         period.AuditorsReportReceived = true;
         period.AuditorsReportReference = "AUD-2026-MIDLANDS-001";
@@ -110,6 +121,9 @@ public class FilingGoldenCorpusScenarioTests
         Assert.True(satisfiedAuditEvidence.Satisfied);
         Assert.Contains("AUD-2026-MIDLANDS-001", satisfiedAuditEvidence.Detail);
         Assert.DoesNotContain(unblockedProfile.BlockingIssues, issue => issue.Code == "auditor-handoff-required");
+        var unblockedAuditorStep = Assert.Single(unblockedProfile.SignOffPacket.Steps, step => step.Code == "auditor-handoff");
+        Assert.Equal("complete", unblockedAuditorStep.State);
+        Assert.Contains("AUD-2026-MIDLANDS-001", unblockedAuditorStep.Detail);
 
         var documents = new DocumentGeneratorService(db, statements);
         var pdf = await documents.GenerateAccountsPackageAsync(period.CompanyId, period.Id);
