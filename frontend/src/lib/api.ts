@@ -1815,6 +1815,27 @@ export interface FilingReadinessIssue {
   sources: LegalSourceReference[];
 }
 
+export interface FilingReadinessSignOffStep {
+  code: string;
+  label: string;
+  state: string;
+  detail: string;
+  sources: LegalSourceReference[];
+}
+
+export interface FilingReadinessSignOffPacket {
+  state: string;
+  stateLabel: string;
+  readyForAccountantApproval: boolean;
+  readyForExternalFiling: boolean;
+  approvedBy?: string;
+  approvedAt?: string;
+  steps: FilingReadinessSignOffStep[];
+  openBlockers: string[];
+  openWarnings: string[];
+  allowedNextActions: string[];
+}
+
 export interface FilingReadinessProfile {
   companyId: number;
   periodId: number;
@@ -1829,6 +1850,7 @@ export interface FilingReadinessProfile {
   directCroSubmissionSupported: boolean;
   directRosSubmissionSupported: boolean;
   revenueTaxonomy: RevenueIxbrlTaxonomySelection;
+  signOffPacket: FilingReadinessSignOffPacket;
   requiredEvidence: FilingReadinessEvidenceItem[];
   blockingIssues: FilingReadinessIssue[];
   warningIssues: FilingReadinessIssue[];

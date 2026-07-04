@@ -18,6 +18,25 @@ public sealed record FilingReadinessIssue(
     string Message,
     IReadOnlyList<LegalSourceReference> Sources);
 
+public sealed record FilingReadinessSignOffStep(
+    string Code,
+    string Label,
+    string State,
+    string Detail,
+    IReadOnlyList<LegalSourceReference> Sources);
+
+public sealed record FilingReadinessSignOffPacket(
+    string State,
+    string StateLabel,
+    bool ReadyForAccountantApproval,
+    bool ReadyForExternalFiling,
+    string? ApprovedBy,
+    DateTime? ApprovedAt,
+    IReadOnlyList<FilingReadinessSignOffStep> Steps,
+    IReadOnlyList<string> OpenBlockers,
+    IReadOnlyList<string> OpenWarnings,
+    IReadOnlyList<string> AllowedNextActions);
+
 public sealed record FilingReadinessProfile(
     int CompanyId,
     int PeriodId,
@@ -32,6 +51,7 @@ public sealed record FilingReadinessProfile(
     bool DirectCroSubmissionSupported,
     bool DirectRosSubmissionSupported,
     RevenueIxbrlTaxonomySelection RevenueTaxonomy,
+    FilingReadinessSignOffPacket SignOffPacket,
     IReadOnlyList<FilingReadinessEvidenceItem> RequiredEvidence,
     IReadOnlyList<FilingReadinessIssue> BlockingIssues,
     IReadOnlyList<FilingReadinessIssue> WarningIssues,
@@ -292,6 +312,17 @@ public class FilingReadinessProfileService(AccountsDbContext db)
 
         var allowedNextActions = DetermineAllowedNextActions(supportedPath, manualHandoff, evidence, blockers, cro, revenue);
         sourceReferences.AddRange(taxonomy.Sources);
+        var distinctSourceReferences = sourceReferences.DistinctBy(s => s.SourceId).ToList();
+        var signOffPacket = BuildSignOffPacket(
+            supportedPath,
+            manualHandoff,
+            reviewState,
+            cro,
+            revenue,
+            evidence,
+            blockers,
+            warnings,
+            allowedNextActions);
 
         return new FilingReadinessProfile(
             companyId,
@@ -307,10 +338,11 @@ public class FilingReadinessProfileService(AccountsDbContext db)
             DirectCroSubmissionSupported: false,
             DirectRosSubmissionSupported: false,
             taxonomy,
+            signOffPacket,
             evidence,
             blockers,
             warnings,
-            sourceReferences.DistinctBy(s => s.SourceId).ToList(),
+            distinctSourceReferences,
             allowedNextActions);
     }
 
@@ -382,5 +414,159 @@ public class FilingReadinessProfileService(AccountsDbContext db)
             actions.Add("mark-cro-accepted");
 
         return actions.Distinct().ToList();
+    }
+
+    private static FilingReadinessSignOffPacket BuildSignOffPacket(
+        bool supportedPath,
+        bool manualHandoff,
+        string reviewState,
+        CroFilingPackage? cro,
+        RevenueFilingPackage? revenue,
+        IReadOnlyList<FilingReadinessEvidenceItem> evidence,
+        IReadOnlyList<FilingReadinessIssue> blockers,
+        IReadOnlyList<FilingReadinessIssue> warnings,
+        IReadOnlyList<string> allowedNextActions)
+    {
+        var approvedBy = string.IsNullOrWhiteSpace(cro?.ApprovedBy) ? null : cro.ApprovedBy;
+        var approvedAt = cro?.ApprovedAt;
+        var accountantApproved = approvedBy is not null && approvedAt is not null;
+        var readyForAccountantApproval = !accountantApproved
+            && supportedPath
+            && !manualHandoff
+            && blockers.All(issue => issue.Code == "accountant-review-required");
+        var readyForExternalFiling = supportedPath
+            && !manualHandoff
+            && accountantApproved
+            && blockers.Count == 0
+            && warnings.Count == 0;
+        var (state, stateLabel) = DetermineSignOffState(
+            supportedPath,
+            manualHandoff,
+            accountantApproved,
+            readyForAccountantApproval,
+            readyForExternalFiling,
+            blockers);
+
+        return new FilingReadinessSignOffPacket(
+            state,
+            stateLabel,
+            readyForAccountantApproval,
+            readyForExternalFiling,
+            approvedBy,
+            approvedAt,
+            BuildSignOffSteps(
+                supportedPath,
+                manualHandoff,
+                accountantApproved,
+                reviewState,
+                cro,
+                revenue,
+                evidence,
+                readyForAccountantApproval),
+            blockers.Select(issue => issue.Message).Distinct().ToList(),
+            warnings.Select(issue => issue.Message).Distinct().ToList(),
+            allowedNextActions);
+    }
+
+    private static (string State, string Label) DetermineSignOffState(
+        bool supportedPath,
+        bool manualHandoff,
+        bool accountantApproved,
+        bool readyForAccountantApproval,
+        bool readyForExternalFiling,
+        IReadOnlyList<FilingReadinessIssue> blockers)
+    {
+        if (!supportedPath || manualHandoff)
+            return ("manual-handoff", "Manual professional handoff");
+        if (readyForExternalFiling)
+            return ("ready-for-external-filing", "Ready for external filing");
+        if (accountantApproved && blockers.Count == 0)
+            return ("approved-external-evidence-open", "Accountant approved, external evidence open");
+        if (readyForAccountantApproval)
+            return ("ready-for-accountant-review", "Ready for accountant review");
+
+        return ("blocked", "Blocked before accountant review");
+    }
+
+    private static IReadOnlyList<FilingReadinessSignOffStep> BuildSignOffSteps(
+        bool supportedPath,
+        bool manualHandoff,
+        bool accountantApproved,
+        string reviewState,
+        CroFilingPackage? cro,
+        RevenueFilingPackage? revenue,
+        IReadOnlyList<FilingReadinessEvidenceItem> evidence,
+        bool readyForAccountantApproval)
+    {
+        var statutoryEvidenceComplete = EvidenceSatisfied(evidence, "size-classification")
+            && EvidenceSatisfied(evidence, "filing-regime");
+        var directorCertificationComplete = EvidenceSatisfied(evidence, "cro-signatories")
+            && EvidenceSatisfied(evidence, "cro-signature-page");
+        var generatedOutputsComplete = EvidenceSatisfied(evidence, "cro-accounts-pdf")
+            && EvidenceSatisfied(evidence, "ixbrl-internal-checks");
+        var externalValidationComplete = revenue?.IxbrlValidated == true;
+
+        return
+        [
+            new FilingReadinessSignOffStep(
+                "supported-path",
+                "Company path support",
+                supportedPath && !manualHandoff ? "complete" : "blocked",
+                supportedPath && !manualHandoff
+                    ? "Core LTD, DAC or CLG filing path is supported by the platform."
+                    : "Manual professional handoff is required for this filing path.",
+                [IrishStatutoryRuleSources.CroFinancialStatementsRequirements]),
+            new FilingReadinessSignOffStep(
+                "statutory-basis",
+                "Statutory basis",
+                statutoryEvidenceComplete ? "complete" : "blocked",
+                statutoryEvidenceComplete
+                    ? "Size classification and filing regime evidence are recorded."
+                    : "Complete size classification and filing regime evidence before review.",
+                [IrishStatutoryRuleSources.CroFinancialStatementsRequirements, IrishStatutoryRuleSources.FrcFrs102]),
+            new FilingReadinessSignOffStep(
+                "directors-certification",
+                "Director and secretary certification",
+                directorCertificationComplete ? "complete" : "blocked",
+                directorCertificationComplete
+                    ? "Director, secretary and CRO signature-page evidence are present."
+                    : "Director/secretary certification evidence is incomplete.",
+                [IrishStatutoryRuleSources.CroFinancialStatementsRequirements]),
+            new FilingReadinessSignOffStep(
+                "generated-outputs",
+                "Generated statutory outputs",
+                generatedOutputsComplete ? "complete" : "blocked",
+                generatedOutputsComplete
+                    ? "CRO accounts PDF and internal iXBRL checks are complete."
+                    : "Generate the CRO accounts PDF and complete internal iXBRL checks.",
+                [
+                    IrishStatutoryRuleSources.CroFinancialStatementsRequirements,
+                    IrishStatutoryRuleSources.RevenueIxbrlOverview,
+                    IrishStatutoryRuleSources.RevenueAcceptedTaxonomies
+                ]),
+            new FilingReadinessSignOffStep(
+                "external-validation",
+                "External ROS validation",
+                externalValidationComplete ? "complete" : "warning",
+                externalValidationComplete
+                    ? "External ROS/iXBRL validation evidence is recorded."
+                    : "External ROS validation evidence pending",
+                [IrishStatutoryRuleSources.RevenueIxbrlOverview, IrishStatutoryRuleSources.RevenueAcceptedTaxonomies]),
+            new FilingReadinessSignOffStep(
+                "accountant-approval",
+                "Qualified accountant approval",
+                accountantApproved ? "complete" : readyForAccountantApproval ? "blocked" : "pending",
+                accountantApproved
+                    ? $"Approved by {cro!.ApprovedBy} on {cro.ApprovedAt!.Value:yyyy-MM-dd HH:mm} UTC."
+                    : readyForAccountantApproval
+                        ? "Ready for named qualified-accountant approval."
+                        : $"Resolve blockers before accountant approval. Current state: {reviewState}.",
+                [IrishStatutoryRuleSources.CroFinancialStatementsRequirements, IrishStatutoryRuleSources.RevenueIxbrlOverview])
+        ];
+    }
+
+    private static bool EvidenceSatisfied(IReadOnlyList<FilingReadinessEvidenceItem> evidence, string code)
+    {
+        return evidence.FirstOrDefault(item => item.Code == code)?.Satisfied == true;
     }
 }

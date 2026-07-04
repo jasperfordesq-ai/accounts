@@ -35,6 +35,8 @@ describe("FilingReviewCentre", () => {
 
     expect(screen.getByText("Filing readiness profile")).toBeInTheDocument();
     expect(screen.getByText("Manual handoff")).toBeInTheDocument();
+    expect(screen.getByText("Accountant sign-off packet")).toBeInTheDocument();
+    expect(screen.getByText("Manual professional handoff")).toBeInTheDocument();
     expect(screen.getByText("Audit report")).toBeInTheDocument();
     expect(screen.getByText("Signed auditor report must be reviewed manually before final filing.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "CRO financial statements requirements" })).toHaveAttribute(
@@ -110,6 +112,9 @@ describe("FilingReviewCentre", () => {
     );
 
     expect(screen.getByText("Filing issue digest")).toBeInTheDocument();
+    expect(screen.getByText("Ready for accountant review")).toBeInTheDocument();
+    expect(screen.getByText("External ROS validation evidence pending")).toBeInTheDocument();
+    expect(screen.getByText("Approve CRO pack")).toBeInTheDocument();
     expect(screen.getByText("5 blockers")).toBeInTheDocument();
     expect(screen.getByText("1 warning")).toBeInTheDocument();
     expect(screen.getByText("Priority blockers")).toBeInTheDocument();
@@ -200,6 +205,35 @@ function sampleReadinessProfile({
     warningIssues,
     sourceReferences: [sourceReference()],
     allowedNextActions: [],
+    signOffPacket: {
+      state: manualProfessionalReviewRequired ? "manual-handoff" : "ready-for-accountant-review",
+      stateLabel: manualProfessionalReviewRequired ? "Manual professional handoff" : "Ready for accountant review",
+      readyForAccountantApproval: !manualProfessionalReviewRequired,
+      readyForExternalFiling: false,
+      approvedBy: undefined,
+      approvedAt: undefined,
+      steps: [
+        {
+          code: "supported-path",
+          label: "Company path support",
+          state: manualProfessionalReviewRequired ? "blocked" : "complete",
+          detail: manualProfessionalReviewRequired
+            ? "Manual professional handoff is required for this filing path."
+            : "Core private company path supported.",
+          sources: [sourceReference()],
+        },
+        {
+          code: "external-validation",
+          label: "External ROS validation",
+          state: "warning",
+          detail: "External ROS validation evidence pending",
+          sources: [sourceReference()],
+        },
+      ],
+      openBlockers: blockingIssues.map((issue) => issue.message),
+      openWarnings: warningIssues.map((issue) => issue.message),
+      allowedNextActions: manualProfessionalReviewRequired ? [] : ["approve-cro-pack"],
+    },
   };
 }
 

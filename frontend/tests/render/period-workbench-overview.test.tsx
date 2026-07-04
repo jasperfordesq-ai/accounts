@@ -224,5 +224,28 @@ function sampleFilingReadinessProfile(): FilingReadinessProfile {
     warningIssues: [],
     sourceReferences: [],
     allowedNextActions: ["record-accountant-review"],
+    signOffPacket: {
+      state: "blocked",
+      stateLabel: "Blocked before accountant review",
+      readyForAccountantApproval: false,
+      readyForExternalFiling: false,
+      approvedBy: undefined,
+      approvedAt: undefined,
+      steps: [
+        {
+          code: "generated-outputs",
+          label: "Generated statutory outputs",
+          state: "blocked",
+          detail: "Generate the CRO accounts PDF and complete internal iXBRL checks.",
+          sources: [],
+        },
+      ],
+      openBlockers: [
+        "Named qualified-accountant approval required",
+        "External ROS/iXBRL validation evidence required",
+      ],
+      openWarnings: [],
+      allowedNextActions: ["record-accountant-review"],
+    },
   };
 }

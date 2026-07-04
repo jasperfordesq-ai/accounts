@@ -30,6 +30,34 @@ public class FilingReadinessProfileTests
         Assert.Contains(profile.SourceReferences, s => s.SourceId == IrishStatutoryRuleSources.FrcFrs102.SourceId);
     }
 
+    [Fact]
+    public async Task ReadinessProfile_BuildsAccountantSignOffPacketFromEvidenceAndWorkflowState()
+    {
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, CompanyType.Private, CompanySizeClass.Small);
+        await SeedOfficersAsync(db, period.CompanyId);
+        await SeedCroPackageAsync(db, period.Id, approvedBy: null);
+        await SeedRevenuePackageAsync(db, period.Id, internalChecksPassed: true, externallyValidated: false);
+
+        var service = new FilingReadinessProfileService(db);
+
+        var profile = await service.GetProfileAsync(period.CompanyId, period.Id);
+
+        Assert.Equal("ready-for-accountant-review", profile.SignOffPacket.State);
+        Assert.Equal("Ready for accountant review", profile.SignOffPacket.StateLabel);
+        Assert.True(profile.SignOffPacket.ReadyForAccountantApproval);
+        Assert.False(profile.SignOffPacket.ReadyForExternalFiling);
+        Assert.Null(profile.SignOffPacket.ApprovedBy);
+        Assert.Contains("approve-cro-pack", profile.SignOffPacket.AllowedNextActions);
+        Assert.Contains(profile.SignOffPacket.OpenBlockers, message => message.Contains("named qualified accountant", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(profile.SignOffPacket.OpenWarnings, message => message.Contains("External ROS/iXBRL validation", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(profile.SignOffPacket.Steps, step => step.Code == "accountant-approval" && step.State == "blocked");
+        Assert.Contains(profile.SignOffPacket.Steps, step => step.Code == "external-validation" && step.State == "warning");
+        Assert.Contains(
+            profile.SignOffPacket.Steps.Single(step => step.Code == "accountant-approval").Sources,
+            source => source.SourceId == IrishStatutoryRuleSources.CroFinancialStatementsRequirements.SourceId);
+    }
+
     [Theory]
     [InlineData(CompanyType.PublicLimitedCompany)]
     [InlineData(CompanyType.PrivateUnlimited)]
@@ -48,6 +76,10 @@ public class FilingReadinessProfileTests
         Assert.True(profile.ManualProfessionalReviewRequired);
         Assert.Empty(profile.AllowedNextActions);
         Assert.Contains(profile.BlockingIssues, i => i.Code == "unsupported-company-type");
+        Assert.Equal("manual-handoff", profile.SignOffPacket.State);
+        Assert.False(profile.SignOffPacket.ReadyForAccountantApproval);
+        Assert.False(profile.SignOffPacket.ReadyForExternalFiling);
+        Assert.Contains(profile.SignOffPacket.Steps, step => step.Code == "supported-path" && step.State == "blocked");
     }
 
     [Fact]
@@ -200,6 +232,25 @@ public class FilingReadinessProfileTests
             SignedByDirector = "Aisling Director",
             SignedBySecretary = "Brian Secretary",
             SignedAt = approvedBy is null ? null : DateTime.UtcNow
+        });
+        await db.SaveChangesAsync();
+    }
+
+    private static async Task SeedRevenuePackageAsync(
+        AccountsDbContext db,
+        int periodId,
+        bool internalChecksPassed,
+        bool externallyValidated)
+    {
+        db.RevenueFilingPackages.Add(new RevenueFilingPackage
+        {
+            PeriodId = periodId,
+            FilingStatus = internalChecksPassed ? FilingStatus.ReadyForReview : FilingStatus.PackageGenerated,
+            IxbrlGenerated = internalChecksPassed,
+            IxbrlValidated = externallyValidated,
+            IxbrlValidationErrors = internalChecksPassed
+                ? "Internal checks passed. External ROS/iXBRL validation is still required."
+                : "Internal checks pending."
         });
         await db.SaveChangesAsync();
     }

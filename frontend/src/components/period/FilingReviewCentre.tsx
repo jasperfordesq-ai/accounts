@@ -1,6 +1,11 @@
 import { Button, Chip, Spinner } from "@heroui/react";
-import { CheckCircle2, FileText, Shield, Upload } from "lucide-react";
-import type { FilingReadinessProfile, FilingWorkflowStatus } from "@/lib/api";
+import { CheckCircle2, ClipboardCheck, FileText, Shield, Upload } from "lucide-react";
+import type {
+  FilingReadinessProfile,
+  FilingReadinessSignOffPacket,
+  FilingReadinessSignOffStep,
+  FilingWorkflowStatus,
+} from "@/lib/api";
 import {
   EvidenceChecklist,
   FilingActionBar,
@@ -66,47 +71,51 @@ export function FilingReviewCentre({
           </div>
 
           {filingReadinessProfile && (
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
-              <div className="space-y-3">
-                <SectionHeader
-                  eyebrow="Required evidence"
-                  title="Professional filing gate"
-                  description="Generated outputs remain draft/recorded workflow states until the required evidence and named review are complete."
-                />
-                <EvidenceChecklist items={filingReadinessProfile.requiredEvidence} />
-              </div>
-              <div className="space-y-3">
-                <div className="rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-4">
-                  <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Submission controls</p>
-                  <div className="mt-3 space-y-2 text-sm text-[var(--foreground)]">
-                    <SubmissionControl
-                      label="Direct CRO submission"
-                      supported={filingReadinessProfile.directCroSubmissionSupported}
-                      supportedLabel="Enabled"
-                      unsupportedLabel="Recorded only"
-                    />
-                    <SubmissionControl
-                      label="Direct ROS submission"
-                      supported={filingReadinessProfile.directRosSubmissionSupported}
-                      supportedLabel="Enabled"
-                      unsupportedLabel="Manual"
-                    />
-                  </div>
+            <div className="space-y-4">
+              <SignOffPacketPanel packet={filingReadinessProfile.signOffPacket} />
+
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
+                <div className="space-y-3">
+                  <SectionHeader
+                    eyebrow="Required evidence"
+                    title="Professional filing gate"
+                    description="Generated outputs remain draft/recorded workflow states until the required evidence and named review are complete."
+                  />
+                  <EvidenceChecklist items={filingReadinessProfile.requiredEvidence} />
                 </div>
-                <div className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-4">
-                  <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Legal sources</p>
-                  <div className="mt-3 space-y-2">
-                    {filingReadinessProfile.sourceReferences.slice(0, 6).map((source) => (
-                      <a
-                        key={source.sourceId}
-                        href={source.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="block rounded border border-[var(--border)] px-3 py-2 text-xs font-medium text-[var(--foreground)] hover:bg-[var(--surface-subtle)]"
-                      >
-                        {source.title}
-                      </a>
-                    ))}
+                <div className="space-y-3">
+                  <div className="rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-4">
+                    <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Submission controls</p>
+                    <div className="mt-3 space-y-2 text-sm text-[var(--foreground)]">
+                      <SubmissionControl
+                        label="Direct CRO submission"
+                        supported={filingReadinessProfile.directCroSubmissionSupported}
+                        supportedLabel="Enabled"
+                        unsupportedLabel="Recorded only"
+                      />
+                      <SubmissionControl
+                        label="Direct ROS submission"
+                        supported={filingReadinessProfile.directRosSubmissionSupported}
+                        supportedLabel="Enabled"
+                        unsupportedLabel="Manual"
+                      />
+                    </div>
+                  </div>
+                  <div className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-4">
+                    <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Legal sources</p>
+                    <div className="mt-3 space-y-2">
+                      {filingReadinessProfile.sourceReferences.slice(0, 6).map((source) => (
+                        <a
+                          key={source.sourceId}
+                          href={source.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="block rounded border border-[var(--border)] px-3 py-2 text-xs font-medium text-[var(--foreground)] hover:bg-[var(--surface-subtle)]"
+                        >
+                          {source.title}
+                        </a>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -183,6 +192,128 @@ export function FilingReviewCentre({
       )}
     </ReviewPanel>
   );
+}
+
+function SignOffPacketPanel({ packet }: { packet: FilingReadinessSignOffPacket }) {
+  const openIssueCount = packet.openBlockers.length + packet.openWarnings.length;
+
+  return (
+    <section className="rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-4" aria-label="Accountant sign-off packet">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="min-w-0">
+          <div className="flex min-w-0 items-center gap-2">
+            <ClipboardCheck className="h-4 w-4 shrink-0 text-[var(--muted-foreground)]" />
+            <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Accountant sign-off packet</p>
+          </div>
+          <p className="mt-1 text-sm font-semibold text-[var(--foreground)]">{packet.stateLabel}</p>
+          <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">
+            {packet.approvedBy
+              ? `Approved by ${packet.approvedBy}${packet.approvedAt ? ` on ${formatIrishDateTime(packet.approvedAt)}` : ""}.`
+              : "Named qualified-accountant approval is recorded only after every required gate is evidenced."}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <StatusBadge tone={signOffStateTone(packet.state)}>{formatStateLabel(packet.state)}</StatusBadge>
+          <StatusBadge tone={openIssueCount > 0 ? "warn" : "good"}>{openIssueCount} open</StatusBadge>
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_18rem]">
+        <ol className="grid gap-2 md:grid-cols-2">
+          {packet.steps.map((step) => (
+            <SignOffStepItem key={step.code} step={step} />
+          ))}
+        </ol>
+        <div className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
+          <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Allowed next actions</p>
+          {packet.allowedNextActions.length > 0 ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {packet.allowedNextActions.map((action) => (
+                <StatusBadge key={action} tone="info">{formatActionLabel(action)}</StatusBadge>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-3 text-sm leading-6 text-[var(--muted-foreground)]">
+              No filing workflow action is allowed until blockers or manual handoff are resolved.
+            </p>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function SignOffStepItem({ step }: { step: FilingReadinessSignOffStep }) {
+  const tone = signOffStepTone(step.state);
+
+  return (
+    <li className="min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
+      <div className="flex items-start justify-between gap-3">
+        <p className="min-w-0 text-sm font-medium text-[var(--foreground)]">{step.label}</p>
+        <StatusBadge tone={tone}>{formatStateLabel(step.state)}</StatusBadge>
+      </div>
+      <p className="mt-2 text-xs leading-5 text-[var(--muted-foreground)]">{step.detail}</p>
+    </li>
+  );
+}
+
+function signOffStateTone(state: string): "default" | "good" | "warn" | "bad" | "info" {
+  if (state === "ready-for-external-filing") return "good";
+  if (state === "ready-for-accountant-review" || state === "approved-external-evidence-open") return "info";
+  if (state === "manual-handoff" || state === "blocked") return "bad";
+  return "default";
+}
+
+function signOffStepTone(state: string): "default" | "good" | "warn" | "bad" | "info" {
+  if (state === "complete") return "good";
+  if (state === "blocked") return "bad";
+  if (state === "warning") return "warn";
+  if (state === "pending") return "info";
+  return "default";
+}
+
+function formatStateLabel(state: string) {
+  const labels: Record<string, string> = {
+    "approved-external-evidence-open": "Evidence open",
+    blocked: "Blocked",
+    complete: "Complete",
+    "manual-handoff": "Manual gate",
+    pending: "Pending",
+    "ready-for-accountant-review": "Ready",
+    "ready-for-external-filing": "External-ready",
+    warning: "Warning",
+  };
+
+  return labels[state] ?? actionToTitleCase(state);
+}
+
+function formatActionLabel(action: string) {
+  const labels: Record<string, string> = {
+    "approve-cro-pack": "Approve CRO pack",
+    "confirm-core-payment": "Confirm CORE payment",
+    "generate-cro-accounts-pdf": "Generate CRO accounts PDF",
+    "generate-cro-signature-page": "Generate CRO signature page",
+    "mark-cro-accepted": "Mark CRO accepted",
+    "mark-cro-submitted": "Mark CRO submitted",
+    "run-internal-ixbrl-checks": "Run internal iXBRL checks",
+  };
+
+  return labels[action] ?? actionToTitleCase(action);
+}
+
+function actionToTitleCase(value: string) {
+  return value
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
+    .join(" ");
+}
+
+function formatIrishDateTime(value: string) {
+  return new Intl.DateTimeFormat("en-IE", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
 }
 
 function StatusTile({
