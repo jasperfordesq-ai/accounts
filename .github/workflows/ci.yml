@@ -132,6 +132,8 @@ jobs:
       BOOTSTRAP_OWNER_EMAIL: owner@example.ie
       BOOTSTRAP_OWNER_DISPLAY_NAME: CI Owner
       BOOTSTRAP_OWNER_MUST_CHANGE_PASSWORD: "false"
+      MONITORING_ERROR_TRACKING_DSN: https://public@sentry.invalid/1
+      MONITORING_TRACES_SAMPLE_RATE: "0"
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -231,6 +233,8 @@ jobs:
       BOOTSTRAP_OWNER_EMAIL: owner@example.ie
       BOOTSTRAP_OWNER_DISPLAY_NAME: CI Owner
       BOOTSTRAP_OWNER_MUST_CHANGE_PASSWORD: "false"
+      MONITORING_ERROR_TRACKING_DSN: https://public@sentry.invalid/1
+      MONITORING_TRACES_SAMPLE_RATE: "0"
     steps:
       - name: Check out repository
         uses: actions/checkout@v7

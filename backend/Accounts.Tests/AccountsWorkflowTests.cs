@@ -6353,7 +6353,8 @@ public class AccountsWorkflowTests
                 OwnerEmail = "owner@example.ie",
                 OwnerDisplayName = "Owner User",
                 OwnerInitialPassword = "Correct Horse Battery Staple 1!"
-            }));
+            }),
+            MonitoringOptions());
 
         Assert.Empty(service.Validate());
     }
@@ -6452,6 +6453,63 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public void ProductionSafety_BlocksMissingMonitoringConfigurationOutsideDevelopment()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["AllowedHosts"] = "accounts.example.ie",
+                ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password;SSL Mode=Require",
+                ["AllowedOrigins:0"] = "https://accounts.example.ie",
+                ["AuthSession:SigningKey"] = StrongSessionSigningKey()
+            })
+            .Build();
+        var service = new ProductionSafetyService(
+            new TestEnvironment("Production"),
+            config,
+            Options.Create(new DatabaseStartupConfig
+            {
+                AutoMigrateOnStartup = false,
+                SeedDemoData = false
+            }),
+            AuthSessionOptions(config),
+            new ApiAccessService(
+                Options.Create(new ApiAccessConfig
+                {
+                    Enabled = true,
+                    RequireInProduction = true,
+                    Keys =
+                    [
+                        new ApiAccessKeyConfig
+                        {
+                            Name = "Production firm",
+                            KeyHash = ApiAccessService.HashKey("real-secret")
+                        }
+                    ]
+                }),
+                new TestEnvironment("Production")),
+            Options.Create(AuditIntegrityCheckpointOptions()));
+
+        var failures = service.Validate();
+
+        Assert.Contains(failures, f => f.Contains("Monitoring:ErrorTrackingDsn"));
+        Assert.Contains(failures, f => f.Contains("Monitoring:StructuredJsonConsole"));
+    }
+
+    [Fact]
+    public void ProductionMonitoring_IsWiredIntoApiStartupAndProductionCompose()
+    {
+        var program = File.ReadAllText(Path.Combine(RepositoryRoot(), "backend", "Accounts.Api", "Program.cs"));
+        var compose = File.ReadAllText(Path.Combine(RepositoryRoot(), "compose.production.yml"));
+
+        Assert.Contains("Configure<MonitoringConfig>", program);
+        Assert.Contains("UseSentry", program);
+        Assert.Contains("AddJsonConsole", program);
+        Assert.Contains("Monitoring__ErrorTrackingDsn", compose);
+        Assert.Contains("Monitoring__StructuredJsonConsole: \"true\"", compose);
+    }
+
+    [Fact]
     public void ProductionSafety_BlocksWeakAuditIntegritySigningKeyInProduction()
     {
         var failures = AuditIntegrityCheckpointService.ValidateConfiguration(new AuditIntegrityConfig
@@ -6527,7 +6585,8 @@ public class AccountsWorkflowTests
                     ]
                 }),
                 new TestEnvironment("Production")),
-            Options.Create(AuditIntegrityCheckpointOptions()));
+            Options.Create(AuditIntegrityCheckpointOptions()),
+            monitoring: MonitoringOptions());
 
         Assert.Empty(service.Validate());
     }
@@ -6569,7 +6628,8 @@ public class AccountsWorkflowTests
                     ]
                 }),
                 new TestEnvironment("Production")),
-            Options.Create(AuditIntegrityCheckpointOptions()));
+            Options.Create(AuditIntegrityCheckpointOptions()),
+            monitoring: MonitoringOptions());
 
         var failures = service.Validate();
 
@@ -6612,7 +6672,8 @@ public class AccountsWorkflowTests
                     ]
                 }),
                 new TestEnvironment("Production")),
-            Options.Create(AuditIntegrityCheckpointOptions()));
+            Options.Create(AuditIntegrityCheckpointOptions()),
+            monitoring: MonitoringOptions());
 
         var failures = service.Validate();
 
@@ -6655,7 +6716,8 @@ public class AccountsWorkflowTests
                     ]
                 }),
                 new TestEnvironment("Production")),
-            Options.Create(AuditIntegrityCheckpointOptions()));
+            Options.Create(AuditIntegrityCheckpointOptions()),
+            monitoring: MonitoringOptions());
 
         var failures = service.Validate();
 
@@ -6698,7 +6760,8 @@ public class AccountsWorkflowTests
                     ]
                 }),
                 new TestEnvironment("Production")),
-            Options.Create(AuditIntegrityCheckpointOptions()));
+            Options.Create(AuditIntegrityCheckpointOptions()),
+            monitoring: MonitoringOptions());
 
         var failures = service.Validate();
 
@@ -6867,7 +6930,8 @@ public class AccountsWorkflowTests
                     ]
                 }),
                 new TestEnvironment("Production")),
-            Options.Create(AuditIntegrityCheckpointOptions()));
+            Options.Create(AuditIntegrityCheckpointOptions()),
+            monitoring: MonitoringOptions());
 
         Assert.Empty(service.Validate());
     }
@@ -6908,7 +6972,8 @@ public class AccountsWorkflowTests
                     ]
                 }),
                 new TestEnvironment("Production")),
-            Options.Create(AuditIntegrityCheckpointOptions()));
+            Options.Create(AuditIntegrityCheckpointOptions()),
+            monitoring: MonitoringOptions());
 
         Assert.Empty(service.Validate());
     }
@@ -18844,6 +18909,15 @@ public class AccountsWorkflowTests
             }
         ]
     };
+
+    private static IOptions<MonitoringConfig> MonitoringOptions() =>
+        Options.Create(new MonitoringConfig
+        {
+            ErrorTrackingProvider = "Sentry-compatible",
+            ErrorTrackingDsn = "https://public@sentry.example.ie/1",
+            StructuredJsonConsole = true,
+            IncludeCorrelationId = true
+        });
 
     private static string StrongSessionSigningKey() =>
         Convert.ToBase64String(Enumerable.Range(0, 64).Select(i => (byte)i).ToArray());

@@ -70,6 +70,12 @@ describe("ProductionReadinessWorkbench", () => {
     expect(screen.getByText("Tamper-evident audit chain")).toBeInTheDocument();
     expect(screen.getByText("audit-log-integrity-chain")).toBeInTheDocument();
     expect(screen.getByText("CroDocumentGenerated")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Production monitoring" })).toBeInTheDocument();
+    expect(screen.getByText("Production error tracking")).toBeInTheDocument();
+    expect(screen.getByText("Structured JSON logs")).toBeInTheDocument();
+    expect(screen.getByText("Correlation id error responses")).toBeInTheDocument();
+    expect(screen.getByText("Sentry-compatible")).toBeInTheDocument();
+    expect(screen.getByText("Monitoring:ErrorTrackingDsn")).toBeInTheDocument();
   }, 20000);
 });
 
@@ -224,6 +230,35 @@ function sampleReport(): ProductionReadinessReport {
         evidenceCaptured: "Previous hash, current hash, checkpoint key id and signed checkpoint anchor.",
         verification: "Signed checkpoint verifies the latest company audit entry.",
         auditEventCodes: ["IxbrlInternalCheckCompleted"],
+      },
+    ],
+    monitoringControls: [
+      {
+        code: "error-tracking",
+        label: "Production error tracking",
+        provider: "Sentry-compatible",
+        required: true,
+        productionSafetyGate: "Monitoring:ErrorTrackingDsn",
+        evidenceCaptured: "Unhandled exceptions are routed to the configured production error-tracking provider.",
+        verification: "Program.cs wires UseSentry and ProductionSafetyService blocks a missing DSN.",
+      },
+      {
+        code: "structured-json-logs",
+        label: "Structured JSON logs",
+        provider: "ASP.NET Core JSON console",
+        required: true,
+        productionSafetyGate: "Monitoring:StructuredJsonConsole",
+        evidenceCaptured: "Production log lines keep structured fields and scopes for indexing.",
+        verification: "Program.cs switches to AddJsonConsole when the production safety gate is enabled.",
+      },
+      {
+        code: "correlation-id-error-responses",
+        label: "Correlation id error responses",
+        provider: "ExceptionMiddleware",
+        required: true,
+        productionSafetyGate: "Monitoring:IncludeCorrelationId",
+        evidenceCaptured: "Safe client errors include a correlation id that maps to the server exception log.",
+        verification: "ExceptionMiddleware logs unhandled errors and returns the trace identifier.",
       },
     ],
     statutoryRuleMatrix: [

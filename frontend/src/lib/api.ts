@@ -1622,6 +1622,16 @@ export interface ProductionAuditabilityControl {
   auditEventCodes: string[];
 }
 
+export interface ProductionMonitoringControl {
+  code: string;
+  label: string;
+  provider: string;
+  required: boolean;
+  productionSafetyGate: string;
+  evidenceCaptured: string;
+  verification: string;
+}
+
 export interface VisualQaViewport {
   name: string;
   width: number;
@@ -1660,6 +1670,7 @@ export interface ProductionReadinessReport {
   operationalGates: OperationalGate[];
   assuranceActions: ProductionReadinessAssuranceAction[];
   auditabilityControls: ProductionAuditabilityControl[];
+  monitoringControls: ProductionMonitoringControl[];
   visualQaCoverage: VisualQaCoverage;
 }
 
@@ -1756,6 +1767,16 @@ const productionAuditabilityControlSchema = z.object({
   auditEventCodes: z.array(z.string().min(1)),
 });
 
+const productionMonitoringControlSchema = z.object({
+  code: z.string().min(1),
+  label: z.string().min(1),
+  provider: z.string().min(1),
+  required: z.boolean(),
+  productionSafetyGate: z.string().min(1),
+  evidenceCaptured: z.string().min(1),
+  verification: z.string().min(1),
+});
+
 const visualQaViewportSchema = z.object({
   name: z.string().min(1),
   width: z.number(),
@@ -1794,6 +1815,7 @@ export const productionReadinessReportSchema = z.object({
   operationalGates: z.array(operationalGateSchema),
   assuranceActions: z.array(productionReadinessAssuranceActionSchema),
   auditabilityControls: z.array(productionAuditabilityControlSchema),
+  monitoringControls: z.array(productionMonitoringControlSchema),
   visualQaCoverage: visualQaCoverageSchema,
 });
 

@@ -69,6 +69,9 @@ Do not run plain `docker compose -f compose.production.yml config` with producti
 | `ACCOUNTS_ALLOWED_ORIGIN` | Public HTTPS origin used by the browser, for example `https://accounts.example.ie`. |
 | `ACCOUNTS_API_KEY_FILE`, `ACCOUNTS_API_KEY_HASH` | Docker secret file path for the frontend service API key and matching lowercase SHA-256 hash. |
 | `TRUST_PROXY_HEADERS` | Set to `true` only when the trusted ingress overwrites forwarded headers and clients cannot bypass it; required by the API when `RateLimits__TrustForwardedFor=true`. |
+| `MONITORING_ERROR_TRACKING_DSN` | Required HTTPS DSN for the production error-tracking provider. Startup fails outside development when this is missing or not HTTPS. |
+| `MONITORING_ERROR_TRACKING_PROVIDER` | Optional; defaults to `Sentry-compatible`. Use a short provider label for the readiness report and operational records. |
+| `MONITORING_TRACES_SAMPLE_RATE` | Optional; defaults to `0`. Must be between `0` and `1` when set. |
 | `BOOTSTRAP_TENANT_NAME`, `BOOTSTRAP_TENANT_SLUG` | Initial firm tenant created by the controlled migration/bootstrap job. |
 | `BOOTSTRAP_OWNER_EMAIL`, `BOOTSTRAP_OWNER_DISPLAY_NAME`, `BOOTSTRAP_OWNER_PASSWORD_FILE` | Initial owner account and Docker secret file path for the initial password; `BOOTSTRAP_OWNER_PASSWORD_FILE` must contain a password of at least 20 characters and include upper case, lower case, number, and symbol characters. Rotate the password at first login. |
 | `BOOTSTRAP_OWNER_MUST_CHANGE_PASSWORD` | Optional; defaults to `true`. When `true` the bootstrap owner must change the password at first sign-in before any other API access is allowed. |
@@ -133,7 +136,7 @@ After restore:
 
 ## Build Gate
 
-CI is the authoritative build gate for releases. Before promoting an image, confirm the backend tests and build, frontend audit, type-check, lint, readiness regression, and Next production build have all passed. Production deployment must run CI-promoted immutable image references, not rebuild from the release checkout. Set `ACCOUNTS_API_IMAGE` to the tested backend image tag or digest and `ACCOUNTS_FRONTEND_IMAGE` to the tested frontend image tag or digest; the migration job and API service intentionally use the same `ACCOUNTS_API_IMAGE`.
+CI is the authoritative build gate for releases. Before promoting an image, confirm the backend tests and build, frontend audit, type-check, lint, readiness regression, production monitoring config gate, and Next production build have all passed. Production deployment must run CI-promoted immutable image references, not rebuild from the release checkout. Set `ACCOUNTS_API_IMAGE` to the tested backend image tag or digest and `ACCOUNTS_FRONTEND_IMAGE` to the tested frontend image tag or digest; the migration job and API service intentionally use the same `ACCOUNTS_API_IMAGE`.
 
 Do not deploy production by rebuilding from the checkout with `docker compose up --build`. Rebuilding on the production host can run code that differs from the CI-promoted immutable image and makes rollback, migration/app parity, and incident reconstruction weaker.
 

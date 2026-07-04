@@ -22,6 +22,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
   const statutoryRuleMatrix = report.statutoryRuleMatrix ?? [];
   const statutoryRulesCoverage = report.statutoryRulesCoverage ?? [];
   const auditabilityControls = report.auditabilityControls ?? [];
+  const monitoringControls = report.monitoringControls ?? [];
   const visualQaCoverage = report.visualQaCoverage;
   const hardenedAreas = report.areas.filter((area) => area.status === "hardened").length;
   const coveredScenarios = report.goldenFilingCorpus.filter((scenario) => scenario.coverageStatus === "covered").length;
@@ -117,6 +118,45 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
               <span key="evidence" className="whitespace-normal text-[var(--muted-foreground)]">{control.evidenceCaptured}</span>,
               <span key="verification" className="whitespace-normal text-[var(--muted-foreground)]">{control.verification}</span>,
               <CodeStack key="events" items={control.auditEventCodes} />,
+            ],
+          }))}
+        />
+      </ReviewPanel>
+
+      <ReviewPanel
+        title="Production monitoring"
+        description="Operational controls proving production errors are routed, logs are structured, and every safe error response can be traced back to server evidence."
+        actions={<StatusBadge tone={monitoringControls.every((control) => control.required) ? "good" : "warn"}>{monitoringControls.length} controls</StatusBadge>}
+      >
+        <DataTable
+          caption="Production monitoring"
+          filterPlaceholder="Filter monitoring controls"
+          emptyState="No matching monitoring controls"
+          columns={["Control", "Provider", "Safety gate", "Evidence captured", "Verification", "Status"]}
+          rows={monitoringControls.map((control) => ({
+            id: control.code,
+            tone: control.required ? "good" : "warn",
+            searchText: [
+              control.label,
+              control.provider,
+              control.productionSafetyGate,
+              control.evidenceCaptured,
+              control.verification,
+            ].join(" "),
+            cells: [
+              <div key="control" className="min-w-48 whitespace-normal">
+                <p className="font-medium">{control.label}</p>
+                <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">{control.required ? "Required production control" : "Advisory control"}</p>
+              </div>,
+              <span key="provider" className="whitespace-normal text-[var(--muted-foreground)]">{control.provider}</span>,
+              <code key="gate" className="break-all rounded border border-[var(--border)] bg-[var(--surface-subtle)] px-2 py-1 text-[11px] text-[var(--muted-foreground)]">
+                {control.productionSafetyGate}
+              </code>,
+              <span key="evidence" className="whitespace-normal text-[var(--muted-foreground)]">{control.evidenceCaptured}</span>,
+              <span key="verification" className="whitespace-normal text-[var(--muted-foreground)]">{control.verification}</span>,
+              <StatusBadge key="status" tone={control.required ? "good" : "warn"}>
+                {control.required ? "Required" : "Advisory"}
+              </StatusBadge>,
             ],
           }))}
         />

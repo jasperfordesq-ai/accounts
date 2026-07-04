@@ -76,6 +76,15 @@ public sealed record ProductionAuditabilityControl(
     string Verification,
     IReadOnlyList<string> AuditEventCodes);
 
+public sealed record ProductionMonitoringControl(
+    string Code,
+    string Label,
+    string Provider,
+    bool Required,
+    string ProductionSafetyGate,
+    string EvidenceCaptured,
+    string Verification);
+
 public sealed record VisualQaViewport(
     string Name,
     int Width,
@@ -111,6 +120,7 @@ public sealed record ProductionReadinessReport(
     IReadOnlyList<OperationalGate> OperationalGates,
     IReadOnlyList<ProductionReadinessAssuranceAction> AssuranceActions,
     IReadOnlyList<ProductionAuditabilityControl> AuditabilityControls,
+    IReadOnlyList<ProductionMonitoringControl> MonitoringControls,
     VisualQaCoverage VisualQaCoverage);
 
 public class ProductionReadinessReportService(AccountsDbContext db)
@@ -134,6 +144,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             BuildOperationalGates(),
             BuildAssuranceActions(),
             BuildAuditabilityControls(),
+            BuildMonitoringControls(),
             BuildVisualQaCoverage());
     }
 
@@ -892,6 +903,34 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 AuditEventCodes.CroDocumentGenerated,
                 AuditEventCodes.IxbrlInternalCheckCompleted
             ])
+    ];
+
+    private static IReadOnlyList<ProductionMonitoringControl> BuildMonitoringControls() =>
+    [
+        new(
+            "error-tracking",
+            "Production error tracking",
+            "Sentry-compatible",
+            true,
+            "Monitoring:ErrorTrackingDsn",
+            "Unhandled exceptions are captured server-side with request path, HTTP method, environment and correlation id while default PII capture is disabled.",
+            "Program.cs wires UseSentry from Monitoring:ErrorTrackingDsn; ProductionSafetyService blocks non-development startup when the DSN is missing or not HTTPS."),
+        new(
+            "structured-json-logs",
+            "Structured JSON logs",
+            "ASP.NET Core JSON console",
+            true,
+            "Monitoring:StructuredJsonConsole",
+            "Production logs are emitted as structured JSON with scopes so log processors can index timestamps, categories, levels and correlation fields.",
+            "Program.cs switches to AddJsonConsole when Monitoring:StructuredJsonConsole is true; production compose sets the flag explicitly."),
+        new(
+            "correlation-id-error-responses",
+            "Correlation id error responses",
+            "ExceptionMiddleware",
+            true,
+            "Monitoring:IncludeCorrelationId",
+            "Unexpected errors return a safe generic response with the ASP.NET trace identifier; server logs carry the same identifier for triage.",
+            "ExceptionMiddleware logs ResourceNotFoundException, BusinessRuleException and unhandled exceptions with context.TraceIdentifier and writes correlationId to the JSON error response.")
     ];
 
     private static VisualQaCoverage BuildVisualQaCoverage()

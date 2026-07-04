@@ -256,12 +256,12 @@ The platform enforces firm-user identity and tenant isolation as the production 
 - **Tenancy**: every company is `TenantId`-scoped. `TenantAccessMiddleware` returns **404 (not 403)** for cross-tenant company IDs (no existence disclosure) and also honours per-user `UserCompanyAccess`.
 - **Roles** (`RoleAuthorizationService`): `Owner` (all), `Accountant` (working papers), `Reviewer` (approve/review/finalise/filing), `Client` (read-only). Backend is the source of truth; the UI only hides ineligible actions.
 - **Audit**: `AuditTrailMiddleware` + tamper-evident `AuditIntegrityCheckpointService` (signed checkpoints). Audit identity comes from the authenticated principal, never caller-supplied names.
-- **Fail-fast**: `ProductionSafetyService.ThrowIfUnsafe()` runs at startup and blocks boot on unsafe config (dev DB password, demo seed, non-HTTPS/localhost origins, wildcard hosts, weak/committed session key, insecure cookies, missing bootstrap-owner secrets).
+- **Fail-fast**: `ProductionSafetyService.ThrowIfUnsafe()` runs at startup and blocks boot on unsafe config (dev DB password, demo seed, non-HTTPS/localhost origins, wildcard hosts, weak/committed session key, insecure cookies, missing bootstrap-owner secrets, missing production monitoring).
 
 ## Production Deployment
 
 - **Stack**: `compose.production.yml` (api + db + frontend) behind a reverse proxy — see `deploy/caddy/Caddyfile.example` for HTTPS ingress.
-- **Secrets via files/env** (never committed): `POSTGRES_PASSWORD_FILE`, `ACCOUNTS_CONNECTION_STRING_FILE`, `AUTH_SESSION_SIGNING_KEY_FILE`, `AUDIT_INTEGRITY_SIGNING_KEY_FILE`, `ACCOUNTS_API_KEY_FILE`/`ACCOUNTS_API_KEY_HASH`, `BOOTSTRAP_OWNER_PASSWORD_FILE`; plus `ACCOUNTS_ALLOWED_HOSTS`, `ACCOUNTS_ALLOWED_ORIGIN`, `TRUST_PROXY_HEADERS`, `BOOTSTRAP_TENANT_*`/`BOOTSTRAP_OWNER_*`.
+- **Secrets via files/env** (never committed): `POSTGRES_PASSWORD_FILE`, `ACCOUNTS_CONNECTION_STRING_FILE`, `AUTH_SESSION_SIGNING_KEY_FILE`, `AUDIT_INTEGRITY_SIGNING_KEY_FILE`, `ACCOUNTS_API_KEY_FILE`/`ACCOUNTS_API_KEY_HASH`, `BOOTSTRAP_OWNER_PASSWORD_FILE`; plus `ACCOUNTS_ALLOWED_HOSTS`, `ACCOUNTS_ALLOWED_ORIGIN`, `TRUST_PROXY_HEADERS`, `MONITORING_ERROR_TRACKING_DSN`, `BOOTSTRAP_TENANT_*`/`BOOTSTRAP_OWNER_*`.
 - **Secret file permissions**: containers run as a non-root user and bind-mount the `*_FILE` secrets read-only. In non-swarm `docker compose` the in-container file keeps the host file's mode, so secret files must be readable by that user — keep the secrets directory `0700` and the secret files `0444`.
 - **First run**: `BootstrapOwnerService` creates the initial tenant + Owner from secret config; migrations run as a controlled step (not auto-migrate).
 - **Ops scripts** (`scripts/`): `backup-postgres.ps1`, `restore-postgres.ps1`, `verify-postgres-backup.ps1`, `smoke-production.ps1`, `verify-production-compose-images.ps1`.

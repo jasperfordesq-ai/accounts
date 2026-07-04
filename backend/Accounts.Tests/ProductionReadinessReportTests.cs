@@ -364,6 +364,35 @@ public class ProductionReadinessReportTests
     }
 
     [Fact]
+    public async Task ProductionReadinessReport_DeclaresProductionMonitoringControls()
+    {
+        await using var db = CreateDbContext();
+        var report = await new ProductionReadinessReportService(db).GetReportAsync();
+
+        Assert.Contains(report.MonitoringControls, control =>
+            control.Code == "error-tracking"
+            && control.Provider == "Sentry-compatible"
+            && control.Required
+            && control.ProductionSafetyGate.Contains("Monitoring:ErrorTrackingDsn", StringComparison.Ordinal)
+            && control.EvidenceCaptured.Contains("unhandled exceptions", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(report.MonitoringControls, control =>
+            control.Code == "structured-json-logs"
+            && control.Required
+            && control.ProductionSafetyGate.Contains("Monitoring:StructuredJsonConsole", StringComparison.Ordinal)
+            && control.EvidenceCaptured.Contains("correlation", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(report.MonitoringControls, control =>
+            control.Code == "correlation-id-error-responses"
+            && control.Required
+            && control.Verification.Contains("ExceptionMiddleware", StringComparison.Ordinal));
+        Assert.All(report.MonitoringControls, control =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(control.Label));
+            Assert.False(string.IsNullOrWhiteSpace(control.EvidenceCaptured));
+            Assert.False(string.IsNullOrWhiteSpace(control.Verification));
+        });
+    }
+
+    [Fact]
     public async Task ProductionReadinessReport_IncludesSourceBackedStatutoryRulesMatrix()
     {
         await using var db = CreateDbContext();

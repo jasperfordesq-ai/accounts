@@ -10,7 +10,8 @@ public class ProductionSafetyService(
     IOptions<AuthSessionConfig> authSession,
     ApiAccessService apiAccess,
     IOptions<AuditIntegrityConfig>? auditIntegrity = null,
-    IOptions<BootstrapOwnerConfig>? bootstrapOwner = null)
+    IOptions<BootstrapOwnerConfig>? bootstrapOwner = null,
+    IOptions<MonitoringConfig>? monitoring = null)
 {
     public IReadOnlyList<string> Validate()
     {
@@ -89,6 +90,7 @@ public class ProductionSafetyService(
         failures.AddRange(AuditIntegrityCheckpointService.ValidateConfiguration(
             auditIntegrity?.Value ?? new AuditIntegrityConfig()));
         failures.AddRange(apiAccess.ValidateConfiguration());
+        failures.AddRange(ValidateMonitoring(monitoring?.Value ?? new MonitoringConfig()));
 
         return failures;
     }
@@ -136,6 +138,36 @@ public class ProductionSafetyService(
 
         if (BootstrapOwnerPasswordPolicy.Validate(bootstrap.OwnerInitialPassword) is { } passwordFailure)
             failures.Add($"{passwordFailure} outside development.");
+
+        return failures;
+    }
+
+    private static IReadOnlyList<string> ValidateMonitoring(MonitoringConfig monitoring)
+    {
+        if (!monitoring.RequireInProduction)
+            return [];
+
+        var failures = new List<string>();
+        if (string.IsNullOrWhiteSpace(monitoring.ErrorTrackingProvider))
+            failures.Add("Monitoring:ErrorTrackingProvider must identify the production error-tracking provider outside development.");
+
+        if (string.IsNullOrWhiteSpace(monitoring.ErrorTrackingDsn))
+        {
+            failures.Add("Monitoring:ErrorTrackingDsn must be configured outside development so unhandled production errors are routed to operators.");
+        }
+        else if (!Uri.TryCreate(monitoring.ErrorTrackingDsn, UriKind.Absolute, out var dsn) || dsn.Scheme != Uri.UriSchemeHttps)
+        {
+            failures.Add("Monitoring:ErrorTrackingDsn must be an absolute HTTPS DSN outside development.");
+        }
+
+        if (!monitoring.StructuredJsonConsole)
+            failures.Add("Monitoring:StructuredJsonConsole must be true outside development so logs can be indexed with structured fields.");
+
+        if (!monitoring.IncludeCorrelationId)
+            failures.Add("Monitoring:IncludeCorrelationId must be true outside development so errors can be traced from client response to server logs.");
+
+        if (monitoring.TracesSampleRate is < 0 or > 1)
+            failures.Add("Monitoring:TracesSampleRate must be between 0 and 1.");
 
         return failures;
     }

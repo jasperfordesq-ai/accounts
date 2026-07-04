@@ -25,6 +25,29 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 // QuestPDF Community License
 QuestPDF.Settings.License = LicenseType.Community;
 
+builder.Services.Configure<MonitoringConfig>(builder.Configuration.GetSection("Monitoring"));
+var monitoring = builder.Configuration.GetSection("Monitoring").Get<MonitoringConfig>() ?? new MonitoringConfig();
+if (monitoring.StructuredJsonConsole)
+{
+    builder.Logging.ClearProviders();
+    builder.Logging.AddJsonConsole(options =>
+    {
+        options.IncludeScopes = true;
+        options.TimestampFormat = "yyyy-MM-ddTHH:mm:ss.fffZ ";
+    });
+}
+
+if (!builder.Environment.IsDevelopment() && !string.IsNullOrWhiteSpace(monitoring.ErrorTrackingDsn))
+{
+    builder.WebHost.UseSentry(options =>
+    {
+        options.Dsn = monitoring.ErrorTrackingDsn;
+        options.Environment = builder.Environment.EnvironmentName;
+        options.SendDefaultPii = false;
+        options.TracesSampleRate = monitoring.TracesSampleRate;
+    });
+}
+
 // Database
 var connectionString = DatabaseConnectionConfig.Resolve(builder.Configuration, builder.Environment);
 builder.Services.AddDbContext<AccountsDbContext>(options =>

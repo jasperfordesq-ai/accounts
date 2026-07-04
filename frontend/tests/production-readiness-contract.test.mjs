@@ -14,6 +14,8 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.equal(parsed.statutoryRulesCoverage[0].code, "size-classification-thresholds");
   assert.equal(parsed.statutoryRulesCoverage[0].automatedVerifierNames[0], "AccountsWorkflowTests.SizeClassification_FirstYearMicro_AllowsMicroAndAuditExemption");
   assert.equal(parsed.statutoryRulesCoverage[0].edgeCases[0], "two-of-three threshold rule");
+  assert.equal(parsed.monitoringControls[0].code, "error-tracking");
+  assert.equal(parsed.monitoringControls[0].productionSafetyGate, "Monitoring:ErrorTrackingDsn");
 });
 
 test("parseProductionReadinessReport rejects missing golden corpus evidence packs", () => {
@@ -123,6 +125,17 @@ function sampleReport() {
         evidenceCaptured: "Authenticated user id, timestamp, entity, action and old/new value snapshots.",
         verification: "Hash chain verification covers each company-scoped audit row.",
         auditEventCodes: ["AdjustmentUpdated"],
+      },
+    ],
+    monitoringControls: [
+      {
+        code: "error-tracking",
+        label: "Production error tracking",
+        provider: "Sentry-compatible",
+        required: true,
+        productionSafetyGate: "Monitoring:ErrorTrackingDsn",
+        evidenceCaptured: "Unhandled exceptions are routed to the configured production error-tracking provider.",
+        verification: "Program.cs wires UseSentry and ProductionSafetyService blocks a missing DSN.",
       },
     ],
     visualQaCoverage: {

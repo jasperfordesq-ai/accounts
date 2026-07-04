@@ -33,6 +33,8 @@ function ProductionComposeEnv {
         @("FRONTEND_PORT", "3000"),
         @("NO_PROXY", "accounts-smoke.local,127.0.0.1,localhost"),
         @("no_proxy", "accounts-smoke.local,127.0.0.1,localhost"),
+        @("MONITORING_ERROR_TRACKING_DSN", "https://public@sentry.invalid/1"),
+        @("MONITORING_TRACES_SAMPLE_RATE", "0"),
         @("BOOTSTRAP_TENANT_NAME", "CI Firm"),
         @("BOOTSTRAP_TENANT_SLUG", "ci-firm"),
         @("BOOTSTRAP_OWNER_EMAIL", "owner@example.ie"),
@@ -113,7 +115,7 @@ function WorkflowRunBlocks([string]$Job) {
         $match.Groups["block"].Value
     }
 
-    $singleLineMatches = [regex]::Matches($Job, "(?m)^\s*run:\s*(?<command>[^\r\n]+)$")
+    $singleLineMatches = [regex]::Matches($Job, "(?m)^\s*run:\s*(?<command>[^\r\n]+)\r?$")
     foreach ($match in $singleLineMatches) {
         $match.Groups["command"].Value
     }

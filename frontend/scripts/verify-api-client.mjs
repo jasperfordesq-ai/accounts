@@ -190,6 +190,17 @@ function productionReadinessReportFixture() {
         auditEventCodes: ["AdjustmentUpdated"],
       },
     ],
+    monitoringControls: [
+      {
+        code: "error-tracking",
+        label: "Production error tracking",
+        provider: "Sentry-compatible",
+        required: true,
+        productionSafetyGate: "Monitoring:ErrorTrackingDsn",
+        evidenceCaptured: "Unhandled exceptions are routed to the configured production error-tracking provider.",
+        verification: "Program.cs wires UseSentry and ProductionSafetyService blocks a missing DSN.",
+      },
+    ],
     visualQaCoverage: {
       artifactName: "visual-smoke-screenshots",
       enforcement: "ci-production-smoke",
