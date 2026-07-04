@@ -15,6 +15,8 @@ public class ProductionReadinessReportTests
 
         Assert.Equal(new DateOnly(2026, 7, 3), snapshot.SnapshotDate);
         Assert.Contains(snapshot.Sources, s => s.SourceId == "cro-financial-statements-requirements");
+        Assert.Contains(snapshot.Sources, s => s.SourceId == "cro-medium-company" && s.EffectiveDate == new DateOnly(2026, 7, 4));
+        Assert.Contains(snapshot.Sources, s => s.SourceId == "cro-auditors-report" && s.EffectiveDate == new DateOnly(2026, 7, 4));
         Assert.Contains(snapshot.Sources, s => s.SourceId == "revenue-accepted-taxonomies" && s.EffectiveDate == new DateOnly(2025, 11, 6));
         Assert.Contains(snapshot.Sources, s => s.SourceId == "frc-frs-102");
         Assert.Contains(snapshot.Sources, s => s.SourceId == "charities-regulator-annual-report");
@@ -137,6 +139,10 @@ public class ProductionReadinessReportTests
             row.Code == "medium-audit-required"
             && row.SupportLevel == "manual-handoff"
             && row.RequiredEvidence.Any(evidence => evidence.Contains("auditor", StringComparison.OrdinalIgnoreCase)));
+        var medium = Assert.Single(report.StatutoryRuleMatrix, row => row.Code == "medium-audit-required");
+        Assert.Contains(medium.Sources, source => source.SourceId == "cro-medium-company");
+        Assert.Contains(medium.Sources, source => source.SourceId == "cro-auditors-report");
+        Assert.Contains(medium.RequiredOutputs, output => output.Contains("auditor", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(report.StatutoryRuleMatrix, row =>
             row.Code == "unsupported-regulated-group"
             && row.SupportLevel == "unsupported"

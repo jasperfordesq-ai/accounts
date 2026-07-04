@@ -152,10 +152,12 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 "AccountsWorkflowTests.GoldenPath_SmallAuditExemptCompany_MixedAccrualSetBalancesThroughPdfAndIxbrl"
             ],
             [
-                "classification selects Small",
+                "classification selects SmallAbridged",
                 "mixed cash/accrual facts reconcile",
-                "PDF text includes legal name and net assets",
-                "iXBRL parses as XML"
+                "statutory PDF includes legal name, net assets and P&L",
+                "CRO abridged pack omits P&L and cites Section 352",
+                "signature page carries director and secretary certification",
+                "iXBRL parses as XML and omits public P&L turnover"
             ]),
         new(
             "clg-charity",
@@ -184,7 +186,10 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             [
                 "audit report evidence is mandatory",
                 "normal filing approval is blocked until auditor evidence exists",
-                "manual professional handoff is exposed in readiness"
+                "manual professional handoff is exposed in readiness",
+                "CRO medium-company and auditor-report sources are attached",
+                "after auditor evidence, the full pack includes auditor report, P&L, cash flow and equity statements",
+                "medium iXBRL includes tagged P&L facts"
             ])
     ];
 
@@ -309,7 +314,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             ],
             [
                 "Full accounts support pack",
-                "Audit report evidence record",
+                "Signed statutory auditor's report evidence record",
                 "Revenue iXBRL and CT1 support pack"
             ],
             [
@@ -318,6 +323,8 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             ],
             [
                 IrishStatutoryRuleSources.CroFinancialStatementsRequirements,
+                IrishStatutoryRuleSources.CroMediumCompany,
+                IrishStatutoryRuleSources.CroAuditorsReport,
                 IrishStatutoryRuleSources.FrcFrs102,
                 IrishStatutoryRuleSources.RevenueIxbrlOverview
             ]),

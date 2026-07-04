@@ -82,6 +82,8 @@ public class FilingReadinessProfileService(AccountsDbContext db)
             sourceReferences.Add(IrishStatutoryRuleSources.CharitiesRegulatorAnnualReport);
         if (company.IsGroupMember || company.IsHolding || company.IsSubsidiary)
             sourceReferences.Add(IrishStatutoryRuleSources.CroGroupCompany);
+        if (sizeClass is CompanySizeClass.Medium or CompanySizeClass.Large || regime is ElectedRegime.Medium or ElectedRegime.Full)
+            sourceReferences.Add(IrishStatutoryRuleSources.CroMediumCompany);
 
         var evidence = new List<FilingReadinessEvidenceItem>();
         var blockers = new List<FilingReadinessIssue>();
@@ -194,6 +196,8 @@ public class FilingReadinessProfileService(AccountsDbContext db)
 
         var auditRequired = period.FilingRegime?.AuditExempt == false
             || sizeClass is CompanySizeClass.Medium or CompanySizeClass.Large;
+        if (auditRequired)
+            sourceReferences.Add(IrishStatutoryRuleSources.CroAuditorsReport);
         RequireEvidence(
             "audit-report",
             "Signed auditor report evidence where audit is required",
@@ -202,11 +206,18 @@ public class FilingReadinessProfileService(AccountsDbContext db)
                 ? period.AuditorsReportReceived ? period.AuditorsReportReference ?? "Auditor report received." : "Auditor handoff and signed auditor report are required."
                 : "Audit exemption currently indicated by filing regime.",
             IrishStatutoryRuleSources.CroFinancialStatementsRequirements,
+            IrishStatutoryRuleSources.CroMediumCompany,
+            IrishStatutoryRuleSources.CroAuditorsReport,
             IrishStatutoryRuleSources.FrcFrs102);
         if (auditRequired && !period.AuditorsReportReceived)
         {
             manualHandoff = true;
-            Block("auditor-handoff-required", "Audit is required, so final filing is blocked until a signed auditor report is recorded.", IrishStatutoryRuleSources.CroFinancialStatementsRequirements);
+            Block(
+                "auditor-handoff-required",
+                "Audit is required, so final filing is blocked until a signed auditor report is recorded.",
+                IrishStatutoryRuleSources.CroFinancialStatementsRequirements,
+                IrishStatutoryRuleSources.CroMediumCompany,
+                IrishStatutoryRuleSources.CroAuditorsReport);
         }
 
         var reviewState = cro?.ApprovedAt is not null && !string.IsNullOrWhiteSpace(cro.ApprovedBy)

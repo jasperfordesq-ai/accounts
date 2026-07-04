@@ -465,6 +465,10 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
         col.Item().PaddingTop(8).Background(Colors.Grey.Lighten4).Border(1).BorderColor(Colors.Grey.Lighten1).Padding(8)
             .Text("TEMPLATE — to be completed and signed by the appointed statutory auditor. This company is not availing of audit exemption, so an audit report is required before the financial statements are approved and filed. The wording below is a standard template only; it is not an audit opinion and must be reviewed, completed and signed by a Registered Auditor.")
             .FontSize(8).FontColor(Colors.Grey.Darken2).Italic();
+        if (!string.IsNullOrWhiteSpace(period.AuditorsReportReference))
+            col.Item().PaddingTop(6).Text($"Auditor evidence reference recorded in the platform: {period.AuditorsReportReference}.")
+                .FontSize(9)
+                .Italic();
 
         col.Item().PaddingTop(10).Text("Opinion").Bold().FontSize(10);
         col.Item().Text($"We have audited the financial statements of {company.LegalName} for the financial year ended {period.PeriodEnd:dd MMMM yyyy}, which comprise the Profit and Loss Account, the Balance Sheet, the Cash Flow Statement, the Statement of Changes in Equity and the related notes, including a summary of significant accounting policies. The financial reporting framework that has been applied in their preparation is Irish law and FRS 102 \"The Financial Reporting Standard applicable in the UK and Republic of Ireland\".").FontSize(9);

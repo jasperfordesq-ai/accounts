@@ -48,6 +48,18 @@ public static class IrishStatutoryRuleSources
         new DateOnly(2026, 7, 3),
         "https://cro.ie/annual-return/financial-statements-requirements/group-company/");
 
+    public static readonly LegalSourceReference CroMediumCompany = new(
+        "cro-medium-company",
+        "CRO medium company financial statements requirements",
+        new DateOnly(2026, 7, 4),
+        "https://cro.ie/annual-return/financial-statements-requirements/medium-company/");
+
+    public static readonly LegalSourceReference CroAuditorsReport = new(
+        "cro-auditors-report",
+        "CRO auditor's report requirements",
+        new DateOnly(2026, 7, 4),
+        "https://cro.ie/annual-return/financial-statements-requirements/auditors-report/");
+
     public static readonly LegalSourceReference RevenueIxbrlOverview = new(
         "revenue-ixbrl-overview",
         "Revenue iXBRL filing overview",
@@ -95,6 +107,8 @@ public static class IrishStatutoryRuleSources
         CroGuaranteeCompany,
         CroUnlimitedCompany,
         CroGroupCompany,
+        CroMediumCompany,
+        CroAuditorsReport,
         RevenueIxbrlOverview,
         RevenueIxbrlContents,
         RevenueAcceptedTaxonomies,
