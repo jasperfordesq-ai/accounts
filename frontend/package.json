@@ -17,7 +17,7 @@
     "dev": "next dev",
     "build": "next build",
     "build:clean": "node scripts/verify-clean-build.mjs",
-    "start": "node .next/standalone/server.js",
+    "start": "node scripts/start-standalone.mjs",
     "lint": "eslint",
     "test:readiness": "node --experimental-strip-types scripts/verify-readiness.mjs",
     "test:proxy": "node --experimental-strip-types scripts/verify-api-proxy.mjs",

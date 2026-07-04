@@ -1,7 +1,18 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import { DataTable, EvidenceChecklist, IssueDigest, ReviewPanel, StatusBadge, WorkflowRail } from "@/components/workbench";
+import {
+  DataTable,
+  EvidenceChecklist,
+  IssueDigest,
+  PermissionDeniedPanel,
+  ReviewPanel,
+  StatusBadge,
+  WorkbenchEmptyState,
+  WorkbenchErrorState,
+  WorkbenchLoadingState,
+  WorkflowRail,
+} from "@/components/workbench";
 
 describe("workbench primitives", () => {
   it("renders evidence checklist completion and required states", () => {
@@ -212,5 +223,42 @@ describe("workbench primitives", () => {
     expect(screen.getByText("Size classification not completed")).toBeInTheDocument();
     expect(screen.getByText("2 more blockers")).toBeInTheDocument();
     expect(screen.getByText("Revenue deadline passed and late filing exposure must be reviewed.")).toBeInTheDocument();
+  });
+
+  it("renders consistent route states for loading, error, empty, and permission denied views", async () => {
+    const user = userEvent.setup();
+    const retry = vi.fn();
+
+    render(
+      <div>
+        <WorkbenchLoadingState
+          title="Loading period workspace"
+          description="Preparing statutory evidence and filing workflow state."
+        />
+        <WorkbenchErrorState
+          title="Period workspace could not be loaded"
+          description="The API did not return a readiness profile."
+          onRetry={retry}
+        />
+        <WorkbenchEmptyState
+          title="No accounting periods yet"
+          description="Create a period before preparing year-end accounts."
+        />
+        <PermissionDeniedPanel
+          title="Manual review access required"
+          description="Ask an owner to grant accountant review permissions before approving filing packs."
+        />
+      </div>,
+    );
+
+    expect(screen.getByLabelText("Loading period workspace")).toBeInTheDocument();
+    expect(screen.getByText("Preparing statutory evidence and filing workflow state.")).toBeInTheDocument();
+    expect(screen.getByText("Period workspace could not be loaded")).toBeInTheDocument();
+    expect(screen.getByText("No accounting periods yet")).toBeInTheDocument();
+    expect(screen.getByText("Manual review access required")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Retry" }));
+
+    expect(retry).toHaveBeenCalledOnce();
   });
 });

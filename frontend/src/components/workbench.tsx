@@ -12,6 +12,10 @@ import {
   CircleDot,
   CircleSlash,
   FileCheck2,
+  FileSearch,
+  LoaderCircle,
+  LockKeyhole,
+  RefreshCw,
 } from "lucide-react";
 
 type WorkflowState = "done" | "active" | "blocked" | "todo";
@@ -42,6 +46,29 @@ export interface IssueDigestProps {
   warnings?: string[];
   maxPriorityItems?: number;
   className?: string;
+}
+
+export interface WorkbenchStatePanelProps {
+  title: string;
+  description?: ReactNode;
+  tone?: Tone;
+  icon?: ReactNode;
+  actions?: ReactNode;
+  children?: ReactNode;
+  className?: string;
+}
+
+export interface WorkbenchErrorStateProps {
+  title?: string;
+  description?: ReactNode;
+  onRetry?: () => void | Promise<void>;
+  retryLabel?: string;
+}
+
+export interface WorkbenchEmptyStateProps {
+  title: string;
+  description?: ReactNode;
+  actions?: ReactNode;
 }
 
 export interface DataTableRichRow {
@@ -101,6 +128,118 @@ export function WorkbenchHeader({
         {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
       </div>
     </section>
+  );
+}
+
+export function WorkbenchStatePanel({
+  title,
+  description,
+  tone = "default",
+  icon,
+  actions,
+  children,
+  className = "",
+}: WorkbenchStatePanelProps) {
+  return (
+    <section
+      aria-label={title}
+      className={`rounded-md border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm shadow-black/[0.03] ${className}`}
+    >
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-md border ${toneClasses[tone]}`}>
+          {icon ?? <FileSearch className="h-5 w-5" />}
+        </div>
+        <div className="min-w-0 flex-1">
+          <h1 className="text-base font-semibold text-[var(--foreground)]">{title}</h1>
+          {description && (
+            <div className="mt-1 text-sm leading-6 text-[var(--muted-foreground)]">{description}</div>
+          )}
+          {children && <div className="mt-4">{children}</div>}
+          {actions && <div className="mt-4 flex flex-wrap items-center gap-2">{actions}</div>}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+export function WorkbenchLoadingState({
+  title = "Loading accountant workspace",
+  description = "Preparing statutory evidence, deadlines and filing workflow state.",
+}: {
+  title?: string;
+  description?: ReactNode;
+}) {
+  return (
+    <WorkbenchStatePanel
+      title={title}
+      description={description}
+      tone="info"
+      icon={<LoaderCircle className="h-5 w-5 animate-spin" />}
+    >
+      <div className="grid gap-3 md:grid-cols-4">
+        {[...Array(4)].map((_, index) => (
+          <div key={index} className="skeleton-shimmer h-16 rounded-md" />
+        ))}
+      </div>
+      <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(18rem,0.6fr)]">
+        <div className="skeleton-shimmer h-44 rounded-md" />
+        <div className="skeleton-shimmer h-44 rounded-md" />
+      </div>
+    </WorkbenchStatePanel>
+  );
+}
+
+export function WorkbenchErrorState({
+  title = "Workspace could not be loaded",
+  description = "Refresh the workspace and check the API health before continuing filing work.",
+  onRetry,
+  retryLabel = "Retry",
+}: WorkbenchErrorStateProps) {
+  return (
+    <WorkbenchStatePanel
+      title={title}
+      description={description}
+      tone="bad"
+      icon={<AlertTriangle className="h-5 w-5" />}
+      actions={onRetry && (
+        <button
+          type="button"
+          onClick={onRetry}
+          className="inline-flex min-h-10 items-center gap-2 rounded-md border border-red-300 bg-red-600 px-3 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500 dark:border-red-800"
+        >
+          <RefreshCw className="h-4 w-4" />
+          {retryLabel}
+        </button>
+      )}
+    />
+  );
+}
+
+export function WorkbenchEmptyState({ title, description, actions }: WorkbenchEmptyStateProps) {
+  return (
+    <WorkbenchStatePanel
+      title={title}
+      description={description}
+      tone="info"
+      icon={<FileSearch className="h-5 w-5" />}
+      actions={actions}
+    />
+  );
+}
+
+export function PermissionDeniedPanel({
+  title = "Permission denied",
+  description = "You do not have permission to approve or submit this accounting workflow.",
+  actions,
+}: WorkbenchEmptyStateProps) {
+  return (
+    <WorkbenchStatePanel
+      title={title}
+      description={description}
+      tone="warn"
+      icon={<LockKeyhole className="h-5 w-5" />}
+      actions={actions}
+    />
   );
 }
 

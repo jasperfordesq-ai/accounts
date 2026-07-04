@@ -13972,15 +13972,24 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
-    public void FrontendStartScript_UsesStandaloneServerWhenNextOutputStandalone()
+    public void FrontendStartScript_PreparesStandaloneAssetsWhenNextOutputStandalone()
     {
         var packageJsonPath = Path.Combine(RepositoryRoot(), "frontend", "package.json");
         using var packageJson = JsonDocument.Parse(File.ReadAllText(packageJsonPath));
         var startScript = packageJson.RootElement.GetProperty("scripts").GetProperty("start").GetString();
         var nextConfig = File.ReadAllText(Path.Combine(RepositoryRoot(), "frontend", "next.config.ts"));
+        var startHelperPath = Path.Combine(RepositoryRoot(), "frontend", "scripts", "start-standalone.mjs");
 
         Assert.Contains("output: \"standalone\"", nextConfig);
-        Assert.Equal("node .next/standalone/server.js", startScript);
+        Assert.Equal("node scripts/start-standalone.mjs", startScript);
+        Assert.True(File.Exists(startHelperPath), "npm start should mirror the Docker standalone asset layout for local production smoke tests.");
+
+        var startHelper = File.ReadAllText(startHelperPath);
+        Assert.Contains("path.join(rootDir, \".next\", \"static\")", startHelper);
+        Assert.Contains("path.join(standaloneDir, \".next\", \"static\")", startHelper);
+        Assert.Contains("path.join(rootDir, \"public\")", startHelper);
+        Assert.Contains("cwd: standaloneDir", startHelper);
+        Assert.Contains("server.js", startHelper);
     }
 
     [Fact]
