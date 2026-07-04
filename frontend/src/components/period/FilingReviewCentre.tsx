@@ -1,5 +1,5 @@
 import { Button, Chip, Spinner } from "@heroui/react";
-import { AlertTriangle, CheckCircle2, FileText, Shield, Upload } from "lucide-react";
+import { CheckCircle2, FileText, Shield, Upload } from "lucide-react";
 import type { FilingReadinessProfile, FilingWorkflowStatus } from "@/lib/api";
 import {
   EvidenceChecklist,
@@ -10,6 +10,12 @@ import {
 } from "@/components/workbench";
 
 type FilingReviewAction = () => void | Promise<void>;
+type FilingIssueTone = "bad" | "warn";
+
+interface FilingIssueView {
+  message: string;
+  tone: FilingIssueTone;
+}
 
 interface FilingReviewCentreProps {
   filingStatus: FilingWorkflowStatus | null;
@@ -38,6 +44,8 @@ export function FilingReviewCentre({
   onMarkCroAccepted,
   onRecordCroSendBack,
 }: FilingReviewCentreProps) {
+  const filingIssues = buildFilingIssueGroups(filingStatus, filingReadinessProfile);
+
   return (
     <ReviewPanel
       title="Filing readiness profile"
@@ -110,7 +118,7 @@ export function FilingReviewCentre({
             </div>
           )}
 
-          <FilingIssues filingStatus={filingStatus} filingReadinessProfile={filingReadinessProfile} />
+          <FilingIssueDigest blockers={filingIssues.blockers} warnings={filingIssues.warnings} />
 
           <Button
             variant="outline"
@@ -219,58 +227,55 @@ function SubmissionControl({
   );
 }
 
-function FilingIssues({
-  filingStatus,
-  filingReadinessProfile,
+function FilingIssueDigest({
+  blockers,
+  warnings,
 }: {
-  filingStatus: FilingWorkflowStatus;
-  filingReadinessProfile: FilingReadinessProfile | null;
+  blockers: FilingIssueView[];
+  warnings: FilingIssueView[];
 }) {
-  if (filingReadinessProfile?.blockingIssues.length) {
-    return (
-      <div className="rounded-md border border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950/40">
-        <h4 className="flex items-center gap-2 text-sm font-semibold text-red-800 dark:text-red-100">
-          <AlertTriangle className="h-4 w-4" /> Statutory blockers
-        </h4>
-        <ul className="mt-2 space-y-1.5">
-          {filingReadinessProfile.blockingIssues.map((issue, index) => (
-            <li key={issueKey(issue.message, index)} className="text-sm leading-6 text-red-800 dark:text-red-100">
-              {issue.message}
-            </li>
-          ))}
-        </ul>
-      </div>
-    );
-  }
+  if (blockers.length === 0 && warnings.length === 0) return null;
+
+  const priorityBlockers = blockers.slice(0, 3);
+  const remainingBlockers = blockers.slice(3);
 
   return (
-    <>
-      {filingStatus.blockingIssues.length > 0 && (
-        <div className="rounded-md border border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950/40">
-          <h4 className="text-sm font-semibold text-red-800 dark:text-red-100">Workflow blockers</h4>
-          <ul className="mt-2 space-y-1.5">
-            {filingStatus.blockingIssues.map((issue, index) => (
-              <li key={issueKey(issue, index)} className="text-sm leading-6 text-red-800 dark:text-red-100">
-                {issue}
-              </li>
-            ))}
-          </ul>
+    <div className="rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Filing issue digest</p>
+          <p className="mt-1 text-sm font-medium text-[var(--foreground)]">
+            {blockers.length > 0 ? "Resolve priority blockers before approval." : "Warnings remain before external filing evidence is complete."}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <StatusBadge tone={blockers.length > 0 ? "bad" : "good"}>{formatIssueCount(blockers.length, "blocker")}</StatusBadge>
+          <StatusBadge tone={warnings.length > 0 ? "warn" : "good"}>{formatIssueCount(warnings.length, "warning")}</StatusBadge>
+        </div>
+      </div>
+
+      {priorityBlockers.length > 0 && (
+        <div className="mt-3">
+          <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Priority blockers</p>
+          <IssueList issues={priorityBlockers} className="mt-2" />
+          {remainingBlockers.length > 0 && (
+            <details className="mt-2 rounded-md border border-red-200 bg-red-50/60 p-2 dark:border-red-900 dark:bg-red-950/30">
+              <summary className="cursor-pointer text-xs font-semibold text-red-800 dark:text-red-100">
+                {formatIssueCount(remainingBlockers.length, "more blocker")}
+              </summary>
+              <IssueList issues={remainingBlockers} className="mt-2" />
+            </details>
+          )}
         </div>
       )}
 
-      {filingStatus.warningIssues.length > 0 && (
-        <div className="rounded-md border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/40">
-          <h4 className="text-sm font-semibold text-amber-900 dark:text-amber-100">Filing warnings</h4>
-          <ul className="mt-2 space-y-1.5">
-            {filingStatus.warningIssues.map((issue, index) => (
-              <li key={issueKey(issue, index)} className="text-sm leading-6 text-amber-900 dark:text-amber-100">
-                {issue}
-              </li>
-            ))}
-          </ul>
+      {warnings.length > 0 && (
+        <div className="mt-3">
+          <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Warnings</p>
+          <IssueList issues={warnings} className="mt-2" />
         </div>
       )}
-    </>
+    </div>
   );
 }
 
@@ -387,6 +392,53 @@ function filingStatusTone(status?: string): "default" | "good" | "warn" | "bad" 
 
 function shouldShowCroReference(status: string) {
   return status === "Approved" || status === "Submitted" || status === "Accepted";
+}
+
+function IssueList({ issues, className = "" }: { issues: FilingIssueView[]; className?: string }) {
+  return (
+    <ul className={`space-y-1.5 ${className}`}>
+      {issues.map((issue, index) => (
+        <li
+          key={issueKey(issue.message, index)}
+          className={issue.tone === "bad"
+            ? "text-sm leading-6 text-red-800 dark:text-red-100"
+            : "text-sm leading-6 text-amber-900 dark:text-amber-100"}
+        >
+          {issue.message}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function buildFilingIssueGroups(
+  filingStatus: FilingWorkflowStatus | null,
+  filingReadinessProfile: FilingReadinessProfile | null,
+) {
+  const blockers = uniqueIssueViews([
+    ...(filingReadinessProfile?.blockingIssues.map((issue) => ({ message: issue.message, tone: "bad" as const })) ?? []),
+    ...(filingStatus?.blockingIssues.map((message) => ({ message, tone: "bad" as const })) ?? []),
+  ]);
+  const warnings = uniqueIssueViews([
+    ...(filingReadinessProfile?.warningIssues.map((issue) => ({ message: issue.message, tone: "warn" as const })) ?? []),
+    ...(filingStatus?.warningIssues.map((message) => ({ message, tone: "warn" as const })) ?? []),
+  ]);
+
+  return { blockers, warnings };
+}
+
+function uniqueIssueViews(issues: FilingIssueView[]) {
+  const seen = new Set<string>();
+  return issues.filter((issue) => {
+    const key = issue.message.trim().toLowerCase();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function formatIssueCount(count: number, singular: string) {
+  return `${count} ${count === 1 ? singular : `${singular}s`}`;
 }
 
 function issueKey(message: string, index: number) {
