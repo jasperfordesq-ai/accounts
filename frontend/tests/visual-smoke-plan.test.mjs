@@ -41,6 +41,10 @@ describe("visual smoke plan", () => {
     );
     assert.equal(visualSmokeRoutes.find((route) => route.name === "filing-review")?.openFilingTab, true);
     assert.equal(
+      visualSmokeRoutes.find((route) => route.name === "company-detail")?.expectedText,
+      "Company command centre",
+    );
+    assert.equal(
       visualSmokeRoutes.find((route) => route.name === "period-workspace")?.expectedText,
       "Filing readiness",
     );
@@ -55,6 +59,8 @@ describe("visual smoke plan", () => {
 
     assert.match(script, /function companyHrefFromPeriodHref/);
     assert.match(script, /a\[href\^="\/companies\/"\]\[href\*="\/periods\/"\]/);
+    assert.match(script, /Company command centre/);
+    assert.doesNotMatch(script, /mainText\(page, "Accounting Periods"\)/);
     assert.ok(
       script.indexOf("companyHrefFromPeriodHref") < script.indexOf("createSmokeCompany(page)"),
       "existing dashboard period links must be resolved before fallback smoke company creation",

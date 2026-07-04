@@ -33,9 +33,9 @@ export const visualSmokeRoutes = [
   {
     name: "company-detail",
     label: "Company detail",
-    description: "Company statutory profile, officers, charity facts and accounting periods.",
+    description: "Company command centre, statutory profile, officers, charity facts and accounting periods.",
     routeKey: "company",
-    expectedText: "Accounting Periods",
+    expectedText: "Company command centre",
     openFilingTab: false,
   },
   {

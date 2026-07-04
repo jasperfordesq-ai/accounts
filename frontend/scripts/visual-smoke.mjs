@@ -221,7 +221,7 @@ async function discoverRoutes(page, baseUrl) {
 
   await page.goto(toAbsoluteUrl(baseUrl, companyHref), { waitUntil: "domcontentloaded" });
   await page.waitForLoadState("networkidle", { timeout: 30_000 }).catch(() => {});
-  await expect(mainText(page, "Accounting Periods")).toBeVisible({ timeout: 30_000 });
+  await expect(mainText(page, "Company command centre")).toBeVisible({ timeout: 30_000 });
   periodHref ??= await firstHref(page, 'a[href*="/periods/"]', "period workspace");
 
   return {

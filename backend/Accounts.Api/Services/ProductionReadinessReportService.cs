@@ -1119,8 +1119,8 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             new VisualQaRoute(
                 "company-detail",
                 "Company detail",
-                "Company statutory profile, officers, charity facts and accounting periods.",
-                "Accounting Periods",
+                "Company command centre, statutory profile, officers, charity facts and accounting periods.",
+                "Company command centre",
                 OpenFilingTab: false),
             new VisualQaRoute(
                 "period-workspace",

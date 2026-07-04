@@ -616,7 +616,7 @@ public class ProductionReadinessReportTests
         Assert.Contains(report.VisualQaCoverage.Routes, route =>
             route.Code == "dashboard" && route.RequiredText == "Production Readiness");
         Assert.Contains(report.VisualQaCoverage.Routes, route =>
-            route.Code == "company-detail" && route.RequiredText == "Accounting Periods");
+            route.Code == "company-detail" && route.RequiredText == "Company command centre");
         Assert.Contains(report.VisualQaCoverage.Routes, route =>
             route.Code == "period-workspace" && route.RequiredText == "Filing readiness");
         Assert.Contains(report.VisualQaCoverage.Routes, route =>
