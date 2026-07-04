@@ -71,7 +71,11 @@ describe("workbench primitives", () => {
     const input = screen.getByLabelText("Balance outstanding");
     expect(input).toHaveAttribute("type", "text");
     expect(input).toHaveAttribute("inputmode", "decimal");
-    expect(screen.getByText("EUR")).toBeInTheDocument();
+    const prefix = screen.getByText("EUR");
+    expect(prefix).toBeInTheDocument();
+    expect(prefix).toHaveAttribute("data-money-input-prefix", "true");
+    expect(prefix.className).not.toContain("absolute");
+    expect(input.parentElement).toHaveClass("grid");
     expect(screen.getByText("Feeds creditors due within and after one year.")).toBeInTheDocument();
 
     await user.type(input, "40000.25");

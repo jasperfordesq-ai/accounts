@@ -739,8 +739,13 @@ export function MoneyInput({
       <label htmlFor={inputId} className="block text-xs font-medium text-[var(--muted-foreground)] mb-1">
         {label}
       </label>
-      <div className="relative">
-        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-[var(--muted-foreground)]">
+      <div
+        className={`grid min-h-10 grid-cols-[3.25rem_minmax(0,1fr)] overflow-hidden rounded-md border border-[var(--border)] bg-[var(--surface)] transition focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 ${isDisabled ? "cursor-not-allowed opacity-60" : ""}`}
+      >
+        <span
+          data-money-input-prefix="true"
+          className="pointer-events-none flex items-center justify-center border-r border-[var(--border)] bg-[var(--surface-subtle)] px-2 text-[11px] font-semibold text-[var(--muted-foreground)]"
+        >
           EUR
         </span>
         <input
@@ -754,7 +759,7 @@ export function MoneyInput({
           aria-describedby={hintId}
           disabled={isDisabled}
           data-money-input="true"
-          className="min-h-10 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 pl-12 text-sm tabular-nums text-[var(--foreground)] outline-none transition placeholder:text-[var(--muted-foreground)] focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+          className="min-w-0 bg-transparent px-3 py-2 text-sm tabular-nums text-[var(--foreground)] outline-none placeholder:text-[var(--muted-foreground)] disabled:cursor-not-allowed"
           onFocus={() => {
             setDraft(formatMoneyInputValue(value));
             setIsFocused(true);
