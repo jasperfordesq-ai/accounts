@@ -23,7 +23,18 @@ describe("CompanyWorkspaceOverview", () => {
     expect(screen.getByText("2 officers")).toBeInTheDocument();
     expect(screen.getByText("2 periods")).toBeInTheDocument();
     expect(screen.getByText("Medium")).toBeInTheDocument();
-    expect(screen.getByRole("navigation", { name: "Company setup workflow" })).toBeInTheDocument();
+    const workflow = screen.getByRole("navigation", { name: "Accountant Workflow" });
+    expect(workflow).toBeInTheDocument();
+    expect(screen.getByText("8 stages")).toBeInTheDocument();
+    expect(workflow).toHaveTextContent("Setup");
+    expect(workflow).toHaveTextContent("Import");
+    expect(workflow).toHaveTextContent("Classify");
+    expect(workflow).toHaveTextContent("Year-End");
+    expect(workflow).toHaveTextContent("Statements");
+    expect(workflow).toHaveTextContent("Notes");
+    expect(workflow).toHaveTextContent("Review");
+    expect(workflow).toHaveTextContent("Filing");
+    expect(screen.getByText("Start with company setup, then move period work through evidence, statements, review and filing.")).toBeInTheDocument();
   });
 });
 

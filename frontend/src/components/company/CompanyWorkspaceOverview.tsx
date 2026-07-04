@@ -1,8 +1,9 @@
-import { AlertTriangle, ArrowRight, Building2, CheckCircle2, FileText, ShieldCheck, Users } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import type { AccountingPeriod, Company } from "@/lib/api";
-import { formatCompanyType, formatPeriodRange } from "@/lib/format";
-import { IssueDigest, MetricStrip, ReviewPanel, StatusBadge, WorkflowRail, type WorkflowItem } from "@/components/workbench";
+import { formatPeriodRange } from "@/lib/format";
+import { IssueDigest, MetricStrip, ReviewPanel, StatusBadge } from "@/components/workbench";
+import { AccountantWorkflowRail } from "@/components/workbench/AccountantWorkflowRail";
 
 export function CompanyWorkspaceOverview({ company }: { company: Company }) {
   const periods = orderedPeriods(company.periods ?? []);
@@ -15,48 +16,7 @@ export function CompanyWorkspaceOverview({ company }: { company: Company }) {
   const latestSize = latestPeriod?.sizeClassification?.calculatedClass ?? "Unclassified";
   const latestRegime = latestPeriod?.filingRegime?.electedRegime ?? "Regime not elected";
   const supportTone = manualReason ? "bad" : missingItems.length > 0 ? "warn" : "good";
-
-  const workflowItems: WorkflowItem[] = [
-    {
-      id: "setup",
-      label: "Setup",
-      detail: company.legalName && company.companyType ? formatCompanyType(company.companyType) : "Identity incomplete",
-      state: company.legalName && company.companyType ? "done" : "active",
-      icon: <Building2 className="h-4 w-4 text-sky-600 dark:text-sky-300" />,
-    },
-    {
-      id: "officers",
-      label: "Officers",
-      detail: officerCount > 0 ? `${officerCount} recorded` : "Director and secretary evidence required",
-      state: officerCount > 0 ? "done" : "active",
-      icon: <Users className="h-4 w-4 text-emerald-600 dark:text-emerald-300" />,
-    },
-    {
-      id: "profile",
-      label: "Statutory profile",
-      detail: manualReason ? "Manual handoff risk" : "Core support path",
-      state: manualReason ? "blocked" : "done",
-      icon: <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-300" />,
-    },
-    {
-      id: "periods",
-      label: "Periods",
-      detail: periods.length > 0 ? `${periods.length} production periods` : "No accounting period yet",
-      state: periods.length > 0 ? "done" : missingItems.length > 0 ? "todo" : "active",
-      href: nextAction.code === "open-latest-period" ? nextAction.href ?? undefined : undefined,
-      icon: <FileText className="h-4 w-4 text-cyan-600 dark:text-cyan-300" />,
-    },
-    {
-      id: "review",
-      label: "Review",
-      detail: manualReason ? "Professional ownership required" : latestPeriod ? "Open latest workbench" : "Waiting for period",
-      state: manualReason ? "blocked" : latestPeriod ? "active" : "todo",
-      href: latestPeriod ? `/companies/${company.id}/periods/${latestPeriod.id}` : undefined,
-      icon: manualReason
-        ? <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-300" />
-        : <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-300" />,
-    },
-  ];
+  const activeWorkflowStage = manualReason ? "Review" : latestPeriod ? "Import" : "Setup";
 
   return (
     <div className="mb-8 space-y-4">
@@ -112,7 +72,7 @@ export function CompanyWorkspaceOverview({ company }: { company: Company }) {
         ]}
       />
 
-      <WorkflowRail title="Company setup workflow" items={workflowItems} />
+      <AccountantWorkflowRail activeStage={activeWorkflowStage} />
 
       <IssueDigest
         title="Company-level issue digest"
