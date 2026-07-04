@@ -4,6 +4,7 @@ using Accounts.Api.Entities;
 using Accounts.Api.Services;
 using Microsoft.EntityFrameworkCore;
 using QuestPDF.Infrastructure;
+using UglyToad.PdfPig;
 using Xunit;
 
 namespace Accounts.Tests;
@@ -31,13 +32,20 @@ public class FilingGoldenCorpusScenarioTests
 
         var statements = new FinancialStatementsService(db);
         var pdf = await new DocumentGeneratorService(db, statements).GenerateAccountsPackageAsync(period.CompanyId, period.Id);
+        var pdfText = ExtractPdfText(pdf);
         var ixbrl = Encoding.UTF8.GetString(await new IxbrlService(db, statements).GenerateIxbrlAsync(period.CompanyId, period.Id));
         var profile = await new FilingReadinessProfileService(db).GetProfileAsync(period.CompanyId, period.Id);
+        var tax = await new TaxComputationService(db, statements).ComputeAsync(period.CompanyId, period.Id);
+        var notes = await db.NotesDisclosures.Where(n => n.PeriodId == period.Id && n.IsIncluded).ToListAsync();
 
         Assert.True(pdf.Length > 1_000);
         Assert.Equal("%PDF", Encoding.ASCII.GetString(pdf, 0, 4));
+        Assert.Contains("Dublin Community Support CLG", pdfText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Community support and education.", pdfText, StringComparison.OrdinalIgnoreCase);
         AssertWellFormedXml(ixbrl);
         Assert.Contains("Dublin Community Support CLG", ixbrl);
+        Assert.Equal(62.50m, tax.TotalCorporationTax);
+        Assert.Contains(notes, n => n.Title == "Accounting Policies" && n.IsIncluded);
         Assert.True(profile.SupportedPath);
         Assert.False(profile.ManualProfessionalReviewRequired);
         Assert.DoesNotContain(profile.BlockingIssues, issue => issue.Code.Contains("charity", StringComparison.OrdinalIgnoreCase));
@@ -307,5 +315,11 @@ public class FilingGoldenCorpusScenarioTests
         using var reader = System.Xml.XmlReader.Create(new StringReader(xhtml), settings);
         var doc = System.Xml.Linq.XDocument.Load(reader);
         Assert.NotNull(doc.Root);
+    }
+
+    private static string ExtractPdfText(byte[] pdf)
+    {
+        using var document = PdfDocument.Open(pdf);
+        return string.Join("\n", document.GetPages().Select(p => p.Text));
     }
 }

@@ -27,6 +27,7 @@ public class DirectorsReportService(AccountsDbContext db, FinancialStatementsSer
     {
         var period = await db.AccountingPeriods
             .Include(p => p.Company).ThenInclude(c => c.Officers)
+            .Include(p => p.Company).ThenInclude(c => c.CharityInfo)
             .Include(p => p.FilingRegime)
             .Include(p => p.Dividends)
             .Include(p => p.PostBalanceSheetEvents)
@@ -90,7 +91,9 @@ public class DirectorsReportService(AccountsDbContext db, FinancialStatementsSer
         }
 
         // Principal activities
-        var activities = company.IsTrading
+        var activities = company.IsCharitableOrganisation && company.CharityInfo is { } charityInfo
+            ? CharityPrincipalActivities(charityInfo)
+            : company.IsTrading
             ? $"The principal activity of the company during the year was {(company.TradingName != null ? $"trading as {company.TradingName}" : "its main business operations")}."
             : "The company was dormant during the financial year.";
 
@@ -110,5 +113,17 @@ public class DirectorsReportService(AccountsDbContext db, FinancialStatementsSer
             isSmall,
             regime.ToString()
         );
+    }
+
+    private static string CharityPrincipalActivities(CharityInfo charityInfo)
+    {
+        var objectives = string.IsNullOrWhiteSpace(charityInfo.CharitableObjectives)
+            ? "its charitable objectives"
+            : charityInfo.CharitableObjectives.Trim();
+        var activities = string.IsNullOrWhiteSpace(charityInfo.PrincipalActivities)
+            ? "charitable activities"
+            : charityInfo.PrincipalActivities.Trim();
+
+        return $"The company pursued its charitable objectives during the year: {objectives} Principal activities comprised {activities}";
     }
 }
