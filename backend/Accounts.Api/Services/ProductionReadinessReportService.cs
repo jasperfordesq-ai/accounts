@@ -106,6 +106,16 @@ public sealed record DeploymentSafetyControl(
     string Verification,
     string FailurePolicy);
 
+public sealed record AccountantAcceptanceCriterion(
+    string ScenarioCode,
+    string Label,
+    bool Required,
+    string AcceptanceStatus,
+    IReadOnlyList<string> ReviewScope,
+    IReadOnlyList<string> RequiredEvidence,
+    string RequiredSignOffGate,
+    IReadOnlyList<LegalSourceReference> Sources);
+
 public sealed record VisualQaViewport(
     string Name,
     int Width,
@@ -149,6 +159,7 @@ public sealed record ProductionReadinessReport(
     int PeriodsInDatabase,
     SourceLawSnapshot SourceLawSnapshot,
     ProductionAssurancePacket AssurancePacket,
+    IReadOnlyList<AccountantAcceptanceCriterion> AccountantAcceptanceCriteria,
     IReadOnlyList<ProductionReadinessArea> Areas,
     IReadOnlyList<GoldenFilingCorpusScenario> GoldenFilingCorpus,
     IReadOnlyList<StatutoryRuleMatrixEntry> StatutoryRuleMatrix,
@@ -180,6 +191,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
         var monitoringControls = BuildMonitoringControls();
         var dependencyPolicyControls = BuildDependencyPolicyControls();
         var deploymentSafetyControls = BuildDeploymentSafetyControls();
+        var accountantAcceptanceCriteria = BuildAccountantAcceptanceCriteria();
         var visualQaCoverage = BuildVisualQaCoverage();
         var assurancePacket = BuildAssurancePacket(
             sourceSnapshot,
@@ -197,6 +209,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             periods,
             sourceSnapshot,
             assurancePacket,
+            accountantAcceptanceCriteria,
             areas,
             goldenCorpus,
             statutoryRuleMatrix,
@@ -251,7 +264,8 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "visual-smoke-screenshots",
             "production-operational-gates",
             "dependency-policy-controls",
-            "deployment-safety-controls"
+            "deployment-safety-controls",
+            "accountant-acceptance-criteria"
         };
         var releaseBlockers = assuranceActions
             .Where(action => action.Status != "complete")
@@ -1127,6 +1141,102 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "The release evidence includes a PostgreSQL custom-format backup dump, sha256 sidecar and backup restore verification before the production smoke job can pass.",
             ".github/workflows/ci.yml Run production backup restore drill step invokes verify-postgres-backup after creating the dump.",
             "Fail the release if backup creation, checksum verification or restore verification fails.")
+    ];
+
+    private static IReadOnlyList<AccountantAcceptanceCriterion> BuildAccountantAcceptanceCriteria() =>
+    [
+        new(
+            "micro-ltd",
+            "Micro LTD accountant acceptance",
+            true,
+            "qualified-accountant-review-required",
+            [
+                "PDF wording and micro statutory statement",
+                "iXBRL XML and Revenue taxonomy selection",
+                "filing readiness profile at 100%",
+                "tax computation and notes disclosure set",
+                "director and secretary signatory gates"
+            ],
+            [
+                "Named qualified-accountant approval recorded against the generated pack.",
+                "External ROS/iXBRL validation evidence recorded before Revenue use.",
+                "Director and secretary certification evidence reviewed."
+            ],
+            "Named qualified accountant must approve the generated pack before real filing use.",
+            [
+                IrishStatutoryRuleSources.CroFinancialStatementsRequirements,
+                IrishStatutoryRuleSources.FrcFrs105,
+                IrishStatutoryRuleSources.RevenueAcceptedTaxonomies
+            ]),
+        new(
+            "small-abridged-ltd",
+            "Small abridged LTD accountant acceptance",
+            true,
+            "qualified-accountant-review-required",
+            [
+                "Full accounts PDF wording and abridged CRO pack wording",
+                "Section 352 abridgement evidence",
+                "iXBRL XML and public profit-and-loss omission checks",
+                "tax computation and small-company notes",
+                "director and secretary signatory gates"
+            ],
+            [
+                "Named qualified-accountant approval recorded against full and abridged generated packs.",
+                "Abridgement eligibility and audit exemption evidence reviewed.",
+                "External ROS/iXBRL validation evidence recorded before Revenue use."
+            ],
+            "Named qualified accountant must approve both the full accounts pack and abridged CRO pack before real filing use.",
+            [
+                IrishStatutoryRuleSources.CroFinancialStatementsRequirements,
+                IrishStatutoryRuleSources.FrcFrs102,
+                IrishStatutoryRuleSources.RevenueIxbrlContents
+            ]),
+        new(
+            "clg-charity",
+            "CLG charity accountant acceptance",
+            true,
+            "qualified-accountant-review-required",
+            [
+                "CLG accounts PDF wording",
+                "charity number, SoFA and trustees annual report evidence",
+                "iXBRL XML and CLG source-backed readiness",
+                "tax computation and charity notes",
+                "charity annual return review gates"
+            ],
+            [
+                "Named qualified-accountant approval recorded against the CLG charity pack.",
+                "Charity annual report evidence reviewed before charity filing state advances.",
+                "Charities Regulator source-backed evidence reviewed."
+            ],
+            "Named qualified accountant must approve the CLG charity pack and charity evidence before real filing use.",
+            [
+                IrishStatutoryRuleSources.CroGuaranteeCompany,
+                IrishStatutoryRuleSources.CharitiesRegulatorAnnualReport,
+                IrishStatutoryRuleSources.FrcFrs102
+            ]),
+        new(
+            "medium-audit-required",
+            "Medium handoff accountant acceptance",
+            true,
+            "manual-handoff-review-required",
+            [
+                "auditor handoff and signed auditor report evidence",
+                "full accounts PDF with P&L, cash flow and equity statements",
+                "iXBRL XML tagged profit-and-loss facts",
+                "filing readiness blockers before and after auditor evidence",
+                "manual professional handoff note"
+            ],
+            [
+                "Signed auditor report and manual handoff note reviewed by the qualified accountant.",
+                "Named qualified-accountant acceptance recorded only after auditor evidence is present.",
+                "Unsupported automated filing path remains blocked until manual professional ownership is recorded."
+            ],
+            "Qualified accountant must record manual handoff acceptance before relying on outputs.",
+            [
+                IrishStatutoryRuleSources.CroMediumCompany,
+                IrishStatutoryRuleSources.CroAuditorsReport,
+                IrishStatutoryRuleSources.FrcFrs102
+            ])
     ];
 
     private static VisualQaCoverage BuildVisualQaCoverage()

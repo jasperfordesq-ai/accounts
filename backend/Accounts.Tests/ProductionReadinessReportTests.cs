@@ -354,6 +354,41 @@ public class ProductionReadinessReportTests
     }
 
     [Fact]
+    public async Task ProductionReadinessReport_ExposesAccountantAcceptanceCriteriaForEveryGoldenScenario()
+    {
+        await using var db = CreateDbContext();
+        var report = await new ProductionReadinessReportService(db).GetReportAsync();
+        var acceptanceProperty = report.GetType().GetProperty("AccountantAcceptanceCriteria");
+
+        Assert.NotNull(acceptanceProperty);
+        var criteria = Assert.IsAssignableFrom<System.Collections.IEnumerable>(acceptanceProperty!.GetValue(report))
+            .Cast<object>()
+            .ToArray();
+
+        Assert.Equal(
+            report.GoldenFilingCorpus.Select(scenario => scenario.Code).Order(StringComparer.Ordinal),
+            criteria.Select(item => StringProperty(item, "ScenarioCode")).Order(StringComparer.Ordinal));
+        Assert.Contains(criteria, criterion =>
+            StringProperty(criterion, "ScenarioCode") == "micro-ltd"
+            && StringListProperty(criterion, "ReviewScope").Any(item => item.Contains("PDF", StringComparison.OrdinalIgnoreCase))
+            && StringProperty(criterion, "RequiredSignOffGate").Contains("qualified accountant", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(criteria, criterion =>
+            StringProperty(criterion, "ScenarioCode") == "medium-audit-required"
+            && StringProperty(criterion, "AcceptanceStatus") == "manual-handoff-review-required"
+            && StringListProperty(criterion, "RequiredEvidence").Any(item => item.Contains("auditor", StringComparison.OrdinalIgnoreCase)));
+        Assert.All(criteria, criterion =>
+        {
+            Assert.True(BooleanProperty(criterion, "Required"));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(criterion, "Label")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(criterion, "AcceptanceStatus")));
+            Assert.NotEmpty(StringListProperty(criterion, "ReviewScope"));
+            Assert.NotEmpty(StringListProperty(criterion, "RequiredEvidence"));
+            Assert.NotEmpty(ObjectListProperty(criterion, "Sources"));
+        });
+        Assert.Contains(report.AssurancePacket.EvidenceItems, item => item == "accountant-acceptance-criteria");
+    }
+
+    [Fact]
     public async Task ProductionReadinessReport_ExposesPrioritisedAssuranceActionsForRemainingProductionWork()
     {
         await using var db = CreateDbContext();

@@ -22,6 +22,9 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.equal(parsed.dependencyPolicyControls[0].failurePolicy, "Fail the release for moderate, high or critical npm advisories.");
   assert.equal(parsed.deploymentSafetyControls[0].code, "controlled-production-migrations");
   assert.match(parsed.deploymentSafetyControls[1].failurePolicy, /demo/i);
+  assert.equal(parsed.accountantAcceptanceCriteria[0].scenarioCode, "micro-ltd");
+  assert.equal(parsed.accountantAcceptanceCriteria[0].required, true);
+  assert.match(parsed.accountantAcceptanceCriteria[0].requiredSignOffGate, /qualified accountant/i);
   assert.equal(parsed.assurancePacket.packetVersion, "production-assurance-packet-v1");
   assert.equal(parsed.assurancePacket.sourceLawSnapshotHash, "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
   assert.equal(parsed.assurancePacket.goldenCorpusCovered, 1);
@@ -66,6 +69,18 @@ function sampleReport() {
       evidenceItems: ["source-law-snapshot-fingerprint", "golden-filing-corpus", "visual-smoke-screenshots"],
       releaseBlockers: ["Qualified accountant sign-off required"],
     },
+    accountantAcceptanceCriteria: [
+      {
+        scenarioCode: "micro-ltd",
+        label: "Micro LTD accountant acceptance",
+        required: true,
+        acceptanceStatus: "qualified-accountant-review-required",
+        reviewScope: ["PDF wording", "iXBRL XML", "filing readiness", "tax computation", "notes", "signatory gates"],
+        requiredEvidence: ["Named qualified-accountant approval recorded against the generated pack."],
+        requiredSignOffGate: "Named qualified accountant must approve the generated pack before real filing use.",
+        sources: [source("frc-frs-105", "FRC FRS 105 current edition and amendments")],
+      },
+    ],
     areas: [
       {
         code: "backend-accounting-engine",

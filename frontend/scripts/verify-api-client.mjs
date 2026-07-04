@@ -119,6 +119,18 @@ function productionReadinessReportFixture() {
       evidenceItems: ["source-law-snapshot-fingerprint", "golden-filing-corpus", "visual-smoke-screenshots"],
       releaseBlockers: ["Qualified accountant sign-off required"],
     },
+    accountantAcceptanceCriteria: [
+      {
+        scenarioCode: "micro-ltd",
+        label: "Micro LTD accountant acceptance",
+        required: true,
+        acceptanceStatus: "qualified-accountant-review-required",
+        reviewScope: ["PDF wording", "iXBRL XML", "filing readiness profile"],
+        requiredEvidence: ["Named qualified-accountant approval recorded against the generated pack."],
+        requiredSignOffGate: "Named qualified accountant must approve the generated pack before real filing use.",
+        sources: [source("frc-frs-105", "FRC FRS 105 current edition and amendments")],
+      },
+    ],
     areas: [
       {
         code: "backend-accounting-engine",

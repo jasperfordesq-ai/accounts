@@ -54,6 +54,25 @@ function sampleReport(): ProductionReadinessReport {
       evidenceItems: ["source-law-snapshot-fingerprint", "golden-filing-corpus", "visual-smoke-screenshots"],
       releaseBlockers: ["Qualified accountant sign-off required"],
     },
+    accountantAcceptanceCriteria: [
+      {
+        scenarioCode: "micro-ltd",
+        label: "Micro LTD accountant acceptance",
+        required: true,
+        acceptanceStatus: "qualified-accountant-review-required",
+        reviewScope: ["PDF wording", "iXBRL XML", "filing readiness profile"],
+        requiredEvidence: ["Named qualified-accountant approval recorded against the generated pack."],
+        requiredSignOffGate: "Named qualified accountant must approve the generated pack before real filing use.",
+        sources: [
+          {
+            sourceId: "frc-frs-105",
+            title: "FRC FRS 105 current edition and amendments",
+            effectiveDate: "2026-07-03",
+            url: "https://www.frc.org.uk/",
+          },
+        ],
+      },
+    ],
     areas: [
       {
         code: "backend-accounting-engine",

@@ -19,6 +19,7 @@ import {
 
 export function ProductionReadinessWorkbench({ report }: { report: ProductionReadinessReport }) {
   const assuranceActions = report.assuranceActions ?? [];
+  const accountantAcceptanceCriteria = report.accountantAcceptanceCriteria ?? [];
   const statutoryRuleMatrix = report.statutoryRuleMatrix ?? [];
   const statutoryRulesCoverage = report.statutoryRulesCoverage ?? [];
   const auditabilityControls = report.auditabilityControls ?? [];
@@ -149,6 +150,45 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
               <span key="evidence" className="whitespace-normal text-[var(--muted-foreground)]">{action.evidenceRequired}</span>,
               <StatusBadge key="status" tone={action.status === "complete" ? "good" : action.status === "in-progress" ? "info" : "warn"}>
                 {formatStatus(action.status)}
+              </StatusBadge>,
+            ],
+          }))}
+        />
+      </ReviewPanel>
+
+      <ReviewPanel
+        title="Accountant acceptance criteria"
+        description="Scenario-by-scenario acceptance gates a named qualified accountant must review before generated packs are trusted for real statutory use."
+        actions={<StatusBadge tone="warn">{accountantAcceptanceCriteria.length} required</StatusBadge>}
+      >
+        <DataTable
+          caption="Accountant acceptance criteria"
+          filterPlaceholder="Filter accountant acceptance criteria"
+          emptyState="No matching accountant acceptance criteria"
+          columns={["Scenario", "Review scope", "Required evidence", "Sign-off gate", "Sources", "Status"]}
+          rows={accountantAcceptanceCriteria.map((criterion) => ({
+            id: criterion.scenarioCode,
+            tone: criterion.acceptanceStatus.includes("manual-handoff") ? "warn" : "info",
+            searchText: [
+              criterion.scenarioCode,
+              criterion.label,
+              criterion.acceptanceStatus,
+              criterion.requiredSignOffGate,
+              ...criterion.reviewScope,
+              ...criterion.requiredEvidence,
+              ...criterion.sources.map((source) => source.title),
+            ].join(" "),
+            cells: [
+              <div key="scenario" className="min-w-48 whitespace-normal">
+                <p className="font-medium">{criterion.label}</p>
+                <code className="mt-1 block break-all text-[11px] text-[var(--muted-foreground)]">{criterion.scenarioCode}</code>
+              </div>,
+              <CompactList key="scope" items={criterion.reviewScope} />,
+              <CompactList key="evidence" items={criterion.requiredEvidence} />,
+              <span key="gate" className="whitespace-normal text-[var(--muted-foreground)]">{criterion.requiredSignOffGate}</span>,
+              <SourceLinkList key="sources" sources={criterion.sources} />,
+              <StatusBadge key="status" tone={criterion.acceptanceStatus.includes("manual-handoff") ? "warn" : "info"}>
+                {formatStatus(criterion.acceptanceStatus)}
               </StatusBadge>,
             ],
           }))}

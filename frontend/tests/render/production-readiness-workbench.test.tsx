@@ -27,10 +27,8 @@ describe("ProductionReadinessWorkbench", () => {
     expect(screen.getByText("Expected proof points")).toBeInTheDocument();
     expect(screen.getByText("PDF text contains company name and micro statutory statement.")).toBeInTheDocument();
     expect(screen.getByText("signatory-gates")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "FRC FRS 105 current edition and amendments" })).toHaveAttribute(
-      "href",
-      "https://www.frc.org.uk/",
-    );
+    expect(screen.getAllByRole("link", { name: "FRC FRS 105 current edition and amendments" }))
+      .toEqual(expect.arrayContaining([expect.objectContaining({ href: "https://www.frc.org.uk/" })]));
     expect(screen.getByText("Unsupported/manual handoff")).toBeInTheDocument();
     expect(screen.getByText("PLC and public-company workflows")).toBeInTheDocument();
     expect(screen.getByText("Operations and security")).toBeInTheDocument();
@@ -91,6 +89,11 @@ describe("ProductionReadinessWorkbench", () => {
     expect(screen.getByText("assurance-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")).toBeInTheDocument();
     expect(screen.getByText("Golden corpus 1/1")).toBeInTheDocument();
     expect(screen.getByText("Qualified accountant sign-off required")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Accountant acceptance criteria" })).toBeInTheDocument();
+    expect(screen.getByText("Micro LTD accountant acceptance")).toBeInTheDocument();
+    expect(screen.getByText("Medium handoff accountant acceptance")).toBeInTheDocument();
+    expect(screen.getByText("Named qualified accountant must approve the generated pack before real filing use.")).toBeInTheDocument();
+    expect(screen.getByText("Signed auditor report and manual handoff note reviewed by the qualified accountant.")).toBeInTheDocument();
   }, 45000);
 });
 
@@ -129,6 +132,42 @@ function sampleReport(): ProductionReadinessReport {
       evidenceItems: ["source-law-snapshot-fingerprint", "golden-filing-corpus", "visual-smoke-screenshots"],
       releaseBlockers: ["Qualified accountant sign-off required"],
     },
+    accountantAcceptanceCriteria: [
+      {
+        scenarioCode: "micro-ltd",
+        label: "Micro LTD accountant acceptance",
+        required: true,
+        acceptanceStatus: "qualified-accountant-review-required",
+        reviewScope: ["PDF wording", "iXBRL XML", "filing readiness", "tax computation", "notes", "signatory gates"],
+        requiredEvidence: ["Named qualified-accountant approval recorded against the generated pack."],
+        requiredSignOffGate: "Named qualified accountant must approve the generated pack before real filing use.",
+        sources: [
+          {
+            sourceId: "frc-frs-105",
+            title: "FRC FRS 105 current edition and amendments",
+            effectiveDate: "2026-07-03",
+            url: "https://www.frc.org.uk/",
+          },
+        ],
+      },
+      {
+        scenarioCode: "medium-audit-required",
+        label: "Medium handoff accountant acceptance",
+        required: true,
+        acceptanceStatus: "manual-handoff-review-required",
+        reviewScope: ["Auditor handoff", "full accounts PDF", "iXBRL XML", "filing readiness"],
+        requiredEvidence: ["Signed auditor report and manual handoff note reviewed by the qualified accountant."],
+        requiredSignOffGate: "Qualified accountant must record manual handoff acceptance before relying on outputs.",
+        sources: [
+          {
+            sourceId: "frc-frs-102",
+            title: "FRC FRS 102 current edition and amendments",
+            effectiveDate: "2026-07-03",
+            url: "https://www.frc.org.uk/",
+          },
+        ],
+      },
+    ],
     areas: [
       {
         code: "backend-accounting-engine",

@@ -1654,6 +1654,17 @@ export interface DeploymentSafetyControl {
   failurePolicy: string;
 }
 
+export interface AccountantAcceptanceCriterion {
+  scenarioCode: string;
+  label: string;
+  required: boolean;
+  acceptanceStatus: string;
+  reviewScope: string[];
+  requiredEvidence: string[];
+  requiredSignOffGate: string;
+  sources: LegalSourceReference[];
+}
+
 export interface VisualQaViewport {
   name: string;
   width: number;
@@ -1701,6 +1712,7 @@ export interface ProductionReadinessReport {
   periodsInDatabase: number;
   sourceLawSnapshot: SourceLawSnapshot;
   assurancePacket: ProductionAssurancePacket;
+  accountantAcceptanceCriteria: AccountantAcceptanceCriterion[];
   areas: ProductionReadinessArea[];
   goldenFilingCorpus: GoldenFilingCorpusScenario[];
   statutoryRuleMatrix: StatutoryRuleMatrixEntry[];
@@ -1856,6 +1868,17 @@ const deploymentSafetyControlSchema = z.object({
   failurePolicy: z.string().min(1),
 });
 
+const accountantAcceptanceCriterionSchema = z.object({
+  scenarioCode: z.string().min(1),
+  label: z.string().min(1),
+  required: z.boolean(),
+  acceptanceStatus: z.string().min(1),
+  reviewScope: z.array(z.string().min(1)),
+  requiredEvidence: z.array(z.string().min(1)),
+  requiredSignOffGate: z.string().min(1),
+  sources: z.array(legalSourceReferenceSchema),
+});
+
 const visualQaViewportSchema = z.object({
   name: z.string().min(1),
   width: z.number(),
@@ -1887,6 +1910,7 @@ export const productionReadinessReportSchema = z.object({
   periodsInDatabase: z.number(),
   sourceLawSnapshot: sourceLawSnapshotSchema,
   assurancePacket: productionAssurancePacketSchema,
+  accountantAcceptanceCriteria: z.array(accountantAcceptanceCriterionSchema),
   areas: z.array(productionReadinessAreaSchema),
   goldenFilingCorpus: z.array(goldenFilingCorpusScenarioSchema),
   statutoryRuleMatrix: z.array(statutoryRuleMatrixEntrySchema),
