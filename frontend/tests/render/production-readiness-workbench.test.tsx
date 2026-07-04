@@ -12,8 +12,16 @@ describe("ProductionReadinessWorkbench", () => {
     expect(screen.getByText("3 companies")).toBeInTheDocument();
     expect(screen.getByText("4 periods")).toBeInTheDocument();
     expect(screen.getByText("Golden filing corpus")).toBeInTheDocument();
-    expect(screen.getByText("Micro LTD")).toBeInTheDocument();
+    expect(screen.getAllByText("Micro LTD")).toHaveLength(2);
     expect(screen.getByText("AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl")).toBeInTheDocument();
+    expect(screen.getByText("Golden evidence pack")).toBeInTheDocument();
+    expect(screen.getByText("accounts PDF text")).toBeInTheDocument();
+    expect(screen.getByText("director and secretary certification")).toBeInTheDocument();
+    expect(screen.getByText("well-formed iXBRL")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "FRC FRS 105 current edition and amendments" })).toHaveAttribute(
+      "href",
+      "https://www.frc.org.uk/",
+    );
     expect(screen.getByText("Unsupported/manual handoff")).toBeInTheDocument();
     expect(screen.getByText("PLC and public-company workflows")).toBeInTheDocument();
     expect(screen.getByText("Operations and security")).toBeInTheDocument();
@@ -93,6 +101,19 @@ function sampleReport(): ProductionReadinessReport {
         coverageStatus: "covered",
         evidenceTestNames: ["AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl"],
         assertions: ["PDF text", "iXBRL parse"],
+        evidencePack: {
+          outputArtifacts: ["accounts PDF text", "CRO filing pack", "iXBRL XML"],
+          decisionGates: ["named qualified-accountant review", "director and secretary certification"],
+          expectedValueChecks: ["Micro regime", "100% filing readiness", "well-formed iXBRL"],
+          sourceReferences: [
+            {
+              sourceId: "frc-frs-105",
+              title: "FRC FRS 105 current edition and amendments",
+              effectiveDate: "2026-07-03",
+              url: "https://www.frc.org.uk/",
+            },
+          ],
+        },
       },
     ],
     manualHandoffPaths: ["PLC and public-company workflows"],

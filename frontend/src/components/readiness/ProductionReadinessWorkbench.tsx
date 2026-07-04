@@ -179,6 +179,25 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
             </StatusBadge>,
           ])}
         />
+
+        <div className="mt-5 space-y-3">
+          <div>
+            <h3 className="text-sm font-semibold text-[var(--foreground)]">Golden evidence pack</h3>
+            <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">
+              The concrete generated artifacts, decision gates, expected values and statutory sources each scenario must prove.
+            </p>
+          </div>
+          <DataTable
+            columns={["Scenario", "Output artifacts", "Decision gates", "Expected value checks", "Sources"]}
+            rows={report.goldenFilingCorpus.map((scenario) => [
+              <span key="scenario" className="font-medium">{scenario.label}</span>,
+              <CompactList key="artifacts" items={scenario.evidencePack.outputArtifacts} />,
+              <CompactList key="gates" items={scenario.evidencePack.decisionGates} />,
+              <CompactList key="values" items={scenario.evidencePack.expectedValueChecks} />,
+              <SourceLinkList key="sources" sources={scenario.evidencePack.sourceReferences} />,
+            ])}
+          />
+        </div>
       </section>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">

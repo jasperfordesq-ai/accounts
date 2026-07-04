@@ -9,6 +9,12 @@ public sealed record ProductionReadinessArea(
     string Status,
     string Detail);
 
+public sealed record GoldenFilingCorpusEvidencePack(
+    IReadOnlyList<string> OutputArtifacts,
+    IReadOnlyList<string> DecisionGates,
+    IReadOnlyList<string> ExpectedValueChecks,
+    IReadOnlyList<LegalSourceReference> SourceReferences);
+
 public sealed record GoldenFilingCorpusScenario(
     string Code,
     string Label,
@@ -16,7 +22,8 @@ public sealed record GoldenFilingCorpusScenario(
     string ExpectedOutcome,
     string CoverageStatus,
     IReadOnlyList<string> EvidenceTestNames,
-    IReadOnlyList<string> Assertions);
+    IReadOnlyList<string> Assertions,
+    GoldenFilingCorpusEvidencePack EvidencePack);
 
 public sealed record StatutoryRuleMatrixEntry(
     string Code,
@@ -152,7 +159,35 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 "balance sheet balances",
                 "PDF text includes company, period and micro statement",
                 "iXBRL parses as XML"
-            ]),
+            ],
+            new(
+                [
+                    "accounts PDF text",
+                    "CRO filing pack",
+                    "CRO signature page",
+                    "iXBRL XML",
+                    "tax computation",
+                    "notes disclosure set",
+                    "filing readiness profile"
+                ],
+                [
+                    "named qualified-accountant review",
+                    "director and secretary certification",
+                    "external ROS/iXBRL validation"
+                ],
+                [
+                    "Micro regime selected",
+                    "100% filing readiness",
+                    "balance sheet balances",
+                    "well-formed iXBRL",
+                    "micro statutory statement present in PDF text"
+                ],
+                [
+                    IrishStatutoryRuleSources.CroFinancialStatementsRequirements,
+                    IrishStatutoryRuleSources.FrcFrs105,
+                    IrishStatutoryRuleSources.RevenueIxbrlOverview,
+                    IrishStatutoryRuleSources.RevenueAcceptedTaxonomies
+                ])),
         new(
             "small-abridged-ltd",
             "Small or small-abridged LTD filing",
@@ -169,7 +204,36 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 "CRO abridged pack omits P&L and cites Section 352",
                 "signature page carries director and secretary certification",
                 "iXBRL parses as XML and omits public P&L turnover"
-            ]),
+            ],
+            new(
+                [
+                    "full accounts PDF text",
+                    "abridged CRO filing pack",
+                    "CRO signature page",
+                    "iXBRL XML",
+                    "tax computation",
+                    "notes disclosure set",
+                    "filing readiness profile"
+                ],
+                [
+                    "abridgement eligibility",
+                    "director and secretary certification",
+                    "named qualified-accountant review",
+                    "external ROS/iXBRL validation"
+                ],
+                [
+                    "SmallAbridged regime selected",
+                    "Section 352 wording present in CRO pack",
+                    "public P&L turnover omitted from iXBRL",
+                    "tax computation matches worked scenario",
+                    "notes include fixed assets and long-term creditors"
+                ],
+                [
+                    IrishStatutoryRuleSources.CroFinancialStatementsRequirements,
+                    IrishStatutoryRuleSources.FrcFrs102,
+                    IrishStatutoryRuleSources.RevenueIxbrlContents,
+                    IrishStatutoryRuleSources.RevenueAcceptedTaxonomies
+                ])),
         new(
             "clg-charity",
             "CLG charity annual reporting",
@@ -184,7 +248,34 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 "charity number evidence is required",
                 "SoFA and trustees report evidence are required",
                 "Charities Regulator source is attached"
-            ]),
+            ],
+            new(
+                [
+                    "CLG accounts PDF text",
+                    "charity readiness profile",
+                    "SoFA evidence",
+                    "trustees annual report evidence",
+                    "iXBRL XML",
+                    "tax computation",
+                    "notes disclosure set"
+                ],
+                [
+                    "charity number",
+                    "charity annual return review",
+                    "named qualified-accountant review"
+                ],
+                [
+                    "charity evidence satisfied",
+                    "Charities Regulator source attached",
+                    "CLG source attached",
+                    "well-formed iXBRL"
+                ],
+                [
+                    IrishStatutoryRuleSources.CroGuaranteeCompany,
+                    IrishStatutoryRuleSources.CharitiesRegulatorAnnualReport,
+                    IrishStatutoryRuleSources.FrcFrs102,
+                    IrishStatutoryRuleSources.RevenueIxbrlOverview
+                ])),
         new(
             "medium-audit-required",
             "Medium audit-required handoff",
@@ -201,7 +292,34 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 "CRO medium-company and auditor-report sources are attached",
                 "after auditor evidence, the full pack includes auditor report, P&L, cash flow and equity statements",
                 "medium iXBRL includes tagged P&L facts"
-            ])
+            ],
+            new(
+                [
+                    "full accounts PDF text",
+                    "auditor report evidence",
+                    "cash flow statement",
+                    "statement of changes in equity",
+                    "iXBRL XML",
+                    "filing readiness profile",
+                    "tax computation"
+                ],
+                [
+                    "auditor handoff",
+                    "manual professional review",
+                    "normal CRO approval blocked until auditor evidence"
+                ],
+                [
+                    "Medium regime selected",
+                    "audit report blocker present before auditor evidence",
+                    "tagged P&L facts present after auditor evidence",
+                    "auditor reference appears in PDF text"
+                ],
+                [
+                    IrishStatutoryRuleSources.CroMediumCompany,
+                    IrishStatutoryRuleSources.CroAuditorsReport,
+                    IrishStatutoryRuleSources.FrcFrs102,
+                    IrishStatutoryRuleSources.RevenueIxbrlOverview
+                ]))
     ];
 
     private static IReadOnlyList<StatutoryRuleMatrixEntry> BuildStatutoryRuleMatrix() =>

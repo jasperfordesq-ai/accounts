@@ -88,6 +88,137 @@ public class ProductionReadinessReportTests
     }
 
     [Fact]
+    public async Task GoldenCorpusScenarios_ExposeFormalEvidencePacksForArtifactsGatesValuesAndSources()
+    {
+        await using var db = CreateDbContext();
+        var report = await new ProductionReadinessReportService(db).GetReportAsync();
+
+        AssertGoldenEvidencePack(
+            report,
+            "micro-ltd",
+            expectedArtifacts:
+            [
+                "accounts PDF text",
+                "CRO filing pack",
+                "CRO signature page",
+                "iXBRL XML",
+                "tax computation",
+                "notes disclosure set",
+                "filing readiness profile"
+            ],
+            expectedGates:
+            [
+                "named qualified-accountant review",
+                "director and secretary certification",
+                "external ROS/iXBRL validation"
+            ],
+            expectedValueChecks:
+            [
+                "Micro regime",
+                "100% filing readiness",
+                "well-formed iXBRL"
+            ],
+            expectedSourceIds:
+            [
+                IrishStatutoryRuleSources.CroFinancialStatementsRequirements.SourceId,
+                IrishStatutoryRuleSources.FrcFrs105.SourceId,
+                IrishStatutoryRuleSources.RevenueAcceptedTaxonomies.SourceId
+            ]);
+
+        AssertGoldenEvidencePack(
+            report,
+            "small-abridged-ltd",
+            expectedArtifacts:
+            [
+                "full accounts PDF text",
+                "abridged CRO filing pack",
+                "CRO signature page",
+                "iXBRL XML",
+                "tax computation",
+                "notes disclosure set",
+                "filing readiness profile"
+            ],
+            expectedGates:
+            [
+                "abridgement eligibility",
+                "director and secretary certification",
+                "external ROS/iXBRL validation"
+            ],
+            expectedValueChecks:
+            [
+                "SmallAbridged regime",
+                "Section 352 wording",
+                "public P&L turnover omitted from iXBRL"
+            ],
+            expectedSourceIds:
+            [
+                IrishStatutoryRuleSources.CroFinancialStatementsRequirements.SourceId,
+                IrishStatutoryRuleSources.FrcFrs102.SourceId,
+                IrishStatutoryRuleSources.RevenueAcceptedTaxonomies.SourceId
+            ]);
+
+        AssertGoldenEvidencePack(
+            report,
+            "clg-charity",
+            expectedArtifacts:
+            [
+                "CLG accounts PDF text",
+                "charity readiness profile",
+                "SoFA evidence",
+                "trustees annual report evidence",
+                "iXBRL XML"
+            ],
+            expectedGates:
+            [
+                "charity number",
+                "charity annual return review",
+                "named qualified-accountant review"
+            ],
+            expectedValueChecks:
+            [
+                "charity evidence satisfied",
+                "Charities Regulator source attached"
+            ],
+            expectedSourceIds:
+            [
+                IrishStatutoryRuleSources.CroGuaranteeCompany.SourceId,
+                IrishStatutoryRuleSources.CharitiesRegulatorAnnualReport.SourceId,
+                IrishStatutoryRuleSources.FrcFrs102.SourceId
+            ]);
+
+        AssertGoldenEvidencePack(
+            report,
+            "medium-audit-required",
+            expectedArtifacts:
+            [
+                "full accounts PDF text",
+                "auditor report evidence",
+                "cash flow statement",
+                "statement of changes in equity",
+                "iXBRL XML",
+                "filing readiness profile"
+            ],
+            expectedGates:
+            [
+                "auditor handoff",
+                "manual professional review",
+                "normal CRO approval blocked until auditor evidence"
+            ],
+            expectedValueChecks:
+            [
+                "Medium regime",
+                "audit report blocker",
+                "tagged P&L facts"
+            ],
+            expectedSourceIds:
+            [
+                IrishStatutoryRuleSources.CroMediumCompany.SourceId,
+                IrishStatutoryRuleSources.CroAuditorsReport.SourceId,
+                IrishStatutoryRuleSources.FrcFrs102.SourceId
+            ]);
+    }
+
+    [Fact]
     public async Task ProductionReadinessReport_ExposesPrioritisedAssuranceActionsForRemainingProductionWork()
     {
         await using var db = CreateDbContext();
@@ -265,6 +396,51 @@ public class ProductionReadinessReportTests
             method!.GetCustomAttributes(typeof(FactAttribute), inherit: false).Any()
             || method.GetCustomAttributes(typeof(TheoryAttribute), inherit: false).Any(),
             $"{evidenceTestName} must point to an executable xUnit test.");
+    }
+
+    private static void AssertGoldenEvidencePack(
+        ProductionReadinessReport report,
+        string scenarioCode,
+        IReadOnlyList<string> expectedArtifacts,
+        IReadOnlyList<string> expectedGates,
+        IReadOnlyList<string> expectedValueChecks,
+        IReadOnlyList<string> expectedSourceIds)
+    {
+        var scenario = Assert.Single(report.GoldenFilingCorpus, s => s.Code == scenarioCode);
+        var evidencePackProperty = scenario.GetType().GetProperty("EvidencePack");
+        Assert.NotNull(evidencePackProperty);
+        var evidencePack = evidencePackProperty!.GetValue(scenario);
+        Assert.NotNull(evidencePack);
+
+        AssertListContainsAll(StringListProperty(evidencePack!, "OutputArtifacts"), expectedArtifacts, scenarioCode, "output artifacts");
+        AssertListContainsAll(StringListProperty(evidencePack!, "DecisionGates"), expectedGates, scenarioCode, "decision gates");
+        AssertListContainsAll(StringListProperty(evidencePack!, "ExpectedValueChecks"), expectedValueChecks, scenarioCode, "expected value checks");
+
+        var sourceReferencesProperty = evidencePack!.GetType().GetProperty("SourceReferences");
+        Assert.NotNull(sourceReferencesProperty);
+        var sources = Assert.IsAssignableFrom<IEnumerable<LegalSourceReference>>(sourceReferencesProperty!.GetValue(evidencePack)).ToArray();
+        foreach (var sourceId in expectedSourceIds)
+            Assert.Contains(sources, source => source.SourceId == sourceId);
+        Assert.All(sources, source => Assert.StartsWith("https://", source.Url));
+    }
+
+    private static void AssertListContainsAll(
+        IReadOnlyList<string> actual,
+        IReadOnlyList<string> expected,
+        string scenarioCode,
+        string label)
+    {
+        foreach (var expectedItem in expected)
+        {
+            Assert.True(
+                actual.Any(item => item.Contains(expectedItem, StringComparison.OrdinalIgnoreCase)),
+                $"{scenarioCode} evidence pack {label} should include '{expectedItem}'.");
+        }
+
+        Assert.Equal(
+            actual.Count,
+            actual.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        Assert.NotEmpty(actual);
     }
 
     private static string StringProperty(object value, string propertyName)

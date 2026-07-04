@@ -54,6 +54,19 @@ function sampleReport(): ProductionReadinessReport {
         coverageStatus: "covered",
         evidenceTestNames: ["AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl"],
         assertions: ["PDF text", "iXBRL parse"],
+        evidencePack: {
+          outputArtifacts: ["accounts PDF text", "iXBRL XML"],
+          decisionGates: ["named qualified-accountant review"],
+          expectedValueChecks: ["well-formed iXBRL"],
+          sourceReferences: [
+            {
+              sourceId: "frc-frs-105",
+              title: "FRC FRS 105 current edition and amendments",
+              effectiveDate: "2026-07-03",
+              url: "https://www.frc.org.uk/",
+            },
+          ],
+        },
       },
       {
         code: "clg-charity",
@@ -63,6 +76,19 @@ function sampleReport(): ProductionReadinessReport {
         coverageStatus: "covered",
         evidenceTestNames: ["FilingGoldenCorpusScenarioTests.GoldenCorpus_ClgCharity_EmitsAccountsIxbrlAndSourceBackedCharityReadiness"],
         assertions: ["charity evidence"],
+        evidencePack: {
+          outputArtifacts: ["CLG accounts PDF text", "charity readiness profile"],
+          decisionGates: ["charity number", "charity annual return review"],
+          expectedValueChecks: ["charity evidence satisfied"],
+          sourceReferences: [
+            {
+              sourceId: "charities-regulator-annual-report",
+              title: "Charities Regulator annual report guidance",
+              effectiveDate: "2026-07-03",
+              url: "https://www.charitiesregulator.ie/",
+            },
+          ],
+        },
       },
     ],
     statutoryRuleMatrix: [

@@ -1545,6 +1545,13 @@ export interface ProductionReadinessArea {
   detail: string;
 }
 
+export interface GoldenFilingCorpusEvidencePack {
+  outputArtifacts: string[];
+  decisionGates: string[];
+  expectedValueChecks: string[];
+  sourceReferences: LegalSourceReference[];
+}
+
 export interface GoldenFilingCorpusScenario {
   code: string;
   label: string;
@@ -1553,6 +1560,7 @@ export interface GoldenFilingCorpusScenario {
   coverageStatus: string;
   evidenceTestNames: string[];
   assertions: string[];
+  evidencePack: GoldenFilingCorpusEvidencePack;
 }
 
 export interface StatutoryRuleMatrixEntry {
