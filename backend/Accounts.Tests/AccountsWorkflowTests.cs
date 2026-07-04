@@ -9422,6 +9422,16 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public void DeadlineCalculation_UsesAtomicPostgresUpsertForIdempotentRecalculation()
+    {
+        var source = File.ReadAllText(Path.Combine(RepositoryRoot(), "backend/Accounts.Api/Services/DeadlineService.cs"));
+
+        Assert.Contains("UpsertDeadlineAtomicallyAsync", source);
+        Assert.Contains("ON CONFLICT", source);
+        Assert.Contains("\"CompanyId\", \"PeriodId\", \"DeadlineType\"", source);
+    }
+
+    [Fact]
     public async Task DeadlineMarkFiled_RejectsCroBeforeAcceptedWorkflowWithoutMutatingDeadlineOrHistory()
     {
         await using var db = CreateDbContext();

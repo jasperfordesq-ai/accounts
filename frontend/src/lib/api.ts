@@ -1551,7 +1551,15 @@ export interface GoldenFilingCorpusEvidencePack {
   outputArtifacts: string[];
   decisionGates: string[];
   expectedValueChecks: string[];
+  expectedProofPoints: GoldenFilingCorpusProofPoint[];
   sourceReferences: LegalSourceReference[];
+}
+
+export interface GoldenFilingCorpusProofPoint {
+  area: string;
+  expectedEvidence: string;
+  automatedVerifier: string;
+  required: boolean;
 }
 
 export interface GoldenFilingCorpusScenario {
@@ -1668,6 +1676,12 @@ const goldenFilingCorpusEvidencePackSchema = z.object({
   outputArtifacts: z.array(z.string().min(1)),
   decisionGates: z.array(z.string().min(1)),
   expectedValueChecks: z.array(z.string().min(1)),
+  expectedProofPoints: z.array(z.object({
+    area: z.string().min(1),
+    expectedEvidence: z.string().min(1),
+    automatedVerifier: z.string().min(1),
+    required: z.boolean(),
+  })),
   sourceReferences: z.array(legalSourceReferenceSchema),
 });
 

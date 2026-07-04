@@ -267,7 +267,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
             caption="Golden evidence pack"
             filterPlaceholder="Filter evidence packs"
             emptyState="No matching evidence packs"
-            columns={["Scenario", "Output artifacts", "Decision gates", "Expected value checks", "Sources"]}
+            columns={["Scenario", "Output artifacts", "Decision gates", "Expected value checks", "Expected proof points", "Sources"]}
             rows={report.goldenFilingCorpus.map((scenario) => ({
               id: `${scenario.code}-evidence`,
               tone: scenario.coverageStatus === "covered" ? "good" : "warn",
@@ -276,6 +276,11 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
                 ...scenario.evidencePack.outputArtifacts,
                 ...scenario.evidencePack.decisionGates,
                 ...scenario.evidencePack.expectedValueChecks,
+                ...scenario.evidencePack.expectedProofPoints.flatMap((proof) => [
+                  proof.area,
+                  proof.expectedEvidence,
+                  proof.automatedVerifier,
+                ]),
                 ...scenario.evidencePack.sourceReferences.map((source) => source.title),
               ].join(" "),
               cells: [
@@ -283,6 +288,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
                 <CompactList key="artifacts" items={scenario.evidencePack.outputArtifacts} />,
                 <CompactList key="gates" items={scenario.evidencePack.decisionGates} />,
                 <CompactList key="values" items={scenario.evidencePack.expectedValueChecks} />,
+                <ProofPointList key="proof-points" proofPoints={scenario.evidencePack.expectedProofPoints} />,
                 <SourceLinkList key="sources" sources={scenario.evidencePack.sourceReferences} />,
               ],
             }))}
@@ -440,6 +446,29 @@ function CompactList({ items }: { items: string[] }) {
         <li key={item} className="flex items-start gap-1.5">
           <FileCheck2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-300" />
           <span>{item}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function ProofPointList({
+  proofPoints,
+}: {
+  proofPoints: ProductionReadinessReport["goldenFilingCorpus"][number]["evidencePack"]["expectedProofPoints"];
+}) {
+  return (
+    <ul className="max-w-lg space-y-2 whitespace-normal text-xs leading-5 text-[var(--muted-foreground)]">
+      {proofPoints.map((proof) => (
+        <li key={`${proof.area}-${proof.automatedVerifier}`} className="rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <code className="rounded border border-[var(--border)] bg-[var(--surface)] px-1.5 py-0.5 text-[11px] text-[var(--foreground)]">
+              {proof.area}
+            </code>
+            {proof.required && <StatusBadge tone="good">Required</StatusBadge>}
+          </div>
+          <p className="mt-1 text-[var(--foreground)]">{proof.expectedEvidence}</p>
+          <code className="mt-1 block break-all text-[11px] text-[var(--muted-foreground)]">{proof.automatedVerifier}</code>
         </li>
       ))}
     </ul>

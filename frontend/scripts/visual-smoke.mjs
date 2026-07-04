@@ -47,15 +47,6 @@ async function setTheme(context, theme) {
   }, theme);
 }
 
-async function setInputValue(locator, value) {
-  await locator.evaluate((input, nextValue) => {
-    const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-    valueSetter?.call(input, nextValue);
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-    input.dispatchEvent(new Event("change", { bubbles: true }));
-  }, value);
-}
-
 async function login(page, baseUrl, email, password) {
   let lastFailure = "";
 
@@ -73,8 +64,8 @@ async function login(page, baseUrl, email, password) {
     const passwordInput = page.locator('input[type="password"]');
     await emailInput.waitFor({ state: "visible", timeout: 30_000 });
     await passwordInput.waitFor({ state: "visible", timeout: 30_000 });
-    await setInputValue(emailInput, email);
-    await setInputValue(passwordInput, password);
+    await emailInput.fill(email);
+    await passwordInput.fill(password);
     const signInButton = page.getByRole("button", { name: "Sign in" });
     await expect(signInButton).toBeEnabled({ timeout: 30_000 });
     await signInButton.click();

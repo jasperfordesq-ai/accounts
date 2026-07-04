@@ -15,5 +15,10 @@ describe("period workspace responsive layout", () => {
     assert.match(source, /md:hidden">\s*Credit\s*<\/span>/);
     assert.match(source, /md:hidden">\s*Evidence\s*<\/span>/);
     assert.match(source, /md:hidden">\s*Action\s*<\/span>/);
+
+    assert.match(source, /hidden grid-cols-12[\s\S]*Account[\s\S]*Currency[\s\S]*Opening balance[\s\S]*Import target/);
+    assert.match(source, /md:hidden">\s*Currency\s*<\/span>/);
+    assert.match(source, /md:hidden">\s*Opening balance\s*<\/span>/);
+    assert.match(source, /md:hidden">\s*Import target\s*<\/span>/);
   });
 });

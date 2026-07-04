@@ -58,6 +58,14 @@ function sampleReport(): ProductionReadinessReport {
           outputArtifacts: ["accounts PDF text", "iXBRL XML"],
           decisionGates: ["named qualified-accountant review"],
           expectedValueChecks: ["well-formed iXBRL"],
+          expectedProofPoints: [
+            {
+              area: "pdf-text",
+              expectedEvidence: "PDF text contains company name and micro statutory statement.",
+              automatedVerifier: "AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl",
+              required: true,
+            },
+          ],
           sourceReferences: [
             {
               sourceId: "frc-frs-105",
@@ -80,6 +88,14 @@ function sampleReport(): ProductionReadinessReport {
           outputArtifacts: ["CLG accounts PDF text", "charity readiness profile"],
           decisionGates: ["charity number", "charity annual return review"],
           expectedValueChecks: ["charity evidence satisfied"],
+          expectedProofPoints: [
+            {
+              area: "filing-readiness",
+              expectedEvidence: "Filing readiness confirms charity number, SoFA and trustees report evidence.",
+              automatedVerifier: "FilingGoldenCorpusScenarioTests.GoldenCorpus_ClgCharity_EmitsAccountsIxbrlAndSourceBackedCharityReadiness",
+              required: true,
+            },
+          ],
           sourceReferences: [
             {
               sourceId: "charities-regulator-annual-report",

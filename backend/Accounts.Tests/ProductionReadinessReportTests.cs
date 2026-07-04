@@ -219,6 +219,53 @@ public class ProductionReadinessReportTests
     }
 
     [Fact]
+    public async Task GoldenCorpusEvidencePacks_ExposeStructuredProofPointsForKnownExpectedOutputs()
+    {
+        await using var db = CreateDbContext();
+        var report = await new ProductionReadinessReportService(db).GetReportAsync();
+
+        foreach (var scenario in report.GoldenFilingCorpus)
+        {
+            var proofPoints = ObjectListProperty(scenario.EvidencePack, "ExpectedProofPoints");
+
+            Assert.Contains(proofPoints, proof =>
+                StringProperty(proof, "Area") == "pdf-text"
+                && StringProperty(proof, "ExpectedEvidence").Contains("PDF", StringComparison.OrdinalIgnoreCase)
+                && StringProperty(proof, "AutomatedVerifier").Contains(scenario.EvidenceTestNames[0], StringComparison.Ordinal));
+            Assert.Contains(proofPoints, proof =>
+                StringProperty(proof, "Area") == "ixbrl-xml"
+                && StringProperty(proof, "ExpectedEvidence").Contains("well-formed", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(proofPoints, proof =>
+                StringProperty(proof, "Area") == "filing-readiness"
+                && StringProperty(proof, "ExpectedEvidence").Contains("readiness", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(proofPoints, proof =>
+                StringProperty(proof, "Area") == "tax-computation"
+                && StringProperty(proof, "ExpectedEvidence").Contains("tax", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(proofPoints, proof =>
+                StringProperty(proof, "Area") == "notes-disclosure"
+                && StringProperty(proof, "ExpectedEvidence").Contains("note", StringComparison.OrdinalIgnoreCase));
+
+            Assert.All(proofPoints, proof =>
+            {
+                Assert.False(string.IsNullOrWhiteSpace(StringProperty(proof, "Area")));
+                Assert.False(string.IsNullOrWhiteSpace(StringProperty(proof, "ExpectedEvidence")));
+                Assert.False(string.IsNullOrWhiteSpace(StringProperty(proof, "AutomatedVerifier")));
+                Assert.True(BooleanProperty(proof, "Required"));
+            });
+        }
+
+        var micro = Assert.Single(report.GoldenFilingCorpus, scenario => scenario.Code == "micro-ltd");
+        Assert.Contains(ObjectListProperty(micro.EvidencePack, "ExpectedProofPoints"), proof =>
+            StringProperty(proof, "Area") == "signatory-gates"
+            && StringProperty(proof, "ExpectedEvidence").Contains("director and secretary", StringComparison.OrdinalIgnoreCase));
+
+        var medium = Assert.Single(report.GoldenFilingCorpus, scenario => scenario.Code == "medium-audit-required");
+        Assert.Contains(ObjectListProperty(medium.EvidencePack, "ExpectedProofPoints"), proof =>
+            StringProperty(proof, "Area") == "auditor-handoff"
+            && StringProperty(proof, "ExpectedEvidence").Contains("signed auditor", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task ProductionReadinessReport_ExposesPrioritisedAssuranceActionsForRemainingProductionWork()
     {
         await using var db = CreateDbContext();
@@ -468,5 +515,14 @@ public class ProductionReadinessReportTests
         var property = value.GetType().GetProperty(propertyName);
         Assert.NotNull(property);
         return Assert.IsAssignableFrom<IEnumerable<string>>(property!.GetValue(value)).ToArray();
+    }
+
+    private static IReadOnlyList<object> ObjectListProperty(object value, string propertyName)
+    {
+        var property = value.GetType().GetProperty(propertyName);
+        Assert.NotNull(property);
+        return Assert.IsAssignableFrom<System.Collections.IEnumerable>(property!.GetValue(value))
+            .Cast<object>()
+            .ToArray();
     }
 }

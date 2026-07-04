@@ -8,6 +8,8 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.equal(parsed.goldenFilingCorpus[0].evidencePack.outputArtifacts[0], "accounts PDF text");
   assert.equal(parsed.goldenFilingCorpus[0].evidencePack.decisionGates[0], "named qualified-accountant review");
   assert.equal(parsed.goldenFilingCorpus[0].evidencePack.expectedValueChecks[0], "well-formed iXBRL");
+  assert.equal(parsed.goldenFilingCorpus[0].evidencePack.expectedProofPoints[0].area, "pdf-text");
+  assert.equal(parsed.goldenFilingCorpus[0].evidencePack.expectedProofPoints[0].required, true);
   assert.equal(parsed.goldenFilingCorpus[0].evidencePack.sourceReferences[0].sourceId, "frc-frs-105");
 });
 
@@ -53,6 +55,14 @@ function sampleReport() {
           outputArtifacts: ["accounts PDF text"],
           decisionGates: ["named qualified-accountant review"],
           expectedValueChecks: ["well-formed iXBRL"],
+          expectedProofPoints: [
+            {
+              area: "pdf-text",
+              expectedEvidence: "PDF text contains company name and micro statutory statement.",
+              automatedVerifier: "AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl",
+              required: true,
+            },
+          ],
           sourceReferences: [source("frc-frs-105", "FRC FRS 105 current edition and amendments")],
         },
       },

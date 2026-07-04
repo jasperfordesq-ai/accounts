@@ -13,7 +13,14 @@ public sealed record GoldenFilingCorpusEvidencePack(
     IReadOnlyList<string> OutputArtifacts,
     IReadOnlyList<string> DecisionGates,
     IReadOnlyList<string> ExpectedValueChecks,
+    IReadOnlyList<GoldenFilingCorpusProofPoint> ExpectedProofPoints,
     IReadOnlyList<LegalSourceReference> SourceReferences);
+
+public sealed record GoldenFilingCorpusProofPoint(
+    string Area,
+    string ExpectedEvidence,
+    string AutomatedVerifier,
+    bool Required);
 
 public sealed record GoldenFilingCorpusScenario(
     string Code,
@@ -183,6 +190,16 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "well-formed iXBRL",
                     "micro statutory statement present in PDF text"
                 ],
+                ProofPoints(
+                    "AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl",
+                    [
+                        new("pdf-text", "PDF text contains company name, period and micro statutory statement."),
+                        new("ixbrl-xml", "iXBRL XML is well-formed and contains the company legal name."),
+                        new("filing-readiness", "Filing readiness reaches 100% with no missing items."),
+                        new("tax-computation", "Tax computation is generated and reconciles to the worked micro scenario."),
+                        new("notes-disclosure", "Notes disclosure set includes the required accounting policies."),
+                        new("signatory-gates", "Director and secretary certification gates remain required before filing use.")
+                    ]),
                 [
                     IrishStatutoryRuleSources.CroFinancialStatementsRequirements,
                     IrishStatutoryRuleSources.FrcFrs105,
@@ -229,6 +246,16 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "tax computation matches worked scenario",
                     "notes include fixed assets and long-term creditors"
                 ],
+                ProofPoints(
+                    "AccountsWorkflowTests.GoldenPath_SmallAuditExemptCompany_MixedAccrualSetBalancesThroughPdfAndIxbrl",
+                    [
+                        new("pdf-text", "Full accounts PDF text contains legal name, net assets, profit and loss and Section 352 abridgement wording."),
+                        new("ixbrl-xml", "iXBRL XML is well-formed and omits public profit-and-loss turnover for the abridged CRO pack."),
+                        new("filing-readiness", "Filing readiness confirms generated CRO, Revenue and accountant-review evidence gates."),
+                        new("tax-computation", "Tax computation matches the mixed cash/accrual worked scenario."),
+                        new("notes-disclosure", "Notes include fixed assets, creditors and the small-company disclosure set."),
+                        new("signatory-gates", "CRO signature page carries director and secretary certification evidence.")
+                    ]),
                 [
                     IrishStatutoryRuleSources.CroFinancialStatementsRequirements,
                     IrishStatutoryRuleSources.FrcFrs102,
@@ -271,6 +298,16 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "CLG source attached",
                     "well-formed iXBRL"
                 ],
+                ProofPoints(
+                    "FilingGoldenCorpusScenarioTests.GoldenCorpus_ClgCharity_EmitsAccountsIxbrlAndSourceBackedCharityReadiness",
+                    [
+                        new("pdf-text", "CLG accounts PDF text contains company name and charity objectives."),
+                        new("ixbrl-xml", "iXBRL XML is well-formed and contains the CLG legal name."),
+                        new("filing-readiness", "Filing readiness confirms charity number, SoFA and trustees report evidence."),
+                        new("tax-computation", "Tax computation is generated for the CLG charity scenario."),
+                        new("notes-disclosure", "Notes include accounting policies and charity reporting disclosures."),
+                        new("signatory-gates", "Charity annual return and named qualified-accountant review gates remain required.")
+                    ]),
                 [
                     IrishStatutoryRuleSources.CroGuaranteeCompany,
                     IrishStatutoryRuleSources.CharitiesRegulatorAnnualReport,
@@ -315,6 +352,16 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "tagged P&L facts present after auditor evidence",
                     "auditor reference appears in PDF text"
                 ],
+                ProofPoints(
+                    "FilingGoldenCorpusScenarioTests.GoldenCorpus_MediumAuditRequired_BlocksFinalOutputsAndRequiresManualHandoffUntilAuditorEvidence",
+                    [
+                        new("pdf-text", "Full accounts PDF text is blocked until auditor evidence exists, then includes auditor report, P&L, cash flow and equity statements."),
+                        new("ixbrl-xml", "iXBRL XML is well-formed and contains tagged profit-and-loss facts after auditor evidence."),
+                        new("filing-readiness", "Filing readiness blocks approval before signed auditor report evidence and clears that blocker when evidence is recorded."),
+                        new("tax-computation", "Tax computation is generated for the medium audit-required scenario."),
+                        new("notes-disclosure", "Notes include turnover and tax-on-profit disclosures for the full accounts path."),
+                        new("auditor-handoff", "Signed auditor report reference is mandatory before final output generation.")
+                    ]),
                 [
                     IrishStatutoryRuleSources.CroMediumCompany,
                     IrishStatutoryRuleSources.CroAuditorsReport,
@@ -629,6 +676,17 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "A qualified accountant must take the golden scenarios through the live workflow and confirm outputs, gates and wording are professionally acceptable.",
             "Signed acceptance note covering micro LTD, small abridged LTD, CLG charity and medium/audit-required manual handoff.")
     ];
+
+    private static IReadOnlyList<GoldenFilingCorpusProofPoint> ProofPoints(
+        string automatedVerifier,
+        IReadOnlyList<(string Area, string ExpectedEvidence)> proofPoints) =>
+        proofPoints
+            .Select(proof => new GoldenFilingCorpusProofPoint(
+                proof.Area,
+                proof.ExpectedEvidence,
+                automatedVerifier,
+                Required: true))
+            .ToArray();
 
     private static IReadOnlyList<ProductionAuditabilityControl> BuildAuditabilityControls() =>
     [

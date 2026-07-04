@@ -327,6 +327,9 @@ public class DeadlineService(AccountsDbContext db, AuditService? audit = null, T
 
     private async Task<FilingDeadline> UpsertDeadline(int companyId, int periodId, DeadlineType type, DateOnly dueDate)
     {
+        if (IsPostgresProvider())
+            return await UpsertDeadlineAtomicallyAsync(companyId, periodId, type, dueDate);
+
         var existing = await db.FilingDeadlines
             .FirstOrDefaultAsync(d => d.CompanyId == companyId && d.PeriodId == periodId && d.DeadlineType == type);
 
@@ -346,6 +349,37 @@ public class DeadlineService(AccountsDbContext db, AuditService? audit = null, T
         db.FilingDeadlines.Add(deadline);
         return deadline;
     }
+
+    private async Task<FilingDeadline> UpsertDeadlineAtomicallyAsync(int companyId, int periodId, DeadlineType type, DateOnly dueDate)
+    {
+        var deadlineType = type.ToString();
+        var createdAt = DateTime.UtcNow;
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO filing_deadlines ("CompanyId", "PeriodId", "DeadlineType", "DueDate", "CreatedAt", "IsLate", "PenaltyAmount")
+            VALUES ({companyId}, {periodId}, {deadlineType}, {dueDate}, {createdAt}, FALSE, 0)
+            ON CONFLICT ("CompanyId", "PeriodId", "DeadlineType")
+            DO UPDATE SET "DueDate" = EXCLUDED."DueDate"
+            """);
+
+        var tracked = db.FilingDeadlines.Local.FirstOrDefault(d =>
+            d.CompanyId == companyId
+            && d.PeriodId == periodId
+            && d.DeadlineType == type);
+
+        if (tracked is not null)
+        {
+            tracked.DueDate = dueDate;
+            return tracked;
+        }
+
+        return await db.FilingDeadlines.SingleAsync(d =>
+            d.CompanyId == companyId
+            && d.PeriodId == periodId
+            && d.DeadlineType == type);
+    }
+
+    private bool IsPostgresProvider() =>
+        string.Equals(db.Database.ProviderName, "Npgsql.EntityFrameworkCore.PostgreSQL", StringComparison.Ordinal);
 
     private static object DeadlineAuditSnapshot(FilingDeadline deadline) => new
     {

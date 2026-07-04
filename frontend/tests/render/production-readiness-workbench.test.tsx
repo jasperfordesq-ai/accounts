@@ -16,11 +16,14 @@ describe("ProductionReadinessWorkbench", () => {
     expect(screen.getByRole("searchbox", { name: "Filter Golden filing corpus" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Golden filing corpus" })).toBeInTheDocument();
     expect(screen.getAllByText("Micro LTD")).toHaveLength(2);
-    expect(screen.getByText("AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl")).toBeInTheDocument();
+    expect(screen.getAllByText("AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl").length).toBeGreaterThan(1);
     expect(screen.getByRole("heading", { name: "Golden evidence pack" })).toBeInTheDocument();
     expect(screen.getByText("accounts PDF text")).toBeInTheDocument();
     expect(screen.getByText("director and secretary certification")).toBeInTheDocument();
     expect(screen.getByText("well-formed iXBRL")).toBeInTheDocument();
+    expect(screen.getByText("Expected proof points")).toBeInTheDocument();
+    expect(screen.getByText("PDF text contains company name and micro statutory statement.")).toBeInTheDocument();
+    expect(screen.getByText("signatory-gates")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "FRC FRS 105 current edition and amendments" })).toHaveAttribute(
       "href",
       "https://www.frc.org.uk/",
@@ -109,6 +112,20 @@ function sampleReport(): ProductionReadinessReport {
           outputArtifacts: ["accounts PDF text", "CRO filing pack", "iXBRL XML"],
           decisionGates: ["named qualified-accountant review", "director and secretary certification"],
           expectedValueChecks: ["Micro regime", "100% filing readiness", "well-formed iXBRL"],
+          expectedProofPoints: [
+            {
+              area: "pdf-text",
+              expectedEvidence: "PDF text contains company name and micro statutory statement.",
+              automatedVerifier: "AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl",
+              required: true,
+            },
+            {
+              area: "signatory-gates",
+              expectedEvidence: "Director and secretary certification gates remain required before filing use.",
+              automatedVerifier: "AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl",
+              required: true,
+            },
+          ],
           sourceReferences: [
             {
               sourceId: "frc-frs-105",

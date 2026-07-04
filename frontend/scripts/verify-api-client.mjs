@@ -123,6 +123,14 @@ function productionReadinessReportFixture() {
           outputArtifacts: ["accounts PDF text"],
           decisionGates: ["named qualified-accountant review"],
           expectedValueChecks: ["well-formed iXBRL"],
+          expectedProofPoints: [
+            {
+              area: "pdf-text",
+              expectedEvidence: "PDF text contains company name and micro statutory statement.",
+              automatedVerifier: "AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl",
+              required: true,
+            },
+          ],
           sourceReferences: [source("frc-frs-105", "FRC FRS 105 current edition and amendments")],
         },
       },

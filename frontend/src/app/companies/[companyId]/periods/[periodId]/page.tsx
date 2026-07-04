@@ -913,7 +913,7 @@ export default function PeriodWorkspacePage({
                     </div>
                   ) : (
                     <div className="overflow-hidden rounded-md border border-gray-200 dark:border-neutral-700">
-                      <div className="grid grid-cols-12 gap-2 bg-gray-50 px-4 py-2 text-xs font-semibold uppercase text-gray-500 dark:bg-neutral-800 dark:text-gray-400">
+                      <div className="hidden grid-cols-12 gap-2 bg-gray-50 px-4 py-2 text-xs font-semibold uppercase text-gray-500 dark:bg-neutral-800 dark:text-gray-400 md:grid">
                         <div className="col-span-5">Account</div>
                         <div className="col-span-2">Currency</div>
                         <div className="col-span-3 text-right">Opening balance</div>
@@ -923,15 +923,22 @@ export default function PeriodWorkspacePage({
                         {bankAccounts.map((ba) => (
                           <div
                             key={ba.id}
-                            className="grid grid-cols-12 items-center gap-2 px-4 py-3 text-sm"
+                            className="grid gap-3 px-4 py-3 text-sm md:grid-cols-12 md:items-center md:gap-2"
                           >
-                            <div className="col-span-5 min-w-0">
+                            <div className="min-w-0 md:col-span-5">
                               <p className="font-medium text-gray-900 dark:text-gray-100">{ba.name}</p>
                               <p className="truncate text-xs text-gray-500 dark:text-gray-400">{ba.iban || "No IBAN recorded"}</p>
                             </div>
-                            <div className="col-span-2 text-gray-600 dark:text-gray-300">{ba.currency}</div>
-                            <div className="col-span-3 text-right font-mono text-gray-900 dark:text-gray-100">{formatCurrency(ba.openingBalance)}</div>
-                            <div className="col-span-2 text-right">
+                            <div className="grid grid-cols-[8rem_minmax(0,1fr)] items-center gap-3 md:col-span-2 md:block">
+                              <span className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 md:hidden">Currency</span>
+                              <span className="text-gray-600 dark:text-gray-300">{ba.currency}</span>
+                            </div>
+                            <div className="grid grid-cols-[8rem_minmax(0,1fr)] items-center gap-3 md:col-span-3 md:block md:text-right">
+                              <span className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 md:hidden">Opening balance</span>
+                              <span className="font-mono text-gray-900 dark:text-gray-100">{formatCurrency(ba.openingBalance)}</span>
+                            </div>
+                            <div className="grid grid-cols-[8rem_minmax(0,1fr)] items-center gap-3 md:col-span-2 md:block md:text-right">
+                              <span className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 md:hidden">Import target</span>
                               {selectedBankAccountId === ba.id ? (
                                 <Chip color="success" variant="soft" size="sm">Selected</Chip>
                               ) : (
