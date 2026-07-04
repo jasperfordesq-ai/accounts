@@ -266,6 +266,36 @@ public class ProductionReadinessReportTests
     }
 
     [Fact]
+    public async Task GoldenCorpusEvidencePacks_ProveAccountantSignOffPacketAcrossEveryScenario()
+    {
+        await using var db = CreateDbContext();
+        var report = await new ProductionReadinessReportService(db).GetReportAsync();
+
+        foreach (var scenario in report.GoldenFilingCorpus)
+        {
+            Assert.Contains(
+                scenario.EvidencePack.OutputArtifacts,
+                artifact => artifact.Contains("accountant sign-off packet", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(
+                scenario.EvidencePack.DecisionGates,
+                gate => gate.Contains("sign-off packet", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(scenario.Assertions, assertion =>
+                assertion.Contains("sign-off packet", StringComparison.OrdinalIgnoreCase));
+
+            var proofPoints = ObjectListProperty(scenario.EvidencePack, "ExpectedProofPoints");
+            Assert.Contains(proofPoints, proof =>
+                StringProperty(proof, "Area") == "accountant-signoff-packet"
+                && StringProperty(proof, "ExpectedEvidence").Contains("sign-off packet", StringComparison.OrdinalIgnoreCase)
+                && StringProperty(proof, "AutomatedVerifier").Contains(scenario.EvidenceTestNames[0], StringComparison.Ordinal));
+        }
+
+        var medium = Assert.Single(report.GoldenFilingCorpus, scenario => scenario.Code == "medium-audit-required");
+        Assert.Contains(ObjectListProperty(medium.EvidencePack, "ExpectedProofPoints"), proof =>
+            StringProperty(proof, "Area") == "accountant-signoff-packet"
+            && StringProperty(proof, "ExpectedEvidence").Contains("manual handoff", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task ProductionReadinessReport_ExposesPrioritisedAssuranceActionsForRemainingProductionWork()
     {
         await using var db = CreateDbContext();

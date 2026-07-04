@@ -166,7 +166,8 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 "readiness has no missing items",
                 "balance sheet balances",
                 "PDF text includes company, period and micro statement",
-                "iXBRL parses as XML"
+                "iXBRL parses as XML",
+                "accountant sign-off packet exposes approval blockers and allowed next actions"
             ],
             new(
                 [
@@ -176,12 +177,14 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "iXBRL XML",
                     "tax computation",
                     "notes disclosure set",
-                    "filing readiness profile"
+                    "filing readiness profile",
+                    "accountant sign-off packet"
                 ],
                 [
                     "named qualified-accountant review",
                     "director and secretary certification",
-                    "external ROS/iXBRL validation"
+                    "external ROS/iXBRL validation",
+                    "accountant sign-off packet state"
                 ],
                 [
                     "Micro regime selected",
@@ -198,7 +201,8 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                         new("filing-readiness", "Filing readiness reaches 100% with no missing items."),
                         new("tax-computation", "Tax computation is generated and reconciles to the worked micro scenario."),
                         new("notes-disclosure", "Notes disclosure set includes the required accounting policies."),
-                        new("signatory-gates", "Director and secretary certification gates remain required before filing use.")
+                        new("signatory-gates", "Director and secretary certification gates remain required before filing use."),
+                        new("accountant-signoff-packet", "Accountant sign-off packet shows reviewer state, open blockers and allowed next actions.")
                     ]),
                 [
                     IrishStatutoryRuleSources.CroFinancialStatementsRequirements,
@@ -221,7 +225,8 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 "statutory PDF includes legal name, net assets and P&L",
                 "CRO abridged pack omits P&L and cites Section 352",
                 "signature page carries director and secretary certification",
-                "iXBRL parses as XML and omits public P&L turnover"
+                "iXBRL parses as XML and omits public P&L turnover",
+                "accountant sign-off packet exposes review state and remaining evidence gates"
             ],
             new(
                 [
@@ -231,13 +236,15 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "iXBRL XML",
                     "tax computation",
                     "notes disclosure set",
-                    "filing readiness profile"
+                    "filing readiness profile",
+                    "accountant sign-off packet"
                 ],
                 [
                     "abridgement eligibility",
                     "director and secretary certification",
                     "named qualified-accountant review",
-                    "external ROS/iXBRL validation"
+                    "external ROS/iXBRL validation",
+                    "accountant sign-off packet state"
                 ],
                 [
                     "SmallAbridged regime selected",
@@ -254,7 +261,8 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                         new("filing-readiness", "Filing readiness confirms generated CRO, Revenue and accountant-review evidence gates."),
                         new("tax-computation", "Tax computation matches the mixed cash/accrual worked scenario."),
                         new("notes-disclosure", "Notes include fixed assets, creditors and the small-company disclosure set."),
-                        new("signatory-gates", "CRO signature page carries director and secretary certification evidence.")
+                        new("signatory-gates", "CRO signature page carries director and secretary certification evidence."),
+                        new("accountant-signoff-packet", "Accountant sign-off packet shows review state, generated-output evidence and allowed next actions.")
                     ]),
                 [
                     IrishStatutoryRuleSources.CroFinancialStatementsRequirements,
@@ -275,7 +283,8 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 "CLG remains in the supported company scope",
                 "charity number evidence is required",
                 "SoFA and trustees report evidence are required",
-                "Charities Regulator source is attached"
+                "Charities Regulator source is attached",
+                "accountant sign-off packet includes charity evidence and review gates"
             ],
             new(
                 [
@@ -285,12 +294,14 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "trustees annual report evidence",
                     "iXBRL XML",
                     "tax computation",
-                    "notes disclosure set"
+                    "notes disclosure set",
+                    "accountant sign-off packet"
                 ],
                 [
                     "charity number",
                     "charity annual return review",
-                    "named qualified-accountant review"
+                    "named qualified-accountant review",
+                    "accountant sign-off packet state"
                 ],
                 [
                     "charity evidence satisfied",
@@ -306,7 +317,8 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                         new("filing-readiness", "Filing readiness confirms charity number, SoFA and trustees report evidence."),
                         new("tax-computation", "Tax computation is generated for the CLG charity scenario."),
                         new("notes-disclosure", "Notes include accounting policies and charity reporting disclosures."),
-                        new("signatory-gates", "Charity annual return and named qualified-accountant review gates remain required.")
+                        new("signatory-gates", "Charity annual return and named qualified-accountant review gates remain required."),
+                        new("accountant-signoff-packet", "Accountant sign-off packet shows charity evidence, review state and allowed next actions.")
                     ]),
                 [
                     IrishStatutoryRuleSources.CroGuaranteeCompany,
@@ -329,7 +341,8 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 "manual professional handoff is exposed in readiness",
                 "CRO medium-company and auditor-report sources are attached",
                 "after auditor evidence, the full pack includes auditor report, P&L, cash flow and equity statements",
-                "medium iXBRL includes tagged P&L facts"
+                "medium iXBRL includes tagged P&L facts",
+                "accountant sign-off packet records manual handoff until auditor evidence is present"
             ],
             new(
                 [
@@ -339,12 +352,14 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "statement of changes in equity",
                     "iXBRL XML",
                     "filing readiness profile",
-                    "tax computation"
+                    "tax computation",
+                    "accountant sign-off packet"
                 ],
                 [
                     "auditor handoff",
                     "manual professional review",
-                    "normal CRO approval blocked until auditor evidence"
+                    "normal CRO approval blocked until auditor evidence",
+                    "accountant sign-off packet state"
                 ],
                 [
                     "Medium regime selected",
@@ -360,7 +375,8 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                         new("filing-readiness", "Filing readiness blocks approval before signed auditor report evidence and clears that blocker when evidence is recorded."),
                         new("tax-computation", "Tax computation is generated for the medium audit-required scenario."),
                         new("notes-disclosure", "Notes include turnover and tax-on-profit disclosures for the full accounts path."),
-                        new("auditor-handoff", "Signed auditor report reference is mandatory before final output generation.")
+                        new("auditor-handoff", "Signed auditor report reference is mandatory before final output generation."),
+                        new("accountant-signoff-packet", "Accountant sign-off packet records manual handoff state until signed auditor report evidence is present.")
                     ]),
                 [
                     IrishStatutoryRuleSources.CroMediumCompany,

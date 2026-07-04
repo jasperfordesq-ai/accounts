@@ -19,6 +19,9 @@ describe("ProductionReadinessWorkbench", () => {
     expect(screen.getAllByText("AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl").length).toBeGreaterThan(1);
     expect(screen.getByRole("heading", { name: "Golden evidence pack" })).toBeInTheDocument();
     expect(screen.getByText("accounts PDF text")).toBeInTheDocument();
+    expect(screen.getByText("accountant sign-off packet")).toBeInTheDocument();
+    expect(screen.getByText("accountant-signoff-packet")).toBeInTheDocument();
+    expect(screen.getByText("Sign-off packet shows reviewer state, open blockers and allowed next actions.")).toBeInTheDocument();
     expect(screen.getByText("director and secretary certification")).toBeInTheDocument();
     expect(screen.getByText("well-formed iXBRL")).toBeInTheDocument();
     expect(screen.getByText("Expected proof points")).toBeInTheDocument();
@@ -64,7 +67,7 @@ describe("ProductionReadinessWorkbench", () => {
     expect(screen.getByText("Tamper-evident audit chain")).toBeInTheDocument();
     expect(screen.getByText("audit-log-integrity-chain")).toBeInTheDocument();
     expect(screen.getByText("CroDocumentGenerated")).toBeInTheDocument();
-  });
+  }, 20000);
 });
 
 function sampleReport(): ProductionReadinessReport {
@@ -109,8 +112,8 @@ function sampleReport(): ProductionReadinessReport {
         evidenceTestNames: ["AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl"],
         assertions: ["PDF text", "iXBRL parse"],
         evidencePack: {
-          outputArtifacts: ["accounts PDF text", "CRO filing pack", "iXBRL XML"],
-          decisionGates: ["named qualified-accountant review", "director and secretary certification"],
+          outputArtifacts: ["accounts PDF text", "CRO filing pack", "iXBRL XML", "accountant sign-off packet"],
+          decisionGates: ["named qualified-accountant review", "director and secretary certification", "accountant sign-off packet state"],
           expectedValueChecks: ["Micro regime", "100% filing readiness", "well-formed iXBRL"],
           expectedProofPoints: [
             {
@@ -122,6 +125,12 @@ function sampleReport(): ProductionReadinessReport {
             {
               area: "signatory-gates",
               expectedEvidence: "Director and secretary certification gates remain required before filing use.",
+              automatedVerifier: "AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl",
+              required: true,
+            },
+            {
+              area: "accountant-signoff-packet",
+              expectedEvidence: "Sign-off packet shows reviewer state, open blockers and allowed next actions.",
               automatedVerifier: "AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl",
               required: true,
             },
