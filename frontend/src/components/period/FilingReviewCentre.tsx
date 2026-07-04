@@ -4,18 +4,13 @@ import type { FilingReadinessProfile, FilingWorkflowStatus } from "@/lib/api";
 import {
   EvidenceChecklist,
   FilingActionBar,
+  IssueDigest,
   ReviewPanel,
   SectionHeader,
   StatusBadge,
 } from "@/components/workbench";
 
 type FilingReviewAction = () => void | Promise<void>;
-type FilingIssueTone = "bad" | "warn";
-
-interface FilingIssueView {
-  message: string;
-  tone: FilingIssueTone;
-}
 
 interface FilingReviewCentreProps {
   filingStatus: FilingWorkflowStatus | null;
@@ -118,7 +113,14 @@ export function FilingReviewCentre({
             </div>
           )}
 
-          <FilingIssueDigest blockers={filingIssues.blockers} warnings={filingIssues.warnings} />
+          <IssueDigest
+            title="Filing issue digest"
+            description={filingIssues.blockers.length > 0
+              ? "Resolve priority blockers before approval."
+              : "Warnings remain before external filing evidence is complete."}
+            blockers={filingIssues.blockers}
+            warnings={filingIssues.warnings}
+          />
 
           <Button
             variant="outline"
@@ -223,58 +225,6 @@ function SubmissionControl({
       <StatusBadge tone={supported ? "good" : "warn"}>
         {supported ? supportedLabel : unsupportedLabel}
       </StatusBadge>
-    </div>
-  );
-}
-
-function FilingIssueDigest({
-  blockers,
-  warnings,
-}: {
-  blockers: FilingIssueView[];
-  warnings: FilingIssueView[];
-}) {
-  if (blockers.length === 0 && warnings.length === 0) return null;
-
-  const priorityBlockers = blockers.slice(0, 3);
-  const remainingBlockers = blockers.slice(3);
-
-  return (
-    <div className="rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-3">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Filing issue digest</p>
-          <p className="mt-1 text-sm font-medium text-[var(--foreground)]">
-            {blockers.length > 0 ? "Resolve priority blockers before approval." : "Warnings remain before external filing evidence is complete."}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <StatusBadge tone={blockers.length > 0 ? "bad" : "good"}>{formatIssueCount(blockers.length, "blocker")}</StatusBadge>
-          <StatusBadge tone={warnings.length > 0 ? "warn" : "good"}>{formatIssueCount(warnings.length, "warning")}</StatusBadge>
-        </div>
-      </div>
-
-      {priorityBlockers.length > 0 && (
-        <div className="mt-3">
-          <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Priority blockers</p>
-          <IssueList issues={priorityBlockers} className="mt-2" />
-          {remainingBlockers.length > 0 && (
-            <details className="mt-2 rounded-md border border-red-200 bg-red-50/60 p-2 dark:border-red-900 dark:bg-red-950/30">
-              <summary className="cursor-pointer text-xs font-semibold text-red-800 dark:text-red-100">
-                {formatIssueCount(remainingBlockers.length, "more blocker")}
-              </summary>
-              <IssueList issues={remainingBlockers} className="mt-2" />
-            </details>
-          )}
-        </div>
-      )}
-
-      {warnings.length > 0 && (
-        <div className="mt-3">
-          <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Warnings</p>
-          <IssueList issues={warnings} className="mt-2" />
-        </div>
-      )}
     </div>
   );
 }
@@ -394,53 +344,28 @@ function shouldShowCroReference(status: string) {
   return status === "Approved" || status === "Submitted" || status === "Accepted";
 }
 
-function IssueList({ issues, className = "" }: { issues: FilingIssueView[]; className?: string }) {
-  return (
-    <ul className={`space-y-1.5 ${className}`}>
-      {issues.map((issue, index) => (
-        <li
-          key={issueKey(issue.message, index)}
-          className={issue.tone === "bad"
-            ? "text-sm leading-6 text-red-800 dark:text-red-100"
-            : "text-sm leading-6 text-amber-900 dark:text-amber-100"}
-        >
-          {issue.message}
-        </li>
-      ))}
-    </ul>
-  );
-}
-
 function buildFilingIssueGroups(
   filingStatus: FilingWorkflowStatus | null,
   filingReadinessProfile: FilingReadinessProfile | null,
 ) {
-  const blockers = uniqueIssueViews([
-    ...(filingReadinessProfile?.blockingIssues.map((issue) => ({ message: issue.message, tone: "bad" as const })) ?? []),
-    ...(filingStatus?.blockingIssues.map((message) => ({ message, tone: "bad" as const })) ?? []),
+  const blockers = uniqueIssueMessages([
+    ...(filingReadinessProfile?.blockingIssues.map((issue) => issue.message) ?? []),
+    ...(filingStatus?.blockingIssues ?? []),
   ]);
-  const warnings = uniqueIssueViews([
-    ...(filingReadinessProfile?.warningIssues.map((issue) => ({ message: issue.message, tone: "warn" as const })) ?? []),
-    ...(filingStatus?.warningIssues.map((message) => ({ message, tone: "warn" as const })) ?? []),
+  const warnings = uniqueIssueMessages([
+    ...(filingReadinessProfile?.warningIssues.map((issue) => issue.message) ?? []),
+    ...(filingStatus?.warningIssues ?? []),
   ]);
 
   return { blockers, warnings };
 }
 
-function uniqueIssueViews(issues: FilingIssueView[]) {
+function uniqueIssueMessages(issues: string[]) {
   const seen = new Set<string>();
   return issues.filter((issue) => {
-    const key = issue.message.trim().toLowerCase();
+    const key = issue.trim().toLowerCase();
     if (!key || seen.has(key)) return false;
     seen.add(key);
     return true;
   });
-}
-
-function formatIssueCount(count: number, singular: string) {
-  return `${count} ${count === 1 ? singular : `${singular}s`}`;
-}
-
-function issueKey(message: string, index: number) {
-  return `${message.slice(0, 36)}-${index}`;
 }

@@ -32,6 +32,15 @@ export interface EvidenceItem {
   detail?: string | null;
 }
 
+export interface IssueDigestProps {
+  title: string;
+  description: string;
+  blockers?: string[];
+  warnings?: string[];
+  maxPriorityItems?: number;
+  className?: string;
+}
+
 const toneClasses: Record<Tone, string> = {
   default: "border-[var(--border)] bg-[var(--surface-subtle)] text-[var(--foreground)]",
   good: "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200",
@@ -228,6 +237,103 @@ export function StatusBadge({
       {children}
     </span>
   );
+}
+
+export function IssueDigest({
+  title,
+  description,
+  blockers = [],
+  warnings = [],
+  maxPriorityItems = 3,
+  className = "",
+}: IssueDigestProps) {
+  const blockerIssues = uniqueIssueMessages(blockers);
+  const warningIssues = uniqueIssueMessages(warnings);
+
+  if (blockerIssues.length === 0 && warningIssues.length === 0) return null;
+
+  const priorityBlockers = blockerIssues.slice(0, maxPriorityItems);
+  const remainingBlockers = blockerIssues.slice(maxPriorityItems);
+
+  return (
+    <div className={`rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-3 ${className}`}>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">{title}</p>
+          <p className="mt-1 text-sm font-medium text-[var(--foreground)]">{description}</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <StatusBadge tone={blockerIssues.length > 0 ? "bad" : "good"}>{formatIssueCount(blockerIssues.length, "blocker")}</StatusBadge>
+          <StatusBadge tone={warningIssues.length > 0 ? "warn" : "good"}>{formatIssueCount(warningIssues.length, "warning")}</StatusBadge>
+        </div>
+      </div>
+
+      {priorityBlockers.length > 0 && (
+        <div className="mt-3">
+          <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Priority blockers</p>
+          <IssueList issues={priorityBlockers} tone="bad" className="mt-2" />
+          {remainingBlockers.length > 0 && (
+            <details className="mt-2 rounded-md border border-red-200 bg-red-50/60 p-2 dark:border-red-900 dark:bg-red-950/30">
+              <summary className="cursor-pointer text-xs font-semibold text-red-800 dark:text-red-100">
+                {formatIssueCount(remainingBlockers.length, "more blocker")}
+              </summary>
+              <IssueList issues={remainingBlockers} tone="bad" className="mt-2" />
+            </details>
+          )}
+        </div>
+      )}
+
+      {warningIssues.length > 0 && (
+        <div className="mt-3">
+          <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Warnings</p>
+          <IssueList issues={warningIssues} tone="warn" className="mt-2" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function IssueList({
+  issues,
+  tone,
+  className = "",
+}: {
+  issues: string[];
+  tone: "bad" | "warn";
+  className?: string;
+}) {
+  const toneClass = tone === "bad"
+    ? "text-red-800 dark:text-red-100"
+    : "text-amber-900 dark:text-amber-100";
+
+  return (
+    <ul className={`space-y-1.5 ${className}`}>
+      {issues.map((issue, index) => (
+        <li key={issueKey(issue, index)} className={`text-sm leading-6 ${toneClass}`}>
+          {issue}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function uniqueIssueMessages(issues: string[]) {
+  const seen = new Set<string>();
+  return issues.filter((issue) => {
+    const normalized = issue.trim();
+    const key = normalized.toLowerCase();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function formatIssueCount(count: number, singular: string) {
+  return `${count} ${count === 1 ? singular : `${singular}s`}`;
+}
+
+function issueKey(message: string, index: number) {
+  return `${message.slice(0, 36)}-${index}`;
 }
 
 export function SectionHeader({

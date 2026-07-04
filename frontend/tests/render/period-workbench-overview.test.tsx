@@ -34,9 +34,13 @@ describe("PeriodWorkbenchOverview", () => {
     expect(screen.getByText("4 uncategorised")).toBeInTheDocument();
     expect(screen.getByText("Filing readiness")).toBeInTheDocument();
     expect(screen.getByText("79%")).toBeInTheDocument();
-    expect(screen.getByText("Readiness Blockers")).toBeInTheDocument();
+    expect(screen.getByText("Readiness issue digest")).toBeInTheDocument();
+    expect(screen.getByText("5 blockers")).toBeInTheDocument();
+    expect(screen.getByText("1 warning")).toBeInTheDocument();
+    expect(screen.getByText("2 more blockers")).toBeInTheDocument();
     expect(screen.getByText("Balance sheet does not balance")).toBeInTheDocument();
     expect(screen.getByText("Named qualified-accountant approval required")).toBeInTheDocument();
+    expect(screen.getByText("Revenue deadline has passed and late filing exposure must be reviewed")).toBeInTheDocument();
   }, 15_000);
 });
 
@@ -124,8 +128,12 @@ function sampleReadiness(): ReadinessScore {
 function sampleFilingStatus(): FilingWorkflowStatus {
   return {
     readyToFile: false,
-    blockingIssues: ["Balance sheet does not balance"],
-    warningIssues: [],
+    blockingIssues: [
+      "Balance sheet does not balance",
+      "CRO accounts PDF not generated",
+      "CRO signature page not generated",
+    ],
+    warningIssues: ["Revenue deadline has passed and late filing exposure must be reviewed"],
     cro: {
       status: "NotStarted",
       accountsPdfReady: false,
@@ -183,6 +191,12 @@ function sampleFilingReadinessProfile(): FilingReadinessProfile {
         code: "accountant-review",
         severity: "blocking",
         message: "Named qualified-accountant approval required",
+        sources: [],
+      },
+      {
+        code: "external-ros-validation",
+        severity: "blocking",
+        message: "External ROS/iXBRL validation evidence required",
         sources: [],
       },
     ],

@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { DataTable, EvidenceChecklist, ReviewPanel, StatusBadge, WorkflowRail } from "@/components/workbench";
+import { DataTable, EvidenceChecklist, IssueDigest, ReviewPanel, StatusBadge, WorkflowRail } from "@/components/workbench";
 
 describe("workbench primitives", () => {
   it("renders evidence checklist completion and required states", () => {
@@ -97,5 +97,32 @@ describe("workbench primitives", () => {
     expect(container.querySelector('td[data-label="Company"]')).toHaveTextContent("CI Visual Accounts Limited");
     expect(container.querySelector('td[data-label="Deadline"]')).toHaveTextContent("Revenue due 23 Sept 2025");
     expect(container.querySelector('td[data-label="Next action"]')).toHaveTextContent("Continue workbench");
+  });
+
+  it("renders a compact issue digest with priority items and collapsed overflow", () => {
+    render(
+      <IssueDigest
+        title="Readiness issue digest"
+        description="Resolve priority blockers before treating the accounts pack as final."
+        blockers={[
+          "Size classification not completed",
+          "Filing regime not determined",
+          "CRO accounts PDF not generated",
+          "Named qualified-accountant approval required",
+          "Internal iXBRL checks must pass",
+        ]}
+        warnings={[
+          "Revenue deadline passed and late filing exposure must be reviewed.",
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Readiness issue digest")).toBeInTheDocument();
+    expect(screen.getByText("5 blockers")).toBeInTheDocument();
+    expect(screen.getByText("1 warning")).toBeInTheDocument();
+    expect(screen.getByText("Priority blockers")).toBeInTheDocument();
+    expect(screen.getByText("Size classification not completed")).toBeInTheDocument();
+    expect(screen.getByText("2 more blockers")).toBeInTheDocument();
+    expect(screen.getByText("Revenue deadline passed and late filing exposure must be reviewed.")).toBeInTheDocument();
   });
 });

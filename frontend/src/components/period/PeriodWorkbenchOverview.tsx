@@ -1,6 +1,4 @@
-import { Chip } from "@heroui/react";
 import {
-  AlertTriangle,
   CheckCircle2,
   ClipboardList,
   Download,
@@ -19,7 +17,7 @@ import type {
   ReadinessScore,
   YearEndSummary,
 } from "@/lib/api";
-import { MetricStrip, ReviewPanel, WorkflowRail, type WorkflowItem } from "@/components/workbench";
+import { IssueDigest, MetricStrip, WorkflowRail, type WorkflowItem } from "@/components/workbench";
 
 interface PeriodWorkbenchOverviewProps {
   companyId: number | string;
@@ -65,6 +63,11 @@ export function PeriodWorkbenchOverview({
   const blockingIssues = uniqueIssues([
     ...(filingStatus?.blockingIssues ?? []),
     ...(filingReadinessProfile?.blockingIssues.map((issue) => issue.message) ?? []),
+  ]);
+  const warningIssues = uniqueIssues([
+    ...(filingStatus?.warningIssues ?? []),
+    ...(filingReadinessProfile?.warningIssues.map((issue) => issue.message) ?? []),
+    ...(readiness?.warnings ?? []),
   ]);
 
   const workflowItems: WorkflowItem[] = [
@@ -167,22 +170,12 @@ export function PeriodWorkbenchOverview({
 
       <WorkflowRail items={workflowItems} />
 
-      {blockingIssues.length > 0 && (
-        <ReviewPanel
-          title="Readiness Blockers"
-          description="Resolve these before treating the accounts pack as final."
-          actions={<Chip color="danger" variant="soft" size="sm">{blockingIssues.length} open</Chip>}
-        >
-          <div className="grid gap-2 md:grid-cols-2">
-            {blockingIssues.map((issue) => (
-              <div key={issue} className="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                <span>{issue}</span>
-              </div>
-            ))}
-          </div>
-        </ReviewPanel>
-      )}
+      <IssueDigest
+        title="Readiness issue digest"
+        description="Resolve priority blockers before treating the accounts pack as final."
+        blockers={blockingIssues}
+        warnings={warningIssues}
+      />
     </div>
   );
 }
