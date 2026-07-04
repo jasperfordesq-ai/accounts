@@ -2636,10 +2636,11 @@ public class AccountsWorkflowTests
             NilReview(period.Id, "going-concern"));
         await db.SaveChangesAsync();
 
-        var emit = await ClassifyAdjustNotesAndEmitAsync(db, companyId, period.Id, ElectedRegime.Small);
+        var emit = await ClassifyAdjustNotesAndEmitAsync(db, companyId, period.Id, ElectedRegime.SmallAbridged);
 
-        // Small audit-exempt regime.
-        Assert.Equal(ElectedRegime.Small, emit.Regime.Regime);
+        // Small abridged audit-exempt regime.
+        Assert.Equal(ElectedRegime.SmallAbridged, emit.Regime.Regime);
+        Assert.True(emit.Regime.CanFileAbridged);
         Assert.True(emit.Regime.AuditExempt);
 
         // Readiness gate satisfied across the richer year-end set.
@@ -2658,8 +2659,17 @@ public class AccountsWorkflowTests
         // PDF generates past the gate; iXBRL is well-formed.
         Assert.True(emit.Pdf.Length > 1_000);
         Assert.Equal("%PDF", Encoding.ASCII.GetString(emit.Pdf, 0, 4));
+        Assert.True(emit.CroPack.Length > 1_000);
+        Assert.Equal("%PDF", Encoding.ASCII.GetString(emit.CroPack, 0, 4));
+        Assert.True(emit.SignaturePage.Length > 1_000);
+        Assert.Equal("%PDF", Encoding.ASCII.GetString(emit.SignaturePage, 0, 4));
         AssertWellFormedXml(emit.Ixbrl);
         Assert.Contains("Connacht Digital Solutions Limited", emit.Ixbrl);
+        Assert.DoesNotContain("core:TurnoverGrossRevenue", emit.Ixbrl);
+
+        Assert.Equal(950m, emit.Tax.TotalCorporationTax);
+        Assert.Contains(emit.Notes, n => n.Title == "Tangible Fixed Assets" && n.IsIncluded);
+        Assert.Contains(emit.Notes, n => n.Title == "Creditors: Amounts Falling Due After More Than One Year" && n.IsIncluded);
 
         // tests-pdf-content-verified: the parsed PDF carries the legal name, period-end date and the
         // computed net-assets total for the richer accrual-basis small company.
@@ -2667,15 +2677,32 @@ public class AccountsWorkflowTests
         Assert.Contains("Connacht Digital Solutions Limited", pdfText);
         Assert.Contains(period.PeriodEnd.ToString("dd MMMM yyyy"), pdfText);
         Assert.Contains(emit.BalanceSheet.NetAssets.ToString("N0"), pdfText); // 7,200 == computed BalanceSheet
+        Assert.Contains("DIRECTORS' REPORT", pdfText);
+        Assert.Contains("PROFIT AND LOSS ACCOUNT", pdfText);
+
+        var croPackText = ExtractPdfText(emit.CroPack);
+        Assert.Contains("Abridged Financial Statements for filing with the CRO", croPackText);
+        Assert.Contains("DIRECTORS' REPORT", croPackText);
+        Assert.Contains("section 352", croPackText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("PROFIT AND LOSS ACCOUNT", croPackText);
+
+        var signatureText = ExtractPdfText(emit.SignaturePage);
+        Assert.Contains("CRO ACCOUNTS CERTIFICATION", signatureText);
+        Assert.Contains("A Director", signatureText);
+        Assert.Contains("B Secretary", signatureText);
     }
 
     private sealed record GoldenPathEmission(
         byte[] Pdf,
+        byte[] CroPack,
+        byte[] SignaturePage,
         string Ixbrl,
         FilingRegimeService.FilingRequirements Regime,
         FinancialStatementsService.ReadinessScore Readiness,
         FinancialStatementsService.BalanceSheet BalanceSheet,
-        FinancialStatementsService.ProfitAndLoss ProfitAndLoss);
+        FinancialStatementsService.ProfitAndLoss ProfitAndLoss,
+        TaxComputationService.TaxComputation Tax,
+        IReadOnlyList<NotesDisclosure> Notes);
 
     // Shared tail of the golden path: classify -> determine regime -> generate + approve adjustments ->
     // generate notes -> compute statements -> generate the accounts PDF and iXBRL. The PDF call itself
@@ -2716,9 +2743,17 @@ public class AccountsWorkflowTests
         var readiness = await statements.GetReadinessScoreAsync(companyId, periodId);
         var bs = await statements.GetBalanceSheetAsync(companyId, periodId);
         var pl = await statements.GetProfitAndLossAsync(companyId, periodId);
-        var pdf = await new DocumentGeneratorService(db, statements).GenerateAccountsPackageAsync(companyId, periodId);
+        var tax = await new TaxComputationService(db, statements).ComputeAsync(companyId, periodId);
+        var notes = await db.NotesDisclosures
+            .Where(n => n.PeriodId == periodId && n.IsIncluded)
+            .OrderBy(n => n.NoteNumber)
+            .ToListAsync();
+        var documents = new DocumentGeneratorService(db, statements);
+        var pdf = await documents.GenerateAccountsPackageAsync(companyId, periodId);
+        var croPack = await documents.GenerateCroFilingPackAsync(companyId, periodId);
+        var signaturePage = await documents.GenerateSignaturePageAsync(companyId, periodId);
         var ixbrl = Encoding.UTF8.GetString(await new IxbrlService(db, statements).GenerateIxbrlAsync(companyId, periodId));
-        return new GoldenPathEmission(pdf, ixbrl, regime, readiness, bs, pl);
+        return new GoldenPathEmission(pdf, croPack, signaturePage, ixbrl, regime, readiness, bs, pl, tax, notes);
     }
 
     // Extract the rendered text from a generated PDF so tests can assert on real figures, names and

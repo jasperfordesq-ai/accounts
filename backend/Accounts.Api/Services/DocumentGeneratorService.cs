@@ -629,7 +629,7 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
             col.Item().Text("STATEMENT REQUIRED BY SECTION 352 OF THE COMPANIES ACT 2014").Bold().FontSize(12);
             col.Item().PaddingTop(10).Text("The directors acknowledge their obligations under Section 352 of the Companies Act 2014 to prepare financial statements which give a true and fair view of the assets, liabilities and financial position of the company as at the financial year end date and of the profit or loss of the company for the financial year and to otherwise comply with the provisions of the Companies Act 2014 relating to financial statements so far as they are applicable to the company.");
 
-            col.Item().PaddingTop(10).Text("The directors are availing of the exemption provided by Section 352(1)(b) of the Companies Act 2014 from the obligation to file abridged financial statements with the Registrar of Companies.");
+            col.Item().PaddingTop(10).Text("The directors are availing of the exemption provided by Section 352 of the Companies Act 2014 from filing the full documents otherwise required by Section 347. The annual return filing pack instead includes abridged financial statements and the extracted directors' report information required for a small company.");
         }
         else
         {
@@ -837,6 +837,10 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
                     col.Item().PageBreak();
 
                     ComposeCompanyIdentification(col, company);
+                    var regimeSubtitle = PackageRegimeSubtitle(regime, DocumentPackagePurpose.CroFiling);
+                    if (!string.IsNullOrWhiteSpace(regimeSubtitle))
+                        col.Item().PaddingTop(6).Text(regimeSubtitle).Italic().FontSize(9);
+
                     if (directorsReport != null)
                     {
                         col.Item().PageBreak();
@@ -975,7 +979,7 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
                         col.Item().Text($"CRO Number: {company.CroNumber}").FontSize(9).FontColor(Colors.Grey.Medium);
                     col.Item().PaddingTop(5).Text($"Financial Year Ended: {period.PeriodEnd:dd MMMM yyyy}").FontSize(10);
 
-                    col.Item().PaddingTop(30).Text("CERTIFICATE").Bold().FontSize(12);
+                    col.Item().PaddingTop(30).Text("CRO ACCOUNTS CERTIFICATION").Bold().FontSize(12);
                     col.Item().PaddingTop(10).Text(
                         $"We, the undersigned, being a director and secretary of {company.LegalName}, "
                         + "hereby certify that the financial statements annexed to the annual return "
