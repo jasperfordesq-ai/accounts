@@ -3,6 +3,7 @@ import { AlertTriangle, ArrowRight, CalendarClock, UserRound } from "lucide-reac
 import type { Company, FilingDeadline } from "@/lib/api";
 import { formatCompanyType, formatDateIE } from "@/lib/format";
 import { DataTable, MetricStrip, ReviewPanel, StatusBadge } from "@/components/workbench";
+import { AccountantWorkflowRail } from "@/components/workbench/AccountantWorkflowRail";
 
 interface AccountantDashboardQueueProps {
   companies: Company[];
@@ -52,6 +53,7 @@ export function AccountantDashboardQueue({
         </div>
       ) : (
         <div className="space-y-4">
+          <AccountantWorkflowRail activeStage={dashboardActiveStage(rows)} />
           <MetricStrip
             metrics={[
               {
@@ -125,6 +127,13 @@ export function AccountantDashboardQueue({
       )}
     </ReviewPanel>
   );
+}
+
+function dashboardActiveStage(rows: QueueRow[]) {
+  if (rows.some((row) => row.blockerLabel === "No period")) return "Setup";
+  if (rows.some((row) => row.blockerLabel === "Manual handoff")) return "Review";
+  if (rows.some((row) => row.deadlineState === "Overdue" || row.deadlineState === "Due soon")) return "Filing";
+  return "Review";
 }
 
 function ReviewerBadge({ company }: { company: Company }) {

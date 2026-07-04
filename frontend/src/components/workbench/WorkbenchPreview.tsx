@@ -20,6 +20,7 @@ import {
   WorkbenchShell,
   WorkflowRail,
 } from "@/components/workbench";
+import { AccountantWorkflowRail } from "@/components/workbench/AccountantWorkflowRail";
 
 const workflowItems = [
   { id: "setup", label: "Setup", detail: "Company identity, officers and filing profile recorded.", state: "done" as const },
@@ -96,6 +97,7 @@ export function WorkbenchPreview() {
       />
 
       <WorkflowRail items={workflowItems} />
+      <AccountantWorkflowRail activeStage="Review" />
 
       <MetricStrip
         metrics={[

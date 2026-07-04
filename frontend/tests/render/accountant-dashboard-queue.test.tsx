@@ -20,6 +20,18 @@ describe("AccountantDashboardQueue", () => {
 
     expect(screen.getByText("Accountant Work Queue")).toBeInTheDocument();
     expect(screen.getByText("Active production work across the firm.")).toBeInTheDocument();
+    const workflow = screen.getByRole("navigation", { name: "Accountant Workflow" });
+    expect(workflow).toBeInTheDocument();
+    expect(screen.getByText("8 stages")).toBeInTheDocument();
+    expect(workflow).toHaveTextContent("Setup");
+    expect(workflow).toHaveTextContent("Import");
+    expect(workflow).toHaveTextContent("Classify");
+    expect(workflow).toHaveTextContent("Year-End");
+    expect(workflow).toHaveTextContent("Statements");
+    expect(workflow).toHaveTextContent("Notes");
+    expect(workflow).toHaveTextContent("Review");
+    expect(workflow).toHaveTextContent("Filing");
+    expect(screen.getByText("Start with company setup, then move period work through evidence, statements, review and filing.")).toBeInTheDocument();
     expect(screen.getByText("Urgent clients")).toBeInTheDocument();
     expect(screen.getByText("2 urgent")).toBeInTheDocument();
     expect(screen.getByText("Due-soon deadlines")).toBeInTheDocument();

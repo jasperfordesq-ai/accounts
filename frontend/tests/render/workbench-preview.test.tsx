@@ -8,6 +8,8 @@ describe("WorkbenchPreview", () => {
 
     expect(screen.getByText("Workbench Component Preview")).toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: "Accounting Workflow" })).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "Accountant Workflow" })).toBeInTheDocument();
+    expect(screen.getByText("Start with company setup, then move period work through evidence, statements, review and filing.")).toBeInTheDocument();
     expect(screen.getByText("Evidence checklist")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Trial balance review" })).toBeInTheDocument();
     expect(screen.getByText("Route states")).toBeInTheDocument();
