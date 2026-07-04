@@ -42,17 +42,21 @@ describe("PeriodWorkbenchOverview", () => {
       "href",
       "/companies/7/periods/3?tab=categorise",
     );
-    const workflow = screen.getByRole("navigation", { name: "Accounting Workflow" });
+    const workflow = screen.getByRole("navigation", { name: "Accountant Workflow" });
     expect(workflow).toBeInTheDocument();
     const workflowNav = within(workflow);
-    expect(screen.getByText("9 stages")).toBeInTheDocument();
+    expect(screen.getByText("8 stages")).toBeInTheDocument();
     expect(workflowNav.getByRole("link", { name: /Setup/ })).toHaveAttribute("href", "/companies/7");
     expect(workflowNav.getByRole("link", { name: /Import/ })).toHaveAttribute("href", "/companies/7/periods/3?tab=import");
-    expect(workflowNav.getByRole("link", { name: /Categorise/ })).toHaveAttribute("href", "/companies/7/periods/3?tab=categorise");
+    expect(workflowNav.getByRole("link", { name: /Classify/ })).toHaveAttribute("href", "/companies/7/periods/3/classify");
     expect(workflowNav.getByRole("link", { name: /Year-End/ })).toHaveAttribute("href", "/companies/7/periods/3/year-end");
+    expect(workflowNav.getByRole("link", { name: /Statements/ })).toHaveAttribute("href", "/companies/7/periods/3/statements");
+    expect(workflowNav.getByRole("link", { name: /Notes/ })).toHaveAttribute("href", "/companies/7/periods/3/notes");
     expect(workflowNav.getByRole("link", { name: /Review/ })).toHaveAttribute("href", "/companies/7/periods/3?tab=filing");
     expect(workflowNav.getByRole("link", { name: /Filing/ })).toHaveAttribute("href", "/companies/7/periods/3?tab=filing");
-    expect(screen.getByText("4 uncategorised")).toBeInTheDocument();
+    expect(workflow).not.toHaveTextContent("Categorise");
+    expect(screen.getByText("Start with company setup, then move period work through evidence, statements, review and filing.")).toBeInTheDocument();
+    expect(screen.getByText("4 uncategorised transactions")).toBeInTheDocument();
     expect(screen.getByText("Filing readiness")).toBeInTheDocument();
     expect(screen.getByText("79%")).toBeInTheDocument();
     expect(screen.getByText("Readiness issue digest")).toBeInTheDocument();

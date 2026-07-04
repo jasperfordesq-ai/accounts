@@ -2,14 +2,6 @@ import {
   AlertTriangle,
   ArrowRight,
   CheckCircle2,
-  ClipboardList,
-  Download,
-  Eye,
-  FileText,
-  Scale,
-  Settings,
-  Shield,
-  Upload,
 } from "lucide-react";
 import Link from "next/link";
 import type {
@@ -20,7 +12,8 @@ import type {
   ReadinessScore,
   YearEndSummary,
 } from "@/lib/api";
-import { IssueDigest, MetricStrip, ReviewPanel, StatusBadge, WorkflowRail, type WorkflowItem } from "@/components/workbench";
+import { IssueDigest, MetricStrip, ReviewPanel, StatusBadge, type WorkflowItem } from "@/components/workbench";
+import { AccountantWorkflowRail } from "@/components/workbench/AccountantWorkflowRail";
 
 interface PeriodWorkbenchOverviewProps {
   companyId: number | string;
@@ -81,7 +74,6 @@ export function PeriodWorkbenchOverview({
       detail: setupComplete ? "Company profile and officers recorded" : "Company profile needs officer evidence",
       state: setupComplete ? "done" : "active",
       href: `/companies/${companyId}`,
-      icon: <Shield className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" />,
     },
     {
       id: "import",
@@ -89,7 +81,6 @@ export function PeriodWorkbenchOverview({
       detail: transactionTotal > 0 ? `${transactionTotal} transactions loaded` : "No transaction data",
       state: transactionTotal > 0 ? "done" : setupComplete ? "active" : "todo",
       href: `${periodWorkspaceHref}?tab=import`,
-      icon: <Upload className="h-4 w-4 shrink-0 text-sky-600 dark:text-sky-300" />,
     },
     {
       id: "classify",
@@ -97,7 +88,6 @@ export function PeriodWorkbenchOverview({
       detail: period?.sizeClassification ? period.sizeClassification.calculatedClass : "Size/regime not complete",
       state: period?.sizeClassification ? "done" : transactionTotal > 0 ? "active" : "todo",
       href: `/companies/${companyId}/periods/${periodId}/classify`,
-      icon: <Scale className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-300" />,
     },
     {
       id: "categorise",
@@ -105,7 +95,6 @@ export function PeriodWorkbenchOverview({
       detail: transactionTotal > 0 ? `${uncategorisedCount} uncategorised` : "Waiting for import",
       state: transactionTotal === 0 ? "todo" : uncategorisedCount === 0 ? "done" : "active",
       href: `${periodWorkspaceHref}?tab=categorise`,
-      icon: <Settings className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-300" />,
     },
     {
       id: "year-end",
@@ -113,7 +102,6 @@ export function PeriodWorkbenchOverview({
       detail: yearEnd ? `${yearEndScore}% evidence complete` : "Questionnaire not reviewed",
       state: yearEndComplete ? "done" : period?.sizeClassification ? "active" : "todo",
       href: `/companies/${companyId}/periods/${periodId}/year-end`,
-      icon: <ClipboardList className="h-4 w-4 shrink-0 text-purple-600 dark:text-purple-300" />,
     },
     {
       id: "statements",
@@ -121,7 +109,6 @@ export function PeriodWorkbenchOverview({
       detail: readiness?.balanceSheetBalances ? "Balance sheet agrees" : "Needs review",
       state: readiness?.balanceSheetBalances ? "done" : yearEndComplete ? "blocked" : "todo",
       href: `/companies/${companyId}/periods/${periodId}/statements`,
-      icon: <FileText className="h-4 w-4 shrink-0 text-cyan-600 dark:text-cyan-300" />,
     },
     {
       id: "notes",
@@ -129,7 +116,6 @@ export function PeriodWorkbenchOverview({
       detail: notesEvidence.length > 0 ? `${notesEvidence.filter((item) => !item.satisfied).length} disclosure gates open` : "Required disclosures not generated",
       state: notesComplete ? "done" : readiness?.balanceSheetBalances ? "active" : "todo",
       href: `/companies/${companyId}/periods/${periodId}/notes`,
-      icon: <Eye className="h-4 w-4 shrink-0 text-indigo-600 dark:text-indigo-300" />,
     },
     {
       id: "review",
@@ -137,7 +123,6 @@ export function PeriodWorkbenchOverview({
       detail: readyToFile ? "Qualified-accountant gate cleared" : `${reviewIssueCount} review issues`,
       state: readyToFile ? "done" : reviewIssueCount > 0 ? "blocked" : "active",
       href: `${periodWorkspaceHref}?tab=filing`,
-      icon: <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" />,
     },
     {
       id: "filing",
@@ -145,9 +130,9 @@ export function PeriodWorkbenchOverview({
       detail: readyToFile ? "CRO pack ready" : `${filingStatus?.blockingIssues.length ?? 0} blockers - ${accountantReviewState}`,
       state: readyToFile ? "done" : "blocked",
       href: `${periodWorkspaceHref}?tab=filing`,
-      icon: <Download className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" />,
     },
   ];
+  const workflowById = new Map(workflowItems.map((item) => [item.id, item]));
   const readyStages = workflowItems.filter((item) => item.state === "done");
   const nextAction = workflowItems.find((item) => item.state === "active")
     ?? workflowItems.find((item) => item.state === "blocked")
@@ -238,7 +223,19 @@ export function PeriodWorkbenchOverview({
         ]}
       />
 
-      <WorkflowRail items={workflowItems} />
+      <AccountantWorkflowRail
+        activeStage="Year-End"
+        stageOverrides={{
+          setup: pickWorkflowRailFields(workflowById.get("setup")),
+          import: pickWorkflowRailFields(workflowById.get("import")),
+          classify: pickWorkflowRailFields(workflowById.get("classify")),
+          "year-end": pickWorkflowRailFields(workflowById.get("year-end")),
+          statements: pickWorkflowRailFields(workflowById.get("statements")),
+          notes: pickWorkflowRailFields(workflowById.get("notes")),
+          review: pickWorkflowRailFields(workflowById.get("review")),
+          filing: pickWorkflowRailFields(workflowById.get("filing")),
+        }}
+      />
 
       <IssueDigest
         title="Readiness issue digest"
@@ -248,6 +245,10 @@ export function PeriodWorkbenchOverview({
       />
     </div>
   );
+}
+
+function pickWorkflowRailFields(item?: WorkflowItem) {
+  return item ? { detail: item.detail, href: item.href, state: item.state } : undefined;
 }
 
 function uniqueIssues(issues: string[]) {
