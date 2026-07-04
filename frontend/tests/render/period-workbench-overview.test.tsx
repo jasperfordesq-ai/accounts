@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { PeriodWorkbenchOverview } from "@/components/period/PeriodWorkbenchOverview";
 import type {
@@ -27,14 +27,31 @@ describe("PeriodWorkbenchOverview", () => {
       />,
     );
 
-    expect(screen.getByRole("navigation", { name: "Accounting Workflow" })).toBeInTheDocument();
+    const commandCentre = screen.getByRole("heading", { name: "Period command centre" }).closest("section");
+    expect(commandCentre).not.toBeNull();
+    const command = within(commandCentre!);
+    expect(command.getByText("What is wrong?")).toBeInTheDocument();
+    expect(command.getAllByText("5 blockers require attention")).toHaveLength(2);
+    expect(command.getByText("What is ready?")).toBeInTheDocument();
+    expect(command.getByText("3 stages ready")).toBeInTheDocument();
+    expect(command.getByText("Setup, Import, Classify")).toBeInTheDocument();
+    expect(command.getByText("What must I do next?")).toBeInTheDocument();
+    expect(command.getByText("Categorise")).toBeInTheDocument();
+    expect(command.getByText("4 uncategorised transactions")).toBeInTheDocument();
+    expect(command.getByRole("link", { name: "Open Categorise" })).toHaveAttribute(
+      "href",
+      "/companies/7/periods/3?tab=categorise",
+    );
+    const workflow = screen.getByRole("navigation", { name: "Accounting Workflow" });
+    expect(workflow).toBeInTheDocument();
+    const workflowNav = within(workflow);
     expect(screen.getByText("9 stages")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Setup/ })).toHaveAttribute("href", "/companies/7");
-    expect(screen.getByRole("link", { name: /Import/ })).toHaveAttribute("href", "/companies/7/periods/3?tab=import");
-    expect(screen.getByRole("link", { name: /Categorise/ })).toHaveAttribute("href", "/companies/7/periods/3?tab=categorise");
-    expect(screen.getByRole("link", { name: /Year-End/ })).toHaveAttribute("href", "/companies/7/periods/3/year-end");
-    expect(screen.getByRole("link", { name: /Review/ })).toHaveAttribute("href", "/companies/7/periods/3?tab=filing");
-    expect(screen.getByRole("link", { name: /Filing/ })).toHaveAttribute("href", "/companies/7/periods/3?tab=filing");
+    expect(workflowNav.getByRole("link", { name: /Setup/ })).toHaveAttribute("href", "/companies/7");
+    expect(workflowNav.getByRole("link", { name: /Import/ })).toHaveAttribute("href", "/companies/7/periods/3?tab=import");
+    expect(workflowNav.getByRole("link", { name: /Categorise/ })).toHaveAttribute("href", "/companies/7/periods/3?tab=categorise");
+    expect(workflowNav.getByRole("link", { name: /Year-End/ })).toHaveAttribute("href", "/companies/7/periods/3/year-end");
+    expect(workflowNav.getByRole("link", { name: /Review/ })).toHaveAttribute("href", "/companies/7/periods/3?tab=filing");
+    expect(workflowNav.getByRole("link", { name: /Filing/ })).toHaveAttribute("href", "/companies/7/periods/3?tab=filing");
     expect(screen.getByText("4 uncategorised")).toBeInTheDocument();
     expect(screen.getByText("Filing readiness")).toBeInTheDocument();
     expect(screen.getByText("79%")).toBeInTheDocument();
@@ -42,7 +59,7 @@ describe("PeriodWorkbenchOverview", () => {
     expect(screen.getByText("5 blockers")).toBeInTheDocument();
     expect(screen.getByText("1 warning")).toBeInTheDocument();
     expect(screen.getByText("2 more blockers")).toBeInTheDocument();
-    expect(screen.getByText("Balance sheet does not balance")).toBeInTheDocument();
+    expect(screen.getAllByText("Balance sheet does not balance")).toHaveLength(2);
     expect(screen.getByText("Named qualified-accountant approval required")).toBeInTheDocument();
     expect(screen.getByText("Revenue deadline has passed and late filing exposure must be reviewed")).toBeInTheDocument();
   }, 15_000);
