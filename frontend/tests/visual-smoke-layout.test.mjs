@@ -42,6 +42,8 @@ describe("visual smoke layout checks", () => {
     const issues = findOverlappingTextBlocks([
       textBlock("Tab label", "Categorise", 40, 40, 100, 58),
       textBlock("Tab label duplicate", "Categorise", 40, 40, 100, 58),
+      textBlock("Selected tab mirror", "Statements", 140, 40, 205, 58),
+      textBlock("Selected tab mirror duplicate", "Statements", 142, 42, 207, 60),
     ]);
 
     assert.equal(issues.length, 0);

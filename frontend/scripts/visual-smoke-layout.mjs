@@ -21,6 +21,7 @@ export function findOverlappingTextBlocks(blocks, options = {}) {
 
       const overlapArea = Math.round(overlapWidth * overlapHeight);
       if (overlapArea < minOverlapArea) continue;
+      if (isNearDuplicateTextBlock(first, second, overlapArea)) continue;
 
       issues.push({
         first: first.label,
@@ -40,6 +41,17 @@ export function formatLayoutIssues(routeName, issues) {
     `${routeName} has text layout overlap:`,
     ...issues.map((issue, index) => `${index + 1}. ${issue.message}`),
   ].join("\n");
+}
+
+function isNearDuplicateTextBlock(first, second, overlapArea) {
+  if (first.text.toLowerCase() !== second.text.toLowerCase()) return false;
+
+  const firstArea = first.rect.width * first.rect.height;
+  const secondArea = second.rect.width * second.rect.height;
+  const smallerArea = Math.min(firstArea, secondArea);
+  if (smallerArea <= 0) return false;
+
+  return overlapArea / smallerArea >= 0.8;
 }
 
 function normalizeBlock(block) {
