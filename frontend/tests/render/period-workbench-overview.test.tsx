@@ -30,7 +30,11 @@ describe("PeriodWorkbenchOverview", () => {
     expect(screen.getByRole("navigation", { name: "Accounting Workflow" })).toBeInTheDocument();
     expect(screen.getByText("9 stages")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Setup/ })).toHaveAttribute("href", "/companies/7");
+    expect(screen.getByRole("link", { name: /Import/ })).toHaveAttribute("href", "/companies/7/periods/3?tab=import");
+    expect(screen.getByRole("link", { name: /Categorise/ })).toHaveAttribute("href", "/companies/7/periods/3?tab=categorise");
     expect(screen.getByRole("link", { name: /Year-End/ })).toHaveAttribute("href", "/companies/7/periods/3/year-end");
+    expect(screen.getByRole("link", { name: /Review/ })).toHaveAttribute("href", "/companies/7/periods/3?tab=filing");
+    expect(screen.getByRole("link", { name: /Filing/ })).toHaveAttribute("href", "/companies/7/periods/3?tab=filing");
     expect(screen.getByText("4 uncategorised")).toBeInTheDocument();
     expect(screen.getByText("Filing readiness")).toBeInTheDocument();
     expect(screen.getByText("79%")).toBeInTheDocument();

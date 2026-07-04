@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState, useEffect, useCallback, useRef } from "react";
+import { type Key, use, useState, useEffect, useCallback, useRef } from "react";
 import {
   Button,
   Card,
@@ -15,6 +15,7 @@ import {
   ProgressBarFill,
 } from "@heroui/react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   Upload,
   Settings,
@@ -108,6 +109,25 @@ function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
+type WorkspaceTabId = "import" | "categorise" | "yearend" | "adjustments" | "statements" | "filing";
+
+const WORKSPACE_TAB_IDS = new Set<WorkspaceTabId>([
+  "import",
+  "categorise",
+  "yearend",
+  "adjustments",
+  "statements",
+  "filing",
+]);
+
+function normaliseWorkspaceTab(value: string | null): WorkspaceTabId {
+  if (value === "year-end") return "yearend";
+  if (value === "review") return "filing";
+  if (value && WORKSPACE_TAB_IDS.has(value as WorkspaceTabId)) return value as WorkspaceTabId;
+
+  return "import";
+}
+
 export default function PeriodWorkspacePage({
   params,
 }: {
@@ -116,6 +136,10 @@ export default function PeriodWorkspacePage({
   const { companyId, periodId } = use(params);
   const cId = Number(companyId);
   const pId = Number(periodId);
+  const searchParams = useSearchParams();
+  const [selectedWorkspaceTab, setSelectedWorkspaceTab] = useState<WorkspaceTabId>(() =>
+    normaliseWorkspaceTab(searchParams.get("tab")),
+  );
 
   const [company, setCompany] = useState<Company | null>(null);
   const [period, setPeriod] = useState<AccountingPeriod | null>(null);
@@ -157,6 +181,14 @@ export default function PeriodWorkspacePage({
   const [generatingAdj, setGeneratingAdj] = useState(false);
   const [validatingIxbrl, setValidatingIxbrl] = useState(false);
   const [downloadingDocument, setDownloadingDocument] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSelectedWorkspaceTab(normaliseWorkspaceTab(searchParams.get("tab")));
+  }, [searchParams]);
+
+  const handleWorkspaceTabChange = useCallback((key: Key) => {
+    setSelectedWorkspaceTab(normaliseWorkspaceTab(String(key)));
+  }, []);
 
   // Import tab state
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -743,7 +775,7 @@ export default function PeriodWorkspacePage({
       )}
 
       {/* Tabs */}
-      <TabsRoot>
+      <TabsRoot selectedKey={selectedWorkspaceTab} onSelectionChange={handleWorkspaceTabChange}>
         <TabList aria-label="Period workspace tabs" className="flex gap-1 border-b border-gray-200 dark:border-neutral-700 mb-6 overflow-x-auto no-print">
           <Tab id="import" className={tabClass}>
             <Upload className="w-4 h-4 inline mr-1.5 -mt-0.5" />

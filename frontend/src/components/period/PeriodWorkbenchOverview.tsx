@@ -69,6 +69,7 @@ export function PeriodWorkbenchOverview({
     ...(filingReadinessProfile?.warningIssues.map((issue) => issue.message) ?? []),
     ...(readiness?.warnings ?? []),
   ]);
+  const periodWorkspaceHref = `/companies/${companyId}/periods/${periodId}`;
 
   const workflowItems: WorkflowItem[] = [
     {
@@ -84,6 +85,7 @@ export function PeriodWorkbenchOverview({
       label: "Import",
       detail: transactionTotal > 0 ? `${transactionTotal} transactions loaded` : "No transaction data",
       state: transactionTotal > 0 ? "done" : setupComplete ? "active" : "todo",
+      href: `${periodWorkspaceHref}?tab=import`,
       icon: <Upload className="h-4 w-4 shrink-0 text-sky-600 dark:text-sky-300" />,
     },
     {
@@ -99,6 +101,7 @@ export function PeriodWorkbenchOverview({
       label: "Categorise",
       detail: transactionTotal > 0 ? `${uncategorisedCount} uncategorised` : "Waiting for import",
       state: transactionTotal === 0 ? "todo" : uncategorisedCount === 0 ? "done" : "active",
+      href: `${periodWorkspaceHref}?tab=categorise`,
       icon: <Settings className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-300" />,
     },
     {
@@ -130,6 +133,7 @@ export function PeriodWorkbenchOverview({
       label: "Review",
       detail: readyToFile ? "Qualified-accountant gate cleared" : `${reviewIssueCount} review issues`,
       state: readyToFile ? "done" : reviewIssueCount > 0 ? "blocked" : "active",
+      href: `${periodWorkspaceHref}?tab=filing`,
       icon: <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" />,
     },
     {
@@ -137,6 +141,7 @@ export function PeriodWorkbenchOverview({
       label: "Filing",
       detail: readyToFile ? "CRO pack ready" : `${filingStatus?.blockingIssues.length ?? 0} blockers - ${accountantReviewState}`,
       state: readyToFile ? "done" : "blocked",
+      href: `${periodWorkspaceHref}?tab=filing`,
       icon: <Download className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" />,
     },
   ];
