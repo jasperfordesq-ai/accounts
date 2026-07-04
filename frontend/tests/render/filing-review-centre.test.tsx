@@ -1,10 +1,57 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { FilingReviewCentre } from "@/components/period/FilingReviewCentre";
 import type { FilingReadinessProfile, FilingWorkflowStatus } from "@/lib/api";
 
 describe("FilingReviewCentre", () => {
+  it("opens with a filing decision centre for blockers, ready evidence and next action", () => {
+    render(
+      <FilingReviewCentre
+        filingStatus={sampleWorkflowStatus({ readyToFile: false, warningIssues: [] })}
+        filingReadinessProfile={sampleReadinessProfile({
+          supportedPath: true,
+          manualProfessionalReviewRequired: false,
+          extraEvidence: [
+            {
+              code: "ixbrl-internal-checks",
+              label: "Internal iXBRL checks completed",
+              required: true,
+              satisfied: true,
+              detail: "Internal checks passed.",
+              sources: [sourceReference()],
+            },
+          ],
+          blockingIssues: [
+            readinessIssue("cro-pdf", "Generate the CRO accounts PDF before approval or submission."),
+          ],
+          warningIssues: [
+            readinessIssue("external-ros-validation", "External ROS/iXBRL validation remains a manual evidence gate.", "warning"),
+          ],
+        })}
+        croSubmissionReference=""
+        validatingIxbrl={false}
+        onCroSubmissionReferenceChange={vi.fn()}
+        onRunIxbrlChecks={vi.fn()}
+        onApproveForFiling={vi.fn()}
+        onMarkCroSubmitted={vi.fn()}
+        onConfirmCroPayment={vi.fn()}
+        onMarkCroAccepted={vi.fn()}
+        onRecordCroSendBack={vi.fn()}
+      />,
+    );
+
+    const decisionCentre = screen.getByLabelText("Filing decision centre");
+    expect(within(decisionCentre).getByText("Filing decision centre")).toBeInTheDocument();
+    expect(within(decisionCentre).getByText("What is wrong?")).toBeInTheDocument();
+    expect(within(decisionCentre).getByText("Generate the CRO accounts PDF before approval or submission.")).toBeInTheDocument();
+    expect(within(decisionCentre).getByText("What is ready?")).toBeInTheDocument();
+    expect(within(decisionCentre).getByText("Internal iXBRL checks completed")).toBeInTheDocument();
+    expect(within(decisionCentre).getByText("What must I do next?")).toBeInTheDocument();
+    expect(within(decisionCentre).getByText("Approve CRO pack")).toBeInTheDocument();
+    expect(within(decisionCentre).getByText("External ROS/iXBRL validation remains a manual evidence gate.")).toBeInTheDocument();
+  });
+
   it("surfaces source-backed evidence and blocks approval for manual handoff paths", () => {
     render(
       <FilingReviewCentre
@@ -38,7 +85,7 @@ describe("FilingReviewCentre", () => {
     expect(screen.getByText("Accountant sign-off packet")).toBeInTheDocument();
     expect(screen.getByText("Manual professional handoff")).toBeInTheDocument();
     expect(screen.getByText("Audit report")).toBeInTheDocument();
-    expect(screen.getByText("Signed auditor report must be reviewed manually before final filing.")).toBeInTheDocument();
+    expect(screen.getAllByText("Signed auditor report must be reviewed manually before final filing.").length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: "CRO financial statements requirements" })).toHaveAttribute(
       "href",
       "https://cro.ie/annual-return/financial-statements-requirements/",
@@ -114,13 +161,13 @@ describe("FilingReviewCentre", () => {
     expect(screen.getByText("Filing issue digest")).toBeInTheDocument();
     expect(screen.getByText("Ready for accountant review")).toBeInTheDocument();
     expect(screen.getByText("External ROS validation evidence pending")).toBeInTheDocument();
-    expect(screen.getByText("Approve CRO pack")).toBeInTheDocument();
-    expect(screen.getByText("5 blockers")).toBeInTheDocument();
-    expect(screen.getByText("1 warning")).toBeInTheDocument();
+    expect(screen.getAllByText("Approve CRO pack").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("5 blockers").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("1 warning").length).toBeGreaterThan(0);
     expect(screen.getByText("Priority blockers")).toBeInTheDocument();
-    expect(screen.getByText("Size classification must be completed before filing readiness can be assessed.")).toBeInTheDocument();
+    expect(screen.getAllByText("Size classification must be completed before filing readiness can be assessed.").length).toBeGreaterThan(0);
     expect(screen.getByText("2 more blockers")).toBeInTheDocument();
-    expect(screen.getByText("External ROS/iXBRL validation remains a manual evidence gate.")).toBeInTheDocument();
+    expect(screen.getAllByText("External ROS/iXBRL validation remains a manual evidence gate.").length).toBeGreaterThan(0);
   });
 
   it("surfaces specialist sign-off evidence gates with their legal sources", () => {
@@ -226,12 +273,14 @@ function sampleReadinessProfile({
   blockingIssues = [],
   warningIssues = [],
   signOffSteps = [],
+  extraEvidence = [],
 }: {
   supportedPath: boolean;
   manualProfessionalReviewRequired: boolean;
   blockingIssues?: FilingReadinessProfile["blockingIssues"];
   warningIssues?: FilingReadinessProfile["warningIssues"];
   signOffSteps?: FilingReadinessProfile["signOffPacket"]["steps"];
+  extraEvidence?: FilingReadinessProfile["requiredEvidence"];
 }): FilingReadinessProfile {
   return {
     companyId: 7,
@@ -264,6 +313,7 @@ function sampleReadinessProfile({
         detail: "Signed auditor report required for this path.",
         sources: [sourceReference()],
       },
+      ...extraEvidence,
     ],
     blockingIssues,
     warningIssues,

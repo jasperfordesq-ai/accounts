@@ -72,6 +72,12 @@ export function FilingReviewCentre({
 
           {filingReadinessProfile && (
             <div className="space-y-4">
+              <FilingDecisionCentre
+                filingStatus={filingStatus}
+                filingReadinessProfile={filingReadinessProfile}
+                filingIssues={filingIssues}
+              />
+
               <SignOffPacketPanel packet={filingReadinessProfile.signOffPacket} />
 
               <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
@@ -191,6 +197,135 @@ export function FilingReviewCentre({
         </div>
       )}
     </ReviewPanel>
+  );
+}
+
+function FilingDecisionCentre({
+  filingStatus,
+  filingReadinessProfile,
+  filingIssues,
+}: {
+  filingStatus: FilingWorkflowStatus;
+  filingReadinessProfile: FilingReadinessProfile;
+  filingIssues: ReturnType<typeof buildFilingIssueGroups>;
+}) {
+  const wrongItems = filingIssues.blockers.length > 0
+    ? filingIssues.blockers
+    : filingIssues.warnings.length > 0
+      ? filingIssues.warnings
+      : ["No blocking filing issues are currently recorded."];
+  const readyItems = filingReadinessProfile.requiredEvidence
+    .filter((item) => item.satisfied)
+    .map((item) => item.label);
+  const nextActions = uniqueIssueMessages([
+    ...filingReadinessProfile.signOffPacket.allowedNextActions,
+    ...filingReadinessProfile.allowedNextActions,
+  ]).map(formatActionLabel);
+  const nextItems = nextActions.length > 0
+    ? nextActions
+    : [filingReadinessProfile.manualProfessionalReviewRequired
+      ? "Move this file to manual professional handoff."
+      : filingStatus.readyToFile
+        ? "Record the named accountant approval and external filing evidence."
+        : "Resolve the filing blockers before approval."];
+  const warningItems = filingIssues.blockers.length > 0 ? filingIssues.warnings : [];
+
+  return (
+    <section
+      aria-label="Filing decision centre"
+      className="rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-4"
+    >
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Filing decision centre</p>
+          <p className="mt-1 max-w-3xl text-sm leading-6 text-[var(--muted-foreground)]">
+            Accountant-facing summary of blockers, evidenced outputs and the next allowed workflow step.
+          </p>
+        </div>
+        <StatusBadge tone={filingIssues.blockers.length > 0 ? "bad" : filingIssues.warnings.length > 0 ? "warn" : "good"}>
+          {filingIssues.blockers.length > 0
+            ? `${filingIssues.blockers.length} blockers`
+            : filingIssues.warnings.length > 0
+              ? `${filingIssues.warnings.length} warnings`
+              : "Clear"}
+        </StatusBadge>
+      </div>
+
+      <div className="mt-4 grid gap-3 lg:grid-cols-3">
+        <DecisionSummaryCard
+          title="What is wrong?"
+          tone={filingIssues.blockers.length > 0 ? "bad" : filingIssues.warnings.length > 0 ? "warn" : "good"}
+          items={wrongItems}
+          maxItems={2}
+        />
+        <DecisionSummaryCard
+          title="What is ready?"
+          tone={readyItems.length > 0 ? "good" : "warn"}
+          items={readyItems.length > 0 ? readyItems : ["No required evidence is complete yet."]}
+          maxItems={3}
+        />
+        <DecisionSummaryCard
+          title="What must I do next?"
+          tone={nextActions.length > 0 ? "info" : filingReadinessProfile.manualProfessionalReviewRequired ? "bad" : "warn"}
+          items={nextItems}
+          maxItems={3}
+        />
+      </div>
+
+      {warningItems.length > 0 && (
+        <div className="mt-3 rounded-md border border-amber-200 bg-amber-50/60 p-3 dark:border-amber-900 dark:bg-amber-950/30">
+          <p className="text-xs font-semibold uppercase text-amber-900 dark:text-amber-100">Warnings to evidence</p>
+          <ul className="mt-2 space-y-1.5">
+            {warningItems.slice(0, 2).map((warning) => (
+              <li key={warning} className="text-sm leading-6 text-amber-900 dark:text-amber-100">
+                {warning}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function DecisionSummaryCard({
+  title,
+  tone,
+  items,
+  maxItems,
+}: {
+  title: string;
+  tone: "default" | "good" | "warn" | "bad" | "info";
+  items: string[];
+  maxItems: number;
+}) {
+  const visibleItems = items.slice(0, maxItems);
+  const hiddenCount = Math.max(0, items.length - maxItems);
+  const textClass = tone === "bad"
+    ? "text-red-800 dark:text-red-100"
+    : tone === "warn"
+      ? "text-amber-900 dark:text-amber-100"
+      : "text-[var(--foreground)]";
+
+  return (
+    <article className="min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
+      <div className="flex items-start justify-between gap-3">
+        <h3 className="text-sm font-semibold text-[var(--foreground)]">{title}</h3>
+        <StatusBadge tone={tone}>{visibleItems.length}</StatusBadge>
+      </div>
+      <ul className="mt-3 space-y-1.5">
+        {visibleItems.map((item) => (
+          <li key={item} className={`text-sm leading-6 ${textClass}`}>
+            {item}
+          </li>
+        ))}
+      </ul>
+      {hiddenCount > 0 && (
+        <p className="mt-2 text-xs font-medium text-[var(--muted-foreground)]">
+          {hiddenCount} more {hiddenCount === 1 ? "item" : "items"}
+        </p>
+      )}
+    </article>
   );
 }
 
