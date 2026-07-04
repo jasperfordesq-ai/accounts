@@ -5,9 +5,9 @@ const MAX_TEXT_PREVIEW = 48;
 export function findOverlappingTextBlocks(blocks, options = {}) {
   const tolerance = options.tolerance ?? DEFAULT_TOLERANCE;
   const minOverlapArea = options.minOverlapArea ?? DEFAULT_MIN_OVERLAP_AREA;
-  const normalizedBlocks = blocks
+  const normalizedBlocks = uniqueBlocks(blocks
     .map(normalizeBlock)
-    .filter((block) => block && block.text.length > 0 && block.rect.width > 0 && block.rect.height > 0);
+    .filter((block) => block && block.text.length > 0 && block.rect.width > 0 && block.rect.height > 0));
   const issues = [];
 
   for (let firstIndex = 0; firstIndex < normalizedBlocks.length; firstIndex += 1) {
@@ -75,6 +75,27 @@ function normalizeRect(rect) {
     width: width ?? right - left,
     height: height ?? bottom - top,
   };
+}
+
+function uniqueBlocks(blocks) {
+  const seen = new Set();
+  const unique = [];
+
+  for (const block of blocks) {
+    const key = [
+      block.text.toLowerCase(),
+      Math.round(block.rect.left),
+      Math.round(block.rect.top),
+      Math.round(block.rect.right),
+      Math.round(block.rect.bottom),
+    ].join("|");
+
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(block);
+  }
+
+  return unique;
 }
 
 function normalizeText(value) {

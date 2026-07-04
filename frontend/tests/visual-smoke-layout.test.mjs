@@ -36,6 +36,17 @@ describe("visual smoke layout checks", () => {
     assert.equal(issues.length, 0);
   });
 
+  it("ignores duplicated accessibility text at identical coordinates", async () => {
+    const { findOverlappingTextBlocks } = await loadLayoutModule();
+
+    const issues = findOverlappingTextBlocks([
+      textBlock("Tab label", "Categorise", 40, 40, 100, 58),
+      textBlock("Tab label duplicate", "Categorise", 40, 40, 100, 58),
+    ]);
+
+    assert.equal(issues.length, 0);
+  });
+
   it("summarizes layout issues for route failures", async () => {
     const { findOverlappingTextBlocks, formatLayoutIssues } = await loadLayoutModule();
     const issues = findOverlappingTextBlocks([
@@ -55,6 +66,7 @@ describe("visual smoke layout checks", () => {
 
     assert.match(script, /document\.createTreeWalker/);
     assert.match(script, /range\.getClientRects/);
+    assert.match(script, /details:not\(\[open\]\)/);
   });
 });
 

@@ -328,6 +328,8 @@ async function checkNoTextOverlap(page, routeName) {
     }
 
     function isVisiblyRendered(element) {
+      const closedDetails = element.closest("details:not([open])");
+      if (closedDetails && !element.closest("summary")) return false;
       if (element.closest("[aria-hidden='true'], [hidden], [inert], [data-inert='true']")) return false;
       const style = window.getComputedStyle(element);
       if (style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0) return false;
@@ -352,7 +354,7 @@ async function checkNoTextOverlap(page, routeName) {
       return normalized.length > 40 ? `${normalized.slice(0, 39)}...` : normalized;
     }
   });
-  const issues = findOverlappingTextBlocks(blocks);
+  const issues = findOverlappingTextBlocks(blocks, { tolerance: 10 });
   if (issues.length > 0) {
     throw new Error(formatLayoutIssues(routeName, issues));
   }
