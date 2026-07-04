@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   DataTable,
   EvidenceChecklist,
@@ -7,6 +8,7 @@ import {
   IssueDigest,
   MetricStrip,
   MoneyField,
+  MoneyInput,
   PermissionDeniedPanel,
   ReviewPanel,
   SectionHeader,
@@ -76,6 +78,9 @@ const reviewRows = [
 ];
 
 export function WorkbenchPreview() {
+  const [balanceOutstanding, setBalanceOutstanding] = useState(40000);
+  const [dueWithinYear, setDueWithinYear] = useState(10000);
+
   return (
     <WorkbenchShell>
       <WorkbenchHeader
@@ -123,6 +128,32 @@ export function WorkbenchPreview() {
           <EvidenceChecklist items={evidenceItems} />
         </ReviewPanel>
       </section>
+
+      <ReviewPanel
+        title="Accounting inputs"
+        description="Money entry uses the same currency prefix, decimal keyboard hint and dense spacing across year-end forms."
+        actions={<StatusBadge tone="info">MoneyInput primitive</StatusBadge>}
+      >
+        <div className="grid gap-3 md:grid-cols-3">
+          <MoneyInput
+            label="Balance outstanding"
+            value={balanceOutstanding}
+            onValueChange={setBalanceOutstanding}
+            hint="Feeds creditors due within and after one year."
+          />
+          <MoneyInput
+            label="Due within one year"
+            value={dueWithinYear}
+            onValueChange={setDueWithinYear}
+          />
+          <div className="rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-3">
+            <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Derived long-term balance</p>
+            <p className="mt-1 text-lg font-semibold text-[var(--foreground)]">
+              <MoneyField value={Math.max(0, balanceOutstanding - dueWithinYear)} />
+            </p>
+          </div>
+        </div>
+      </ReviewPanel>
 
       <section className="grid min-w-0 gap-4 lg:grid-cols-2">
         <ReviewPanel

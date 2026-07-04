@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import {
   getDirectorLoans, createDirectorLoan, updateDirectorLoan, deleteDirectorLoan, type DirectorLoanRow,
 } from "@/lib/api";
+import { MoneyInput } from "@/components/workbench";
 
 const inputClass =
   "w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors";
@@ -229,50 +230,35 @@ export function DirectorLoansManager({
               ))}
             </select>
           </div>
-          <div className="col-span-2">
-            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Opening Balance</label>
-            <input
-              type="number"
-              className={inputClass}
-              placeholder="0.00"
-              value={form.openingBalance || ""}
-              onChange={(e) => setForm({ ...form, openingBalance: Number(e.target.value) })}
-              aria-label="Opening balance"
-            />
-          </div>
-          <div className="col-span-2">
-            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Advances</label>
-            <input
-              type="number"
-              className={inputClass}
-              placeholder="0.00"
-              value={form.advances || ""}
-              onChange={(e) => setForm({ ...form, advances: Number(e.target.value) })}
-              aria-label="Advances to director"
-            />
-          </div>
-          <div className="col-span-2">
-            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Repayments</label>
-            <input
-              type="number"
-              className={inputClass}
-              placeholder="0.00"
-              value={form.repayments || ""}
-              onChange={(e) => setForm({ ...form, repayments: Number(e.target.value) })}
-              aria-label="Repayments by director"
-            />
-          </div>
-          <div className="col-span-2">
-            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Max During Year</label>
-            <input
-              type="number"
-              className={inputClass}
-              placeholder="auto"
-              value={form.maxBalanceDuringYear || ""}
-              onChange={(e) => setForm({ ...form, maxBalanceDuringYear: Number(e.target.value) })}
-              aria-label="Maximum balance during year"
-            />
-          </div>
+          <MoneyInput
+            className="col-span-2"
+            label="Opening Balance"
+            ariaLabel="Opening balance"
+            value={form.openingBalance}
+            onValueChange={(value) => setForm({ ...form, openingBalance: value })}
+          />
+          <MoneyInput
+            className="col-span-2"
+            label="Advances"
+            ariaLabel="Advances to director"
+            value={form.advances}
+            onValueChange={(value) => setForm({ ...form, advances: value })}
+          />
+          <MoneyInput
+            className="col-span-2"
+            label="Repayments"
+            ariaLabel="Repayments by director"
+            value={form.repayments}
+            onValueChange={(value) => setForm({ ...form, repayments: value })}
+          />
+          <MoneyInput
+            className="col-span-2"
+            label="Max During Year"
+            ariaLabel="Maximum balance during year"
+            placeholder="auto"
+            value={form.maxBalanceDuringYear}
+            onValueChange={(value) => setForm({ ...form, maxBalanceDuringYear: value })}
+          />
         </div>
         <div className="grid grid-cols-12 gap-3 items-end">
           <div className="col-span-3">
@@ -286,17 +272,13 @@ export function DirectorLoansManager({
               aria-label="Interest rate"
             />
           </div>
-          <div className="col-span-3">
-            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Interest Charged</label>
-            <input
-              type="number"
-              className={inputClass}
-              placeholder="0.00"
-              value={form.interestCharged || ""}
-              onChange={(e) => setForm({ ...form, interestCharged: Number(e.target.value) })}
-              aria-label="Interest charged"
-            />
-          </div>
+          <MoneyInput
+            className="col-span-3"
+            label="Interest Charged"
+            ariaLabel="Interest charged"
+            value={form.interestCharged}
+            onValueChange={(value) => setForm({ ...form, interestCharged: value })}
+          />
           <div className="col-span-3 flex items-center gap-2 pb-2">
             <input
               type="checkbox"

@@ -1,10 +1,12 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import {
   DataTable,
   EvidenceChecklist,
   IssueDigest,
+  MoneyInput,
   PermissionDeniedPanel,
   ReviewPanel,
   StatusBadge,
@@ -47,6 +49,34 @@ describe("workbench primitives", () => {
     render(<StatusBadge tone="warn">Recorded only</StatusBadge>);
 
     expect(screen.getByText("Recorded only")).toBeInTheDocument();
+  });
+
+  it("renders a dedicated accountant money input without browser number steppers", async () => {
+    const user = userEvent.setup();
+
+    function Harness() {
+      const [amount, setAmount] = useState(0);
+      return (
+        <MoneyInput
+          label="Balance outstanding"
+          value={amount}
+          onValueChange={setAmount}
+          hint="Feeds creditors due within and after one year."
+        />
+      );
+    }
+
+    render(<Harness />);
+
+    const input = screen.getByLabelText("Balance outstanding");
+    expect(input).toHaveAttribute("type", "text");
+    expect(input).toHaveAttribute("inputmode", "decimal");
+    expect(screen.getByText("EUR")).toBeInTheDocument();
+    expect(screen.getByText("Feeds creditors due within and after one year.")).toBeInTheDocument();
+
+    await user.type(input, "40000.25");
+
+    expect(input).toHaveValue("40000.25");
   });
 
   it("renders an eight-stage accountant workflow rail with linked route steps", () => {

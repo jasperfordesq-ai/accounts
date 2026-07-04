@@ -5,6 +5,7 @@ import { Button, Chip, Spinner } from "@heroui/react";
 import { Pencil, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { getLoans, createLoan, updateLoan, deleteLoan, type Loan } from "@/lib/api";
+import { MoneyInput } from "@/components/workbench";
 
 const inputClass =
   "w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors";
@@ -209,28 +210,20 @@ export function LoansManager({
               aria-label="Lender"
             />
           </div>
-          <div className="col-span-3">
-            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Original Amount</label>
-            <input
-              type="number"
-              className={inputClass}
-              placeholder="0.00"
-              value={form.originalAmount || ""}
-              onChange={(e) => setForm({ ...form, originalAmount: Number(e.target.value) })}
-              aria-label="Original amount"
-            />
-          </div>
-          <div className="col-span-3">
-            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Balance Outstanding</label>
-            <input
-              type="number"
-              className={inputClass}
-              placeholder="0.00"
-              value={form.balance || ""}
-              onChange={(e) => setForm({ ...form, balance: Number(e.target.value) })}
-              aria-label="Balance outstanding"
-            />
-          </div>
+          <MoneyInput
+            className="col-span-3"
+            label="Original Amount"
+            ariaLabel="Original amount"
+            value={form.originalAmount}
+            onValueChange={(value) => setForm({ ...form, originalAmount: value })}
+          />
+          <MoneyInput
+            className="col-span-3"
+            label="Balance Outstanding"
+            ariaLabel="Balance outstanding"
+            value={form.balance}
+            onValueChange={(value) => setForm({ ...form, balance: value })}
+          />
           <div className="col-span-2">
             <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Interest %</label>
             <input
@@ -264,17 +257,13 @@ export function LoansManager({
               aria-label="Balance as-of date"
             />
           </div>
-          <div className="col-span-3">
-            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Due Within 1 Year</label>
-            <input
-              type="number"
-              className={inputClass}
-              placeholder="0.00"
-              value={form.dueWithinYear || ""}
-              onChange={(e) => setForm({ ...form, dueWithinYear: Number(e.target.value) })}
-              aria-label="Amount due within one year"
-            />
-          </div>
+          <MoneyInput
+            className="col-span-3"
+            label="Due Within 1 Year"
+            ariaLabel="Amount due within one year"
+            value={form.dueWithinYear}
+            onValueChange={(value) => setForm({ ...form, dueWithinYear: value })}
+          />
           <div className="col-span-3 flex items-center justify-between pb-2">
             <span className="text-xs text-gray-500 dark:text-gray-400">
               Due &gt; 1yr:{" "}

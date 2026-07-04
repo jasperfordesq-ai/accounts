@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useId, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -75,6 +75,19 @@ export interface PermissionDeniedPanelProps {
   title?: string;
   description?: ReactNode;
   actions?: ReactNode;
+}
+
+export interface MoneyInputProps {
+  label: string;
+  value: number;
+  onValueChange: (value: number) => void;
+  ariaLabel?: string;
+  placeholder?: string;
+  hint?: ReactNode;
+  className?: string;
+  id?: string;
+  isDisabled?: boolean;
+  allowNegative?: boolean;
 }
 
 export interface DataTableRichRow {
@@ -700,6 +713,90 @@ export function MoneyField({ value }: { value: number | null | undefined }) {
       {new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(value)}
     </span>
   );
+}
+
+export function MoneyInput({
+  label,
+  value,
+  onValueChange,
+  ariaLabel,
+  placeholder = "0.00",
+  hint,
+  className = "",
+  id,
+  isDisabled = false,
+  allowNegative = false,
+}: MoneyInputProps) {
+  const generatedId = useId();
+  const inputId = id ?? generatedId;
+  const hintId = hint ? `${inputId}-hint` : undefined;
+  const [isFocused, setIsFocused] = useState(false);
+  const [draft, setDraft] = useState(() => formatMoneyInputValue(value));
+  const displayValue = isFocused ? draft : formatMoneyInputValue(value);
+
+  return (
+    <div className={className}>
+      <label htmlFor={inputId} className="block text-xs font-medium text-[var(--muted-foreground)] mb-1">
+        {label}
+      </label>
+      <div className="relative">
+        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-[var(--muted-foreground)]">
+          EUR
+        </span>
+        <input
+          id={inputId}
+          type="text"
+          inputMode="decimal"
+          autoComplete="off"
+          value={displayValue}
+          placeholder={placeholder}
+          aria-label={ariaLabel ?? label}
+          aria-describedby={hintId}
+          disabled={isDisabled}
+          data-money-input="true"
+          className="min-h-10 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 pl-12 text-sm tabular-nums text-[var(--foreground)] outline-none transition placeholder:text-[var(--muted-foreground)] focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+          onFocus={() => {
+            setDraft(formatMoneyInputValue(value));
+            setIsFocused(true);
+          }}
+          onBlur={() => {
+            setIsFocused(false);
+          }}
+          onChange={(event) => {
+            const nextDraft = event.target.value;
+            const nextValue = parseMoneyInputDraft(nextDraft, allowNegative);
+            setDraft(nextDraft);
+            if (nextValue !== null) {
+              onValueChange(nextValue);
+            }
+          }}
+        />
+      </div>
+      {hint && (
+        <p id={hintId} className="mt-1 text-[11px] leading-4 text-[var(--muted-foreground)]">
+          {hint}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function formatMoneyInputValue(value: number) {
+  if (!Number.isFinite(value) || value === 0) return "";
+  return String(value);
+}
+
+function parseMoneyInputDraft(rawValue: string, allowNegative: boolean) {
+  const normalized = rawValue.replace(/[\s,]/g, "");
+  if (normalized === "") return 0;
+
+  const pattern = allowNegative ? /^-?\d*(\.\d{0,2})?$/ : /^\d*(\.\d{0,2})?$/;
+  if (!pattern.test(normalized) || normalized === "-" || normalized === "." || normalized === "-.") {
+    return null;
+  }
+
+  const value = Number(normalized);
+  return Number.isFinite(value) ? value : null;
 }
 
 export function FilingActionBar({ children }: { children: ReactNode }) {

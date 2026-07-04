@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import {
   getShareCapital, createShareCapital, updateShareCapital, deleteShareCapital, type ShareCapital,
 } from "@/lib/api";
+import { MoneyInput } from "@/components/workbench";
 
 const inputClass =
   "w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors";
@@ -220,17 +221,13 @@ export function ShareCapitalCard({
                   aria-label="Number of shares issued"
                 />
               </div>
-              <div className="col-span-2">
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Nominal Value</label>
-                <input
-                  type="number"
-                  className={inputClass}
-                  placeholder="0.00"
-                  value={form.nominalValue || ""}
-                  onChange={(e) => setForm({ ...form, nominalValue: Number(e.target.value) })}
-                  aria-label="Nominal value per share"
-                />
-              </div>
+              <MoneyInput
+                className="col-span-2"
+                label="Nominal Value"
+                ariaLabel="Nominal value per share"
+                value={form.nominalValue}
+                onValueChange={(value) => setForm({ ...form, nominalValue: value })}
+              />
               <div className="col-span-2">
                 <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Issue Date</label>
                 <input
