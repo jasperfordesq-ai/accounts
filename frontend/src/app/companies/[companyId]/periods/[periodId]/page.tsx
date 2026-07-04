@@ -1043,7 +1043,7 @@ export default function PeriodWorkspacePage({
                 </div>
 
                 <div className="mt-4 overflow-hidden rounded-md border border-gray-200 dark:border-neutral-700">
-                  <div className="grid grid-cols-12 gap-2 bg-gray-50 px-4 py-2 text-xs font-semibold uppercase text-gray-500 dark:bg-neutral-800 dark:text-gray-400">
+                  <div className="hidden grid-cols-12 gap-2 bg-gray-50 px-4 py-2 text-xs font-semibold uppercase text-gray-500 dark:bg-neutral-800 dark:text-gray-400 md:grid">
                     <div className="col-span-5">Account</div>
                     <div className="col-span-2 text-right">Debit</div>
                     <div className="col-span-2 text-right">Credit</div>
@@ -1056,17 +1056,27 @@ export default function PeriodWorkspacePage({
                     </div>
                   ) : (
                     openingBalances.map((balance) => (
-                      <div key={balance.id} className="grid grid-cols-12 gap-2 border-t border-gray-100 px-4 py-3 text-sm dark:border-neutral-800">
-                        <div className="col-span-5">
+                      <div key={balance.id} className="grid gap-3 border-t border-gray-100 px-4 py-3 text-sm dark:border-neutral-800 md:grid-cols-12 md:gap-2">
+                        <div className="md:col-span-5">
                           <span className="font-mono text-xs text-gray-500">{balance.accountCategory.code}</span>{" "}
                           <span className="font-medium text-gray-900 dark:text-gray-100">{balance.accountCategory.name}</span>
                         </div>
-                        <div className="col-span-2 text-right font-mono">{balance.debit ? formatCurrency(balance.debit) : "-"}</div>
-                        <div className="col-span-2 text-right font-mono">{balance.credit ? formatCurrency(balance.credit) : "-"}</div>
-                        <div className="col-span-2 truncate text-xs text-gray-500" title={balance.sourceNote ?? ""}>
-                          {balance.reviewed ? "Reviewed" : "Unreviewed"}{balance.sourceNote ? ` - ${balance.sourceNote}` : ""}
+                        <div className="grid grid-cols-[6rem_minmax(0,1fr)] items-center gap-3 md:col-span-2 md:block md:text-right">
+                          <span className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 md:hidden">Debit</span>
+                          <span className="font-mono">{balance.debit ? formatCurrency(balance.debit) : "-"}</span>
                         </div>
-                        <div className="col-span-1 text-right">
+                        <div className="grid grid-cols-[6rem_minmax(0,1fr)] items-center gap-3 md:col-span-2 md:block md:text-right">
+                          <span className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 md:hidden">Credit</span>
+                          <span className="font-mono">{balance.credit ? formatCurrency(balance.credit) : "-"}</span>
+                        </div>
+                        <div className="grid grid-cols-[6rem_minmax(0,1fr)] items-center gap-3 md:col-span-2 md:block" title={balance.sourceNote ?? ""}>
+                          <span className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 md:hidden">Evidence</span>
+                          <span className="min-w-0 truncate text-xs text-gray-500">
+                            {balance.reviewed ? "Reviewed" : "Unreviewed"}{balance.sourceNote ? ` - ${balance.sourceNote}` : ""}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-[6rem_minmax(0,1fr)] items-center gap-3 md:col-span-1 md:block md:text-right">
+                          <span className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 md:hidden">Action</span>
                           <Button variant="ghost" size="sm" onPress={() => handleDeleteOpeningBalance(balance.accountCategoryId)} isDisabled={deletingOpeningCategoryId === balance.accountCategoryId}>
                             {deletingOpeningCategoryId === balance.accountCategoryId ? <Spinner size="sm" /> : <Trash2 className="h-4 w-4" />}
                           </Button>
