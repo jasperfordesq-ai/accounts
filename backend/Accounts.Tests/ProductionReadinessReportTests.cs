@@ -353,6 +353,12 @@ public class ProductionReadinessReportTests
         Assert.Equal("visual-smoke-screenshots", report.VisualQaCoverage.ArtifactName);
         Assert.Equal("ci-production-smoke", report.VisualQaCoverage.Enforcement);
         Assert.Equal(20, report.VisualQaCoverage.ExpectedScreenshotCount);
+        var layoutChecksProperty = report.VisualQaCoverage.GetType().GetProperty("LayoutChecks");
+        Assert.NotNull(layoutChecksProperty);
+        var layoutChecks = Assert.IsAssignableFrom<IEnumerable<string>>(layoutChecksProperty!.GetValue(report.VisualQaCoverage)).ToArray();
+        Assert.Contains("browser-console-errors", layoutChecks);
+        Assert.Contains("page-horizontal-overflow", layoutChecks);
+        Assert.Contains("visible-text-overlap", layoutChecks);
         Assert.Equal(["light", "dark"], report.VisualQaCoverage.Themes);
         Assert.Contains(report.VisualQaCoverage.Viewports, viewport =>
             viewport.Name == "desktop" && viewport.Width == 1440 && viewport.Height == 1000);

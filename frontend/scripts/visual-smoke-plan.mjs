@@ -7,6 +7,12 @@ export const visualSmokeViewports = [
 
 export const visualSmokeThemes = ["light", "dark"];
 
+export const visualSmokeLayoutChecks = [
+  "browser-console-errors",
+  "page-horizontal-overflow",
+  "visible-text-overlap",
+];
+
 export const visualSmokeRoutes = [
   {
     name: "dashboard",

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   VISUAL_SMOKE_ARTIFACT_NAME,
+  visualSmokeLayoutChecks,
   visualSmokeRoutes,
   visualSmokeThemes,
   visualSmokeViewports,
@@ -12,6 +13,11 @@ describe("visual smoke plan", () => {
   it("covers the accountant workbench routes in light/dark desktop/mobile", () => {
     assert.equal(VISUAL_SMOKE_ARTIFACT_NAME, "visual-smoke-screenshots");
     assert.deepEqual(visualSmokeThemes, ["light", "dark"]);
+    assert.deepEqual(visualSmokeLayoutChecks, [
+      "browser-console-errors",
+      "page-horizontal-overflow",
+      "visible-text-overlap",
+    ]);
     assert.deepEqual(
       visualSmokeViewports.map(({ name, width, height }) => ({ name, width, height })),
       [

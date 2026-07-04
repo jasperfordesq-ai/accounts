@@ -51,6 +51,7 @@ describe("ProductionReadinessWorkbench", () => {
     expect(screen.getByText("20 screenshots")).toBeInTheDocument();
     expect(screen.getByText("Light desktop")).toBeInTheDocument();
     expect(screen.getByText("Dark mobile")).toBeInTheDocument();
+    expect(screen.getByText("Visible text overlap")).toBeInTheDocument();
     expect(screen.getByText("Filing review")).toBeInTheDocument();
     expect(screen.getByText("visual-smoke-screenshots")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Production auditability" })).toBeInTheDocument();
@@ -270,6 +271,7 @@ function sampleReport(): ProductionReadinessReport {
       artifactName: "visual-smoke-screenshots",
       enforcement: "ci-production-smoke",
       expectedScreenshotCount: 20,
+      layoutChecks: ["browser-console-errors", "page-horizontal-overflow", "visible-text-overlap"],
       themes: ["light", "dark"],
       viewports: [
         { name: "desktop", width: 1440, height: 1000 },

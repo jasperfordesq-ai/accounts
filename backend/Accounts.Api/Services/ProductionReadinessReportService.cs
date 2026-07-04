@@ -76,6 +76,7 @@ public sealed record VisualQaCoverage(
     string ArtifactName,
     string Enforcement,
     int ExpectedScreenshotCount,
+    IReadOnlyList<string> LayoutChecks,
     IReadOnlyList<string> Themes,
     IReadOnlyList<VisualQaViewport> Viewports,
     IReadOnlyList<VisualQaRoute> Routes);
@@ -703,6 +704,12 @@ public class ProductionReadinessReportService(AccountsDbContext db)
     private static VisualQaCoverage BuildVisualQaCoverage()
     {
         var themes = new[] { "light", "dark" };
+        var layoutChecks = new[]
+        {
+            "browser-console-errors",
+            "page-horizontal-overflow",
+            "visible-text-overlap"
+        };
         var viewports = new[]
         {
             new VisualQaViewport("desktop", 1440, 1000),
@@ -746,6 +753,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "visual-smoke-screenshots",
             "ci-production-smoke",
             routes.Length * themes.Length * viewports.Length,
+            layoutChecks,
             themes,
             viewports,
             routes);

@@ -182,6 +182,14 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
                   )),
                 )}
               </div>
+              <div className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
+                <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Layout checks</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {visualQaCoverage.layoutChecks.map((check) => (
+                    <StatusBadge key={check} tone="good">{formatStatus(check)}</StatusBadge>
+                  ))}
+                </div>
+              </div>
             </div>
 
             <DataTable

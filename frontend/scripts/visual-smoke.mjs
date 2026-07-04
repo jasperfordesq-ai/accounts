@@ -1,6 +1,7 @@
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { chromium, expect } from "@playwright/test";
+import { findOverlappingTextBlocks, formatLayoutIssues } from "./visual-smoke-layout.mjs";
 import { visualSmokeRoutes, visualSmokeThemes, visualSmokeViewports } from "./visual-smoke-plan.mjs";
 
 function arg(name, fallback) {
@@ -242,6 +243,104 @@ async function checkNoPageOverflow(page, routeName) {
   }
 }
 
+async function checkNoTextOverlap(page, routeName) {
+  const blocks = await page.evaluate(() => {
+    const root = document.querySelector("main");
+    if (!root) return [];
+    const selectors = [
+      "a",
+      "button",
+      "label",
+      "p",
+      "span",
+      "h1",
+      "h2",
+      "h3",
+      "h4",
+      "h5",
+      "h6",
+      "td",
+      "th",
+      "li",
+      "summary",
+      "code",
+      "input",
+      "textarea",
+      "select",
+      "[role='tab']",
+      "[role='button']",
+      "[role='link']",
+    ];
+
+    const elements = Array.from(root.querySelectorAll(selectors.join(",")));
+    const candidates = elements
+      .map((element) => ({ element, text: visibleTextFor(element) }))
+      .filter(({ element, text }) => text.length >= 2 && isVisiblyRendered(element));
+    const leafCandidates = candidates.filter(({ element }) =>
+      !candidates.some(({ element: other }) => other !== element && element.contains(other))
+    );
+
+    return leafCandidates.map(({ element, text }, index) => {
+      const rect = element.getBoundingClientRect();
+      const scrollLeft = window.scrollX || document.documentElement.scrollLeft || 0;
+      const scrollTop = window.scrollY || document.documentElement.scrollTop || 0;
+      return {
+        label: labelFor(element, text, index),
+        text,
+        rect: {
+          left: rect.left + scrollLeft,
+          top: rect.top + scrollTop,
+          right: rect.right + scrollLeft,
+          bottom: rect.bottom + scrollTop,
+          width: rect.width,
+          height: rect.height,
+        },
+      };
+    });
+
+    function visibleTextFor(element) {
+      if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+        return normalizeText(element.value || element.placeholder || "");
+      }
+
+      if (element instanceof HTMLSelectElement) {
+        return normalizeText(element.selectedOptions[0]?.textContent ?? element.value);
+      }
+
+      return normalizeText(element.innerText || element.textContent || "");
+    }
+
+    function isVisiblyRendered(element) {
+      if (element.closest("[aria-hidden='true'], [hidden]")) return false;
+      const style = window.getComputedStyle(element);
+      if (style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0) return false;
+      const rect = element.getBoundingClientRect();
+      return rect.width > 1 && rect.height > 1;
+    }
+
+    function labelFor(element, text, index) {
+      const tag = element.tagName.toLowerCase();
+      const id = element.id ? `#${element.id}` : "";
+      const role = element.getAttribute("role");
+      const roleLabel = role ? `[role="${role}"]` : "";
+      return `${tag}${id}${roleLabel} "${previewText(text)}" (${index + 1})`;
+    }
+
+    function normalizeText(value) {
+      return value.replace(/\s+/g, " ").trim();
+    }
+
+    function previewText(value) {
+      const normalized = normalizeText(value);
+      return normalized.length > 40 ? `${normalized.slice(0, 39)}...` : normalized;
+    }
+  });
+  const issues = findOverlappingTextBlocks(blocks);
+  if (issues.length > 0) {
+    throw new Error(formatLayoutIssues(routeName, issues));
+  }
+}
+
 async function captureRoute({ page, routeName, href, expectedText, outputPath, openFilingTab }) {
   const routeErrors = [];
   const onConsole = (message) => {
@@ -271,6 +370,7 @@ async function captureRoute({ page, routeName, href, expectedText, outputPath, o
 
     await expect(mainText(page, expectedText)).toBeVisible({ timeout: 30_000 });
     await checkNoPageOverflow(page, routeName);
+    await checkNoTextOverlap(page, routeName);
     await page.screenshot({ path: outputPath, fullPage: true });
 
     if (routeErrors.length > 0) {

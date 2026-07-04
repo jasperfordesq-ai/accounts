@@ -175,6 +175,7 @@ function productionReadinessReportFixture() {
       artifactName: "visual-smoke-screenshots",
       enforcement: "ci-production-smoke",
       expectedScreenshotCount: 20,
+      layoutChecks: ["browser-console-errors", "page-horizontal-overflow", "visible-text-overlap"],
       themes: ["light", "dark"],
       viewports: [{ name: "desktop", width: 1440, height: 1000 }],
       routes: [

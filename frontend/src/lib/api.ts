@@ -1622,6 +1622,7 @@ export interface VisualQaCoverage {
   artifactName: string;
   enforcement: string;
   expectedScreenshotCount: number;
+  layoutChecks: string[];
   themes: string[];
   viewports: VisualQaViewport[];
   routes: VisualQaRoute[];
@@ -1738,6 +1739,7 @@ const visualQaCoverageSchema = z.object({
   artifactName: z.string().min(1),
   enforcement: z.string().min(1),
   expectedScreenshotCount: z.number(),
+  layoutChecks: z.array(z.string().min(1)),
   themes: z.array(z.string().min(1)),
   viewports: z.array(visualQaViewportSchema),
   routes: z.array(visualQaRouteSchema),
