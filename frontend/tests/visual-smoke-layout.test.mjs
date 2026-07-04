@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
 
 async function loadLayoutModule() {
@@ -47,6 +48,13 @@ describe("visual smoke layout checks", () => {
     assert.match(message, /dashboard\/light\/mobile/);
     assert.match(message, /text layout overlap/);
     assert.match(message, /Route title/);
+  });
+
+  it("uses text-range rectangles in the smoke browser collector", async () => {
+    const script = await readFile(new URL("../scripts/visual-smoke.mjs", import.meta.url), "utf8");
+
+    assert.match(script, /document\.createTreeWalker/);
+    assert.match(script, /range\.getClientRects/);
   });
 });
 

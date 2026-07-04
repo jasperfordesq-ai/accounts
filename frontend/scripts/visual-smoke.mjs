@@ -247,44 +247,58 @@ async function checkNoTextOverlap(page, routeName) {
   const blocks = await page.evaluate(() => {
     const root = document.querySelector("main");
     if (!root) return [];
-    const selectors = [
-      "a",
-      "button",
-      "label",
-      "p",
-      "span",
-      "h1",
-      "h2",
-      "h3",
-      "h4",
-      "h5",
-      "h6",
-      "td",
-      "th",
-      "li",
-      "summary",
-      "code",
-      "input",
-      "textarea",
-      "select",
-      "[role='tab']",
-      "[role='button']",
-      "[role='link']",
-    ];
+    const blocks = [];
+    const scrollLeft = window.scrollX || document.documentElement.scrollLeft || 0;
+    const scrollTop = window.scrollY || document.documentElement.scrollTop || 0;
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode(node) {
+        const text = normalizeText(node.textContent || "");
+        if (text.length < 2) return NodeFilter.FILTER_REJECT;
 
-    const elements = Array.from(root.querySelectorAll(selectors.join(",")));
-    const candidates = elements
-      .map((element) => ({ element, text: visibleTextFor(element) }))
-      .filter(({ element, text }) => text.length >= 2 && isVisiblyRendered(element));
-    const leafCandidates = candidates.filter(({ element }) =>
-      !candidates.some(({ element: other }) => other !== element && element.contains(other))
-    );
+        const element = node.parentElement;
+        if (!element || !isVisiblyRendered(element)) return NodeFilter.FILTER_REJECT;
+        if (["SCRIPT", "STYLE", "NOSCRIPT", "SVG"].includes(element.tagName)) return NodeFilter.FILTER_REJECT;
 
-    return leafCandidates.map(({ element, text }, index) => {
+        return NodeFilter.FILTER_ACCEPT;
+      },
+    });
+
+    let index = 0;
+    while (walker.nextNode()) {
+      const node = walker.currentNode;
+      const element = node.parentElement;
+      if (!element) continue;
+
+      const text = normalizeText(node.textContent || "");
+      const range = document.createRange();
+      range.selectNodeContents(node);
+
+      for (const rect of Array.from(range.getClientRects())) {
+        if (rect.width <= 1 || rect.height <= 1) continue;
+        blocks.push({
+          label: labelFor(element, text, index),
+          text,
+          rect: {
+            left: rect.left + scrollLeft,
+            top: rect.top + scrollTop,
+            right: rect.right + scrollLeft,
+            bottom: rect.bottom + scrollTop,
+            width: rect.width,
+            height: rect.height,
+          },
+        });
+        index += 1;
+      }
+
+      range.detach();
+    }
+
+    for (const element of Array.from(root.querySelectorAll("input, textarea, select"))) {
+      const text = visibleControlTextFor(element);
+      if (text.length < 2 || !isVisiblyRendered(element)) continue;
+
       const rect = element.getBoundingClientRect();
-      const scrollLeft = window.scrollX || document.documentElement.scrollLeft || 0;
-      const scrollTop = window.scrollY || document.documentElement.scrollTop || 0;
-      return {
+      blocks.push({
         label: labelFor(element, text, index),
         text,
         rect: {
@@ -295,10 +309,13 @@ async function checkNoTextOverlap(page, routeName) {
           width: rect.width,
           height: rect.height,
         },
-      };
-    });
+      });
+      index += 1;
+    }
 
-    function visibleTextFor(element) {
+    return blocks;
+
+    function visibleControlTextFor(element) {
       if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
         return normalizeText(element.value || element.placeholder || "");
       }
@@ -307,11 +324,11 @@ async function checkNoTextOverlap(page, routeName) {
         return normalizeText(element.selectedOptions[0]?.textContent ?? element.value);
       }
 
-      return normalizeText(element.innerText || element.textContent || "");
+      return "";
     }
 
     function isVisiblyRendered(element) {
-      if (element.closest("[aria-hidden='true'], [hidden]")) return false;
+      if (element.closest("[aria-hidden='true'], [hidden], [inert], [data-inert='true']")) return false;
       const style = window.getComputedStyle(element);
       if (style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0) return false;
       const rect = element.getBoundingClientRect();
