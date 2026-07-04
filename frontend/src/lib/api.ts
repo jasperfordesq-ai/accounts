@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 const API_BASE = "";
 const ACCOUNTS_CSRF_COOKIE = "accounts_csrf";
 const CSRF_HEADER = "X-CSRF-Token";
@@ -1641,6 +1643,136 @@ export interface ProductionReadinessReport {
   visualQaCoverage: VisualQaCoverage;
 }
 
+const legalSourceReferenceSchema = z.object({
+  sourceId: z.string().min(1),
+  title: z.string().min(1),
+  effectiveDate: z.string().min(1),
+  url: z.string().url(),
+});
+
+const sourceLawSnapshotSchema = z.object({
+  snapshotDate: z.string().min(1),
+  snapshotVersion: z.string().min(1),
+  sources: z.array(legalSourceReferenceSchema),
+});
+
+const productionReadinessAreaSchema = z.object({
+  code: z.string().min(1),
+  label: z.string().min(1),
+  status: z.string().min(1),
+  detail: z.string().min(1),
+});
+
+const goldenFilingCorpusEvidencePackSchema = z.object({
+  outputArtifacts: z.array(z.string().min(1)),
+  decisionGates: z.array(z.string().min(1)),
+  expectedValueChecks: z.array(z.string().min(1)),
+  sourceReferences: z.array(legalSourceReferenceSchema),
+});
+
+const goldenFilingCorpusScenarioSchema = z.object({
+  code: z.string().min(1),
+  label: z.string().min(1),
+  companyScope: z.string().min(1),
+  expectedOutcome: z.string().min(1),
+  coverageStatus: z.string().min(1),
+  evidenceTestNames: z.array(z.string().min(1)),
+  assertions: z.array(z.string().min(1)),
+  evidencePack: goldenFilingCorpusEvidencePackSchema,
+});
+
+const statutoryRuleMatrixEntrySchema = z.object({
+  code: z.string().min(1),
+  companyScope: z.string().min(1),
+  sizeOrRegime: z.string().min(1),
+  supportLevel: z.string().min(1),
+  requiredEvidence: z.array(z.string().min(1)),
+  requiredOutputs: z.array(z.string().min(1)),
+  manualHandoffGates: z.array(z.string().min(1)),
+  sources: z.array(legalSourceReferenceSchema),
+});
+
+const operationalGateSchema = z.object({
+  code: z.string().min(1),
+  label: z.string().min(1),
+  required: z.boolean(),
+  status: z.string().min(1),
+  detail: z.string().min(1),
+});
+
+const productionReadinessAssuranceActionSchema = z.object({
+  code: z.string().min(1),
+  label: z.string().min(1),
+  owner: z.string().min(1),
+  priority: z.string().min(1),
+  status: z.string().min(1),
+  detail: z.string().min(1),
+  evidenceRequired: z.string().min(1),
+});
+
+const productionAuditabilityControlSchema = z.object({
+  code: z.string().min(1),
+  label: z.string().min(1),
+  required: z.boolean(),
+  enforcement: z.string().min(1),
+  evidenceCaptured: z.string().min(1),
+  verification: z.string().min(1),
+  auditEventCodes: z.array(z.string().min(1)),
+});
+
+const visualQaViewportSchema = z.object({
+  name: z.string().min(1),
+  width: z.number(),
+  height: z.number(),
+});
+
+const visualQaRouteSchema = z.object({
+  code: z.string().min(1),
+  label: z.string().min(1),
+  description: z.string().min(1),
+  requiredText: z.string().min(1),
+  openFilingTab: z.boolean(),
+});
+
+const visualQaCoverageSchema = z.object({
+  artifactName: z.string().min(1),
+  enforcement: z.string().min(1),
+  expectedScreenshotCount: z.number(),
+  themes: z.array(z.string().min(1)),
+  viewports: z.array(visualQaViewportSchema),
+  routes: z.array(visualQaRouteSchema),
+});
+
+export const productionReadinessReportSchema = z.object({
+  generatedAt: z.string().min(1),
+  overallStatus: z.string().min(1),
+  companiesInDatabase: z.number(),
+  periodsInDatabase: z.number(),
+  sourceLawSnapshot: sourceLawSnapshotSchema,
+  areas: z.array(productionReadinessAreaSchema),
+  goldenFilingCorpus: z.array(goldenFilingCorpusScenarioSchema),
+  statutoryRuleMatrix: z.array(statutoryRuleMatrixEntrySchema),
+  manualHandoffPaths: z.array(z.string().min(1)),
+  operationalGates: z.array(operationalGateSchema),
+  assuranceActions: z.array(productionReadinessAssuranceActionSchema),
+  auditabilityControls: z.array(productionAuditabilityControlSchema),
+  visualQaCoverage: visualQaCoverageSchema,
+});
+
+export function parseProductionReadinessReport(payload: unknown): ProductionReadinessReport {
+  const result = productionReadinessReportSchema.safeParse(payload);
+
+  if (!result.success) {
+    const issue = result.error.issues[0];
+    const path = issue?.path.length ? issue.path.join(".") : "root";
+    const message = issue?.message ?? "Invalid payload";
+    throw new Error(`Invalid production readiness report contract: ${path} - ${message}`);
+  }
+
+  const report: ProductionReadinessReport = result.data;
+  return report;
+}
+
 export interface RevenueIxbrlTaxonomySelection {
   taxonomyKey: string;
   taxonomyDate: string;
@@ -1739,8 +1871,8 @@ export const getFilingWorkflowStatus = (companyId: number, periodId: number) =>
 export const getFilingReadinessProfile = (companyId: number, periodId: number) =>
   apiFetch<FilingReadinessProfile>(`/api/companies/${companyId}/periods/${periodId}/filing/readiness-profile`);
 
-export const getProductionReadinessReport = () =>
-  apiFetch<ProductionReadinessReport>("/api/system/production-readiness");
+export const getProductionReadinessReport = async () =>
+  parseProductionReadinessReport(await apiFetch<unknown>("/api/system/production-readiness"));
 
 export const updateCroFilingStatus = (
   companyId: number,
