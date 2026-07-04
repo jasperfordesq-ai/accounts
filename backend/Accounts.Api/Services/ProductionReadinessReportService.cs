@@ -1,5 +1,8 @@
 using Accounts.Api.Data;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace Accounts.Api.Services;
 
@@ -106,12 +109,28 @@ public sealed record VisualQaCoverage(
     IReadOnlyList<VisualQaViewport> Viewports,
     IReadOnlyList<VisualQaRoute> Routes);
 
+public sealed record ProductionAssurancePacket(
+    string PacketId,
+    string PacketVersion,
+    string Status,
+    string SourceLawSnapshotHash,
+    int GoldenCorpusCovered,
+    int GoldenCorpusTotal,
+    int StatutoryRuleMatrixPaths,
+    int StatutoryRuleCoverageFamilies,
+    int VisualQaExpectedScreenshots,
+    int RequiredOperationalGates,
+    int OpenCriticalActions,
+    IReadOnlyList<string> EvidenceItems,
+    IReadOnlyList<string> ReleaseBlockers);
+
 public sealed record ProductionReadinessReport(
     DateTime GeneratedAt,
     string OverallStatus,
     int CompaniesInDatabase,
     int PeriodsInDatabase,
     SourceLawSnapshot SourceLawSnapshot,
+    ProductionAssurancePacket AssurancePacket,
     IReadOnlyList<ProductionReadinessArea> Areas,
     IReadOnlyList<GoldenFilingCorpusScenario> GoldenFilingCorpus,
     IReadOnlyList<StatutoryRuleMatrixEntry> StatutoryRuleMatrix,
@@ -129,23 +148,110 @@ public class ProductionReadinessReportService(AccountsDbContext db)
     {
         var companies = await db.Companies.CountAsync(cancellationToken);
         var periods = await db.AccountingPeriods.CountAsync(cancellationToken);
+        var sourceSnapshot = IrishStatutoryRuleSources.BuildSnapshot();
+        var areas = BuildAreas();
+        var goldenCorpus = BuildGoldenCorpus();
+        var statutoryRuleMatrix = BuildStatutoryRuleMatrix();
+        var statutoryRulesCoverage = BuildStatutoryRulesCoverage();
+        var manualHandoffPaths = BuildManualHandoffPaths();
+        var operationalGates = BuildOperationalGates();
+        var assuranceActions = BuildAssuranceActions();
+        var auditabilityControls = BuildAuditabilityControls();
+        var monitoringControls = BuildMonitoringControls();
+        var visualQaCoverage = BuildVisualQaCoverage();
+        var assurancePacket = BuildAssurancePacket(
+            sourceSnapshot,
+            goldenCorpus,
+            statutoryRuleMatrix,
+            statutoryRulesCoverage,
+            operationalGates,
+            assuranceActions,
+            visualQaCoverage);
 
         return new ProductionReadinessReport(
             DateTime.UtcNow,
             "review-required",
             companies,
             periods,
-            IrishStatutoryRuleSources.BuildSnapshot(),
-            BuildAreas(),
-            BuildGoldenCorpus(),
-            BuildStatutoryRuleMatrix(),
-            BuildStatutoryRulesCoverage(),
-            BuildManualHandoffPaths(),
-            BuildOperationalGates(),
-            BuildAssuranceActions(),
-            BuildAuditabilityControls(),
-            BuildMonitoringControls(),
-            BuildVisualQaCoverage());
+            sourceSnapshot,
+            assurancePacket,
+            areas,
+            goldenCorpus,
+            statutoryRuleMatrix,
+            statutoryRulesCoverage,
+            manualHandoffPaths,
+            operationalGates,
+            assuranceActions,
+            auditabilityControls,
+            monitoringControls,
+            visualQaCoverage);
+    }
+
+    public static string ComputeAssurancePacketId(ProductionAssurancePacket packet)
+    {
+        var canonical = string.Join(
+            "\n",
+            [
+                packet.PacketVersion,
+                packet.Status,
+                packet.SourceLawSnapshotHash,
+                packet.GoldenCorpusCovered.ToString(CultureInfo.InvariantCulture),
+                packet.GoldenCorpusTotal.ToString(CultureInfo.InvariantCulture),
+                packet.StatutoryRuleMatrixPaths.ToString(CultureInfo.InvariantCulture),
+                packet.StatutoryRuleCoverageFamilies.ToString(CultureInfo.InvariantCulture),
+                packet.VisualQaExpectedScreenshots.ToString(CultureInfo.InvariantCulture),
+                packet.RequiredOperationalGates.ToString(CultureInfo.InvariantCulture),
+                packet.OpenCriticalActions.ToString(CultureInfo.InvariantCulture),
+                string.Join("|", packet.EvidenceItems.Order(StringComparer.Ordinal)),
+                string.Join("|", packet.ReleaseBlockers.Order(StringComparer.Ordinal))
+            ]);
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(canonical));
+        return $"assurance-sha256:{Convert.ToHexString(hash).ToLowerInvariant()}";
+    }
+
+    private static ProductionAssurancePacket BuildAssurancePacket(
+        SourceLawSnapshot sourceSnapshot,
+        IReadOnlyList<GoldenFilingCorpusScenario> goldenCorpus,
+        IReadOnlyList<StatutoryRuleMatrixEntry> statutoryRuleMatrix,
+        IReadOnlyList<StatutoryRulesCoverageItem> statutoryRulesCoverage,
+        IReadOnlyList<OperationalGate> operationalGates,
+        IReadOnlyList<ProductionReadinessAssuranceAction> assuranceActions,
+        VisualQaCoverage visualQaCoverage)
+    {
+        var evidenceItems = new[]
+        {
+            "source-law-snapshot-fingerprint",
+            "golden-filing-corpus",
+            "statutory-rules-matrix",
+            "statutory-rules-coverage",
+            "visual-smoke-screenshots",
+            "production-operational-gates"
+        };
+        var releaseBlockers = assuranceActions
+            .Where(action => action.Status != "complete")
+            .OrderBy(action => action.Priority == "critical" ? 0 : action.Priority == "high" ? 1 : 2)
+            .ThenBy(action => action.Code, StringComparer.Ordinal)
+            .Select(action => action.Code == "qualified-accountant-signoff"
+                ? "Qualified accountant sign-off required"
+                : $"{action.Label} required")
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var packetWithoutId = new ProductionAssurancePacket(
+            "",
+            "production-assurance-packet-v1",
+            releaseBlockers.Length == 0 ? "ready" : "review-required",
+            sourceSnapshot.ContentHash,
+            goldenCorpus.Count(scenario => scenario.CoverageStatus == "covered"),
+            goldenCorpus.Count,
+            statutoryRuleMatrix.Count,
+            statutoryRulesCoverage.Count,
+            visualQaCoverage.ExpectedScreenshotCount,
+            operationalGates.Count(gate => gate.Required),
+            assuranceActions.Count(action => action.Priority == "critical" && action.Status != "complete"),
+            evidenceItems,
+            releaseBlockers);
+
+        return packetWithoutId with { PacketId = ComputeAssurancePacketId(packetWithoutId) };
     }
 
     private static IReadOnlyList<ProductionReadinessArea> BuildAreas() =>

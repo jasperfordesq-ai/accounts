@@ -24,6 +24,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
   const auditabilityControls = report.auditabilityControls ?? [];
   const monitoringControls = report.monitoringControls ?? [];
   const visualQaCoverage = report.visualQaCoverage;
+  const assurancePacket = report.assurancePacket;
   const hardenedAreas = report.areas.filter((area) => area.status === "hardened").length;
   const coveredScenarios = report.goldenFilingCorpus.filter((scenario) => scenario.coverageStatus === "covered").length;
   const enforcedGates = report.operationalGates.filter((gate) => gate.status === "enforced").length;
@@ -51,6 +52,69 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
           { label: "Assurance actions", value: `${completedAssuranceActions}/${assuranceActions.length}`, tone: completedAssuranceActions === assuranceActions.length ? "good" : "warn" },
         ]}
       />
+
+      <ReviewPanel
+        title="Production assurance packet"
+        description="A deterministic release-evidence fingerprint tying source law, golden corpus coverage, statutory rules, visual QA and operational gates together."
+        actions={<StatusBadge tone={assurancePacket.status === "ready" ? "good" : "warn"}>{formatPacketStatus(assurancePacket.status)}</StatusBadge>}
+      >
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+          <div className="rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-3">
+            <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Packet id</p>
+            <code className="mt-1 block break-all text-xs leading-5 text-[var(--foreground)]">{assurancePacket.packetId}</code>
+            <p className="mt-2 break-all text-xs text-[var(--muted-foreground)]">{assurancePacket.packetVersion}</p>
+            <p className="mt-2 break-all text-xs text-[var(--muted-foreground)]">
+              Source hash {assurancePacket.sourceLawSnapshotHash}
+            </p>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <PacketMetric
+              label="Golden corpus"
+              value={`${assurancePacket.goldenCorpusCovered}/${assurancePacket.goldenCorpusTotal}`}
+              tone={assurancePacket.goldenCorpusCovered === assurancePacket.goldenCorpusTotal ? "good" : "warn"}
+              status={assurancePacket.goldenCorpusCovered === assurancePacket.goldenCorpusTotal ? "Covered" : "Partial"}
+            />
+            <PacketMetric
+              label="Visual QA"
+              value={`${assurancePacket.visualQaExpectedScreenshots} screenshots`}
+              tone="info"
+              status="Expected"
+            />
+            <PacketMetric
+              label="Required gates"
+              value={`${assurancePacket.requiredOperationalGates}`}
+              tone="warn"
+              status="Required"
+            />
+            <PacketMetric
+              label="Open critical actions"
+              value={`${assurancePacket.openCriticalActions}`}
+              tone={assurancePacket.openCriticalActions === 0 ? "good" : "bad"}
+              status={assurancePacket.openCriticalActions === 0 ? "Clear" : "Open"}
+            />
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-4 xl:grid-cols-2">
+          <div className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
+            <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Evidence items</p>
+            <div className="mt-2">
+              <CompactList items={assurancePacket.evidenceItems} />
+            </div>
+          </div>
+          <div className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
+            <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Release blockers</p>
+            <div className="mt-2">
+              {assurancePacket.releaseBlockers.length === 0 ? (
+                <EmptyLine label="No release blockers." />
+              ) : (
+                <CompactList items={assurancePacket.releaseBlockers} />
+              )}
+            </div>
+          </div>
+        </div>
+      </ReviewPanel>
 
       <ReviewPanel
         title="Next assurance actions"
@@ -580,6 +644,27 @@ function EmptyLine({ label }: { label: string }) {
   return <p className="text-sm text-[var(--muted-foreground)]">{label}</p>;
 }
 
+function PacketMetric({
+  label,
+  value,
+  tone,
+  status,
+}: {
+  label: string;
+  value: string;
+  tone: "good" | "warn" | "bad" | "info" | "default";
+  status: string;
+}) {
+  return (
+    <div className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
+      <p className="text-sm font-semibold text-[var(--foreground)]">{label} {value}</p>
+      <div className="mt-2">
+        <StatusBadge tone={tone}>{status}</StatusBadge>
+      </div>
+    </div>
+  );
+}
+
 function toneIconClass(tone: "good" | "warn" | "bad" | "info" | "default") {
   if (tone === "good") return "mt-0.5 shrink-0 text-emerald-600 dark:text-emerald-300";
   if (tone === "bad") return "mt-0.5 shrink-0 text-red-600 dark:text-red-300";
@@ -609,6 +694,10 @@ function formatStatus(value: string) {
     .join(" ");
 
   return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+function formatPacketStatus(value: string) {
+  return value === "ready" ? "Packet ready" : `Packet ${formatStatus(value).toLowerCase()}`;
 }
 
 function formatDate(value: string) {

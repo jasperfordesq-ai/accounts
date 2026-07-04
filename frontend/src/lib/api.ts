@@ -1658,12 +1658,29 @@ export interface VisualQaCoverage {
   routes: VisualQaRoute[];
 }
 
+export interface ProductionAssurancePacket {
+  packetId: string;
+  packetVersion: string;
+  status: string;
+  sourceLawSnapshotHash: string;
+  goldenCorpusCovered: number;
+  goldenCorpusTotal: number;
+  statutoryRuleMatrixPaths: number;
+  statutoryRuleCoverageFamilies: number;
+  visualQaExpectedScreenshots: number;
+  requiredOperationalGates: number;
+  openCriticalActions: number;
+  evidenceItems: string[];
+  releaseBlockers: string[];
+}
+
 export interface ProductionReadinessReport {
   generatedAt: string;
   overallStatus: string;
   companiesInDatabase: number;
   periodsInDatabase: number;
   sourceLawSnapshot: SourceLawSnapshot;
+  assurancePacket: ProductionAssurancePacket;
   areas: ProductionReadinessArea[];
   goldenFilingCorpus: GoldenFilingCorpusScenario[];
   statutoryRuleMatrix: StatutoryRuleMatrixEntry[];
@@ -1689,6 +1706,22 @@ const sourceLawSnapshotSchema = z.object({
   contentHash: z.string().regex(/^sha256:[0-9a-f]{64}$/),
   sourceCount: z.number().int().nonnegative(),
   sources: z.array(legalSourceReferenceSchema),
+});
+
+const productionAssurancePacketSchema = z.object({
+  packetId: z.string().regex(/^assurance-sha256:[0-9a-f]{64}$/),
+  packetVersion: z.string().min(1),
+  status: z.string().min(1),
+  sourceLawSnapshotHash: z.string().regex(/^sha256:[0-9a-f]{64}$/),
+  goldenCorpusCovered: z.number().int().nonnegative(),
+  goldenCorpusTotal: z.number().int().nonnegative(),
+  statutoryRuleMatrixPaths: z.number().int().nonnegative(),
+  statutoryRuleCoverageFamilies: z.number().int().nonnegative(),
+  visualQaExpectedScreenshots: z.number().int().nonnegative(),
+  requiredOperationalGates: z.number().int().nonnegative(),
+  openCriticalActions: z.number().int().nonnegative(),
+  evidenceItems: z.array(z.string().min(1)),
+  releaseBlockers: z.array(z.string().min(1)),
 });
 
 const productionReadinessAreaSchema = z.object({
@@ -1811,6 +1844,7 @@ export const productionReadinessReportSchema = z.object({
   companiesInDatabase: z.number(),
   periodsInDatabase: z.number(),
   sourceLawSnapshot: sourceLawSnapshotSchema,
+  assurancePacket: productionAssurancePacketSchema,
   areas: z.array(productionReadinessAreaSchema),
   goldenFilingCorpus: z.array(goldenFilingCorpusScenarioSchema),
   statutoryRuleMatrix: z.array(statutoryRuleMatrixEntrySchema),

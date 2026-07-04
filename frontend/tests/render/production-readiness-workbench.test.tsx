@@ -62,7 +62,7 @@ describe("ProductionReadinessWorkbench", () => {
     expect(screen.getByText("Dark mobile")).toBeInTheDocument();
     expect(screen.getByText("Visible text overlap")).toBeInTheDocument();
     expect(screen.getByText("Filing review")).toBeInTheDocument();
-    expect(screen.getByText("visual-smoke-screenshots")).toBeInTheDocument();
+    expect(screen.getAllByText("visual-smoke-screenshots").length).toBeGreaterThan(1);
     expect(screen.getByRole("heading", { name: "Production auditability" })).toBeInTheDocument();
     expect(screen.getByText("Who changed what")).toBeInTheDocument();
     expect(screen.getByText("Who approved what")).toBeInTheDocument();
@@ -78,6 +78,10 @@ describe("ProductionReadinessWorkbench", () => {
     expect(screen.getByText("Monitoring:ErrorTrackingDsn")).toBeInTheDocument();
     expect(screen.getByText("sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")).toBeInTheDocument();
     expect(screen.getByText("1 pinned source")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Production assurance packet" })).toBeInTheDocument();
+    expect(screen.getByText("assurance-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")).toBeInTheDocument();
+    expect(screen.getByText("Golden corpus 1/1")).toBeInTheDocument();
+    expect(screen.getByText("Qualified accountant sign-off required")).toBeInTheDocument();
   }, 20000);
 });
 
@@ -100,6 +104,21 @@ function sampleReport(): ProductionReadinessReport {
           url: "https://www.revenue.ie/",
         },
       ],
+    },
+    assurancePacket: {
+      packetId: "assurance-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      packetVersion: "production-assurance-packet-v1",
+      status: "review-required",
+      sourceLawSnapshotHash: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      goldenCorpusCovered: 1,
+      goldenCorpusTotal: 1,
+      statutoryRuleMatrixPaths: 2,
+      statutoryRuleCoverageFamilies: 1,
+      visualQaExpectedScreenshots: 24,
+      requiredOperationalGates: 1,
+      openCriticalActions: 1,
+      evidenceItems: ["source-law-snapshot-fingerprint", "golden-filing-corpus", "visual-smoke-screenshots"],
+      releaseBlockers: ["Qualified accountant sign-off required"],
     },
     areas: [
       {

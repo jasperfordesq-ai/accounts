@@ -78,6 +78,34 @@ public class ProductionReadinessReportTests
     }
 
     [Fact]
+    public async Task ProductionReadinessReport_ExposesDeterministicAssurancePacketForReleaseEvidence()
+    {
+        await using var db = CreateDbContext();
+        var report = await new ProductionReadinessReportService(db).GetReportAsync();
+
+        Assert.NotNull(report.AssurancePacket);
+        Assert.Equal("production-assurance-packet-v1", report.AssurancePacket.PacketVersion);
+        Assert.Matches("^assurance-sha256:[0-9a-f]{64}$", report.AssurancePacket.PacketId);
+        Assert.Equal("review-required", report.AssurancePacket.Status);
+        Assert.Equal(report.SourceLawSnapshot.ContentHash, report.AssurancePacket.SourceLawSnapshotHash);
+        Assert.Equal(report.GoldenFilingCorpus.Count, report.AssurancePacket.GoldenCorpusTotal);
+        Assert.Equal(report.GoldenFilingCorpus.Count(scenario => scenario.CoverageStatus == "covered"), report.AssurancePacket.GoldenCorpusCovered);
+        Assert.Equal(report.StatutoryRuleMatrix.Count, report.AssurancePacket.StatutoryRuleMatrixPaths);
+        Assert.Equal(report.StatutoryRulesCoverage.Count, report.AssurancePacket.StatutoryRuleCoverageFamilies);
+        Assert.Equal(report.VisualQaCoverage.ExpectedScreenshotCount, report.AssurancePacket.VisualQaExpectedScreenshots);
+        Assert.Equal(report.OperationalGates.Count(gate => gate.Required), report.AssurancePacket.RequiredOperationalGates);
+        Assert.Equal(report.AssuranceActions.Count(action => action.Priority == "critical" && action.Status != "complete"), report.AssurancePacket.OpenCriticalActions);
+        Assert.Contains("source-law-snapshot-fingerprint", report.AssurancePacket.EvidenceItems);
+        Assert.Contains("golden-filing-corpus", report.AssurancePacket.EvidenceItems);
+        Assert.Contains("visual-smoke-screenshots", report.AssurancePacket.EvidenceItems);
+        Assert.Contains(report.AssurancePacket.ReleaseBlockers, blocker =>
+            blocker.Contains("qualified accountant", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(
+            report.AssurancePacket.PacketId,
+            ProductionReadinessReportService.ComputeAssurancePacketId(report.AssurancePacket));
+    }
+
+    [Fact]
     public async Task GoldenCorpusCoverage_IsBackedByConcreteAutomatedEvidenceTests()
     {
         await using var db = CreateDbContext();

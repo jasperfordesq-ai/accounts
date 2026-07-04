@@ -104,6 +104,21 @@ function productionReadinessReportFixture() {
       sourceCount: 1,
       sources: [source("frc-frs-105", "FRC FRS 105 current edition and amendments")],
     },
+    assurancePacket: {
+      packetId: "assurance-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      packetVersion: "production-assurance-packet-v1",
+      status: "review-required",
+      sourceLawSnapshotHash: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      goldenCorpusCovered: 1,
+      goldenCorpusTotal: 1,
+      statutoryRuleMatrixPaths: 1,
+      statutoryRuleCoverageFamilies: 1,
+      visualQaExpectedScreenshots: 24,
+      requiredOperationalGates: 1,
+      openCriticalActions: 1,
+      evidenceItems: ["source-law-snapshot-fingerprint", "golden-filing-corpus", "visual-smoke-screenshots"],
+      releaseBlockers: ["Qualified accountant sign-off required"],
+    },
     areas: [
       {
         code: "backend-accounting-engine",

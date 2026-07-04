@@ -18,6 +18,10 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.equal(parsed.statutoryRulesCoverage[0].edgeCases[0], "two-of-three threshold rule");
   assert.equal(parsed.monitoringControls[0].code, "error-tracking");
   assert.equal(parsed.monitoringControls[0].productionSafetyGate, "Monitoring:ErrorTrackingDsn");
+  assert.equal(parsed.assurancePacket.packetVersion, "production-assurance-packet-v1");
+  assert.equal(parsed.assurancePacket.sourceLawSnapshotHash, "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+  assert.equal(parsed.assurancePacket.goldenCorpusCovered, 1);
+  assert.equal(parsed.assurancePacket.releaseBlockers[0], "Qualified accountant sign-off required");
 });
 
 test("parseProductionReadinessReport rejects missing golden corpus evidence packs", () => {
@@ -42,6 +46,21 @@ function sampleReport() {
       contentHash: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       sourceCount: 1,
       sources: [source("frc-frs-105", "FRC FRS 105 current edition and amendments")],
+    },
+    assurancePacket: {
+      packetId: "assurance-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      packetVersion: "production-assurance-packet-v1",
+      status: "review-required",
+      sourceLawSnapshotHash: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      goldenCorpusCovered: 1,
+      goldenCorpusTotal: 1,
+      statutoryRuleMatrixPaths: 1,
+      statutoryRuleCoverageFamilies: 1,
+      visualQaExpectedScreenshots: 24,
+      requiredOperationalGates: 1,
+      openCriticalActions: 1,
+      evidenceItems: ["source-law-snapshot-fingerprint", "golden-filing-corpus", "visual-smoke-screenshots"],
+      releaseBlockers: ["Qualified accountant sign-off required"],
     },
     areas: [
       {
