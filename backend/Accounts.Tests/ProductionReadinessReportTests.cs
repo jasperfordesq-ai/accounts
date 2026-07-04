@@ -132,6 +132,12 @@ public class ProductionReadinessReportTests
             && row.CompanyScope.Contains("DAC", StringComparison.OrdinalIgnoreCase)
             && row.SupportLevel == "supported");
         Assert.Contains(report.StatutoryRuleMatrix, row =>
+            row.Code == "clg-non-charity"
+            && row.CompanyScope.Contains("CLG non-charity", StringComparison.OrdinalIgnoreCase)
+            && row.SupportLevel == "supported"
+            && row.RequiredEvidence.Any(evidence => evidence.Contains("guarantee", StringComparison.OrdinalIgnoreCase))
+            && row.Sources.Any(source => source.SourceId == "cro-guarantee-company"));
+        Assert.Contains(report.StatutoryRuleMatrix, row =>
             row.Code == "clg-charity"
             && row.CompanyScope.Contains("CLG charity", StringComparison.OrdinalIgnoreCase)
             && row.ManualHandoffGates.Any(gate => gate.Contains("charity annual return", StringComparison.OrdinalIgnoreCase)));

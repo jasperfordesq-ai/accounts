@@ -276,6 +276,33 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 IrishStatutoryRuleSources.RevenueIxbrlOverview
             ]),
         new(
+            "clg-non-charity",
+            "CLG non-charity",
+            "Company limited by guarantee / FRS 102",
+            "supported",
+            [
+                "Company limited by guarantee status recorded",
+                "Non-charity status confirmed so charity annual-return evidence is not expected",
+                "Members-guarantee and officers evidence recorded",
+                "Named qualified-accountant review recorded"
+            ],
+            [
+                "Guarantee-company financial statements PDF",
+                "Directors' report evidence",
+                "CRO certification/signature page",
+                "Revenue iXBRL and CT1 support pack where corporation tax filing applies"
+            ],
+            [
+                "Manual handoff if charity status, audit requirement, regulated exclusions or group context are detected",
+                "No direct CRO/ROS submission automation"
+            ],
+            [
+                IrishStatutoryRuleSources.CroGuaranteeCompany,
+                IrishStatutoryRuleSources.CroFinancialStatementsRequirements,
+                IrishStatutoryRuleSources.FrcFrs102,
+                IrishStatutoryRuleSources.RevenueIxbrlOverview
+            ]),
+        new(
             "clg-charity",
             "CLG charity",
             "CLG / charity annual return",
