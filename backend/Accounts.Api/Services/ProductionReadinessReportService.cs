@@ -88,6 +88,15 @@ public sealed record ProductionMonitoringControl(
     string EvidenceCaptured,
     string Verification);
 
+public sealed record DependencyPolicyControl(
+    string Code,
+    string Label,
+    bool Required,
+    string Enforcement,
+    string EvidenceCaptured,
+    string Verification,
+    string FailurePolicy);
+
 public sealed record VisualQaViewport(
     string Name,
     int Width,
@@ -140,6 +149,7 @@ public sealed record ProductionReadinessReport(
     IReadOnlyList<ProductionReadinessAssuranceAction> AssuranceActions,
     IReadOnlyList<ProductionAuditabilityControl> AuditabilityControls,
     IReadOnlyList<ProductionMonitoringControl> MonitoringControls,
+    IReadOnlyList<DependencyPolicyControl> DependencyPolicyControls,
     VisualQaCoverage VisualQaCoverage);
 
 public class ProductionReadinessReportService(AccountsDbContext db)
@@ -158,6 +168,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
         var assuranceActions = BuildAssuranceActions();
         var auditabilityControls = BuildAuditabilityControls();
         var monitoringControls = BuildMonitoringControls();
+        var dependencyPolicyControls = BuildDependencyPolicyControls();
         var visualQaCoverage = BuildVisualQaCoverage();
         var assurancePacket = BuildAssurancePacket(
             sourceSnapshot,
@@ -184,6 +195,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             assuranceActions,
             auditabilityControls,
             monitoringControls,
+            dependencyPolicyControls,
             visualQaCoverage);
     }
 
@@ -225,7 +237,8 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "statutory-rules-matrix",
             "statutory-rules-coverage",
             "visual-smoke-screenshots",
-            "production-operational-gates"
+            "production-operational-gates",
+            "dependency-policy-controls"
         };
         var releaseBlockers = assuranceActions
             .Where(action => action.Status != "complete")
@@ -1037,6 +1050,42 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "Monitoring:IncludeCorrelationId",
             "Unexpected errors return a safe generic response with the ASP.NET trace identifier; server logs carry the same identifier for triage.",
             "ExceptionMiddleware logs ResourceNotFoundException, BusinessRuleException and unhandled exceptions with context.TraceIdentifier and writes correlationId to the JSON error response.")
+    ];
+
+    private static IReadOnlyList<DependencyPolicyControl> BuildDependencyPolicyControls() =>
+    [
+        new(
+            "frontend-npm-audit",
+            "Frontend dependency vulnerability audit",
+            true,
+            "CI frontend job runs npm audit --audit-level=moderate after npm ci.",
+            "npm audit report for dependencies resolved from frontend/package-lock.json, with low-severity advisories tolerated only when they do not affect production build/runtime paths.",
+            ".github/workflows/ci.yml Audit frontend dependencies step plus package-lock.json review in release evidence.",
+            "Fail the release for moderate, high or critical npm advisories; record any accepted low-severity dev-tool advisory with owner and review date."),
+        new(
+            "frontend-lockfile-reproducibility",
+            "Frontend lockfile reproducibility",
+            true,
+            "CI installs with npm ci using frontend/package-lock.json and the Node version pinned by .nvmrc/package engines.",
+            "The package-lock.json resolved dependency graph is the release input for test, lint, build and production smoke images.",
+            ".github/workflows/ci.yml Set up Node cache-dependency-path and Install frontend dependencies steps.",
+            "Fail the release if package.json and package-lock.json drift or if npm ci cannot reproduce the dependency tree."),
+        new(
+            "ci-action-version-hygiene",
+            "CI action version hygiene",
+            true,
+            "Workflow Hygiene job runs node scripts/verify-ci-actions.mjs before backend/frontend/production jobs.",
+            "GitHub Actions used by CI are checked for explicit version hygiene before any production assurance job can pass.",
+            ".github/workflows/ci.yml Workflow Hygiene job blocks downstream jobs through needs dependencies.",
+            "Fail the release if workflow actions are unpinned, downgraded below policy, or bypass the hygiene verifier."),
+        new(
+            "backend-restore-build",
+            "Backend NuGet restore and release build",
+            true,
+            "CI backend job runs dotnet restore, dotnet test --configuration Release and dotnet build --configuration Release.",
+            "NuGet restore, Release test output and Release API build output prove the backend dependency graph resolves and compiles before production images are accepted.",
+            ".github/workflows/ci.yml Backend job and production image build jobs.",
+            "Fail the release if NuGet restore fails, Release tests fail, or the API cannot be built from the restored dependency graph.")
     ];
 
     private static VisualQaCoverage BuildVisualQaCoverage()

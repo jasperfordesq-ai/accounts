@@ -451,6 +451,46 @@ public class ProductionReadinessReportTests
     }
 
     [Fact]
+    public async Task ProductionReadinessReport_DeclaresDependencyPolicyControls()
+    {
+        await using var db = CreateDbContext();
+        var report = await new ProductionReadinessReportService(db).GetReportAsync();
+        var dependencyPolicyProperty = report.GetType().GetProperty("DependencyPolicyControls");
+
+        Assert.NotNull(dependencyPolicyProperty);
+        var controls = Assert.IsAssignableFrom<System.Collections.IEnumerable>(dependencyPolicyProperty!.GetValue(report))
+            .Cast<object>()
+            .ToArray();
+
+        Assert.Contains(controls, control =>
+            StringProperty(control, "Code") == "frontend-npm-audit"
+            && BooleanProperty(control, "Required")
+            && StringProperty(control, "Enforcement").Contains("npm audit --audit-level=moderate", StringComparison.Ordinal)
+            && StringProperty(control, "FailurePolicy").Contains("moderate", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(controls, control =>
+            StringProperty(control, "Code") == "frontend-lockfile-reproducibility"
+            && StringProperty(control, "Enforcement").Contains("npm ci", StringComparison.Ordinal)
+            && StringProperty(control, "EvidenceCaptured").Contains("package-lock.json", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(controls, control =>
+            StringProperty(control, "Code") == "ci-action-version-hygiene"
+            && StringProperty(control, "Enforcement").Contains("verify-ci-actions", StringComparison.Ordinal)
+            && StringProperty(control, "FailurePolicy").Contains("unpinned", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(controls, control =>
+            StringProperty(control, "Code") == "backend-restore-build"
+            && StringProperty(control, "Enforcement").Contains("dotnet restore", StringComparison.Ordinal)
+            && StringProperty(control, "Enforcement").Contains("dotnet build", StringComparison.Ordinal)
+            && StringProperty(control, "EvidenceCaptured").Contains("NuGet", StringComparison.OrdinalIgnoreCase));
+        Assert.All(controls, control =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(control, "Label")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(control, "EvidenceCaptured")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(control, "Verification")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(control, "FailurePolicy")));
+        });
+        Assert.Contains(report.AssurancePacket.EvidenceItems, item => item == "dependency-policy-controls");
+    }
+
+    [Fact]
     public async Task ProductionReadinessReport_IncludesSourceBackedStatutoryRulesMatrix()
     {
         await using var db = CreateDbContext();
