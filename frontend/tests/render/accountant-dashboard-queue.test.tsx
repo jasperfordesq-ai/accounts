@@ -18,14 +18,30 @@ describe("AccountantDashboardQueue", () => {
 
     expect(screen.getByText("Accountant Work Queue")).toBeInTheDocument();
     expect(screen.getByText("Active production work across the firm.")).toBeInTheDocument();
+    expect(screen.getByText("Urgent clients")).toBeInTheDocument();
+    expect(screen.getByText("2 urgent")).toBeInTheDocument();
+    expect(screen.getByText("Due-soon deadlines")).toBeInTheDocument();
+    expect(screen.getByText("1 deadline")).toBeInTheDocument();
+    expect(screen.getByText("Manual handoffs")).toBeInTheDocument();
+    expect(screen.getByText("1 handoff")).toBeInTheDocument();
+    expect(screen.getByText("Unassigned reviewers")).toBeInTheDocument();
+    expect(screen.getByText("2 unassigned")).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Assigned reviewer" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Next action" })).toBeInTheDocument();
+    expect(screen.getAllByRole("row")[1]).toHaveTextContent("Atlantic Public Limited Company");
+    expect(screen.getAllByRole("row")[2]).toHaveTextContent("New Client Limited");
+    expect(screen.getAllByRole("row")[3]).toHaveTextContent("Connacht Visual Limited");
     expect(container.querySelector(".workbench-data-table")).toHaveAttribute("data-responsive", "card");
-    expect(container.querySelector('td[data-label="Company"]')).toHaveTextContent("Connacht Visual Limited");
-    expect(container.querySelector('td[data-label="Deadline"]')).toHaveTextContent("CRO due 10 Jul 2026");
-    expect(container.querySelector('td[data-label="Blockers"]')).toHaveTextContent("No dashboard-level blockers");
-    expect(container.querySelector('td[data-label="Assigned reviewer"]')).toHaveTextContent("Niamh Reviewer");
-    expect(container.querySelector('td[data-label="Next action"]')).toHaveTextContent("Open filing");
+    const companyCells = container.querySelectorAll('td[data-label="Company"]');
+    const deadlineCells = container.querySelectorAll('td[data-label="Deadline"]');
+    const blockerCells = container.querySelectorAll('td[data-label="Blockers"]');
+    const reviewerCells = container.querySelectorAll('td[data-label="Assigned reviewer"]');
+    const actionCells = container.querySelectorAll('td[data-label="Next action"]');
+    expect(companyCells[2]).toHaveTextContent("Connacht Visual Limited");
+    expect(deadlineCells[2]).toHaveTextContent("CRO due 10 Jul 2026");
+    expect(blockerCells[2]).toHaveTextContent("No dashboard-level blockers");
+    expect(reviewerCells[2]).toHaveTextContent("Niamh Reviewer");
+    expect(actionCells[2]).toHaveTextContent("Open filing");
 
     expect(screen.getByText("Connacht Visual Limited")).toBeInTheDocument();
     expect(screen.getByText("CRO due 10 Jul 2026")).toBeInTheDocument();

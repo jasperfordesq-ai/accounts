@@ -2,7 +2,7 @@ import Link from "next/link";
 import { AlertTriangle, ArrowRight, CalendarClock, UserRound } from "lucide-react";
 import type { Company, FilingDeadline } from "@/lib/api";
 import { formatCompanyType, formatDateIE } from "@/lib/format";
-import { DataTable, ReviewPanel, StatusBadge } from "@/components/workbench";
+import { DataTable, MetricStrip, ReviewPanel, StatusBadge } from "@/components/workbench";
 
 interface AccountantDashboardQueueProps {
   companies: Company[];
@@ -32,57 +32,88 @@ export function AccountantDashboardQueue({
   today,
 }: AccountantDashboardQueueProps) {
   const todayDate = parseDate(today) ?? new Date();
-  const rows = companies.map((company) => buildQueueRow(company, deadlines[company.id] ?? null, todayDate));
+  const rows = companies
+    .map((company) => buildQueueRow(company, deadlines[company.id] ?? null, todayDate))
+    .sort(compareQueueRows);
   const urgentCount = rows.filter((row) => row.deadlineTone === "bad" || row.blockerTone === "bad").length;
+  const dueSoonCount = rows.filter((row) => row.deadlineState === "Due soon").length;
+  const manualHandoffCount = rows.filter((row) => row.blockerLabel === "Manual handoff").length;
+  const unassignedReviewerCount = rows.filter((row) => !row.company.assignedReviewerName?.trim()).length;
 
   return (
     <ReviewPanel
       title="Accountant Work Queue"
       description="Active production work across the firm."
-      actions={<StatusBadge tone={urgentCount > 0 ? "bad" : "good"}>{urgentCount} urgent</StatusBadge>}
+      actions={<StatusBadge tone={urgentCount > 0 ? "bad" : "good"}>{urgentCount} urgent total</StatusBadge>}
     >
       {rows.length === 0 ? (
         <div className="rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-4 text-sm text-[var(--muted-foreground)]">
           No companies are currently visible to this user.
         </div>
       ) : (
-        <DataTable
-          columns={["Company", "Deadline", "Blockers", "Assigned reviewer", "Next action"]}
-          rows={rows.map((row) => [
-            <div key="company" className="min-w-56">
-              <div className="font-medium text-[var(--foreground)]">{row.company.legalName}</div>
-              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--muted-foreground)]">
-                <span>{formatCompanyType(row.company.companyType)}</span>
-                {row.company.croNumber && <span>CRO {row.company.croNumber}</span>}
-              </div>
-            </div>,
-            <div key="deadline" className="flex min-w-44 items-start gap-2">
-              <CalendarClock className="mt-0.5 h-4 w-4 shrink-0 text-[var(--muted-foreground)]" />
-              <div>
-                <p className="font-medium text-[var(--foreground)]">{row.deadlineLabel}</p>
-                <div className="mt-1">
-                  <StatusBadge tone={row.deadlineTone}>{row.deadlineState}</StatusBadge>
+        <div className="space-y-4">
+          <MetricStrip
+            metrics={[
+              {
+                label: "Urgent clients",
+                value: formatQueueCount(urgentCount, "urgent", "urgent"),
+                tone: urgentCount > 0 ? "bad" : "good",
+              },
+              {
+                label: "Due-soon deadlines",
+                value: formatQueueCount(dueSoonCount, "deadline", "deadlines"),
+                tone: dueSoonCount > 0 ? "warn" : "good",
+              },
+              {
+                label: "Manual handoffs",
+                value: formatQueueCount(manualHandoffCount, "handoff", "handoffs"),
+                tone: manualHandoffCount > 0 ? "bad" : "good",
+              },
+              {
+                label: "Unassigned reviewers",
+                value: formatQueueCount(unassignedReviewerCount, "unassigned", "unassigned"),
+                tone: unassignedReviewerCount > 0 ? "warn" : "good",
+              },
+            ]}
+          />
+          <DataTable
+            columns={["Company", "Deadline", "Blockers", "Assigned reviewer", "Next action"]}
+            rows={rows.map((row) => [
+              <div key="company" className="min-w-56">
+                <div className="font-medium text-[var(--foreground)]">{row.company.legalName}</div>
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--muted-foreground)]">
+                  <span>{formatCompanyType(row.company.companyType)}</span>
+                  {row.company.croNumber && <span>CRO {row.company.croNumber}</span>}
                 </div>
-              </div>
-            </div>,
-            <div key="blockers" className="flex min-w-56 items-start gap-2">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--muted-foreground)]" />
-              <div>
-                <StatusBadge tone={row.blockerTone}>{row.blockerLabel}</StatusBadge>
-                <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">{row.blockerDetail}</p>
-              </div>
-            </div>,
-            <ReviewerBadge key="reviewer" company={row.company} />,
-            <Link
-              key="action"
-              href={row.nextActionHref}
-              className="inline-flex min-h-8 items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] px-3 text-xs font-semibold text-[var(--foreground)] hover:border-[var(--ring)]"
-            >
-              {row.nextActionLabel}
-              <ArrowRight className="h-3.5 w-3.5" />
-            </Link>,
-          ])}
-        />
+              </div>,
+              <div key="deadline" className="flex min-w-44 items-start gap-2">
+                <CalendarClock className="mt-0.5 h-4 w-4 shrink-0 text-[var(--muted-foreground)]" />
+                <div>
+                  <p className="font-medium text-[var(--foreground)]">{row.deadlineLabel}</p>
+                  <div className="mt-1">
+                    <StatusBadge tone={row.deadlineTone}>{row.deadlineState}</StatusBadge>
+                  </div>
+                </div>
+              </div>,
+              <div key="blockers" className="flex min-w-56 items-start gap-2">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--muted-foreground)]" />
+                <div>
+                  <StatusBadge tone={row.blockerTone}>{row.blockerLabel}</StatusBadge>
+                  <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">{row.blockerDetail}</p>
+                </div>
+              </div>,
+              <ReviewerBadge key="reviewer" company={row.company} />,
+              <Link
+                key="action"
+                href={row.nextActionHref}
+                className="inline-flex min-h-8 items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] px-3 text-xs font-semibold text-[var(--foreground)] hover:border-[var(--ring)]"
+              >
+                {row.nextActionLabel}
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>,
+            ])}
+          />
+        </div>
       )}
     </ReviewPanel>
   );
@@ -177,6 +208,31 @@ function buildQueueRow(company: Company, deadline: FilingDeadline | null, today:
     nextActionLabel: hasDeadlinePressure ? "Open filing" : "Continue workbench",
     nextActionHref: `/companies/${company.id}/periods/${period.id}`,
   };
+}
+
+function compareQueueRows(a: QueueRow, b: QueueRow) {
+  const priorityDiff = queuePriority(a) - queuePriority(b);
+  if (priorityDiff !== 0) return priorityDiff;
+
+  const dateDiff = deadlineSortValue(a) - deadlineSortValue(b);
+  if (dateDiff !== 0) return dateDiff;
+
+  return a.company.legalName.localeCompare(b.company.legalName);
+}
+
+function queuePriority(row: QueueRow) {
+  if (row.blockerTone === "bad" || row.deadlineTone === "bad") return 0;
+  if (row.deadlineState === "Due soon" || row.blockerTone === "warn" || row.deadlineTone === "warn") return 1;
+  if (row.blockerTone === "good" && row.deadlineTone === "good") return 2;
+  return 3;
+}
+
+function deadlineSortValue(row: QueueRow) {
+  return parseDate(row.deadline?.dueDate)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+}
+
+function formatQueueCount(count: number, singular: string, plural: string) {
+  return `${count} ${count === 1 ? singular : plural}`;
 }
 
 function latestPeriod(company: Company) {
