@@ -234,13 +234,42 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 "Named qualified-accountant review recorded"
             ],
             [
-                "Small or abridged financial statements PDF",
+                "Abridged small-company financial statements PDF",
                 "Required statutory statements and notes",
                 "CRO certification/signature page",
                 "Revenue iXBRL and CT1 support pack"
             ],
             [
                 "Fail closed if audit exemption is lost, member audit notice applies, or abridgement is not available",
+                "External ROS/iXBRL validation remains a manual evidence gate"
+            ],
+            [
+                IrishStatutoryRuleSources.CroFinancialStatementsRequirements,
+                IrishStatutoryRuleSources.FrcFrs102,
+                IrishStatutoryRuleSources.RevenueIxbrlContents,
+                IrishStatutoryRuleSources.RevenueAcceptedTaxonomies
+            ]),
+        new(
+            "ltd-small-full",
+            "LTD small full accounts",
+            "Small / FRS 102",
+            "supported",
+            [
+                "Small size classification completed under two-of-three rules",
+                "Audit exemption confirmed or audit report evidence recorded if exemption is unavailable",
+                "Abridgement not elected or not available for this filing package",
+                "Director and secretary evidence recorded",
+                "Named qualified-accountant review recorded"
+            ],
+            [
+                "Full small-company financial statements PDF",
+                "Profit and loss account where required for the selected filing package",
+                "Required statutory statements and notes",
+                "CRO certification/signature page",
+                "Revenue iXBRL and CT1 support pack"
+            ],
+            [
+                "Manual handoff if audit exemption is lost, member audit notice applies, or abridgement/accountant judgement changes the filing path",
                 "External ROS/iXBRL validation remains a manual evidence gate"
             ],
             [

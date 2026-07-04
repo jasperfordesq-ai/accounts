@@ -128,6 +128,13 @@ public class ProductionReadinessReportTests
             row.Code == "ltd-small-abridged"
             && row.RequiredOutputs.Any(output => output.Contains("abridged", StringComparison.OrdinalIgnoreCase)));
         Assert.Contains(report.StatutoryRuleMatrix, row =>
+            row.Code == "ltd-small-full"
+            && row.CompanyScope.Contains("LTD", StringComparison.OrdinalIgnoreCase)
+            && row.SizeOrRegime.Contains("Small", StringComparison.OrdinalIgnoreCase)
+            && !row.SizeOrRegime.Contains("abridged", StringComparison.OrdinalIgnoreCase)
+            && row.RequiredOutputs.Any(output => output.Contains("full small-company financial statements", StringComparison.OrdinalIgnoreCase))
+            && row.ManualHandoffGates.Any(gate => gate.Contains("abridgement", StringComparison.OrdinalIgnoreCase)));
+        Assert.Contains(report.StatutoryRuleMatrix, row =>
             row.Code == "dac-small"
             && row.CompanyScope.Contains("DAC", StringComparison.OrdinalIgnoreCase)
             && row.SupportLevel == "supported");
