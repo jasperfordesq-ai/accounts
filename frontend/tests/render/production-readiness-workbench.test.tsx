@@ -76,6 +76,10 @@ describe("ProductionReadinessWorkbench", () => {
     expect(screen.getByText("Correlation id error responses")).toBeInTheDocument();
     expect(screen.getByText("Sentry-compatible")).toBeInTheDocument();
     expect(screen.getByText("Monitoring:ErrorTrackingDsn")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Dependency policy controls" })).toBeInTheDocument();
+    expect(screen.getByText("Frontend dependency vulnerability audit")).toBeInTheDocument();
+    expect(screen.getByText("CI action version hygiene")).toBeInTheDocument();
+    expect(screen.getByText("Fail the release for moderate, high or critical npm advisories.")).toBeInTheDocument();
     expect(screen.getByText("sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")).toBeInTheDocument();
     expect(screen.getByText("1 pinned source")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Production assurance packet" })).toBeInTheDocument();
@@ -282,6 +286,26 @@ function sampleReport(): ProductionReadinessReport {
         productionSafetyGate: "Monitoring:IncludeCorrelationId",
         evidenceCaptured: "Safe client errors include a correlation id that maps to the server exception log.",
         verification: "ExceptionMiddleware logs unhandled errors and returns the trace identifier.",
+      },
+    ],
+    dependencyPolicyControls: [
+      {
+        code: "frontend-npm-audit",
+        label: "Frontend dependency vulnerability audit",
+        required: true,
+        enforcement: "CI frontend job runs npm audit --audit-level=moderate after npm ci.",
+        evidenceCaptured: "npm audit report for dependencies resolved from frontend/package-lock.json.",
+        verification: ".github/workflows/ci.yml Audit frontend dependencies step.",
+        failurePolicy: "Fail the release for moderate, high or critical npm advisories.",
+      },
+      {
+        code: "ci-action-version-hygiene",
+        label: "CI action version hygiene",
+        required: true,
+        enforcement: "Workflow Hygiene job runs node scripts/verify-ci-actions.mjs before downstream jobs.",
+        evidenceCaptured: "GitHub Actions used by CI are checked for explicit version hygiene.",
+        verification: ".github/workflows/ci.yml Workflow Hygiene job.",
+        failurePolicy: "Fail the release if workflow actions are unpinned or bypass the hygiene verifier.",
       },
     ],
     statutoryRuleMatrix: [

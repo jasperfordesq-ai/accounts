@@ -204,6 +204,17 @@ function sampleReport(): ProductionReadinessReport {
         verification: "Program.cs wires UseSentry and ProductionSafetyService blocks a missing DSN.",
       },
     ],
+    dependencyPolicyControls: [
+      {
+        code: "frontend-npm-audit",
+        label: "Frontend dependency vulnerability audit",
+        required: true,
+        enforcement: "CI frontend job runs npm audit --audit-level=moderate after npm ci.",
+        evidenceCaptured: "npm audit report for dependencies resolved from frontend/package-lock.json.",
+        verification: ".github/workflows/ci.yml Audit frontend dependencies step.",
+        failurePolicy: "Fail the release for moderate, high or critical npm advisories.",
+      },
+    ],
     visualQaCoverage: {
       artifactName: "visual-smoke-screenshots",
       enforcement: "ci-production-smoke",

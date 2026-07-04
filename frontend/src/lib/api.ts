@@ -1634,6 +1634,16 @@ export interface ProductionMonitoringControl {
   verification: string;
 }
 
+export interface DependencyPolicyControl {
+  code: string;
+  label: string;
+  required: boolean;
+  enforcement: string;
+  evidenceCaptured: string;
+  verification: string;
+  failurePolicy: string;
+}
+
 export interface VisualQaViewport {
   name: string;
   width: number;
@@ -1690,6 +1700,7 @@ export interface ProductionReadinessReport {
   assuranceActions: ProductionReadinessAssuranceAction[];
   auditabilityControls: ProductionAuditabilityControl[];
   monitoringControls: ProductionMonitoringControl[];
+  dependencyPolicyControls: DependencyPolicyControl[];
   visualQaCoverage: VisualQaCoverage;
 }
 
@@ -1814,6 +1825,16 @@ const productionMonitoringControlSchema = z.object({
   verification: z.string().min(1),
 });
 
+const dependencyPolicyControlSchema = z.object({
+  code: z.string().min(1),
+  label: z.string().min(1),
+  required: z.boolean(),
+  enforcement: z.string().min(1),
+  evidenceCaptured: z.string().min(1),
+  verification: z.string().min(1),
+  failurePolicy: z.string().min(1),
+});
+
 const visualQaViewportSchema = z.object({
   name: z.string().min(1),
   width: z.number(),
@@ -1854,6 +1875,7 @@ export const productionReadinessReportSchema = z.object({
   assuranceActions: z.array(productionReadinessAssuranceActionSchema),
   auditabilityControls: z.array(productionAuditabilityControlSchema),
   monitoringControls: z.array(productionMonitoringControlSchema),
+  dependencyPolicyControls: z.array(dependencyPolicyControlSchema),
   visualQaCoverage: visualQaCoverageSchema,
 });
 

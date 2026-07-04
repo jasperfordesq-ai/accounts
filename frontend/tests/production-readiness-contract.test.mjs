@@ -18,6 +18,8 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.equal(parsed.statutoryRulesCoverage[0].edgeCases[0], "two-of-three threshold rule");
   assert.equal(parsed.monitoringControls[0].code, "error-tracking");
   assert.equal(parsed.monitoringControls[0].productionSafetyGate, "Monitoring:ErrorTrackingDsn");
+  assert.equal(parsed.dependencyPolicyControls[0].code, "frontend-npm-audit");
+  assert.equal(parsed.dependencyPolicyControls[0].failurePolicy, "Fail the release for moderate, high or critical npm advisories.");
   assert.equal(parsed.assurancePacket.packetVersion, "production-assurance-packet-v1");
   assert.equal(parsed.assurancePacket.sourceLawSnapshotHash, "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
   assert.equal(parsed.assurancePacket.goldenCorpusCovered, 1);
@@ -159,6 +161,17 @@ function sampleReport() {
         productionSafetyGate: "Monitoring:ErrorTrackingDsn",
         evidenceCaptured: "Unhandled exceptions are routed to the configured production error-tracking provider.",
         verification: "Program.cs wires UseSentry and ProductionSafetyService blocks a missing DSN.",
+      },
+    ],
+    dependencyPolicyControls: [
+      {
+        code: "frontend-npm-audit",
+        label: "Frontend dependency vulnerability audit",
+        required: true,
+        enforcement: "CI frontend job runs npm audit --audit-level=moderate after npm ci.",
+        evidenceCaptured: "npm audit report for dependencies resolved from frontend/package-lock.json.",
+        verification: ".github/workflows/ci.yml Audit frontend dependencies step.",
+        failurePolicy: "Fail the release for moderate, high or critical npm advisories.",
       },
     ],
     visualQaCoverage: {

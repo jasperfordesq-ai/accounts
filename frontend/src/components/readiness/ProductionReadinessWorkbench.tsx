@@ -23,6 +23,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
   const statutoryRulesCoverage = report.statutoryRulesCoverage ?? [];
   const auditabilityControls = report.auditabilityControls ?? [];
   const monitoringControls = report.monitoringControls ?? [];
+  const dependencyPolicyControls = report.dependencyPolicyControls ?? [];
   const visualQaCoverage = report.visualQaCoverage;
   const assurancePacket = report.assurancePacket;
   const hardenedAreas = report.areas.filter((area) => area.status === "hardened").length;
@@ -221,6 +222,40 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
               <StatusBadge key="status" tone={control.required ? "good" : "warn"}>
                 {control.required ? "Required" : "Advisory"}
               </StatusBadge>,
+            ],
+          }))}
+        />
+      </ReviewPanel>
+
+      <ReviewPanel
+        title="Dependency policy controls"
+        description="Release controls proving frontend, backend and CI dependency hygiene is reproducible, audited, and fails closed before production use."
+        actions={<StatusBadge tone={dependencyPolicyControls.every((control) => control.required) ? "good" : "warn"}>{dependencyPolicyControls.length} controls</StatusBadge>}
+      >
+        <DataTable
+          caption="Dependency policy controls"
+          filterPlaceholder="Filter dependency controls"
+          emptyState="No matching dependency controls"
+          columns={["Control", "Enforcement", "Evidence captured", "Verification", "Failure policy"]}
+          rows={dependencyPolicyControls.map((control) => ({
+            id: control.code,
+            tone: control.required ? "good" : "warn",
+            searchText: [
+              control.label,
+              control.enforcement,
+              control.evidenceCaptured,
+              control.verification,
+              control.failurePolicy,
+            ].join(" "),
+            cells: [
+              <div key="control" className="min-w-48 whitespace-normal">
+                <p className="font-medium">{control.label}</p>
+                <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">{control.required ? "Required release control" : "Advisory release control"}</p>
+              </div>,
+              <span key="enforcement" className="whitespace-normal text-[var(--muted-foreground)]">{control.enforcement}</span>,
+              <span key="evidence" className="whitespace-normal text-[var(--muted-foreground)]">{control.evidenceCaptured}</span>,
+              <span key="verification" className="whitespace-normal text-[var(--muted-foreground)]">{control.verification}</span>,
+              <span key="failure-policy" className="whitespace-normal text-[var(--muted-foreground)]">{control.failurePolicy}</span>,
             ],
           }))}
         />
