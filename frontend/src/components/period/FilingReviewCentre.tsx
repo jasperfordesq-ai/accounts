@@ -603,17 +603,26 @@ function CroWorkflowActions({
   onRecordCroSendBack: FilingReviewAction;
 }) {
   if (["NotStarted", "InProgress", "PackageGenerated"].includes(filingStatus.cro.status)) {
+    const disabledReason = approvalDisabledReason(filingStatus, filingReadinessProfile);
+
     return (
-      <Button
-        variant="primary"
-        size="sm"
-        isDisabled={!filingStatus.readyToFile || filingReadinessProfile?.manualProfessionalReviewRequired === true}
-        onPress={() => {
-          void onApproveForFiling();
-        }}
-      >
-        <CheckCircle2 className="w-4 h-4 mr-1" /> Approve for Filing
-      </Button>
+      <div className="flex min-w-0 flex-col gap-2">
+        <Button
+          variant="primary"
+          size="sm"
+          isDisabled={disabledReason !== null}
+          onPress={() => {
+            void onApproveForFiling();
+          }}
+        >
+          <CheckCircle2 className="w-4 h-4 mr-1" /> Approve for Filing
+        </Button>
+        {disabledReason && (
+          <p className="max-w-xl text-xs leading-5 text-[var(--muted-foreground)]">
+            {disabledReason}
+          </p>
+        )}
+      </div>
     );
   }
 
@@ -681,6 +690,21 @@ function CroWorkflowActions({
         Correction due {filingStatus.cro.correctionDeadline ? new Date(filingStatus.cro.correctionDeadline).toLocaleDateString("en-IE") : "within 14 days"}
       </Chip>
     );
+  }
+
+  return null;
+}
+
+function approvalDisabledReason(
+  filingStatus: FilingWorkflowStatus,
+  filingReadinessProfile: FilingReadinessProfile | null,
+) {
+  if (filingReadinessProfile?.manualProfessionalReviewRequired === true) {
+    return "Approval is disabled while manual professional handoff is required.";
+  }
+
+  if (!filingStatus.readyToFile) {
+    return "Approval is disabled until filing readiness blockers are resolved.";
   }
 
   return null;

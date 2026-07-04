@@ -90,6 +90,7 @@ describe("FilingReviewCentre", () => {
       "href",
       "https://cro.ie/annual-return/financial-statements-requirements/",
     );
+    expect(screen.getByText("Approval is disabled while manual professional handoff is required.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Approve for Filing/i })).toBeDisabled();
   });
 
