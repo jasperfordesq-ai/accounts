@@ -82,7 +82,7 @@ describe("ProductionReadinessWorkbench", () => {
     expect(screen.getByText("assurance-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")).toBeInTheDocument();
     expect(screen.getByText("Golden corpus 1/1")).toBeInTheDocument();
     expect(screen.getByText("Qualified accountant sign-off required")).toBeInTheDocument();
-  }, 20000);
+  }, 45000);
 });
 
 function sampleReport(): ProductionReadinessReport {

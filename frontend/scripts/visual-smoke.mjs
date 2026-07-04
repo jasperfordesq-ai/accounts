@@ -104,6 +104,11 @@ async function optionalFirstHref(page, selector) {
   });
 }
 
+function companyHrefFromPeriodHref(href) {
+  const match = href?.match(/^\/companies\/([^/]+)\/periods\/[^/]+/);
+  return match ? `/companies/${match[1]}` : null;
+}
+
 async function apiJson(page, pathName, { method = "GET", body } = {}) {
   return page.evaluate(async ({ requestPath, requestMethod, requestBody }) => {
     const headers = new Headers({ "Content-Type": "application/json" });
@@ -202,7 +207,11 @@ async function discoverRoutes(page, baseUrl) {
     page,
     'a[href^="/companies/"]:not([href="/companies/new"]):not([href*="/periods/"])',
   );
-  let periodHref = null;
+  let periodHref = await optionalFirstHref(page, 'a[href^="/companies/"][href*="/periods/"]');
+
+  if (!companyHref && periodHref) {
+    companyHref = companyHrefFromPeriodHref(periodHref);
+  }
 
   if (!companyHref) {
     const smokeCompany = await createSmokeCompany(page);

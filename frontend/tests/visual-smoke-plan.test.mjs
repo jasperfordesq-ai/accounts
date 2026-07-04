@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
 import {
   VISUAL_SMOKE_ARTIFACT_NAME,
@@ -46,6 +47,17 @@ describe("visual smoke plan", () => {
     assert.equal(
       visualSmokeRoutes.find((route) => route.name === "workbench-preview")?.expectedText,
       "Workbench Component Preview",
+    );
+  });
+
+  it("discovers dashboard period workspace links before creating fallback smoke data", async () => {
+    const script = await readFile(new URL("../scripts/visual-smoke.mjs", import.meta.url), "utf8");
+
+    assert.match(script, /function companyHrefFromPeriodHref/);
+    assert.match(script, /a\[href\^="\/companies\/"\]\[href\*="\/periods\/"\]/);
+    assert.ok(
+      script.indexOf("companyHrefFromPeriodHref") < script.indexOf("createSmokeCompany(page)"),
+      "existing dashboard period links must be resolved before fallback smoke company creation",
     );
   });
 });
