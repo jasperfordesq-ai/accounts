@@ -88,7 +88,16 @@ describe("ProductionReadinessWorkbench", () => {
     expect(screen.getByRole("heading", { name: "Production assurance packet" })).toBeInTheDocument();
     expect(screen.getByText("assurance-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")).toBeInTheDocument();
     expect(screen.getByText("Golden corpus 1/1")).toBeInTheDocument();
-    expect(screen.getByText("Qualified accountant sign-off required")).toBeInTheDocument();
+    expect(screen.getAllByText("Qualified accountant sign-off required").length).toBeGreaterThan(1);
+    expect(screen.getByRole("heading", { name: "Release decision summary" })).toBeInTheDocument();
+    expect(screen.getByText("Do not use for real filings")).toBeInTheDocument();
+    expect(screen.getByText("1 critical blocker")).toBeInTheDocument();
+    expect(screen.getByText("Golden corpus covered")).toBeInTheDocument();
+    expect(screen.getByText("1 of 1 scenarios")).toBeInTheDocument();
+    expect(screen.getByText("Visual QA evidence")).toBeInTheDocument();
+    expect(screen.getByText("24 required screenshots")).toBeInTheDocument();
+    expect(screen.getByText("Accountant acceptance")).toBeInTheDocument();
+    expect(screen.getByText("2 scenarios require sign-off")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Accountant acceptance criteria" })).toBeInTheDocument();
     expect(screen.getByText("Micro LTD accountant acceptance")).toBeInTheDocument();
     expect(screen.getByText("Medium handoff accountant acceptance")).toBeInTheDocument();

@@ -33,6 +33,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
   const enforcedGates = report.operationalGates.filter((gate) => gate.status === "enforced").length;
   const completedAssuranceActions = assuranceActions.filter((action) => action.status === "complete").length;
   const statusTone = report.overallStatus === "ready" ? "good" : "warn";
+  const releaseReady = report.overallStatus === "ready" && assurancePacket.openCriticalActions === 0;
 
   return (
     <WorkbenchShell>
@@ -55,6 +56,43 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
           { label: "Assurance actions", value: `${completedAssuranceActions}/${assuranceActions.length}`, tone: completedAssuranceActions === assuranceActions.length ? "good" : "warn" },
         ]}
       />
+
+      <ReviewPanel
+        title="Release decision summary"
+        description="The top-line release call before a reviewer drills into source law, golden scenarios, visual evidence and operational controls."
+        actions={
+          <StatusBadge tone={releaseReady ? "good" : "bad"}>
+            {releaseReady ? "Ready for controlled release" : "Do not use for real filings"}
+          </StatusBadge>
+        }
+      >
+        <div className="grid overflow-hidden rounded-md border border-[var(--border)] bg-[var(--surface)] md:grid-cols-4 md:divide-x divide-y md:divide-y-0 divide-[var(--border)]">
+          <DecisionSummaryItem
+            label="Critical blockers"
+            value={`${assurancePacket.openCriticalActions} critical ${assurancePacket.openCriticalActions === 1 ? "blocker" : "blockers"}`}
+            detail={assurancePacket.releaseBlockers[0] ?? "No release blockers reported."}
+            tone={assurancePacket.openCriticalActions === 0 ? "good" : "bad"}
+          />
+          <DecisionSummaryItem
+            label="Golden corpus covered"
+            value={`${assurancePacket.goldenCorpusCovered} of ${assurancePacket.goldenCorpusTotal} scenarios`}
+            detail="Backend output evidence for PDF text, iXBRL, tax, notes, readiness and filing gates."
+            tone={assurancePacket.goldenCorpusCovered === assurancePacket.goldenCorpusTotal ? "good" : "warn"}
+          />
+          <DecisionSummaryItem
+            label="Visual QA evidence"
+            value={`${assurancePacket.visualQaExpectedScreenshots} required screenshots`}
+            detail="Light and dark desktop/mobile screenshots for the accountant workflow routes."
+            tone="info"
+          />
+          <DecisionSummaryItem
+            label="Accountant acceptance"
+            value={`${accountantAcceptanceCriteria.length} scenarios require sign-off`}
+            detail="Named qualified-accountant acceptance remains the controlling production gate."
+            tone="warn"
+          />
+        </div>
+      </ReviewPanel>
 
       <ReviewPanel
         title="Production assurance packet"
@@ -637,6 +675,29 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
         </ReviewPanel>
       </div>
     </WorkbenchShell>
+  );
+}
+
+function DecisionSummaryItem({
+  label,
+  value,
+  detail,
+  tone,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+  tone: "good" | "warn" | "bad" | "info" | "default";
+}) {
+  return (
+    <div className="min-w-0 p-4">
+      <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">{label}</p>
+      <p className="mt-2 text-sm font-semibold text-[var(--foreground)]">{value}</p>
+      <div className="mt-3">
+        <StatusBadge tone={tone}>{tone === "good" ? "Clear" : tone === "bad" ? "Blocked" : tone === "info" ? "Evidenced" : "Required"}</StatusBadge>
+      </div>
+      <p className="mt-3 text-xs leading-5 text-[var(--muted-foreground)]">{detail}</p>
+    </div>
   );
 }
 
