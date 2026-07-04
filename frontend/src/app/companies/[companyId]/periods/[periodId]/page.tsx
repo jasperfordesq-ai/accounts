@@ -100,6 +100,7 @@ import { FilingDeadlinesPanel } from "@/components/period/FilingDeadlinesPanel";
 import { PeriodAuditTrailPanel } from "@/components/period/PeriodAuditTrailPanel";
 import { FilingOutputsPanel } from "@/components/period/FilingOutputsPanel";
 import { StatutoryWarningsPanel } from "@/components/period/StatutoryWarningsPanel";
+import { StatementsReadinessPanel } from "@/components/period/StatementsReadinessPanel";
 import { formatPeriodRange } from "@/lib/format";
 
 function formatCurrency(amount: number): string {
@@ -1815,78 +1816,7 @@ export default function PeriodWorkspacePage({
         {/* Statements Tab */}
         <TabPanel id="statements">
           <div className="space-y-6">
-            <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
-              <Card.Header>
-                <Card.Title className="text-gray-900 dark:text-gray-100">Filing Readiness</Card.Title>
-                <Card.Description>Assessment of whether the accounts are ready for filing</Card.Description>
-              </Card.Header>
-              <Card.Content>
-                {readiness ? (
-                  <div className="space-y-6">
-                    <div className="grid grid-cols-2 gap-6">
-                      <div>
-                        <div className="flex items-center justify-between text-sm mb-2">
-                          <span className="text-gray-600 dark:text-gray-400">Completeness</span>
-                          <span className="font-medium text-gray-900 dark:text-gray-100">{readiness.completenessPercent}%</span>
-                        </div>
-                        <ProgressBar value={readiness.completenessPercent} minValue={0} maxValue={100} aria-label="Completeness" color={readiness.completenessPercent >= 80 ? "success" : "warning"}>
-                          <ProgressBarTrack><ProgressBarFill /></ProgressBarTrack>
-                        </ProgressBar>
-                      </div>
-                      <div>
-                        <div className="flex items-center justify-between text-sm mb-2">
-                          <span className="text-gray-600 dark:text-gray-400">Filing Readiness</span>
-                          <span className="font-medium text-gray-900 dark:text-gray-100">{readiness.filingReadinessPercent}%</span>
-                        </div>
-                        <ProgressBar value={readiness.filingReadinessPercent} minValue={0} maxValue={100} aria-label="Filing readiness" color={readiness.filingReadinessPercent >= 80 ? "success" : "warning"}>
-                          <ProgressBarTrack><ProgressBarFill /></ProgressBarTrack>
-                        </ProgressBar>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 text-sm">
-                      {readiness.balanceSheetBalances ? (
-                        <><CheckCircle2 className="w-5 h-5 text-emerald-600" /><span className="text-emerald-700 dark:text-emerald-400 font-medium">Balance sheet balances</span></>
-                      ) : (
-                        <><AlertTriangle className="w-5 h-5 text-amber-500" /><span className="text-amber-700 dark:text-amber-400 font-medium">Balance sheet does not balance</span></>
-                      )}
-                    </div>
-
-                    {readiness.missingItems.length > 0 && (
-                      <div>
-                        <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Missing Items</h4>
-                        <ul className="space-y-1.5">
-                          {readiness.missingItems.map((item, i) => (
-                            <li key={i} className="flex items-start gap-2 text-sm text-red-700 dark:text-red-400">
-                              <span className="w-1.5 h-1.5 rounded-full bg-red-400 mt-1.5 shrink-0" />{item}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-
-                    {readiness.warnings.length > 0 && (
-                      <div>
-                        <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Warnings</h4>
-                        <ul className="space-y-1.5">
-                          {readiness.warnings.map((warning, i) => (
-                            <li key={i} className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-400">
-                              <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />{warning}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <FileText className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Readiness data is not available yet.</p>
-                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Complete the year-end process and generate adjustments first.</p>
-                  </div>
-                )}
-              </Card.Content>
-            </Card>
+            <StatementsReadinessPanel readiness={readiness} />
 
             <Card className="shadow-sm border border-blue-200 dark:border-blue-800 bg-blue-50/30 dark:bg-blue-900/10">
               <Card.Content className="p-4">
