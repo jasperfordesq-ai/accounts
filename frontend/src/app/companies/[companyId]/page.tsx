@@ -20,6 +20,7 @@ import { CompanyStatutoryProfile } from "@/components/company/CompanyStatutoryPr
 import { CompanyOfficersPanel } from "@/components/company/CompanyOfficersPanel";
 import { CompanyCharityInfoPanel } from "@/components/company/CompanyCharityInfoPanel";
 import { CompanyIdentityEditPanel, type CompanyEditFormValues } from "@/components/company/CompanyIdentityEditPanel";
+import { CompanyWorkspaceOverview } from "@/components/company/CompanyWorkspaceOverview";
 
 export default function CompanyDetailPage({ params }: { params: Promise<{ companyId: string }> }) {
   const { companyId: id } = use(params);
@@ -307,6 +308,8 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ compan
           />
         </div>
       )}
+
+      <CompanyWorkspaceOverview company={company} />
 
       <div className="mb-8">
         <CompanyStatutoryProfile company={company} />
