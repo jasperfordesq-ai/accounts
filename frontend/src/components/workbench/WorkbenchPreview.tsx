@@ -10,6 +10,7 @@ import {
   MoneyField,
   MoneyInput,
   PermissionDeniedPanel,
+  ReadOnlyNotice,
   ReviewPanel,
   SectionHeader,
   StatusBadge,
@@ -195,6 +196,7 @@ export function WorkbenchPreview() {
               description="Generate the accounts PDF and iXBRL file before review."
             />
             <PermissionDeniedPanel />
+            <ReadOnlyNotice subject="year-end working papers" />
           </div>
         </ReviewPanel>
       </section>

@@ -95,6 +95,12 @@ export interface PermissionDeniedPanelProps {
   actions?: ReactNode;
 }
 
+export interface ReadOnlyNoticeProps {
+  subject: string;
+  detail?: ReactNode;
+  className?: string;
+}
+
 export interface MoneyInputProps {
   label: string;
   value: number;
@@ -278,6 +284,28 @@ export function PermissionDeniedPanel({
       icon={<LockKeyhole className="h-5 w-5" />}
       actions={actions}
     />
+  );
+}
+
+export function ReadOnlyNotice({
+  subject,
+  detail = "Evidence remains visible; editing requires Owner or Accountant access.",
+  className = "",
+}: ReadOnlyNoticeProps) {
+  return (
+    <div
+      role="status"
+      aria-label="Read-only workflow access"
+      className={`flex items-start gap-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-100 ${className}`}
+    >
+      <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-300" />
+      <div className="min-w-0">
+        <p className="text-xs font-semibold">Read-only workflow access</p>
+        <p className="mt-0.5 text-xs leading-5">
+          Your role has read-only access to {subject}. {detail}
+        </p>
+      </div>
+    </div>
   );
 }
 

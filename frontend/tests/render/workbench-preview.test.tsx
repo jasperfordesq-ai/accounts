@@ -16,6 +16,8 @@ describe("WorkbenchPreview", () => {
     expect(screen.getByRole("heading", { name: "Accounting inputs" })).toBeInTheDocument();
     expect(screen.getByLabelText("Balance outstanding")).toHaveAttribute("data-money-input", "true");
     expect(screen.getByText("Permission denied")).toBeInTheDocument();
+    expect(screen.getByText("Read-only workflow access")).toBeInTheDocument();
+    expect(screen.getByText(/Evidence remains visible; editing requires Owner or Accountant access/i)).toBeInTheDocument();
     expect(screen.getByText("Filing action bar")).toBeInTheDocument();
     expect(screen.getByText("EUR 125,000")).toBeInTheDocument();
   });

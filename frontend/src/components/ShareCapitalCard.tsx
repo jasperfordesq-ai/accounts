@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import {
   getShareCapital, createShareCapital, updateShareCapital, deleteShareCapital, type ShareCapital,
 } from "@/lib/api";
-import { MoneyInput } from "@/components/workbench";
+import { MoneyInput, ReadOnlyNotice } from "@/components/workbench";
 
 const inputClass =
   "w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors";
@@ -189,9 +189,7 @@ export function ShareCapitalCard({
             )}
 
             {!canWrite ? (
-              <p className="text-xs text-gray-400 dark:text-gray-500 italic">
-                Your role has read-only access to share capital.
-              </p>
+              <ReadOnlyNotice subject="share capital" />
             ) : (
             <>
             <div className="grid grid-cols-12 gap-3 items-end">
