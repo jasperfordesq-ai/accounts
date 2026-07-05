@@ -15,4 +15,13 @@ describe("workbench responsive table CSS", () => {
     assert.match(css, /\.workbench-data-table tfoot td::before/);
     assert.match(css, /min-width:\s*0/);
   });
+
+  it("keeps the filing action bar in normal flow on mobile to avoid sticky text overlap", async () => {
+    const source = await readFile(new URL("../src/components/workbench.tsx", import.meta.url), "utf8");
+    const match = source.match(/function FilingActionBar[\s\S]*?className="([^"]+)"/);
+
+    assert.ok(match, "FilingActionBar should render a className that can be inspected.");
+    assert.match(match[1], /\bsm:sticky\b/);
+    assert.doesNotMatch(match[1], /(^|\s)sticky(\s|$)/);
+  });
 });
