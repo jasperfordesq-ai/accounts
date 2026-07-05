@@ -386,12 +386,14 @@ function sampleReport(): ProductionReadinessReport {
       manifestFileName: "visual-smoke-manifest.json",
       expectedScreenshotCount: 24,
       layoutChecks: ["browser-console-errors", "page-horizontal-overflow", "visible-text-overlap"],
+      reviewChecks: visualQaReviewChecks(),
       themes: ["light", "dark"],
       viewports: [
         { name: "desktop", width: 1440, height: 1000 },
         { name: "mobile", width: 390, height: 844 },
       ],
       routes: visualQaRoutes(),
+      routeAudits: visualQaRouteAudits(),
       artifacts: visualQaArtifacts(),
     },
   };
@@ -399,6 +401,10 @@ function sampleReport(): ProductionReadinessReport {
 
 function accountantWorkflowStages() {
   return ["Setup", "Import", "Classify", "Year-End", "Statements", "Notes", "Review", "Filing"];
+}
+
+function visualQaReviewChecks() {
+  return ["accountant-workflow-hierarchy", "table-scanability", "theme-contrast", "mobile-density", "loading-error-empty-states"];
 }
 
 function visualQaRoutes(): ProductionReadinessReport["visualQaCoverage"]["routes"] {
@@ -481,4 +487,16 @@ function visualQaArtifacts(): ProductionReadinessReport["visualQaCoverage"]["art
       }),
     ),
   );
+}
+
+function visualQaRouteAudits(): ProductionReadinessReport["visualQaCoverage"]["routeAudits"] {
+  return visualQaRoutes().map((route) => ({
+    routeCode: route.code,
+    routeKey: route.routeKey,
+    label: route.label,
+    workflowStages: route.workflowStages,
+    screenshotCount: 4,
+    reviewStatus: "required-review",
+    reviewChecks: visualQaReviewChecks(),
+  }));
 }

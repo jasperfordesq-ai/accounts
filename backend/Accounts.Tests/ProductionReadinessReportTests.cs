@@ -1079,7 +1079,9 @@ public class ProductionReadinessReportTests
         Assert.Equal("visual-smoke-manifest.json", StringProperty(report.VisualQaCoverage, "ManifestFileName"));
         Assert.Equal(24, report.VisualQaCoverage.ExpectedScreenshotCount);
         var artifacts = ObjectListProperty(report.VisualQaCoverage, "Artifacts");
+        var routeAudits = ObjectListProperty(report.VisualQaCoverage, "RouteAudits");
         Assert.Equal(report.VisualQaCoverage.ExpectedScreenshotCount, artifacts.Count);
+        Assert.Equal(report.VisualQaCoverage.Routes.Count, routeAudits.Count);
         var layoutChecksProperty = report.VisualQaCoverage.GetType().GetProperty("LayoutChecks");
         Assert.NotNull(layoutChecksProperty);
         var layoutChecks = Assert.IsAssignableFrom<IEnumerable<string>>(layoutChecksProperty!.GetValue(report.VisualQaCoverage)).ToArray();
@@ -1148,6 +1150,18 @@ public class ProductionReadinessReportTests
             Assert.False(string.IsNullOrWhiteSpace(route.Label));
             Assert.False(string.IsNullOrWhiteSpace(route.Description));
             Assert.NotEmpty(route.WorkflowStages);
+            var routeAudit = Assert.Single(routeAudits, audit =>
+                StringProperty(audit, "RouteCode") == route.Code
+                && StringProperty(audit, "RouteKey") == route.RouteKey);
+            Assert.Equal(route.Label, StringProperty(routeAudit, "Label"));
+            Assert.Equal(report.VisualQaCoverage.Themes.Count * report.VisualQaCoverage.Viewports.Count, IntProperty(routeAudit, "ScreenshotCount"));
+            Assert.Equal("required-review", StringProperty(routeAudit, "ReviewStatus"));
+            Assert.Equal(route.WorkflowStages, StringListProperty(routeAudit, "WorkflowStages"));
+            Assert.Contains("accountant-workflow-hierarchy", StringListProperty(routeAudit, "ReviewChecks"));
+            Assert.Contains("table-scanability", StringListProperty(routeAudit, "ReviewChecks"));
+            Assert.Contains("theme-contrast", StringListProperty(routeAudit, "ReviewChecks"));
+            Assert.Contains("mobile-density", StringListProperty(routeAudit, "ReviewChecks"));
+            Assert.Contains("loading-error-empty-states", StringListProperty(routeAudit, "ReviewChecks"));
         });
     }
 

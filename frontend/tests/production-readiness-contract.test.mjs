@@ -4,8 +4,10 @@ import { parseProductionReadinessReport } from "../src/lib/api.ts";
 import {
   ACCOUNTANT_WORKFLOW_STAGES,
   expectedVisualSmokeArtifacts,
+  expectedVisualSmokeRouteAudits,
   expectedVisualSmokeScreenshotCount,
   visualSmokeLayoutChecks,
+  visualSmokeReviewChecks,
   visualSmokeRoutes,
   visualSmokeThemes,
   visualSmokeViewports,
@@ -86,6 +88,16 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.equal(parsed.visualQaCoverage.expectedScreenshotCount, expectedVisualSmokeScreenshotCount());
   assert.equal(parsed.visualQaCoverage.manifestFileName, "visual-smoke-manifest.json");
   assert.equal(parsed.visualQaCoverage.artifacts.length, expectedVisualSmokeArtifacts().length);
+  assert.deepEqual(parsed.visualQaCoverage.reviewChecks, visualSmokeReviewChecks);
+  assert.deepEqual(parsed.visualQaCoverage.routeAudits, expectedVisualSmokeRouteAudits().map((audit) => ({
+    routeCode: audit.routeName,
+    routeKey: audit.routeKey,
+    label: audit.label,
+    workflowStages: audit.workflowStages,
+    screenshotCount: audit.screenshotCount,
+    reviewStatus: audit.reviewStatus,
+    reviewChecks: audit.reviewChecks,
+  })));
   assert.deepEqual(parsed.visualQaCoverage.themes, visualSmokeThemes);
   assert.deepEqual(parsed.visualQaCoverage.viewports, visualSmokeViewports);
   assert.deepEqual(parsed.visualQaCoverage.routes.find((route) => route.code === "period-workspace")?.workflowStages, ACCOUNTANT_WORKFLOW_STAGES);
@@ -184,6 +196,16 @@ test("parseProductionReadinessReport rejects inconsistent production assurance c
   assert.throws(
     () => parseProductionReadinessReport(visualAssurancePayload),
     /Invalid production readiness report contract: assurancePacket\.visualQaExpectedScreenshots - expected 24, received 99/,
+  );
+});
+
+test("parseProductionReadinessReport rejects stale visual route audit counts", () => {
+  const payload = sampleReport();
+  payload.visualQaCoverage.routeAudits[0].screenshotCount = 3;
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: visualQaCoverage\.routeAudits\.0\.screenshotCount - expected 4, received 3/,
   );
 });
 
@@ -592,6 +614,7 @@ function sampleReport() {
       manifestFileName: "visual-smoke-manifest.json",
       expectedScreenshotCount: expectedVisualSmokeScreenshotCount(),
       layoutChecks: visualSmokeLayoutChecks,
+      reviewChecks: visualSmokeReviewChecks,
       themes: visualSmokeThemes,
       viewports: visualSmokeViewports,
       routes: visualSmokeRoutes.map(({ name, routeKey, label, description, expectedText, workflowStages, openFilingTab }) => ({
@@ -602,6 +625,15 @@ function sampleReport() {
         requiredText: expectedText,
         workflowStages,
         openFilingTab,
+      })),
+      routeAudits: expectedVisualSmokeRouteAudits().map((audit) => ({
+        routeCode: audit.routeName,
+        routeKey: audit.routeKey,
+        label: audit.label,
+        workflowStages: audit.workflowStages,
+        screenshotCount: audit.screenshotCount,
+        reviewStatus: audit.reviewStatus,
+        reviewChecks: audit.reviewChecks,
       })),
       artifacts: expectedVisualSmokeArtifacts().map(({ routeName, routeKey, theme, viewportName, fileName, artifactPath, expectedText, openFilingTab, reviewStatus, layoutChecks }) => ({
         routeCode: routeName,

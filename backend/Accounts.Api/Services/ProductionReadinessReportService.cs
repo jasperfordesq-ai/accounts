@@ -230,15 +230,26 @@ public sealed record VisualQaArtifact(
     string ReviewStatus,
     IReadOnlyList<string> LayoutChecks);
 
+public sealed record VisualQaRouteAudit(
+    string RouteCode,
+    string RouteKey,
+    string Label,
+    IReadOnlyList<string> WorkflowStages,
+    int ScreenshotCount,
+    string ReviewStatus,
+    IReadOnlyList<string> ReviewChecks);
+
 public sealed record VisualQaCoverage(
     string ArtifactName,
     string Enforcement,
     string ManifestFileName,
     int ExpectedScreenshotCount,
     IReadOnlyList<string> LayoutChecks,
+    IReadOnlyList<string> ReviewChecks,
     IReadOnlyList<string> Themes,
     IReadOnlyList<VisualQaViewport> Viewports,
     IReadOnlyList<VisualQaRoute> Routes,
+    IReadOnlyList<VisualQaRouteAudit> RouteAudits,
     IReadOnlyList<VisualQaArtifact> Artifacts);
 
 public sealed record ProductionAssurancePacket(
@@ -1991,6 +2002,14 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "page-horizontal-overflow",
             "visible-text-overlap"
         };
+        var reviewChecks = new[]
+        {
+            "accountant-workflow-hierarchy",
+            "table-scanability",
+            "theme-contrast",
+            "mobile-density",
+            "loading-error-empty-states"
+        };
         var viewports = new[]
         {
             new VisualQaViewport("desktop", 1440, 1000),
@@ -2065,6 +2084,16 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     layoutChecks);
             })))
             .ToArray();
+        var routeAudits = routes
+            .Select(route => new VisualQaRouteAudit(
+                route.Code,
+                route.RouteKey,
+                route.Label,
+                route.WorkflowStages,
+                themes.Length * viewports.Length,
+                "required-review",
+                reviewChecks))
+            .ToArray();
 
         return new VisualQaCoverage(
             "visual-smoke-screenshots",
@@ -2072,9 +2101,11 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "visual-smoke-manifest.json",
             routes.Length * themes.Length * viewports.Length,
             layoutChecks,
+            reviewChecks,
             themes,
             viewports,
             routes,
+            routeAudits,
             artifacts);
     }
 }

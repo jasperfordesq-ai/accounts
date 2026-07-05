@@ -24,6 +24,14 @@ export const visualSmokeLayoutChecks = [
   "visible-text-overlap",
 ];
 
+export const visualSmokeReviewChecks = [
+  "accountant-workflow-hierarchy",
+  "table-scanability",
+  "theme-contrast",
+  "mobile-density",
+  "loading-error-empty-states",
+];
+
 export const visualSmokeRoutes = [
   {
     name: "dashboard",
@@ -107,12 +115,26 @@ export function expectedVisualSmokeArtifacts(outputDir = "artifacts/visual-smoke
   );
 }
 
+export function expectedVisualSmokeRouteAudits() {
+  return visualSmokeRoutes.map((route) => ({
+    routeName: route.name,
+    routeKey: route.routeKey,
+    label: route.label,
+    workflowStages: route.workflowStages,
+    screenshotCount: visualSmokeThemes.length * visualSmokeViewports.length,
+    reviewStatus: "required-review",
+    reviewChecks: visualSmokeReviewChecks,
+  }));
+}
+
 export function expectedVisualSmokeManifest(outputDir = "artifacts/visual-smoke") {
   return {
     artifactName: VISUAL_SMOKE_ARTIFACT_NAME,
     manifestFileName: "visual-smoke-manifest.json",
     expectedScreenshotCount: expectedVisualSmokeScreenshotCount(),
     layoutChecks: visualSmokeLayoutChecks,
+    reviewChecks: visualSmokeReviewChecks,
+    routeAudits: expectedVisualSmokeRouteAudits(),
     screenshots: expectedVisualSmokeArtifacts(outputDir),
   };
 }

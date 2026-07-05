@@ -722,6 +722,49 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
 
             <div className="mt-4">
               <DataTable
+                caption="Route audit summary"
+                filterPlaceholder="Filter visual route audits"
+                emptyState="No matching visual route audits"
+                columns={["Route", "Screenshots", "Workflow stages", "Review checks", "Status"]}
+                rows={visualQaCoverage.routeAudits.map((audit) => ({
+                  id: audit.routeCode,
+                  tone: audit.reviewStatus === "accepted" ? "good" : "warn",
+                  searchText: [
+                    audit.label,
+                    audit.routeCode,
+                    audit.routeKey,
+                    audit.reviewStatus,
+                    ...audit.workflowStages,
+                    ...audit.reviewChecks,
+                  ].join(" "),
+                  cells: [
+                    <div key="route" className="min-w-44 whitespace-normal">
+                      <p className="font-medium">{audit.label}</p>
+                      <code className="mt-1 block break-all text-[11px] text-[var(--muted-foreground)]">{audit.routeCode}</code>
+                    </div>,
+                    <span key="screenshots" className="text-[var(--muted-foreground)]">
+                      {audit.screenshotCount} screenshots
+                    </span>,
+                    <div key="workflow-stages" className="flex min-w-44 flex-wrap gap-1.5">
+                      {audit.workflowStages.map((stage) => (
+                        <StatusBadge key={stage} tone="default">{stage}</StatusBadge>
+                      ))}
+                    </div>,
+                    <div key="review-checks" className="flex min-w-48 flex-wrap gap-1.5">
+                      {audit.reviewChecks.map((check) => (
+                        <StatusBadge key={check} tone="info">{formatStatus(check)}</StatusBadge>
+                      ))}
+                    </div>,
+                    <StatusBadge key="status" tone={audit.reviewStatus === "accepted" ? "good" : "warn"}>
+                      {formatStatus(audit.reviewStatus)}
+                    </StatusBadge>,
+                  ],
+                }))}
+              />
+            </div>
+
+            <div className="mt-4">
+              <DataTable
                 caption="Visual QA artifact manifest"
                 filterPlaceholder="Filter visual QA artifacts"
                 emptyState="No matching visual QA artifacts"

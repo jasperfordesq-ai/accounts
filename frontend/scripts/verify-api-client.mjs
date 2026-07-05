@@ -33,8 +33,10 @@ import {
 } from "../src/lib/api.ts";
 import {
   expectedVisualSmokeArtifacts,
+  expectedVisualSmokeRouteAudits,
   expectedVisualSmokeScreenshotCount,
   visualSmokeLayoutChecks,
+  visualSmokeReviewChecks,
   visualSmokeRoutes,
   visualSmokeThemes,
   visualSmokeViewports,
@@ -372,6 +374,7 @@ function productionReadinessReportFixture() {
       manifestFileName: "visual-smoke-manifest.json",
       expectedScreenshotCount: expectedVisualSmokeScreenshotCount(),
       layoutChecks: visualSmokeLayoutChecks,
+      reviewChecks: visualSmokeReviewChecks,
       themes: visualSmokeThemes,
       viewports: visualSmokeViewports,
       routes: visualSmokeRoutes.map(({ name, routeKey, label, description, expectedText, workflowStages, openFilingTab }) => ({
@@ -382,6 +385,15 @@ function productionReadinessReportFixture() {
         requiredText: expectedText,
         workflowStages,
         openFilingTab,
+      })),
+      routeAudits: expectedVisualSmokeRouteAudits().map((audit) => ({
+        routeCode: audit.routeName,
+        routeKey: audit.routeKey,
+        label: audit.label,
+        workflowStages: audit.workflowStages,
+        screenshotCount: audit.screenshotCount,
+        reviewStatus: audit.reviewStatus,
+        reviewChecks: audit.reviewChecks,
       })),
       artifacts: expectedVisualSmokeArtifacts().map(({ routeName, routeKey, theme, viewportName, fileName, artifactPath, expectedText, openFilingTab, reviewStatus, layoutChecks }) => ({
         routeCode: routeName,

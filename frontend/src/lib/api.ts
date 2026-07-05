@@ -1790,15 +1790,27 @@ export interface VisualQaArtifact {
   layoutChecks: string[];
 }
 
+export interface VisualQaRouteAudit {
+  routeCode: string;
+  routeKey: string;
+  label: string;
+  workflowStages: string[];
+  screenshotCount: number;
+  reviewStatus: string;
+  reviewChecks: string[];
+}
+
 export interface VisualQaCoverage {
   artifactName: string;
   enforcement: string;
   manifestFileName: string;
   expectedScreenshotCount: number;
   layoutChecks: string[];
+  reviewChecks: string[];
   themes: string[];
   viewports: VisualQaViewport[];
   routes: VisualQaRoute[];
+  routeAudits: VisualQaRouteAudit[];
   artifacts: VisualQaArtifact[];
 }
 
@@ -2120,15 +2132,27 @@ const visualQaArtifactSchema = z.object({
   layoutChecks: z.array(z.string().min(1)),
 });
 
+const visualQaRouteAuditSchema = z.object({
+  routeCode: z.string().min(1),
+  routeKey: z.string().min(1),
+  label: z.string().min(1),
+  workflowStages: z.array(z.string().min(1)),
+  screenshotCount: z.number().int().nonnegative(),
+  reviewStatus: z.string().min(1),
+  reviewChecks: z.array(z.string().min(1)),
+});
+
 const visualQaCoverageSchema = z.object({
   artifactName: z.string().min(1),
   enforcement: z.string().min(1),
   manifestFileName: z.string().min(1),
   expectedScreenshotCount: z.number(),
   layoutChecks: z.array(z.string().min(1)),
+  reviewChecks: z.array(z.string().min(1)),
   themes: z.array(z.string().min(1)),
   viewports: z.array(visualQaViewportSchema),
   routes: z.array(visualQaRouteSchema),
+  routeAudits: z.array(visualQaRouteAuditSchema),
   artifacts: z.array(visualQaArtifactSchema),
 });
 
@@ -2465,6 +2489,7 @@ function assertVisualQaArtifacts(report: ProductionReadinessReport) {
   const themes = new Set(report.visualQaCoverage.themes);
   const viewports = new Set(report.visualQaCoverage.viewports.map((viewport) => viewport.name));
   const artifactsByKey = new Map<string, VisualQaArtifact>();
+  const routeAuditsByCode = new Map(report.visualQaCoverage.routeAudits.map((audit) => [audit.routeCode, audit]));
 
   report.visualQaCoverage.artifacts.forEach((artifact, artifactIndex) => {
     const route = routeByCode.get(artifact.routeCode);
@@ -2524,6 +2549,52 @@ function assertVisualQaArtifacts(report: ProductionReadinessReport) {
       report.visualQaCoverage.layoutChecks,
       artifact.layoutChecks,
     );
+  });
+
+  report.visualQaCoverage.routes.forEach((route) => {
+    if (!routeAuditsByCode.has(route.code)) {
+      throw new Error(
+        `Invalid production readiness report contract: visualQaCoverage.routeAudits - missing route audit for ${route.code}`,
+      );
+    }
+  });
+
+  report.visualQaCoverage.routeAudits.forEach((audit, auditIndex) => {
+    const route = routeByCode.get(audit.routeCode);
+
+    if (!route) {
+      throw new Error(
+        `Invalid production readiness report contract: visualQaCoverage.routeAudits.${auditIndex}.routeCode - must reference a visual QA route`,
+      );
+    }
+
+    if (audit.routeKey !== route.routeKey || audit.label !== route.label) {
+      throw new Error(
+        `Invalid production readiness report contract: visualQaCoverage.routeAudits.${auditIndex}.routeKey - must mirror the visual QA route metadata`,
+      );
+    }
+
+    assertExpectedNumber(
+      `visualQaCoverage.routeAudits.${auditIndex}.screenshotCount`,
+      report.visualQaCoverage.themes.length * report.visualQaCoverage.viewports.length,
+      audit.screenshotCount,
+    );
+    assertStringArrayEqual(
+      `visualQaCoverage.routeAudits.${auditIndex}.workflowStages`,
+      route.workflowStages,
+      audit.workflowStages,
+    );
+    assertStringArrayEqual(
+      `visualQaCoverage.routeAudits.${auditIndex}.reviewChecks`,
+      report.visualQaCoverage.reviewChecks,
+      audit.reviewChecks,
+    );
+
+    if (audit.reviewStatus !== "required-review") {
+      throw new Error(
+        `Invalid production readiness report contract: visualQaCoverage.routeAudits.${auditIndex}.reviewStatus - route audits must require named review`,
+      );
+    }
   });
 
   report.visualQaCoverage.routes.forEach((route) => {

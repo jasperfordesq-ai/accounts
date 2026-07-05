@@ -4,6 +4,7 @@ import { chromium, expect } from "@playwright/test";
 import { findOverlappingTextBlocks, formatLayoutIssues } from "./visual-smoke-layout.mjs";
 import {
   expectedVisualSmokeManifest,
+  expectedVisualSmokeRouteAudits,
   visualSmokeLayoutChecks,
   visualSmokeRoutes,
   visualSmokeThemes,
@@ -573,6 +574,10 @@ async function run() {
   const manifest = {
     ...manifestTemplate,
     generatedAt: new Date().toISOString(),
+    routeAudits: expectedVisualSmokeRouteAudits().map((audit) => ({
+      ...audit,
+      screenshotCount: captures.filter((capture) => capture.routeName === audit.routeName).length,
+    })),
     screenshots: captures,
   };
   const manifestFileName = "visual-smoke-manifest.json";
