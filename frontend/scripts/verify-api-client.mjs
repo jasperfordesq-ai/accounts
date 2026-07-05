@@ -114,6 +114,7 @@ function productionReadinessReportFixture() {
           "statutory-rules-coverage:size-classification-thresholds",
           "accountant-acceptance:micro-ltd",
         ],
+        releaseGateCodes: ["qualified-accountant-review"],
       },
     ],
     assurancePacket: {

@@ -1549,6 +1549,7 @@ export interface SourceLawTraceabilityEntry {
   url: string;
   inSnapshot: boolean;
   usedBy: string[];
+  releaseGateCodes: string[];
 }
 
 export interface ProductionReadinessArea {
@@ -1813,6 +1814,7 @@ const sourceLawTraceabilityEntrySchema = z.object({
   url: z.string().url(),
   inSnapshot: z.boolean(),
   usedBy: z.array(z.string().min(1)),
+  releaseGateCodes: z.array(z.string().min(1)),
 });
 
 const productionAssurancePacketSchema = z.object({
@@ -2176,6 +2178,12 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
     if (entry.usedBy.length === 0) {
       throw new Error(
         `Invalid production readiness report contract: sourceLawTraceability.${entryIndex}.usedBy - every pinned source must have at least one usage`,
+      );
+    }
+
+    if (entry.releaseGateCodes.length === 0) {
+      throw new Error(
+        `Invalid production readiness report contract: sourceLawTraceability.${entryIndex}.releaseGateCodes - every pinned source must link to at least one release gate`,
       );
     }
   });

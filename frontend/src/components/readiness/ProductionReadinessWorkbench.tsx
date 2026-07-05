@@ -811,18 +811,19 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
             ])}
           />
           <div className="mt-4">
-            <DataTable
-              columns={["Traceability", "Used by", "Pinned"]}
-              rows={sourceLawTraceability.map((entry) => [
-                <span key="title" className="font-medium">{entry.title}</span>,
-                <span key="used" className="text-[var(--muted-foreground)]">
-                  {entry.usedBy.slice(0, 3).join(", ")}
-                  {entry.usedBy.length > 3 ? ` +${entry.usedBy.length - 3} more` : ""}
-                </span>,
-                <StatusBadge key="pinned" tone={entry.inSnapshot ? "good" : "bad"}>
-                  {entry.inSnapshot ? "Snapshot" : "Missing"}
-                </StatusBadge>,
-              ])}
+          <DataTable
+            columns={["Traceability", "Used by", "Release gates", "Pinned"]}
+            rows={sourceLawTraceability.map((entry) => [
+              <span key="title" className="font-medium">{entry.title}</span>,
+              <span key="used" className="text-[var(--muted-foreground)]">
+                {entry.usedBy.slice(0, 3).join(", ")}
+                {entry.usedBy.length > 3 ? ` +${entry.usedBy.length - 3} more` : ""}
+              </span>,
+              <CodeStack key="release-gates" items={entry.releaseGateCodes} />,
+              <StatusBadge key="pinned" tone={entry.inSnapshot ? "good" : "bad"}>
+                {entry.inSnapshot ? "Snapshot" : "Missing"}
+              </StatusBadge>,
+            ])}
             />
           </div>
         </ReviewPanel>

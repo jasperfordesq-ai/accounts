@@ -40,6 +40,8 @@ describe("ProductionReadinessWorkbench", () => {
       "href",
       "https://www.revenue.ie/",
     );
+    expect(screen.getByText("external-ros-validation")).toBeInTheDocument();
+    expect(screen.getByText("ixbrl-taxonomy-selection")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Next assurance actions" })).toBeInTheDocument();
     expect(screen.getByText("Qualified accountant sign-off")).toBeInTheDocument();
     expect(screen.getByText("Risk 0")).toBeInTheDocument();
@@ -145,6 +147,7 @@ function sampleReport(): ProductionReadinessReport {
         url: "https://www.revenue.ie/",
         inSnapshot: true,
         usedBy: ["statutory-rule-matrix:ltd-micro", "golden-corpus:micro-ltd"],
+        releaseGateCodes: ["external-ros-validation", "ixbrl-taxonomy-selection"],
       },
     ],
     assurancePacket: {

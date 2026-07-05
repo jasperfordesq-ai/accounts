@@ -49,6 +49,7 @@ function sampleReport(): ProductionReadinessReport {
         url: "https://www.revenue.ie/",
         inSnapshot: true,
         usedBy: ["statutory-rule-matrix:ltd-micro"],
+        releaseGateCodes: ["external-ros-validation", "ixbrl-taxonomy-selection"],
       },
     ],
     assurancePacket: {

@@ -24,6 +24,7 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.equal(parsed.sourceLawTraceability[0].sourceId, "frc-frs-105");
   assert.equal(parsed.sourceLawTraceability[0].inSnapshot, true);
   assert.equal(parsed.sourceLawTraceability[0].usedBy[0], "golden-corpus:micro-ltd");
+  assert.equal(parsed.sourceLawTraceability[0].releaseGateCodes[0], "qualified-accountant-review");
   assert.equal(parsed.statutoryRulesCoverage[0].code, "size-classification-thresholds");
   assert.equal(parsed.statutoryRulesCoverage[0].automatedVerifierNames[0], "AccountsWorkflowTests.SizeClassification_FirstYearMicro_AllowsMicroAndAuditExemption");
   assert.equal(parsed.statutoryRulesCoverage[0].edgeCases[0], "two-of-three threshold rule");
@@ -130,6 +131,14 @@ test("parseProductionReadinessReport rejects incomplete source-law traceability"
     () => parseProductionReadinessReport(missingEvidencePayload),
     /Invalid production readiness report contract: assurancePacket\.evidenceItems - source-law-traceability-index is required/,
   );
+
+  const missingReleaseGatePayload = sampleReport();
+  missingReleaseGatePayload.sourceLawTraceability[0].releaseGateCodes = [];
+
+  assert.throws(
+    () => parseProductionReadinessReport(missingReleaseGatePayload),
+    /Invalid production readiness report contract: sourceLawTraceability\.0\.releaseGateCodes - every pinned source must link to at least one release gate/,
+  );
 });
 
 test("parseProductionReadinessReport rejects proof points whose verifier is not listed on the scenario", () => {
@@ -199,6 +208,7 @@ function sampleReport() {
           "statutory-rules-coverage:size-classification-thresholds",
           "accountant-acceptance:micro-ltd",
         ],
+        releaseGateCodes: ["qualified-accountant-review"],
       },
     ],
     assurancePacket: {

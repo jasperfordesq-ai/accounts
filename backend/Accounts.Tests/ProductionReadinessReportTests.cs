@@ -129,15 +129,24 @@ public class ProductionReadinessReportTests
             Assert.Equal(source.Url, StringProperty(entry, "Url"));
             Assert.Equal(source.EffectiveDate.ToString("yyyy-MM-dd"), StringProperty(entry, "EffectiveDate"));
             Assert.NotEmpty(StringListProperty(entry, "UsedBy"));
+            Assert.NotEmpty(StringListProperty(entry, "ReleaseGateCodes"));
         });
 
         Assert.Contains(traceability, entry =>
             StringProperty(entry, "SourceId") == IrishStatutoryRuleSources.CroAuditorsReport.SourceId
             && StringListProperty(entry, "UsedBy").Any(usage => usage == "golden-corpus:medium-audit-required")
-            && StringListProperty(entry, "UsedBy").Any(usage => usage == "statutory-rule-matrix:medium-audit-required"));
+            && StringListProperty(entry, "UsedBy").Any(usage => usage == "statutory-rule-matrix:medium-audit-required")
+            && StringListProperty(entry, "ReleaseGateCodes").Contains("auditor-handoff"));
         Assert.Contains(traceability, entry =>
             StringProperty(entry, "SourceId") == IrishStatutoryRuleSources.CroUnlimitedCompany.SourceId
-            && StringListProperty(entry, "UsedBy").Any(usage => usage.Contains("unsupported", StringComparison.OrdinalIgnoreCase)));
+            && StringListProperty(entry, "UsedBy").Any(usage => usage.Contains("unsupported", StringComparison.OrdinalIgnoreCase))
+            && StringListProperty(entry, "ReleaseGateCodes").Contains("manual-professional-handoff"));
+        Assert.Contains(traceability, entry =>
+            StringProperty(entry, "SourceId") == IrishStatutoryRuleSources.RevenueAcceptedTaxonomies.SourceId
+            && StringListProperty(entry, "ReleaseGateCodes").Contains("external-ros-validation"));
+        Assert.Contains(traceability, entry =>
+            StringProperty(entry, "SourceId") == IrishStatutoryRuleSources.CharitiesRegulatorAnnualReport.SourceId
+            && StringListProperty(entry, "ReleaseGateCodes").Contains("charity-annual-return-review"));
         Assert.Contains(report.AssurancePacket.EvidenceItems, item => item == "source-law-traceability-index");
     }
 

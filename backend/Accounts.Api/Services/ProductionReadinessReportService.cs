@@ -62,7 +62,8 @@ public sealed record SourceLawTraceabilityEntry(
     string EffectiveDate,
     string Url,
     bool InSnapshot,
-    IReadOnlyList<string> UsedBy);
+    IReadOnlyList<string> UsedBy,
+    IReadOnlyList<string> ReleaseGateCodes);
 
 public sealed record StatutoryRuleMatrixEntry(
     string Code,
@@ -375,6 +376,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             source => source.SourceId,
             _ => new SortedSet<string>(StringComparer.Ordinal),
             StringComparer.Ordinal);
+        var releaseGateCodes = BuildSourceReleaseGateCodes();
 
         void AddUsage(LegalSourceReference source, string usage)
         {
@@ -424,9 +426,77 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     reference.EffectiveDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
                     reference.Url,
                     inSnapshot,
-                    pair.Value.ToArray());
+                    pair.Value.ToArray(),
+                    releaseGateCodes.TryGetValue(pair.Key, out var gates) ? gates : []);
             })
             .ToArray();
+    }
+
+    private static IReadOnlyDictionary<string, IReadOnlyList<string>> BuildSourceReleaseGateCodes()
+    {
+        return new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
+        {
+            [IrishStatutoryRuleSources.CharitiesRegulatorAnnualReport.SourceId] =
+            [
+                "charity-annual-return-review",
+                "qualified-accountant-review"
+            ],
+            [IrishStatutoryRuleSources.CroAuditorsReport.SourceId] =
+            [
+                "auditor-handoff",
+                "manual-professional-handoff"
+            ],
+            [IrishStatutoryRuleSources.CroFinancialStatementsRequirements.SourceId] =
+            [
+                "cro-filing-readiness",
+                "director-secretary-certification",
+                "qualified-accountant-review"
+            ],
+            [IrishStatutoryRuleSources.CroGroupCompany.SourceId] =
+            [
+                "group-manual-handoff",
+                "manual-professional-handoff"
+            ],
+            [IrishStatutoryRuleSources.CroGuaranteeCompany.SourceId] =
+            [
+                "clg-filing-review",
+                "qualified-accountant-review"
+            ],
+            [IrishStatutoryRuleSources.CroMediumCompany.SourceId] =
+            [
+                "auditor-handoff",
+                "manual-professional-handoff"
+            ],
+            [IrishStatutoryRuleSources.CroUnlimitedCompany.SourceId] =
+            [
+                "manual-professional-handoff"
+            ],
+            [IrishStatutoryRuleSources.FrcFrs102.SourceId] =
+            [
+                "statutory-basis-review",
+                "qualified-accountant-review"
+            ],
+            [IrishStatutoryRuleSources.FrcFrs105.SourceId] =
+            [
+                "micro-statutory-review",
+                "qualified-accountant-review"
+            ],
+            [IrishStatutoryRuleSources.RevenueAcceptedTaxonomies.SourceId] =
+            [
+                "external-ros-validation",
+                "ixbrl-taxonomy-selection"
+            ],
+            [IrishStatutoryRuleSources.RevenueIxbrlContents.SourceId] =
+            [
+                "external-ros-validation",
+                "ixbrl-content-review"
+            ],
+            [IrishStatutoryRuleSources.RevenueIxbrlOverview.SourceId] =
+            [
+                "external-ros-validation",
+                "revenue-filing-readiness"
+            ]
+        };
     }
 
     private static IReadOnlyList<ProductionReadinessArea> BuildAreas() =>
