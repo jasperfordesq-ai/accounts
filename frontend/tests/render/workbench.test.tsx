@@ -210,6 +210,42 @@ describe("workbench primitives", () => {
     expect(screen.queryByText("Bravo Trading DAC")).not.toBeInTheDocument();
   });
 
+  it("sorts accountant tables by header without losing row status cues", async () => {
+    const user = userEvent.setup();
+    render(
+      <DataTable
+        caption="Accountant filing queue"
+        columns={["Company", "Deadline", "Status"]}
+        rows={[
+          {
+            id: "bravo",
+            cells: ["Bravo Trading DAC", "23 Sep 2026", "Ready"],
+            sortValues: ["Bravo Trading DAC", "2026-09-23", "ready"],
+            tone: "good",
+          },
+          {
+            id: "alpha",
+            cells: ["Alpha Accounts Limited", "15 Jul 2026", "Blocked"],
+            sortValues: ["Alpha Accounts Limited", "2026-07-15", "blocked"],
+            tone: "bad",
+          },
+        ]}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Sort by Deadline" }));
+
+    let rows = screen.getAllByRole("row");
+    expect(within(rows[1]).getByText("Alpha Accounts Limited")).toBeInTheDocument();
+    expect(rows[1]).toHaveAttribute("data-tone", "bad");
+
+    await user.click(screen.getByRole("button", { name: "Sort by Deadline" }));
+
+    rows = screen.getAllByRole("row");
+    expect(within(rows[1]).getByText("Bravo Trading DAC")).toBeInTheDocument();
+    expect(rows[1]).toHaveAttribute("data-tone", "good");
+  });
+
   it("renders totals, warning cues, and a useful empty state", async () => {
     const user = userEvent.setup();
     render(

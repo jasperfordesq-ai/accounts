@@ -4,7 +4,10 @@ import { useId, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
+  ArrowDown,
   ArrowRight,
+  ArrowUp,
+  ArrowUpDown,
   CheckCircle2,
   Circle,
   CircleAlert,
@@ -22,6 +25,8 @@ import {
 type WorkflowState = "done" | "active" | "blocked" | "todo";
 type Tone = "default" | "good" | "warn" | "bad" | "info";
 type DataTableRowTone = Tone;
+type DataTableSortDirection = "asc" | "desc";
+type DataTableSortValue = string | number | null | undefined;
 
 export interface WorkflowItem {
   id?: string;
@@ -103,6 +108,7 @@ export interface DataTableRichRow {
   cells: ReactNode[];
   searchText?: string;
   tone?: DataTableRowTone;
+  sortValues?: DataTableSortValue[];
 }
 
 type DataTableRow = ReactNode[] | DataTableRichRow;
@@ -649,14 +655,41 @@ export function DataTable({
   totals?: ReactNode[];
 }) {
   const [filter, setFilter] = useState("");
+  const [sortState, setSortState] = useState<{
+    columnIndex: number;
+    direction: DataTableSortDirection;
+  } | null>(null);
   const normalizedRows = useMemo(() => rows.map(normalizeDataTableRow), [rows]);
   const normalizedFilter = filter.trim().toLowerCase();
   const visibleRows = useMemo(() => {
-    if (!normalizedFilter) return normalizedRows;
-    return normalizedRows.filter((row) => row.searchText.toLowerCase().includes(normalizedFilter));
-  }, [normalizedFilter, normalizedRows]);
+    const filteredRows = normalizedFilter
+      ? normalizedRows.filter((row) => row.searchText.toLowerCase().includes(normalizedFilter))
+      : normalizedRows;
+
+    if (!sortState) return filteredRows;
+
+    return [...filteredRows].sort((left, right) => {
+      const comparison = compareDataTableSortValues(
+        left.sortValues[sortState.columnIndex],
+        right.sortValues[sortState.columnIndex],
+      );
+      return sortState.direction === "asc" ? comparison : -comparison;
+    });
+  }, [normalizedFilter, normalizedRows, sortState]);
   const tableLabel = caption ?? "Workbench data table";
   const showFilter = Boolean(filterPlaceholder);
+  const toggleSort = (columnIndex: number) => {
+    setSortState((current) => {
+      if (current?.columnIndex !== columnIndex) {
+        return { columnIndex, direction: "asc" };
+      }
+
+      return {
+        columnIndex,
+        direction: current.direction === "asc" ? "desc" : "asc",
+      };
+    });
+  };
 
   return (
     <div className="min-w-0 space-y-3">
@@ -687,11 +720,26 @@ export function DataTable({
         {caption && <caption className="sr-only">{caption}</caption>}
         <thead className="bg-[var(--surface-subtle)] text-xs font-semibold uppercase text-[var(--muted-foreground)]">
           <tr>
-            {columns.map((column) => (
-              <th key={column} className="whitespace-nowrap border-b border-[var(--border)] px-4 py-3">
-                {column}
-              </th>
-            ))}
+            {columns.map((column, columnIndex) => {
+              const isSorted = sortState?.columnIndex === columnIndex;
+              return (
+                <th
+                  key={column}
+                  aria-sort={isSorted ? (sortState.direction === "asc" ? "ascending" : "descending") : "none"}
+                  className="whitespace-nowrap border-b border-[var(--border)] px-4 py-3"
+                >
+                  <button
+                    type="button"
+                    aria-label={`Sort by ${column}`}
+                    onClick={() => toggleSort(columnIndex)}
+                    className="inline-flex min-h-7 items-center gap-1.5 rounded-sm text-left font-semibold uppercase text-[var(--muted-foreground)] transition hover:text-[var(--foreground)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500"
+                  >
+                    <span>{column}</span>
+                    <SortIcon direction={isSorted ? sortState.direction : null} />
+                  </button>
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody className="divide-y divide-[var(--border)]">
@@ -741,6 +789,18 @@ export function DataTable({
   );
 }
 
+function SortIcon({ direction }: { direction: DataTableSortDirection | null }) {
+  if (direction === "asc") {
+    return <ArrowUp aria-hidden="true" className="h-3.5 w-3.5" />;
+  }
+
+  if (direction === "desc") {
+    return <ArrowDown aria-hidden="true" className="h-3.5 w-3.5" />;
+  }
+
+  return <ArrowUpDown aria-hidden="true" className="h-3.5 w-3.5 opacity-60" />;
+}
+
 function normalizeDataTableRow(row: DataTableRow, rowIndex: number): Required<DataTableRichRow> {
   if (Array.isArray(row)) {
     const fallbackId = row.map(cellText).join("|");
@@ -749,6 +809,7 @@ function normalizeDataTableRow(row: DataTableRow, rowIndex: number): Required<Da
       cells: row,
       searchText: row.map(cellText).join(" "),
       tone: "default",
+      sortValues: row.map(cellText),
     };
   }
 
@@ -758,7 +819,20 @@ function normalizeDataTableRow(row: DataTableRow, rowIndex: number): Required<Da
     cells: row.cells,
     searchText: row.searchText ?? row.cells.map(cellText).join(" "),
     tone: row.tone ?? "default",
+    sortValues: row.sortValues ?? row.cells.map(cellText),
   };
+}
+
+function compareDataTableSortValues(left: DataTableSortValue, right: DataTableSortValue) {
+  if (left === right) return 0;
+  if (left === null || left === undefined || left === "") return 1;
+  if (right === null || right === undefined || right === "") return -1;
+  if (typeof left === "number" && typeof right === "number") return left - right;
+
+  return String(left).localeCompare(String(right), "en-IE", {
+    numeric: true,
+    sensitivity: "base",
+  });
 }
 
 function cellText(cell: ReactNode): string {
