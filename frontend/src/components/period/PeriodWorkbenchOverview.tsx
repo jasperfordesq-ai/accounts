@@ -158,6 +158,23 @@ export function PeriodWorkbenchOverview({
     good: "text-emerald-800 dark:text-emerald-100",
   }[commandCentreTone];
   const CommandCentreIssueIcon = commandCentreTone === "good" ? CheckCircle2 : AlertTriangle;
+  const filingReviewHref = `${periodWorkspaceHref}?tab=filing`;
+  const filingGatePathLabel = filingReadinessProfile?.manualProfessionalReviewRequired
+    ? "Manual professional review"
+    : filingReadinessProfile?.supportedPath
+      ? "Supported filing path"
+      : "Manual handoff";
+  const filingGateTone = filingReadinessProfile?.signOffPacket.readyForExternalFiling
+    ? "good"
+    : filingReadinessProfile?.manualProfessionalReviewRequired
+      ? "bad"
+      : "warn";
+  const externalFilingState = filingReadinessProfile?.signOffPacket.readyForExternalFiling
+    ? "External filing ready"
+    : "External filing blocked";
+  const allowedNextActions = filingReadinessProfile?.allowedNextActions.length
+    ? filingReadinessProfile.allowedNextActions.join(", ")
+    : "No allowed filing action";
 
   return (
     <div className="mb-6 min-w-0 max-w-full space-y-6 overflow-x-clip">
@@ -196,6 +213,26 @@ export function PeriodWorkbenchOverview({
               </Link>
             )}
           </div>
+        </div>
+      </ReviewPanel>
+
+      <ReviewPanel
+        title="Filing gate snapshot"
+        description="Compact review state for accountant sign-off, external filing evidence and the next allowed filing workflow action."
+        actions={<StatusBadge tone={filingGateTone}>{filingGatePathLabel}</StatusBadge>}
+      >
+        <div className="grid gap-3 rounded-md border border-[var(--border)] bg-[var(--surface)] p-3 md:grid-cols-[minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,1fr)_auto] md:items-center">
+          <GateSnapshotItem label="Path" value={filingGatePathLabel} />
+          <GateSnapshotItem label="Accountant review" value={accountantReviewState} />
+          <GateSnapshotItem label="External filing" value={externalFilingState} />
+          <GateSnapshotItem label="Allowed next action" value={allowedNextActions} />
+          <Link
+            href={filingReviewHref}
+            className="inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] px-3 text-xs font-semibold text-[var(--foreground)] hover:border-[var(--ring)]"
+          >
+            Open filing review
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
         </div>
       </ReviewPanel>
 
@@ -246,6 +283,15 @@ export function PeriodWorkbenchOverview({
         blockers={blockingIssues}
         warnings={warningIssues}
       />
+    </div>
+  );
+}
+
+function GateSnapshotItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[11px] font-semibold uppercase text-[var(--muted-foreground)]">{label}</p>
+      <p className="mt-1 break-words text-sm font-semibold leading-5 text-[var(--foreground)]">{value}</p>
     </div>
   );
 }

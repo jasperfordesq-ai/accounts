@@ -42,6 +42,16 @@ describe("PeriodWorkbenchOverview", () => {
       "href",
       "/companies/7/periods/3?tab=categorise",
     );
+    const filingGate = screen.getByRole("region", { name: "Filing gate snapshot" });
+    expect(within(filingGate).getByText("Filing gate snapshot")).toBeInTheDocument();
+    expect(within(filingGate).getAllByText("Manual professional review")).toHaveLength(2);
+    expect(within(filingGate).getByText("Not approved")).toBeInTheDocument();
+    expect(within(filingGate).getByText("External filing blocked")).toBeInTheDocument();
+    expect(within(filingGate).getByText("record-accountant-review")).toBeInTheDocument();
+    expect(within(filingGate).getByRole("link", { name: "Open filing review" })).toHaveAttribute(
+      "href",
+      "/companies/7/periods/3?tab=filing",
+    );
     const workflow = screen.getByRole("navigation", { name: "Accountant Workflow" });
     expect(workflow).toBeInTheDocument();
     const workflowNav = within(workflow);
