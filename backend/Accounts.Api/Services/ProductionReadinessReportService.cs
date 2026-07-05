@@ -116,6 +116,19 @@ public sealed record DeploymentSafetyControl(
     string Verification,
     string FailurePolicy);
 
+public sealed record ReleaseReviewChecklistItem(
+    string Code,
+    string Label,
+    string OwnerRole,
+    bool Required,
+    string Status,
+    bool BlocksRelease,
+    string EvidenceArtifact,
+    string AssuranceActionCode,
+    string OperationalGateCode,
+    IReadOnlyList<string> AuditEventCodes,
+    string Detail);
+
 public sealed record AccountantAcceptanceCriterion(
     string ScenarioCode,
     string Label,
@@ -183,6 +196,7 @@ public sealed record ProductionReadinessReport(
     IReadOnlyList<ProductionMonitoringControl> MonitoringControls,
     IReadOnlyList<DependencyPolicyControl> DependencyPolicyControls,
     IReadOnlyList<DeploymentSafetyControl> DeploymentSafetyControls,
+    IReadOnlyList<ReleaseReviewChecklistItem> ReleaseReviewChecklist,
     VisualQaCoverage VisualQaCoverage);
 
 public class ProductionReadinessReportService(AccountsDbContext db)
@@ -203,6 +217,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
         var monitoringControls = BuildMonitoringControls();
         var dependencyPolicyControls = BuildDependencyPolicyControls();
         var deploymentSafetyControls = BuildDeploymentSafetyControls();
+        var releaseReviewChecklist = BuildReleaseReviewChecklist(assuranceActions, operationalGates);
         var accountantAcceptanceCriteria = BuildAccountantAcceptanceCriteria();
         var visualQaCoverage = BuildVisualQaCoverage();
         var sourceLawTraceability = BuildSourceLawTraceability(
@@ -240,6 +255,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             monitoringControls,
             dependencyPolicyControls,
             deploymentSafetyControls,
+            releaseReviewChecklist,
             visualQaCoverage);
     }
 
@@ -285,6 +301,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "production-operational-gates",
             "dependency-policy-controls",
             "deployment-safety-controls",
+            "release-review-checklist",
             "accountant-acceptance-criteria"
         };
         var releaseBlockers = assuranceActions
@@ -1063,6 +1080,101 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "The accountant journey needs desktop and mobile screenshots across light and dark mode before it can be called visually production-ready.",
             "Screenshots for dashboard, production readiness, company detail, period workspace, filing review and the workbench component preview in light desktop, dark desktop, light mobile and dark mobile.")
     ];
+
+    private static IReadOnlyList<ReleaseReviewChecklistItem> BuildReleaseReviewChecklist(
+        IReadOnlyList<ProductionReadinessAssuranceAction> assuranceActions,
+        IReadOnlyList<OperationalGate> operationalGates)
+    {
+        var actionStatuses = assuranceActions.ToDictionary(action => action.Code, action => action.Status, StringComparer.Ordinal);
+        var gateCodes = operationalGates.Select(gate => gate.Code).ToHashSet(StringComparer.Ordinal);
+
+        ReleaseReviewChecklistItem Item(
+            string code,
+            string label,
+            string ownerRole,
+            string evidenceArtifact,
+            string assuranceActionCode,
+            string operationalGateCode,
+            IReadOnlyList<string> auditEventCodes,
+            string detail)
+        {
+            if (!actionStatuses.TryGetValue(assuranceActionCode, out var status))
+                throw new InvalidOperationException($"Release checklist item {code} references unknown assurance action {assuranceActionCode}.");
+
+            if (!string.IsNullOrWhiteSpace(operationalGateCode) && !gateCodes.Contains(operationalGateCode))
+                throw new InvalidOperationException($"Release checklist item {code} references unknown operational gate {operationalGateCode}.");
+
+            return new ReleaseReviewChecklistItem(
+                code,
+                label,
+                ownerRole,
+                Required: true,
+                status,
+                BlocksRelease: status != "complete",
+                evidenceArtifact,
+                assuranceActionCode,
+                operationalGateCode,
+                auditEventCodes,
+                detail);
+        }
+
+        return
+        [
+            Item(
+                "accountant-final-signoff",
+                "Named accountant final sign-off",
+                "Qualified accountant",
+                "named-accountant-approval-record",
+                "qualified-accountant-signoff",
+                "qualified-accountant-review",
+                [
+                    AuditEventCodes.CroFilingStatusChanged,
+                    AuditEventCodes.CharityFilingStatusChanged,
+                    AuditEventCodes.YearEndReviewConfirmationUpdated
+                ],
+                "Named professional approval must be recorded against the period before any real filing pack is treated as final."),
+            Item(
+                "external-ros-validation-evidence",
+                "External ROS/iXBRL validation evidence",
+                "Reviewer",
+                "external-ros-validation-reference",
+                "external-ros-validation",
+                "external-ros-validation",
+                [AuditEventCodes.IxbrlInternalCheckCompleted],
+                "Internal XML checks are not enough for Revenue acceptance; the reviewer must retain external validation evidence."),
+            Item(
+                "golden-corpus-accountant-acceptance",
+                "Golden corpus accountant acceptance",
+                "Qualified accountant",
+                "signed-golden-corpus-acceptance-note",
+                "accountant-acceptance-walkthrough",
+                "qualified-accountant-review",
+                [
+                    AuditEventCodes.CroDocumentGenerated,
+                    AuditEventCodes.IxbrlInternalCheckCompleted,
+                    AuditEventCodes.NotesGenerated
+                ],
+                "A qualified accountant must walk the golden scenarios through the live workflow and accept outputs, gates and wording."),
+            Item(
+                "production-smoke-and-backup",
+                "Production smoke and backup evidence",
+                "Operations",
+                "ci-production-stack-smoke-and-backup-restore",
+                "production-monitoring",
+                "production-ci-gates",
+                [],
+                "Release evidence must include successful production stack smoke, visual smoke, monitoring configuration and backup restore drill."),
+            Item(
+                "visual-qa-screenshot-review",
+                "Light/dark visual QA screenshot review",
+                "Engineering",
+                "light-dark-desktop-mobile-screenshot-review",
+                "light-dark-visual-regression",
+                "production-ci-gates",
+                [],
+                "Desktop and mobile screenshots in light and dark mode must be reviewed for the accountant workflow before release.")
+        ];
+    }
 
     private static IReadOnlyList<GoldenFilingCorpusProofPoint> ProofPoints(
         string automatedVerifier,

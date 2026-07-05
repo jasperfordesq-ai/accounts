@@ -607,6 +607,59 @@ public class ProductionReadinessReportTests
     }
 
     [Fact]
+    public async Task ProductionReadinessReport_ExposesReleaseReviewChecklistTiedToAssuranceActionsAndAuditEvidence()
+    {
+        await using var db = CreateDbContext();
+        var report = await new ProductionReadinessReportService(db).GetReportAsync();
+        var checklistProperty = report.GetType().GetProperty("ReleaseReviewChecklist");
+
+        Assert.NotNull(checklistProperty);
+        var checklist = Assert.IsAssignableFrom<System.Collections.IEnumerable>(checklistProperty!.GetValue(report))
+            .Cast<object>()
+            .ToArray();
+
+        Assert.NotEmpty(checklist);
+        Assert.Contains(report.AssurancePacket.EvidenceItems, item => item == "release-review-checklist");
+        Assert.Contains(checklist, item =>
+            StringProperty(item, "Code") == "accountant-final-signoff"
+            && StringProperty(item, "OwnerRole") == "Qualified accountant"
+            && StringProperty(item, "AssuranceActionCode") == "qualified-accountant-signoff"
+            && StringProperty(item, "OperationalGateCode") == "qualified-accountant-review"
+            && StringProperty(item, "EvidenceArtifact") == "named-accountant-approval-record"
+            && BooleanProperty(item, "BlocksRelease")
+            && StringListProperty(item, "AuditEventCodes").Contains(AuditEventCodes.CroFilingStatusChanged));
+        Assert.Contains(checklist, item =>
+            StringProperty(item, "Code") == "production-smoke-and-backup"
+            && StringProperty(item, "OwnerRole") == "Operations"
+            && StringProperty(item, "AssuranceActionCode") == "production-monitoring"
+            && StringProperty(item, "EvidenceArtifact") == "ci-production-stack-smoke-and-backup-restore"
+            && StringProperty(item, "Status") == "required");
+
+        var assuranceActionCodes = report.AssuranceActions.Select(action => action.Code).ToHashSet(StringComparer.Ordinal);
+        var operationalGateCodes = report.OperationalGates.Select(gate => gate.Code).ToHashSet(StringComparer.Ordinal);
+
+        Assert.Equal(
+            report.AssuranceActions.Select(action => action.Code).Order(StringComparer.Ordinal),
+            checklist.Select(item => StringProperty(item, "AssuranceActionCode")).Order(StringComparer.Ordinal));
+        Assert.All(checklist, item =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(item, "Code")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(item, "Label")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(item, "OwnerRole")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(item, "EvidenceArtifact")));
+            Assert.Contains(StringProperty(item, "AssuranceActionCode"), assuranceActionCodes);
+
+            var operationalGateCode = StringProperty(item, "OperationalGateCode");
+            if (!string.IsNullOrWhiteSpace(operationalGateCode))
+                Assert.Contains(operationalGateCode, operationalGateCodes);
+
+            var ownerRole = StringProperty(item, "OwnerRole");
+            if (ownerRole is "Qualified accountant" or "Reviewer")
+                Assert.NotEmpty(StringListProperty(item, "AuditEventCodes"));
+        });
+    }
+
+    [Fact]
     public async Task ProductionReadinessReport_IncludesSourceBackedStatutoryRulesMatrix()
     {
         await using var db = CreateDbContext();

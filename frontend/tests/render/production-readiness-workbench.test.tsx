@@ -45,6 +45,10 @@ describe("ProductionReadinessWorkbench", () => {
     expect(screen.getByText("Light/dark visual regression")).toBeInTheDocument();
     expect(screen.getByText("visual-qa-evidence")).toBeInTheDocument();
     expect(screen.getByText(/Sentry production error routing configured and reviewed/)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Release review checklist" })).toBeInTheDocument();
+    expect(screen.getByText("Named accountant final sign-off")).toBeInTheDocument();
+    expect(screen.getByText("named-accountant-approval-record")).toBeInTheDocument();
+    expect(screen.getByText("ci-production-stack-smoke-and-backup-restore")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Statutory rules matrix" })).toBeInTheDocument();
     expect(screen.getByText("LTD micro")).toBeInTheDocument();
     expect(screen.getByText("CLG charity")).toBeInTheDocument();
@@ -151,7 +155,7 @@ function sampleReport(): ProductionReadinessReport {
       visualQaExpectedScreenshots: 24,
       requiredOperationalGates: 1,
       openCriticalActions: 1,
-      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "golden-filing-corpus", "visual-smoke-screenshots"],
+      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "golden-filing-corpus", "visual-smoke-screenshots", "release-review-checklist"],
       releaseBlockers: ["Qualified accountant sign-off required"],
     },
     accountantAcceptanceCriteria: [
@@ -291,6 +295,47 @@ function sampleReport(): ProductionReadinessReport {
         status: "in-progress",
         detail: "Capture desktop and mobile screenshots for accountant routes in both themes.",
         evidenceRequired: "Screenshot review attached to CI or release checklist.",
+      },
+    ],
+    releaseReviewChecklist: [
+      {
+        code: "accountant-final-signoff",
+        label: "Named accountant final sign-off",
+        ownerRole: "Qualified accountant",
+        required: true,
+        status: "required",
+        blocksRelease: true,
+        evidenceArtifact: "named-accountant-approval-record",
+        assuranceActionCode: "qualified-accountant-signoff",
+        operationalGateCode: "accountant-review",
+        auditEventCodes: ["CroFilingStatusChanged"],
+        detail: "Named professional approval must be recorded against the period.",
+      },
+      {
+        code: "production-smoke-and-backup",
+        label: "Production smoke and backup evidence",
+        ownerRole: "Operations",
+        required: true,
+        status: "required",
+        blocksRelease: true,
+        evidenceArtifact: "ci-production-stack-smoke-and-backup-restore",
+        assuranceActionCode: "production-monitoring",
+        operationalGateCode: "",
+        auditEventCodes: [],
+        detail: "Production stack smoke and backup restore evidence must be attached before release.",
+      },
+      {
+        code: "visual-qa-screenshot-review",
+        label: "Light/dark visual QA screenshot review",
+        ownerRole: "Engineering",
+        required: true,
+        status: "in-progress",
+        blocksRelease: true,
+        evidenceArtifact: "light-dark-desktop-mobile-screenshot-review",
+        assuranceActionCode: "light-dark-visual-regression",
+        operationalGateCode: "",
+        auditEventCodes: [],
+        detail: "Desktop and mobile screenshots in light and dark mode must be reviewed.",
       },
     ],
     auditabilityControls: [

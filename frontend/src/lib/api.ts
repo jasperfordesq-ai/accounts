@@ -1665,6 +1665,20 @@ export interface DeploymentSafetyControl {
   failurePolicy: string;
 }
 
+export interface ReleaseReviewChecklistItem {
+  code: string;
+  label: string;
+  ownerRole: string;
+  required: boolean;
+  status: string;
+  blocksRelease: boolean;
+  evidenceArtifact: string;
+  assuranceActionCode: string;
+  operationalGateCode: string;
+  auditEventCodes: string[];
+  detail: string;
+}
+
 export interface AccountantAcceptanceCriterion {
   scenarioCode: string;
   label: string;
@@ -1737,6 +1751,7 @@ export interface ProductionReadinessReport {
   monitoringControls: ProductionMonitoringControl[];
   dependencyPolicyControls: DependencyPolicyControl[];
   deploymentSafetyControls: DeploymentSafetyControl[];
+  releaseReviewChecklist: ReleaseReviewChecklistItem[];
   visualQaCoverage: VisualQaCoverage;
 }
 
@@ -1892,6 +1907,20 @@ const deploymentSafetyControlSchema = z.object({
   failurePolicy: z.string().min(1),
 });
 
+const releaseReviewChecklistItemSchema = z.object({
+  code: z.string().min(1),
+  label: z.string().min(1),
+  ownerRole: z.string().min(1),
+  required: z.boolean(),
+  status: z.string().min(1),
+  blocksRelease: z.boolean(),
+  evidenceArtifact: z.string().min(1),
+  assuranceActionCode: z.string().min(1),
+  operationalGateCode: z.string(),
+  auditEventCodes: z.array(z.string().min(1)),
+  detail: z.string().min(1),
+});
+
 const accountantAcceptanceCriterionSchema = z.object({
   scenarioCode: z.string().min(1),
   label: z.string().min(1),
@@ -1948,6 +1977,7 @@ export const productionReadinessReportSchema = z.object({
   monitoringControls: z.array(productionMonitoringControlSchema),
   dependencyPolicyControls: z.array(dependencyPolicyControlSchema),
   deploymentSafetyControls: z.array(deploymentSafetyControlSchema),
+  releaseReviewChecklist: z.array(releaseReviewChecklistItemSchema),
   visualQaCoverage: visualQaCoverageSchema,
 });
 
@@ -2080,6 +2110,14 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
     );
   }
 
+  if (!report.assurancePacket.evidenceItems.includes("release-review-checklist")) {
+    throw new Error(
+      "Invalid production readiness report contract: assurancePacket.evidenceItems - release-review-checklist is required",
+    );
+  }
+
+  assertReleaseReviewChecklist(report);
+
   report.goldenFilingCorpus.forEach((scenario, scenarioIndex) => {
     const evidenceTests = new Set(scenario.evidenceTestNames);
     scenario.evidencePack.expectedProofPoints.forEach((proofPoint, proofPointIndex) => {
@@ -2090,6 +2128,38 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
       }
     });
   });
+}
+
+function assertReleaseReviewChecklist(report: ProductionReadinessReport) {
+  const assuranceActionCodes = new Set(report.assuranceActions.map((action) => action.code));
+  const operationalGateCodes = new Set(report.operationalGates.map((gate) => gate.code));
+  const checklistActionCodes = new Set<string>();
+
+  report.releaseReviewChecklist.forEach((item, itemIndex) => {
+    if (!assuranceActionCodes.has(item.assuranceActionCode)) {
+      throw new Error(
+        `Invalid production readiness report contract: releaseReviewChecklist.${itemIndex}.assuranceActionCode - must reference a known assurance action`,
+      );
+    }
+
+    if (item.operationalGateCode.trim() && !operationalGateCodes.has(item.operationalGateCode)) {
+      throw new Error(
+        `Invalid production readiness report contract: releaseReviewChecklist.${itemIndex}.operationalGateCode - must reference a known operational gate`,
+      );
+    }
+
+    checklistActionCodes.add(item.assuranceActionCode);
+  });
+
+  const missingActions = [...assuranceActionCodes]
+    .filter((code) => !checklistActionCodes.has(code))
+    .sort();
+
+  if (missingActions.length > 0) {
+    throw new Error(
+      `Invalid production readiness report contract: releaseReviewChecklist - missing checklist items for assurance actions: ${missingActions.join(", ")}`,
+    );
+  }
 }
 
 function assertAssuranceActionsRiskOrder(actions: ProductionReadinessAssuranceAction[]) {

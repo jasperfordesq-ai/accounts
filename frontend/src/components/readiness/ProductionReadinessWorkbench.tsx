@@ -26,6 +26,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
   const monitoringControls = report.monitoringControls ?? [];
   const dependencyPolicyControls = report.dependencyPolicyControls ?? [];
   const deploymentSafetyControls = report.deploymentSafetyControls ?? [];
+  const releaseReviewChecklist = report.releaseReviewChecklist ?? [];
   const sourceLawTraceability = report.sourceLawTraceability ?? [];
   const visualQaCoverage = report.visualQaCoverage;
   const assurancePacket = report.assurancePacket;
@@ -204,6 +205,58 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
               <span key="evidence" className="whitespace-normal text-[var(--muted-foreground)]">{action.evidenceRequired}</span>,
               <StatusBadge key="status" tone={action.status === "complete" ? "good" : action.status === "in-progress" ? "info" : "warn"}>
                 {formatStatus(action.status)}
+              </StatusBadge>,
+            ],
+          }))}
+        />
+      </ReviewPanel>
+
+      <ReviewPanel
+        title="Release review checklist"
+        description="Role-owned evidence checklist tying release blockers to assurance actions, operational gates, audit events and CI artifacts."
+        actions={<StatusBadge tone={releaseReviewChecklist.some((item) => item.blocksRelease) ? "bad" : "good"}>{releaseReviewChecklist.filter((item) => item.blocksRelease).length} blocking</StatusBadge>}
+      >
+        <DataTable
+          caption="Release review checklist"
+          filterPlaceholder="Filter release checklist"
+          emptyState="No release checklist items"
+          columns={["Gate", "Owner", "Evidence artifact", "Linked controls", "Audit evidence", "Status"]}
+          rows={releaseReviewChecklist.map((item) => ({
+            id: item.code,
+            tone: item.blocksRelease ? "bad" : item.status === "complete" ? "good" : "warn",
+            searchText: [
+              item.code,
+              item.label,
+              item.ownerRole,
+              item.status,
+              item.evidenceArtifact,
+              item.assuranceActionCode,
+              item.operationalGateCode,
+              ...item.auditEventCodes,
+              item.detail,
+            ].join(" "),
+            cells: [
+              <div key="gate" className="min-w-48 whitespace-normal">
+                <p className="font-medium">{item.label}</p>
+                <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">{item.detail}</p>
+              </div>,
+              <span key="owner" className="text-[var(--muted-foreground)]">{item.ownerRole}</span>,
+              <code key="artifact" className="break-all text-[11px] text-[var(--foreground)]">{item.evidenceArtifact}</code>,
+              <div key="controls" className="space-y-1">
+                <code className="block break-all text-[11px] text-[var(--muted-foreground)]">{item.assuranceActionCode}</code>
+                {item.operationalGateCode ? (
+                  <code className="block break-all text-[11px] text-[var(--muted-foreground)]">{item.operationalGateCode}</code>
+                ) : (
+                  <span className="text-xs text-[var(--muted-foreground)]">No app gate</span>
+                )}
+              </div>,
+              item.auditEventCodes.length > 0 ? (
+                <CodeStack key="audit" items={item.auditEventCodes} />
+              ) : (
+                <span key="audit" className="text-xs text-[var(--muted-foreground)]">CI artifact</span>
+              ),
+              <StatusBadge key="status" tone={item.blocksRelease ? "bad" : item.status === "complete" ? "good" : "warn"}>
+                {item.blocksRelease ? "Blocks release" : formatStatus(item.status)}
               </StatusBadge>,
             ],
           }))}

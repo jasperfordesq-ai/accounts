@@ -128,7 +128,7 @@ function productionReadinessReportFixture() {
       visualQaExpectedScreenshots: 6,
       requiredOperationalGates: 1,
       openCriticalActions: 1,
-      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "golden-filing-corpus", "visual-smoke-screenshots"],
+      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "golden-filing-corpus", "visual-smoke-screenshots", "release-review-checklist"],
       releaseBlockers: ["Qualified accountant sign-off required"],
     },
     accountantAcceptanceCriteria: [
@@ -220,6 +220,21 @@ function productionReadinessReportFixture() {
         status: "required",
         detail: "No real filing pack can be treated as final until a named qualified accountant has approved it.",
         evidenceRequired: "Named accountant approval recorded against the period.",
+      },
+    ],
+    releaseReviewChecklist: [
+      {
+        code: "accountant-final-signoff",
+        label: "Named accountant final sign-off",
+        ownerRole: "Qualified accountant",
+        required: true,
+        status: "required",
+        blocksRelease: true,
+        evidenceArtifact: "named-accountant-approval-record",
+        assuranceActionCode: "qualified-accountant-signoff",
+        operationalGateCode: "qualified-accountant-review",
+        auditEventCodes: ["CroFilingStatusChanged"],
+        detail: "Named professional approval must be recorded against the period.",
       },
     ],
     auditabilityControls: [

@@ -32,9 +32,13 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.equal(parsed.assurancePacket.sourceLawSnapshotHash, "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
   assert.equal(parsed.assurancePacket.goldenCorpusCovered, 1);
   assert.ok(parsed.assurancePacket.evidenceItems.includes("source-law-traceability-index"));
+  assert.ok(parsed.assurancePacket.evidenceItems.includes("release-review-checklist"));
   assert.equal(parsed.assurancePacket.releaseBlockers[0], "Qualified accountant sign-off required");
   assert.equal(parsed.assuranceActions[0].riskRank, 0);
   assert.equal(parsed.assuranceActions[0].evidenceStage, "accountant-review-gate");
+  assert.equal(parsed.releaseReviewChecklist[0].code, "accountant-final-signoff");
+  assert.equal(parsed.releaseReviewChecklist[0].assuranceActionCode, "qualified-accountant-signoff");
+  assert.equal(parsed.releaseReviewChecklist[0].evidenceArtifact, "named-accountant-approval-record");
 });
 
 test("parseProductionReadinessReport rejects missing golden corpus evidence packs", () => {
@@ -150,6 +154,16 @@ test("parseProductionReadinessReport rejects assurance actions that are not risk
   );
 });
 
+test("parseProductionReadinessReport rejects release checklist items for unknown assurance actions", () => {
+  const payload = sampleReport();
+  payload.releaseReviewChecklist[0].assuranceActionCode = "missing-assurance-action";
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: releaseReviewChecklist\.0\.assuranceActionCode - must reference a known assurance action/,
+  );
+});
+
 function sampleReport() {
   return {
     generatedAt: "2026-07-04T12:00:00Z",
@@ -187,7 +201,7 @@ function sampleReport() {
       visualQaExpectedScreenshots: 6,
       requiredOperationalGates: 1,
       openCriticalActions: 1,
-      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "golden-filing-corpus", "visual-smoke-screenshots"],
+      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "golden-filing-corpus", "visual-smoke-screenshots", "release-review-checklist"],
       releaseBlockers: ["Qualified accountant sign-off required"],
     },
     accountantAcceptanceCriteria: [
@@ -279,6 +293,21 @@ function sampleReport() {
         status: "required",
         detail: "No real filing pack can be treated as final until a named qualified accountant has approved it.",
         evidenceRequired: "Named accountant approval recorded against the period.",
+      },
+    ],
+    releaseReviewChecklist: [
+      {
+        code: "accountant-final-signoff",
+        label: "Named accountant final sign-off",
+        ownerRole: "Qualified accountant",
+        required: true,
+        status: "required",
+        blocksRelease: true,
+        evidenceArtifact: "named-accountant-approval-record",
+        assuranceActionCode: "qualified-accountant-signoff",
+        operationalGateCode: "qualified-accountant-review",
+        auditEventCodes: ["CroFilingStatusChanged"],
+        detail: "Named professional approval must be recorded against the period.",
       },
     ],
     auditabilityControls: [
