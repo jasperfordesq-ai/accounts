@@ -575,14 +575,14 @@ export function LegalSourceList({
   }
 
   return (
-    <ul className="flex max-w-full flex-wrap gap-2 whitespace-normal">
+    <ul className="flex w-full max-w-full flex-wrap gap-2 whitespace-normal">
       {visible.map((source) => (
-        <li key={source.sourceId || source.url} className="min-w-0">
+        <li key={source.sourceId || source.url} className="min-w-0 max-w-full basis-full sm:basis-auto">
           <a
             href={source.url}
             target="_blank"
             rel="noreferrer"
-            className="group inline-flex max-w-full items-start gap-2 rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] px-3 py-2 text-xs font-medium text-[var(--foreground)] transition hover:border-[var(--ring)] hover:bg-[var(--surface)]"
+            className="group inline-flex w-full max-w-full items-start gap-2 rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] px-3 py-2 text-xs font-medium text-[var(--foreground)] transition hover:border-[var(--ring)] hover:bg-[var(--surface)]"
           >
             <span className="min-w-0">
               <span className="block truncate">{source.title}</span>
@@ -595,7 +595,7 @@ export function LegalSourceList({
         </li>
       ))}
       {remaining > 0 && (
-        <li className="inline-flex min-h-9 items-center rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] px-3 text-xs font-semibold text-[var(--muted-foreground)]">
+        <li className="inline-flex min-h-9 max-w-full basis-full items-center rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] px-3 text-xs font-semibold text-[var(--muted-foreground)] sm:basis-auto">
           {remaining} more {remaining === 1 ? "source" : "sources"}
         </li>
       )}
