@@ -424,6 +424,8 @@ function sampleReport(): ProductionReadinessReport {
         productionSafetyGate: "Monitoring:StructuredJsonConsole",
         evidenceCaptured: "Production log lines keep structured fields and scopes for indexing.",
         verification: "Program.cs switches to AddJsonConsole when the production safety gate is enabled.",
+        alertRoute: "Platform operations log stream and release reviewer",
+        failurePolicy: "Block release if production logs cannot be parsed by timestamp, level, category and correlation id.",
       },
       {
         code: "correlation-id-error-responses",
@@ -433,6 +435,8 @@ function sampleReport(): ProductionReadinessReport {
         productionSafetyGate: "Monitoring:IncludeCorrelationId",
         evidenceCaptured: "Safe client errors include a correlation id that maps to the server exception log.",
         verification: "ExceptionMiddleware logs unhandled errors and returns the trace identifier.",
+        alertRoute: "Support triage queue and platform owner",
+        failurePolicy: "Block release if safe error responses omit correlation ids or server logs cannot be matched to the support ticket.",
       },
     ],
     dependencyPolicyControls: [
