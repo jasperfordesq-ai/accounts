@@ -151,6 +151,50 @@ public class ProductionReadinessReportTests
     }
 
     [Fact]
+    public async Task ProductionReadinessReport_ExposesAuditEvidenceTimelineForWhoWhatWhenReview()
+    {
+        await using var db = CreateDbContext();
+        var report = await new ProductionReadinessReportService(db).GetReportAsync();
+        var timelineProperty = report.GetType().GetProperty("AuditEvidenceTimeline");
+
+        Assert.NotNull(timelineProperty);
+        var timeline = Assert.IsAssignableFrom<System.Collections.IEnumerable>(timelineProperty!.GetValue(report))
+            .Cast<object>()
+            .ToArray();
+
+        Assert.Contains(report.AssurancePacket.EvidenceItems, item => item == "audit-evidence-timeline");
+        Assert.Contains(timeline, entry =>
+            StringProperty(entry, "Code") == "data-change-capture"
+            && StringProperty(entry, "EvidenceQuestion").Contains("who changed what", StringComparison.OrdinalIgnoreCase)
+            && StringProperty(entry, "CapturedWhen").Contains("write", StringComparison.OrdinalIgnoreCase)
+            && StringListProperty(entry, "AuditEventCodes").Contains(AuditEventCodes.SizeClassificationDataSaved));
+        Assert.Contains(timeline, entry =>
+            StringProperty(entry, "Code") == "generated-output-capture"
+            && StringProperty(entry, "EvidenceQuestion").Contains("what was generated", StringComparison.OrdinalIgnoreCase)
+            && StringListProperty(entry, "AuditEventCodes").Contains(AuditEventCodes.CroDocumentGenerated));
+        Assert.Contains(timeline, entry =>
+            StringProperty(entry, "Code") == "accountant-approval-capture"
+            && StringProperty(entry, "RequiredActor").Contains("qualified accountant", StringComparison.OrdinalIgnoreCase)
+            && StringListProperty(entry, "BlockingGateCodes").Contains("qualified-accountant-review"));
+        Assert.Contains(timeline, entry =>
+            StringProperty(entry, "Code") == "external-validation-capture"
+            && StringProperty(entry, "EvidenceQuestion").Contains("external ROS", StringComparison.OrdinalIgnoreCase)
+            && StringListProperty(entry, "BlockingGateCodes").Contains("external-ros-validation"));
+
+        Assert.All(timeline, entry =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(entry, "Code")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(entry, "Stage")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(entry, "EvidenceQuestion")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(entry, "CapturedWhen")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(entry, "RequiredActor")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(entry, "Verification")));
+            Assert.NotEmpty(StringListProperty(entry, "AuditEventCodes"));
+            Assert.NotEmpty(StringListProperty(entry, "BlockingGateCodes"));
+        });
+    }
+
+    [Fact]
     public async Task GoldenCorpusCoverage_IsBackedByConcreteAutomatedEvidenceTests()
     {
         await using var db = CreateDbContext();

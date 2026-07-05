@@ -120,6 +120,16 @@ public sealed record ProductionAuditabilityControl(
     string Verification,
     IReadOnlyList<string> AuditEventCodes);
 
+public sealed record AuditEvidenceTimelineEntry(
+    string Code,
+    string Stage,
+    string EvidenceQuestion,
+    string CapturedWhen,
+    string RequiredActor,
+    string Verification,
+    IReadOnlyList<string> AuditEventCodes,
+    IReadOnlyList<string> BlockingGateCodes);
+
 public sealed record ProductionMonitoringControl(
     string Code,
     string Label,
@@ -240,6 +250,7 @@ public sealed record ProductionReadinessReport(
     IReadOnlyList<OperationalGate> OperationalGates,
     IReadOnlyList<ProductionReadinessAssuranceAction> AssuranceActions,
     IReadOnlyList<ProductionAuditabilityControl> AuditabilityControls,
+    IReadOnlyList<AuditEvidenceTimelineEntry> AuditEvidenceTimeline,
     IReadOnlyList<ProductionMonitoringControl> MonitoringControls,
     IReadOnlyList<DependencyPolicyControl> DependencyPolicyControls,
     IReadOnlyList<DeploymentSafetyControl> DeploymentSafetyControls,
@@ -261,6 +272,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
         var operationalGates = BuildOperationalGates();
         var assuranceActions = BuildAssuranceActions();
         var auditabilityControls = BuildAuditabilityControls();
+        var auditEvidenceTimeline = BuildAuditEvidenceTimeline();
         var monitoringControls = BuildMonitoringControls();
         var dependencyPolicyControls = BuildDependencyPolicyControls();
         var deploymentSafetyControls = BuildDeploymentSafetyControls();
@@ -299,6 +311,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             operationalGates,
             assuranceActions,
             auditabilityControls,
+            auditEvidenceTimeline,
             monitoringControls,
             dependencyPolicyControls,
             deploymentSafetyControls,
@@ -345,6 +358,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "golden-verifier-manifest",
             "statutory-rules-matrix",
             "statutory-rules-coverage",
+            "audit-evidence-timeline",
             "visual-smoke-screenshots",
             "production-operational-gates",
             "dependency-policy-controls",
@@ -1519,6 +1533,77 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 AuditEventCodes.CroFilingStatusChanged,
                 AuditEventCodes.CroDocumentGenerated,
                 AuditEventCodes.IxbrlInternalCheckCompleted
+            ])
+    ];
+
+    private static IReadOnlyList<AuditEvidenceTimelineEntry> BuildAuditEvidenceTimeline() =>
+    [
+        new(
+            "data-change-capture",
+            "Working papers",
+            "Who changed what and when?",
+            "At every authenticated write before regenerated outputs can be reviewed.",
+            "Authenticated firm user",
+            "Audit log snapshots and integrity hash chain must cover the changed entity before a reviewer relies on the updated evidence.",
+            [
+                AuditEventCodes.SizeClassificationDataSaved,
+                AuditEventCodes.FilingRegimeDetermined,
+                AuditEventCodes.AdjustmentUpdated,
+                AuditEventCodes.NoteDisclosureUpdated,
+                AuditEventCodes.YearEndReviewConfirmationUpdated
+            ],
+            [
+                "working-paper-review",
+                "qualified-accountant-review"
+            ]),
+        new(
+            "generated-output-capture",
+            "Generated outputs",
+            "What was generated and when?",
+            "Immediately after server-side PDF, notes, charity or iXBRL generation completes.",
+            "System generation service",
+            "Generated output audit event must exist before accountant approval can rely on the pack.",
+            [
+                AuditEventCodes.CroDocumentGenerated,
+                AuditEventCodes.IxbrlInternalCheckCompleted,
+                AuditEventCodes.NotesGenerated,
+                AuditEventCodes.CharityReportGenerated
+            ],
+            [
+                "generated-output-review",
+                "qualified-accountant-review"
+            ]),
+        new(
+            "accountant-approval-capture",
+            "Professional review",
+            "Who approved the pack and what evidence was open at approval?",
+            "At named qualified-accountant approval, after generated outputs and required evidence are present.",
+            "Named qualified accountant",
+            "Filing workflow transitions must record reviewer identity, approval timestamp, open blockers, warnings and allowed next actions.",
+            [
+                AuditEventCodes.AdjustmentApproved,
+                AuditEventCodes.CroFilingStatusChanged,
+                AuditEventCodes.CroPaymentConfirmed,
+                AuditEventCodes.CharityFilingStatusChanged
+            ],
+            [
+                "qualified-accountant-review",
+                "director-secretary-certification"
+            ]),
+        new(
+            "external-validation-capture",
+            "External validation",
+            "When was external ROS/iXBRL validation evidence present?",
+            "After internal iXBRL checks pass and before Revenue filing status can be marked externally usable.",
+            "Reviewer or qualified accountant",
+            "External validation evidence remains a recorded workflow state only; the platform must not perform direct ROS submission.",
+            [
+                AuditEventCodes.IxbrlInternalCheckCompleted,
+                AuditEventCodes.CroFilingStatusChanged
+            ],
+            [
+                "external-ros-validation",
+                "no-direct-cro-ros-submission"
             ])
     ];
 

@@ -137,7 +137,7 @@ function productionReadinessReportFixture() {
       visualQaExpectedScreenshots: expectedVisualSmokeScreenshotCount(),
       requiredOperationalGates: 1,
       openCriticalActions: 1,
-      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "golden-filing-corpus", "golden-verifier-manifest", "visual-smoke-screenshots", "release-review-checklist"],
+      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "golden-filing-corpus", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-review-checklist"],
       releaseBlockers: ["Qualified accountant sign-off required"],
     },
     accountantAcceptanceCriteria: [
@@ -284,6 +284,18 @@ function productionReadinessReportFixture() {
         evidenceCaptured: "Authenticated user id, timestamp, entity, action and old/new value snapshots.",
         verification: "Hash chain verification covers each company-scoped audit row.",
         auditEventCodes: ["AdjustmentUpdated"],
+      },
+    ],
+    auditEvidenceTimeline: [
+      {
+        code: "data-change-capture",
+        stage: "Working papers",
+        evidenceQuestion: "Who changed what and when?",
+        capturedWhen: "At every authenticated write before regenerated outputs can be reviewed.",
+        requiredActor: "Authenticated firm user",
+        verification: "Audit log snapshots and integrity hash chain must cover the changed entity.",
+        auditEventCodes: ["AdjustmentUpdated"],
+        blockingGateCodes: ["working-paper-review"],
       },
     ],
     monitoringControls: [

@@ -80,7 +80,12 @@ describe("ProductionReadinessWorkbench", () => {
     expect(screen.getByText("What was generated")).toBeInTheDocument();
     expect(screen.getByText("Tamper-evident audit chain")).toBeInTheDocument();
     expect(screen.getByText("audit-log-integrity-chain")).toBeInTheDocument();
-    expect(screen.getByText("CroDocumentGenerated")).toBeInTheDocument();
+    expect(screen.getAllByText("CroDocumentGenerated").length).toBeGreaterThan(1);
+    expect(screen.getByRole("heading", { name: "Audit evidence timeline" })).toBeInTheDocument();
+    expect(screen.getByText("Who changed what and when?")).toBeInTheDocument();
+    expect(screen.getByText("At every authenticated write before regenerated outputs can be reviewed.")).toBeInTheDocument();
+    expect(screen.getByText("Generated output audit event must exist before accountant approval can rely on the pack.")).toBeInTheDocument();
+    expect(screen.getAllByText("generated-output-review").length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Production monitoring" })).toBeInTheDocument();
     expect(screen.getByText("Production error tracking")).toBeInTheDocument();
     expect(screen.getByText("Structured JSON logs")).toBeInTheDocument();
@@ -166,7 +171,7 @@ function sampleReport(): ProductionReadinessReport {
       visualQaExpectedScreenshots: 24,
       requiredOperationalGates: 1,
       openCriticalActions: 1,
-      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "golden-filing-corpus", "golden-verifier-manifest", "visual-smoke-screenshots", "release-review-checklist"],
+      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "golden-filing-corpus", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-review-checklist"],
       releaseBlockers: ["Qualified accountant sign-off required"],
     },
     accountantAcceptanceCriteria: [
@@ -414,6 +419,28 @@ function sampleReport(): ProductionReadinessReport {
         evidenceCaptured: "Previous hash, current hash, checkpoint key id and signed checkpoint anchor.",
         verification: "Signed checkpoint verifies the latest company audit entry.",
         auditEventCodes: ["IxbrlInternalCheckCompleted"],
+      },
+    ],
+    auditEvidenceTimeline: [
+      {
+        code: "data-change-capture",
+        stage: "Working papers",
+        evidenceQuestion: "Who changed what and when?",
+        capturedWhen: "At every authenticated write before regenerated outputs can be reviewed.",
+        requiredActor: "Authenticated firm user",
+        verification: "Audit log snapshots and integrity hash chain must cover the changed entity.",
+        auditEventCodes: ["AdjustmentUpdated"],
+        blockingGateCodes: ["working-paper-review"],
+      },
+      {
+        code: "generated-output-capture",
+        stage: "Generated outputs",
+        evidenceQuestion: "What was generated and when?",
+        capturedWhen: "Immediately after server-side PDF, notes or iXBRL generation completes.",
+        requiredActor: "System generation service",
+        verification: "Generated output audit event must exist before accountant approval can rely on the pack.",
+        auditEventCodes: ["CroDocumentGenerated"],
+        blockingGateCodes: ["generated-output-review"],
       },
     ],
     monitoringControls: [

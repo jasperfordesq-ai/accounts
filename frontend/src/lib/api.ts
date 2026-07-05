@@ -1669,6 +1669,17 @@ export interface ProductionAuditabilityControl {
   auditEventCodes: string[];
 }
 
+export interface AuditEvidenceTimelineEntry {
+  code: string;
+  stage: string;
+  evidenceQuestion: string;
+  capturedWhen: string;
+  requiredActor: string;
+  verification: string;
+  auditEventCodes: string[];
+  blockingGateCodes: string[];
+}
+
 export interface ProductionMonitoringControl {
   code: string;
   label: string;
@@ -1799,6 +1810,7 @@ export interface ProductionReadinessReport {
   operationalGates: OperationalGate[];
   assuranceActions: ProductionReadinessAssuranceAction[];
   auditabilityControls: ProductionAuditabilityControl[];
+  auditEvidenceTimeline: AuditEvidenceTimelineEntry[];
   monitoringControls: ProductionMonitoringControl[];
   dependencyPolicyControls: DependencyPolicyControl[];
   deploymentSafetyControls: DeploymentSafetyControl[];
@@ -1960,6 +1972,17 @@ const productionAuditabilityControlSchema = z.object({
   auditEventCodes: z.array(z.string().min(1)),
 });
 
+const auditEvidenceTimelineEntrySchema = z.object({
+  code: z.string().min(1),
+  stage: z.string().min(1),
+  evidenceQuestion: z.string().min(1),
+  capturedWhen: z.string().min(1),
+  requiredActor: z.string().min(1),
+  verification: z.string().min(1),
+  auditEventCodes: z.array(z.string().min(1)),
+  blockingGateCodes: z.array(z.string().min(1)),
+});
+
 const productionMonitoringControlSchema = z.object({
   code: z.string().min(1),
   label: z.string().min(1),
@@ -2074,6 +2097,7 @@ export const productionReadinessReportSchema = z.object({
   operationalGates: z.array(operationalGateSchema),
   assuranceActions: z.array(productionReadinessAssuranceActionSchema),
   auditabilityControls: z.array(productionAuditabilityControlSchema),
+  auditEvidenceTimeline: z.array(auditEvidenceTimelineEntrySchema),
   monitoringControls: z.array(productionMonitoringControlSchema),
   dependencyPolicyControls: z.array(dependencyPolicyControlSchema),
   deploymentSafetyControls: z.array(deploymentSafetyControlSchema),
@@ -2227,6 +2251,26 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
       "Invalid production readiness report contract: assurancePacket.evidenceItems - release-review-checklist is required",
     );
   }
+
+  if (!report.assurancePacket.evidenceItems.includes("audit-evidence-timeline")) {
+    throw new Error(
+      "Invalid production readiness report contract: assurancePacket.evidenceItems - audit-evidence-timeline is required",
+    );
+  }
+
+  report.auditEvidenceTimeline.forEach((entry, entryIndex) => {
+    if (entry.auditEventCodes.length === 0) {
+      throw new Error(
+        `Invalid production readiness report contract: auditEvidenceTimeline.${entryIndex}.auditEventCodes - at least one audit event code is required`,
+      );
+    }
+
+    if (entry.blockingGateCodes.length === 0) {
+      throw new Error(
+        `Invalid production readiness report contract: auditEvidenceTimeline.${entryIndex}.blockingGateCodes - at least one blocking gate code is required`,
+      );
+    }
+  });
 
   assertReleaseReviewChecklist(report);
 

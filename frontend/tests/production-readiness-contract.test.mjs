@@ -63,6 +63,9 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.equal(parsed.releaseReviewChecklist[0].code, "accountant-final-signoff");
   assert.equal(parsed.releaseReviewChecklist[0].assuranceActionCode, "qualified-accountant-signoff");
   assert.equal(parsed.releaseReviewChecklist[0].evidenceArtifact, "named-accountant-approval-record");
+  assert.equal(parsed.auditEvidenceTimeline[0].code, "data-change-capture");
+  assert.equal(parsed.auditEvidenceTimeline[0].capturedWhen, "At every authenticated write before regenerated outputs can be reviewed.");
+  assert.equal(parsed.auditEvidenceTimeline[1].blockingGateCodes[0], "generated-output-review");
   assert.equal(parsed.visualQaCoverage.expectedScreenshotCount, expectedVisualSmokeScreenshotCount());
   assert.equal(parsed.visualQaCoverage.artifacts.length, expectedVisualSmokeArtifacts().length);
   assert.deepEqual(parsed.visualQaCoverage.themes, visualSmokeThemes);
@@ -226,6 +229,16 @@ test("parseProductionReadinessReport rejects release checklist items for unknown
   );
 });
 
+test("parseProductionReadinessReport rejects missing audit evidence timeline", () => {
+  const payload = sampleReport();
+  delete payload.auditEvidenceTimeline;
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: auditEvidenceTimeline/,
+  );
+});
+
 function sampleReport() {
   return {
     generatedAt: "2026-07-04T12:00:00Z",
@@ -264,7 +277,7 @@ function sampleReport() {
       visualQaExpectedScreenshots: expectedVisualSmokeScreenshotCount(),
       requiredOperationalGates: 1,
       openCriticalActions: 1,
-      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "golden-filing-corpus", "golden-verifier-manifest", "visual-smoke-screenshots", "release-review-checklist"],
+      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "golden-filing-corpus", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-review-checklist"],
       releaseBlockers: ["Qualified accountant sign-off required"],
     },
     accountantAcceptanceCriteria: [
@@ -411,6 +424,28 @@ function sampleReport() {
         evidenceCaptured: "Authenticated user id, timestamp, entity, action and old/new value snapshots.",
         verification: "Hash chain verification covers each company-scoped audit row.",
         auditEventCodes: ["AdjustmentUpdated"],
+      },
+    ],
+    auditEvidenceTimeline: [
+      {
+        code: "data-change-capture",
+        stage: "Working papers",
+        evidenceQuestion: "Who changed what and when?",
+        capturedWhen: "At every authenticated write before regenerated outputs can be reviewed.",
+        requiredActor: "Authenticated firm user",
+        verification: "Audit log snapshots and integrity hash chain must cover the changed entity.",
+        auditEventCodes: ["AdjustmentUpdated"],
+        blockingGateCodes: ["working-paper-review"],
+      },
+      {
+        code: "generated-output-capture",
+        stage: "Generated outputs",
+        evidenceQuestion: "What was generated and when?",
+        capturedWhen: "Immediately after server-side PDF, notes or iXBRL generation completes.",
+        requiredActor: "System generation service",
+        verification: "Generated output audit event must exist before accountant approval can rely on the pack.",
+        auditEventCodes: ["CroDocumentGenerated"],
+        blockingGateCodes: ["generated-output-review"],
       },
     ],
     monitoringControls: [

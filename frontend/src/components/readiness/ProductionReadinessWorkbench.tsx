@@ -23,6 +23,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
   const statutoryRuleMatrix = report.statutoryRuleMatrix ?? [];
   const statutoryRulesCoverage = report.statutoryRulesCoverage ?? [];
   const auditabilityControls = report.auditabilityControls ?? [];
+  const auditEvidenceTimeline = report.auditEvidenceTimeline ?? [];
   const monitoringControls = report.monitoringControls ?? [];
   const dependencyPolicyControls = report.dependencyPolicyControls ?? [];
   const deploymentSafetyControls = report.deploymentSafetyControls ?? [];
@@ -331,6 +332,45 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
               <span key="evidence" className="whitespace-normal text-[var(--muted-foreground)]">{control.evidenceCaptured}</span>,
               <span key="verification" className="whitespace-normal text-[var(--muted-foreground)]">{control.verification}</span>,
               <CodeStack key="events" items={control.auditEventCodes} />,
+            ],
+          }))}
+        />
+      </ReviewPanel>
+
+      <ReviewPanel
+        title="Audit evidence timeline"
+        description="Chronological evidence capture points proving when data changed, outputs were generated, professional approval happened, and external validation evidence was present."
+        actions={<StatusBadge tone="info">{auditEvidenceTimeline.length} capture points</StatusBadge>}
+      >
+        <DataTable
+          caption="Audit evidence timeline"
+          filterPlaceholder="Filter audit evidence timeline"
+          emptyState="No audit evidence timeline entries"
+          columns={["Stage", "Evidence question", "Captured when", "Actor", "Verification", "Audit events", "Blocking gates"]}
+          rows={auditEvidenceTimeline.map((entry) => ({
+            id: entry.code,
+            tone: entry.blockingGateCodes.some((gate) => gate.includes("qualified-accountant") || gate.includes("external-ros")) ? "warn" : "info",
+            searchText: [
+              entry.code,
+              entry.stage,
+              entry.evidenceQuestion,
+              entry.capturedWhen,
+              entry.requiredActor,
+              entry.verification,
+              ...entry.auditEventCodes,
+              ...entry.blockingGateCodes,
+            ].join(" "),
+            cells: [
+              <div key="stage" className="min-w-44 whitespace-normal">
+                <p className="font-medium">{entry.stage}</p>
+                <code className="mt-1 block break-all text-[11px] text-[var(--muted-foreground)]">{entry.code}</code>
+              </div>,
+              <span key="question" className="whitespace-normal text-[var(--foreground)]">{entry.evidenceQuestion}</span>,
+              <span key="when" className="whitespace-normal text-[var(--muted-foreground)]">{entry.capturedWhen}</span>,
+              <span key="actor" className="whitespace-normal text-[var(--muted-foreground)]">{entry.requiredActor}</span>,
+              <span key="verification" className="whitespace-normal text-[var(--muted-foreground)]">{entry.verification}</span>,
+              <CodeStack key="events" items={entry.auditEventCodes} />,
+              <CodeStack key="gates" items={entry.blockingGateCodes} />,
             ],
           }))}
         />
