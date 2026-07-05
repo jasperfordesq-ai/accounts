@@ -1936,7 +1936,62 @@ export function parseProductionReadinessReport(payload: unknown): ProductionRead
   }
 
   const report: ProductionReadinessReport = result.data;
+  assertProductionReadinessInvariants(report);
   return report;
+}
+
+function assertProductionReadinessInvariants(report: ProductionReadinessReport) {
+  assertExpectedNumber(
+    "sourceLawSnapshot.sourceCount",
+    report.sourceLawSnapshot.sources.length,
+    report.sourceLawSnapshot.sourceCount,
+  );
+  assertExpectedNumber(
+    "assurancePacket.goldenCorpusTotal",
+    report.goldenFilingCorpus.length,
+    report.assurancePacket.goldenCorpusTotal,
+  );
+  assertExpectedNumber(
+    "assurancePacket.goldenCorpusCovered",
+    report.goldenFilingCorpus.filter((scenario) => scenario.coverageStatus === "covered").length,
+    report.assurancePacket.goldenCorpusCovered,
+  );
+  assertExpectedNumber(
+    "visualQaCoverage.expectedScreenshotCount",
+    report.visualQaCoverage.themes.length * report.visualQaCoverage.viewports.length * report.visualQaCoverage.routes.length,
+    report.visualQaCoverage.expectedScreenshotCount,
+  );
+
+  const scenarioCodes = new Set(report.goldenFilingCorpus.map((scenario) => scenario.code));
+  const acceptanceCodes = new Set(report.accountantAcceptanceCriteria.map((criterion) => criterion.scenarioCode));
+  const missingAcceptanceCriteria = [...scenarioCodes]
+    .filter((code) => !acceptanceCodes.has(code))
+    .sort();
+
+  if (missingAcceptanceCriteria.length > 0) {
+    throw new Error(
+      `Invalid production readiness report contract: accountantAcceptanceCriteria - missing acceptance criteria for golden scenarios: ${missingAcceptanceCriteria.join(", ")}`,
+    );
+  }
+
+  report.goldenFilingCorpus.forEach((scenario, scenarioIndex) => {
+    const evidenceTests = new Set(scenario.evidenceTestNames);
+    scenario.evidencePack.expectedProofPoints.forEach((proofPoint, proofPointIndex) => {
+      if (!evidenceTests.has(proofPoint.automatedVerifier)) {
+        throw new Error(
+          `Invalid production readiness report contract: goldenFilingCorpus.${scenarioIndex}.evidencePack.expectedProofPoints.${proofPointIndex}.automatedVerifier - verifier must be listed in evidenceTestNames`,
+        );
+      }
+    });
+  });
+}
+
+function assertExpectedNumber(path: string, expected: number, received: number) {
+  if (expected !== received) {
+    throw new Error(
+      `Invalid production readiness report contract: ${path} - expected ${expected}, received ${received}`,
+    );
+  }
 }
 
 export interface RevenueIxbrlTaxonomySelection {

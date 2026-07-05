@@ -41,6 +41,59 @@ test("parseProductionReadinessReport rejects missing golden corpus evidence pack
   );
 });
 
+test("parseProductionReadinessReport rejects golden corpus without matching accountant acceptance criteria", () => {
+  const payload = sampleReport();
+  payload.goldenFilingCorpus.push({
+    ...payload.goldenFilingCorpus[0],
+    code: "small-abridged-ltd",
+    label: "Small abridged LTD",
+  });
+  payload.assurancePacket.goldenCorpusTotal = 2;
+  payload.assurancePacket.goldenCorpusCovered = 2;
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: accountantAcceptanceCriteria - missing acceptance criteria for golden scenarios: small-abridged-ltd/,
+  );
+});
+
+test("parseProductionReadinessReport rejects inconsistent production assurance counts", () => {
+  const payload = sampleReport();
+  payload.sourceLawSnapshot.sourceCount = 2;
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: sourceLawSnapshot\.sourceCount - expected 1, received 2/,
+  );
+
+  const corpusPayload = sampleReport();
+  corpusPayload.assurancePacket.goldenCorpusTotal = 2;
+
+  assert.throws(
+    () => parseProductionReadinessReport(corpusPayload),
+    /Invalid production readiness report contract: assurancePacket\.goldenCorpusTotal - expected 1, received 2/,
+  );
+
+  const visualPayload = sampleReport();
+  visualPayload.visualQaCoverage.expectedScreenshotCount = 7;
+
+  assert.throws(
+    () => parseProductionReadinessReport(visualPayload),
+    /Invalid production readiness report contract: visualQaCoverage\.expectedScreenshotCount - expected 4, received 7/,
+  );
+});
+
+test("parseProductionReadinessReport rejects proof points whose verifier is not listed on the scenario", () => {
+  const payload = sampleReport();
+  payload.goldenFilingCorpus[0].evidencePack.expectedProofPoints[0].automatedVerifier =
+    "AccountsWorkflowTests.NotActuallyPartOfThisScenario";
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: goldenFilingCorpus\.0\.evidencePack\.expectedProofPoints\.0\.automatedVerifier - verifier must be listed in evidenceTestNames/,
+  );
+});
+
 function sampleReport() {
   return {
     generatedAt: "2026-07-04T12:00:00Z",
@@ -63,7 +116,7 @@ function sampleReport() {
       goldenCorpusTotal: 1,
       statutoryRuleMatrixPaths: 1,
       statutoryRuleCoverageFamilies: 1,
-      visualQaExpectedScreenshots: 24,
+      visualQaExpectedScreenshots: 4,
       requiredOperationalGates: 1,
       openCriticalActions: 1,
       evidenceItems: ["source-law-snapshot-fingerprint", "golden-filing-corpus", "visual-smoke-screenshots"],
@@ -214,7 +267,7 @@ function sampleReport() {
     visualQaCoverage: {
       artifactName: "visual-smoke-screenshots",
       enforcement: "ci-production-smoke",
-      expectedScreenshotCount: 24,
+      expectedScreenshotCount: 4,
       layoutChecks: ["browser-console-errors", "page-horizontal-overflow", "visible-text-overlap"],
       themes: ["light", "dark"],
       viewports: [{ name: "desktop", width: 1440, height: 1000 }],
