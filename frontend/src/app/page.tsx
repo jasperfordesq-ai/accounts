@@ -127,7 +127,11 @@ export default function Dashboard() {
       </div>
 
       <div className="mb-8">
-        <AccountantDashboardQueue companies={companies} deadlines={deadlines} />
+        <AccountantDashboardQueue
+          companies={companies}
+          deadlines={deadlines}
+          productionReleaseBlockers={readinessReport?.releaseBlockerRegister ?? []}
+        />
       </div>
 
       {/* Quick Stats Bar */}

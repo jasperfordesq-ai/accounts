@@ -2,7 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { AccountantDashboardQueue } from "@/components/dashboard/AccountantDashboardQueue";
-import type { Company, FilingDeadline } from "@/lib/api";
+import type { Company, FilingDeadline, ProductionReleaseBlocker } from "@/lib/api";
 
 describe("AccountantDashboardQueue", () => {
   it("surfaces deadlines, blockers, reviewer ownership and next actions", async () => {
@@ -15,6 +15,7 @@ describe("AccountantDashboardQueue", () => {
           8: sampleDeadline({ companyId: 8, periodId: 4, deadlineType: "Revenue", dueDate: "2026-06-20" }),
         }}
         today="2026-07-03"
+        productionReleaseBlockers={sampleProductionReleaseBlockers()}
       />,
     );
 
@@ -40,6 +41,14 @@ describe("AccountantDashboardQueue", () => {
     expect(screen.getByText("1 handoff")).toBeInTheDocument();
     expect(screen.getByText("Unassigned reviewers")).toBeInTheDocument();
     expect(screen.getByText("2 unassigned")).toBeInTheDocument();
+    const releaseBlockers = screen.getByRole("region", { name: "Production release blockers" });
+    expect(within(releaseBlockers).getByText("Production release blockers")).toBeInTheDocument();
+    expect(within(releaseBlockers).getByText("2 blockers")).toBeInTheDocument();
+    expect(within(releaseBlockers).getByText("Backend code")).toBeInTheDocument();
+    expect(within(releaseBlockers).getByText("Qualified accountant sign-off required")).toBeInTheDocument();
+    expect(within(releaseBlockers).getByText("named-accountant-approval-record")).toBeInTheDocument();
+    expect(within(releaseBlockers).getByText("Run qualified-accountant acceptance on the golden corpus.")).toBeInTheDocument();
+    expect(within(releaseBlockers).getByRole("link", { name: "Open production readiness" })).toHaveAttribute("href", "/production-readiness");
     const triage = screen.getByRole("region", { name: "Queue triage" });
     expect(within(triage).getByText("Highest-risk client")).toBeInTheDocument();
     expect(within(triage).getByText("Atlantic Public Limited Company")).toBeInTheDocument();
@@ -194,4 +203,41 @@ function sampleDeadline({
     isLate: false,
     penaltyAmount: 0,
   };
+}
+
+function sampleProductionReleaseBlockers(): ProductionReleaseBlocker[] {
+  return [
+    {
+      code: "backend-code:qualified-accountant-signoff",
+      trackCode: "backend-code",
+      trackLabel: "Backend code",
+      ownerRole: "Qualified accountant",
+      severity: "critical",
+      riskRank: 0,
+      blockingIssue: "Qualified accountant sign-off required",
+      requiredEvidence: "Named accountant approval recorded against the period.",
+      nextAction: "Run qualified-accountant acceptance on the golden corpus.",
+      sourceActionCode: "qualified-accountant-signoff",
+      releaseChecklistCode: "accountant-final-signoff",
+      operationalGateCode: "qualified-accountant-review",
+      evidenceArtifact: "named-accountant-approval-record",
+      blocksRelease: true,
+    },
+    {
+      code: "frontend-ui-ux:light-dark-visual-regression",
+      trackCode: "frontend-ui-ux",
+      trackLabel: "Frontend UI/UX",
+      ownerRole: "Engineering",
+      severity: "high",
+      riskRank: 30,
+      blockingIssue: "Light/dark visual regression required",
+      requiredEvidence: "Screenshot review attached to CI or release checklist.",
+      nextAction: "Review each screenshot route-by-route in light and dark mode.",
+      sourceActionCode: "light-dark-visual-regression",
+      releaseChecklistCode: "visual-qa-screenshot-review",
+      operationalGateCode: "",
+      evidenceArtifact: "light-dark-desktop-mobile-screenshot-review",
+      blocksRelease: true,
+    },
+  ];
 }
