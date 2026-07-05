@@ -149,6 +149,10 @@ describe("ProductionReadinessWorkbench", () => {
     expectText(/Block release if any pinned source changes/);
     expect(screen.getAllByText("Qualified accountant sign-off required").length).toBeGreaterThan(1);
     expect(screen.getByRole("heading", { name: "Release blocker register" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Production release blockers" })).toHaveAttribute(
+      "data-workbench-release-blocker-summary",
+      "true",
+    );
     expect(screen.getByRole("searchbox", { name: "Filter Release blocker register" })).toBeInTheDocument();
     expectText("backend-code:qualified-accountant-signoff");
     expectText("frontend-ui-ux:light-dark-visual-regression");

@@ -77,6 +77,27 @@ export interface IssueDigestProps {
   className?: string;
 }
 
+export interface ReleaseBlockerSummaryItem {
+  code: string;
+  trackCode?: string;
+  trackLabel: string;
+  severity: string;
+  riskRank: number;
+  blockingIssue: string;
+  evidenceArtifact: string;
+  nextAction: string;
+  blocksRelease: boolean;
+}
+
+export interface ReleaseBlockerSummaryProps {
+  blockers: ReleaseBlockerSummaryItem[];
+  title?: string;
+  description?: string;
+  actionHref?: string;
+  actionLabel?: string;
+  maxVisible?: number;
+}
+
 export interface FilingActionBarProps {
   children: ReactNode;
   title?: string;
@@ -505,6 +526,81 @@ export function StatusBadge({
   );
 }
 
+export function ReleaseBlockerSummary({
+  blockers,
+  title = "Production release blockers",
+  description = "Platform-level release gates that must be cleared before real filing packs are trusted.",
+  actionHref = "/production-readiness",
+  actionLabel = "Open production readiness",
+  maxVisible = 3,
+}: ReleaseBlockerSummaryProps) {
+  const openBlockers = blockers
+    .filter((blocker) => blocker.blocksRelease)
+    .sort((a, b) => a.riskRank - b.riskRank || a.trackLabel.localeCompare(b.trackLabel))
+    .slice(0, maxVisible);
+  const openBlockerCount = blockers.filter((blocker) => blocker.blocksRelease).length;
+
+  if (openBlockerCount === 0) {
+    return (
+      <section
+        aria-label={title}
+        data-workbench-release-blocker-summary="true"
+        className="rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-3"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-[var(--foreground)]">{title}</h3>
+            <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">
+              No platform-level release blockers are reported by the production readiness register.
+            </p>
+          </div>
+          <StatusBadge tone="good">Clear</StatusBadge>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section
+      aria-label={title}
+      data-workbench-release-blocker-summary="true"
+      className="rounded-md border border-red-200 bg-red-50/60 p-3 dark:border-red-900 dark:bg-red-950/25"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold text-[var(--foreground)]">{title}</h3>
+          <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">{description}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusBadge tone="bad">{formatIssueCount(openBlockerCount, "blocker")}</StatusBadge>
+          {actionHref && (
+            <Link
+              href={actionHref}
+              className="inline-flex min-h-8 items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 text-xs font-semibold text-[var(--foreground)] hover:border-[var(--ring)]"
+            >
+              {actionLabel}
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          )}
+        </div>
+      </div>
+      <div className="mt-3 grid gap-3 lg:grid-cols-3">
+        {openBlockers.map((blocker) => (
+          <div key={blocker.code} className="min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <StatusBadge tone={releaseBlockerTone(blocker)}>{blocker.trackLabel}</StatusBadge>
+              <StatusBadge tone={blocker.severity === "critical" ? "bad" : "warn"}>Risk {blocker.riskRank}</StatusBadge>
+            </div>
+            <p className="mt-2 text-sm font-semibold leading-5 text-[var(--foreground)]">{blocker.blockingIssue}</p>
+            <code className="mt-2 block break-all text-[11px] text-[var(--muted-foreground)]">{blocker.evidenceArtifact}</code>
+            <p className="mt-2 text-xs leading-5 text-[var(--muted-foreground)]">{blocker.nextAction}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export function IssueDigest({
   title,
   description,
@@ -596,6 +692,12 @@ function uniqueIssueMessages(issues: string[]) {
 
 function formatIssueCount(count: number, singular: string) {
   return `${count} ${count === 1 ? singular : `${singular}s`}`;
+}
+
+function releaseBlockerTone(blocker: ReleaseBlockerSummaryItem): Tone {
+  if (blocker.severity === "critical" || blocker.riskRank <= 5) return "bad";
+  if (blocker.severity === "high" || blocker.riskRank <= 30) return "warn";
+  return "info";
 }
 
 function issueKey(message: string, index: number) {

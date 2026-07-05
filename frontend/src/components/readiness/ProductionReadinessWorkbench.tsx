@@ -11,6 +11,7 @@ import {
   DataTable,
   MetricStrip,
   PageShell,
+  ReleaseBlockerSummary,
   ReviewPanel,
   SectionHeader,
   StatusBadge,
@@ -293,6 +294,9 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
         description="Track-owned production blockers tied to assurance actions, release checklist evidence and the next action required to clear them."
         actions={<StatusBadge tone={releaseBlockerRegister.some((blocker) => blocker.blocksRelease) ? "bad" : "good"}>{releaseBlockerRegister.length} blockers</StatusBadge>}
       >
+        <div className="mb-4">
+          <ReleaseBlockerSummary blockers={releaseBlockerRegister} actionHref="" />
+        </div>
         <DataTable
           caption="Release blocker register"
           filterPlaceholder="Filter release blocker register"

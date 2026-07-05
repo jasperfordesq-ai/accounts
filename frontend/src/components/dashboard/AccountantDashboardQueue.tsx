@@ -2,7 +2,7 @@ import Link from "next/link";
 import { AlertTriangle, ArrowRight, CalendarClock, UserRound } from "lucide-react";
 import type { Company, FilingDeadline, ProductionReleaseBlocker } from "@/lib/api";
 import { formatCompanyType, formatDateIE } from "@/lib/format";
-import { DataTable, MetricStrip, ReviewPanel, StatusBadge } from "@/components/workbench";
+import { DataTable, MetricStrip, ReleaseBlockerSummary, ReviewPanel, StatusBadge } from "@/components/workbench";
 import { AccountantWorkflowRail } from "@/components/workbench/AccountantWorkflowRail";
 
 interface AccountantDashboardQueueProps {
@@ -81,7 +81,7 @@ export function AccountantDashboardQueue({
               },
             ]}
           />
-          <ProductionReleaseBlockerStrip blockers={productionReleaseBlockers} />
+          <ReleaseBlockerSummary blockers={productionReleaseBlockers} />
           <QueueTriage row={rows[0]} />
           <DataTable
             caption="Accountant work queue"
@@ -137,71 +137,6 @@ export function AccountantDashboardQueue({
   );
 }
 
-function ProductionReleaseBlockerStrip({ blockers }: { blockers: ProductionReleaseBlocker[] }) {
-  const openBlockers = blockers
-    .filter((blocker) => blocker.blocksRelease)
-    .sort((a, b) => a.riskRank - b.riskRank || a.trackCode.localeCompare(b.trackCode))
-    .slice(0, 3);
-
-  if (openBlockers.length === 0) {
-    return (
-      <section
-        aria-label="Production release blockers"
-        className="rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-3"
-      >
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h3 className="text-sm font-semibold text-[var(--foreground)]">Production release blockers</h3>
-            <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">
-              No platform-level release blockers are reported by the production readiness register.
-            </p>
-          </div>
-          <StatusBadge tone="good">Clear</StatusBadge>
-        </div>
-      </section>
-    );
-  }
-
-  return (
-    <section
-      aria-label="Production release blockers"
-      className="rounded-md border border-red-200 bg-red-50/60 p-3 dark:border-red-900 dark:bg-red-950/25"
-    >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h3 className="text-sm font-semibold text-[var(--foreground)]">Production release blockers</h3>
-          <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">
-            Platform-level release gates that must be cleared before real filing packs are trusted.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <StatusBadge tone="bad">{formatQueueCount(blockers.filter((blocker) => blocker.blocksRelease).length, "blocker", "blockers")}</StatusBadge>
-          <Link
-            href="/production-readiness"
-            className="inline-flex min-h-8 items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 text-xs font-semibold text-[var(--foreground)] hover:border-[var(--ring)]"
-          >
-            Open production readiness
-            <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
-        </div>
-      </div>
-      <div className="mt-3 grid gap-3 lg:grid-cols-3">
-        {openBlockers.map((blocker) => (
-          <div key={blocker.code} className="min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <StatusBadge tone={releaseBlockerTone(blocker)}>{blocker.trackLabel}</StatusBadge>
-              <StatusBadge tone={blocker.severity === "critical" ? "bad" : "warn"}>Risk {blocker.riskRank}</StatusBadge>
-            </div>
-            <p className="mt-2 text-sm font-semibold leading-5 text-[var(--foreground)]">{blocker.blockingIssue}</p>
-            <code className="mt-2 block break-all text-[11px] text-[var(--muted-foreground)]">{blocker.evidenceArtifact}</code>
-            <p className="mt-2 text-xs leading-5 text-[var(--muted-foreground)]">{blocker.nextAction}</p>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
 function QueueTriage({ row }: { row: QueueRow }) {
   const reviewerName = row.company.assignedReviewerName?.trim();
   return (
@@ -241,12 +176,6 @@ function QueueTriage({ row }: { row: QueueRow }) {
       </div>
     </section>
   );
-}
-
-function releaseBlockerTone(blocker: ProductionReleaseBlocker): QueueTone {
-  if (blocker.severity === "critical" || blocker.riskRank <= 5) return "bad";
-  if (blocker.severity === "high" || blocker.riskRank <= 30) return "warn";
-  return "info";
 }
 
 function TriageItem({

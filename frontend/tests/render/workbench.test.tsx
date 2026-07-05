@@ -11,6 +11,7 @@ import {
   MoneyInput,
   PageShell,
   PermissionDeniedPanel,
+  ReleaseBlockerSummary,
   ReviewPanel,
   StatusBadge,
   WorkbenchEmptyState,
@@ -121,6 +122,50 @@ describe("workbench primitives", () => {
     render(<StatusBadge tone="warn">Recorded only</StatusBadge>);
 
     expect(screen.getByText("Recorded only")).toBeInTheDocument();
+  });
+
+  it("renders production release blockers as a reusable accountant workbench summary", () => {
+    render(
+      <ReleaseBlockerSummary
+        blockers={[
+          {
+            code: "accountant-signoff",
+            trackCode: "backend",
+            trackLabel: "Backend code",
+            severity: "critical",
+            riskRank: 1,
+            blockingIssue: "Qualified accountant sign-off required",
+            evidenceArtifact: "named-accountant-approval-record",
+            nextAction: "Run qualified-accountant acceptance on the golden corpus.",
+            blocksRelease: true,
+          },
+          {
+            code: "visual-qa",
+            trackCode: "frontend-ux",
+            trackLabel: "Frontend UI/UX",
+            severity: "high",
+            riskRank: 7,
+            blockingIssue: "Light and dark visual QA sign-off required",
+            evidenceArtifact: "light-dark-screenshot-review",
+            nextAction: "Complete production seeded-data screenshot review.",
+            blocksRelease: true,
+          },
+        ]}
+      />,
+    );
+
+    const summary = screen.getByRole("region", { name: "Production release blockers" });
+
+    expect(summary).toHaveAttribute("data-workbench-release-blocker-summary", "true");
+    expect(within(summary).getByText("2 blockers")).toBeInTheDocument();
+    expect(within(summary).getByText("Backend code")).toBeInTheDocument();
+    expect(within(summary).getByText("Qualified accountant sign-off required")).toBeInTheDocument();
+    expect(within(summary).getByText("named-accountant-approval-record")).toBeInTheDocument();
+    expect(within(summary).getByText("Run qualified-accountant acceptance on the golden corpus.")).toBeInTheDocument();
+    expect(within(summary).getByRole("link", { name: "Open production readiness" })).toHaveAttribute(
+      "href",
+      "/production-readiness",
+    );
   });
 
   it("renders filing workflow actions as a labelled normal-flow control", () => {
