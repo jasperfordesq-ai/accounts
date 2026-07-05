@@ -41,6 +41,21 @@ export function FilingOutputsPanel({
 }: FilingOutputsPanelProps) {
   const completeCount = checklistLabels.filter((item) => checklist[item.key]).length;
   const anyDownloadInProgress = downloadingDocument !== null;
+  const outputStates = [
+    { title: "AGM Pack", isBlocked: anyDownloadInProgress },
+    { title: "CRO Filing Pack", isBlocked: anyDownloadInProgress || !filingRegimeReady },
+    { title: "Signature Page", isBlocked: anyDownloadInProgress || !filingRegimeReady },
+    { title: "iXBRL Filing", isBlocked: anyDownloadInProgress },
+  ];
+  const availableOutputs = outputStates.filter((output) => !output.isBlocked).map((output) => output.title);
+  const blockedOutputs = outputStates.filter((output) => output.isBlocked).map((output) => output.title);
+  const nextOutputGate = anyDownloadInProgress
+    ? "Wait for the current output to finish preparing"
+    : !filingRegimeReady
+      ? "Complete filing regime before CRO downloads"
+      : completeCount === checklistLabels.length
+        ? "All filing outputs are available for review"
+        : "Complete open filing checklist items before final use";
 
   return (
     <ReviewPanel
@@ -52,55 +67,124 @@ export function FilingOutputsPanel({
         </StatusBadge>
       }
     >
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          <OutputDownloadTile
-            title="AGM Pack"
-            description="Full statutory accounts for AGM approval"
-            buttonLabel="Download AGM PDF"
-            isLoading={downloadingDocument === "AGM pack"}
-            isDisabled={anyDownloadInProgress}
-            onDownload={onDownloadAgmPack}
-          />
-          <OutputDownloadTile
-            title="CRO Filing Pack"
-            description="Abridged accounts for CRO filing"
-            buttonLabel="Download CRO PDF"
-            isLoading={downloadingDocument === "CRO filing pack"}
-            isDisabled={anyDownloadInProgress || !filingRegimeReady}
-            gateLabel={filingRegimeReady ? undefined : "Filing regime required"}
-            onDownload={onDownloadCroFilingPack}
-          />
-          <OutputDownloadTile
-            title="Signature Page"
-            description="Typeset signatures for CRO (s.347)"
-            buttonLabel="Download Signature PDF"
-            isLoading={downloadingDocument === "signature page"}
-            isDisabled={anyDownloadInProgress || !filingRegimeReady}
-            gateLabel={filingRegimeReady ? undefined : "Filing regime required"}
-            onDownload={onDownloadSignaturePage}
-          />
-          <OutputDownloadTile
-            title="iXBRL Filing"
-            description="For Revenue Online Service (ROS) submission"
-            buttonLabel="Download iXBRL"
-            isLoading={downloadingDocument === "iXBRL filing"}
-            isDisabled={anyDownloadInProgress}
-            onDownload={onDownloadIxbrl}
-          />
-        </div>
+      <div className="space-y-4">
+        <OutputReadinessSummary
+          availableOutputs={availableOutputs}
+          blockedOutputs={blockedOutputs}
+          nextOutputGate={nextOutputGate}
+        />
 
-        <div className="rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-4">
-          <h3 className="text-sm font-semibold text-[var(--foreground)]">Filing checklist</h3>
-          <ul className="mt-3 space-y-2">
-            {checklistLabels.map((item) => (
-              <ChecklistRow key={item.key} label={item.label} done={checklist[item.key]} />
-            ))}
-          </ul>
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <OutputDownloadTile
+              title="AGM Pack"
+              description="Full statutory accounts for AGM approval"
+              buttonLabel="Download AGM PDF"
+              isLoading={downloadingDocument === "AGM pack"}
+              isDisabled={anyDownloadInProgress}
+              onDownload={onDownloadAgmPack}
+            />
+            <OutputDownloadTile
+              title="CRO Filing Pack"
+              description="Abridged accounts for CRO filing"
+              buttonLabel="Download CRO PDF"
+              isLoading={downloadingDocument === "CRO filing pack"}
+              isDisabled={anyDownloadInProgress || !filingRegimeReady}
+              gateLabel={filingRegimeReady ? undefined : "Filing regime required"}
+              onDownload={onDownloadCroFilingPack}
+            />
+            <OutputDownloadTile
+              title="Signature Page"
+              description="Typeset signatures for CRO (s.347)"
+              buttonLabel="Download Signature PDF"
+              isLoading={downloadingDocument === "signature page"}
+              isDisabled={anyDownloadInProgress || !filingRegimeReady}
+              gateLabel={filingRegimeReady ? undefined : "Filing regime required"}
+              onDownload={onDownloadSignaturePage}
+            />
+            <OutputDownloadTile
+              title="iXBRL Filing"
+              description="For Revenue Online Service (ROS) submission"
+              buttonLabel="Download iXBRL"
+              isLoading={downloadingDocument === "iXBRL filing"}
+              isDisabled={anyDownloadInProgress}
+              onDownload={onDownloadIxbrl}
+            />
+          </div>
+
+          <div className="rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-4">
+            <h3 className="text-sm font-semibold text-[var(--foreground)]">Filing checklist</h3>
+            <ul className="mt-3 space-y-2">
+              {checklistLabels.map((item) => (
+                <ChecklistRow key={item.key} label={item.label} done={checklist[item.key]} />
+              ))}
+            </ul>
+          </div>
         </div>
       </div>
     </ReviewPanel>
   );
+}
+
+function OutputReadinessSummary({
+  availableOutputs,
+  blockedOutputs,
+  nextOutputGate,
+}: {
+  availableOutputs: string[];
+  blockedOutputs: string[];
+  nextOutputGate: string;
+}) {
+  return (
+    <section
+      aria-label="Output readiness"
+      className="grid gap-3 rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-4 md:grid-cols-3"
+    >
+      <OutputReadinessItem
+        label="What can I download now?"
+        badge={formatOutputCount(availableOutputs.length, "available")}
+        badgeTone="good"
+        value={formatOutputList(availableOutputs, "No outputs available")}
+      />
+      <OutputReadinessItem
+        label="What is blocked?"
+        badge={formatOutputCount(blockedOutputs.length, "blocked")}
+        badgeTone={blockedOutputs.length > 0 ? "warn" : "good"}
+        value={formatOutputList(blockedOutputs, "Nothing blocked")}
+      />
+      <OutputReadinessItem label="What must I do next?" badge="Next" badgeTone="info" value={nextOutputGate} />
+    </section>
+  );
+}
+
+function OutputReadinessItem({
+  label,
+  badge,
+  badgeTone,
+  value,
+}: {
+  label: string;
+  badge: string;
+  badgeTone: "good" | "warn" | "info";
+  value: string;
+}) {
+  return (
+    <div className="min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">{label}</h3>
+        <StatusBadge tone={badgeTone}>{badge}</StatusBadge>
+      </div>
+      <p className="mt-2 text-sm font-medium leading-5 text-[var(--foreground)]">{value}</p>
+    </div>
+  );
+}
+
+function formatOutputList(outputs: string[], emptyLabel: string) {
+  return outputs.length > 0 ? outputs.join(", ") : emptyLabel;
+}
+
+function formatOutputCount(count: number, label: string) {
+  return `${count} ${label}`;
 }
 
 function OutputDownloadTile({

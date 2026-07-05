@@ -26,6 +26,15 @@ describe("FilingOutputsPanel", () => {
 
     expect(screen.getByText("Filing outputs")).toBeInTheDocument();
     expect(screen.getByText("3 of 6 checklist items complete")).toBeInTheDocument();
+    const outputReadiness = screen.getByRole("region", { name: "Output readiness" });
+    expect(within(outputReadiness).getByText("What can I download now?")).toBeInTheDocument();
+    expect(within(outputReadiness).getByText("2 available")).toBeInTheDocument();
+    expect(within(outputReadiness).getByText("AGM Pack, iXBRL Filing")).toBeInTheDocument();
+    expect(within(outputReadiness).getByText("What is blocked?")).toBeInTheDocument();
+    expect(within(outputReadiness).getByText("2 blocked")).toBeInTheDocument();
+    expect(within(outputReadiness).getByText("CRO Filing Pack, Signature Page")).toBeInTheDocument();
+    expect(within(outputReadiness).getByText("What must I do next?")).toBeInTheDocument();
+    expect(within(outputReadiness).getByText("Complete filing regime before CRO downloads")).toBeInTheDocument();
     expect(screen.getByText("AGM Pack")).toBeInTheDocument();
     expect(screen.getByText("CRO Filing Pack")).toBeInTheDocument();
     expect(screen.getByText("Signature Page")).toBeInTheDocument();
