@@ -363,6 +363,10 @@ public class ProductionReadinessReportTests
             [
                 "AccountsWorkflowTests.GoldenPath_SmallAuditExemptCompany_MixedAccrualSetBalancesThroughPdfAndIxbrl"
             ],
+            ["dac-small"] =
+            [
+                "FilingGoldenCorpusScenarioTests.GoldenCorpus_DacSmall_EmitsAccountsIxbrlAndSourceBackedReadiness"
+            ],
             ["clg-charity"] =
             [
                 "FilingGoldenCorpusScenarioTests.GoldenCorpus_ClgCharity_EmitsAccountsIxbrlAndSourceBackedCharityReadiness"
@@ -550,6 +554,40 @@ public class ProductionReadinessReportTests
 
         AssertGoldenEvidencePack(
             report,
+            "dac-small",
+            expectedArtifacts:
+            [
+                "DAC accounts PDF text",
+                "directors' report evidence",
+                "CRO signature page",
+                "iXBRL XML",
+                "tax computation",
+                "notes disclosure set",
+                "filing readiness profile",
+                "accountant sign-off packet"
+            ],
+            expectedGates:
+            [
+                "DAC company type",
+                "director and secretary certification",
+                "named qualified-accountant review",
+                "external ROS/iXBRL validation"
+            ],
+            expectedValueChecks:
+            [
+                "Small regime",
+                "DAC source-backed readiness",
+                "well-formed iXBRL"
+            ],
+            expectedSourceIds:
+            [
+                IrishStatutoryRuleSources.CroFinancialStatementsRequirements.SourceId,
+                IrishStatutoryRuleSources.FrcFrs102.SourceId,
+                IrishStatutoryRuleSources.RevenueAcceptedTaxonomies.SourceId
+            ]);
+
+        AssertGoldenEvidencePack(
+            report,
             "clg-charity",
             expectedArtifacts:
             [
@@ -709,6 +747,7 @@ public class ProductionReadinessReportTests
 
         AssertGoldenFixture(report, "micro-ltd", "Example Micro Limited", "Private", "2025-01-01", "2025-12-31", "Micro", "Micro", auditExempt: true, manualReviewRequired: false);
         AssertGoldenFixture(report, "small-abridged-ltd", "Connacht Digital Solutions Limited", "Private", "2025-01-01", "2025-12-31", "Small", "SmallAbridged", auditExempt: true, manualReviewRequired: false);
+        AssertGoldenFixture(report, "dac-small", "Atlantic Manufacturing DAC", "DesignatedActivityCompany", "2026-01-01", "2026-12-31", "Small", "Small", auditExempt: true, manualReviewRequired: false);
         AssertGoldenFixture(report, "clg-charity", "Dublin Community Support CLG", "CompanyLimitedByGuarantee", "2026-01-01", "2026-12-31", "Small", "Small", auditExempt: true, manualReviewRequired: false);
         AssertGoldenFixture(report, "medium-audit-required", "Midlands Manufacturing Limited", "Private", "2026-01-01", "2026-12-31", "Medium", "Medium", auditExempt: false, manualReviewRequired: true);
     }
@@ -748,6 +787,14 @@ public class ProductionReadinessReportTests
             expectedTax: 950m,
             readinessState: "generated-output-evidence-required",
             signOffState: "review-required");
+        AssertGoldenExpectedOutputs(
+            report,
+            "dac-small",
+            expectedPdfMarker: "Atlantic Manufacturing DAC",
+            expectedIxbrlTag: "bus:EntityCurrentLegalOrRegisteredName",
+            expectedTax: 62.50m,
+            readinessState: "ready-for-external-filing",
+            signOffState: "ready-for-external-filing");
         AssertGoldenExpectedOutputs(
             report,
             "clg-charity",

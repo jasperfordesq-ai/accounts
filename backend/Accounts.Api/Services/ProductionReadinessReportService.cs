@@ -845,6 +845,92 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     IrishStatutoryRuleSources.RevenueAcceptedTaxonomies
                 ])),
         new(
+            "dac-small",
+            "Small DAC filing",
+            "Designated activity company, small FRS 102 regime",
+            "generated-pack",
+            "covered",
+            new(
+                "Atlantic Manufacturing DAC",
+                "DesignatedActivityCompany",
+                "2026-01-01",
+                "2026-12-31",
+                "Small",
+                "Small",
+                AuditExempt: true,
+                ManualProfessionalReviewRequired: false),
+            [
+                "FilingGoldenCorpusScenarioTests.GoldenCorpus_DacSmall_EmitsAccountsIxbrlAndSourceBackedReadiness"
+            ],
+            Verifiers("FilingGoldenCorpusScenarioTests.GoldenCorpus_DacSmall_EmitsAccountsIxbrlAndSourceBackedReadiness"),
+            [
+                "DAC company type remains in the supported path",
+                "small FRS 102 regime is selected",
+                "directors' report and CRO signature evidence are generated",
+                "iXBRL parses as XML against the Revenue-accepted taxonomy gate",
+                "accountant sign-off packet reaches ready-for-external-filing only after reviewer, signatory and external validation evidence"
+            ],
+            new(
+                [
+                    "DAC accounts PDF text",
+                    "directors' report evidence",
+                    "CRO signature page",
+                    "iXBRL XML",
+                    "tax computation",
+                    "notes disclosure set",
+                    "filing readiness profile",
+                    "accountant sign-off packet"
+                ],
+                [
+                    "DAC company type",
+                    "director and secretary certification",
+                    "named qualified-accountant review",
+                    "external ROS/iXBRL validation",
+                    "accountant sign-off packet state"
+                ],
+                [
+                    "Small regime selected",
+                    "DAC source-backed readiness",
+                    "well-formed iXBRL",
+                    "tax computation generated"
+                ],
+                new(
+                    [
+                        "Atlantic Manufacturing DAC",
+                        "DIRECTORS' REPORT"
+                    ],
+                    [
+                        "bus:EntityCurrentLegalOrRegisteredName"
+                    ],
+                    "ready-for-external-filing",
+                    62.50m,
+                    [
+                        "Accounting Policies"
+                    ],
+                    [
+                        "director and secretary certification satisfied",
+                        "qualified-accountant review recorded",
+                        "external ROS/iXBRL validation recorded"
+                    ],
+                    "ready-for-external-filing"),
+                ProofPoints(
+                    "FilingGoldenCorpusScenarioTests.GoldenCorpus_DacSmall_EmitsAccountsIxbrlAndSourceBackedReadiness",
+                    [
+                        new("pdf-text", "DAC accounts PDF text contains the legal name and directors' report."),
+                        new("ixbrl-xml", "iXBRL XML is well-formed and contains the DAC legal name."),
+                        new("filing-readiness", "Filing readiness confirms DAC source-backed support and all review/signatory/validation gates."),
+                        new("tax-computation", "Tax computation is generated for the DAC small-company scenario."),
+                        new("notes-disclosure", "Notes include the required accounting policies for the small-company path."),
+                        new("signatory-gates", "Director and secretary certification evidence is satisfied before filing actions are allowed."),
+                        new("accountant-signoff-packet", "Accountant sign-off packet reaches ready-for-external-filing only after reviewer and external validation evidence.")
+                    ]),
+                [
+                    IrishStatutoryRuleSources.CroFinancialStatementsRequirements,
+                    IrishStatutoryRuleSources.FrcFrs102,
+                    IrishStatutoryRuleSources.RevenueIxbrlOverview,
+                    IrishStatutoryRuleSources.RevenueAcceptedTaxonomies
+                ])),
+        new(
             "clg-charity",
             "CLG charity annual reporting",
             "Company limited by guarantee with charity evidence",
@@ -2069,6 +2155,30 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 IrishStatutoryRuleSources.RevenueIxbrlContents
             ],
             AcceptanceVerifiers(goldenCorpus, "small-abridged-ltd")),
+        new(
+            "dac-small",
+            "Small DAC accountant acceptance",
+            true,
+            "qualified-accountant-review-required",
+            [
+                "DAC accounts PDF wording and directors' report evidence",
+                "iXBRL XML and Revenue taxonomy selection",
+                "filing readiness profile with DAC supported-path evidence",
+                "tax computation and small-company notes",
+                "director and secretary signatory gates"
+            ],
+            [
+                "Named qualified-accountant approval recorded against the DAC pack.",
+                "DAC company type, audit exemption and small-company filing regime evidence reviewed.",
+                "External ROS/iXBRL validation evidence recorded before Revenue use."
+            ],
+            "Named qualified accountant must approve the DAC generated pack before real filing use.",
+            [
+                IrishStatutoryRuleSources.CroFinancialStatementsRequirements,
+                IrishStatutoryRuleSources.FrcFrs102,
+                IrishStatutoryRuleSources.RevenueAcceptedTaxonomies
+            ],
+            AcceptanceVerifiers(goldenCorpus, "dac-small")),
         new(
             "clg-charity",
             "CLG charity accountant acceptance",

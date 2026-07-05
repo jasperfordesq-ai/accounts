@@ -17,6 +17,55 @@ public class FilingGoldenCorpusScenarioTests
     }
 
     [Fact]
+    public async Task GoldenCorpus_DacSmall_EmitsAccountsIxbrlAndSourceBackedReadiness()
+    {
+        await using var db = CreateDbContext();
+        var period = await SeedBasicScenarioAsync(
+            db,
+            "Atlantic Manufacturing DAC",
+            CompanyType.DesignatedActivityCompany,
+            CompanySizeClass.Small,
+            ElectedRegime.Small,
+            auditExempt: true,
+            charity: false);
+        await MarkGeneratedReviewedAndExternallyValidatedAsync(db, period, includeCharityReports: false);
+
+        var statements = new FinancialStatementsService(db);
+        var pdf = await new DocumentGeneratorService(db, statements).GenerateAccountsPackageAsync(period.CompanyId, period.Id);
+        var pdfText = ExtractPdfText(pdf);
+        var ixbrl = Encoding.UTF8.GetString(await new IxbrlService(db, statements).GenerateIxbrlAsync(period.CompanyId, period.Id));
+        var profile = await new FilingReadinessProfileService(db).GetProfileAsync(period.CompanyId, period.Id);
+        var tax = await new TaxComputationService(db, statements).ComputeAsync(period.CompanyId, period.Id);
+        var notes = await db.NotesDisclosures.Where(n => n.PeriodId == period.Id && n.IsIncluded).ToListAsync();
+
+        Assert.True(pdf.Length > 1_000);
+        Assert.Equal("%PDF", Encoding.ASCII.GetString(pdf, 0, 4));
+        Assert.Contains("Atlantic Manufacturing DAC", pdfText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("DIRECTORS' REPORT", pdfText, StringComparison.OrdinalIgnoreCase);
+        AssertWellFormedXml(ixbrl);
+        Assert.Contains("Atlantic Manufacturing DAC", ixbrl);
+        Assert.Contains("bus:EntityCurrentLegalOrRegisteredName", ixbrl);
+        Assert.Equal(62.50m, tax.TotalCorporationTax);
+        Assert.Contains(notes, n => n.Title == "Accounting Policies" && n.IsIncluded);
+        Assert.True(profile.SupportedPath);
+        Assert.Equal(CompanyType.DesignatedActivityCompany, profile.CompanyType);
+        Assert.Equal(CompanySizeClass.Small, profile.SizeClass);
+        Assert.Equal(ElectedRegime.Small, profile.ElectedRegime);
+        Assert.True(profile.AuditExempt);
+        Assert.False(profile.ManualProfessionalReviewRequired);
+        Assert.DoesNotContain(profile.BlockingIssues, issue => issue.Code.Contains("unsupported", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(profile.RequiredEvidence, e => e.Code == "accountant-review" && e.Satisfied);
+        Assert.Contains(profile.RequiredEvidence, e => e.Code == "cro-signatories" && e.Satisfied);
+        Assert.Contains(profile.RequiredEvidence, e => e.Code == "external-ros-validation" && e.Satisfied);
+        Assert.Contains(profile.SourceReferences, s => s.SourceId == IrishStatutoryRuleSources.CroFinancialStatementsRequirements.SourceId);
+        Assert.Contains(profile.SourceReferences, s => s.SourceId == IrishStatutoryRuleSources.FrcFrs102.SourceId);
+        Assert.Contains(profile.SourceReferences, s => s.SourceId == IrishStatutoryRuleSources.RevenueAcceptedTaxonomies.SourceId);
+        Assert.Equal("ready-for-external-filing", profile.SignOffPacket.State);
+        Assert.True(profile.SignOffPacket.ReadyForExternalFiling);
+        Assert.Contains("mark-cro-submitted", profile.AllowedNextActions);
+    }
+
+    [Fact]
     public async Task GoldenCorpus_ClgCharity_EmitsAccountsIxbrlAndSourceBackedCharityReadiness()
     {
         await using var db = CreateDbContext();

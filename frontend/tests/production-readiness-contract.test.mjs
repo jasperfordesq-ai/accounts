@@ -34,7 +34,12 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.equal(parsed.goldenFilingCorpus[0].evidencePack.expectedProofPoints[0].area, "pdf-text");
   assert.equal(parsed.goldenFilingCorpus[0].evidencePack.expectedProofPoints[0].required, true);
   assert.equal(parsed.goldenFilingCorpus[0].evidencePack.sourceReferences[0].sourceId, "frc-frs-105");
-  assert.equal(parsed.sourceLawSnapshot.sourceCount, 1);
+  const dacScenario = parsed.goldenFilingCorpus.find((scenario) => scenario.code === "dac-small");
+  assert.equal(dacScenario?.fixture.legalName, "Atlantic Manufacturing DAC");
+  assert.equal(dacScenario?.fixture.companyType, "DesignatedActivityCompany");
+  assert.equal(dacScenario?.evidenceVerifiers[0].name, "FilingGoldenCorpusScenarioTests.GoldenCorpus_DacSmall_EmitsAccountsIxbrlAndSourceBackedReadiness");
+  assert.equal(dacScenario?.evidencePack.expectedOutputs.ixbrlRequiredTags[0], "bus:EntityCurrentLegalOrRegisteredName");
+  assert.equal(parsed.sourceLawSnapshot.sourceCount, 2);
   assert.equal(parsed.sourceLawSnapshot.contentHash, "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
   assert.equal(parsed.sourceLawTraceability[0].sourceId, "frc-frs-105");
   assert.equal(parsed.sourceLawTraceability[0].inSnapshot, true);
@@ -43,7 +48,7 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.equal(parsed.sourceLawMaintenanceProtocol.protocolVersion, "source-law-maintenance-v1");
   assert.equal(parsed.sourceLawMaintenanceProtocol.ownerRole, "Qualified accountant and engineering");
   assert.equal(parsed.sourceLawMaintenanceProtocol.signOffGate, "source-law-change-review");
-  assert.deepEqual(parsed.sourceLawMaintenanceProtocol.monitoredSourceIds, ["frc-frs-105"]);
+  assert.deepEqual(parsed.sourceLawMaintenanceProtocol.monitoredSourceIds, ["frc-frs-105", "frc-frs-102"]);
   assert.match(parsed.sourceLawMaintenanceProtocol.failurePolicy, /Block release/);
   assert.match(parsed.sourceLawMaintenanceProtocol.acceptanceCriteria[0], /CRO/);
   assert.ok(parsed.sourceLawMaintenanceProtocol.requiredEvidence.includes("source-law-change-review-note"));
@@ -63,18 +68,19 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.match(parsed.accountantAcceptanceCriteria[0].requiredSignOffGate, /qualified accountant/i);
   assert.equal(parsed.accountantAcceptanceCriteria[0].evidenceVerifiers[0].name, parsed.goldenFilingCorpus[0].evidenceVerifiers[0].name);
   assert.equal(parsed.accountantAcceptanceCriteria[0].evidenceVerifiers[0].command, parsed.goldenFilingCorpus[0].evidenceVerifiers[0].command);
-  assert.equal(parsed.accountantAcceptanceSummary.scenarioCount, 1);
-  assert.equal(parsed.accountantAcceptanceSummary.professionalSignOffRequiredCount, 1);
-  assert.equal(parsed.accountantAcceptanceSummary.automatedVerifierCount, 1);
+  assert.equal(parsed.accountantAcceptanceSummary.scenarioCount, 2);
+  assert.equal(parsed.accountantAcceptanceSummary.professionalSignOffRequiredCount, 2);
+  assert.equal(parsed.accountantAcceptanceSummary.automatedVerifierCount, 2);
   assert.equal(parsed.accountantAcceptanceSummary.manualHandoffScenarioCount, 0);
-  assert.deepEqual(parsed.accountantAcceptanceSummary.releaseBlockingScenarioCodes, ["micro-ltd"]);
+  assert.deepEqual(parsed.accountantAcceptanceSummary.releaseBlockingScenarioCodes, ["dac-small", "micro-ltd"]);
   assert.deepEqual(parsed.accountantAcceptanceSummary.requiredSignOffGates, [
+    "Named qualified accountant must approve the DAC generated pack before real filing use.",
     "Named qualified accountant must approve the generated pack before real filing use.",
   ]);
   assert.equal(parsed.accountantAcceptanceSummary.status, "qualified-accountant-review-required");
   assert.equal(parsed.assurancePacket.packetVersion, "production-assurance-packet-v1");
   assert.equal(parsed.assurancePacket.sourceLawSnapshotHash, "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
-  assert.equal(parsed.assurancePacket.goldenCorpusCovered, 1);
+  assert.equal(parsed.assurancePacket.goldenCorpusCovered, 2);
   assert.ok(parsed.assurancePacket.evidenceItems.includes("source-law-traceability-index"));
   assert.ok(parsed.assurancePacket.evidenceItems.includes("release-review-checklist"));
   assert.ok(parsed.assurancePacket.evidenceItems.includes("golden-verifier-manifest"));
@@ -175,8 +181,8 @@ test("parseProductionReadinessReport rejects golden corpus without matching acco
     code: "small-abridged-ltd",
     label: "Small abridged LTD",
   });
-  payload.assurancePacket.goldenCorpusTotal = 2;
-  payload.assurancePacket.goldenCorpusCovered = 2;
+  payload.assurancePacket.goldenCorpusTotal = 3;
+  payload.assurancePacket.goldenCorpusCovered = 3;
 
   assert.throws(
     () => parseProductionReadinessReport(payload),
@@ -197,19 +203,19 @@ test("parseProductionReadinessReport rejects accountant acceptance verifiers tha
 
 test("parseProductionReadinessReport rejects inconsistent production assurance counts", () => {
   const payload = sampleReport();
-  payload.sourceLawSnapshot.sourceCount = 2;
+  payload.sourceLawSnapshot.sourceCount = 3;
 
   assert.throws(
     () => parseProductionReadinessReport(payload),
-    /Invalid production readiness report contract: sourceLawSnapshot\.sourceCount - expected 1, received 2/,
+    /Invalid production readiness report contract: sourceLawSnapshot\.sourceCount - expected 2, received 3/,
   );
 
   const corpusPayload = sampleReport();
-  corpusPayload.assurancePacket.goldenCorpusTotal = 2;
+  corpusPayload.assurancePacket.goldenCorpusTotal = 3;
 
   assert.throws(
     () => parseProductionReadinessReport(corpusPayload),
-    /Invalid production readiness report contract: assurancePacket\.goldenCorpusTotal - expected 1, received 2/,
+    /Invalid production readiness report contract: assurancePacket\.goldenCorpusTotal - expected 2, received 3/,
   );
 
   const visualPayload = sampleReport();
@@ -261,11 +267,11 @@ test("parseProductionReadinessReport rejects source-law maintenance protocols wi
 
 test("parseProductionReadinessReport rejects inconsistent accountant acceptance summaries", () => {
   const payload = sampleReport();
-  payload.accountantAcceptanceSummary.scenarioCount = 2;
+  payload.accountantAcceptanceSummary.scenarioCount = 3;
 
   assert.throws(
     () => parseProductionReadinessReport(payload),
-    /Invalid production readiness report contract: accountantAcceptanceSummary\.scenarioCount - expected 1, received 2/,
+    /Invalid production readiness report contract: accountantAcceptanceSummary\.scenarioCount - expected 2, received 3/,
   );
 });
 
@@ -380,8 +386,11 @@ function sampleReport() {
       snapshotDate: "2026-07-03",
       snapshotVersion: "irish-statutory-accounts-sources-2026-07-03",
       contentHash: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      sourceCount: 1,
-      sources: [source("frc-frs-105", "FRC FRS 105 current edition and amendments")],
+      sourceCount: 2,
+      sources: [
+        source("frc-frs-105", "FRC FRS 105 current edition and amendments"),
+        source("frc-frs-102", "FRC FRS 102 current edition and amendments"),
+      ],
     },
     sourceLawTraceability: [
       {
@@ -389,9 +398,20 @@ function sampleReport() {
         inSnapshot: true,
         usedBy: [
           "golden-corpus:micro-ltd",
+          "golden-corpus:dac-small",
           "statutory-rule-matrix:ltd-micro",
           "statutory-rules-coverage:size-classification-thresholds",
           "accountant-acceptance:micro-ltd",
+          "accountant-acceptance:dac-small",
+        ],
+        releaseGateCodes: ["qualified-accountant-review"],
+      },
+      {
+        ...source("frc-frs-102", "FRC FRS 102 current edition and amendments"),
+        inSnapshot: true,
+        usedBy: [
+          "golden-corpus:dac-small",
+          "accountant-acceptance:dac-small",
         ],
         releaseGateCodes: ["qualified-accountant-review"],
       },
@@ -405,7 +425,7 @@ function sampleReport() {
       signOffGate: "source-law-change-review",
       changeDetection: "Compare CRO, Revenue, FRC and Charities Regulator guidance pages against the pinned source-law snapshot before release.",
       failurePolicy: "Block release if any pinned source changes, becomes unreachable, gains a newer effective date, or lacks qualified-accountant review.",
-      monitoredSourceIds: ["frc-frs-105"],
+      monitoredSourceIds: ["frc-frs-105", "frc-frs-102"],
       acceptanceCriteria: [
         "CRO, Revenue, FRC and Charities Regulator source pages are reachable and reviewed for changes.",
         "Every changed effective date or guidance wording is reflected in source-law snapshot metadata before release.",
@@ -423,8 +443,8 @@ function sampleReport() {
       packetVersion: "production-assurance-packet-v1",
       status: "review-required",
       sourceLawSnapshotHash: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      goldenCorpusCovered: 1,
-      goldenCorpusTotal: 1,
+      goldenCorpusCovered: 2,
+      goldenCorpusTotal: 2,
       statutoryRuleMatrixPaths: 1,
       statutoryRuleCoverageFamilies: 1,
       visualQaExpectedScreenshots: expectedVisualSmokeScreenshotCount(),
@@ -454,14 +474,37 @@ function sampleReport() {
         ],
         sources: [source("frc-frs-105", "FRC FRS 105 current edition and amendments")],
       },
+      {
+        scenarioCode: "dac-small",
+        label: "Small DAC accountant acceptance",
+        required: true,
+        acceptanceStatus: "qualified-accountant-review-required",
+        reviewScope: ["DAC accounts PDF", "iXBRL XML", "filing readiness", "tax computation", "notes", "signatory gates"],
+        requiredEvidence: ["Named qualified-accountant approval recorded against the DAC pack."],
+        requiredSignOffGate: "Named qualified accountant must approve the DAC generated pack before real filing use.",
+        evidenceVerifiers: [
+          {
+            name: "FilingGoldenCorpusScenarioTests.GoldenCorpus_DacSmall_EmitsAccountsIxbrlAndSourceBackedReadiness",
+            command: "dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter FullyQualifiedName~FilingGoldenCorpusScenarioTests.GoldenCorpus_DacSmall_EmitsAccountsIxbrlAndSourceBackedReadiness",
+            ciScope: "default-ci",
+            runsInDefaultCi: true,
+            environment: "EF Core InMemory golden fixture; CI also runs the broader backend suite on Linux",
+            evidenceLevel: "end-to-end golden filing scenario",
+          },
+        ],
+        sources: [source("frc-frs-102", "FRC FRS 102 current edition and amendments")],
+      },
     ],
     accountantAcceptanceSummary: {
-      scenarioCount: 1,
-      automatedVerifierCount: 1,
-      professionalSignOffRequiredCount: 1,
+      scenarioCount: 2,
+      automatedVerifierCount: 2,
+      professionalSignOffRequiredCount: 2,
       manualHandoffScenarioCount: 0,
-      releaseBlockingScenarioCodes: ["micro-ltd"],
-      requiredSignOffGates: ["Named qualified accountant must approve the generated pack before real filing use."],
+      releaseBlockingScenarioCodes: ["dac-small", "micro-ltd"],
+      requiredSignOffGates: [
+        "Named qualified accountant must approve the DAC generated pack before real filing use.",
+        "Named qualified accountant must approve the generated pack before real filing use.",
+      ],
       status: "qualified-accountant-review-required",
     },
     areas: [
@@ -523,6 +566,58 @@ function sampleReport() {
             },
           ],
           sourceReferences: [source("frc-frs-105", "FRC FRS 105 current edition and amendments")],
+        },
+      },
+      {
+        code: "dac-small",
+        label: "Small DAC",
+        companyScope: "Designated activity company",
+        expectedOutcome: "generated-pack",
+        coverageStatus: "covered",
+        fixture: {
+          legalName: "Atlantic Manufacturing DAC",
+          companyType: "DesignatedActivityCompany",
+          periodStart: "2026-01-01",
+          periodEnd: "2026-12-31",
+          expectedSizeClass: "Small",
+          expectedRegime: "Small",
+          auditExempt: true,
+          manualProfessionalReviewRequired: false,
+        },
+        evidenceTestNames: ["FilingGoldenCorpusScenarioTests.GoldenCorpus_DacSmall_EmitsAccountsIxbrlAndSourceBackedReadiness"],
+        evidenceVerifiers: [
+          {
+            name: "FilingGoldenCorpusScenarioTests.GoldenCorpus_DacSmall_EmitsAccountsIxbrlAndSourceBackedReadiness",
+            command: "dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter FullyQualifiedName~FilingGoldenCorpusScenarioTests.GoldenCorpus_DacSmall_EmitsAccountsIxbrlAndSourceBackedReadiness",
+            ciScope: "default-ci",
+            runsInDefaultCi: true,
+            environment: "EF Core InMemory golden fixture; CI also runs the broader backend suite on Linux",
+            evidenceLevel: "end-to-end golden filing scenario",
+          },
+        ],
+        assertions: ["PDF text", "iXBRL parse", "source-backed readiness"],
+        evidencePack: {
+          outputArtifacts: ["DAC accounts PDF text"],
+          decisionGates: ["named qualified-accountant review"],
+          expectedValueChecks: ["well-formed iXBRL"],
+          expectedOutputs: {
+            pdfTextMarkers: ["Atlantic Manufacturing DAC", "DIRECTORS' REPORT"],
+            ixbrlRequiredTags: ["bus:EntityCurrentLegalOrRegisteredName"],
+            filingReadinessState: "ready-for-external-filing",
+            expectedCorporationTax: 62.5,
+            requiredNotes: ["Accounting Policies"],
+            filingGateStates: ["director and secretary certification satisfied", "qualified-accountant review recorded"],
+            signOffPacketState: "ready-for-external-filing",
+          },
+          expectedProofPoints: [
+            {
+              area: "pdf-text",
+              expectedEvidence: "DAC accounts PDF text contains the legal name and directors' report.",
+              automatedVerifier: "FilingGoldenCorpusScenarioTests.GoldenCorpus_DacSmall_EmitsAccountsIxbrlAndSourceBackedReadiness",
+              required: true,
+            },
+          ],
+          sourceReferences: [source("frc-frs-102", "FRC FRS 102 current edition and amendments")],
         },
       },
     ],
