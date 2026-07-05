@@ -206,6 +206,8 @@ function sampleReport(): ProductionReadinessReport {
         label: "Qualified accountant sign-off",
         owner: "Qualified accountant",
         priority: "critical",
+        riskRank: 0,
+        evidenceStage: "accountant-review-gate",
         status: "required",
         detail: "No real filing pack can be treated as final until a named qualified accountant has approved it.",
         evidenceRequired: "Named accountant approval recorded against the period.",

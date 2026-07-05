@@ -33,6 +33,8 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.equal(parsed.assurancePacket.goldenCorpusCovered, 1);
   assert.ok(parsed.assurancePacket.evidenceItems.includes("source-law-traceability-index"));
   assert.equal(parsed.assurancePacket.releaseBlockers[0], "Qualified accountant sign-off required");
+  assert.equal(parsed.assuranceActions[0].riskRank, 0);
+  assert.equal(parsed.assuranceActions[0].evidenceStage, "accountant-review-gate");
 });
 
 test("parseProductionReadinessReport rejects missing golden corpus evidence packs", () => {
@@ -122,6 +124,29 @@ test("parseProductionReadinessReport rejects proof points whose verifier is not 
   assert.throws(
     () => parseProductionReadinessReport(payload),
     /Invalid production readiness report contract: goldenFilingCorpus\.0\.evidencePack\.expectedProofPoints\.0\.automatedVerifier - verifier must be listed in evidenceTestNames/,
+  );
+});
+
+test("parseProductionReadinessReport rejects assurance actions that are not risk ordered", () => {
+  const payload = sampleReport();
+  payload.assuranceActions = [
+    {
+      ...payload.assuranceActions[0],
+      code: "visual-regression",
+      riskRank: 30,
+      evidenceStage: "visual-qa-evidence",
+    },
+    {
+      ...payload.assuranceActions[0],
+      code: "external-validation",
+      riskRank: 5,
+      evidenceStage: "external-validation-gate",
+    },
+  ];
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: assuranceActions\.1\.riskRank - actions must be sorted by riskRank then code/,
   );
 });
 
@@ -249,6 +274,8 @@ function sampleReport() {
         label: "Qualified accountant sign-off",
         owner: "Qualified accountant",
         priority: "critical",
+        riskRank: 0,
+        evidenceStage: "accountant-review-gate",
         status: "required",
         detail: "No real filing pack can be treated as final until a named qualified accountant has approved it.",
         evidenceRequired: "Named accountant approval recorded against the period.",

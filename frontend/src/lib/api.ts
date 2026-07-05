@@ -1618,6 +1618,8 @@ export interface ProductionReadinessAssuranceAction {
   label: string;
   owner: string;
   priority: string;
+  riskRank: number;
+  evidenceStage: string;
   status: string;
   detail: string;
   evidenceRequired: string;
@@ -1843,6 +1845,8 @@ const productionReadinessAssuranceActionSchema = z.object({
   label: z.string().min(1),
   owner: z.string().min(1),
   priority: z.string().min(1),
+  riskRank: z.number().int().nonnegative(),
+  evidenceStage: z.string().min(1),
   status: z.string().min(1),
   detail: z.string().min(1),
   evidenceRequired: z.string().min(1),
@@ -1993,6 +1997,7 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
     report.visualQaCoverage.expectedScreenshotCount,
     report.assurancePacket.visualQaExpectedScreenshots,
   );
+  assertAssuranceActionsRiskOrder(report.assuranceActions);
 
   const expectedWorkflowStages = [
     "Setup",
@@ -2084,6 +2089,29 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
         );
       }
     });
+  });
+}
+
+function assertAssuranceActionsRiskOrder(actions: ProductionReadinessAssuranceAction[]) {
+  actions.forEach((action, actionIndex) => {
+    if (!action.evidenceStage.trim()) {
+      throw new Error(
+        `Invalid production readiness report contract: assuranceActions.${actionIndex}.evidenceStage - evidence stage is required`,
+      );
+    }
+
+    if (actionIndex === 0) return;
+
+    const previous = actions[actionIndex - 1];
+    const outOfRiskOrder =
+      action.riskRank < previous.riskRank ||
+      (action.riskRank === previous.riskRank && action.code.localeCompare(previous.code, "en-IE") < 0);
+
+    if (outOfRiskOrder) {
+      throw new Error(
+        `Invalid production readiness report contract: assuranceActions.${actionIndex}.riskRank - actions must be sorted by riskRank then code`,
+      );
+    }
   });
 }
 

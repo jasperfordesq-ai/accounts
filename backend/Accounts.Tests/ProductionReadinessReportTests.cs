@@ -433,20 +433,30 @@ public class ProductionReadinessReportTests
         Assert.NotEmpty(report.AssuranceActions);
         Assert.Equal("qualified-accountant-signoff", report.AssuranceActions[0].Code);
         Assert.Equal("critical", report.AssuranceActions[0].Priority);
+        Assert.Equal(0, report.AssuranceActions[0].RiskRank);
+        Assert.Equal("accountant-review-gate", report.AssuranceActions[0].EvidenceStage);
         Assert.Equal("Qualified accountant", report.AssuranceActions[0].Owner);
         Assert.Contains(report.AssuranceActions, action =>
             action.Code == "light-dark-visual-regression"
             && action.Owner == "Engineering"
-            && action.Status == "in-progress");
+            && action.Status == "in-progress"
+            && action.RiskRank > report.AssuranceActions[0].RiskRank
+            && action.EvidenceStage == "visual-qa-evidence");
         Assert.Contains(report.AssuranceActions, action =>
             action.Code == "production-monitoring"
             && action.Priority == "high"
+            && action.RiskRank == 20
+            && action.EvidenceStage == "operations-evidence"
             && action.EvidenceRequired.Contains("Sentry", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(
+            report.AssuranceActions.OrderBy(action => action.RiskRank).ThenBy(action => action.Code).Select(action => action.Code),
+            report.AssuranceActions.Select(action => action.Code));
         Assert.All(report.AssuranceActions, action =>
         {
             Assert.False(string.IsNullOrWhiteSpace(action.Label));
             Assert.False(string.IsNullOrWhiteSpace(action.Detail));
             Assert.False(string.IsNullOrWhiteSpace(action.EvidenceRequired));
+            Assert.False(string.IsNullOrWhiteSpace(action.EvidenceStage));
         });
     }
 

@@ -167,14 +167,25 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
           caption="Next assurance actions"
           filterPlaceholder="Filter assurance actions"
           emptyState="No matching assurance actions"
-          columns={["Action", "Owner", "Priority", "Evidence required", "Status"]}
+          defaultSort={{ columnIndex: 2, direction: "asc" }}
+          columns={["Action", "Owner", "Risk", "Stage", "Evidence required", "Status"]}
           rows={assuranceActions.map((action) => ({
             id: action.code,
             tone: action.status === "complete" ? "good" : action.priority === "critical" ? "bad" : action.status === "in-progress" ? "info" : "warn",
+            sortValues: [
+              action.label,
+              action.owner,
+              action.riskRank,
+              action.evidenceStage,
+              action.evidenceRequired,
+              action.status,
+            ],
             searchText: [
               action.label,
               action.owner,
               action.priority,
+              action.riskRank,
+              action.evidenceStage,
               action.status,
               action.detail,
               action.evidenceRequired,
@@ -185,7 +196,11 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
                 <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">{action.detail}</p>
               </div>,
               <span key="owner" className="text-[var(--muted-foreground)]">{action.owner}</span>,
-              <StatusBadge key="priority" tone={priorityTone(action.priority)}>{formatStatus(action.priority)}</StatusBadge>,
+              <StatusBadge key="risk" tone={riskTone(action.riskRank)}>Risk {action.riskRank}</StatusBadge>,
+              <div key="stage" className="min-w-36">
+                <StatusBadge tone={priorityTone(action.priority)}>{formatStatus(action.priority)}</StatusBadge>
+                <code className="mt-1 block break-all text-[11px] text-[var(--muted-foreground)]">{action.evidenceStage}</code>
+              </div>,
               <span key="evidence" className="whitespace-normal text-[var(--muted-foreground)]">{action.evidenceRequired}</span>,
               <StatusBadge key="status" tone={action.status === "complete" ? "good" : action.status === "in-progress" ? "info" : "warn"}>
                 {formatStatus(action.status)}
@@ -874,6 +889,13 @@ function toneIconClass(tone: "good" | "warn" | "bad" | "info" | "default") {
 function priorityTone(priority: string): "good" | "warn" | "bad" | "info" | "default" {
   if (priority === "critical") return "bad";
   if (priority === "high") return "warn";
+  return "default";
+}
+
+function riskTone(riskRank: number): "good" | "warn" | "bad" | "info" | "default" {
+  if (riskRank <= 5) return "bad";
+  if (riskRank <= 20) return "warn";
+  if (riskRank <= 40) return "info";
   return "default";
 }
 

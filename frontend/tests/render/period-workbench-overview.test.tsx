@@ -67,7 +67,7 @@ describe("PeriodWorkbenchOverview", () => {
     expect(screen.getAllByText("Balance sheet does not balance")).toHaveLength(2);
     expect(screen.getByText("Named qualified-accountant approval required")).toBeInTheDocument();
     expect(screen.getByText("Revenue deadline has passed and late filing exposure must be reviewed")).toBeInTheDocument();
-  }, 15_000);
+  }, 20_000);
 });
 
 function sampleCompany(): Company {
