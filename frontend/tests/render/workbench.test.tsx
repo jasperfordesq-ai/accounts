@@ -70,6 +70,53 @@ describe("workbench primitives", () => {
     expect(screen.getAllByText("Required").length).toBeGreaterThanOrEqual(2);
   });
 
+  it("summarises and groups evidence so filing reviewers can scan open gates first", () => {
+    render(
+      <EvidenceChecklist
+        items={[
+          {
+            code: "cro-pdf",
+            label: "CRO accounts PDF generated",
+            required: true,
+            satisfied: false,
+            detail: "Generate the CRO accounts PDF from the server workflow.",
+          },
+          {
+            code: "external-ros-validation",
+            label: "External ROS validation evidence",
+            required: false,
+            satisfied: false,
+            detail: "Manual evidence remains open.",
+          },
+          {
+            code: "cro-signatories",
+            label: "Director and secretary certification",
+            required: true,
+            satisfied: true,
+            detail: "Director and secretary present.",
+          },
+        ]}
+      />,
+    );
+
+    const checklist = screen.getByRole("region", { name: "Evidence checklist" });
+    expect(within(checklist).getByText("Evidence progress")).toBeInTheDocument();
+    expect(within(checklist).getByText("1 open required")).toBeInTheDocument();
+    expect(within(checklist).getByText("1 advisory")).toBeInTheDocument();
+    expect(within(checklist).getByText("1 complete")).toBeInTheDocument();
+    expect(within(checklist).getByText("Open evidence")).toBeInTheDocument();
+    expect(within(checklist).getByText("Advisory evidence")).toBeInTheDocument();
+    expect(within(checklist).getByText("Completed evidence")).toBeInTheDocument();
+
+    const openGroup = within(screen.getByRole("group", { name: "Open evidence" }));
+    const advisoryGroup = within(screen.getByRole("group", { name: "Advisory evidence" }));
+    const completedGroup = within(screen.getByRole("group", { name: "Completed evidence" }));
+
+    expect(openGroup.getByText("CRO accounts PDF generated")).toBeInTheDocument();
+    expect(advisoryGroup.getByText("External ROS validation evidence")).toBeInTheDocument();
+    expect(completedGroup.getByText("Director and secretary certification")).toBeInTheDocument();
+  });
+
   it("renders concise status badges", () => {
     render(<StatusBadge tone="warn">Recorded only</StatusBadge>);
 

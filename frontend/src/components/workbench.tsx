@@ -626,25 +626,92 @@ export function SectionHeader({
 }
 
 export function EvidenceChecklist({ items }: { items: EvidenceItem[] }) {
+  const openRequired = items.filter((item) => item.required && !item.satisfied);
+  const advisory = items.filter((item) => !item.required && !item.satisfied);
+  const complete = items.filter((item) => item.satisfied);
+
   return (
-    <div className="divide-y divide-[var(--border)] overflow-hidden rounded-md border border-[var(--border)] bg-[var(--surface)]">
-      {items.map((item) => {
-        const tone: Tone = item.satisfied ? "good" : item.required ? "bad" : "warn";
-        return (
-          <div key={item.code} className="grid gap-3 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-            <div className="flex min-w-0 items-start gap-3">
-              <FileCheck2 className={`mt-0.5 h-4 w-4 shrink-0 ${iconToneClasses[tone]}`} />
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-[var(--foreground)]">{item.label}</p>
-                {item.detail && <p className="mt-0.5 text-xs leading-5 text-[var(--muted-foreground)]">{item.detail}</p>}
-              </div>
-            </div>
-            <StatusBadge tone={tone}>{item.satisfied ? "Complete" : item.required ? "Required" : "Review"}</StatusBadge>
+    <section
+      aria-label="Evidence checklist"
+      className="overflow-hidden rounded-md border border-[var(--border)] bg-[var(--surface)]"
+    >
+      <div className="border-b border-[var(--border)] bg-[var(--surface-subtle)] px-4 py-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Evidence progress</p>
+            <p className="mt-1 text-sm font-medium text-[var(--foreground)]">
+              {openRequired.length === 0 ? "Required evidence is complete" : "Open evidence is listed first for review"}
+            </p>
           </div>
-        );
-      })}
+          <div className="flex flex-wrap gap-2">
+            <StatusBadge tone={openRequired.length > 0 ? "bad" : "good"}>
+              {formatEvidenceCount(openRequired.length, "open required", "open required")}
+            </StatusBadge>
+            <StatusBadge tone={advisory.length > 0 ? "warn" : "good"}>
+              {formatEvidenceCount(advisory.length, "advisory", "advisories")}
+            </StatusBadge>
+            <StatusBadge tone="good">
+              {formatEvidenceCount(complete.length, "complete", "complete")}
+            </StatusBadge>
+          </div>
+        </div>
+      </div>
+
+      {items.length === 0 ? (
+        <p className="px-4 py-3 text-sm text-[var(--muted-foreground)]">No evidence items recorded.</p>
+      ) : (
+        <div className="divide-y divide-[var(--border)]">
+          <EvidenceChecklistGroup title="Open evidence" items={openRequired} />
+          <EvidenceChecklistGroup title="Advisory evidence" items={advisory} />
+          <EvidenceChecklistGroup title="Completed evidence" items={complete} />
+        </div>
+      )}
+    </section>
+  );
+}
+
+function EvidenceChecklistGroup({
+  title,
+  items,
+}: {
+  title: string;
+  items: EvidenceItem[];
+}) {
+  if (items.length === 0) return null;
+
+  return (
+    <div role="group" aria-label={title}>
+      <div className="border-b border-[var(--border)] bg-[var(--surface-subtle)] px-4 py-2">
+        <p className="text-[11px] font-semibold uppercase text-[var(--muted-foreground)]">{title}</p>
+      </div>
+      <div className="divide-y divide-[var(--border)]">
+        {items.map((item) => (
+          <EvidenceChecklistRow key={item.code} item={item} />
+        ))}
+      </div>
     </div>
   );
+}
+
+function EvidenceChecklistRow({ item }: { item: EvidenceItem }) {
+  const tone: Tone = item.satisfied ? "good" : item.required ? "bad" : "warn";
+
+  return (
+    <div className="grid gap-3 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+      <div className="flex min-w-0 items-start gap-3">
+        <FileCheck2 className={`mt-0.5 h-4 w-4 shrink-0 ${iconToneClasses[tone]}`} />
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-[var(--foreground)]">{item.label}</p>
+          {item.detail && <p className="mt-0.5 text-xs leading-5 text-[var(--muted-foreground)]">{item.detail}</p>}
+        </div>
+      </div>
+      <StatusBadge tone={tone}>{item.satisfied ? "Complete" : item.required ? "Required" : "Review"}</StatusBadge>
+    </div>
+  );
+}
+
+function formatEvidenceCount(count: number, singular: string, plural: string) {
+  return `${count} ${count === 1 ? singular : plural}`;
 }
 
 export function LegalSourceList({
