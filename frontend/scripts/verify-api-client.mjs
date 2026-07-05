@@ -640,6 +640,18 @@ function productionReadinessReportFixture() {
         releaseChecklistEvidenceArtifact: "named-accountant-approval-record",
         manualFallback: "Run the same command locally from backend/ when GitHub Actions is unavailable.",
       },
+      {
+        code: "visual-smoke-light-dark",
+        label: "Light/dark desktop/mobile visual smoke",
+        ownerRole: "Engineering",
+        command: "node scripts/visual-smoke.mjs; node scripts/verify-visual-smoke-artifacts.mjs",
+        ciScope: "default-ci",
+        runsInDefaultCi: true,
+        blocksRelease: true,
+        evidenceArtifact: "artifacts/visual-smoke",
+        releaseChecklistEvidenceArtifact: "visual-smoke-screenshots",
+        manualFallback: "Run visual smoke locally, then retain the manifest verification output and review the generated artifacts manually.",
+      },
     ],
     auditabilityControls: [
       {

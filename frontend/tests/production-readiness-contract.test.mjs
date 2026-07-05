@@ -133,6 +133,9 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.equal(parsed.releaseVerificationManifest[1].ciScope, "environment-gated");
   assert.equal(parsed.releaseVerificationManifest[1].runsInDefaultCi, false);
   assert.match(parsed.releaseVerificationManifest[1].manualFallback, /ACCOUNTS_POSTGRES_TEST_CONNECTION/);
+  const visualSmokeVerification = parsed.releaseVerificationManifest.find((item) => item.code === "visual-smoke-light-dark");
+  assert.match(visualSmokeVerification?.command ?? "", /verify-visual-smoke-artifacts/);
+  assert.equal(visualSmokeVerification?.evidenceArtifact, "artifacts/visual-smoke");
   assert.equal(parsed.auditEvidenceTimeline[0].code, "data-change-capture");
   assert.equal(parsed.auditEvidenceTimeline[0].capturedWhen, "At every authenticated write before regenerated outputs can be reviewed.");
   assert.equal(parsed.auditEvidenceTimeline[1].blockingGateCodes[0], "generated-output-review");
@@ -1254,6 +1257,18 @@ function sampleReport() {
         evidenceArtifact: "postgres-integration-test-results",
         releaseChecklistEvidenceArtifact: "named-accountant-approval-record",
         manualFallback: "Set ACCOUNTS_POSTGRES_TEST_CONNECTION to a disposable PostgreSQL database before relying on audit durability evidence.",
+      },
+      {
+        code: "visual-smoke-light-dark",
+        label: "Light/dark desktop/mobile visual smoke",
+        ownerRole: "Engineering",
+        command: "node scripts/visual-smoke.mjs; node scripts/verify-visual-smoke-artifacts.mjs",
+        ciScope: "default-ci",
+        runsInDefaultCi: true,
+        blocksRelease: true,
+        evidenceArtifact: "artifacts/visual-smoke",
+        releaseChecklistEvidenceArtifact: "visual-smoke-screenshots",
+        manualFallback: "Run visual smoke locally, then retain the manifest verification output and review the generated artifacts manually.",
       },
     ],
     auditabilityControls: [

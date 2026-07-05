@@ -148,6 +148,7 @@ describe("visual smoke plan", () => {
 
   it("discovers dashboard period workspace links before creating fallback smoke data", async () => {
     const script = await readFile(new URL("../scripts/visual-smoke.mjs", import.meta.url), "utf8");
+    const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
 
     assert.match(script, /withScreenshotEvidence/);
     assert.match(script, /function companyHrefFromPeriodHref/);
@@ -162,5 +163,6 @@ describe("visual smoke plan", () => {
       script.indexOf("companyHrefFromPeriodHref") < script.indexOf("createSmokeCompany(page)"),
       "existing dashboard period links must be resolved before fallback smoke company creation",
     );
+    assert.equal(packageJson.scripts["test:visual:verify"], "node scripts/verify-visual-smoke-artifacts.mjs");
   });
 });

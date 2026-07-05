@@ -567,6 +567,7 @@ public class ProductionReadinessReportTests
         Assert.Contains(manifest, item =>
             StringProperty(item, "Code") == "visual-smoke-light-dark"
             && StringProperty(item, "Command").Contains("visual-smoke", StringComparison.OrdinalIgnoreCase)
+            && StringProperty(item, "Command").Contains("verify-visual-smoke-artifacts", StringComparison.OrdinalIgnoreCase)
             && StringProperty(item, "EvidenceArtifact") == "artifacts/visual-smoke"
             && BooleanProperty(item, "BlocksRelease"));
         Assert.Contains(manifest, item =>
