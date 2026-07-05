@@ -73,6 +73,16 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.equal(parsed.assurancePacket.releaseBlockers[0], "Qualified accountant sign-off required");
   assert.equal(parsed.assuranceActions[0].riskRank, 0);
   assert.equal(parsed.assuranceActions[0].evidenceStage, "accountant-review-gate");
+  assert.equal(parsed.completionTracks.length, 3);
+  assert.equal(parsed.completionTracks[0].code, "backend-code");
+  assert.equal(parsed.completionTracks[0].label, "Backend code");
+  assert.deepEqual(parsed.completionTracks[0].assuranceActionCodes, [
+    "qualified-accountant-signoff",
+    "external-ros-validation",
+    "accountant-acceptance-walkthrough",
+  ]);
+  assert.match(parsed.completionTracks[1].completionCriteria[0], /accountant workflow rail/i);
+  assert.match(parsed.completionTracks[2].currentEvidence[0], /API client invariants/i);
   assert.equal(parsed.releaseReviewChecklist[0].code, "accountant-final-signoff");
   assert.equal(parsed.releaseReviewChecklist[0].assuranceActionCode, "qualified-accountant-signoff");
   assert.equal(parsed.releaseReviewChecklist[0].evidenceArtifact, "named-accountant-approval-record");
@@ -280,6 +290,16 @@ test("parseProductionReadinessReport rejects assurance actions that are not risk
   );
 });
 
+test("parseProductionReadinessReport rejects completion tracks with unknown assurance actions", () => {
+  const payload = sampleReport();
+  payload.completionTracks[0].assuranceActionCodes.push("unknown-action");
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: completionTracks\.0\.assuranceActionCodes - unknown assurance action unknown-action/,
+  );
+});
+
 test("parseProductionReadinessReport rejects release checklist items for unknown assurance actions", () => {
   const payload = sampleReport();
   payload.releaseReviewChecklist[0].assuranceActionCode = "missing-assurance-action";
@@ -348,7 +368,7 @@ function sampleReport() {
       visualQaExpectedScreenshots: expectedVisualSmokeScreenshotCount(),
       requiredOperationalGates: 1,
       openCriticalActions: 1,
-      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "golden-filing-corpus", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary"],
+      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "golden-filing-corpus", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "production-completion-map"],
       releaseBlockers: ["Qualified accountant sign-off required"],
     },
     accountantAcceptanceCriteria: [
@@ -476,6 +496,13 @@ function sampleReport() {
         status: "required",
         detail: "Real filing packs require named professional approval before use.",
       },
+      {
+        code: "external-ros-validation",
+        label: "External ROS/iXBRL validation",
+        required: true,
+        status: "required",
+        detail: "External validation evidence must be retained before Revenue filing use.",
+      },
     ],
     assuranceActions: [
       {
@@ -488,6 +515,114 @@ function sampleReport() {
         status: "required",
         detail: "No real filing pack can be treated as final until a named qualified accountant has approved it.",
         evidenceRequired: "Named accountant approval recorded against the period.",
+      },
+      {
+        code: "external-ros-validation",
+        label: "External ROS/iXBRL validation",
+        owner: "Reviewer",
+        priority: "critical",
+        riskRank: 5,
+        evidenceStage: "external-validation-gate",
+        status: "required",
+        detail: "Internal XML checks are not a Revenue acceptance check.",
+        evidenceRequired: "External ROS validation evidence uploaded or referenced.",
+      },
+      {
+        code: "accountant-acceptance-walkthrough",
+        label: "Accountant acceptance walkthrough",
+        owner: "Qualified accountant",
+        priority: "high",
+        riskRank: 10,
+        evidenceStage: "golden-corpus-acceptance",
+        status: "required",
+        detail: "A qualified accountant must accept outputs, gates and wording.",
+        evidenceRequired: "Signed acceptance note for the golden corpus.",
+      },
+      {
+        code: "light-dark-visual-regression",
+        label: "Light/dark visual regression",
+        owner: "Engineering",
+        priority: "high",
+        riskRank: 30,
+        evidenceStage: "visual-qa-evidence",
+        status: "in-progress",
+        detail: "The accountant journey needs screenshot evidence across light and dark mode.",
+        evidenceRequired: "Light/dark desktop/mobile screenshots for the main workflow routes.",
+      },
+    ],
+    completionTracks: [
+      {
+        code: "backend-code",
+        label: "Backend code",
+        ownerRole: "Engineering",
+        status: "review-required",
+        completionCriteria: [
+          "Golden filing corpus proves PDF text, iXBRL XML, tax, notes, readiness and gates.",
+          "Source-law snapshot and traceability cover every statutory decision.",
+          "Production auditability captures who changed, approved, generated and submitted each pack.",
+        ],
+        currentEvidence: [
+          "Backend golden corpus scenarios are covered by automated verifiers.",
+          "Statutory rules coverage is mapped to executable tests.",
+          "Production auditability controls and audit evidence timeline are declared.",
+        ],
+        nextActions: [
+          "Run qualified-accountant acceptance on the golden corpus.",
+          "Attach external ROS/iXBRL validation evidence for generated iXBRL packs.",
+          "Record manual handoff acceptance for audit-required paths.",
+        ],
+        assuranceActionCodes: [
+          "qualified-accountant-signoff",
+          "external-ros-validation",
+          "accountant-acceptance-walkthrough",
+        ],
+      },
+      {
+        code: "frontend-ui-ux",
+        label: "Frontend UI/UX",
+        ownerRole: "Product design",
+        status: "in-progress",
+        completionCriteria: [
+          "Accountant workflow rail is visually coherent across the core journey.",
+          "Light/dark visual regression covers desktop and mobile.",
+          "Dense review workbench surfaces blockers, evidence, sources and next actions without visual clutter.",
+        ],
+        currentEvidence: [
+          "Visual QA route audit covers the accountant workbench routes.",
+          "Route-level loading/error states exist for main dynamic routes.",
+          "Workbench primitives are used in the readiness and period review surfaces.",
+        ],
+        nextActions: [
+          "Review each screenshot route-by-route in light and dark mode.",
+          "Polish spacing, typography, table density, empty states and mobile flow.",
+          "Record named visual acceptance against the smoke manifest.",
+        ],
+        assuranceActionCodes: [
+          "light-dark-visual-regression",
+          "accountant-acceptance-walkthrough",
+        ],
+      },
+      {
+        code: "frontend-code",
+        label: "Frontend code",
+        ownerRole: "Frontend engineering",
+        status: "in-progress",
+        completionCriteria: [
+          "Shared workbench primitives cover repeated page patterns.",
+          "Typed API contract blocks frontend/backend readiness drift.",
+          "Route-level states cover loading, error, empty and permission-denied cases.",
+        ],
+        currentEvidence: [
+          "API client invariants validate production readiness contracts.",
+          "Component-preview route exercises shared workbench primitives.",
+          "Render tests cover accountant dashboards, review panels and workflow routes.",
+        ],
+        nextActions: [
+          "Continue extracting large route files into focused workflow components.",
+          "Expand visual regression assertions from screenshot capture into reviewable sign-off.",
+          "Keep route fixtures aligned with backend readiness evidence.",
+        ],
+        assuranceActionCodes: ["light-dark-visual-regression"],
       },
     ],
     releaseReviewChecklist: [
@@ -503,6 +638,45 @@ function sampleReport() {
         operationalGateCode: "qualified-accountant-review",
         auditEventCodes: ["CroFilingStatusChanged"],
         detail: "Named professional approval must be recorded against the period.",
+      },
+      {
+        code: "external-ros-validation-evidence",
+        label: "External ROS/iXBRL validation evidence",
+        ownerRole: "Reviewer",
+        required: true,
+        status: "required",
+        blocksRelease: true,
+        evidenceArtifact: "external-ros-validation-reference",
+        assuranceActionCode: "external-ros-validation",
+        operationalGateCode: "external-ros-validation",
+        auditEventCodes: ["IxbrlInternalCheckCompleted"],
+        detail: "External ROS validation evidence must be retained before real Revenue filing use.",
+      },
+      {
+        code: "golden-corpus-accountant-acceptance",
+        label: "Golden corpus accountant acceptance",
+        ownerRole: "Qualified accountant",
+        required: true,
+        status: "required",
+        blocksRelease: true,
+        evidenceArtifact: "signed-golden-corpus-acceptance-note",
+        assuranceActionCode: "accountant-acceptance-walkthrough",
+        operationalGateCode: "qualified-accountant-review",
+        auditEventCodes: ["CroDocumentGenerated", "IxbrlInternalCheckCompleted", "NotesGenerated"],
+        detail: "A qualified accountant must walk the golden scenarios and accept outputs, gates and wording.",
+      },
+      {
+        code: "visual-qa-screenshot-review",
+        label: "Visual QA screenshot review",
+        ownerRole: "Engineering",
+        required: true,
+        status: "in-progress",
+        blocksRelease: true,
+        evidenceArtifact: "visual-smoke-screenshots",
+        assuranceActionCode: "light-dark-visual-regression",
+        operationalGateCode: "",
+        auditEventCodes: [],
+        detail: "Visual smoke screenshots must be reviewed in light and dark mode before release.",
       },
     ],
     releaseVerificationManifest: [

@@ -233,6 +233,68 @@ public class ProductionReadinessReportTests
     }
 
     [Fact]
+    public async Task ProductionReadinessReport_ExposesCompletionTracksForBackendUiAndFrontendCode()
+    {
+        await using var db = CreateDbContext();
+        var report = await new ProductionReadinessReportService(db).GetReportAsync();
+        var tracksProperty = report.GetType().GetProperty("CompletionTracks");
+
+        Assert.NotNull(tracksProperty);
+        var tracks = Assert.IsAssignableFrom<System.Collections.IEnumerable>(tracksProperty!.GetValue(report))
+            .Cast<object>()
+            .ToArray();
+
+        Assert.Equal(
+            new[] { "backend-code", "frontend-code", "frontend-ui-ux" },
+            tracks.Select(track => StringProperty(track, "Code")).Order(StringComparer.Ordinal));
+
+        var assuranceActionCodes = report.AssuranceActions
+            .Select(action => action.Code)
+            .ToHashSet(StringComparer.Ordinal);
+
+        AssertCompletionTrack(
+            tracks,
+            "backend-code",
+            "Backend code",
+            "Engineering",
+            ["golden filing corpus", "source-law snapshot", "auditability"],
+            ["backend golden corpus", "statutory rules coverage", "production auditability controls"],
+            ["qualified-accountant-signoff", "external-ros-validation", "accountant-acceptance-walkthrough"]);
+
+        AssertCompletionTrack(
+            tracks,
+            "frontend-ui-ux",
+            "Frontend UI/UX",
+            "Product design",
+            ["accountant workflow rail", "light/dark visual regression", "dense review workbench"],
+            ["visual QA route audit", "route-level loading/error states", "workbench primitives"],
+            ["light-dark-visual-regression", "accountant-acceptance-walkthrough"]);
+
+        AssertCompletionTrack(
+            tracks,
+            "frontend-code",
+            "Frontend code",
+            "Frontend engineering",
+            ["shared workbench primitives", "typed API contract", "route-level states"],
+            ["API client invariants", "component-preview route", "render tests"],
+            ["light-dark-visual-regression"]);
+
+        Assert.All(tracks, track =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(track, "Label")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(track, "OwnerRole")));
+            Assert.Contains(StringProperty(track, "Status"), new[] { "complete", "in-progress", "blocked", "review-required" });
+            Assert.NotEmpty(StringListProperty(track, "CompletionCriteria"));
+            Assert.NotEmpty(StringListProperty(track, "CurrentEvidence"));
+            Assert.NotEmpty(StringListProperty(track, "NextActions"));
+            Assert.NotEmpty(StringListProperty(track, "AssuranceActionCodes"));
+            Assert.All(StringListProperty(track, "AssuranceActionCodes"), code => Assert.Contains(code, assuranceActionCodes));
+        });
+
+        Assert.Contains(report.AssurancePacket.EvidenceItems, item => item == "production-completion-map");
+    }
+
+    [Fact]
     public async Task GoldenCorpusCoverage_IsBackedByConcreteAutomatedEvidenceTests()
     {
         await using var db = CreateDbContext();
@@ -1295,6 +1357,24 @@ public class ProductionReadinessReportTests
         Assert.Equal(expectedTax, DecimalProperty(expectedOutputs, "ExpectedCorporationTax"));
         Assert.Equal(readinessState, StringProperty(expectedOutputs, "FilingReadinessState"));
         Assert.Equal(signOffState, StringProperty(expectedOutputs, "SignOffPacketState"));
+    }
+
+    private static void AssertCompletionTrack(
+        IReadOnlyList<object> tracks,
+        string code,
+        string label,
+        string ownerRole,
+        IReadOnlyList<string> expectedCriteria,
+        IReadOnlyList<string> expectedEvidence,
+        IReadOnlyList<string> expectedAssuranceActions)
+    {
+        var track = Assert.Single(tracks, item => StringProperty(item, "Code") == code);
+
+        Assert.Equal(label, StringProperty(track, "Label"));
+        Assert.Equal(ownerRole, StringProperty(track, "OwnerRole"));
+        AssertListContainsAll(StringListProperty(track, "CompletionCriteria"), expectedCriteria, code, "completion criteria");
+        AssertListContainsAll(StringListProperty(track, "CurrentEvidence"), expectedEvidence, code, "current evidence");
+        AssertListContainsAll(StringListProperty(track, "AssuranceActionCodes"), expectedAssuranceActions, code, "assurance actions");
     }
 
     private static void AssertListContainsAll(

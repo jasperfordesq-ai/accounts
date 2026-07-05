@@ -1659,6 +1659,17 @@ export interface ProductionReadinessAssuranceAction {
   evidenceRequired: string;
 }
 
+export interface ProductionReadinessCompletionTrack {
+  code: string;
+  label: string;
+  ownerRole: string;
+  status: string;
+  completionCriteria: string[];
+  currentEvidence: string[];
+  nextActions: string[];
+  assuranceActionCodes: string[];
+}
+
 export interface ProductionAuditabilityControl {
   code: string;
   label: string;
@@ -1847,6 +1858,7 @@ export interface ProductionReadinessReport {
   manualHandoffPaths: string[];
   operationalGates: OperationalGate[];
   assuranceActions: ProductionReadinessAssuranceAction[];
+  completionTracks: ProductionReadinessCompletionTrack[];
   auditabilityControls: ProductionAuditabilityControl[];
   auditEvidenceTimeline: AuditEvidenceTimelineEntry[];
   monitoringControls: ProductionMonitoringControl[];
@@ -1999,6 +2011,17 @@ const productionReadinessAssuranceActionSchema = z.object({
   status: z.string().min(1),
   detail: z.string().min(1),
   evidenceRequired: z.string().min(1),
+});
+
+const productionReadinessCompletionTrackSchema = z.object({
+  code: z.string().min(1),
+  label: z.string().min(1),
+  ownerRole: z.string().min(1),
+  status: z.string().min(1),
+  completionCriteria: z.array(z.string().min(1)),
+  currentEvidence: z.array(z.string().min(1)),
+  nextActions: z.array(z.string().min(1)),
+  assuranceActionCodes: z.array(z.string().min(1)),
 });
 
 const productionAuditabilityControlSchema = z.object({
@@ -2173,6 +2196,7 @@ export const productionReadinessReportSchema = z.object({
   manualHandoffPaths: z.array(z.string().min(1)),
   operationalGates: z.array(operationalGateSchema),
   assuranceActions: z.array(productionReadinessAssuranceActionSchema),
+  completionTracks: z.array(productionReadinessCompletionTrackSchema),
   auditabilityControls: z.array(productionAuditabilityControlSchema),
   auditEvidenceTimeline: z.array(auditEvidenceTimelineEntrySchema),
   monitoringControls: z.array(productionMonitoringControlSchema),
@@ -2425,6 +2449,12 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
     );
   }
 
+  if (!report.assurancePacket.evidenceItems.includes("production-completion-map")) {
+    throw new Error(
+      "Invalid production readiness report contract: assurancePacket.evidenceItems - production-completion-map is required",
+    );
+  }
+
   report.auditEvidenceTimeline.forEach((entry, entryIndex) => {
     if (entry.auditEventCodes.length === 0) {
       throw new Error(
@@ -2439,6 +2469,7 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
     }
   });
 
+  assertCompletionTracks(report);
   assertReleaseReviewChecklist(report);
   assertReleaseVerificationManifest(report);
 
@@ -2613,6 +2644,54 @@ function assertVisualQaArtifacts(report: ProductionReadinessReport) {
 
 function visualQaArtifactKey(routeCode: string, theme: string, viewportName: string) {
   return `${routeCode}/${theme}/${viewportName}`;
+}
+
+function assertCompletionTracks(report: ProductionReadinessReport) {
+  const expectedCodes = ["backend-code", "frontend-ui-ux", "frontend-code"];
+  const actualCodes = report.completionTracks.map((track) => track.code);
+  const missingCodes = expectedCodes.filter((code) => !actualCodes.includes(code));
+  const duplicateCodes = actualCodes.filter((code, index) => actualCodes.indexOf(code) !== index);
+  const assuranceActionCodes = new Set(report.assuranceActions.map((action) => action.code));
+
+  if (missingCodes.length > 0) {
+    throw new Error(
+      `Invalid production readiness report contract: completionTracks - missing required tracks: ${missingCodes.join(", ")}`,
+    );
+  }
+
+  if (duplicateCodes.length > 0) {
+    throw new Error(
+      `Invalid production readiness report contract: completionTracks - duplicate track codes: ${[...new Set(duplicateCodes)].join(", ")}`,
+    );
+  }
+
+  report.completionTracks.forEach((track, trackIndex) => {
+    if (track.completionCriteria.length === 0) {
+      throw new Error(
+        `Invalid production readiness report contract: completionTracks.${trackIndex}.completionCriteria - at least one completion criterion is required`,
+      );
+    }
+
+    if (track.currentEvidence.length === 0) {
+      throw new Error(
+        `Invalid production readiness report contract: completionTracks.${trackIndex}.currentEvidence - at least one current evidence item is required`,
+      );
+    }
+
+    if (track.nextActions.length === 0) {
+      throw new Error(
+        `Invalid production readiness report contract: completionTracks.${trackIndex}.nextActions - at least one next action is required`,
+      );
+    }
+
+    track.assuranceActionCodes.forEach((code) => {
+      if (!assuranceActionCodes.has(code)) {
+        throw new Error(
+          `Invalid production readiness report contract: completionTracks.${trackIndex}.assuranceActionCodes - unknown assurance action ${code}`,
+        );
+      }
+    });
+  });
 }
 
 function assertReleaseReviewChecklist(report: ProductionReadinessReport) {

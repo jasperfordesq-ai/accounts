@@ -18,6 +18,7 @@ import {
 
 export function ProductionReadinessWorkbench({ report }: { report: ProductionReadinessReport }) {
   const assuranceActions = report.assuranceActions ?? [];
+  const completionTracks = report.completionTracks ?? [];
   const accountantAcceptanceCriteria = report.accountantAcceptanceCriteria ?? [];
   const statutoryRuleMatrix = report.statutoryRuleMatrix ?? [];
   const statutoryRulesCoverage = report.statutoryRulesCoverage ?? [];
@@ -229,6 +230,47 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
               <span key="evidence" className="whitespace-normal text-[var(--muted-foreground)]">{action.evidenceRequired}</span>,
               <StatusBadge key="status" tone={action.status === "complete" ? "good" : action.status === "in-progress" ? "info" : "warn"}>
                 {formatStatus(action.status)}
+              </StatusBadge>,
+            ],
+          }))}
+        />
+      </ReviewPanel>
+
+      <ReviewPanel
+        title="Production completion map"
+        description="The remaining production work split into backend code, frontend UI/UX and frontend code, with evidence and release actions tied together."
+        actions={<StatusBadge tone={completionTracks.every((track) => track.status === "complete") ? "good" : "warn"}>{completionTracks.length} tracks</StatusBadge>}
+      >
+        <DataTable
+          caption="Production completion map"
+          filterPlaceholder="Filter production completion map"
+          emptyState="No completion tracks"
+          columns={["Track", "Completion criteria", "Current evidence", "Next actions", "Assurance links", "Status"]}
+          rows={completionTracks.map((track) => ({
+            id: track.code,
+            tone: track.status === "complete" ? "good" : track.status === "in-progress" ? "info" : track.status === "blocked" ? "bad" : "warn",
+            searchText: [
+              track.code,
+              track.label,
+              track.ownerRole,
+              track.status,
+              ...track.completionCriteria,
+              ...track.currentEvidence,
+              ...track.nextActions,
+              ...track.assuranceActionCodes,
+            ].join(" "),
+            cells: [
+              <div key="track" className="min-w-40 whitespace-normal">
+                <p className="font-medium">{track.label}</p>
+                <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">{track.ownerRole}</p>
+                <code className="mt-1 block break-all text-[11px] text-[var(--muted-foreground)]">{track.code}</code>
+              </div>,
+              <CompactList key="criteria" items={track.completionCriteria} />,
+              <CompactList key="evidence" items={track.currentEvidence} />,
+              <CompactList key="next-actions" items={track.nextActions} />,
+              <CodeStack key="links" items={track.assuranceActionCodes} />,
+              <StatusBadge key="status" tone={track.status === "complete" ? "good" : track.status === "in-progress" ? "info" : track.status === "blocked" ? "bad" : "warn"}>
+                {formatStatus(track.status)}
               </StatusBadge>,
             ],
           }))}

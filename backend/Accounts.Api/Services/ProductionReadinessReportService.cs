@@ -111,6 +111,16 @@ public sealed record ProductionReadinessAssuranceAction(
     string Detail,
     string EvidenceRequired);
 
+public sealed record ProductionReadinessCompletionTrack(
+    string Code,
+    string Label,
+    string OwnerRole,
+    string Status,
+    IReadOnlyList<string> CompletionCriteria,
+    IReadOnlyList<string> CurrentEvidence,
+    IReadOnlyList<string> NextActions,
+    IReadOnlyList<string> AssuranceActionCodes);
+
 public sealed record ProductionAuditabilityControl(
     string Code,
     string Label,
@@ -284,6 +294,7 @@ public sealed record ProductionReadinessReport(
     IReadOnlyList<string> ManualHandoffPaths,
     IReadOnlyList<OperationalGate> OperationalGates,
     IReadOnlyList<ProductionReadinessAssuranceAction> AssuranceActions,
+    IReadOnlyList<ProductionReadinessCompletionTrack> CompletionTracks,
     IReadOnlyList<ProductionAuditabilityControl> AuditabilityControls,
     IReadOnlyList<AuditEvidenceTimelineEntry> AuditEvidenceTimeline,
     IReadOnlyList<ProductionMonitoringControl> MonitoringControls,
@@ -307,6 +318,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
         var manualHandoffPaths = BuildManualHandoffPaths();
         var operationalGates = BuildOperationalGates();
         var assuranceActions = BuildAssuranceActions();
+        var completionTracks = BuildCompletionTracks();
         var auditabilityControls = BuildAuditabilityControls();
         var auditEvidenceTimeline = BuildAuditEvidenceTimeline();
         var monitoringControls = BuildMonitoringControls();
@@ -349,6 +361,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             manualHandoffPaths,
             operationalGates,
             assuranceActions,
+            completionTracks,
             auditabilityControls,
             auditEvidenceTimeline,
             monitoringControls,
@@ -406,7 +419,8 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "release-review-checklist",
             "release-verification-manifest",
             "accountant-acceptance-criteria",
-            "accountant-acceptance-summary"
+            "accountant-acceptance-summary",
+            "production-completion-map"
         };
         var releaseBlockers = assuranceActions
             .Where(action => action.Status != "complete")
@@ -1388,6 +1402,82 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "in-progress",
             "The accountant journey needs desktop and mobile screenshots across light and dark mode before it can be called visually production-ready.",
             "Screenshots for dashboard, production readiness, company detail, period workspace, filing review and the workbench component preview in light desktop, dark desktop, light mobile and dark mobile.")
+    ];
+
+    private static IReadOnlyList<ProductionReadinessCompletionTrack> BuildCompletionTracks() =>
+    [
+        new(
+            "backend-code",
+            "Backend code",
+            "Engineering",
+            "review-required",
+            [
+                "Golden filing corpus proves PDF text, iXBRL XML, tax, notes, readiness and gates.",
+                "Source-law snapshot and traceability cover every statutory decision.",
+                "Production auditability captures who changed, approved, generated and submitted each pack."
+            ],
+            [
+                "Backend golden corpus scenarios are covered by automated verifiers.",
+                "Statutory rules coverage is mapped to executable tests.",
+                "Production auditability controls and audit evidence timeline are declared."
+            ],
+            [
+                "Run qualified-accountant acceptance on the golden corpus.",
+                "Attach external ROS/iXBRL validation evidence for generated iXBRL packs.",
+                "Record manual handoff acceptance for audit-required paths."
+            ],
+            [
+                "qualified-accountant-signoff",
+                "external-ros-validation",
+                "accountant-acceptance-walkthrough"
+            ]),
+        new(
+            "frontend-ui-ux",
+            "Frontend UI/UX",
+            "Product design",
+            "in-progress",
+            [
+                "Accountant workflow rail is visually coherent across the core journey.",
+                "Light/dark visual regression covers desktop and mobile.",
+                "Dense review workbench surfaces blockers, evidence, sources and next actions without visual clutter."
+            ],
+            [
+                "Visual QA route audit covers the accountant workbench routes.",
+                "Route-level loading/error states exist for main dynamic routes.",
+                "Workbench primitives are used in the readiness and period review surfaces."
+            ],
+            [
+                "Review each screenshot route-by-route in light and dark mode.",
+                "Polish spacing, typography, table density, empty states and mobile flow.",
+                "Record named visual acceptance against the smoke manifest."
+            ],
+            [
+                "light-dark-visual-regression",
+                "accountant-acceptance-walkthrough"
+            ]),
+        new(
+            "frontend-code",
+            "Frontend code",
+            "Frontend engineering",
+            "in-progress",
+            [
+                "Shared workbench primitives cover repeated page patterns.",
+                "Typed API contract blocks frontend/backend readiness drift.",
+                "Route-level states cover loading, error, empty and permission-denied cases."
+            ],
+            [
+                "API client invariants validate production readiness contracts.",
+                "Component-preview route exercises shared workbench primitives.",
+                "Render tests cover accountant dashboards, review panels and workflow routes."
+            ],
+            [
+                "Continue extracting large route files into focused workflow components.",
+                "Expand visual regression assertions from screenshot capture into reviewable sign-off.",
+                "Keep route fixtures aligned with backend readiness evidence."
+            ],
+            [
+                "light-dark-visual-regression"
+            ])
     ];
 
     private static IReadOnlyList<ReleaseReviewChecklistItem> BuildReleaseReviewChecklist(
