@@ -32,6 +32,26 @@ export const visualSmokeReviewChecks = [
   "loading-error-empty-states",
 ];
 
+export const visualSmokeReviewProtocol = {
+  protocolVersion: "visual-review-v1",
+  reviewerRole: "Design reviewer",
+  status: "required-review",
+  signOffGate: "visual-qa-screenshot-review",
+  failurePolicy: "Block release if any accountant workbench route has console errors, horizontal overflow, visible text overlap, inaccessible contrast, unreadable table density, or unresolved light/dark/mobile defects.",
+  acceptanceCriteria: [
+    "Every configured route is captured in light desktop, dark desktop, light mobile and dark mobile.",
+    "No browser console errors, horizontal overflow or visible text overlap are present.",
+    "Accountant workflow hierarchy, table scanability, theme contrast, mobile density and route states are professionally acceptable.",
+    "A named visual QA reviewer records screenshot-manifest acceptance before real filing release.",
+  ],
+  requiredEvidence: [
+    "visual-smoke-manifest.json",
+    "24 visual smoke screenshots",
+    "route audit summary",
+    "named visual QA reviewer sign-off",
+  ],
+};
+
 export const visualSmokeRoutes = [
   {
     name: "dashboard",
@@ -134,6 +154,7 @@ export function expectedVisualSmokeManifest(outputDir = "artifacts/visual-smoke"
     expectedScreenshotCount: expectedVisualSmokeScreenshotCount(),
     layoutChecks: visualSmokeLayoutChecks,
     reviewChecks: visualSmokeReviewChecks,
+    reviewProtocol: visualSmokeReviewProtocol,
     routeAudits: expectedVisualSmokeRouteAudits(),
     screenshots: expectedVisualSmokeArtifacts(outputDir),
   };

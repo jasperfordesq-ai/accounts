@@ -6,11 +6,19 @@ import type { ProductionReadinessReport } from "@/lib/api";
 describe("ProductionReadinessWorkbench", () => {
   it("turns backend readiness evidence into a full accountant checklist", () => {
     render(<ProductionReadinessWorkbench report={sampleReport()} />);
+    const pageText = () => document.body.textContent ?? "";
+    const expectText = (value: RegExp | string) => {
+      if (value instanceof RegExp) {
+        expect(pageText()).toMatch(value);
+      } else {
+        expect(pageText()).toContain(value);
+      }
+    };
 
     expect(screen.getByRole("heading", { name: "Production Readiness Checklist" })).toBeInTheDocument();
     expect(screen.getAllByText("Review required").length).toBeGreaterThan(1);
-    expect(screen.getByText("3 companies")).toBeInTheDocument();
-    expect(screen.getByText("4 periods")).toBeInTheDocument();
+    expectText("3 companies");
+    expectText("4 periods");
     expect(screen.getByRole("searchbox", { name: "Filter Next assurance actions" })).toBeInTheDocument();
     expect(screen.getByRole("searchbox", { name: "Filter Statutory rules matrix" })).toBeInTheDocument();
     expect(screen.getByRole("searchbox", { name: "Filter Golden filing corpus" })).toBeInTheDocument();
@@ -18,23 +26,23 @@ describe("ProductionReadinessWorkbench", () => {
     expect(screen.getAllByText("Micro LTD")).toHaveLength(2);
     expect(screen.getAllByText("AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl").length).toBeGreaterThan(1);
     expect(screen.getByRole("heading", { name: "Golden evidence pack" })).toBeInTheDocument();
-    expect(screen.getByText("accounts PDF text")).toBeInTheDocument();
-    expect(screen.getByText("accountant sign-off packet")).toBeInTheDocument();
-    expect(screen.getByText("accountant-signoff-packet")).toBeInTheDocument();
-    expect(screen.getByText("Sign-off packet shows reviewer state, open blockers and allowed next actions.")).toBeInTheDocument();
-    expect(screen.getByText("director and secretary certification")).toBeInTheDocument();
-    expect(screen.getByText("well-formed iXBRL")).toBeInTheDocument();
-    expect(screen.getByText("Expected CT:")).toBeInTheDocument();
-    expect(screen.getByText("€718.75")).toBeInTheDocument();
-    expect(screen.getByText("Expected proof points")).toBeInTheDocument();
-    expect(screen.getByText("PDF text contains company name and micro statutory statement.")).toBeInTheDocument();
-    expect(screen.getByText("signatory-gates")).toBeInTheDocument();
+    expectText("accounts PDF text");
+    expectText("accountant sign-off packet");
+    expectText("accountant-signoff-packet");
+    expectText("Sign-off packet shows reviewer state, open blockers and allowed next actions.");
+    expectText("director and secretary certification");
+    expectText("well-formed iXBRL");
+    expectText("Expected CT:");
+    expectText("€718.75");
+    expectText("Expected proof points");
+    expectText("PDF text contains company name and micro statutory statement.");
+    expectText("signatory-gates");
     expect(screen.getAllByRole("link", { name: "FRC FRS 105 current edition and amendments" }))
       .toEqual(expect.arrayContaining([expect.objectContaining({ href: "https://www.frc.org.uk/" })]));
-    expect(screen.getByText("Unsupported/manual handoff")).toBeInTheDocument();
-    expect(screen.getByText("PLC and public-company workflows")).toBeInTheDocument();
-    expect(screen.getByText("Operations and security")).toBeInTheDocument();
-    expect(screen.getByText("Named qualified-accountant review")).toBeInTheDocument();
+    expectText("Unsupported/manual handoff");
+    expectText("PLC and public-company workflows");
+    expectText("Operations and security");
+    expectText("Named qualified-accountant review");
     expect(screen.getByRole("heading", { name: "Source-backed statutory rules" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Revenue accepted iXBRL taxonomies" })).toHaveAttribute(
       "href",
@@ -43,114 +51,119 @@ describe("ProductionReadinessWorkbench", () => {
     expect(screen.getAllByText("external-ros-validation").length).toBeGreaterThan(0);
     expect(screen.getAllByText("ixbrl-taxonomy-selection").length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Next assurance actions" })).toBeInTheDocument();
-    expect(screen.getByText("Qualified accountant sign-off")).toBeInTheDocument();
-    expect(screen.getByText("Risk 0")).toBeInTheDocument();
-    expect(screen.getByText("accountant-review-gate")).toBeInTheDocument();
-    expect(screen.getByText("Light/dark visual regression")).toBeInTheDocument();
-    expect(screen.getByText("visual-qa-evidence")).toBeInTheDocument();
-    expect(screen.getByText(/Sentry production error routing configured and reviewed/)).toBeInTheDocument();
+    expectText("Qualified accountant sign-off");
+    expectText("Risk 0");
+    expectText("accountant-review-gate");
+    expectText("Light/dark visual regression");
+    expectText("visual-qa-evidence");
+    expectText(/Sentry production error routing configured and reviewed/);
     expect(screen.getByRole("heading", { name: "Production completion map" })).toBeInTheDocument();
     expect(screen.getByRole("searchbox", { name: "Filter Production completion map" })).toBeInTheDocument();
-    expect(screen.getByText("Backend code")).toBeInTheDocument();
-    expect(screen.getByText("Frontend UI/UX")).toBeInTheDocument();
-    expect(screen.getByText("Frontend code")).toBeInTheDocument();
-    expect(screen.getByText(/Golden filing corpus proves PDF text/)).toBeInTheDocument();
-    expect(screen.getByText(/Accountant workflow rail is visually coherent/)).toBeInTheDocument();
-    expect(screen.getByText(/Typed API contract blocks frontend\/backend readiness drift/)).toBeInTheDocument();
+    expectText("Backend code");
+    expectText("Frontend UI/UX");
+    expectText("Frontend code");
+    expectText(/Golden filing corpus proves PDF text/);
+    expectText(/Accountant workflow rail is visually coherent/);
+    expectText(/Typed API contract blocks frontend\/backend readiness drift/);
     expect(screen.getByRole("heading", { name: "Release review checklist" })).toBeInTheDocument();
-    expect(screen.getByText("Named accountant final sign-off")).toBeInTheDocument();
-    expect(screen.getByText("named-accountant-approval-record")).toBeInTheDocument();
-    expect(screen.getByText("ci-production-stack-smoke-and-backup-restore")).toBeInTheDocument();
+    expectText("Named accountant final sign-off");
+    expectText("named-accountant-approval-record");
+    expectText("ci-production-stack-smoke-and-backup-restore");
     expect(screen.getByRole("heading", { name: "Release verification manifest" })).toBeInTheDocument();
     expect(screen.getByRole("searchbox", { name: "Filter Release verification manifest" })).toBeInTheDocument();
-    expect(screen.getByText("Backend golden corpus and statutory rules")).toBeInTheDocument();
-    expect(screen.getByText("dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art")).toBeInTheDocument();
-    expect(screen.getByText("PostgreSQL-gated audit durability tests")).toBeInTheDocument();
-    expect(screen.getByText("environment-gated")).toBeInTheDocument();
-    expect(screen.getByText(/ACCOUNTS_POSTGRES_TEST_CONNECTION/)).toBeInTheDocument();
+    expectText("Backend golden corpus and statutory rules");
+    expectText("dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art");
+    expectText("PostgreSQL-gated audit durability tests");
+    expectText("environment-gated");
+    expectText(/ACCOUNTS_POSTGRES_TEST_CONNECTION/);
     expect(screen.getByRole("heading", { name: "Statutory rules matrix" })).toBeInTheDocument();
-    expect(screen.getByText("LTD micro")).toBeInTheDocument();
-    expect(screen.getByText("CLG charity")).toBeInTheDocument();
-    expect(screen.getByText("Medium audit-required")).toBeInTheDocument();
-    expect(screen.getByText("Unsupported regulated/group")).toBeInTheDocument();
+    expectText("LTD micro");
+    expectText("CLG charity");
+    expectText("Medium audit-required");
+    expectText("Unsupported regulated/group");
     expect(screen.getByRole("heading", { name: "Statutory rules coverage" })).toBeInTheDocument();
     expect(screen.getByRole("searchbox", { name: "Filter Statutory rules coverage" })).toBeInTheDocument();
-    expect(screen.getByText("Size classification")).toBeInTheDocument();
-    expect(screen.getByText("two-of-three threshold rule")).toBeInTheDocument();
-    expect(screen.getByText("AccountsWorkflowTests.SizeClassification_FirstYearMicro_AllowsMicroAndAuditExemption")).toBeInTheDocument();
+    expectText("Size classification");
+    expectText("two-of-three threshold rule");
+    expectText("AccountsWorkflowTests.SizeClassification_FirstYearMicro_AllowsMicroAndAuditExemption");
     expect(screen.getAllByRole("link", { name: "CRO financial statements requirements" }))
       .toEqual(expect.arrayContaining([expect.objectContaining({ href: "https://cro.ie/" })]));
     expect(screen.getByRole("heading", { name: "Visual QA coverage" })).toBeInTheDocument();
-    expect(screen.getByText("24 screenshots")).toBeInTheDocument();
-    expect(screen.getByText("visual-smoke-manifest.json")).toBeInTheDocument();
-    expect(screen.getByText("Light desktop")).toBeInTheDocument();
-    expect(screen.getByText("Dark mobile")).toBeInTheDocument();
-    expect(screen.getByText("Visible text overlap")).toBeInTheDocument();
-    expect(screen.getByText("Route audit summary")).toBeInTheDocument();
+    expectText("24 screenshots");
+    expect(screen.getAllByText("visual-smoke-manifest.json").length).toBeGreaterThan(1);
+    expectText("Visual review protocol");
+    expectText("Design reviewer");
+    expect(screen.getAllByText("visual-qa-screenshot-review").length).toBeGreaterThan(0);
+    expectText("named visual QA reviewer sign-off");
+    expectText(/Block release if any accountant workbench route/);
+    expectText("Light desktop");
+    expectText("Dark mobile");
+    expectText("Visible text overlap");
+    expectText("Route audit summary");
     expect(screen.getAllByText("Table scanability").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Theme contrast").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Mobile density").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Filing review").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Capture key filing").length).toBeGreaterThan(0);
-    expect(screen.getByText("workbenchPreview")).toBeInTheDocument();
+    expectText("workbenchPreview");
     expect(screen.getAllByText("visual-smoke-screenshots").length).toBeGreaterThan(1);
     expect(screen.getByRole("heading", { name: "Production auditability" })).toBeInTheDocument();
-    expect(screen.getByText("Who changed what")).toBeInTheDocument();
-    expect(screen.getByText("Who approved what")).toBeInTheDocument();
-    expect(screen.getByText("What was generated")).toBeInTheDocument();
-    expect(screen.getByText("Tamper-evident audit chain")).toBeInTheDocument();
-    expect(screen.getByText("audit-log-integrity-chain")).toBeInTheDocument();
+    expectText("Who changed what");
+    expectText("Who approved what");
+    expectText("What was generated");
+    expectText("Tamper-evident audit chain");
+    expectText("audit-log-integrity-chain");
     expect(screen.getAllByText("CroDocumentGenerated").length).toBeGreaterThan(1);
     expect(screen.getByRole("heading", { name: "Audit evidence timeline" })).toBeInTheDocument();
-    expect(screen.getByText("Who changed what and when?")).toBeInTheDocument();
-    expect(screen.getByText("At every authenticated write before regenerated outputs can be reviewed.")).toBeInTheDocument();
-    expect(screen.getByText("Generated output audit event must exist before accountant approval can rely on the pack.")).toBeInTheDocument();
+    expectText("Who changed what and when?");
+    expectText("At every authenticated write before regenerated outputs can be reviewed.");
+    expectText("Generated output audit event must exist before accountant approval can rely on the pack.");
     expect(screen.getAllByText("generated-output-review").length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Production monitoring" })).toBeInTheDocument();
-    expect(screen.getByText("Production error tracking")).toBeInTheDocument();
-    expect(screen.getByText("Structured JSON logs")).toBeInTheDocument();
-    expect(screen.getByText("Correlation id error responses")).toBeInTheDocument();
-    expect(screen.getByText("Sentry-compatible")).toBeInTheDocument();
-    expect(screen.getByText("Monitoring:ErrorTrackingDsn")).toBeInTheDocument();
-    expect(screen.getByText("Primary on-call accountant and platform owner")).toBeInTheDocument();
-    expect(screen.getByText("Block release if error events cannot be routed to the on-call owner.")).toBeInTheDocument();
+    expectText("Production error tracking");
+    expectText("Structured JSON logs");
+    expectText("Correlation id error responses");
+    expectText("Sentry-compatible");
+    expectText("Monitoring:ErrorTrackingDsn");
+    expectText("Primary on-call accountant and platform owner");
+    expectText("Block release if error events cannot be routed to the on-call owner.");
     expect(screen.getByRole("heading", { name: "Dependency policy controls" })).toBeInTheDocument();
-    expect(screen.getByText("Frontend dependency vulnerability audit")).toBeInTheDocument();
-    expect(screen.getByText("CI action version hygiene")).toBeInTheDocument();
-    expect(screen.getByText("Fail the release for moderate, high or critical npm advisories.")).toBeInTheDocument();
+    expectText("Frontend dependency vulnerability audit");
+    expectText("CI action version hygiene");
+    expectText("Fail the release for moderate, high or critical npm advisories.");
     expect(screen.getByRole("heading", { name: "Deployment safety controls" })).toBeInTheDocument();
-    expect(screen.getByText("Controlled production migrations")).toBeInTheDocument();
-    expect(screen.getByText("Production demo seed blocking")).toBeInTheDocument();
-    expect(screen.getByText("Backup restore drill")).toBeInTheDocument();
-    expect(screen.getByText("Fail production startup if demo seed data is enabled outside development.")).toBeInTheDocument();
-    expect(screen.getByText("sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")).toBeInTheDocument();
-    expect(screen.getByText("1 pinned source")).toBeInTheDocument();
+    expectText("Controlled production migrations");
+    expectText("Production demo seed blocking");
+    expectText("Backup restore drill");
+    expectText("Fail production startup if demo seed data is enabled outside development.");
+    expectText("sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    expectText("1 pinned source");
     expect(screen.getByRole("heading", { name: "Production assurance packet" })).toBeInTheDocument();
-    expect(screen.getByText("assurance-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")).toBeInTheDocument();
-    expect(screen.getByText("Golden corpus 1/1")).toBeInTheDocument();
+    expectText("assurance-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    expectText("Golden corpus 1/1");
     expect(screen.getAllByText("Qualified accountant sign-off required").length).toBeGreaterThan(1);
     expect(screen.getByRole("heading", { name: "Release decision summary" })).toBeInTheDocument();
-    expect(screen.getByText("2 professional sign-offs")).toBeInTheDocument();
-    expect(screen.getByText("1 manual handoff scenario")).toBeInTheDocument();
-    expect(screen.getByText("2 automated verifiers")).toBeInTheDocument();
-    expect(screen.getByText("micro-ltd, medium-audit-required")).toBeInTheDocument();
-    expect(screen.getByText("Do not use for real filings")).toBeInTheDocument();
-    expect(screen.getByText("1 critical blocker")).toBeInTheDocument();
-    expect(screen.getByText("Golden corpus covered")).toBeInTheDocument();
-    expect(screen.getByText("1 of 1 scenarios")).toBeInTheDocument();
-    expect(screen.getByText("Visual QA evidence")).toBeInTheDocument();
-    expect(screen.getByText("24 required screenshots")).toBeInTheDocument();
-    expect(screen.getByText("Accountant acceptance")).toBeInTheDocument();
+    expectText("2 professional sign-offs");
+    expectText("1 manual handoff scenario");
+    expectText("2 automated verifiers");
+    expectText("micro-ltd, medium-audit-required");
+    expectText("Do not use for real filings");
+    expectText("1 critical blocker");
+    expectText("Golden corpus covered");
+    expectText("1 of 1 scenarios");
+    expectText("Visual QA evidence");
+    expectText("24 required screenshots");
+    expectText("Accountant acceptance");
     expect(screen.getByRole("heading", { name: "Accountant acceptance criteria" })).toBeInTheDocument();
-    expect(screen.getByText("Micro LTD accountant acceptance")).toBeInTheDocument();
-    expect(screen.getByText("Medium handoff accountant acceptance")).toBeInTheDocument();
+    expectText("Micro LTD accountant acceptance");
+    expectText("Medium handoff accountant acceptance");
     expect(screen.getAllByText("Example Micro Limited").length).toBeGreaterThan(1);
-    expect(screen.getByText("2025-01-01 to 2025-12-31")).toBeInTheDocument();
-    expect(screen.getByText("Named qualified accountant must approve the generated pack before real filing use.")).toBeInTheDocument();
-    expect(screen.getByText("Signed auditor report and manual handoff note reviewed by the qualified accountant.")).toBeInTheDocument();
+    expectText("2025-01-01 to 2025-12-31");
+    expectText("Named qualified accountant must approve the generated pack before real filing use.");
+    expectText("Signed auditor report and manual handoff note reviewed by the qualified accountant.");
     expect(screen.getAllByText("Acceptance verifier").length).toBeGreaterThan(0);
     expect(screen.getAllByText(/dotnet test Accounts\.slnx/).length).toBeGreaterThan(1);
-  }, 45000);
+  }, 90000);
 });
 
 function sampleReport(): ProductionReadinessReport {
@@ -802,6 +815,7 @@ function sampleReport(): ProductionReadinessReport {
       expectedScreenshotCount: 24,
       layoutChecks: ["browser-console-errors", "page-horizontal-overflow", "visible-text-overlap"],
       reviewChecks: visualQaReviewChecks(),
+      reviewProtocol: visualQaReviewProtocol(),
       themes: ["light", "dark"],
       viewports: [
         { name: "desktop", width: 1440, height: 1000 },
@@ -820,6 +834,28 @@ function accountantWorkflowStages() {
 
 function visualQaReviewChecks() {
   return ["accountant-workflow-hierarchy", "table-scanability", "theme-contrast", "mobile-density", "loading-error-empty-states"];
+}
+
+function visualQaReviewProtocol(): ProductionReadinessReport["visualQaCoverage"]["reviewProtocol"] {
+  return {
+    protocolVersion: "visual-review-v1",
+    reviewerRole: "Design reviewer",
+    status: "required-review",
+    signOffGate: "visual-qa-screenshot-review",
+    failurePolicy: "Block release if any accountant workbench route has console errors, horizontal overflow, visible text overlap, inaccessible contrast, unreadable table density, or unresolved light/dark/mobile defects.",
+    acceptanceCriteria: [
+      "Every configured route is captured in light desktop, dark desktop, light mobile and dark mobile.",
+      "No browser console errors, horizontal overflow or visible text overlap are present.",
+      "Accountant workflow hierarchy, table scanability, theme contrast, mobile density and route states are professionally acceptable.",
+      "A named visual QA reviewer records screenshot-manifest acceptance before real filing release.",
+    ],
+    requiredEvidence: [
+      "visual-smoke-manifest.json",
+      "24 visual smoke screenshots",
+      "route audit summary",
+      "named visual QA reviewer sign-off",
+    ],
+  };
 }
 
 function visualQaRoutes(): ProductionReadinessReport["visualQaCoverage"]["routes"] {

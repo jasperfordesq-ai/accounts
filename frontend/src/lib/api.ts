@@ -1811,6 +1811,16 @@ export interface VisualQaRouteAudit {
   reviewChecks: string[];
 }
 
+export interface VisualQaReviewProtocol {
+  protocolVersion: string;
+  reviewerRole: string;
+  status: string;
+  signOffGate: string;
+  failurePolicy: string;
+  acceptanceCriteria: string[];
+  requiredEvidence: string[];
+}
+
 export interface VisualQaCoverage {
   artifactName: string;
   enforcement: string;
@@ -1818,6 +1828,7 @@ export interface VisualQaCoverage {
   expectedScreenshotCount: number;
   layoutChecks: string[];
   reviewChecks: string[];
+  reviewProtocol: VisualQaReviewProtocol;
   themes: string[];
   viewports: VisualQaViewport[];
   routes: VisualQaRoute[];
@@ -2165,6 +2176,16 @@ const visualQaRouteAuditSchema = z.object({
   reviewChecks: z.array(z.string().min(1)),
 });
 
+const visualQaReviewProtocolSchema = z.object({
+  protocolVersion: z.string().min(1),
+  reviewerRole: z.string().min(1),
+  status: z.string().min(1),
+  signOffGate: z.string().min(1),
+  failurePolicy: z.string().min(1),
+  acceptanceCriteria: z.array(z.string().min(1)),
+  requiredEvidence: z.array(z.string().min(1)),
+});
+
 const visualQaCoverageSchema = z.object({
   artifactName: z.string().min(1),
   enforcement: z.string().min(1),
@@ -2172,6 +2193,7 @@ const visualQaCoverageSchema = z.object({
   expectedScreenshotCount: z.number(),
   layoutChecks: z.array(z.string().min(1)),
   reviewChecks: z.array(z.string().min(1)),
+  reviewProtocol: visualQaReviewProtocolSchema,
   themes: z.array(z.string().min(1)),
   viewports: z.array(visualQaViewportSchema),
   routes: z.array(visualQaRouteSchema),
@@ -2521,6 +2543,26 @@ function assertVisualQaArtifacts(report: ProductionReadinessReport) {
   const viewports = new Set(report.visualQaCoverage.viewports.map((viewport) => viewport.name));
   const artifactsByKey = new Map<string, VisualQaArtifact>();
   const routeAuditsByCode = new Map(report.visualQaCoverage.routeAudits.map((audit) => [audit.routeCode, audit]));
+  const releaseChecklistCodes = new Set(report.releaseReviewChecklist.map((item) => item.code));
+  const reviewProtocol = report.visualQaCoverage.reviewProtocol;
+
+  if (!releaseChecklistCodes.has(reviewProtocol.signOffGate)) {
+    throw new Error(
+      "Invalid production readiness report contract: visualQaCoverage.reviewProtocol.signOffGate - must reference a release checklist item",
+    );
+  }
+
+  if (reviewProtocol.acceptanceCriteria.length === 0) {
+    throw new Error(
+      "Invalid production readiness report contract: visualQaCoverage.reviewProtocol.acceptanceCriteria - at least one criterion is required",
+    );
+  }
+
+  if (!reviewProtocol.requiredEvidence.includes(report.visualQaCoverage.manifestFileName)) {
+    throw new Error(
+      "Invalid production readiness report contract: visualQaCoverage.reviewProtocol.requiredEvidence - must include the visual smoke manifest",
+    );
+  }
 
   report.visualQaCoverage.artifacts.forEach((artifact, artifactIndex) => {
     const route = routeByCode.get(artifact.routeCode);

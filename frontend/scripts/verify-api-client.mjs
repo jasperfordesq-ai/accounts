@@ -36,6 +36,7 @@ import {
   expectedVisualSmokeRouteAudits,
   expectedVisualSmokeScreenshotCount,
   visualSmokeLayoutChecks,
+  visualSmokeReviewProtocol,
   visualSmokeReviewChecks,
   visualSmokeRoutes,
   visualSmokeThemes,
@@ -280,6 +281,17 @@ function productionReadinessReportFixture() {
         detail: "No real filing pack can be treated as final until a named qualified accountant has approved it.",
         evidenceRequired: "Named accountant approval recorded against the period.",
       },
+      {
+        code: "light-dark-visual-regression",
+        label: "Light/dark visual regression",
+        owner: "Engineering",
+        priority: "high",
+        riskRank: 30,
+        evidenceStage: "visual-qa-evidence",
+        status: "in-progress",
+        detail: "Screenshot review covers accountant routes in light and dark mode.",
+        evidenceRequired: "Named visual QA reviewer sign-off against the screenshot manifest.",
+      },
     ],
     completionTracks: [
       {
@@ -326,6 +338,19 @@ function productionReadinessReportFixture() {
         operationalGateCode: "qualified-accountant-review",
         auditEventCodes: ["CroFilingStatusChanged"],
         detail: "Named professional approval must be recorded against the period.",
+      },
+      {
+        code: "visual-qa-screenshot-review",
+        label: "Visual QA screenshot review",
+        ownerRole: "Engineering",
+        required: true,
+        status: "in-progress",
+        blocksRelease: true,
+        evidenceArtifact: "visual-smoke-screenshots",
+        assuranceActionCode: "light-dark-visual-regression",
+        operationalGateCode: "",
+        auditEventCodes: [],
+        detail: "Named visual QA reviewer sign-off must be recorded against the screenshot manifest.",
       },
     ],
     releaseVerificationManifest: [
@@ -407,6 +432,7 @@ function productionReadinessReportFixture() {
       expectedScreenshotCount: expectedVisualSmokeScreenshotCount(),
       layoutChecks: visualSmokeLayoutChecks,
       reviewChecks: visualSmokeReviewChecks,
+      reviewProtocol: visualSmokeReviewProtocol,
       themes: visualSmokeThemes,
       viewports: visualSmokeViewports,
       routes: visualSmokeRoutes.map(({ name, routeKey, label, description, expectedText, workflowStages, openFilingTab }) => ({

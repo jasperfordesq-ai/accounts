@@ -574,6 +574,7 @@ async function run() {
   const manifest = {
     ...manifestTemplate,
     generatedAt: new Date().toISOString(),
+    reviewProtocol: manifestTemplate.reviewProtocol,
     routeAudits: expectedVisualSmokeRouteAudits().map((audit) => ({
       ...audit,
       screenshotCount: captures.filter((capture) => capture.routeName === audit.routeName).length,

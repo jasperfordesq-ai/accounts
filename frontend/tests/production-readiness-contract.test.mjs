@@ -7,6 +7,7 @@ import {
   expectedVisualSmokeRouteAudits,
   expectedVisualSmokeScreenshotCount,
   visualSmokeLayoutChecks,
+  visualSmokeReviewProtocol,
   visualSmokeReviewChecks,
   visualSmokeRoutes,
   visualSmokeThemes,
@@ -99,6 +100,17 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.equal(parsed.visualQaCoverage.manifestFileName, "visual-smoke-manifest.json");
   assert.equal(parsed.visualQaCoverage.artifacts.length, expectedVisualSmokeArtifacts().length);
   assert.deepEqual(parsed.visualQaCoverage.reviewChecks, visualSmokeReviewChecks);
+  assert.equal(parsed.visualQaCoverage.reviewProtocol.protocolVersion, "visual-review-v1");
+  assert.equal(parsed.visualQaCoverage.reviewProtocol.reviewerRole, "Design reviewer");
+  assert.equal(parsed.visualQaCoverage.reviewProtocol.signOffGate, "visual-qa-screenshot-review");
+  assert.match(parsed.visualQaCoverage.reviewProtocol.failurePolicy, /Block release/);
+  assert.match(parsed.visualQaCoverage.reviewProtocol.acceptanceCriteria[0], /light desktop/);
+  assert.deepEqual(parsed.visualQaCoverage.reviewProtocol.requiredEvidence, [
+    "visual-smoke-manifest.json",
+    "24 visual smoke screenshots",
+    "route audit summary",
+    "named visual QA reviewer sign-off",
+  ]);
   assert.deepEqual(parsed.visualQaCoverage.routeAudits, expectedVisualSmokeRouteAudits().map((audit) => ({
     routeCode: audit.routeName,
     routeKey: audit.routeKey,
@@ -216,6 +228,16 @@ test("parseProductionReadinessReport rejects stale visual route audit counts", (
   assert.throws(
     () => parseProductionReadinessReport(payload),
     /Invalid production readiness report contract: visualQaCoverage\.routeAudits\.0\.screenshotCount - expected 4, received 3/,
+  );
+});
+
+test("parseProductionReadinessReport rejects visual review protocols without a release checklist sign-off gate", () => {
+  const payload = sampleReport();
+  payload.visualQaCoverage.reviewProtocol.signOffGate = "missing-visual-review-gate";
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: visualQaCoverage\.reviewProtocol\.signOffGate - must reference a release checklist item/,
   );
 });
 
@@ -789,6 +811,7 @@ function sampleReport() {
       expectedScreenshotCount: expectedVisualSmokeScreenshotCount(),
       layoutChecks: visualSmokeLayoutChecks,
       reviewChecks: visualSmokeReviewChecks,
+      reviewProtocol: structuredClone(visualSmokeReviewProtocol),
       themes: visualSmokeThemes,
       viewports: visualSmokeViewports,
       routes: visualSmokeRoutes.map(({ name, routeKey, label, description, expectedText, workflowStages, openFilingTab }) => ({

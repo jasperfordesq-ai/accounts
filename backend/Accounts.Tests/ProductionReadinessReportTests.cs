@@ -1142,8 +1142,34 @@ public class ProductionReadinessReportTests
         Assert.Equal(24, report.VisualQaCoverage.ExpectedScreenshotCount);
         var artifacts = ObjectListProperty(report.VisualQaCoverage, "Artifacts");
         var routeAudits = ObjectListProperty(report.VisualQaCoverage, "RouteAudits");
+        var reviewProtocol = ObjectProperty(report.VisualQaCoverage, "ReviewProtocol");
         Assert.Equal(report.VisualQaCoverage.ExpectedScreenshotCount, artifacts.Count);
         Assert.Equal(report.VisualQaCoverage.Routes.Count, routeAudits.Count);
+        Assert.Equal("visual-review-v1", StringProperty(reviewProtocol, "ProtocolVersion"));
+        Assert.Equal("Design reviewer", StringProperty(reviewProtocol, "ReviewerRole"));
+        Assert.Equal("required-review", StringProperty(reviewProtocol, "Status"));
+        Assert.Equal("visual-qa-screenshot-review", StringProperty(reviewProtocol, "SignOffGate"));
+        Assert.Contains("Block release", StringProperty(reviewProtocol, "FailurePolicy"));
+        AssertListContainsAll(
+            StringListProperty(reviewProtocol, "AcceptanceCriteria"),
+            [
+                "light desktop",
+                "horizontal overflow",
+                "table scanability",
+                "named visual QA reviewer"
+            ],
+            "visual-qa",
+            "acceptance criteria");
+        AssertListContainsAll(
+            StringListProperty(reviewProtocol, "RequiredEvidence"),
+            [
+                "visual-smoke-manifest.json",
+                "24 visual smoke screenshots",
+                "route audit summary",
+                "named visual QA reviewer sign-off"
+            ],
+            "visual-qa",
+            "required evidence");
         var layoutChecksProperty = report.VisualQaCoverage.GetType().GetProperty("LayoutChecks");
         Assert.NotNull(layoutChecksProperty);
         var layoutChecks = Assert.IsAssignableFrom<IEnumerable<string>>(layoutChecksProperty!.GetValue(report.VisualQaCoverage)).ToArray();

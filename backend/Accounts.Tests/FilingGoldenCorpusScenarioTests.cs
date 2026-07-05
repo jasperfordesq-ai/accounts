@@ -411,6 +411,9 @@ public class FilingGoldenCorpusScenarioTests
     private static string ExtractPdfText(byte[] pdf)
     {
         using var document = PdfDocument.Open(pdf);
-        return string.Join("\n", document.GetPages().Select(p => p.Text));
+        var sb = new StringBuilder();
+        foreach (var page in document.GetPages())
+            sb.Append(' ').Append(string.Join(' ', page.GetWords().Select(w => w.Text)));
+        return sb.ToString();
     }
 }

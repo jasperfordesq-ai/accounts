@@ -722,6 +722,31 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
                   ))}
                 </div>
               </div>
+              <div className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Visual review protocol</p>
+                    <p className="mt-1 text-sm font-medium text-[var(--foreground)]">{visualQaCoverage.reviewProtocol.reviewerRole}</p>
+                    <code className="mt-1 block break-all text-[11px] text-[var(--muted-foreground)]">{visualQaCoverage.reviewProtocol.protocolVersion}</code>
+                  </div>
+                  <StatusBadge tone="warn">{formatStatus(visualQaCoverage.reviewProtocol.status)}</StatusBadge>
+                </div>
+                <div className="mt-3 grid gap-3 text-xs leading-5 text-[var(--muted-foreground)]">
+                  <div>
+                    <p className="mb-1 font-semibold uppercase text-[var(--foreground)]">Sign-off gate</p>
+                    <code className="break-all text-[11px] text-[var(--foreground)]">{visualQaCoverage.reviewProtocol.signOffGate}</code>
+                  </div>
+                  <div>
+                    <p className="mb-1 font-semibold uppercase text-[var(--foreground)]">Required evidence</p>
+                    <CompactList items={visualQaCoverage.reviewProtocol.requiredEvidence} />
+                  </div>
+                  <div>
+                    <p className="mb-1 font-semibold uppercase text-[var(--foreground)]">Acceptance criteria</p>
+                    <CompactList items={visualQaCoverage.reviewProtocol.acceptanceCriteria} />
+                  </div>
+                  <p>{visualQaCoverage.reviewProtocol.failurePolicy}</p>
+                </div>
+              </div>
             </div>
 
             <DataTable

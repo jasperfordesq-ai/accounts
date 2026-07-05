@@ -249,6 +249,15 @@ public sealed record VisualQaRouteAudit(
     string ReviewStatus,
     IReadOnlyList<string> ReviewChecks);
 
+public sealed record VisualQaReviewProtocol(
+    string ProtocolVersion,
+    string ReviewerRole,
+    string Status,
+    string SignOffGate,
+    string FailurePolicy,
+    IReadOnlyList<string> AcceptanceCriteria,
+    IReadOnlyList<string> RequiredEvidence);
+
 public sealed record VisualQaCoverage(
     string ArtifactName,
     string Enforcement,
@@ -256,6 +265,7 @@ public sealed record VisualQaCoverage(
     int ExpectedScreenshotCount,
     IReadOnlyList<string> LayoutChecks,
     IReadOnlyList<string> ReviewChecks,
+    VisualQaReviewProtocol ReviewProtocol,
     IReadOnlyList<string> Themes,
     IReadOnlyList<VisualQaViewport> Viewports,
     IReadOnlyList<VisualQaRoute> Routes,
@@ -2100,6 +2110,24 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "mobile-density",
             "loading-error-empty-states"
         };
+        var reviewProtocol = new VisualQaReviewProtocol(
+            "visual-review-v1",
+            "Design reviewer",
+            "required-review",
+            "visual-qa-screenshot-review",
+            "Block release if any accountant workbench route has console errors, horizontal overflow, visible text overlap, inaccessible contrast, unreadable table density, or unresolved light/dark/mobile defects.",
+            [
+                "Every configured route is captured in light desktop, dark desktop, light mobile and dark mobile.",
+                "No browser console errors, horizontal overflow or visible text overlap are present.",
+                "Accountant workflow hierarchy, table scanability, theme contrast, mobile density and route states are professionally acceptable.",
+                "A named visual QA reviewer records screenshot-manifest acceptance before real filing release."
+            ],
+            [
+                "visual-smoke-manifest.json",
+                "24 visual smoke screenshots",
+                "route audit summary",
+                "named visual QA reviewer sign-off"
+            ]);
         var viewports = new[]
         {
             new VisualQaViewport("desktop", 1440, 1000),
@@ -2192,6 +2220,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             routes.Length * themes.Length * viewports.Length,
             layoutChecks,
             reviewChecks,
+            reviewProtocol,
             themes,
             viewports,
             routes,
