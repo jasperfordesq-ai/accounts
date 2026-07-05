@@ -607,9 +607,11 @@ function CroWorkflowActions({
           <CheckCircle2 className="w-4 h-4 mr-1" /> Approve for Filing
         </Button>
         {disabledReason && (
-          <p className="max-w-xl text-xs leading-5 text-[var(--muted-foreground)]">
-            {disabledReason}
-          </p>
+          <ApprovalEvidenceGates
+            disabledReason={disabledReason}
+            filingStatus={filingStatus}
+            filingReadinessProfile={filingReadinessProfile}
+          />
         )}
       </div>
     );
@@ -693,6 +695,78 @@ function CroWorkflowActions({
   }
 
   return null;
+}
+
+function ApprovalEvidenceGates({
+  disabledReason,
+  filingStatus,
+  filingReadinessProfile,
+}: {
+  disabledReason: string;
+  filingStatus: FilingWorkflowStatus;
+  filingReadinessProfile: FilingReadinessProfile | null;
+}) {
+  const blockers = uniqueIssueMessages([
+    ...(filingReadinessProfile?.signOffPacket.openBlockers ?? []),
+    ...(filingReadinessProfile?.blockingIssues.map((issue) => issue.message) ?? []),
+    ...filingStatus.blockingIssues,
+  ]);
+  const warnings = uniqueIssueMessages([
+    ...(filingReadinessProfile?.signOffPacket.openWarnings ?? []),
+    ...(filingReadinessProfile?.warningIssues.map((issue) => issue.message) ?? []),
+    ...filingStatus.warningIssues,
+  ]);
+  const visibleBlockers = blockers.slice(0, 2);
+  const hiddenBlockerCount = Math.max(0, blockers.length - visibleBlockers.length);
+  const visibleWarnings = warnings.slice(0, 1);
+
+  return (
+    <section
+      aria-label="Approval evidence gates"
+      className="max-w-2xl rounded-md border border-red-200 bg-red-50/70 p-3 text-red-900 dark:border-red-900 dark:bg-red-950/30 dark:text-red-100"
+    >
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase">Resolve before approval</p>
+          <p className="mt-1 text-xs leading-5">{disabledReason}</p>
+        </div>
+        <StatusBadge tone="bad">{blockers.length} open</StatusBadge>
+      </div>
+
+      {visibleBlockers.length > 0 ? (
+        <ul className="mt-3 space-y-1.5">
+          {visibleBlockers.map((blocker) => (
+            <li key={blocker} className="text-xs leading-5">
+              {blocker}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-3 text-xs leading-5">
+          No detailed blocker evidence is attached to this workflow state.
+        </p>
+      )}
+
+      {hiddenBlockerCount > 0 && (
+        <p className="mt-2 text-xs font-semibold">
+          {hiddenBlockerCount} more approval {hiddenBlockerCount === 1 ? "blocker" : "blockers"}
+        </p>
+      )}
+
+      {visibleWarnings.length > 0 && (
+        <div className="mt-3 rounded-md border border-amber-200 bg-amber-50/80 p-2 text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
+          <p className="text-xs font-semibold uppercase">Warnings still to evidence</p>
+          <ul className="mt-1 space-y-1">
+            {visibleWarnings.map((warning) => (
+              <li key={warning} className="text-xs leading-5">
+                {warning}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
+  );
 }
 
 function approvalDisabledReason(

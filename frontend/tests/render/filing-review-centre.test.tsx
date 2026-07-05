@@ -215,6 +215,45 @@ describe("FilingReviewCentre", () => {
     expect(onMarkSubmitted).not.toHaveBeenCalled();
   });
 
+  it("shows the exact open sign-off gates beside a disabled approval action", () => {
+    render(
+      <FilingReviewCentre
+        filingStatus={sampleWorkflowStatus({ readyToFile: false, warningIssues: [] })}
+        filingReadinessProfile={sampleReadinessProfile({
+          supportedPath: true,
+          manualProfessionalReviewRequired: false,
+          blockingIssues: [
+            readinessIssue("cro-pdf", "Generate the CRO accounts PDF before approval or submission."),
+            readinessIssue("accountant-review", "A named qualified accountant must approve the filing pack before real CRO/Revenue use."),
+            readinessIssue("director-signatory", "Director certification must be recorded before CRO filing."),
+          ],
+          warningIssues: [
+            readinessIssue("external-ros-validation", "External ROS/iXBRL validation remains a manual evidence gate.", "warning"),
+          ],
+        })}
+        croSubmissionReference=""
+        validatingIxbrl={false}
+        onCroSubmissionReferenceChange={vi.fn()}
+        onRunIxbrlChecks={vi.fn()}
+        onApproveForFiling={vi.fn()}
+        onMarkCroSubmitted={vi.fn()}
+        onConfirmCroPayment={vi.fn()}
+        onMarkCroAccepted={vi.fn()}
+        onRecordCroSendBack={vi.fn()}
+      />,
+    );
+
+    const approvalGates = screen.getByRole("region", { name: "Approval evidence gates" });
+    const gates = within(approvalGates);
+
+    expect(gates.getByText("Resolve before approval")).toBeInTheDocument();
+    expect(gates.getByText("Generate the CRO accounts PDF before approval or submission.")).toBeInTheDocument();
+    expect(gates.getByText("A named qualified accountant must approve the filing pack before real CRO/Revenue use.")).toBeInTheDocument();
+    expect(gates.getByText("1 more approval blocker")).toBeInTheDocument();
+    expect(gates.getByText("External ROS/iXBRL validation remains a manual evidence gate.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Approve for Filing/i })).toBeDisabled();
+  });
+
   it("summarises filing issues before exposing the full blocker list", () => {
     render(
       <FilingReviewCentre
