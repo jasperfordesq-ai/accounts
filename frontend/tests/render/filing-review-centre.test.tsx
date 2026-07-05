@@ -95,6 +95,60 @@ describe("FilingReviewCentre", () => {
     expect(screen.getByRole("button", { name: /Approve for Filing/i })).toBeDisabled();
   });
 
+  it("orders filing evidence by risk before completed evidence", () => {
+    render(
+      <FilingReviewCentre
+        filingStatus={sampleWorkflowStatus({ readyToFile: false, warningIssues: [] })}
+        filingReadinessProfile={sampleReadinessProfile({
+          supportedPath: true,
+          manualProfessionalReviewRequired: false,
+          requiredEvidence: [
+            {
+              code: "cro-pdf",
+              label: "CRO accounts PDF generated",
+              required: true,
+              satisfied: true,
+              detail: "Draft CRO PDF exists.",
+              sources: [sourceReference()],
+            },
+            {
+              code: "external-ros-validation",
+              label: "External ROS validation evidence",
+              required: false,
+              satisfied: false,
+              detail: "Manual evidence remains open.",
+              sources: [sourceReference()],
+            },
+            {
+              code: "accountant-review",
+              label: "Named accountant approval",
+              required: true,
+              satisfied: false,
+              detail: "Approval must be recorded before filing.",
+              sources: [sourceReference()],
+            },
+          ],
+        })}
+        croSubmissionReference=""
+        validatingIxbrl={false}
+        onCroSubmissionReferenceChange={vi.fn()}
+        onRunIxbrlChecks={vi.fn()}
+        onApproveForFiling={vi.fn()}
+        onMarkCroSubmitted={vi.fn()}
+        onConfirmCroPayment={vi.fn()}
+        onMarkCroAccepted={vi.fn()}
+        onRecordCroSendBack={vi.fn()}
+      />,
+    );
+
+    const blockingEvidence = evidenceChecklistLabel("Named accountant approval");
+    const advisoryEvidence = evidenceChecklistLabel("External ROS validation evidence");
+    const completedEvidence = evidenceChecklistLabel("CRO accounts PDF generated");
+
+    expect(blockingEvidence.compareDocumentPosition(advisoryEvidence) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(advisoryEvidence.compareDocumentPosition(completedEvidence) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("passes the CORE reference when marking an approved filing as submitted", async () => {
     const user = userEvent.setup();
     const onReferenceChange = vi.fn();
@@ -304,6 +358,7 @@ function sampleWorkflowStatus({
 function sampleReadinessProfile({
   supportedPath,
   manualProfessionalReviewRequired,
+  requiredEvidence,
   blockingIssues = [],
   warningIssues = [],
   signOffSteps = [],
@@ -311,6 +366,7 @@ function sampleReadinessProfile({
 }: {
   supportedPath: boolean;
   manualProfessionalReviewRequired: boolean;
+  requiredEvidence?: FilingReadinessProfile["requiredEvidence"];
   blockingIssues?: FilingReadinessProfile["blockingIssues"];
   warningIssues?: FilingReadinessProfile["warningIssues"];
   signOffSteps?: FilingReadinessProfile["signOffPacket"]["steps"];
@@ -338,7 +394,7 @@ function sampleReadinessProfile({
       effectiveForPeriodsStartingOnOrAfter: "2024-01-01",
       sources: [sourceReference()],
     },
-    requiredEvidence: [
+    requiredEvidence: requiredEvidence ?? [
       {
         code: "audit-report",
         label: "Audit report",
@@ -407,4 +463,12 @@ function sourceReference(overrides: Partial<{ sourceId: string; title: string; e
     url: "https://cro.ie/annual-return/financial-statements-requirements/",
     ...overrides,
   };
+}
+
+function evidenceChecklistLabel(label: string) {
+  const match = screen.getAllByText(label).find((element) =>
+    element.tagName === "P" && element.className.includes("font-medium"));
+
+  if (!match) throw new Error(`Could not find evidence checklist label: ${label}`);
+  return match;
 }

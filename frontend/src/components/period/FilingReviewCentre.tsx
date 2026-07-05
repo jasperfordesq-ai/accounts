@@ -46,6 +46,9 @@ export function FilingReviewCentre({
   onRecordCroSendBack,
 }: FilingReviewCentreProps) {
   const filingIssues = buildFilingIssueGroups(filingStatus, filingReadinessProfile);
+  const requiredEvidence = filingReadinessProfile
+    ? sortFilingEvidenceByRisk(filingReadinessProfile.requiredEvidence)
+    : [];
 
   return (
     <ReviewPanel
@@ -88,7 +91,7 @@ export function FilingReviewCentre({
                     title="Professional filing gate"
                     description="Generated outputs remain draft/recorded workflow states until the required evidence and named review are complete."
                   />
-                  <EvidenceChecklist items={filingReadinessProfile.requiredEvidence} />
+                  <EvidenceChecklist items={requiredEvidence} />
                 </div>
                 <div className="min-w-0 max-w-full space-y-3">
                   <div className="rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-4">
@@ -189,6 +192,22 @@ export function FilingReviewCentre({
       )}
     </ReviewPanel>
   );
+}
+
+function sortFilingEvidenceByRisk(items: FilingReadinessProfile["requiredEvidence"]) {
+  return [...items].sort((left, right) => {
+    const priorityDiff = filingEvidencePriority(left) - filingEvidencePriority(right);
+    if (priorityDiff !== 0) return priorityDiff;
+
+    return left.label.localeCompare(right.label, "en-IE", { sensitivity: "base" });
+  });
+}
+
+function filingEvidencePriority(item: FilingReadinessProfile["requiredEvidence"][number]) {
+  if (item.required && !item.satisfied) return 0;
+  if (!item.required && !item.satisfied) return 1;
+  if (item.required && item.satisfied) return 2;
+  return 3;
 }
 
 function FilingDecisionCentre({
