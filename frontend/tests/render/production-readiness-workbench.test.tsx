@@ -108,6 +108,8 @@ describe("ProductionReadinessWorkbench", () => {
     expect(screen.getByRole("heading", { name: "Accountant acceptance criteria" })).toBeInTheDocument();
     expect(screen.getByText("Micro LTD accountant acceptance")).toBeInTheDocument();
     expect(screen.getByText("Medium handoff accountant acceptance")).toBeInTheDocument();
+    expect(screen.getByText("Example Micro Limited")).toBeInTheDocument();
+    expect(screen.getByText("2025-01-01 to 2025-12-31")).toBeInTheDocument();
     expect(screen.getByText("Named qualified accountant must approve the generated pack before real filing use.")).toBeInTheDocument();
     expect(screen.getByText("Signed auditor report and manual handoff note reviewed by the qualified accountant.")).toBeInTheDocument();
   }, 45000);
@@ -215,6 +217,16 @@ function sampleReport(): ProductionReadinessReport {
         companyScope: "Private company limited by shares",
         expectedOutcome: "generated-pack",
         coverageStatus: "covered",
+        fixture: {
+          legalName: "Example Micro Limited",
+          companyType: "Private",
+          periodStart: "2025-01-01",
+          periodEnd: "2025-12-31",
+          expectedSizeClass: "Micro",
+          expectedRegime: "Micro",
+          auditExempt: true,
+          manualProfessionalReviewRequired: false,
+        },
         evidenceTestNames: ["AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl"],
         assertions: ["PDF text", "iXBRL parse"],
         evidencePack: {

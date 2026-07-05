@@ -5,6 +5,10 @@ import { parseProductionReadinessReport } from "../src/lib/api.ts";
 test("parseProductionReadinessReport accepts the golden corpus evidence-pack contract", () => {
   const parsed = parseProductionReadinessReport(sampleReport());
 
+  assert.equal(parsed.goldenFilingCorpus[0].fixture.legalName, "Example Micro Limited");
+  assert.equal(parsed.goldenFilingCorpus[0].fixture.expectedRegime, "Micro");
+  assert.equal(parsed.goldenFilingCorpus[0].fixture.auditExempt, true);
+  assert.equal(parsed.goldenFilingCorpus[0].fixture.manualProfessionalReviewRequired, false);
   assert.equal(parsed.goldenFilingCorpus[0].evidencePack.outputArtifacts[0], "accounts PDF text");
   assert.equal(parsed.goldenFilingCorpus[0].evidencePack.decisionGates[0], "named qualified-accountant review");
   assert.equal(parsed.goldenFilingCorpus[0].evidencePack.expectedValueChecks[0], "well-formed iXBRL");
@@ -231,6 +235,16 @@ function sampleReport() {
         companyScope: "Private company limited by shares",
         expectedOutcome: "generated-pack",
         coverageStatus: "covered",
+        fixture: {
+          legalName: "Example Micro Limited",
+          companyType: "Private",
+          periodStart: "2025-01-01",
+          periodEnd: "2025-12-31",
+          expectedSizeClass: "Micro",
+          expectedRegime: "Micro",
+          auditExempt: true,
+          manualProfessionalReviewRequired: false,
+        },
         evidenceTestNames: ["AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl"],
         assertions: ["PDF text", "iXBRL parse"],
         evidencePack: {

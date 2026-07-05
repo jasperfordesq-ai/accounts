@@ -599,12 +599,16 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
           caption="Golden filing corpus"
           filterPlaceholder="Filter golden scenarios"
           emptyState="No matching golden filing scenarios"
-          columns={["Scenario", "Company scope", "Expected outcome", "Evidence tests", "Assertions", "Status"]}
+          columns={["Scenario", "Fixture", "Company scope", "Expected outcome", "Evidence tests", "Assertions", "Status"]}
           rows={report.goldenFilingCorpus.map((scenario) => ({
             id: scenario.code,
             tone: scenario.coverageStatus === "covered" ? "good" : "warn",
             searchText: [
               scenario.label,
+              scenario.fixture.legalName,
+              scenario.fixture.companyType,
+              scenario.fixture.expectedSizeClass,
+              scenario.fixture.expectedRegime,
               scenario.companyScope,
               scenario.expectedOutcome,
               scenario.coverageStatus,
@@ -613,6 +617,12 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
             ].join(" "),
             cells: [
               <span key="label" className="font-medium">{scenario.label}</span>,
+              <div key="fixture" className="space-y-1 text-xs text-[var(--muted-foreground)]">
+                <p className="font-semibold text-[var(--foreground)]">{scenario.fixture.legalName}</p>
+                <p>{scenario.fixture.periodStart} to {scenario.fixture.periodEnd}</p>
+                <p>{scenario.fixture.companyType} / {scenario.fixture.expectedSizeClass} / {scenario.fixture.expectedRegime}</p>
+                <p>{scenario.fixture.auditExempt ? "Audit exempt" : "Audit required"}; {scenario.fixture.manualProfessionalReviewRequired ? "manual review required" : "standard review gate"}</p>
+              </div>,
               <span key="scope" className="whitespace-normal text-[var(--muted-foreground)]">{scenario.companyScope}</span>,
               <span key="outcome" className="text-[var(--muted-foreground)]">{formatStatus(scenario.expectedOutcome)}</span>,
               <CodeStack key="tests" items={scenario.evidenceTestNames} />,

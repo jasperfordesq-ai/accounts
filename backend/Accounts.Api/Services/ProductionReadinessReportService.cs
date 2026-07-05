@@ -25,12 +25,23 @@ public sealed record GoldenFilingCorpusProofPoint(
     string AutomatedVerifier,
     bool Required);
 
+public sealed record GoldenFilingCorpusFixture(
+    string LegalName,
+    string CompanyType,
+    string PeriodStart,
+    string PeriodEnd,
+    string ExpectedSizeClass,
+    string ExpectedRegime,
+    bool AuditExempt,
+    bool ManualProfessionalReviewRequired);
+
 public sealed record GoldenFilingCorpusScenario(
     string Code,
     string Label,
     string CompanyScope,
     string ExpectedOutcome,
     string CoverageStatus,
+    GoldenFilingCorpusFixture Fixture,
     IReadOnlyList<string> EvidenceTestNames,
     IReadOnlyList<string> Assertions,
     GoldenFilingCorpusEvidencePack EvidencePack);
@@ -428,6 +439,15 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "Private company limited by shares, micro regime",
             "generated-pack",
             "covered",
+            new(
+                "Example Micro Limited",
+                "Private",
+                "2025-01-01",
+                "2025-12-31",
+                "Micro",
+                "Micro",
+                AuditExempt: true,
+                ManualProfessionalReviewRequired: false),
             [
                 "AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl"
             ],
@@ -486,6 +506,15 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "Private company limited by shares, small/abridged regime",
             "generated-pack",
             "covered",
+            new(
+                "Connacht Digital Solutions Limited",
+                "Private",
+                "2025-01-01",
+                "2025-12-31",
+                "Small",
+                "SmallAbridged",
+                AuditExempt: true,
+                ManualProfessionalReviewRequired: false),
             [
                 "AccountsWorkflowTests.GoldenPath_SmallAuditExemptCompany_MixedAccrualSetBalancesThroughPdfAndIxbrl"
             ],
@@ -546,6 +575,15 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "Company limited by guarantee with charity evidence",
             "generated-pack-with-charity-gates",
             "covered",
+            new(
+                "Dublin Community Support CLG",
+                "CompanyLimitedByGuarantee",
+                "2026-01-01",
+                "2026-12-31",
+                "Small",
+                "Small",
+                AuditExempt: true,
+                ManualProfessionalReviewRequired: false),
             [
                 "FilingGoldenCorpusScenarioTests.GoldenCorpus_ClgCharity_EmitsAccountsIxbrlAndSourceBackedCharityReadiness"
             ],
@@ -602,6 +640,15 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "Medium company or non-audit-exempt filing",
             "manual-handoff",
             "covered",
+            new(
+                "Midlands Manufacturing Limited",
+                "Private",
+                "2026-01-01",
+                "2026-12-31",
+                "Medium",
+                "Medium",
+                AuditExempt: false,
+                ManualProfessionalReviewRequired: true),
             [
                 "FilingGoldenCorpusScenarioTests.GoldenCorpus_MediumAuditRequired_BlocksFinalOutputsAndRequiresManualHandoffUntilAuditorEvidence"
             ],

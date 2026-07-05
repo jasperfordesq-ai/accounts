@@ -1573,12 +1573,24 @@ export interface GoldenFilingCorpusProofPoint {
   required: boolean;
 }
 
+export interface GoldenFilingCorpusFixture {
+  legalName: string;
+  companyType: string;
+  periodStart: string;
+  periodEnd: string;
+  expectedSizeClass: string;
+  expectedRegime: string;
+  auditExempt: boolean;
+  manualProfessionalReviewRequired: boolean;
+}
+
 export interface GoldenFilingCorpusScenario {
   code: string;
   label: string;
   companyScope: string;
   expectedOutcome: string;
   coverageStatus: string;
+  fixture: GoldenFilingCorpusFixture;
   evidenceTestNames: string[];
   assertions: string[];
   evidencePack: GoldenFilingCorpusEvidencePack;
@@ -1815,12 +1827,24 @@ const goldenFilingCorpusEvidencePackSchema = z.object({
   sourceReferences: z.array(legalSourceReferenceSchema),
 });
 
+const goldenFilingCorpusFixtureSchema = z.object({
+  legalName: z.string().min(1),
+  companyType: z.string().min(1),
+  periodStart: z.string().min(1),
+  periodEnd: z.string().min(1),
+  expectedSizeClass: z.string().min(1),
+  expectedRegime: z.string().min(1),
+  auditExempt: z.boolean(),
+  manualProfessionalReviewRequired: z.boolean(),
+});
+
 const goldenFilingCorpusScenarioSchema = z.object({
   code: z.string().min(1),
   label: z.string().min(1),
   companyScope: z.string().min(1),
   expectedOutcome: z.string().min(1),
   coverageStatus: z.string().min(1),
+  fixture: goldenFilingCorpusFixtureSchema,
   evidenceTestNames: z.array(z.string().min(1)),
   assertions: z.array(z.string().min(1)),
   evidencePack: goldenFilingCorpusEvidencePackSchema,

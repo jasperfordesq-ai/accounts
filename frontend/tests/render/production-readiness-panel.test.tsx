@@ -11,6 +11,8 @@ describe("ProductionReadinessPanel", () => {
     expect(screen.getByText("Review required")).toBeInTheDocument();
     expect(screen.getByText("Micro LTD")).toBeInTheDocument();
     expect(screen.getByText("CLG charity")).toBeInTheDocument();
+    expect(screen.getByText("Example Micro Limited")).toBeInTheDocument();
+    expect(screen.getByText("2025-01-01 to 2025-12-31")).toBeInTheDocument();
     expect(screen.getByText("AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl")).toBeInTheDocument();
     expect(screen.getByText("No direct CRO/ROS submission automation")).toBeInTheDocument();
     expect(screen.getByText("Revenue accepted iXBRL taxonomies")).toBeInTheDocument();
@@ -98,6 +100,16 @@ function sampleReport(): ProductionReadinessReport {
         companyScope: "Private company limited by shares",
         expectedOutcome: "generated-pack",
         coverageStatus: "covered",
+        fixture: {
+          legalName: "Example Micro Limited",
+          companyType: "Private",
+          periodStart: "2025-01-01",
+          periodEnd: "2025-12-31",
+          expectedSizeClass: "Micro",
+          expectedRegime: "Micro",
+          auditExempt: true,
+          manualProfessionalReviewRequired: false,
+        },
         evidenceTestNames: ["AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl"],
         assertions: ["PDF text", "iXBRL parse"],
         evidencePack: {
@@ -128,6 +140,16 @@ function sampleReport(): ProductionReadinessReport {
         companyScope: "Company limited by guarantee",
         expectedOutcome: "generated-pack-with-charity-gates",
         coverageStatus: "covered",
+        fixture: {
+          legalName: "Dublin Community Support CLG",
+          companyType: "CompanyLimitedByGuarantee",
+          periodStart: "2026-01-01",
+          periodEnd: "2026-12-31",
+          expectedSizeClass: "Small",
+          expectedRegime: "Small",
+          auditExempt: true,
+          manualProfessionalReviewRequired: false,
+        },
         evidenceTestNames: ["FilingGoldenCorpusScenarioTests.GoldenCorpus_ClgCharity_EmitsAccountsIxbrlAndSourceBackedCharityReadiness"],
         assertions: ["charity evidence"],
         evidencePack: {

@@ -158,6 +158,16 @@ function productionReadinessReportFixture() {
         companyScope: "Private company limited by shares",
         expectedOutcome: "generated-pack",
         coverageStatus: "covered",
+        fixture: {
+          legalName: "Example Micro Limited",
+          companyType: "Private",
+          periodStart: "2025-01-01",
+          periodEnd: "2025-12-31",
+          expectedSizeClass: "Micro",
+          expectedRegime: "Micro",
+          auditExempt: true,
+          manualProfessionalReviewRequired: false,
+        },
         evidenceTestNames: ["AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl"],
         assertions: ["PDF text", "iXBRL parse"],
         evidencePack: {

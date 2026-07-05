@@ -390,6 +390,33 @@ public class ProductionReadinessReportTests
     }
 
     [Fact]
+    public async Task GoldenCorpusScenarios_ExposeConcreteFixtureIdentityForAccountantAcceptance()
+    {
+        await using var db = CreateDbContext();
+        var report = await new ProductionReadinessReportService(db).GetReportAsync();
+
+        foreach (var scenario in report.GoldenFilingCorpus)
+        {
+            var fixtureProperty = scenario.GetType().GetProperty("Fixture");
+            Assert.NotNull(fixtureProperty);
+            var fixture = fixtureProperty!.GetValue(scenario);
+            Assert.NotNull(fixture);
+
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(fixture!, "LegalName")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(fixture!, "CompanyType")));
+            Assert.Matches(@"^\d{4}-\d{2}-\d{2}$", StringProperty(fixture!, "PeriodStart"));
+            Assert.Matches(@"^\d{4}-\d{2}-\d{2}$", StringProperty(fixture!, "PeriodEnd"));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(fixture!, "ExpectedSizeClass")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(fixture!, "ExpectedRegime")));
+        }
+
+        AssertGoldenFixture(report, "micro-ltd", "Example Micro Limited", "Private", "2025-01-01", "2025-12-31", "Micro", "Micro", auditExempt: true, manualReviewRequired: false);
+        AssertGoldenFixture(report, "small-abridged-ltd", "Connacht Digital Solutions Limited", "Private", "2025-01-01", "2025-12-31", "Small", "SmallAbridged", auditExempt: true, manualReviewRequired: false);
+        AssertGoldenFixture(report, "clg-charity", "Dublin Community Support CLG", "CompanyLimitedByGuarantee", "2026-01-01", "2026-12-31", "Small", "Small", auditExempt: true, manualReviewRequired: false);
+        AssertGoldenFixture(report, "medium-audit-required", "Midlands Manufacturing Limited", "Private", "2026-01-01", "2026-12-31", "Medium", "Medium", auditExempt: false, manualReviewRequired: true);
+    }
+
+    [Fact]
     public async Task ProductionReadinessReport_ExposesAccountantAcceptanceCriteriaForEveryGoldenScenario()
     {
         await using var db = CreateDbContext();
@@ -870,6 +897,34 @@ public class ProductionReadinessReportTests
         foreach (var sourceId in expectedSourceIds)
             Assert.Contains(sources, source => source.SourceId == sourceId);
         Assert.All(sources, source => Assert.StartsWith("https://", source.Url));
+    }
+
+    private static void AssertGoldenFixture(
+        ProductionReadinessReport report,
+        string scenarioCode,
+        string legalName,
+        string companyType,
+        string periodStart,
+        string periodEnd,
+        string expectedSizeClass,
+        string expectedRegime,
+        bool auditExempt,
+        bool manualReviewRequired)
+    {
+        var scenario = Assert.Single(report.GoldenFilingCorpus, s => s.Code == scenarioCode);
+        var fixtureProperty = scenario.GetType().GetProperty("Fixture");
+        Assert.NotNull(fixtureProperty);
+        var fixture = fixtureProperty!.GetValue(scenario);
+        Assert.NotNull(fixture);
+
+        Assert.Equal(legalName, StringProperty(fixture!, "LegalName"));
+        Assert.Equal(companyType, StringProperty(fixture!, "CompanyType"));
+        Assert.Equal(periodStart, StringProperty(fixture!, "PeriodStart"));
+        Assert.Equal(periodEnd, StringProperty(fixture!, "PeriodEnd"));
+        Assert.Equal(expectedSizeClass, StringProperty(fixture!, "ExpectedSizeClass"));
+        Assert.Equal(expectedRegime, StringProperty(fixture!, "ExpectedRegime"));
+        Assert.Equal(auditExempt, BooleanProperty(fixture!, "AuditExempt"));
+        Assert.Equal(manualReviewRequired, BooleanProperty(fixture!, "ManualProfessionalReviewRequired"));
     }
 
     private static void AssertListContainsAll(
