@@ -51,6 +51,8 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.equal(parsed.accountantAcceptanceCriteria[0].scenarioCode, "micro-ltd");
   assert.equal(parsed.accountantAcceptanceCriteria[0].required, true);
   assert.match(parsed.accountantAcceptanceCriteria[0].requiredSignOffGate, /qualified accountant/i);
+  assert.equal(parsed.accountantAcceptanceCriteria[0].evidenceVerifiers[0].name, parsed.goldenFilingCorpus[0].evidenceVerifiers[0].name);
+  assert.equal(parsed.accountantAcceptanceCriteria[0].evidenceVerifiers[0].command, parsed.goldenFilingCorpus[0].evidenceVerifiers[0].command);
   assert.equal(parsed.assurancePacket.packetVersion, "production-assurance-packet-v1");
   assert.equal(parsed.assurancePacket.sourceLawSnapshotHash, "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
   assert.equal(parsed.assurancePacket.goldenCorpusCovered, 1);
@@ -121,6 +123,17 @@ test("parseProductionReadinessReport rejects golden corpus without matching acco
   assert.throws(
     () => parseProductionReadinessReport(payload),
     /Invalid production readiness report contract: accountantAcceptanceCriteria - missing acceptance criteria for golden scenarios: small-abridged-ltd/,
+  );
+});
+
+test("parseProductionReadinessReport rejects accountant acceptance verifiers that do not match the golden scenario", () => {
+  const payload = sampleReport();
+  payload.accountantAcceptanceCriteria[0].evidenceVerifiers[0].name =
+    "AccountsWorkflowTests.NotTheGoldenScenarioVerifier";
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: accountantAcceptanceCriteria\.0\.evidenceVerifiers - must match the golden scenario verifier manifest/,
   );
 });
 
@@ -289,6 +302,16 @@ function sampleReport() {
         reviewScope: ["PDF wording", "iXBRL XML", "filing readiness", "tax computation", "notes", "signatory gates"],
         requiredEvidence: ["Named qualified-accountant approval recorded against the generated pack."],
         requiredSignOffGate: "Named qualified accountant must approve the generated pack before real filing use.",
+        evidenceVerifiers: [
+          {
+            name: "AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl",
+            command: "dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter FullyQualifiedName~AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl",
+            ciScope: "default-ci",
+            runsInDefaultCi: true,
+            environment: "EF Core InMemory golden fixture; CI also runs the broader backend suite on Linux",
+            evidenceLevel: "end-to-end golden filing scenario",
+          },
+        ],
         sources: [source("frc-frs-105", "FRC FRS 105 current edition and amendments")],
       },
     ],

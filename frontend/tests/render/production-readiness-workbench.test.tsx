@@ -125,6 +125,8 @@ describe("ProductionReadinessWorkbench", () => {
     expect(screen.getByText("2025-01-01 to 2025-12-31")).toBeInTheDocument();
     expect(screen.getByText("Named qualified accountant must approve the generated pack before real filing use.")).toBeInTheDocument();
     expect(screen.getByText("Signed auditor report and manual handoff note reviewed by the qualified accountant.")).toBeInTheDocument();
+    expect(screen.getAllByText("Acceptance verifier").length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/dotnet test Accounts\.slnx/).length).toBeGreaterThan(1);
   }, 45000);
 });
 
@@ -183,6 +185,16 @@ function sampleReport(): ProductionReadinessReport {
         reviewScope: ["PDF wording", "iXBRL XML", "filing readiness", "tax computation", "notes", "signatory gates"],
         requiredEvidence: ["Named qualified-accountant approval recorded against the generated pack."],
         requiredSignOffGate: "Named qualified accountant must approve the generated pack before real filing use.",
+        evidenceVerifiers: [
+          {
+            name: "AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl",
+            command: "dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter FullyQualifiedName~AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl",
+            ciScope: "default-ci",
+            runsInDefaultCi: true,
+            environment: "EF Core InMemory golden fixture; CI also runs the broader backend suite on Linux",
+            evidenceLevel: "end-to-end golden filing scenario",
+          },
+        ],
         sources: [
           {
             sourceId: "frc-frs-105",
@@ -200,6 +212,16 @@ function sampleReport(): ProductionReadinessReport {
         reviewScope: ["Auditor handoff", "full accounts PDF", "iXBRL XML", "filing readiness"],
         requiredEvidence: ["Signed auditor report and manual handoff note reviewed by the qualified accountant."],
         requiredSignOffGate: "Qualified accountant must record manual handoff acceptance before relying on outputs.",
+        evidenceVerifiers: [
+          {
+            name: "FilingGoldenCorpusScenarioTests.GoldenCorpus_MediumAuditRequired_BlocksFinalOutputsAndRequiresManualHandoffUntilAuditorEvidence",
+            command: "dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter FullyQualifiedName~FilingGoldenCorpusScenarioTests.GoldenCorpus_MediumAuditRequired_BlocksFinalOutputsAndRequiresManualHandoffUntilAuditorEvidence",
+            ciScope: "default-ci",
+            runsInDefaultCi: true,
+            environment: "EF Core InMemory golden fixture; CI also runs the broader backend suite on Linux",
+            evidenceLevel: "end-to-end golden filing scenario",
+          },
+        ],
         sources: [
           {
             sourceId: "frc-frs-102",

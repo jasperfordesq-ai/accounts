@@ -273,7 +273,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
           caption="Accountant acceptance criteria"
           filterPlaceholder="Filter accountant acceptance criteria"
           emptyState="No matching accountant acceptance criteria"
-          columns={["Scenario", "Review scope", "Required evidence", "Sign-off gate", "Sources", "Status"]}
+          columns={["Scenario", "Review scope", "Required evidence", "Sign-off gate", "Automated evidence", "Sources", "Status"]}
           rows={accountantAcceptanceCriteria.map((criterion) => ({
             id: criterion.scenarioCode,
             tone: criterion.acceptanceStatus.includes("manual-handoff") ? "warn" : "info",
@@ -284,6 +284,12 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
               criterion.requiredSignOffGate,
               ...criterion.reviewScope,
               ...criterion.requiredEvidence,
+              ...criterion.evidenceVerifiers.flatMap((verifier) => [
+                verifier.name,
+                verifier.command,
+                verifier.ciScope,
+                verifier.environment,
+              ]),
               ...criterion.sources.map((source) => source.title),
             ].join(" "),
             cells: [
@@ -294,6 +300,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
               <CompactList key="scope" items={criterion.reviewScope} />,
               <CompactList key="evidence" items={criterion.requiredEvidence} />,
               <span key="gate" className="whitespace-normal text-[var(--muted-foreground)]">{criterion.requiredSignOffGate}</span>,
+              <VerifierScopeList key="acceptance-verifiers" verifiers={criterion.evidenceVerifiers} label="Acceptance verifier" />,
               <SourceLinkList key="sources" sources={criterion.sources} />,
               <StatusBadge key="status" tone={criterion.acceptanceStatus.includes("manual-handoff") ? "warn" : "info"}>
                 {formatStatus(criterion.acceptanceStatus)}
@@ -954,13 +961,16 @@ function CodeStack({ items }: { items: string[] }) {
 
 function VerifierScopeList({
   verifiers,
+  label,
 }: {
   verifiers: ProductionReadinessReport["goldenFilingCorpus"][number]["evidenceVerifiers"];
+  label?: string;
 }) {
   return (
     <div className="max-w-lg space-y-2 whitespace-normal">
       {verifiers.map((verifier) => (
         <div key={verifier.name} className="rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-2 text-xs leading-5">
+          {label && <p className="mb-1 text-[11px] font-semibold uppercase text-[var(--foreground)]">{label}</p>}
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge tone={verifier.runsInDefaultCi ? "good" : "warn"}>
               {verifier.runsInDefaultCi ? "Default CI" : "Environment gated"}

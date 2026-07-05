@@ -76,6 +76,16 @@ function sampleReport(): ProductionReadinessReport {
         reviewScope: ["PDF wording", "iXBRL XML", "filing readiness profile"],
         requiredEvidence: ["Named qualified-accountant approval recorded against the generated pack."],
         requiredSignOffGate: "Named qualified accountant must approve the generated pack before real filing use.",
+        evidenceVerifiers: [
+          {
+            name: "AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl",
+            command: "dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter FullyQualifiedName~AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl",
+            ciScope: "default-ci",
+            runsInDefaultCi: true,
+            environment: "EF Core InMemory golden fixture; CI also runs the broader backend suite on Linux",
+            evidenceLevel: "end-to-end golden filing scenario",
+          },
+        ],
         sources: [
           {
             sourceId: "frc-frs-105",

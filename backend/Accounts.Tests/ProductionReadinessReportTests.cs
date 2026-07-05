@@ -583,6 +583,20 @@ public class ProductionReadinessReportTests
             Assert.NotEmpty(StringListProperty(criterion, "ReviewScope"));
             Assert.NotEmpty(StringListProperty(criterion, "RequiredEvidence"));
             Assert.NotEmpty(ObjectListProperty(criterion, "Sources"));
+
+            var scenarioCode = StringProperty(criterion, "ScenarioCode");
+            var scenario = Assert.Single(report.GoldenFilingCorpus, item => item.Code == scenarioCode);
+            var acceptanceVerifiers = ObjectListProperty(criterion, "EvidenceVerifiers");
+            Assert.Equal(
+                scenario.EvidenceVerifiers.Select(verifier => verifier.Name).Order(StringComparer.Ordinal),
+                acceptanceVerifiers.Select(verifier => StringProperty(verifier, "Name")).Order(StringComparer.Ordinal));
+            Assert.All(acceptanceVerifiers, verifier =>
+            {
+                Assert.Contains(StringProperty(verifier, "Name"), scenario.EvidenceTestNames);
+                Assert.Contains("dotnet test Accounts.slnx", StringProperty(verifier, "Command"), StringComparison.Ordinal);
+                Assert.Contains(StringProperty(verifier, "Name"), StringProperty(verifier, "Command"), StringComparison.Ordinal);
+                Assert.True(BooleanProperty(verifier, "RunsInDefaultCi") || StringProperty(verifier, "CiScope") == "environment-gated");
+            });
         });
         Assert.Contains(report.AssurancePacket.EvidenceItems, item => item == "accountant-acceptance-criteria");
     }

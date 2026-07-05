@@ -180,7 +180,8 @@ public sealed record AccountantAcceptanceCriterion(
     IReadOnlyList<string> ReviewScope,
     IReadOnlyList<string> RequiredEvidence,
     string RequiredSignOffGate,
-    IReadOnlyList<LegalSourceReference> Sources);
+    IReadOnlyList<LegalSourceReference> Sources,
+    IReadOnlyList<GoldenFilingCorpusVerifier> EvidenceVerifiers);
 
 public sealed record VisualQaViewport(
     string Name,
@@ -277,7 +278,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
         var dependencyPolicyControls = BuildDependencyPolicyControls();
         var deploymentSafetyControls = BuildDeploymentSafetyControls();
         var releaseReviewChecklist = BuildReleaseReviewChecklist(assuranceActions, operationalGates);
-        var accountantAcceptanceCriteria = BuildAccountantAcceptanceCriteria();
+        var accountantAcceptanceCriteria = BuildAccountantAcceptanceCriteria(goldenCorpus);
         var visualQaCoverage = BuildVisualQaCoverage();
         var sourceLawTraceability = BuildSourceLawTraceability(
             sourceSnapshot,
@@ -1705,7 +1706,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "Fail the release if backup creation, checksum verification or restore verification fails.")
     ];
 
-    private static IReadOnlyList<AccountantAcceptanceCriterion> BuildAccountantAcceptanceCriteria() =>
+    private static IReadOnlyList<AccountantAcceptanceCriterion> BuildAccountantAcceptanceCriteria(IReadOnlyList<GoldenFilingCorpusScenario> goldenCorpus) =>
     [
         new(
             "micro-ltd",
@@ -1729,7 +1730,8 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 IrishStatutoryRuleSources.CroFinancialStatementsRequirements,
                 IrishStatutoryRuleSources.FrcFrs105,
                 IrishStatutoryRuleSources.RevenueAcceptedTaxonomies
-            ]),
+            ],
+            AcceptanceVerifiers(goldenCorpus, "micro-ltd")),
         new(
             "small-abridged-ltd",
             "Small abridged LTD accountant acceptance",
@@ -1752,7 +1754,8 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 IrishStatutoryRuleSources.CroFinancialStatementsRequirements,
                 IrishStatutoryRuleSources.FrcFrs102,
                 IrishStatutoryRuleSources.RevenueIxbrlContents
-            ]),
+            ],
+            AcceptanceVerifiers(goldenCorpus, "small-abridged-ltd")),
         new(
             "clg-charity",
             "CLG charity accountant acceptance",
@@ -1775,7 +1778,8 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 IrishStatutoryRuleSources.CroGuaranteeCompany,
                 IrishStatutoryRuleSources.CharitiesRegulatorAnnualReport,
                 IrishStatutoryRuleSources.FrcFrs102
-            ]),
+            ],
+            AcceptanceVerifiers(goldenCorpus, "clg-charity")),
         new(
             "medium-audit-required",
             "Medium handoff accountant acceptance",
@@ -1798,8 +1802,17 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 IrishStatutoryRuleSources.CroMediumCompany,
                 IrishStatutoryRuleSources.CroAuditorsReport,
                 IrishStatutoryRuleSources.FrcFrs102
-            ])
+            ],
+            AcceptanceVerifiers(goldenCorpus, "medium-audit-required"))
     ];
+
+    private static IReadOnlyList<GoldenFilingCorpusVerifier> AcceptanceVerifiers(
+        IReadOnlyList<GoldenFilingCorpusScenario> goldenCorpus,
+        string scenarioCode)
+    {
+        var scenario = goldenCorpus.Single(item => item.Code == scenarioCode);
+        return scenario.EvidenceVerifiers;
+    }
 
     private static VisualQaCoverage BuildVisualQaCoverage()
     {

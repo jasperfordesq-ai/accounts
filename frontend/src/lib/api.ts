@@ -1734,6 +1734,7 @@ export interface AccountantAcceptanceCriterion {
   reviewScope: string[];
   requiredEvidence: string[];
   requiredSignOffGate: string;
+  evidenceVerifiers: GoldenFilingCorpusVerifier[];
   sources: LegalSourceReference[];
 }
 
@@ -2037,6 +2038,7 @@ const accountantAcceptanceCriterionSchema = z.object({
   reviewScope: z.array(z.string().min(1)),
   requiredEvidence: z.array(z.string().min(1)),
   requiredSignOffGate: z.string().min(1),
+  evidenceVerifiers: z.array(goldenFilingCorpusVerifierSchema),
   sources: z.array(legalSourceReferenceSchema),
 });
 
@@ -2204,6 +2206,41 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
       `Invalid production readiness report contract: accountantAcceptanceCriteria - missing acceptance criteria for golden scenarios: ${missingAcceptanceCriteria.join(", ")}`,
     );
   }
+
+  const scenariosByCode = new Map(report.goldenFilingCorpus.map((scenario) => [scenario.code, scenario]));
+  report.accountantAcceptanceCriteria.forEach((criterion, criterionIndex) => {
+    const scenario = scenariosByCode.get(criterion.scenarioCode);
+
+    if (!scenario) {
+      throw new Error(
+        `Invalid production readiness report contract: accountantAcceptanceCriteria.${criterionIndex}.scenarioCode - must reference a golden scenario`,
+      );
+    }
+
+    const scenarioVerifierNames = scenario.evidenceVerifiers
+      .map((verifier) => verifier.name)
+      .sort((left, right) => left.localeCompare(right));
+    const acceptanceVerifierNames = criterion.evidenceVerifiers
+      .map((verifier) => verifier.name)
+      .sort((left, right) => left.localeCompare(right));
+
+    if (
+      scenarioVerifierNames.length !== acceptanceVerifierNames.length ||
+      scenarioVerifierNames.some((name, index) => name !== acceptanceVerifierNames[index])
+    ) {
+      throw new Error(
+        `Invalid production readiness report contract: accountantAcceptanceCriteria.${criterionIndex}.evidenceVerifiers - must match the golden scenario verifier manifest`,
+      );
+    }
+
+    criterion.evidenceVerifiers.forEach((verifier, verifierIndex) => {
+      if (!verifier.command.includes("dotnet test Accounts.slnx") || !verifier.command.includes(verifier.name)) {
+        throw new Error(
+          `Invalid production readiness report contract: accountantAcceptanceCriteria.${criterionIndex}.evidenceVerifiers.${verifierIndex}.command - must include the executable backend verifier command`,
+        );
+      }
+    });
+  });
 
   const snapshotSourceIds = new Set(report.sourceLawSnapshot.sources.map((source) => source.sourceId));
   const traceabilitySourceIds = new Set(report.sourceLawTraceability.map((entry) => entry.sourceId));
