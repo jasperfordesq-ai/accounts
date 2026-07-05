@@ -1751,6 +1751,16 @@ export interface AccountantAcceptanceCriterion {
   sources: LegalSourceReference[];
 }
 
+export interface AccountantAcceptanceSummary {
+  scenarioCount: number;
+  automatedVerifierCount: number;
+  professionalSignOffRequiredCount: number;
+  manualHandoffScenarioCount: number;
+  releaseBlockingScenarioCodes: string[];
+  requiredSignOffGates: string[];
+  status: string;
+}
+
 export interface VisualQaViewport {
   name: string;
   width: number;
@@ -1817,6 +1827,7 @@ export interface ProductionReadinessReport {
   sourceLawTraceability: SourceLawTraceabilityEntry[];
   assurancePacket: ProductionAssurancePacket;
   accountantAcceptanceCriteria: AccountantAcceptanceCriterion[];
+  accountantAcceptanceSummary: AccountantAcceptanceSummary;
   areas: ProductionReadinessArea[];
   goldenFilingCorpus: GoldenFilingCorpusScenario[];
   statutoryRuleMatrix: StatutoryRuleMatrixEntry[];
@@ -2070,6 +2081,16 @@ const accountantAcceptanceCriterionSchema = z.object({
   sources: z.array(legalSourceReferenceSchema),
 });
 
+const accountantAcceptanceSummarySchema = z.object({
+  scenarioCount: z.number().int().nonnegative(),
+  automatedVerifierCount: z.number().int().nonnegative(),
+  professionalSignOffRequiredCount: z.number().int().nonnegative(),
+  manualHandoffScenarioCount: z.number().int().nonnegative(),
+  releaseBlockingScenarioCodes: z.array(z.string().min(1)),
+  requiredSignOffGates: z.array(z.string().min(1)),
+  status: z.string().min(1),
+});
+
 const visualQaViewportSchema = z.object({
   name: z.string().min(1),
   width: z.number(),
@@ -2120,6 +2141,7 @@ export const productionReadinessReportSchema = z.object({
   sourceLawTraceability: z.array(sourceLawTraceabilityEntrySchema),
   assurancePacket: productionAssurancePacketSchema,
   accountantAcceptanceCriteria: z.array(accountantAcceptanceCriterionSchema),
+  accountantAcceptanceSummary: accountantAcceptanceSummarySchema,
   areas: z.array(productionReadinessAreaSchema),
   goldenFilingCorpus: z.array(goldenFilingCorpusScenarioSchema),
   statutoryRuleMatrix: z.array(statutoryRuleMatrixEntrySchema),
@@ -2271,6 +2293,54 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
       }
     });
   });
+
+  const requiredAcceptanceCriteria = report.accountantAcceptanceCriteria.filter((criterion) => criterion.required);
+  const acceptanceSummary = report.accountantAcceptanceSummary;
+  assertExpectedNumber(
+    "accountantAcceptanceSummary.scenarioCount",
+    report.goldenFilingCorpus.length,
+    acceptanceSummary.scenarioCount,
+  );
+  assertExpectedNumber(
+    "accountantAcceptanceSummary.professionalSignOffRequiredCount",
+    requiredAcceptanceCriteria.length,
+    acceptanceSummary.professionalSignOffRequiredCount,
+  );
+  assertExpectedNumber(
+    "accountantAcceptanceSummary.automatedVerifierCount",
+    new Set(report.accountantAcceptanceCriteria.flatMap((criterion) => criterion.evidenceVerifiers.map((verifier) => verifier.name))).size,
+    acceptanceSummary.automatedVerifierCount,
+  );
+  assertExpectedNumber(
+    "accountantAcceptanceSummary.manualHandoffScenarioCount",
+    report.goldenFilingCorpus.filter((scenario) =>
+      scenario.expectedOutcome.toLowerCase().includes("manual-handoff")
+      || scenario.fixture.manualProfessionalReviewRequired
+    ).length,
+    acceptanceSummary.manualHandoffScenarioCount,
+  );
+  const expectedReleaseBlockingScenarioCodes = requiredAcceptanceCriteria
+    .filter((criterion) => criterion.acceptanceStatus !== "accepted")
+    .map((criterion) => criterion.scenarioCode)
+    .sort((left, right) => left.localeCompare(right));
+  assertStringArrayEqual(
+    "accountantAcceptanceSummary.releaseBlockingScenarioCodes",
+    expectedReleaseBlockingScenarioCodes,
+    [...acceptanceSummary.releaseBlockingScenarioCodes].sort((left, right) => left.localeCompare(right)),
+  );
+  assertStringArrayEqual(
+    "accountantAcceptanceSummary.requiredSignOffGates",
+    [...new Set(requiredAcceptanceCriteria.map((criterion) => criterion.requiredSignOffGate))].sort((left, right) => left.localeCompare(right)),
+    [...acceptanceSummary.requiredSignOffGates].sort((left, right) => left.localeCompare(right)),
+  );
+  const expectedAcceptanceSummaryStatus = expectedReleaseBlockingScenarioCodes.length === 0
+    ? "accepted"
+    : "qualified-accountant-review-required";
+  if (acceptanceSummary.status !== expectedAcceptanceSummaryStatus) {
+    throw new Error(
+      `Invalid production readiness report contract: accountantAcceptanceSummary.status - expected ${expectedAcceptanceSummaryStatus}, received ${acceptanceSummary.status}`,
+    );
+  }
 
   const snapshotSourceIds = new Set(report.sourceLawSnapshot.sources.map((source) => source.sourceId));
   const traceabilitySourceIds = new Set(report.sourceLawTraceability.map((entry) => entry.sourceId));

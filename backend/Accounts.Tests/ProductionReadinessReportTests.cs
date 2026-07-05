@@ -195,6 +195,44 @@ public class ProductionReadinessReportTests
     }
 
     [Fact]
+    public async Task ProductionReadinessReport_ExposesAccountantAcceptanceSummaryForReleaseDecision()
+    {
+        await using var db = CreateDbContext();
+        var report = await new ProductionReadinessReportService(db).GetReportAsync();
+        var summaryProperty = report.GetType().GetProperty("AccountantAcceptanceSummary");
+
+        Assert.NotNull(summaryProperty);
+        var summary = summaryProperty!.GetValue(report)!;
+
+        Assert.Equal(report.GoldenFilingCorpus.Count, IntProperty(summary, "ScenarioCount"));
+        Assert.Equal(
+            report.AccountantAcceptanceCriteria.Count(criterion => criterion.Required),
+            IntProperty(summary, "ProfessionalSignOffRequiredCount"));
+        Assert.Equal(
+            report.AccountantAcceptanceCriteria
+                .SelectMany(criterion => criterion.EvidenceVerifiers)
+                .Select(verifier => verifier.Name)
+                .Distinct(StringComparer.Ordinal)
+                .Count(),
+            IntProperty(summary, "AutomatedVerifierCount"));
+        Assert.Equal(
+            report.GoldenFilingCorpus.Count(scenario =>
+                scenario.ExpectedOutcome.Contains("manual-handoff", StringComparison.OrdinalIgnoreCase)
+                || scenario.Fixture.ManualProfessionalReviewRequired),
+            IntProperty(summary, "ManualHandoffScenarioCount"));
+        Assert.Equal(
+            report.AccountantAcceptanceCriteria
+                .Where(criterion => criterion.Required && criterion.AcceptanceStatus != "accepted")
+                .Select(criterion => criterion.ScenarioCode)
+                .Order(StringComparer.Ordinal),
+            StringListProperty(summary, "ReleaseBlockingScenarioCodes").Order(StringComparer.Ordinal));
+        Assert.Contains(
+            report.AccountantAcceptanceCriteria[0].RequiredSignOffGate,
+            StringListProperty(summary, "RequiredSignOffGates"));
+        Assert.Equal("qualified-accountant-review-required", StringProperty(summary, "Status"));
+    }
+
+    [Fact]
     public async Task GoldenCorpusCoverage_IsBackedByConcreteAutomatedEvidenceTests()
     {
         await using var db = CreateDbContext();
@@ -1276,6 +1314,13 @@ public class ProductionReadinessReportTests
         var property = value.GetType().GetProperty(propertyName);
         Assert.NotNull(property);
         return Assert.IsType<bool>(property!.GetValue(value));
+    }
+
+    private static int IntProperty(object value, string propertyName)
+    {
+        var property = value.GetType().GetProperty(propertyName);
+        Assert.NotNull(property);
+        return Assert.IsType<int>(property!.GetValue(value));
     }
 
     private static IReadOnlyList<string> StringListProperty(object value, string propertyName)

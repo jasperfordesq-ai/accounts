@@ -118,6 +118,10 @@ describe("ProductionReadinessWorkbench", () => {
     expect(screen.getByText("Golden corpus 1/1")).toBeInTheDocument();
     expect(screen.getAllByText("Qualified accountant sign-off required").length).toBeGreaterThan(1);
     expect(screen.getByRole("heading", { name: "Release decision summary" })).toBeInTheDocument();
+    expect(screen.getByText("2 professional sign-offs")).toBeInTheDocument();
+    expect(screen.getByText("1 manual handoff scenario")).toBeInTheDocument();
+    expect(screen.getByText("2 automated verifiers")).toBeInTheDocument();
+    expect(screen.getByText("micro-ltd, medium-audit-required")).toBeInTheDocument();
     expect(screen.getByText("Do not use for real filings")).toBeInTheDocument();
     expect(screen.getByText("1 critical blocker")).toBeInTheDocument();
     expect(screen.getByText("Golden corpus covered")).toBeInTheDocument();
@@ -125,7 +129,6 @@ describe("ProductionReadinessWorkbench", () => {
     expect(screen.getByText("Visual QA evidence")).toBeInTheDocument();
     expect(screen.getByText("24 required screenshots")).toBeInTheDocument();
     expect(screen.getByText("Accountant acceptance")).toBeInTheDocument();
-    expect(screen.getByText("2 scenarios require sign-off")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Accountant acceptance criteria" })).toBeInTheDocument();
     expect(screen.getByText("Micro LTD accountant acceptance")).toBeInTheDocument();
     expect(screen.getByText("Medium handoff accountant acceptance")).toBeInTheDocument();
@@ -181,7 +184,7 @@ function sampleReport(): ProductionReadinessReport {
       visualQaExpectedScreenshots: 24,
       requiredOperationalGates: 1,
       openCriticalActions: 1,
-      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "golden-filing-corpus", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-review-checklist", "release-verification-manifest"],
+      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "golden-filing-corpus", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary"],
       releaseBlockers: ["Qualified accountant sign-off required"],
     },
     accountantAcceptanceCriteria: [
@@ -240,6 +243,18 @@ function sampleReport(): ProductionReadinessReport {
         ],
       },
     ],
+    accountantAcceptanceSummary: {
+      scenarioCount: 2,
+      automatedVerifierCount: 2,
+      professionalSignOffRequiredCount: 2,
+      manualHandoffScenarioCount: 1,
+      releaseBlockingScenarioCodes: ["micro-ltd", "medium-audit-required"],
+      requiredSignOffGates: [
+        "Named qualified accountant must approve the generated pack before real filing use.",
+        "Qualified accountant must record manual handoff acceptance before relying on outputs.",
+      ],
+      status: "qualified-accountant-review-required",
+    },
     areas: [
       {
         code: "backend-accounting-engine",

@@ -53,6 +53,15 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.match(parsed.accountantAcceptanceCriteria[0].requiredSignOffGate, /qualified accountant/i);
   assert.equal(parsed.accountantAcceptanceCriteria[0].evidenceVerifiers[0].name, parsed.goldenFilingCorpus[0].evidenceVerifiers[0].name);
   assert.equal(parsed.accountantAcceptanceCriteria[0].evidenceVerifiers[0].command, parsed.goldenFilingCorpus[0].evidenceVerifiers[0].command);
+  assert.equal(parsed.accountantAcceptanceSummary.scenarioCount, 1);
+  assert.equal(parsed.accountantAcceptanceSummary.professionalSignOffRequiredCount, 1);
+  assert.equal(parsed.accountantAcceptanceSummary.automatedVerifierCount, 1);
+  assert.equal(parsed.accountantAcceptanceSummary.manualHandoffScenarioCount, 0);
+  assert.deepEqual(parsed.accountantAcceptanceSummary.releaseBlockingScenarioCodes, ["micro-ltd"]);
+  assert.deepEqual(parsed.accountantAcceptanceSummary.requiredSignOffGates, [
+    "Named qualified accountant must approve the generated pack before real filing use.",
+  ]);
+  assert.equal(parsed.accountantAcceptanceSummary.status, "qualified-accountant-review-required");
   assert.equal(parsed.assurancePacket.packetVersion, "production-assurance-packet-v1");
   assert.equal(parsed.assurancePacket.sourceLawSnapshotHash, "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
   assert.equal(parsed.assurancePacket.goldenCorpusCovered, 1);
@@ -175,6 +184,16 @@ test("parseProductionReadinessReport rejects inconsistent production assurance c
   assert.throws(
     () => parseProductionReadinessReport(visualAssurancePayload),
     /Invalid production readiness report contract: assurancePacket\.visualQaExpectedScreenshots - expected 24, received 99/,
+  );
+});
+
+test("parseProductionReadinessReport rejects inconsistent accountant acceptance summaries", () => {
+  const payload = sampleReport();
+  payload.accountantAcceptanceSummary.scenarioCount = 2;
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: accountantAcceptanceSummary\.scenarioCount - expected 1, received 2/,
   );
 });
 
@@ -307,7 +326,7 @@ function sampleReport() {
       visualQaExpectedScreenshots: expectedVisualSmokeScreenshotCount(),
       requiredOperationalGates: 1,
       openCriticalActions: 1,
-      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "golden-filing-corpus", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-review-checklist", "release-verification-manifest"],
+      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "golden-filing-corpus", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary"],
       releaseBlockers: ["Qualified accountant sign-off required"],
     },
     accountantAcceptanceCriteria: [
@@ -332,6 +351,15 @@ function sampleReport() {
         sources: [source("frc-frs-105", "FRC FRS 105 current edition and amendments")],
       },
     ],
+    accountantAcceptanceSummary: {
+      scenarioCount: 1,
+      automatedVerifierCount: 1,
+      professionalSignOffRequiredCount: 1,
+      manualHandoffScenarioCount: 0,
+      releaseBlockingScenarioCodes: ["micro-ltd"],
+      requiredSignOffGates: ["Named qualified accountant must approve the generated pack before real filing use."],
+      status: "qualified-accountant-review-required",
+    },
     areas: [
       {
         code: "backend-accounting-engine",

@@ -137,7 +137,7 @@ function productionReadinessReportFixture() {
       visualQaExpectedScreenshots: expectedVisualSmokeScreenshotCount(),
       requiredOperationalGates: 1,
       openCriticalActions: 1,
-      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "golden-filing-corpus", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-review-checklist", "release-verification-manifest"],
+      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "golden-filing-corpus", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary"],
       releaseBlockers: ["Qualified accountant sign-off required"],
     },
     accountantAcceptanceCriteria: [
@@ -162,6 +162,15 @@ function productionReadinessReportFixture() {
         sources: [source("frc-frs-105", "FRC FRS 105 current edition and amendments")],
       },
     ],
+    accountantAcceptanceSummary: {
+      scenarioCount: 1,
+      automatedVerifierCount: 1,
+      professionalSignOffRequiredCount: 1,
+      manualHandoffScenarioCount: 0,
+      releaseBlockingScenarioCodes: ["micro-ltd"],
+      requiredSignOffGates: ["Named qualified accountant must approve the generated pack before real filing use."],
+      status: "qualified-accountant-review-required",
+    },
     areas: [
       {
         code: "backend-accounting-engine",

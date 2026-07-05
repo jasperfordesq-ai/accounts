@@ -64,7 +64,7 @@ function sampleReport(): ProductionReadinessReport {
       visualQaExpectedScreenshots: 24,
       requiredOperationalGates: 1,
       openCriticalActions: 1,
-      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "golden-filing-corpus", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-review-checklist", "release-verification-manifest"],
+      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "golden-filing-corpus", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary"],
       releaseBlockers: ["Qualified accountant sign-off required"],
     },
     accountantAcceptanceCriteria: [
@@ -96,6 +96,15 @@ function sampleReport(): ProductionReadinessReport {
         ],
       },
     ],
+    accountantAcceptanceSummary: {
+      scenarioCount: 2,
+      automatedVerifierCount: 1,
+      professionalSignOffRequiredCount: 1,
+      manualHandoffScenarioCount: 0,
+      releaseBlockingScenarioCodes: ["micro-ltd"],
+      requiredSignOffGates: ["Named qualified accountant must approve the generated pack before real filing use."],
+      status: "qualified-accountant-review-required",
+    },
     areas: [
       {
         code: "backend-accounting-engine",

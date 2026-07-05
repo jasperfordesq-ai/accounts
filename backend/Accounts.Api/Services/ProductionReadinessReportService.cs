@@ -195,6 +195,15 @@ public sealed record AccountantAcceptanceCriterion(
     IReadOnlyList<LegalSourceReference> Sources,
     IReadOnlyList<GoldenFilingCorpusVerifier> EvidenceVerifiers);
 
+public sealed record AccountantAcceptanceSummary(
+    int ScenarioCount,
+    int AutomatedVerifierCount,
+    int ProfessionalSignOffRequiredCount,
+    int ManualHandoffScenarioCount,
+    IReadOnlyList<string> ReleaseBlockingScenarioCodes,
+    IReadOnlyList<string> RequiredSignOffGates,
+    string Status);
+
 public sealed record VisualQaViewport(
     string Name,
     int Width,
@@ -256,6 +265,7 @@ public sealed record ProductionReadinessReport(
     IReadOnlyList<SourceLawTraceabilityEntry> SourceLawTraceability,
     ProductionAssurancePacket AssurancePacket,
     IReadOnlyList<AccountantAcceptanceCriterion> AccountantAcceptanceCriteria,
+    AccountantAcceptanceSummary AccountantAcceptanceSummary,
     IReadOnlyList<ProductionReadinessArea> Areas,
     IReadOnlyList<GoldenFilingCorpusScenario> GoldenFilingCorpus,
     IReadOnlyList<StatutoryRuleMatrixEntry> StatutoryRuleMatrix,
@@ -294,6 +304,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
         var releaseReviewChecklist = BuildReleaseReviewChecklist(assuranceActions, operationalGates);
         var releaseVerificationManifest = BuildReleaseVerificationManifest();
         var accountantAcceptanceCriteria = BuildAccountantAcceptanceCriteria(goldenCorpus);
+        var accountantAcceptanceSummary = BuildAccountantAcceptanceSummary(goldenCorpus, accountantAcceptanceCriteria);
         var visualQaCoverage = BuildVisualQaCoverage();
         var sourceLawTraceability = BuildSourceLawTraceability(
             sourceSnapshot,
@@ -319,6 +330,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             sourceLawTraceability,
             assurancePacket,
             accountantAcceptanceCriteria,
+            accountantAcceptanceSummary,
             areas,
             goldenCorpus,
             statutoryRuleMatrix,
@@ -382,7 +394,8 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "deployment-safety-controls",
             "release-review-checklist",
             "release-verification-manifest",
-            "accountant-acceptance-criteria"
+            "accountant-acceptance-criteria",
+            "accountant-acceptance-summary"
         };
         var releaseBlockers = assuranceActions
             .Where(action => action.Status != "complete")
@@ -1914,6 +1927,41 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             ],
             AcceptanceVerifiers(goldenCorpus, "medium-audit-required"))
     ];
+
+    private static AccountantAcceptanceSummary BuildAccountantAcceptanceSummary(
+        IReadOnlyList<GoldenFilingCorpusScenario> goldenCorpus,
+        IReadOnlyList<AccountantAcceptanceCriterion> accountantAcceptanceCriteria)
+    {
+        var releaseBlockingScenarioCodes = accountantAcceptanceCriteria
+            .Where(criterion => criterion.Required && criterion.AcceptanceStatus != "accepted")
+            .Select(criterion => criterion.ScenarioCode)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        var requiredSignOffGates = accountantAcceptanceCriteria
+            .Where(criterion => criterion.Required)
+            .Select(criterion => criterion.RequiredSignOffGate)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        var automatedVerifierCount = accountantAcceptanceCriteria
+            .SelectMany(criterion => criterion.EvidenceVerifiers)
+            .Select(verifier => verifier.Name)
+            .Distinct(StringComparer.Ordinal)
+            .Count();
+        var manualHandoffScenarioCount = goldenCorpus.Count(scenario =>
+            scenario.ExpectedOutcome.Contains("manual-handoff", StringComparison.OrdinalIgnoreCase)
+            || scenario.Fixture.ManualProfessionalReviewRequired);
+
+        return new AccountantAcceptanceSummary(
+            goldenCorpus.Count,
+            automatedVerifierCount,
+            accountantAcceptanceCriteria.Count(criterion => criterion.Required),
+            manualHandoffScenarioCount,
+            releaseBlockingScenarioCodes,
+            requiredSignOffGates,
+            releaseBlockingScenarioCodes.Length == 0 ? "accepted" : "qualified-accountant-review-required");
+    }
 
     private static IReadOnlyList<GoldenFilingCorpusVerifier> AcceptanceVerifiers(
         IReadOnlyList<GoldenFilingCorpusScenario> goldenCorpus,

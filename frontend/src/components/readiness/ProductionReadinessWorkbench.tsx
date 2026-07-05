@@ -31,6 +31,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
   const sourceLawTraceability = report.sourceLawTraceability ?? [];
   const visualQaCoverage = report.visualQaCoverage;
   const assurancePacket = report.assurancePacket;
+  const accountantAcceptanceSummary = report.accountantAcceptanceSummary;
   const hardenedAreas = report.areas.filter((area) => area.status === "hardened").length;
   const coveredScenarios = report.goldenFilingCorpus.filter((scenario) => scenario.coverageStatus === "covered").length;
   const enforcedGates = report.operationalGates.filter((gate) => gate.status === "enforced").length;
@@ -90,10 +91,32 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
           />
           <DecisionSummaryItem
             label="Accountant acceptance"
-            value={`${accountantAcceptanceCriteria.length} scenarios require sign-off`}
-            detail="Named qualified-accountant acceptance remains the controlling production gate."
+            value={`${accountantAcceptanceSummary.professionalSignOffRequiredCount} professional ${accountantAcceptanceSummary.professionalSignOffRequiredCount === 1 ? "sign-off" : "sign-offs"}`}
+            detail={`${accountantAcceptanceSummary.manualHandoffScenarioCount} manual handoff ${accountantAcceptanceSummary.manualHandoffScenarioCount === 1 ? "scenario" : "scenarios"}`}
             tone="warn"
           />
+        </div>
+        <div className="mt-3 grid gap-3 rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-3 text-xs leading-5 text-[var(--muted-foreground)] md:grid-cols-3">
+          <div>
+            <p className="font-semibold uppercase text-[var(--muted-foreground)]">Automated verifiers</p>
+            <p className="mt-1 text-sm font-medium text-[var(--foreground)]">
+              {accountantAcceptanceSummary.automatedVerifierCount} automated {accountantAcceptanceSummary.automatedVerifierCount === 1 ? "verifier" : "verifiers"}
+            </p>
+          </div>
+          <div>
+            <p className="font-semibold uppercase text-[var(--muted-foreground)]">Blocking scenarios</p>
+            <p className="mt-1 break-words text-sm font-medium text-[var(--foreground)]">
+              {accountantAcceptanceSummary.releaseBlockingScenarioCodes.join(", ") || "None"}
+            </p>
+          </div>
+          <div>
+            <p className="font-semibold uppercase text-[var(--muted-foreground)]">Acceptance status</p>
+            <div className="mt-1">
+              <StatusBadge tone={accountantAcceptanceSummary.status === "accepted" ? "good" : "warn"}>
+                {formatStatus(accountantAcceptanceSummary.status)}
+              </StatusBadge>
+            </div>
+          </div>
         </div>
       </ReviewPanel>
 
