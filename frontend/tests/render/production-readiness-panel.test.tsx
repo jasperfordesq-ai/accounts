@@ -116,6 +116,15 @@ function sampleReport(): ProductionReadinessReport {
           outputArtifacts: ["accounts PDF text", "iXBRL XML"],
           decisionGates: ["named qualified-accountant review"],
           expectedValueChecks: ["well-formed iXBRL"],
+          expectedOutputs: {
+            pdfTextMarkers: ["Example Micro Limited", "280D"],
+            ixbrlRequiredTags: ["core:EntityCurrentLegalOrRegisteredName"],
+            filingReadinessState: "100% filing readiness",
+            expectedCorporationTax: 718.75,
+            requiredNotes: ["Accounting Policies"],
+            filingGateStates: ["director and secretary certification required", "qualified-accountant review required"],
+            signOffPacketState: "review-required",
+          },
           expectedProofPoints: [
             {
               area: "pdf-text",
@@ -156,6 +165,15 @@ function sampleReport(): ProductionReadinessReport {
           outputArtifacts: ["CLG accounts PDF text", "charity readiness profile"],
           decisionGates: ["charity number", "charity annual return review"],
           expectedValueChecks: ["charity evidence satisfied"],
+          expectedOutputs: {
+            pdfTextMarkers: ["Dublin Community Support CLG", "Community support and education."],
+            ixbrlRequiredTags: ["core:EntityCurrentLegalOrRegisteredName"],
+            filingReadinessState: "ready-for-external-filing",
+            expectedCorporationTax: 62.5,
+            requiredNotes: ["Accounting Policies", "Charity reporting disclosures"],
+            filingGateStates: ["charity number satisfied", "qualified-accountant review recorded"],
+            signOffPacketState: "ready-for-external-filing",
+          },
           expectedProofPoints: [
             {
               area: "filing-readiness",

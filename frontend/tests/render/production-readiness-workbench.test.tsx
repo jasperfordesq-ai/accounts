@@ -8,7 +8,7 @@ describe("ProductionReadinessWorkbench", () => {
     render(<ProductionReadinessWorkbench report={sampleReport()} />);
 
     expect(screen.getByRole("heading", { name: "Production Readiness Checklist" })).toBeInTheDocument();
-    expect(screen.getByText("Review required")).toBeInTheDocument();
+    expect(screen.getAllByText("Review required").length).toBeGreaterThan(1);
     expect(screen.getByText("3 companies")).toBeInTheDocument();
     expect(screen.getByText("4 periods")).toBeInTheDocument();
     expect(screen.getByRole("searchbox", { name: "Filter Next assurance actions" })).toBeInTheDocument();
@@ -24,6 +24,8 @@ describe("ProductionReadinessWorkbench", () => {
     expect(screen.getByText("Sign-off packet shows reviewer state, open blockers and allowed next actions.")).toBeInTheDocument();
     expect(screen.getByText("director and secretary certification")).toBeInTheDocument();
     expect(screen.getByText("well-formed iXBRL")).toBeInTheDocument();
+    expect(screen.getByText("Expected CT:")).toBeInTheDocument();
+    expect(screen.getByText("€718.75")).toBeInTheDocument();
     expect(screen.getByText("Expected proof points")).toBeInTheDocument();
     expect(screen.getByText("PDF text contains company name and micro statutory statement.")).toBeInTheDocument();
     expect(screen.getByText("signatory-gates")).toBeInTheDocument();
@@ -108,7 +110,7 @@ describe("ProductionReadinessWorkbench", () => {
     expect(screen.getByRole("heading", { name: "Accountant acceptance criteria" })).toBeInTheDocument();
     expect(screen.getByText("Micro LTD accountant acceptance")).toBeInTheDocument();
     expect(screen.getByText("Medium handoff accountant acceptance")).toBeInTheDocument();
-    expect(screen.getByText("Example Micro Limited")).toBeInTheDocument();
+    expect(screen.getAllByText("Example Micro Limited").length).toBeGreaterThan(1);
     expect(screen.getByText("2025-01-01 to 2025-12-31")).toBeInTheDocument();
     expect(screen.getByText("Named qualified accountant must approve the generated pack before real filing use.")).toBeInTheDocument();
     expect(screen.getByText("Signed auditor report and manual handoff note reviewed by the qualified accountant.")).toBeInTheDocument();
@@ -233,6 +235,15 @@ function sampleReport(): ProductionReadinessReport {
           outputArtifacts: ["accounts PDF text", "CRO filing pack", "iXBRL XML", "accountant sign-off packet"],
           decisionGates: ["named qualified-accountant review", "director and secretary certification", "accountant sign-off packet state"],
           expectedValueChecks: ["Micro regime", "100% filing readiness", "well-formed iXBRL"],
+          expectedOutputs: {
+            pdfTextMarkers: ["Example Micro Limited", "280D"],
+            ixbrlRequiredTags: ["core:EntityCurrentLegalOrRegisteredName"],
+            filingReadinessState: "100% filing readiness",
+            expectedCorporationTax: 718.75,
+            requiredNotes: ["Accounting Policies"],
+            filingGateStates: ["director and secretary certification required", "qualified-accountant review required"],
+            signOffPacketState: "review-required",
+          },
           expectedProofPoints: [
             {
               area: "pdf-text",

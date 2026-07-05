@@ -174,6 +174,15 @@ function productionReadinessReportFixture() {
           outputArtifacts: ["accounts PDF text"],
           decisionGates: ["named qualified-accountant review"],
           expectedValueChecks: ["well-formed iXBRL"],
+          expectedOutputs: {
+            pdfTextMarkers: ["Example Micro Limited", "280D"],
+            ixbrlRequiredTags: ["core:EntityCurrentLegalOrRegisteredName"],
+            filingReadinessState: "100% filing readiness",
+            expectedCorporationTax: 718.75,
+            requiredNotes: ["Accounting Policies"],
+            filingGateStates: ["director and secretary certification required", "qualified-accountant review required"],
+            signOffPacketState: "review-required",
+          },
           expectedProofPoints: [
             {
               area: "pdf-text",

@@ -645,7 +645,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
             caption="Golden evidence pack"
             filterPlaceholder="Filter evidence packs"
             emptyState="No matching evidence packs"
-            columns={["Scenario", "Output artifacts", "Decision gates", "Expected value checks", "Expected proof points", "Sources"]}
+            columns={["Scenario", "Output artifacts", "Decision gates", "Expected value checks", "Expected outputs", "Expected proof points", "Sources"]}
             rows={report.goldenFilingCorpus.map((scenario) => ({
               id: `${scenario.code}-evidence`,
               tone: scenario.coverageStatus === "covered" ? "good" : "warn",
@@ -654,6 +654,13 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
                 ...scenario.evidencePack.outputArtifacts,
                 ...scenario.evidencePack.decisionGates,
                 ...scenario.evidencePack.expectedValueChecks,
+                ...scenario.evidencePack.expectedOutputs.pdfTextMarkers,
+                ...scenario.evidencePack.expectedOutputs.ixbrlRequiredTags,
+                scenario.evidencePack.expectedOutputs.filingReadinessState,
+                scenario.evidencePack.expectedOutputs.expectedCorporationTax.toString(),
+                ...scenario.evidencePack.expectedOutputs.requiredNotes,
+                ...scenario.evidencePack.expectedOutputs.filingGateStates,
+                scenario.evidencePack.expectedOutputs.signOffPacketState,
                 ...scenario.evidencePack.expectedProofPoints.flatMap((proof) => [
                   proof.area,
                   proof.expectedEvidence,
@@ -666,6 +673,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
                 <CompactList key="artifacts" items={scenario.evidencePack.outputArtifacts} />,
                 <CompactList key="gates" items={scenario.evidencePack.decisionGates} />,
                 <CompactList key="values" items={scenario.evidencePack.expectedValueChecks} />,
+                <ExpectedOutputsList key="expected-outputs" outputs={scenario.evidencePack.expectedOutputs} />,
                 <ProofPointList key="proof-points" proofPoints={scenario.evidencePack.expectedProofPoints} />,
                 <SourceLinkList key="sources" sources={scenario.evidencePack.sourceReferences} />,
               ],
@@ -874,6 +882,35 @@ function CompactList({ items }: { items: string[] }) {
   );
 }
 
+function ExpectedOutputsList({
+  outputs,
+}: {
+  outputs: ProductionReadinessReport["goldenFilingCorpus"][number]["evidencePack"]["expectedOutputs"];
+}) {
+  return (
+    <div className="max-w-lg space-y-2 whitespace-normal text-xs leading-5 text-[var(--muted-foreground)]">
+      <ExpectedOutputGroup label="PDF" items={outputs.pdfTextMarkers} />
+      <ExpectedOutputGroup label="iXBRL" items={outputs.ixbrlRequiredTags} />
+      <ExpectedOutputGroup label="Notes" items={outputs.requiredNotes} />
+      <ExpectedOutputGroup label="Gates" items={outputs.filingGateStates} />
+      <div className="rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-2">
+        <p><span className="font-semibold text-[var(--foreground)]">Readiness:</span> {formatStatus(outputs.filingReadinessState)}</p>
+        <p><span className="font-semibold text-[var(--foreground)]">Sign-off:</span> {formatStatus(outputs.signOffPacketState)}</p>
+        <p><span className="font-semibold text-[var(--foreground)]">Expected CT:</span> {formatCurrency(outputs.expectedCorporationTax)}</p>
+      </div>
+    </div>
+  );
+}
+
+function ExpectedOutputGroup({ label, items }: { label: string; items: string[] }) {
+  return (
+    <div>
+      <p className="text-[11px] font-semibold uppercase text-[var(--foreground)]">{label}</p>
+      <CompactList items={items} />
+    </div>
+  );
+}
+
 function ProofPointList({
   proofPoints,
 }: {
@@ -977,6 +1014,10 @@ function formatStatus(value: string) {
     .join(" ");
 
   return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" }).format(value);
 }
 
 function formatPacketStatus(value: string) {

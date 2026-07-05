@@ -12,6 +12,10 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.equal(parsed.goldenFilingCorpus[0].evidencePack.outputArtifacts[0], "accounts PDF text");
   assert.equal(parsed.goldenFilingCorpus[0].evidencePack.decisionGates[0], "named qualified-accountant review");
   assert.equal(parsed.goldenFilingCorpus[0].evidencePack.expectedValueChecks[0], "well-formed iXBRL");
+  assert.equal(parsed.goldenFilingCorpus[0].evidencePack.expectedOutputs.pdfTextMarkers[0], "Example Micro Limited");
+  assert.equal(parsed.goldenFilingCorpus[0].evidencePack.expectedOutputs.ixbrlRequiredTags[0], "core:EntityCurrentLegalOrRegisteredName");
+  assert.equal(parsed.goldenFilingCorpus[0].evidencePack.expectedOutputs.expectedCorporationTax, 718.75);
+  assert.equal(parsed.goldenFilingCorpus[0].evidencePack.expectedOutputs.signOffPacketState, "review-required");
   assert.equal(parsed.goldenFilingCorpus[0].evidencePack.expectedProofPoints[0].area, "pdf-text");
   assert.equal(parsed.goldenFilingCorpus[0].evidencePack.expectedProofPoints[0].required, true);
   assert.equal(parsed.goldenFilingCorpus[0].evidencePack.sourceReferences[0].sourceId, "frc-frs-105");
@@ -251,6 +255,15 @@ function sampleReport() {
           outputArtifacts: ["accounts PDF text"],
           decisionGates: ["named qualified-accountant review"],
           expectedValueChecks: ["well-formed iXBRL"],
+          expectedOutputs: {
+            pdfTextMarkers: ["Example Micro Limited", "280D"],
+            ixbrlRequiredTags: ["core:EntityCurrentLegalOrRegisteredName"],
+            filingReadinessState: "100% filing readiness",
+            expectedCorporationTax: 718.75,
+            requiredNotes: ["Accounting Policies"],
+            filingGateStates: ["director and secretary certification required", "qualified-accountant review required"],
+            signOffPacketState: "review-required",
+          },
           expectedProofPoints: [
             {
               area: "pdf-text",

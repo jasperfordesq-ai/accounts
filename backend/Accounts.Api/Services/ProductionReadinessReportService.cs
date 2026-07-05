@@ -16,8 +16,18 @@ public sealed record GoldenFilingCorpusEvidencePack(
     IReadOnlyList<string> OutputArtifacts,
     IReadOnlyList<string> DecisionGates,
     IReadOnlyList<string> ExpectedValueChecks,
+    GoldenFilingCorpusExpectedOutputs ExpectedOutputs,
     IReadOnlyList<GoldenFilingCorpusProofPoint> ExpectedProofPoints,
     IReadOnlyList<LegalSourceReference> SourceReferences);
+
+public sealed record GoldenFilingCorpusExpectedOutputs(
+    IReadOnlyList<string> PdfTextMarkers,
+    IReadOnlyList<string> IxbrlRequiredTags,
+    string FilingReadinessState,
+    decimal ExpectedCorporationTax,
+    IReadOnlyList<string> RequiredNotes,
+    IReadOnlyList<string> FilingGateStates,
+    string SignOffPacketState);
 
 public sealed record GoldenFilingCorpusProofPoint(
     string Area,
@@ -483,6 +493,27 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "well-formed iXBRL",
                     "micro statutory statement present in PDF text"
                 ],
+                new(
+                    [
+                        "Example Micro Limited",
+                        "31 December 2025",
+                        "6,250",
+                        "280D"
+                    ],
+                    [
+                        "core:EntityCurrentLegalOrRegisteredName"
+                    ],
+                    "100% filing readiness",
+                    718.75m,
+                    [
+                        "Accounting Policies"
+                    ],
+                    [
+                        "director and secretary certification required",
+                        "external ROS/iXBRL validation required",
+                        "qualified-accountant review required"
+                    ],
+                    "review-required"),
                 ProofPoints(
                     "AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl",
                     [
@@ -552,6 +583,28 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "tax computation matches worked scenario",
                     "notes include fixed assets and long-term creditors"
                 ],
+                new(
+                    [
+                        "Connacht Digital Solutions Limited",
+                        "Section 352",
+                        "PROFIT AND LOSS ACCOUNT"
+                    ],
+                    [
+                        "core:EntityCurrentLegalOrRegisteredName"
+                    ],
+                    "generated-output-evidence-required",
+                    950m,
+                    [
+                        "Accounting Policies",
+                        "Tangible Fixed Assets",
+                        "Creditors"
+                    ],
+                    [
+                        "abridgement eligibility confirmed",
+                        "director and secretary certification required",
+                        "qualified-accountant review required"
+                    ],
+                    "review-required"),
                 ProofPoints(
                     "AccountsWorkflowTests.GoldenPath_SmallAuditExemptCompany_MixedAccrualSetBalancesThroughPdfAndIxbrl",
                     [
@@ -617,6 +670,26 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "CLG source attached",
                     "well-formed iXBRL"
                 ],
+                new(
+                    [
+                        "Dublin Community Support CLG",
+                        "Community support and education."
+                    ],
+                    [
+                        "core:EntityCurrentLegalOrRegisteredName"
+                    ],
+                    "ready-for-external-filing",
+                    62.50m,
+                    [
+                        "Accounting Policies",
+                        "Charity reporting disclosures"
+                    ],
+                    [
+                        "charity number satisfied",
+                        "SoFA and trustees annual report evidence satisfied",
+                        "qualified-accountant review recorded"
+                    ],
+                    "ready-for-external-filing"),
                 ProofPoints(
                     "FilingGoldenCorpusScenarioTests.GoldenCorpus_ClgCharity_EmitsAccountsIxbrlAndSourceBackedCharityReadiness",
                     [
@@ -684,6 +757,30 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "tagged P&L facts present after auditor evidence",
                     "auditor reference appears in PDF text"
                 ],
+                new(
+                    [
+                        "Midlands Manufacturing Limited",
+                        "INDEPENDENT AUDITOR'S REPORT",
+                        "AUD-2026-MIDLANDS-001",
+                        "CASH FLOW STATEMENT",
+                        "STATEMENT OF CHANGES IN EQUITY"
+                    ],
+                    [
+                        "core:TurnoverGrossRevenue",
+                        "core:ProfitLossOnOrdinaryActivitiesBeforeTax"
+                    ],
+                    "manual-handoff-until-auditor-evidence",
+                    62.50m,
+                    [
+                        "Turnover",
+                        "Tax on Profit on Ordinary Activities"
+                    ],
+                    [
+                        "auditor handoff blocked until signed auditor report",
+                        "normal CRO approval blocked until auditor evidence",
+                        "manual professional review required"
+                    ],
+                    "manual-handoff"),
                 ProofPoints(
                     "FilingGoldenCorpusScenarioTests.GoldenCorpus_MediumAuditRequired_BlocksFinalOutputsAndRequiresManualHandoffUntilAuditorEvidence",
                     [

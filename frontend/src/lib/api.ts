@@ -1562,8 +1562,19 @@ export interface GoldenFilingCorpusEvidencePack {
   outputArtifacts: string[];
   decisionGates: string[];
   expectedValueChecks: string[];
+  expectedOutputs: GoldenFilingCorpusExpectedOutputs;
   expectedProofPoints: GoldenFilingCorpusProofPoint[];
   sourceReferences: LegalSourceReference[];
+}
+
+export interface GoldenFilingCorpusExpectedOutputs {
+  pdfTextMarkers: string[];
+  ixbrlRequiredTags: string[];
+  filingReadinessState: string;
+  expectedCorporationTax: number;
+  requiredNotes: string[];
+  filingGateStates: string[];
+  signOffPacketState: string;
 }
 
 export interface GoldenFilingCorpusProofPoint {
@@ -1818,6 +1829,15 @@ const goldenFilingCorpusEvidencePackSchema = z.object({
   outputArtifacts: z.array(z.string().min(1)),
   decisionGates: z.array(z.string().min(1)),
   expectedValueChecks: z.array(z.string().min(1)),
+  expectedOutputs: z.object({
+    pdfTextMarkers: z.array(z.string().min(1)),
+    ixbrlRequiredTags: z.array(z.string().min(1)),
+    filingReadinessState: z.string().min(1),
+    expectedCorporationTax: z.number().nonnegative(),
+    requiredNotes: z.array(z.string().min(1)),
+    filingGateStates: z.array(z.string().min(1)),
+    signOffPacketState: z.string().min(1),
+  }),
   expectedProofPoints: z.array(z.object({
     area: z.string().min(1),
     expectedEvidence: z.string().min(1),

@@ -417,6 +417,59 @@ public class ProductionReadinessReportTests
     }
 
     [Fact]
+    public async Task GoldenCorpusEvidencePacks_ExposeStructuredExpectedOutputValues()
+    {
+        await using var db = CreateDbContext();
+        var report = await new ProductionReadinessReportService(db).GetReportAsync();
+
+        foreach (var scenario in report.GoldenFilingCorpus)
+        {
+            var expectedOutputs = ObjectProperty(scenario.EvidencePack, "ExpectedOutputs");
+
+            Assert.NotEmpty(StringListProperty(expectedOutputs, "PdfTextMarkers"));
+            Assert.NotEmpty(StringListProperty(expectedOutputs, "IxbrlRequiredTags"));
+            Assert.NotEmpty(StringListProperty(expectedOutputs, "RequiredNotes"));
+            Assert.NotEmpty(StringListProperty(expectedOutputs, "FilingGateStates"));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(expectedOutputs, "FilingReadinessState")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(expectedOutputs, "SignOffPacketState")));
+            Assert.True(DecimalProperty(expectedOutputs, "ExpectedCorporationTax") >= 0m);
+        }
+
+        AssertGoldenExpectedOutputs(
+            report,
+            "micro-ltd",
+            expectedPdfMarker: "280D",
+            expectedIxbrlTag: "core:EntityCurrentLegalOrRegisteredName",
+            expectedTax: 718.75m,
+            readinessState: "100% filing readiness",
+            signOffState: "review-required");
+        AssertGoldenExpectedOutputs(
+            report,
+            "small-abridged-ltd",
+            expectedPdfMarker: "Section 352",
+            expectedIxbrlTag: "core:EntityCurrentLegalOrRegisteredName",
+            expectedTax: 950m,
+            readinessState: "generated-output-evidence-required",
+            signOffState: "review-required");
+        AssertGoldenExpectedOutputs(
+            report,
+            "clg-charity",
+            expectedPdfMarker: "Community support and education.",
+            expectedIxbrlTag: "core:EntityCurrentLegalOrRegisteredName",
+            expectedTax: 62.50m,
+            readinessState: "ready-for-external-filing",
+            signOffState: "ready-for-external-filing");
+        AssertGoldenExpectedOutputs(
+            report,
+            "medium-audit-required",
+            expectedPdfMarker: "INDEPENDENT AUDITOR'S REPORT",
+            expectedIxbrlTag: "core:TurnoverGrossRevenue",
+            expectedTax: 62.50m,
+            readinessState: "manual-handoff-until-auditor-evidence",
+            signOffState: "manual-handoff");
+    }
+
+    [Fact]
     public async Task ProductionReadinessReport_ExposesAccountantAcceptanceCriteriaForEveryGoldenScenario()
     {
         await using var db = CreateDbContext();
@@ -927,6 +980,27 @@ public class ProductionReadinessReportTests
         Assert.Equal(manualReviewRequired, BooleanProperty(fixture!, "ManualProfessionalReviewRequired"));
     }
 
+    private static void AssertGoldenExpectedOutputs(
+        ProductionReadinessReport report,
+        string scenarioCode,
+        string expectedPdfMarker,
+        string expectedIxbrlTag,
+        decimal expectedTax,
+        string readinessState,
+        string signOffState)
+    {
+        var scenario = Assert.Single(report.GoldenFilingCorpus, s => s.Code == scenarioCode);
+        var expectedOutputs = ObjectProperty(scenario.EvidencePack, "ExpectedOutputs");
+
+        Assert.Contains(StringListProperty(expectedOutputs, "PdfTextMarkers"), marker =>
+            marker.Contains(expectedPdfMarker, StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(StringListProperty(expectedOutputs, "IxbrlRequiredTags"), tag =>
+            tag.Contains(expectedIxbrlTag, StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(expectedTax, DecimalProperty(expectedOutputs, "ExpectedCorporationTax"));
+        Assert.Equal(readinessState, StringProperty(expectedOutputs, "FilingReadinessState"));
+        Assert.Equal(signOffState, StringProperty(expectedOutputs, "SignOffPacketState"));
+    }
+
     private static void AssertListContainsAll(
         IReadOnlyList<string> actual,
         IReadOnlyList<string> expected,
@@ -974,5 +1048,21 @@ public class ProductionReadinessReportTests
         return Assert.IsAssignableFrom<System.Collections.IEnumerable>(property!.GetValue(value))
             .Cast<object>()
             .ToArray();
+    }
+
+    private static object ObjectProperty(object value, string propertyName)
+    {
+        var property = value.GetType().GetProperty(propertyName);
+        Assert.NotNull(property);
+        var propertyValue = property!.GetValue(value);
+        Assert.NotNull(propertyValue);
+        return propertyValue!;
+    }
+
+    private static decimal DecimalProperty(object value, string propertyName)
+    {
+        var property = value.GetType().GetProperty(propertyName);
+        Assert.NotNull(property);
+        return Assert.IsType<decimal>(property!.GetValue(value));
     }
 }
