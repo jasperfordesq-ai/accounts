@@ -2604,6 +2604,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             [
                 "visual-smoke-manifest.json",
                 "24 visual smoke screenshots",
+                "screenshot SHA-256 checksums",
                 "route audit summary",
                 "named visual QA reviewer sign-off"
             ]);

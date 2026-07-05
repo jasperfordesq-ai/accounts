@@ -3074,6 +3074,12 @@ function assertVisualQaArtifacts(report: ProductionReadinessReport) {
     );
   }
 
+  if (!reviewProtocol.requiredEvidence.includes("screenshot SHA-256 checksums")) {
+    throw new Error(
+      "Invalid production readiness report contract: visualQaCoverage.reviewProtocol.requiredEvidence - must include screenshot SHA-256 checksums",
+    );
+  }
+
   report.visualQaCoverage.artifacts.forEach((artifact, artifactIndex) => {
     const route = routeByCode.get(artifact.routeCode);
     if (!route) {

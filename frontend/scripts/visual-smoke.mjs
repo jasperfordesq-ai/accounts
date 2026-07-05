@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { chromium, expect } from "@playwright/test";
+import { withScreenshotEvidence } from "./visual-smoke-artifacts.mjs";
 import { findOverlappingTextBlocks, formatLayoutIssues } from "./visual-smoke-layout.mjs";
 import {
   expectedVisualSmokeManifest,
@@ -549,7 +550,7 @@ async function run() {
             outputPath,
             openFilingTab: spec.openFilingTab,
           });
-          captures.push({
+          captures.push(await withScreenshotEvidence({
             routeName: spec.name,
             routeKey: spec.routeKey,
             theme,
@@ -560,7 +561,7 @@ async function run() {
             openFilingTab: spec.openFilingTab,
             reviewStatus: "required-review",
             layoutChecks: visualSmokeLayoutChecks,
-          });
+          }));
         }
 
         await context.close();

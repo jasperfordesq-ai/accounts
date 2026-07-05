@@ -148,6 +148,7 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.deepEqual(parsed.visualQaCoverage.reviewProtocol.requiredEvidence, [
     "visual-smoke-manifest.json",
     "24 visual smoke screenshots",
+    "screenshot SHA-256 checksums",
     "route audit summary",
     "named visual QA reviewer sign-off",
   ]);
@@ -301,6 +302,17 @@ test("parseProductionReadinessReport rejects visual review protocols without a r
   assert.throws(
     () => parseProductionReadinessReport(payload),
     /Invalid production readiness report contract: visualQaCoverage\.reviewProtocol\.signOffGate - must reference a release checklist item/,
+  );
+});
+
+test("parseProductionReadinessReport rejects visual review protocols without checksum evidence", () => {
+  const payload = sampleReport();
+  payload.visualQaCoverage.reviewProtocol.requiredEvidence =
+    payload.visualQaCoverage.reviewProtocol.requiredEvidence.filter((item) => item !== "screenshot SHA-256 checksums");
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: visualQaCoverage\.reviewProtocol\.requiredEvidence - must include screenshot SHA-256 checksums/,
   );
 });
 

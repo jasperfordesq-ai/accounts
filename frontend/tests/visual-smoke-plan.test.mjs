@@ -57,6 +57,7 @@ describe("visual smoke plan", () => {
       requiredEvidence: [
         "visual-smoke-manifest.json",
         "24 visual smoke screenshots",
+        "screenshot SHA-256 checksums",
         "route audit summary",
         "named visual QA reviewer sign-off",
       ],
@@ -148,6 +149,7 @@ describe("visual smoke plan", () => {
   it("discovers dashboard period workspace links before creating fallback smoke data", async () => {
     const script = await readFile(new URL("../scripts/visual-smoke.mjs", import.meta.url), "utf8");
 
+    assert.match(script, /withScreenshotEvidence/);
     assert.match(script, /function companyHrefFromPeriodHref/);
     assert.match(script, /writeFile/);
     assert.match(script, /visual-smoke-manifest\.json/);

@@ -96,6 +96,7 @@ describe("ProductionReadinessWorkbench", () => {
     expectText("Visual review protocol");
     expectText("Design reviewer");
     expect(screen.getAllByText("visual-qa-screenshot-review").length).toBeGreaterThan(0);
+    expectText("screenshot SHA-256 checksums");
     expectText("named visual QA reviewer sign-off");
     expectText(/Block release if any accountant workbench route/);
     expectText("Light desktop");
@@ -1060,6 +1061,7 @@ function visualQaReviewProtocol(): ProductionReadinessReport["visualQaCoverage"]
     requiredEvidence: [
       "visual-smoke-manifest.json",
       "24 visual smoke screenshots",
+      "screenshot SHA-256 checksums",
       "route audit summary",
       "named visual QA reviewer sign-off",
     ],
