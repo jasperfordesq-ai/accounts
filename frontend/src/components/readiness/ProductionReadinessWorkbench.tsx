@@ -37,6 +37,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
   const assurancePacket = report.assurancePacket;
   const accountantAcceptanceSummary = report.accountantAcceptanceSummary;
   const accountantWorkflowWalkthroughProtocol = report.accountantWorkflowWalkthroughProtocol;
+  const accountantJourneyAcceptanceChecklist = report.accountantJourneyAcceptanceChecklist ?? [];
   const hardenedAreas = report.areas.filter((area) => area.status === "hardened").length;
   const coveredScenarios = report.goldenFilingCorpus.filter((scenario) => scenario.coverageStatus === "covered").length;
   const enforcedGates = report.operationalGates.filter((gate) => gate.status === "enforced").length;
@@ -566,6 +567,54 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
             </div>
           </div>
         </div>
+      </ReviewPanel>
+
+      <ReviewPanel
+        title="Accountant journey acceptance checklist"
+        description="Route-by-route acceptance evidence tying the live accountant workbench journey to seeded golden scenarios and visual smoke artifacts."
+        actions={<StatusBadge tone="warn">{accountantJourneyAcceptanceChecklist.length} routes</StatusBadge>}
+      >
+        <DataTable
+          caption="Accountant journey acceptance checklist"
+          filterPlaceholder="Filter accountant journey acceptance"
+          emptyState="No matching accountant journey acceptance entries"
+          columns={["Route", "Workflow", "Seeded scenarios", "Visual evidence", "Acceptance criteria", "Required evidence", "Status"]}
+          rows={accountantJourneyAcceptanceChecklist.map((item) => ({
+            id: item.routeCode,
+            tone: item.status === "accepted" ? "good" : "warn",
+            searchText: [
+              item.routeCode,
+              item.routeLabel,
+              item.routeKey,
+              item.status,
+              item.signOffGate,
+              ...item.workflowStages,
+              ...item.seededScenarioCodes,
+              ...item.visualArtifactNames,
+              ...item.acceptanceCriteria,
+              ...item.requiredEvidence,
+            ].join(" "),
+            cells: [
+              <div key="route" className="min-w-44 whitespace-normal">
+                <p className="font-medium">{item.routeLabel}</p>
+                <code className="mt-1 block break-all text-[11px] text-[var(--muted-foreground)]">{item.routeCode}</code>
+                <p className="mt-1 text-xs text-[var(--muted-foreground)]">Gate: {item.signOffGate}</p>
+              </div>,
+              <div key="workflow" className="flex min-w-44 flex-wrap gap-1.5">
+                {item.workflowStages.map((stage) => (
+                  <StatusBadge key={stage} tone="default">{stage}</StatusBadge>
+                ))}
+              </div>,
+              <CodeStack key="seeded-scenarios" items={item.seededScenarioCodes} />,
+              <CodeStack key="visual-artifacts" items={item.visualArtifactNames} />,
+              <CompactList key="acceptance-criteria" items={item.acceptanceCriteria} />,
+              <CompactList key="required-evidence" items={item.requiredEvidence} />,
+              <StatusBadge key="status" tone={item.status === "accepted" ? "good" : "warn"}>
+                {formatStatus(item.status)}
+              </StatusBadge>,
+            ],
+          }))}
+        />
       </ReviewPanel>
 
       <ReviewPanel

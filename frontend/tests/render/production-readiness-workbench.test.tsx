@@ -182,6 +182,13 @@ describe("ProductionReadinessWorkbench", () => {
     expectText("seeded golden corpus walkthrough note");
     expectText("visual QA screenshot review");
     expectText("golden-corpus-accountant-acceptance");
+    expect(screen.getByRole("heading", { name: "Accountant journey acceptance checklist" })).toBeInTheDocument();
+    expectText("Dashboard route exposes the relevant accountant workflow state, blockers, next actions and evidence.");
+    expectText("Filing review route exposes readiness, source links, generated outputs, signatory gates, accountant sign-off packet, external ROS/iXBRL validation and filing state.");
+    expectText("Production readiness route exposes backend checks, filing rules coverage, unsupported paths, security posture, release blockers and accountant review state.");
+    expectText("dashboard-light-desktop.png");
+    expectText("filing-review-dark-mobile.png");
+    expectText("named qualified-accountant route acceptance");
     expect(screen.getByRole("heading", { name: "Accountant acceptance criteria" })).toBeInTheDocument();
     expectText("Micro LTD accountant acceptance");
     expectText("Medium handoff accountant acceptance");
@@ -259,7 +266,7 @@ function sampleReport(): ProductionReadinessReport {
       visualQaExpectedScreenshots: 24,
       requiredOperationalGates: 1,
       openCriticalActions: 1,
-      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "production-completion-map"],
+      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "accountant-journey-acceptance-checklist", "production-completion-map"],
       releaseBlockers: ["Qualified accountant sign-off required"],
     },
     accountantAcceptanceCriteria: [
@@ -357,6 +364,19 @@ function sampleReport(): ProductionReadinessReport {
         "manual handoff acceptance",
       ],
     },
+    accountantJourneyAcceptanceChecklist: [
+      journeyAcceptance("dashboard", "Dashboard", "dashboard", ["Setup", "Import", "Classify", "Year-End", "Statements", "Notes", "Review", "Filing"]),
+      journeyAcceptance("company-detail", "Company detail", "company", ["Setup"]),
+      journeyAcceptance("period-workspace", "Period workspace", "period", ["Setup", "Import", "Classify", "Year-End", "Statements", "Notes", "Review", "Filing"]),
+      journeyAcceptance("filing-review", "Filing review", "filing", ["Review", "Filing"], [
+        "Filing review route exposes readiness, source links, generated outputs, signatory gates, accountant sign-off packet, external ROS/iXBRL validation and filing state.",
+        "A named qualified accountant accepts the Filing review route outputs, gates, wording and evidence for every seeded golden scenario.",
+      ]),
+      journeyAcceptance("production-readiness", "Production readiness", "readiness", ["Review", "Filing"], [
+        "Production readiness route exposes backend checks, filing rules coverage, unsupported paths, security posture, release blockers and accountant review state.",
+        "A named qualified accountant accepts the Production readiness route outputs, gates, wording and evidence for every seeded golden scenario.",
+      ]),
+    ],
     areas: [
       {
         code: "backend-accounting-engine",
@@ -983,6 +1003,36 @@ function sampleReport(): ProductionReadinessReport {
       routeAudits: visualQaRouteAudits(),
       artifacts: visualQaArtifacts(),
     },
+  };
+}
+
+function journeyAcceptance(
+  routeCode: string,
+  routeLabel: string,
+  routeKey: string,
+  workflowStages: string[],
+  acceptanceCriteria?: string[],
+) {
+  return {
+    routeCode,
+    routeLabel,
+    routeKey,
+    workflowStages,
+    seededScenarioCodes: ["micro-ltd", "medium-audit-required"],
+    visualArtifactNames: ["light-desktop", "light-mobile", "dark-desktop", "dark-mobile"].map(
+      (suffix) => `${routeCode}-${suffix}.png`,
+    ),
+    requiredEvidence: [
+      "named qualified-accountant route acceptance",
+      "visual smoke screenshots reviewed",
+      "golden corpus evidence accepted",
+    ],
+    acceptanceCriteria: acceptanceCriteria ?? [
+      `${routeLabel} route exposes the relevant accountant workflow state, blockers, next actions and evidence.`,
+      `A named qualified accountant accepts the ${routeLabel} route outputs, gates, wording and evidence for every seeded golden scenario.`,
+    ],
+    signOffGate: "golden-corpus-accountant-acceptance",
+    status: "required-review",
   };
 }
 

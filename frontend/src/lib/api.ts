@@ -1836,6 +1836,19 @@ export interface AccountantWorkflowWalkthroughProtocol {
   requiredEvidence: string[];
 }
 
+export interface AccountantJourneyAcceptanceChecklistItem {
+  routeCode: string;
+  routeLabel: string;
+  routeKey: string;
+  workflowStages: string[];
+  seededScenarioCodes: string[];
+  visualArtifactNames: string[];
+  requiredEvidence: string[];
+  acceptanceCriteria: string[];
+  signOffGate: string;
+  status: string;
+}
+
 export interface VisualQaViewport {
   name: string;
   width: number;
@@ -1928,6 +1941,7 @@ export interface ProductionReadinessReport {
   accountantAcceptanceCriteria: AccountantAcceptanceCriterion[];
   accountantAcceptanceSummary: AccountantAcceptanceSummary;
   accountantWorkflowWalkthroughProtocol: AccountantWorkflowWalkthroughProtocol;
+  accountantJourneyAcceptanceChecklist: AccountantJourneyAcceptanceChecklistItem[];
   areas: ProductionReadinessArea[];
   goldenFilingCorpus: GoldenFilingCorpusScenario[];
   goldenEvidenceLedger: GoldenEvidenceLedgerEntry[];
@@ -2269,6 +2283,19 @@ const accountantWorkflowWalkthroughProtocolSchema = z.object({
   requiredEvidence: z.array(z.string().min(1)),
 });
 
+const accountantJourneyAcceptanceChecklistItemSchema = z.object({
+  routeCode: z.string().min(1),
+  routeLabel: z.string().min(1),
+  routeKey: z.string().min(1),
+  workflowStages: z.array(z.string().min(1)),
+  seededScenarioCodes: z.array(z.string().min(1)),
+  visualArtifactNames: z.array(z.string().min(1)),
+  requiredEvidence: z.array(z.string().min(1)),
+  acceptanceCriteria: z.array(z.string().min(1)),
+  signOffGate: z.string().min(1),
+  status: z.string().min(1),
+});
+
 const visualQaViewportSchema = z.object({
   name: z.string().min(1),
   width: z.number(),
@@ -2345,6 +2372,7 @@ export const productionReadinessReportSchema = z.object({
   accountantAcceptanceCriteria: z.array(accountantAcceptanceCriterionSchema),
   accountantAcceptanceSummary: accountantAcceptanceSummarySchema,
   accountantWorkflowWalkthroughProtocol: accountantWorkflowWalkthroughProtocolSchema,
+  accountantJourneyAcceptanceChecklist: z.array(accountantJourneyAcceptanceChecklistItemSchema),
   areas: z.array(productionReadinessAreaSchema),
   goldenFilingCorpus: z.array(goldenFilingCorpusScenarioSchema),
   goldenEvidenceLedger: z.array(goldenEvidenceLedgerEntrySchema),
@@ -2551,6 +2579,7 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
   }
 
   assertAccountantWorkflowWalkthroughProtocol(report);
+  assertAccountantJourneyAcceptanceChecklist(report);
 
   const snapshotSourceIds = new Set(report.sourceLawSnapshot.sources.map((source) => source.sourceId));
   const traceabilitySourceIds = new Set(report.sourceLawTraceability.map((entry) => entry.sourceId));
@@ -2922,6 +2951,100 @@ function assertAccountantWorkflowWalkthroughProtocol(report: ProductionReadiness
       "Invalid production readiness report contract: accountantWorkflowWalkthroughProtocol.failurePolicy - must block release when accountant walkthrough evidence is missing",
     );
   }
+}
+
+function assertAccountantJourneyAcceptanceChecklist(report: ProductionReadinessReport) {
+  const requiredRouteCodes = ["dashboard", "company-detail", "period-workspace", "filing-review", "production-readiness"];
+  const checklist = report.accountantJourneyAcceptanceChecklist;
+  const releaseChecklistCodes = new Set(report.releaseReviewChecklist.map((item) => item.code));
+  const routeByCode = new Map(report.visualQaCoverage.routes.map((route) => [route.code, route]));
+  const expectedScenarioCodes = report.goldenFilingCorpus
+    .map((scenario) => scenario.code)
+    .sort((left, right) => left.localeCompare(right));
+  const checklistByRoute = new Map(checklist.map((item) => [item.routeCode, item]));
+  const missingRoutes = requiredRouteCodes.filter((routeCode) => !checklistByRoute.has(routeCode));
+  const unexpectedRoutes = checklist
+    .map((item) => item.routeCode)
+    .filter((routeCode) => !requiredRouteCodes.includes(routeCode))
+    .sort((left, right) => left.localeCompare(right));
+
+  if (missingRoutes.length > 0 || unexpectedRoutes.length > 0) {
+    throw new Error(
+      `Invalid production readiness report contract: accountantJourneyAcceptanceChecklist - missing route acceptance entries: ${missingRoutes.join(", ") || "none"}; unexpected ${unexpectedRoutes.join(", ") || "none"}`,
+    );
+  }
+
+  if (!report.assurancePacket.evidenceItems.includes("accountant-journey-acceptance-checklist")) {
+    throw new Error(
+      "Invalid production readiness report contract: assurancePacket.evidenceItems - accountant-journey-acceptance-checklist is required",
+    );
+  }
+
+  checklist.forEach((item, itemIndex) => {
+    const route = routeByCode.get(item.routeCode);
+    if (!route) {
+      throw new Error(
+        `Invalid production readiness report contract: accountantJourneyAcceptanceChecklist.${itemIndex}.routeCode - must reference a visual QA route`,
+      );
+    }
+
+    if (item.routeKey !== route.routeKey || item.routeLabel !== route.label) {
+      throw new Error(
+        `Invalid production readiness report contract: accountantJourneyAcceptanceChecklist.${itemIndex}.routeKey - must mirror visual QA route metadata for ${item.routeCode}`,
+      );
+    }
+
+    assertStringArrayEqual(
+      `accountantJourneyAcceptanceChecklist.${itemIndex}.workflowStages`,
+      route.workflowStages,
+      item.workflowStages,
+    );
+    assertStringArrayEqual(
+      `accountantJourneyAcceptanceChecklist.${itemIndex}.seededScenarioCodes`,
+      expectedScenarioCodes,
+      [...item.seededScenarioCodes].sort((left, right) => left.localeCompare(right)),
+    );
+
+    const expectedArtifactNames = report.visualQaCoverage.artifacts
+      .filter((artifact) => artifact.routeCode === item.routeCode)
+      .map((artifact) => artifact.fileName)
+      .sort((left, right) => left.localeCompare(right));
+    const receivedArtifactNames = [...item.visualArtifactNames].sort((left, right) => left.localeCompare(right));
+    if (
+      expectedArtifactNames.length !== receivedArtifactNames.length ||
+      expectedArtifactNames.some((fileName, index) => fileName !== receivedArtifactNames[index])
+    ) {
+      throw new Error(
+        `Invalid production readiness report contract: accountantJourneyAcceptanceChecklist.${itemIndex}.visualArtifactNames - must mirror visual smoke artifacts for ${item.routeCode}`,
+      );
+    }
+
+    if (!releaseChecklistCodes.has(item.signOffGate)) {
+      throw new Error(
+        `Invalid production readiness report contract: accountantJourneyAcceptanceChecklist.${itemIndex}.signOffGate - must reference a release checklist item`,
+      );
+    }
+
+    for (const evidence of ["named qualified-accountant route acceptance", "visual smoke screenshots reviewed", "golden corpus evidence accepted"]) {
+      if (!item.requiredEvidence.includes(evidence)) {
+        throw new Error(
+          `Invalid production readiness report contract: accountantJourneyAcceptanceChecklist.${itemIndex}.requiredEvidence - ${evidence} is required`,
+        );
+      }
+    }
+
+    if (!item.acceptanceCriteria.some((criterion) => criterion.includes(item.routeLabel))) {
+      throw new Error(
+        `Invalid production readiness report contract: accountantJourneyAcceptanceChecklist.${itemIndex}.acceptanceCriteria - must mention ${item.routeLabel}`,
+      );
+    }
+
+    if (!item.acceptanceCriteria.some((criterion) => criterion.includes("outputs, gates, wording and evidence"))) {
+      throw new Error(
+        `Invalid production readiness report contract: accountantJourneyAcceptanceChecklist.${itemIndex}.acceptanceCriteria - outputs, gates, wording and evidence is required`,
+      );
+    }
+  });
 }
 
 function assertVisualQaArtifacts(report: ProductionReadinessReport) {

@@ -274,6 +274,18 @@ public sealed record AccountantWorkflowWalkthroughProtocol(
     IReadOnlyList<string> AcceptanceCriteria,
     IReadOnlyList<string> RequiredEvidence);
 
+public sealed record AccountantJourneyAcceptanceChecklistItem(
+    string RouteCode,
+    string RouteLabel,
+    string RouteKey,
+    IReadOnlyList<string> WorkflowStages,
+    IReadOnlyList<string> SeededScenarioCodes,
+    IReadOnlyList<string> VisualArtifactNames,
+    IReadOnlyList<string> RequiredEvidence,
+    IReadOnlyList<string> AcceptanceCriteria,
+    string SignOffGate,
+    string Status);
+
 public sealed record VisualQaViewport(
     string Name,
     int Width,
@@ -359,6 +371,7 @@ public sealed record ProductionReadinessReport(
     IReadOnlyList<AccountantAcceptanceCriterion> AccountantAcceptanceCriteria,
     AccountantAcceptanceSummary AccountantAcceptanceSummary,
     AccountantWorkflowWalkthroughProtocol AccountantWorkflowWalkthroughProtocol,
+    IReadOnlyList<AccountantJourneyAcceptanceChecklistItem> AccountantJourneyAcceptanceChecklist,
     IReadOnlyList<ProductionReadinessArea> Areas,
     IReadOnlyList<GoldenFilingCorpusScenario> GoldenFilingCorpus,
     IReadOnlyList<GoldenEvidenceLedgerEntry> GoldenEvidenceLedger,
@@ -409,6 +422,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
         var accountantAcceptanceSummary = BuildAccountantAcceptanceSummary(goldenCorpus, accountantAcceptanceCriteria);
         var accountantWorkflowWalkthroughProtocol = BuildAccountantWorkflowWalkthroughProtocol(goldenCorpus);
         var visualQaCoverage = BuildVisualQaCoverage();
+        var accountantJourneyAcceptanceChecklist = BuildAccountantJourneyAcceptanceChecklist(goldenCorpus, visualQaCoverage);
         var sourceLawTraceability = BuildSourceLawTraceability(
             sourceSnapshot,
             goldenCorpus,
@@ -437,6 +451,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             accountantAcceptanceCriteria,
             accountantAcceptanceSummary,
             accountantWorkflowWalkthroughProtocol,
+            accountantJourneyAcceptanceChecklist,
             areas,
             goldenCorpus,
             goldenEvidenceLedger,
@@ -509,6 +524,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "accountant-acceptance-criteria",
             "accountant-acceptance-summary",
             "accountant-workflow-walkthrough-protocol",
+            "accountant-journey-acceptance-checklist",
             "production-completion-map"
         };
         var releaseBlockers = assuranceActions
@@ -2470,6 +2486,72 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 "manual handoff acceptance"
             ]);
     }
+
+    private static IReadOnlyList<AccountantJourneyAcceptanceChecklistItem> BuildAccountantJourneyAcceptanceChecklist(
+        IReadOnlyList<GoldenFilingCorpusScenario> goldenCorpus,
+        VisualQaCoverage visualQaCoverage)
+    {
+        var scenarioCodes = goldenCorpus.Select(scenario => scenario.Code).Order(StringComparer.Ordinal).ToArray();
+        var routeCodes = new HashSet<string>(
+            ["dashboard", "company-detail", "period-workspace", "filing-review", "production-readiness"],
+            StringComparer.Ordinal);
+        var visualArtifactNamesByRoute = visualQaCoverage.Artifacts
+            .GroupBy(artifact => artifact.RouteCode, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<string>)group.Select(artifact => artifact.FileName).Order(StringComparer.Ordinal).ToArray(),
+                StringComparer.Ordinal);
+
+        return visualQaCoverage.Routes
+            .Where(route => routeCodes.Contains(route.Code))
+            .OrderBy(route => JourneyRouteOrder(route.Code))
+            .Select(route => new AccountantJourneyAcceptanceChecklistItem(
+                route.Code,
+                route.Label,
+                route.RouteKey,
+                route.WorkflowStages,
+                scenarioCodes,
+                visualArtifactNamesByRoute.TryGetValue(route.Code, out var artifactNames) ? artifactNames : [],
+                [
+                    "named qualified-accountant route acceptance",
+                    "visual smoke screenshots reviewed",
+                    "golden corpus evidence accepted"
+                ],
+                BuildJourneyAcceptanceCriteria(route),
+                "golden-corpus-accountant-acceptance",
+                "required-review"))
+            .ToArray();
+    }
+
+    private static IReadOnlyList<string> BuildJourneyAcceptanceCriteria(VisualQaRoute route)
+    {
+        var criteria = new List<string>
+        {
+            $"{route.Label} route exposes the relevant accountant workflow state, blockers, next actions and evidence.",
+            $"A named qualified accountant accepts the {route.Label} route outputs, gates, wording and evidence for every seeded golden scenario."
+        };
+
+        if (route.Code == "filing-review")
+        {
+            criteria[0] = "Filing review route exposes readiness, source links, generated outputs, signatory gates, accountant sign-off packet, external ROS/iXBRL validation and filing state.";
+        }
+        else if (route.Code == "production-readiness")
+        {
+            criteria[0] = "Production readiness route exposes backend checks, filing rules coverage, unsupported paths, security posture, release blockers and accountant review state.";
+        }
+
+        return criteria;
+    }
+
+    private static int JourneyRouteOrder(string routeCode) => routeCode switch
+    {
+        "dashboard" => 0,
+        "company-detail" => 1,
+        "period-workspace" => 2,
+        "filing-review" => 3,
+        "production-readiness" => 4,
+        _ => 99
+    };
 
     private static IReadOnlyList<GoldenFilingCorpusVerifier> AcceptanceVerifiers(
         IReadOnlyList<GoldenFilingCorpusScenario> goldenCorpus,

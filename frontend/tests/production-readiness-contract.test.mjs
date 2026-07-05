@@ -89,6 +89,15 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.match(parsed.accountantWorkflowWalkthroughProtocol.routeSequence[0], /Dashboard/);
   assert.match(parsed.accountantWorkflowWalkthroughProtocol.acceptanceCriteria.at(-1), /outputs, gates, wording and evidence/);
   assert.ok(parsed.accountantWorkflowWalkthroughProtocol.requiredEvidence.includes("seeded golden corpus walkthrough note"));
+  assert.equal(parsed.accountantJourneyAcceptanceChecklist.length, 5);
+  assert.deepEqual(
+    parsed.accountantJourneyAcceptanceChecklist.map((item) => item.routeCode).sort(),
+    ["company-detail", "dashboard", "filing-review", "period-workspace", "production-readiness"],
+  );
+  assert.equal(parsed.accountantJourneyAcceptanceChecklist[0].signOffGate, "golden-corpus-accountant-acceptance");
+  assert.deepEqual(parsed.accountantJourneyAcceptanceChecklist[0].seededScenarioCodes, ["dac-small", "micro-ltd"]);
+  assert.equal(parsed.accountantJourneyAcceptanceChecklist[0].visualArtifactNames.length, 4);
+  assert.match(parsed.accountantJourneyAcceptanceChecklist[2].acceptanceCriteria[0], /Period workspace/);
   assert.equal(parsed.assurancePacket.packetVersion, "production-assurance-packet-v1");
   assert.equal(parsed.assurancePacket.sourceLawSnapshotHash, "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
   assert.equal(parsed.assurancePacket.goldenCorpusCovered, 2);
@@ -337,6 +346,40 @@ test("parseProductionReadinessReport rejects accountant walkthrough protocols wi
   );
 });
 
+test("parseProductionReadinessReport rejects accountant journey acceptance route drift", () => {
+  const payload = sampleReport();
+  payload.accountantJourneyAcceptanceChecklist = payload.accountantJourneyAcceptanceChecklist.filter(
+    (item) => item.routeCode !== "filing-review",
+  );
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: accountantJourneyAcceptanceChecklist - missing route acceptance entries: filing-review/,
+  );
+});
+
+test("parseProductionReadinessReport rejects accountant journey acceptance without screenshot evidence", () => {
+  const payload = sampleReport();
+  payload.accountantJourneyAcceptanceChecklist[0].visualArtifactNames = ["dashboard-light-desktop.png"];
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: accountantJourneyAcceptanceChecklist\.0\.visualArtifactNames - must mirror visual smoke artifacts for dashboard/,
+  );
+});
+
+test("parseProductionReadinessReport rejects accountant journey acceptance without assurance packet evidence", () => {
+  const payload = sampleReport();
+  payload.assurancePacket.evidenceItems = payload.assurancePacket.evidenceItems.filter(
+    (item) => item !== "accountant-journey-acceptance-checklist",
+  );
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: assurancePacket\.evidenceItems - accountant-journey-acceptance-checklist is required/,
+  );
+});
+
 test("parseProductionReadinessReport rejects inconsistent accountant acceptance summaries", () => {
   const payload = sampleReport();
   payload.accountantAcceptanceSummary.scenarioCount = 3;
@@ -560,7 +603,7 @@ function sampleReport() {
       visualQaExpectedScreenshots: expectedVisualSmokeScreenshotCount(),
       requiredOperationalGates: 1,
       openCriticalActions: 3,
-      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-blocker-register", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "production-completion-map"],
+      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-blocker-register", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "accountant-journey-acceptance-checklist", "production-completion-map"],
       releaseBlockers: [
         "Qualified accountant sign-off required",
         "Source-law change review required",
@@ -652,6 +695,19 @@ function sampleReport() {
         "manual handoff acceptance",
       ],
     },
+    accountantJourneyAcceptanceChecklist: [
+      journeyAcceptance("dashboard", "Dashboard", "dashboard", ["Setup", "Import", "Classify", "Year-End", "Statements", "Notes", "Review", "Filing"]),
+      journeyAcceptance("company-detail", "Company detail", "company", ["Setup"]),
+      journeyAcceptance("period-workspace", "Period workspace", "period", ["Setup", "Import", "Classify", "Year-End", "Statements", "Notes", "Review", "Filing"]),
+      journeyAcceptance("filing-review", "Filing review", "filing", ["Review", "Filing"], [
+        "Filing review route exposes readiness, source links, generated outputs, signatory gates, accountant sign-off packet, external ROS/iXBRL validation and filing state.",
+        "A named qualified accountant accepts the Filing review route outputs, gates, wording and evidence for every seeded golden scenario.",
+      ]),
+      journeyAcceptance("production-readiness", "Production readiness", "readiness", ["Review", "Filing"], [
+        "Production readiness route exposes backend checks, filing rules coverage, unsupported paths, security posture, release blockers and accountant review state.",
+        "A named qualified accountant accepts the Production readiness route outputs, gates, wording and evidence for every seeded golden scenario.",
+      ]),
+    ],
     areas: [
       {
         code: "backend-accounting-engine",
@@ -1306,6 +1362,30 @@ function sampleReport() {
         layoutChecks,
       })),
     },
+  };
+}
+
+function journeyAcceptance(routeCode, routeLabel, routeKey, workflowStages, acceptanceCriteria) {
+  return {
+    routeCode,
+    routeLabel,
+    routeKey,
+    workflowStages,
+    seededScenarioCodes: ["dac-small", "micro-ltd"],
+    visualArtifactNames: ["dark-desktop", "dark-mobile", "light-desktop", "light-mobile"].map(
+      (suffix) => `${routeCode}-${suffix}.png`,
+    ),
+    requiredEvidence: [
+      "named qualified-accountant route acceptance",
+      "visual smoke screenshots reviewed",
+      "golden corpus evidence accepted",
+    ],
+    acceptanceCriteria: acceptanceCriteria ?? [
+      `${routeLabel} route exposes the relevant accountant workflow state, blockers, next actions and evidence.`,
+      `A named qualified accountant accepts the ${routeLabel} route outputs, gates, wording and evidence for every seeded golden scenario.`,
+    ],
+    signOffGate: "golden-corpus-accountant-acceptance",
+    status: "required-review",
   };
 }
 

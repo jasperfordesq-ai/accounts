@@ -345,6 +345,66 @@ public class ProductionReadinessReportTests
     }
 
     [Fact]
+    public async Task ProductionReadinessReport_ExposesAccountantJourneyAcceptanceChecklistAcrossWorkbenchRoutes()
+    {
+        await using var db = CreateDbContext();
+        var report = await new ProductionReadinessReportService(db).GetReportAsync();
+        var checklistProperty = report.GetType().GetProperty("AccountantJourneyAcceptanceChecklist");
+
+        Assert.NotNull(checklistProperty);
+        var checklist = Assert.IsAssignableFrom<System.Collections.IEnumerable>(checklistProperty!.GetValue(report))
+            .Cast<object>()
+            .ToArray();
+
+        Assert.Contains(report.AssurancePacket.EvidenceItems, item => item == "accountant-journey-acceptance-checklist");
+        Assert.Equal(
+            new[] { "company-detail", "dashboard", "filing-review", "period-workspace", "production-readiness" },
+            checklist.Select(item => StringProperty(item, "RouteCode")).Order(StringComparer.Ordinal));
+
+        var scenarioCodes = report.GoldenFilingCorpus.Select(scenario => scenario.Code).Order(StringComparer.Ordinal).ToArray();
+        var visualArtifacts = ObjectListProperty(report.VisualQaCoverage, "Artifacts");
+
+        foreach (var item in checklist)
+        {
+            var routeCode = StringProperty(item, "RouteCode");
+            var route = Assert.Single(report.VisualQaCoverage.Routes, route => route.Code == routeCode);
+
+            Assert.Equal(route.RouteKey, StringProperty(item, "RouteKey"));
+            Assert.Equal(route.Label, StringProperty(item, "RouteLabel"));
+            Assert.Equal("required-review", StringProperty(item, "Status"));
+            Assert.Equal("golden-corpus-accountant-acceptance", StringProperty(item, "SignOffGate"));
+            Assert.Equal(route.WorkflowStages, StringListProperty(item, "WorkflowStages"));
+            Assert.Equal(scenarioCodes, StringListProperty(item, "SeededScenarioCodes").Order(StringComparer.Ordinal));
+            Assert.Contains("named qualified-accountant route acceptance", StringListProperty(item, "RequiredEvidence"));
+            Assert.Contains("visual smoke screenshots reviewed", StringListProperty(item, "RequiredEvidence"));
+            Assert.Contains("golden corpus evidence accepted", StringListProperty(item, "RequiredEvidence"));
+            Assert.Contains(StringListProperty(item, "AcceptanceCriteria"), criterion =>
+                criterion.Contains(route.Label, StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(StringListProperty(item, "AcceptanceCriteria"), criterion =>
+                criterion.Contains("outputs, gates, wording and evidence", StringComparison.OrdinalIgnoreCase));
+
+            var expectedArtifactNames = visualArtifacts
+                .Where(artifact => StringProperty(artifact, "RouteCode") == routeCode)
+                .Select(artifact => StringProperty(artifact, "FileName"))
+                .Order(StringComparer.Ordinal)
+                .ToArray();
+
+            Assert.Equal(4, expectedArtifactNames.Length);
+            Assert.Equal(expectedArtifactNames, StringListProperty(item, "VisualArtifactNames").Order(StringComparer.Ordinal));
+        }
+
+        var filingReview = Assert.Single(checklist, item => StringProperty(item, "RouteCode") == "filing-review");
+        Assert.Contains(StringListProperty(filingReview, "WorkflowStages"), stage => stage == "Review");
+        Assert.Contains(StringListProperty(filingReview, "WorkflowStages"), stage => stage == "Filing");
+        Assert.Contains(StringListProperty(filingReview, "AcceptanceCriteria"), criterion =>
+            criterion.Contains("external ROS/iXBRL validation", StringComparison.OrdinalIgnoreCase));
+
+        var productionReadiness = Assert.Single(checklist, item => StringProperty(item, "RouteCode") == "production-readiness");
+        Assert.Contains(StringListProperty(productionReadiness, "AcceptanceCriteria"), criterion =>
+            criterion.Contains("release blockers", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task ProductionReadinessReport_ExposesCompletionTracksForBackendUiAndFrontendCode()
     {
         await using var db = CreateDbContext();
