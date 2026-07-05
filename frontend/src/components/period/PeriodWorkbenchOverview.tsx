@@ -159,7 +159,7 @@ export function PeriodWorkbenchOverview({
   const CommandCentreIssueIcon = commandCentreTone === "good" ? CheckCircle2 : AlertTriangle;
 
   return (
-    <div className="mb-6 space-y-6">
+    <div className="mb-6 min-w-0 max-w-full space-y-6 overflow-x-clip">
       <ReviewPanel
         title="Period command centre"
         description="Current blocker, completed evidence and next workflow action for this accounting period."
