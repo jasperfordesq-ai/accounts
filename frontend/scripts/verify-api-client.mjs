@@ -333,12 +333,35 @@ function productionReadinessReportFixture() {
           openFilingTab: false,
         },
       ],
+      artifacts: [
+        visualArtifact("dashboard", "light", "desktop", "Production Readiness", false),
+        visualArtifact("period-workspace", "light", "desktop", "Filing readiness", false),
+        visualArtifact("workbench-preview", "light", "desktop", "Workbench Component Preview", false),
+        visualArtifact("dashboard", "dark", "desktop", "Production Readiness", false),
+        visualArtifact("period-workspace", "dark", "desktop", "Filing readiness", false),
+        visualArtifact("workbench-preview", "dark", "desktop", "Workbench Component Preview", false),
+      ],
     },
   };
 }
 
 function accountantWorkflowStages() {
   return ["Setup", "Import", "Classify", "Year-End", "Statements", "Notes", "Review", "Filing"];
+}
+
+function visualArtifact(routeCode, theme, viewportName, requiredText, openFilingTab) {
+  const fileName = `${routeCode}-${theme}-${viewportName}.png`;
+  return {
+    routeCode,
+    theme,
+    viewportName,
+    fileName,
+    artifactPath: `artifacts/visual-smoke/${fileName}`,
+    requiredText,
+    openFilingTab,
+    reviewStatus: "required-review",
+    layoutChecks: ["browser-console-errors", "page-horizontal-overflow", "visible-text-overlap"],
+  };
 }
 
 function source(sourceId, title) {

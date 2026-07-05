@@ -584,6 +584,46 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
                 ],
               }))}
             />
+
+            <div className="mt-4">
+              <DataTable
+                caption="Visual QA artifact manifest"
+                filterPlaceholder="Filter visual QA artifacts"
+                emptyState="No matching visual QA artifacts"
+                columns={["Artifact", "Route", "Theme", "Viewport", "Capture target", "Review"]}
+                rows={visualQaCoverage.artifacts.map((artifact) => ({
+                  id: `${artifact.routeCode}-${artifact.theme}-${artifact.viewportName}`,
+                  tone: artifact.reviewStatus === "accepted" ? "good" : "warn",
+                  searchText: [
+                    artifact.fileName,
+                    artifact.artifactPath,
+                    artifact.routeCode,
+                    artifact.theme,
+                    artifact.viewportName,
+                    artifact.requiredText,
+                    artifact.reviewStatus,
+                    ...artifact.layoutChecks,
+                  ].join(" "),
+                  cells: [
+                    <div key="artifact" className="min-w-52 whitespace-normal">
+                      <p className="font-medium">{artifact.fileName}</p>
+                      <code className="mt-1 block break-all text-[11px] text-[var(--muted-foreground)]">{artifact.artifactPath}</code>
+                    </div>,
+                    <code key="route" className="break-all text-[11px] text-[var(--foreground)]">{artifact.routeCode}</code>,
+                    <StatusBadge key="theme" tone="default">{formatStatus(artifact.theme)}</StatusBadge>,
+                    <span key="viewport" className="text-[var(--muted-foreground)]">{artifact.viewportName}</span>,
+                    <div key="target" className="min-w-48 whitespace-normal text-xs leading-5 text-[var(--muted-foreground)]">
+                      <p className="font-medium text-[var(--foreground)]">{artifact.requiredText}</p>
+                      <p>{artifact.openFilingTab ? "Open filing tab before capture" : "Capture initial view"}</p>
+                      <p>{artifact.layoutChecks.map(formatStatus).join(", ")}</p>
+                    </div>,
+                    <StatusBadge key="review" tone={artifact.reviewStatus === "accepted" ? "good" : "warn"}>
+                      {formatStatus(artifact.reviewStatus)}
+                    </StatusBadge>,
+                  ],
+                }))}
+              />
+            </div>
           </div>
         </ReviewPanel>
       )}

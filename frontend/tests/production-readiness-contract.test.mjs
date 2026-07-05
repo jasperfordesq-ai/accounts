@@ -47,6 +47,10 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.equal(parsed.releaseReviewChecklist[0].code, "accountant-final-signoff");
   assert.equal(parsed.releaseReviewChecklist[0].assuranceActionCode, "qualified-accountant-signoff");
   assert.equal(parsed.releaseReviewChecklist[0].evidenceArtifact, "named-accountant-approval-record");
+  assert.equal(parsed.visualQaCoverage.artifacts.length, 6);
+  assert.equal(parsed.visualQaCoverage.artifacts[0].artifactPath, "artifacts/visual-smoke/dashboard-light-desktop.png");
+  assert.equal(parsed.visualQaCoverage.artifacts[0].requiredText, "Production Readiness");
+  assert.deepEqual(parsed.visualQaCoverage.artifacts[0].layoutChecks, ["browser-console-errors", "page-horizontal-overflow", "visible-text-overlap"]);
 });
 
 test("parseProductionReadinessReport rejects missing golden corpus evidence packs", () => {
@@ -423,12 +427,35 @@ function sampleReport() {
           openFilingTab: false,
         },
       ],
+      artifacts: [
+        visualArtifact("dashboard", "light", "desktop", "Production Readiness", false),
+        visualArtifact("period-workspace", "light", "desktop", "Filing readiness", false),
+        visualArtifact("workbench-preview", "light", "desktop", "Workbench Component Preview", false),
+        visualArtifact("dashboard", "dark", "desktop", "Production Readiness", false),
+        visualArtifact("period-workspace", "dark", "desktop", "Filing readiness", false),
+        visualArtifact("workbench-preview", "dark", "desktop", "Workbench Component Preview", false),
+      ],
     },
   };
 }
 
 function accountantWorkflowStages() {
   return ["Setup", "Import", "Classify", "Year-End", "Statements", "Notes", "Review", "Filing"];
+}
+
+function visualArtifact(routeCode, theme, viewportName, requiredText, openFilingTab) {
+  const fileName = `${routeCode}-${theme}-${viewportName}.png`;
+  return {
+    routeCode,
+    theme,
+    viewportName,
+    fileName,
+    artifactPath: `artifacts/visual-smoke/${fileName}`,
+    requiredText,
+    openFilingTab,
+    reviewStatus: "required-review",
+    layoutChecks: ["browser-console-errors", "page-horizontal-overflow", "visible-text-overlap"],
+  };
 }
 
 function source(sourceId, title) {

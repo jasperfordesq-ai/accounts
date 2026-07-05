@@ -322,28 +322,87 @@ function sampleReport(): ProductionReadinessReport {
         { name: "desktop", width: 1440, height: 1000 },
         { name: "mobile", width: 390, height: 844 },
       ],
-      routes: [
-        {
-          code: "dashboard",
-          label: "Dashboard",
-          description: "Accountant queue and production readiness overview.",
-          requiredText: "Production Readiness",
-          workflowStages: accountantWorkflowStages(),
-          openFilingTab: false,
-        },
-        {
-          code: "workbench-preview",
-          label: "Workbench preview",
-          description: "Internal component preview for accountant workflow primitives and route states.",
-          requiredText: "Workbench Component Preview",
-          workflowStages: accountantWorkflowStages(),
-          openFilingTab: false,
-        },
-      ],
+      routes: visualQaRoutes(),
+      artifacts: visualQaArtifacts(),
     },
   };
 }
 
 function accountantWorkflowStages() {
   return ["Setup", "Import", "Classify", "Year-End", "Statements", "Notes", "Review", "Filing"];
+}
+
+function visualQaRoutes(): ProductionReadinessReport["visualQaCoverage"]["routes"] {
+  return [
+    {
+      code: "dashboard",
+      label: "Dashboard",
+      description: "Accountant queue and production readiness overview.",
+      requiredText: "Production Readiness",
+      workflowStages: accountantWorkflowStages(),
+      openFilingTab: false,
+    },
+    {
+      code: "production-readiness",
+      label: "Production readiness",
+      description: "Assurance checklist, statutory rules matrix, source snapshot and operational gates.",
+      requiredText: "Production Readiness Checklist",
+      workflowStages: ["Review", "Filing"],
+      openFilingTab: false,
+    },
+    {
+      code: "company-detail",
+      label: "Company detail",
+      description: "Company command centre, statutory profile, officers, charity facts and accounting periods.",
+      requiredText: "Company command centre",
+      workflowStages: ["Setup"],
+      openFilingTab: false,
+    },
+    {
+      code: "period-workspace",
+      label: "Period workspace",
+      description: "Import, classification, year-end, statements and filing readiness overview.",
+      requiredText: "Filing readiness",
+      workflowStages: accountantWorkflowStages(),
+      openFilingTab: false,
+    },
+    {
+      code: "filing-review",
+      label: "Filing review",
+      description: "Period workspace filing tab.",
+      requiredText: "Filing readiness profile",
+      workflowStages: ["Review", "Filing"],
+      openFilingTab: true,
+    },
+    {
+      code: "workbench-preview",
+      label: "Workbench preview",
+      description: "Internal component preview for accountant workflow primitives and route states.",
+      requiredText: "Workbench Component Preview",
+      workflowStages: accountantWorkflowStages(),
+      openFilingTab: false,
+    },
+  ];
+}
+
+function visualQaArtifacts(): ProductionReadinessReport["visualQaCoverage"]["artifacts"] {
+  const layoutChecks = ["browser-console-errors", "page-horizontal-overflow", "visible-text-overlap"];
+  return ["light", "dark"].flatMap((theme) =>
+    ["desktop", "mobile"].flatMap((viewportName) =>
+      visualQaRoutes().map((route) => {
+        const fileName = `${route.code}-${theme}-${viewportName}.png`;
+        return {
+          routeCode: route.code,
+          theme,
+          viewportName,
+          fileName,
+          artifactPath: `artifacts/visual-smoke/${fileName}`,
+          requiredText: route.requiredText,
+          openFilingTab: route.openFilingTab,
+          reviewStatus: "required-review",
+          layoutChecks,
+        };
+      }),
+    ),
+  );
 }

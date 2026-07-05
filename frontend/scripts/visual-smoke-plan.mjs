@@ -84,3 +84,24 @@ export const visualSmokeRoutes = [
 export function expectedVisualSmokeScreenshotCount() {
   return visualSmokeRoutes.length * visualSmokeThemes.length * visualSmokeViewports.length;
 }
+
+export function expectedVisualSmokeArtifacts(outputDir = "artifacts/visual-smoke") {
+  return visualSmokeViewports.flatMap((viewport) =>
+    visualSmokeThemes.flatMap((theme) =>
+      visualSmokeRoutes.map((route) => {
+        const fileName = `${route.name}-${theme}-${viewport.name}.png`;
+        return {
+          routeName: route.name,
+          theme,
+          viewportName: viewport.name,
+          fileName,
+          artifactPath: `${outputDir}/${fileName}`,
+          expectedText: route.expectedText,
+          openFilingTab: route.openFilingTab,
+          reviewStatus: "required-review",
+          layoutChecks: visualSmokeLayoutChecks,
+        };
+      }),
+    ),
+  );
+}

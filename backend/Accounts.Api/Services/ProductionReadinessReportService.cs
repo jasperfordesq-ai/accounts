@@ -173,6 +173,17 @@ public sealed record VisualQaRoute(
     IReadOnlyList<string> WorkflowStages,
     bool OpenFilingTab);
 
+public sealed record VisualQaArtifact(
+    string RouteCode,
+    string Theme,
+    string ViewportName,
+    string FileName,
+    string ArtifactPath,
+    string RequiredText,
+    bool OpenFilingTab,
+    string ReviewStatus,
+    IReadOnlyList<string> LayoutChecks);
+
 public sealed record VisualQaCoverage(
     string ArtifactName,
     string Enforcement,
@@ -180,7 +191,8 @@ public sealed record VisualQaCoverage(
     IReadOnlyList<string> LayoutChecks,
     IReadOnlyList<string> Themes,
     IReadOnlyList<VisualQaViewport> Viewports,
-    IReadOnlyList<VisualQaRoute> Routes);
+    IReadOnlyList<VisualQaRoute> Routes,
+    IReadOnlyList<VisualQaArtifact> Artifacts);
 
 public sealed record ProductionAssurancePacket(
     string PacketId,
@@ -1661,6 +1673,23 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 OpenFilingTab: false)
         };
 
+        var artifacts = routes
+            .SelectMany(route => themes.SelectMany(theme => viewports.Select(viewport =>
+            {
+                var fileName = $"{route.Code}-{theme}-{viewport.Name}.png";
+                return new VisualQaArtifact(
+                    route.Code,
+                    theme,
+                    viewport.Name,
+                    fileName,
+                    $"artifacts/visual-smoke/{fileName}",
+                    route.RequiredText,
+                    route.OpenFilingTab,
+                    "required-review",
+                    layoutChecks);
+            })))
+            .ToArray();
+
         return new VisualQaCoverage(
             "visual-smoke-screenshots",
             "ci-production-smoke",
@@ -1668,6 +1697,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             layoutChecks,
             themes,
             viewports,
-            routes);
+            routes,
+            artifacts);
     }
 }

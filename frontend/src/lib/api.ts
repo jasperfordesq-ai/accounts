@@ -1728,6 +1728,18 @@ export interface VisualQaRoute {
   openFilingTab: boolean;
 }
 
+export interface VisualQaArtifact {
+  routeCode: string;
+  theme: string;
+  viewportName: string;
+  fileName: string;
+  artifactPath: string;
+  requiredText: string;
+  openFilingTab: boolean;
+  reviewStatus: string;
+  layoutChecks: string[];
+}
+
 export interface VisualQaCoverage {
   artifactName: string;
   enforcement: string;
@@ -1736,6 +1748,7 @@ export interface VisualQaCoverage {
   themes: string[];
   viewports: VisualQaViewport[];
   routes: VisualQaRoute[];
+  artifacts: VisualQaArtifact[];
 }
 
 export interface ProductionAssurancePacket {
@@ -1991,6 +2004,18 @@ const visualQaRouteSchema = z.object({
   openFilingTab: z.boolean(),
 });
 
+const visualQaArtifactSchema = z.object({
+  routeCode: z.string().min(1),
+  theme: z.string().min(1),
+  viewportName: z.string().min(1),
+  fileName: z.string().min(1),
+  artifactPath: z.string().min(1),
+  requiredText: z.string().min(1),
+  openFilingTab: z.boolean(),
+  reviewStatus: z.string().min(1),
+  layoutChecks: z.array(z.string().min(1)),
+});
+
 const visualQaCoverageSchema = z.object({
   artifactName: z.string().min(1),
   enforcement: z.string().min(1),
@@ -1999,6 +2024,7 @@ const visualQaCoverageSchema = z.object({
   themes: z.array(z.string().min(1)),
   viewports: z.array(visualQaViewportSchema),
   routes: z.array(visualQaRouteSchema),
+  artifacts: z.array(visualQaArtifactSchema),
 });
 
 export const productionReadinessReportSchema = z.object({
@@ -2067,11 +2093,17 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
     report.visualQaCoverage.expectedScreenshotCount,
   );
   assertExpectedNumber(
+    "visualQaCoverage.artifacts.length",
+    report.visualQaCoverage.expectedScreenshotCount,
+    report.visualQaCoverage.artifacts.length,
+  );
+  assertExpectedNumber(
     "assurancePacket.visualQaExpectedScreenshots",
     report.visualQaCoverage.expectedScreenshotCount,
     report.assurancePacket.visualQaExpectedScreenshots,
   );
   assertAssuranceActionsRiskOrder(report.assuranceActions);
+  assertVisualQaArtifacts(report);
 
   const expectedWorkflowStages = [
     "Setup",
@@ -2174,6 +2206,84 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
   });
 }
 
+function assertVisualQaArtifacts(report: ProductionReadinessReport) {
+  const routeByCode = new Map(report.visualQaCoverage.routes.map((route) => [route.code, route]));
+  const themes = new Set(report.visualQaCoverage.themes);
+  const viewports = new Set(report.visualQaCoverage.viewports.map((viewport) => viewport.name));
+  const artifactsByKey = new Map<string, VisualQaArtifact>();
+
+  report.visualQaCoverage.artifacts.forEach((artifact, artifactIndex) => {
+    const route = routeByCode.get(artifact.routeCode);
+    if (!route) {
+      throw new Error(
+        `Invalid production readiness report contract: visualQaCoverage.artifacts.${artifactIndex}.routeCode - must reference a visual QA route`,
+      );
+    }
+
+    if (!themes.has(artifact.theme)) {
+      throw new Error(
+        `Invalid production readiness report contract: visualQaCoverage.artifacts.${artifactIndex}.theme - must reference a configured visual QA theme`,
+      );
+    }
+
+    if (!viewports.has(artifact.viewportName)) {
+      throw new Error(
+        `Invalid production readiness report contract: visualQaCoverage.artifacts.${artifactIndex}.viewportName - must reference a configured visual QA viewport`,
+      );
+    }
+
+    const key = visualQaArtifactKey(artifact.routeCode, artifact.theme, artifact.viewportName);
+    if (artifactsByKey.has(key)) {
+      throw new Error(
+        `Invalid production readiness report contract: visualQaCoverage.artifacts.${artifactIndex} - duplicate artifact for ${key}`,
+      );
+    }
+    artifactsByKey.set(key, artifact);
+
+    const expectedFileName = `${artifact.routeCode}-${artifact.theme}-${artifact.viewportName}.png`;
+    if (artifact.fileName !== expectedFileName || artifact.artifactPath !== `artifacts/visual-smoke/${expectedFileName}`) {
+      throw new Error(
+        `Invalid production readiness report contract: visualQaCoverage.artifacts.${artifactIndex}.artifactPath - must match the visual smoke screenshot naming convention`,
+      );
+    }
+
+    if (artifact.requiredText !== route.requiredText || artifact.openFilingTab !== route.openFilingTab) {
+      throw new Error(
+        `Invalid production readiness report contract: visualQaCoverage.artifacts.${artifactIndex}.requiredText - must mirror the visual QA route capture target`,
+      );
+    }
+
+    if (artifact.reviewStatus !== "required-review") {
+      throw new Error(
+        `Invalid production readiness report contract: visualQaCoverage.artifacts.${artifactIndex}.reviewStatus - screenshots must require named review`,
+      );
+    }
+
+    assertStringArrayEqual(
+      `visualQaCoverage.artifacts.${artifactIndex}.layoutChecks`,
+      report.visualQaCoverage.layoutChecks,
+      artifact.layoutChecks,
+    );
+  });
+
+  report.visualQaCoverage.routes.forEach((route) => {
+    report.visualQaCoverage.themes.forEach((theme) => {
+      report.visualQaCoverage.viewports.forEach((viewport) => {
+        const key = visualQaArtifactKey(route.code, theme, viewport.name);
+        if (!artifactsByKey.has(key)) {
+          throw new Error(
+            `Invalid production readiness report contract: visualQaCoverage.artifacts - missing screenshot artifact for ${key}`,
+          );
+        }
+      });
+    });
+  });
+}
+
+function visualQaArtifactKey(routeCode: string, theme: string, viewportName: string) {
+  return `${routeCode}/${theme}/${viewportName}`;
+}
+
 function assertReleaseReviewChecklist(report: ProductionReadinessReport) {
   const assuranceActionCodes = new Set(report.assuranceActions.map((action) => action.code));
   const operationalGateCodes = new Set(report.operationalGates.map((gate) => gate.code));
@@ -2227,6 +2337,14 @@ function assertAssuranceActionsRiskOrder(actions: ProductionReadinessAssuranceAc
       );
     }
   });
+}
+
+function assertStringArrayEqual(path: string, expected: string[], received: string[]) {
+  if (expected.length !== received.length || expected.some((value, index) => value !== received[index])) {
+    throw new Error(
+      `Invalid production readiness report contract: ${path} - expected ${expected.join(", ")}, received ${received.join(", ")}`,
+    );
+  }
 }
 
 function assertExpectedNumber(path: string, expected: number, received: number) {

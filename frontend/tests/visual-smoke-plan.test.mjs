@@ -9,6 +9,7 @@ import {
   visualSmokeThemes,
   visualSmokeViewports,
   expectedVisualSmokeScreenshotCount,
+  expectedVisualSmokeArtifacts,
 } from "../scripts/visual-smoke-plan.mjs";
 
 describe("visual smoke plan", () => {
@@ -38,6 +39,22 @@ describe("visual smoke plan", () => {
       ],
     );
     assert.equal(expectedVisualSmokeScreenshotCount(), 24);
+    assert.equal(expectedVisualSmokeArtifacts().length, 24);
+    assert.deepEqual(expectedVisualSmokeArtifacts()[0], {
+      routeName: "dashboard",
+      theme: "light",
+      viewportName: "desktop",
+      fileName: "dashboard-light-desktop.png",
+      artifactPath: "artifacts/visual-smoke/dashboard-light-desktop.png",
+      expectedText: "Production Readiness",
+      openFilingTab: false,
+      reviewStatus: "required-review",
+      layoutChecks: visualSmokeLayoutChecks,
+    });
+    assert.equal(
+      expectedVisualSmokeArtifacts().at(-1)?.artifactPath,
+      "artifacts/visual-smoke/workbench-preview-dark-mobile.png",
+    );
 
     assert.deepEqual(
       visualSmokeRoutes.map((route) => route.name),

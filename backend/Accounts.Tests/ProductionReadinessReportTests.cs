@@ -851,6 +851,8 @@ public class ProductionReadinessReportTests
         Assert.Equal("visual-smoke-screenshots", report.VisualQaCoverage.ArtifactName);
         Assert.Equal("ci-production-smoke", report.VisualQaCoverage.Enforcement);
         Assert.Equal(24, report.VisualQaCoverage.ExpectedScreenshotCount);
+        var artifacts = ObjectListProperty(report.VisualQaCoverage, "Artifacts");
+        Assert.Equal(report.VisualQaCoverage.ExpectedScreenshotCount, artifacts.Count);
         var layoutChecksProperty = report.VisualQaCoverage.GetType().GetProperty("LayoutChecks");
         Assert.NotNull(layoutChecksProperty);
         var layoutChecks = Assert.IsAssignableFrom<IEnumerable<string>>(layoutChecksProperty!.GetValue(report.VisualQaCoverage)).ToArray();
@@ -872,6 +874,27 @@ public class ProductionReadinessReportTests
             route.Code == "filing-review" && route.OpenFilingTab && route.RequiredText == "Filing readiness profile");
         Assert.Contains(report.VisualQaCoverage.Routes, route =>
             route.Code == "workbench-preview" && route.RequiredText == "Workbench Component Preview");
+        foreach (var route in report.VisualQaCoverage.Routes)
+        {
+            foreach (var theme in report.VisualQaCoverage.Themes)
+            {
+                foreach (var viewport in report.VisualQaCoverage.Viewports)
+                {
+                    var artifact = Assert.Single(artifacts, item =>
+                        StringProperty(item, "RouteCode") == route.Code
+                        && StringProperty(item, "Theme") == theme
+                        && StringProperty(item, "ViewportName") == viewport.Name);
+                    var fileName = $"{route.Code}-{theme}-{viewport.Name}.png";
+
+                    Assert.Equal(fileName, StringProperty(artifact, "FileName"));
+                    Assert.Equal($"artifacts/visual-smoke/{fileName}", StringProperty(artifact, "ArtifactPath"));
+                    Assert.Equal(route.RequiredText, StringProperty(artifact, "RequiredText"));
+                    Assert.Equal("required-review", StringProperty(artifact, "ReviewStatus"));
+                    Assert.Equal(route.OpenFilingTab, BooleanProperty(artifact, "OpenFilingTab"));
+                    Assert.Equal(report.VisualQaCoverage.LayoutChecks, StringListProperty(artifact, "LayoutChecks"));
+                }
+            }
+        }
         var expectedWorkflowStages = new[]
         {
             "Setup",
