@@ -26,6 +26,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
   const monitoringControls = report.monitoringControls ?? [];
   const dependencyPolicyControls = report.dependencyPolicyControls ?? [];
   const deploymentSafetyControls = report.deploymentSafetyControls ?? [];
+  const sourceLawTraceability = report.sourceLawTraceability ?? [];
   const visualQaCoverage = report.visualQaCoverage;
   const assurancePacket = report.assurancePacket;
   const hardenedAreas = report.areas.filter((area) => area.status === "hardened").length;
@@ -672,6 +673,21 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
               </a>,
             ])}
           />
+          <div className="mt-4">
+            <DataTable
+              columns={["Traceability", "Used by", "Pinned"]}
+              rows={sourceLawTraceability.map((entry) => [
+                <span key="title" className="font-medium">{entry.title}</span>,
+                <span key="used" className="text-[var(--muted-foreground)]">
+                  {entry.usedBy.slice(0, 3).join(", ")}
+                  {entry.usedBy.length > 3 ? ` +${entry.usedBy.length - 3} more` : ""}
+                </span>,
+                <StatusBadge key="pinned" tone={entry.inSnapshot ? "good" : "bad"}>
+                  {entry.inSnapshot ? "Snapshot" : "Missing"}
+                </StatusBadge>,
+              ])}
+            />
+          </div>
         </ReviewPanel>
       </div>
     </WorkbenchShell>

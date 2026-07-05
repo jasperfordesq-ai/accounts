@@ -1542,6 +1542,15 @@ export interface SourceLawSnapshot {
   sources: LegalSourceReference[];
 }
 
+export interface SourceLawTraceabilityEntry {
+  sourceId: string;
+  title: string;
+  effectiveDate: string;
+  url: string;
+  inSnapshot: boolean;
+  usedBy: string[];
+}
+
 export interface ProductionReadinessArea {
   code: string;
   label: string;
@@ -1711,6 +1720,7 @@ export interface ProductionReadinessReport {
   companiesInDatabase: number;
   periodsInDatabase: number;
   sourceLawSnapshot: SourceLawSnapshot;
+  sourceLawTraceability: SourceLawTraceabilityEntry[];
   assurancePacket: ProductionAssurancePacket;
   accountantAcceptanceCriteria: AccountantAcceptanceCriterion[];
   areas: ProductionReadinessArea[];
@@ -1740,6 +1750,15 @@ const sourceLawSnapshotSchema = z.object({
   contentHash: z.string().regex(/^sha256:[0-9a-f]{64}$/),
   sourceCount: z.number().int().nonnegative(),
   sources: z.array(legalSourceReferenceSchema),
+});
+
+const sourceLawTraceabilityEntrySchema = z.object({
+  sourceId: z.string().min(1),
+  title: z.string().min(1),
+  effectiveDate: z.string().min(1),
+  url: z.string().url(),
+  inSnapshot: z.boolean(),
+  usedBy: z.array(z.string().min(1)),
 });
 
 const productionAssurancePacketSchema = z.object({
@@ -1909,6 +1928,7 @@ export const productionReadinessReportSchema = z.object({
   companiesInDatabase: z.number(),
   periodsInDatabase: z.number(),
   sourceLawSnapshot: sourceLawSnapshotSchema,
+  sourceLawTraceability: z.array(sourceLawTraceabilityEntrySchema),
   assurancePacket: productionAssurancePacketSchema,
   accountantAcceptanceCriteria: z.array(accountantAcceptanceCriterionSchema),
   areas: z.array(productionReadinessAreaSchema),
@@ -1947,6 +1967,11 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
     report.sourceLawSnapshot.sourceCount,
   );
   assertExpectedNumber(
+    "sourceLawTraceability.length",
+    report.sourceLawSnapshot.sourceCount,
+    report.sourceLawTraceability.length,
+  );
+  assertExpectedNumber(
     "assurancePacket.goldenCorpusTotal",
     report.goldenFilingCorpus.length,
     report.assurancePacket.goldenCorpusTotal,
@@ -1971,6 +1996,41 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
   if (missingAcceptanceCriteria.length > 0) {
     throw new Error(
       `Invalid production readiness report contract: accountantAcceptanceCriteria - missing acceptance criteria for golden scenarios: ${missingAcceptanceCriteria.join(", ")}`,
+    );
+  }
+
+  const snapshotSourceIds = new Set(report.sourceLawSnapshot.sources.map((source) => source.sourceId));
+  const traceabilitySourceIds = new Set(report.sourceLawTraceability.map((entry) => entry.sourceId));
+  const missingTraceability = [...snapshotSourceIds]
+    .filter((sourceId) => !traceabilitySourceIds.has(sourceId))
+    .sort();
+  const unexpectedTraceability = [...traceabilitySourceIds]
+    .filter((sourceId) => !snapshotSourceIds.has(sourceId))
+    .sort();
+
+  if (missingTraceability.length > 0 || unexpectedTraceability.length > 0) {
+    throw new Error(
+      `Invalid production readiness report contract: sourceLawTraceability - expected snapshot source ids only; missing ${missingTraceability.join(", ") || "none"}, unexpected ${unexpectedTraceability.join(", ") || "none"}`,
+    );
+  }
+
+  report.sourceLawTraceability.forEach((entry, entryIndex) => {
+    if (!entry.inSnapshot) {
+      throw new Error(
+        `Invalid production readiness report contract: sourceLawTraceability.${entryIndex}.inSnapshot - every production source must be pinned in the snapshot`,
+      );
+    }
+
+    if (entry.usedBy.length === 0) {
+      throw new Error(
+        `Invalid production readiness report contract: sourceLawTraceability.${entryIndex}.usedBy - every pinned source must have at least one usage`,
+      );
+    }
+  });
+
+  if (!report.assurancePacket.evidenceItems.includes("source-law-traceability-index")) {
+    throw new Error(
+      "Invalid production readiness report contract: assurancePacket.evidenceItems - source-law-traceability-index is required",
     );
   }
 

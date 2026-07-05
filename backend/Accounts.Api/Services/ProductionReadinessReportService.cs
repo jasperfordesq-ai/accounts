@@ -35,6 +35,14 @@ public sealed record GoldenFilingCorpusScenario(
     IReadOnlyList<string> Assertions,
     GoldenFilingCorpusEvidencePack EvidencePack);
 
+public sealed record SourceLawTraceabilityEntry(
+    string SourceId,
+    string Title,
+    string EffectiveDate,
+    string Url,
+    bool InSnapshot,
+    IReadOnlyList<string> UsedBy);
+
 public sealed record StatutoryRuleMatrixEntry(
     string Code,
     string CompanyScope,
@@ -158,6 +166,7 @@ public sealed record ProductionReadinessReport(
     int CompaniesInDatabase,
     int PeriodsInDatabase,
     SourceLawSnapshot SourceLawSnapshot,
+    IReadOnlyList<SourceLawTraceabilityEntry> SourceLawTraceability,
     ProductionAssurancePacket AssurancePacket,
     IReadOnlyList<AccountantAcceptanceCriterion> AccountantAcceptanceCriteria,
     IReadOnlyList<ProductionReadinessArea> Areas,
@@ -193,6 +202,12 @@ public class ProductionReadinessReportService(AccountsDbContext db)
         var deploymentSafetyControls = BuildDeploymentSafetyControls();
         var accountantAcceptanceCriteria = BuildAccountantAcceptanceCriteria();
         var visualQaCoverage = BuildVisualQaCoverage();
+        var sourceLawTraceability = BuildSourceLawTraceability(
+            sourceSnapshot,
+            goldenCorpus,
+            statutoryRuleMatrix,
+            statutoryRulesCoverage,
+            accountantAcceptanceCriteria);
         var assurancePacket = BuildAssurancePacket(
             sourceSnapshot,
             goldenCorpus,
@@ -208,6 +223,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             companies,
             periods,
             sourceSnapshot,
+            sourceLawTraceability,
             assurancePacket,
             accountantAcceptanceCriteria,
             areas,
@@ -258,6 +274,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
         var evidenceItems = new[]
         {
             "source-law-snapshot-fingerprint",
+            "source-law-traceability-index",
             "golden-filing-corpus",
             "statutory-rules-matrix",
             "statutory-rules-coverage",
@@ -292,6 +309,71 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             releaseBlockers);
 
         return packetWithoutId with { PacketId = ComputeAssurancePacketId(packetWithoutId) };
+    }
+
+    private static IReadOnlyList<SourceLawTraceabilityEntry> BuildSourceLawTraceability(
+        SourceLawSnapshot sourceSnapshot,
+        IReadOnlyList<GoldenFilingCorpusScenario> goldenCorpus,
+        IReadOnlyList<StatutoryRuleMatrixEntry> statutoryRuleMatrix,
+        IReadOnlyList<StatutoryRulesCoverageItem> statutoryRulesCoverage,
+        IReadOnlyList<AccountantAcceptanceCriterion> accountantAcceptanceCriteria)
+    {
+        var sourceUsages = sourceSnapshot.Sources.ToDictionary(
+            source => source.SourceId,
+            _ => new SortedSet<string>(StringComparer.Ordinal),
+            StringComparer.Ordinal);
+
+        void AddUsage(LegalSourceReference source, string usage)
+        {
+            if (!sourceUsages.TryGetValue(source.SourceId, out var usages))
+            {
+                usages = new SortedSet<string>(StringComparer.Ordinal);
+                sourceUsages[source.SourceId] = usages;
+            }
+
+            usages.Add(usage);
+        }
+
+        foreach (var scenario in goldenCorpus)
+        {
+            foreach (var source in scenario.EvidencePack.SourceReferences)
+                AddUsage(source, $"golden-corpus:{scenario.Code}");
+        }
+
+        foreach (var row in statutoryRuleMatrix)
+        {
+            foreach (var source in row.Sources)
+                AddUsage(source, $"statutory-rule-matrix:{row.Code}");
+        }
+
+        foreach (var coverage in statutoryRulesCoverage)
+        {
+            foreach (var source in coverage.Sources)
+                AddUsage(source, $"statutory-rules-coverage:{coverage.Code}");
+        }
+
+        foreach (var criterion in accountantAcceptanceCriteria)
+        {
+            foreach (var source in criterion.Sources)
+                AddUsage(source, $"accountant-acceptance:{criterion.ScenarioCode}");
+        }
+
+        var snapshotBySourceId = sourceSnapshot.Sources.ToDictionary(source => source.SourceId, StringComparer.Ordinal);
+        return sourceUsages
+            .OrderBy(pair => pair.Key, StringComparer.Ordinal)
+            .Select(pair =>
+            {
+                var inSnapshot = snapshotBySourceId.TryGetValue(pair.Key, out var source);
+                var reference = source ?? new LegalSourceReference(pair.Key, pair.Key, sourceSnapshot.SnapshotDate, "");
+                return new SourceLawTraceabilityEntry(
+                    reference.SourceId,
+                    reference.Title,
+                    reference.EffectiveDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                    reference.Url,
+                    inSnapshot,
+                    pair.Value.ToArray());
+            })
+            .ToArray();
     }
 
     private static IReadOnlyList<ProductionReadinessArea> BuildAreas() =>

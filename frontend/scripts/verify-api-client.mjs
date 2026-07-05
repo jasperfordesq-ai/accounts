@@ -104,6 +104,18 @@ function productionReadinessReportFixture() {
       sourceCount: 1,
       sources: [source("frc-frs-105", "FRC FRS 105 current edition and amendments")],
     },
+    sourceLawTraceability: [
+      {
+        ...source("frc-frs-105", "FRC FRS 105 current edition and amendments"),
+        inSnapshot: true,
+        usedBy: [
+          "golden-corpus:micro-ltd",
+          "statutory-rule-matrix:ltd-micro",
+          "statutory-rules-coverage:size-classification-thresholds",
+          "accountant-acceptance:micro-ltd",
+        ],
+      },
+    ],
     assurancePacket: {
       packetId: "assurance-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       packetVersion: "production-assurance-packet-v1",
@@ -116,7 +128,7 @@ function productionReadinessReportFixture() {
       visualQaExpectedScreenshots: 4,
       requiredOperationalGates: 1,
       openCriticalActions: 1,
-      evidenceItems: ["source-law-snapshot-fingerprint", "golden-filing-corpus", "visual-smoke-screenshots"],
+      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "golden-filing-corpus", "visual-smoke-screenshots"],
       releaseBlockers: ["Qualified accountant sign-off required"],
     },
     accountantAcceptanceCriteria: [

@@ -39,6 +39,16 @@ function sampleReport(): ProductionReadinessReport {
         },
       ],
     },
+    sourceLawTraceability: [
+      {
+        sourceId: "revenue-accepted-taxonomies",
+        title: "Revenue accepted iXBRL taxonomies",
+        effectiveDate: "2025-11-06",
+        url: "https://www.revenue.ie/",
+        inSnapshot: true,
+        usedBy: ["statutory-rule-matrix:ltd-micro"],
+      },
+    ],
     assurancePacket: {
       packetId: "assurance-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       packetVersion: "production-assurance-packet-v1",
@@ -51,7 +61,7 @@ function sampleReport(): ProductionReadinessReport {
       visualQaExpectedScreenshots: 24,
       requiredOperationalGates: 1,
       openCriticalActions: 1,
-      evidenceItems: ["source-law-snapshot-fingerprint", "golden-filing-corpus", "visual-smoke-screenshots"],
+      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "golden-filing-corpus", "visual-smoke-screenshots"],
       releaseBlockers: ["Qualified accountant sign-off required"],
     },
     accountantAcceptanceCriteria: [

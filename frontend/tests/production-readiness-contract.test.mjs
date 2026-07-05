@@ -13,6 +13,9 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.equal(parsed.goldenFilingCorpus[0].evidencePack.sourceReferences[0].sourceId, "frc-frs-105");
   assert.equal(parsed.sourceLawSnapshot.sourceCount, 1);
   assert.equal(parsed.sourceLawSnapshot.contentHash, "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+  assert.equal(parsed.sourceLawTraceability[0].sourceId, "frc-frs-105");
+  assert.equal(parsed.sourceLawTraceability[0].inSnapshot, true);
+  assert.equal(parsed.sourceLawTraceability[0].usedBy[0], "golden-corpus:micro-ltd");
   assert.equal(parsed.statutoryRulesCoverage[0].code, "size-classification-thresholds");
   assert.equal(parsed.statutoryRulesCoverage[0].automatedVerifierNames[0], "AccountsWorkflowTests.SizeClassification_FirstYearMicro_AllowsMicroAndAuditExemption");
   assert.equal(parsed.statutoryRulesCoverage[0].edgeCases[0], "two-of-three threshold rule");
@@ -28,6 +31,7 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.equal(parsed.assurancePacket.packetVersion, "production-assurance-packet-v1");
   assert.equal(parsed.assurancePacket.sourceLawSnapshotHash, "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
   assert.equal(parsed.assurancePacket.goldenCorpusCovered, 1);
+  assert.ok(parsed.assurancePacket.evidenceItems.includes("source-law-traceability-index"));
   assert.equal(parsed.assurancePacket.releaseBlockers[0], "Qualified accountant sign-off required");
 });
 
@@ -83,6 +87,25 @@ test("parseProductionReadinessReport rejects inconsistent production assurance c
   );
 });
 
+test("parseProductionReadinessReport rejects incomplete source-law traceability", () => {
+  const missingUsagePayload = sampleReport();
+  missingUsagePayload.sourceLawTraceability[0].usedBy = [];
+
+  assert.throws(
+    () => parseProductionReadinessReport(missingUsagePayload),
+    /Invalid production readiness report contract: sourceLawTraceability\.0\.usedBy - every pinned source must have at least one usage/,
+  );
+
+  const missingEvidencePayload = sampleReport();
+  missingEvidencePayload.assurancePacket.evidenceItems =
+    missingEvidencePayload.assurancePacket.evidenceItems.filter((item) => item !== "source-law-traceability-index");
+
+  assert.throws(
+    () => parseProductionReadinessReport(missingEvidencePayload),
+    /Invalid production readiness report contract: assurancePacket\.evidenceItems - source-law-traceability-index is required/,
+  );
+});
+
 test("parseProductionReadinessReport rejects proof points whose verifier is not listed on the scenario", () => {
   const payload = sampleReport();
   payload.goldenFilingCorpus[0].evidencePack.expectedProofPoints[0].automatedVerifier =
@@ -107,6 +130,18 @@ function sampleReport() {
       sourceCount: 1,
       sources: [source("frc-frs-105", "FRC FRS 105 current edition and amendments")],
     },
+    sourceLawTraceability: [
+      {
+        ...source("frc-frs-105", "FRC FRS 105 current edition and amendments"),
+        inSnapshot: true,
+        usedBy: [
+          "golden-corpus:micro-ltd",
+          "statutory-rule-matrix:ltd-micro",
+          "statutory-rules-coverage:size-classification-thresholds",
+          "accountant-acceptance:micro-ltd",
+        ],
+      },
+    ],
     assurancePacket: {
       packetId: "assurance-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       packetVersion: "production-assurance-packet-v1",
@@ -119,7 +154,7 @@ function sampleReport() {
       visualQaExpectedScreenshots: 4,
       requiredOperationalGates: 1,
       openCriticalActions: 1,
-      evidenceItems: ["source-law-snapshot-fingerprint", "golden-filing-corpus", "visual-smoke-screenshots"],
+      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "golden-filing-corpus", "visual-smoke-screenshots"],
       releaseBlockers: ["Qualified accountant sign-off required"],
     },
     accountantAcceptanceCriteria: [

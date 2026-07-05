@@ -106,6 +106,42 @@ public class ProductionReadinessReportTests
     }
 
     [Fact]
+    public async Task ProductionReadinessReport_ExposesSourceLawTraceabilityIndex()
+    {
+        await using var db = CreateDbContext();
+        var report = await new ProductionReadinessReportService(db).GetReportAsync();
+        var traceabilityProperty = report.GetType().GetProperty("SourceLawTraceability");
+
+        Assert.NotNull(traceabilityProperty);
+        var traceability = Assert.IsAssignableFrom<System.Collections.IEnumerable>(traceabilityProperty!.GetValue(report))
+            .Cast<object>()
+            .ToArray();
+        var snapshotSources = report.SourceLawSnapshot.Sources.ToDictionary(source => source.SourceId);
+
+        Assert.Equal(
+            snapshotSources.Keys.Order(StringComparer.Ordinal),
+            traceability.Select(entry => StringProperty(entry, "SourceId")).Order(StringComparer.Ordinal));
+        Assert.All(traceability, entry =>
+        {
+            var source = snapshotSources[StringProperty(entry, "SourceId")];
+            Assert.True(BooleanProperty(entry, "InSnapshot"));
+            Assert.Equal(source.Title, StringProperty(entry, "Title"));
+            Assert.Equal(source.Url, StringProperty(entry, "Url"));
+            Assert.Equal(source.EffectiveDate.ToString("yyyy-MM-dd"), StringProperty(entry, "EffectiveDate"));
+            Assert.NotEmpty(StringListProperty(entry, "UsedBy"));
+        });
+
+        Assert.Contains(traceability, entry =>
+            StringProperty(entry, "SourceId") == IrishStatutoryRuleSources.CroAuditorsReport.SourceId
+            && StringListProperty(entry, "UsedBy").Any(usage => usage == "golden-corpus:medium-audit-required")
+            && StringListProperty(entry, "UsedBy").Any(usage => usage == "statutory-rule-matrix:medium-audit-required"));
+        Assert.Contains(traceability, entry =>
+            StringProperty(entry, "SourceId") == IrishStatutoryRuleSources.CroUnlimitedCompany.SourceId
+            && StringListProperty(entry, "UsedBy").Any(usage => usage.Contains("unsupported", StringComparison.OrdinalIgnoreCase)));
+        Assert.Contains(report.AssurancePacket.EvidenceItems, item => item == "source-law-traceability-index");
+    }
+
+    [Fact]
     public async Task GoldenCorpusCoverage_IsBackedByConcreteAutomatedEvidenceTests()
     {
         await using var db = CreateDbContext();
