@@ -81,8 +81,8 @@ export function FilingReviewCentre({
 
               <SignOffPacketPanel packet={filingReadinessProfile.signOffPacket} />
 
-              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
-                <div className="space-y-3">
+              <div className="grid min-w-0 max-w-full gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
+                <div className="min-w-0 max-w-full space-y-3">
                   <SectionHeader
                     eyebrow="Required evidence"
                     title="Professional filing gate"
@@ -90,7 +90,7 @@ export function FilingReviewCentre({
                   />
                   <EvidenceChecklist items={filingReadinessProfile.requiredEvidence} />
                 </div>
-                <div className="space-y-3">
+                <div className="min-w-0 max-w-full space-y-3">
                   <div className="rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-4">
                     <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Submission controls</p>
                     <div className="mt-3 space-y-2 text-sm text-[var(--foreground)]">
