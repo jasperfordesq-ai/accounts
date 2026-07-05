@@ -978,7 +978,8 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 "DAC company type and size classification recorded",
                 "Audit exemption and filing regime confirmed",
                 "Director and secretary evidence recorded",
-                "Named qualified-accountant review recorded"
+                "Named qualified-accountant review recorded",
+                "External ROS/iXBRL validation evidence recorded before Revenue use"
             ],
             [
                 "Small company financial statements PDF",
@@ -993,7 +994,8 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             [
                 IrishStatutoryRuleSources.CroFinancialStatementsRequirements,
                 IrishStatutoryRuleSources.FrcFrs102,
-                IrishStatutoryRuleSources.RevenueIxbrlOverview
+                IrishStatutoryRuleSources.RevenueIxbrlOverview,
+                IrishStatutoryRuleSources.RevenueAcceptedTaxonomies
             ]),
         new(
             "clg-non-charity",
@@ -1014,13 +1016,15 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             ],
             [
                 "Manual handoff if charity status, audit requirement, regulated exclusions or group context are detected",
+                "External ROS/iXBRL validation remains a manual evidence gate",
                 "No direct CRO/ROS submission automation"
             ],
             [
                 IrishStatutoryRuleSources.CroGuaranteeCompany,
                 IrishStatutoryRuleSources.CroFinancialStatementsRequirements,
                 IrishStatutoryRuleSources.FrcFrs102,
-                IrishStatutoryRuleSources.RevenueIxbrlOverview
+                IrishStatutoryRuleSources.RevenueIxbrlOverview,
+                IrishStatutoryRuleSources.RevenueAcceptedTaxonomies
             ]),
         new(
             "clg-charity",
@@ -1041,12 +1045,15 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             ],
             [
                 "Charity annual return must be manually reviewed before use",
+                "External ROS/iXBRL validation remains a manual evidence gate where corporation tax filing applies",
                 "Manual handoff required for complex charity governance, restricted funds or regulator-specific queries"
             ],
             [
                 IrishStatutoryRuleSources.CroGuaranteeCompany,
                 IrishStatutoryRuleSources.CharitiesRegulatorAnnualReport,
-                IrishStatutoryRuleSources.FrcFrs102
+                IrishStatutoryRuleSources.FrcFrs102,
+                IrishStatutoryRuleSources.RevenueIxbrlOverview,
+                IrishStatutoryRuleSources.RevenueAcceptedTaxonomies
             ]),
         new(
             "medium-audit-required",
@@ -1066,6 +1073,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             ],
             [
                 "Final outputs remain blocked until signed auditor report evidence is recorded",
+                "External ROS/iXBRL validation remains a manual evidence gate",
                 "Manual professional handoff required before approval or submission states"
             ],
             [
@@ -1073,7 +1081,8 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 IrishStatutoryRuleSources.CroMediumCompany,
                 IrishStatutoryRuleSources.CroAuditorsReport,
                 IrishStatutoryRuleSources.FrcFrs102,
-                IrishStatutoryRuleSources.RevenueIxbrlOverview
+                IrishStatutoryRuleSources.RevenueIxbrlOverview,
+                IrishStatutoryRuleSources.RevenueAcceptedTaxonomies
             ]),
         new(
             "unsupported-regulated-group",

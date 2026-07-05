@@ -815,6 +815,18 @@ public class ProductionReadinessReportTests
             && row.SupportLevel == "unsupported"
             && row.ManualHandoffGates.Any(gate => gate.Contains("fail closed", StringComparison.OrdinalIgnoreCase)));
 
+        var ixbrlRows = report.StatutoryRuleMatrix
+            .Where(row => row.RequiredOutputs.Any(output => output.Contains("iXBRL", StringComparison.OrdinalIgnoreCase)))
+            .ToArray();
+        Assert.NotEmpty(ixbrlRows);
+        Assert.All(ixbrlRows, row =>
+        {
+            Assert.Contains(row.Sources, source => source.SourceId == IrishStatutoryRuleSources.RevenueAcceptedTaxonomies.SourceId);
+            Assert.Contains(
+                row.RequiredEvidence.Concat(row.ManualHandoffGates),
+                evidence => evidence.Contains("external ROS/iXBRL validation", StringComparison.OrdinalIgnoreCase));
+        });
+
         Assert.All(report.StatutoryRuleMatrix, row =>
         {
             Assert.NotEmpty(row.RequiredEvidence);
