@@ -11,7 +11,6 @@ import {
   type ReactNode,
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Spinner } from "@heroui/react";
 import { toast } from "sonner";
 import {
   ApiError,
@@ -36,6 +35,7 @@ import {
   loginRouteForReturnTo,
   returnToFromLocation,
 } from "@/lib/navigation";
+import { WorkbenchLoadingState } from "@/components/workbench";
 
 interface AuthContextValue {
   user: AuthUser | null;
@@ -58,10 +58,9 @@ function roleIs(user: AuthUser | null, roles: string[]) {
 
 function FullPageSpinner() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[var(--background)] text-[var(--foreground)]">
-      <div className="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-300">
-        <Spinner size="sm" />
-        <span>Loading account session</span>
+    <div className="min-h-screen bg-[var(--background)] px-4 py-6 text-[var(--foreground)] sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-5xl">
+        <WorkbenchLoadingState />
       </div>
     </div>
   );
