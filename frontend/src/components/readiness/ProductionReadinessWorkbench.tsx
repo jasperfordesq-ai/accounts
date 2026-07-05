@@ -345,7 +345,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
           caption="Production monitoring"
           filterPlaceholder="Filter monitoring controls"
           emptyState="No matching monitoring controls"
-          columns={["Control", "Provider", "Safety gate", "Evidence captured", "Verification", "Status"]}
+          columns={["Control", "Provider", "Safety gate", "Alert route", "Evidence captured", "Verification", "Failure policy", "Status"]}
           rows={monitoringControls.map((control) => ({
             id: control.code,
             tone: control.required ? "good" : "warn",
@@ -353,8 +353,10 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
               control.label,
               control.provider,
               control.productionSafetyGate,
+              control.alertRoute,
               control.evidenceCaptured,
               control.verification,
+              control.failurePolicy,
             ].join(" "),
             cells: [
               <div key="control" className="min-w-48 whitespace-normal">
@@ -365,8 +367,10 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
               <code key="gate" className="break-all rounded border border-[var(--border)] bg-[var(--surface-subtle)] px-2 py-1 text-[11px] text-[var(--muted-foreground)]">
                 {control.productionSafetyGate}
               </code>,
+              <span key="alert-route" className="whitespace-normal text-[var(--muted-foreground)]">{control.alertRoute}</span>,
               <span key="evidence" className="whitespace-normal text-[var(--muted-foreground)]">{control.evidenceCaptured}</span>,
               <span key="verification" className="whitespace-normal text-[var(--muted-foreground)]">{control.verification}</span>,
+              <span key="failure-policy" className="whitespace-normal text-[var(--muted-foreground)]">{control.failurePolicy}</span>,
               <StatusBadge key="status" tone={control.required ? "good" : "warn"}>
                 {control.required ? "Required" : "Advisory"}
               </StatusBadge>,

@@ -1667,6 +1667,8 @@ export interface ProductionMonitoringControl {
   productionSafetyGate: string;
   evidenceCaptured: string;
   verification: string;
+  alertRoute: string;
+  failurePolicy: string;
 }
 
 export interface DependencyPolicyControl {
@@ -1944,6 +1946,8 @@ const productionMonitoringControlSchema = z.object({
   productionSafetyGate: z.string().min(1),
   evidenceCaptured: z.string().min(1),
   verification: z.string().min(1),
+  alertRoute: z.string().min(1),
+  failurePolicy: z.string().min(1),
 });
 
 const dependencyPolicyControlSchema = z.object({

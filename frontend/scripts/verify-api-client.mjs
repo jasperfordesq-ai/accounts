@@ -277,6 +277,8 @@ function productionReadinessReportFixture() {
         productionSafetyGate: "Monitoring:ErrorTrackingDsn",
         evidenceCaptured: "Unhandled exceptions are routed to the configured production error-tracking provider.",
         verification: "Program.cs wires UseSentry and ProductionSafetyService blocks a missing DSN.",
+        alertRoute: "Primary on-call accountant and platform owner",
+        failurePolicy: "Block release if error events cannot be routed to the on-call owner.",
       },
     ],
     dependencyPolicyControls: [

@@ -30,6 +30,8 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.equal(parsed.statutoryRulesCoverage[0].edgeCases[0], "two-of-three threshold rule");
   assert.equal(parsed.monitoringControls[0].code, "error-tracking");
   assert.equal(parsed.monitoringControls[0].productionSafetyGate, "Monitoring:ErrorTrackingDsn");
+  assert.equal(parsed.monitoringControls[0].alertRoute, "Primary on-call accountant and platform owner");
+  assert.equal(parsed.monitoringControls[0].failurePolicy, "Block release if error events cannot be routed to the on-call owner.");
   assert.equal(parsed.dependencyPolicyControls[0].code, "frontend-npm-audit");
   assert.equal(parsed.dependencyPolicyControls[0].failurePolicy, "Fail the release for moderate, high or critical npm advisories.");
   assert.equal(parsed.deploymentSafetyControls[0].code, "controlled-production-migrations");
@@ -371,6 +373,8 @@ function sampleReport() {
         productionSafetyGate: "Monitoring:ErrorTrackingDsn",
         evidenceCaptured: "Unhandled exceptions are routed to the configured production error-tracking provider.",
         verification: "Program.cs wires UseSentry and ProductionSafetyService blocks a missing DSN.",
+        alertRoute: "Primary on-call accountant and platform owner",
+        failurePolicy: "Block release if error events cannot be routed to the on-call owner.",
       },
     ],
     dependencyPolicyControls: [

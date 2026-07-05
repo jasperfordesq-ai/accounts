@@ -618,6 +618,25 @@ public class ProductionReadinessReportTests
             Assert.False(string.IsNullOrWhiteSpace(control.EvidenceCaptured));
             Assert.False(string.IsNullOrWhiteSpace(control.Verification));
         });
+
+        var alertRouteProperty = typeof(ProductionMonitoringControl).GetProperty("AlertRoute");
+        var failurePolicyProperty = typeof(ProductionMonitoringControl).GetProperty("FailurePolicy");
+        Assert.NotNull(alertRouteProperty);
+        Assert.NotNull(failurePolicyProperty);
+
+        Assert.All(report.MonitoringControls.Cast<object>(), control =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(control, "AlertRoute")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(control, "FailurePolicy")));
+        });
+        Assert.Contains(report.MonitoringControls.Cast<object>(), control =>
+            StringProperty(control, "Code") == "error-tracking"
+            && StringProperty(control, "AlertRoute").Contains("on-call", StringComparison.OrdinalIgnoreCase)
+            && StringProperty(control, "FailurePolicy").Contains("block", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(report.MonitoringControls.Cast<object>(), control =>
+            StringProperty(control, "Code") == "correlation-id-error-responses"
+            && StringProperty(control, "AlertRoute").Contains("support", StringComparison.OrdinalIgnoreCase)
+            && StringProperty(control, "FailurePolicy").Contains("correlation", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

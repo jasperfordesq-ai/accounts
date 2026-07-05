@@ -118,7 +118,9 @@ public sealed record ProductionMonitoringControl(
     bool Required,
     string ProductionSafetyGate,
     string EvidenceCaptured,
-    string Verification);
+    string Verification,
+    string AlertRoute,
+    string FailurePolicy);
 
 public sealed record DependencyPolicyControl(
     string Code,
@@ -1493,7 +1495,9 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             true,
             "Monitoring:ErrorTrackingDsn",
             "Unhandled exceptions are captured server-side with request path, HTTP method, environment and correlation id while default PII capture is disabled.",
-            "Program.cs wires UseSentry from Monitoring:ErrorTrackingDsn; ProductionSafetyService blocks non-development startup when the DSN is missing or not HTTPS."),
+            "Program.cs wires UseSentry from Monitoring:ErrorTrackingDsn; ProductionSafetyService blocks non-development startup when the DSN is missing or not HTTPS.",
+            "Primary on-call accountant and platform owner",
+            "Block release if error events cannot be routed to the on-call owner."),
         new(
             "structured-json-logs",
             "Structured JSON logs",
@@ -1501,7 +1505,9 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             true,
             "Monitoring:StructuredJsonConsole",
             "Production logs are emitted as structured JSON with scopes so log processors can index timestamps, categories, levels and correlation fields.",
-            "Program.cs switches to AddJsonConsole when Monitoring:StructuredJsonConsole is true; production compose sets the flag explicitly."),
+            "Program.cs switches to AddJsonConsole when Monitoring:StructuredJsonConsole is true; production compose sets the flag explicitly.",
+            "Platform operations log stream and release reviewer",
+            "Block release if production logs cannot be parsed by timestamp, level, category and correlation id."),
         new(
             "correlation-id-error-responses",
             "Correlation id error responses",
@@ -1509,7 +1515,9 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             true,
             "Monitoring:IncludeCorrelationId",
             "Unexpected errors return a safe generic response with the ASP.NET trace identifier; server logs carry the same identifier for triage.",
-            "ExceptionMiddleware logs ResourceNotFoundException, BusinessRuleException and unhandled exceptions with context.TraceIdentifier and writes correlationId to the JSON error response.")
+            "ExceptionMiddleware logs ResourceNotFoundException, BusinessRuleException and unhandled exceptions with context.TraceIdentifier and writes correlationId to the JSON error response.",
+            "Support triage queue and platform owner",
+            "Block release if safe error responses omit correlation ids or server logs cannot be matched to the support ticket.")
     ];
 
     private static IReadOnlyList<DependencyPolicyControl> BuildDependencyPolicyControls() =>

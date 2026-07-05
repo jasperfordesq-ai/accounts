@@ -85,6 +85,8 @@ describe("ProductionReadinessWorkbench", () => {
     expect(screen.getByText("Correlation id error responses")).toBeInTheDocument();
     expect(screen.getByText("Sentry-compatible")).toBeInTheDocument();
     expect(screen.getByText("Monitoring:ErrorTrackingDsn")).toBeInTheDocument();
+    expect(screen.getByText("Primary on-call accountant and platform owner")).toBeInTheDocument();
+    expect(screen.getByText("Block release if error events cannot be routed to the on-call owner.")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Dependency policy controls" })).toBeInTheDocument();
     expect(screen.getByText("Frontend dependency vulnerability audit")).toBeInTheDocument();
     expect(screen.getByText("CI action version hygiene")).toBeInTheDocument();
@@ -411,6 +413,8 @@ function sampleReport(): ProductionReadinessReport {
         productionSafetyGate: "Monitoring:ErrorTrackingDsn",
         evidenceCaptured: "Unhandled exceptions are routed to the configured production error-tracking provider.",
         verification: "Program.cs wires UseSentry and ProductionSafetyService blocks a missing DSN.",
+        alertRoute: "Primary on-call accountant and platform owner",
+        failurePolicy: "Block release if error events cannot be routed to the on-call owner.",
       },
       {
         code: "structured-json-logs",
