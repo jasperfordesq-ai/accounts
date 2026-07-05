@@ -134,6 +134,22 @@ public sealed record ProductionReadinessCompletionTrack(
     IReadOnlyList<string> NextActions,
     IReadOnlyList<string> AssuranceActionCodes);
 
+public sealed record ProductionReleaseBlocker(
+    string Code,
+    string TrackCode,
+    string TrackLabel,
+    string OwnerRole,
+    string Severity,
+    int RiskRank,
+    string BlockingIssue,
+    string RequiredEvidence,
+    string NextAction,
+    string SourceActionCode,
+    string ReleaseChecklistCode,
+    string OperationalGateCode,
+    string EvidenceArtifact,
+    bool BlocksRelease);
+
 public sealed record ProductionAuditabilityControl(
     string Code,
     string Label,
@@ -319,6 +335,7 @@ public sealed record ProductionReadinessReport(
     IReadOnlyList<OperationalGate> OperationalGates,
     IReadOnlyList<ProductionReadinessAssuranceAction> AssuranceActions,
     IReadOnlyList<ProductionReadinessCompletionTrack> CompletionTracks,
+    IReadOnlyList<ProductionReleaseBlocker> ReleaseBlockerRegister,
     IReadOnlyList<ProductionAuditabilityControl> AuditabilityControls,
     IReadOnlyList<AuditEvidenceTimelineEntry> AuditEvidenceTimeline,
     IReadOnlyList<ProductionMonitoringControl> MonitoringControls,
@@ -350,6 +367,10 @@ public class ProductionReadinessReportService(AccountsDbContext db)
         var deploymentSafetyControls = BuildDeploymentSafetyControls();
         var releaseReviewChecklist = BuildReleaseReviewChecklist(assuranceActions, operationalGates);
         var releaseVerificationManifest = BuildReleaseVerificationManifest();
+        var releaseBlockerRegister = BuildReleaseBlockerRegister(
+            completionTracks,
+            assuranceActions,
+            releaseReviewChecklist);
         var accountantAcceptanceCriteria = BuildAccountantAcceptanceCriteria(goldenCorpus);
         var accountantAcceptanceSummary = BuildAccountantAcceptanceSummary(goldenCorpus, accountantAcceptanceCriteria);
         var visualQaCoverage = BuildVisualQaCoverage();
@@ -388,6 +409,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             operationalGates,
             assuranceActions,
             completionTracks,
+            releaseBlockerRegister,
             auditabilityControls,
             auditEvidenceTimeline,
             monitoringControls,
@@ -443,6 +465,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "production-operational-gates",
             "dependency-policy-controls",
             "deployment-safety-controls",
+            "release-blocker-register",
             "release-review-checklist",
             "release-verification-manifest",
             "accountant-acceptance-criteria",
@@ -1575,13 +1598,15 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 "Run qualified-accountant acceptance on the golden corpus.",
                 "Record source-law change review evidence against the pinned snapshot.",
                 "Attach external ROS/iXBRL validation evidence for generated iXBRL packs.",
+                "Verify Sentry/error routing, structured logs and backup restore evidence.",
                 "Record manual handoff acceptance for audit-required paths."
             ],
             [
                 "qualified-accountant-signoff",
                 "source-law-change-review",
                 "external-ros-validation",
-                "accountant-acceptance-walkthrough"
+                "accountant-acceptance-walkthrough",
+                "production-monitoring"
             ]),
         new(
             "frontend-ui-ux",
@@ -1631,6 +1656,80 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 "light-dark-visual-regression"
             ])
     ];
+
+    private static IReadOnlyList<ProductionReleaseBlocker> BuildReleaseBlockerRegister(
+        IReadOnlyList<ProductionReadinessCompletionTrack> completionTracks,
+        IReadOnlyList<ProductionReadinessAssuranceAction> assuranceActions,
+        IReadOnlyList<ReleaseReviewChecklistItem> releaseReviewChecklist)
+    {
+        var actionsByCode = assuranceActions.ToDictionary(action => action.Code, StringComparer.Ordinal);
+        var checklistByAction = releaseReviewChecklist.ToDictionary(item => item.AssuranceActionCode, StringComparer.Ordinal);
+        var blockers = new List<ProductionReleaseBlocker>();
+
+        foreach (var track in completionTracks)
+        {
+            foreach (var actionCode in track.AssuranceActionCodes.Distinct(StringComparer.Ordinal))
+            {
+                if (!actionsByCode.TryGetValue(actionCode, out var action))
+                    throw new InvalidOperationException($"Completion track {track.Code} references unknown assurance action {actionCode}.");
+
+                if (action.Status == "complete")
+                    continue;
+
+                if (!checklistByAction.TryGetValue(action.Code, out var checklist))
+                    throw new InvalidOperationException($"Open assurance action {action.Code} does not have a release checklist item.");
+
+                blockers.Add(new ProductionReleaseBlocker(
+                    $"{track.Code}:{action.Code}",
+                    track.Code,
+                    track.Label,
+                    checklist.OwnerRole,
+                    action.Priority,
+                    action.RiskRank,
+                    FormatReleaseBlockingIssue(action),
+                    action.EvidenceRequired,
+                    SelectNextAction(track, action),
+                    action.Code,
+                    checklist.Code,
+                    checklist.OperationalGateCode,
+                    checklist.EvidenceArtifact,
+                    checklist.BlocksRelease));
+            }
+        }
+
+        return blockers
+            .OrderBy(blocker => blocker.RiskRank)
+            .ThenBy(blocker => blocker.TrackCode, StringComparer.Ordinal)
+            .ThenBy(blocker => blocker.SourceActionCode, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static string FormatReleaseBlockingIssue(ProductionReadinessAssuranceAction action) =>
+        action.Code == "qualified-accountant-signoff"
+            ? "Qualified accountant sign-off required"
+            : $"{action.Label} required";
+
+    private static string SelectNextAction(
+        ProductionReadinessCompletionTrack track,
+        ProductionReadinessAssuranceAction action)
+    {
+        var match = track.NextActions.FirstOrDefault(nextAction => action.Code switch
+        {
+            "source-law-change-review" => nextAction.Contains("source-law", StringComparison.OrdinalIgnoreCase),
+            "external-ros-validation" => nextAction.Contains("ROS/iXBRL", StringComparison.OrdinalIgnoreCase),
+            "production-monitoring" => nextAction.Contains("Sentry", StringComparison.OrdinalIgnoreCase)
+                || nextAction.Contains("backup", StringComparison.OrdinalIgnoreCase),
+            "light-dark-visual-regression" => nextAction.Contains("screenshot", StringComparison.OrdinalIgnoreCase)
+                || nextAction.Contains("visual", StringComparison.OrdinalIgnoreCase),
+            "accountant-acceptance-walkthrough" => nextAction.Contains("acceptance", StringComparison.OrdinalIgnoreCase)
+                || nextAction.Contains("visual acceptance", StringComparison.OrdinalIgnoreCase),
+            "qualified-accountant-signoff" => nextAction.Contains("qualified-accountant", StringComparison.OrdinalIgnoreCase)
+                || nextAction.Contains("acceptance", StringComparison.OrdinalIgnoreCase),
+            _ => nextAction.Contains(action.Label, StringComparison.OrdinalIgnoreCase)
+        });
+
+        return match ?? track.NextActions.FirstOrDefault() ?? action.EvidenceRequired;
+    }
 
     private static IReadOnlyList<ReleaseReviewChecklistItem> BuildReleaseReviewChecklist(
         IReadOnlyList<ProductionReadinessAssuranceAction> assuranceActions,

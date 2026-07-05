@@ -84,6 +84,7 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.ok(parsed.assurancePacket.evidenceItems.includes("source-law-traceability-index"));
   assert.ok(parsed.assurancePacket.evidenceItems.includes("release-review-checklist"));
   assert.ok(parsed.assurancePacket.evidenceItems.includes("golden-verifier-manifest"));
+  assert.ok(parsed.assurancePacket.evidenceItems.includes("release-blocker-register"));
   assert.equal(parsed.assurancePacket.releaseBlockers[0], "Qualified accountant sign-off required");
   assert.equal(parsed.assuranceActions[0].riskRank, 0);
   assert.equal(parsed.assuranceActions[0].evidenceStage, "accountant-review-gate");
@@ -98,6 +99,10 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   ]);
   assert.match(parsed.completionTracks[1].completionCriteria[0], /accountant workflow rail/i);
   assert.match(parsed.completionTracks[2].currentEvidence[0], /API client invariants/i);
+  assert.equal(parsed.releaseBlockerRegister[0].code, "backend-code:qualified-accountant-signoff");
+  assert.equal(parsed.releaseBlockerRegister[0].blockingIssue, "Qualified accountant sign-off required");
+  assert.equal(parsed.releaseBlockerRegister[0].releaseChecklistCode, "accountant-final-signoff");
+  assert.equal(parsed.releaseBlockerRegister[0].evidenceArtifact, "named-accountant-approval-record");
   assert.equal(parsed.releaseReviewChecklist[0].code, "accountant-final-signoff");
   assert.equal(parsed.releaseReviewChecklist[0].assuranceActionCode, "qualified-accountant-signoff");
   assert.equal(parsed.releaseReviewChecklist[0].evidenceArtifact, "named-accountant-approval-record");
@@ -346,6 +351,44 @@ test("parseProductionReadinessReport rejects completion tracks with unknown assu
   );
 });
 
+test("parseProductionReadinessReport rejects a missing release blocker register", () => {
+  const payload = sampleReport();
+  delete payload.releaseBlockerRegister;
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: releaseBlockerRegister/,
+  );
+});
+
+test("parseProductionReadinessReport rejects release blockers that drift from tracks and actions", () => {
+  const payload = sampleReport();
+  payload.releaseBlockerRegister[0].trackCode = "unknown-track";
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: releaseBlockerRegister\.0\.trackCode - must reference a completion track/,
+  );
+
+  const actionPayload = sampleReport();
+  actionPayload.releaseBlockerRegister[0].sourceActionCode = "unknown-action";
+
+  assert.throws(
+    () => parseProductionReadinessReport(actionPayload),
+    /Invalid production readiness report contract: releaseBlockerRegister\.0\.sourceActionCode - must reference an assurance action/,
+  );
+
+  const blockerPayload = sampleReport();
+  blockerPayload.releaseBlockerRegister = blockerPayload.releaseBlockerRegister.filter(
+    (blocker) => blocker.blockingIssue !== "Qualified accountant sign-off required",
+  );
+
+  assert.throws(
+    () => parseProductionReadinessReport(blockerPayload),
+    /Invalid production readiness report contract: releaseBlockerRegister - must cover every assurance packet release blocker/,
+  );
+});
+
 test("parseProductionReadinessReport rejects release checklist items for unknown assurance actions", () => {
   const payload = sampleReport();
   payload.releaseReviewChecklist[0].assuranceActionCode = "missing-assurance-action";
@@ -449,9 +492,15 @@ function sampleReport() {
       statutoryRuleCoverageFamilies: 1,
       visualQaExpectedScreenshots: expectedVisualSmokeScreenshotCount(),
       requiredOperationalGates: 1,
-      openCriticalActions: 1,
-      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "golden-filing-corpus", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "production-completion-map"],
-      releaseBlockers: ["Qualified accountant sign-off required"],
+      openCriticalActions: 3,
+      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "golden-filing-corpus", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-blocker-register", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "production-completion-map"],
+      releaseBlockers: [
+        "Qualified accountant sign-off required",
+        "Source-law change review required",
+        "External ROS/iXBRL validation required",
+        "Accountant acceptance walkthrough required",
+        "Light/dark visual regression required",
+      ],
     },
     accountantAcceptanceCriteria: [
       {
@@ -716,6 +765,120 @@ function sampleReport() {
         status: "in-progress",
         detail: "The accountant journey needs screenshot evidence across light and dark mode.",
         evidenceRequired: "Light/dark desktop/mobile screenshots for the main workflow routes.",
+      },
+    ],
+    releaseBlockerRegister: [
+      {
+        code: "backend-code:qualified-accountant-signoff",
+        trackCode: "backend-code",
+        trackLabel: "Backend code",
+        ownerRole: "Qualified accountant",
+        severity: "critical",
+        riskRank: 0,
+        blockingIssue: "Qualified accountant sign-off required",
+        requiredEvidence: "Named accountant approval recorded against the period.",
+        nextAction: "Run qualified-accountant acceptance on the golden corpus.",
+        sourceActionCode: "qualified-accountant-signoff",
+        releaseChecklistCode: "accountant-final-signoff",
+        operationalGateCode: "qualified-accountant-review",
+        evidenceArtifact: "named-accountant-approval-record",
+        blocksRelease: true,
+      },
+      {
+        code: "backend-code:source-law-change-review",
+        trackCode: "backend-code",
+        trackLabel: "Backend code",
+        ownerRole: "Qualified accountant and engineering",
+        severity: "critical",
+        riskRank: 2,
+        blockingIssue: "Source-law change review required",
+        requiredEvidence: "Source-law change review note and qualified-accountant sign-off recorded against the snapshot.",
+        nextAction: "Run qualified-accountant acceptance on the golden corpus.",
+        sourceActionCode: "source-law-change-review",
+        releaseChecklistCode: "source-law-change-review",
+        operationalGateCode: "qualified-accountant-review",
+        evidenceArtifact: "source-law-change-review-note",
+        blocksRelease: true,
+      },
+      {
+        code: "backend-code:external-ros-validation",
+        trackCode: "backend-code",
+        trackLabel: "Backend code",
+        ownerRole: "Reviewer",
+        severity: "critical",
+        riskRank: 5,
+        blockingIssue: "External ROS/iXBRL validation required",
+        requiredEvidence: "External ROS validation evidence uploaded or referenced.",
+        nextAction: "Attach external ROS/iXBRL validation evidence for generated iXBRL packs.",
+        sourceActionCode: "external-ros-validation",
+        releaseChecklistCode: "external-ros-validation-evidence",
+        operationalGateCode: "external-ros-validation",
+        evidenceArtifact: "external-ros-validation-reference",
+        blocksRelease: true,
+      },
+      {
+        code: "backend-code:accountant-acceptance-walkthrough",
+        trackCode: "backend-code",
+        trackLabel: "Backend code",
+        ownerRole: "Qualified accountant",
+        severity: "high",
+        riskRank: 10,
+        blockingIssue: "Accountant acceptance walkthrough required",
+        requiredEvidence: "Signed acceptance note for the golden corpus.",
+        nextAction: "Run qualified-accountant acceptance on the golden corpus.",
+        sourceActionCode: "accountant-acceptance-walkthrough",
+        releaseChecklistCode: "golden-corpus-accountant-acceptance",
+        operationalGateCode: "qualified-accountant-review",
+        evidenceArtifact: "signed-golden-corpus-acceptance-note",
+        blocksRelease: true,
+      },
+      {
+        code: "frontend-ui-ux:light-dark-visual-regression",
+        trackCode: "frontend-ui-ux",
+        trackLabel: "Frontend UI/UX",
+        ownerRole: "Engineering",
+        severity: "high",
+        riskRank: 30,
+        blockingIssue: "Light/dark visual regression required",
+        requiredEvidence: "Light/dark desktop/mobile screenshots for the main workflow routes.",
+        nextAction: "Review each screenshot route-by-route in light and dark mode.",
+        sourceActionCode: "light-dark-visual-regression",
+        releaseChecklistCode: "visual-qa-screenshot-review",
+        operationalGateCode: "",
+        evidenceArtifact: "visual-smoke-screenshots",
+        blocksRelease: true,
+      },
+      {
+        code: "frontend-ui-ux:accountant-acceptance-walkthrough",
+        trackCode: "frontend-ui-ux",
+        trackLabel: "Frontend UI/UX",
+        ownerRole: "Qualified accountant",
+        severity: "high",
+        riskRank: 10,
+        blockingIssue: "Accountant acceptance walkthrough required",
+        requiredEvidence: "Signed acceptance note for the golden corpus.",
+        nextAction: "Record named visual acceptance against the smoke manifest.",
+        sourceActionCode: "accountant-acceptance-walkthrough",
+        releaseChecklistCode: "golden-corpus-accountant-acceptance",
+        operationalGateCode: "qualified-accountant-review",
+        evidenceArtifact: "signed-golden-corpus-acceptance-note",
+        blocksRelease: true,
+      },
+      {
+        code: "frontend-code:light-dark-visual-regression",
+        trackCode: "frontend-code",
+        trackLabel: "Frontend code",
+        ownerRole: "Engineering",
+        severity: "high",
+        riskRank: 30,
+        blockingIssue: "Light/dark visual regression required",
+        requiredEvidence: "Light/dark desktop/mobile screenshots for the main workflow routes.",
+        nextAction: "Expand visual regression assertions from screenshot capture into reviewable sign-off.",
+        sourceActionCode: "light-dark-visual-regression",
+        releaseChecklistCode: "visual-qa-screenshot-review",
+        operationalGateCode: "",
+        evidenceArtifact: "visual-smoke-screenshots",
+        blocksRelease: true,
       },
     ],
     completionTracks: [

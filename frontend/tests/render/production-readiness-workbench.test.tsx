@@ -148,6 +148,13 @@ describe("ProductionReadinessWorkbench", () => {
     expectText("qualified-accountant-source-law-signoff");
     expectText(/Block release if any pinned source changes/);
     expect(screen.getAllByText("Qualified accountant sign-off required").length).toBeGreaterThan(1);
+    expect(screen.getByRole("heading", { name: "Release blocker register" })).toBeInTheDocument();
+    expect(screen.getByRole("searchbox", { name: "Filter Release blocker register" })).toBeInTheDocument();
+    expectText("backend-code:qualified-accountant-signoff");
+    expectText("frontend-ui-ux:light-dark-visual-regression");
+    expectText("named-accountant-approval-record");
+    expectText("light-dark-desktop-mobile-screenshot-review");
+    expectText("Run qualified-accountant acceptance on the golden corpus.");
     expect(screen.getByRole("heading", { name: "Release decision summary" })).toBeInTheDocument();
     expectText("2 professional sign-offs");
     expectText("1 manual handoff scenario");
@@ -471,6 +478,40 @@ function sampleReport(): ProductionReadinessReport {
         status: "in-progress",
         detail: "Capture desktop and mobile screenshots for accountant routes in both themes.",
         evidenceRequired: "Screenshot review attached to CI or release checklist.",
+      },
+    ],
+    releaseBlockerRegister: [
+      {
+        code: "backend-code:qualified-accountant-signoff",
+        trackCode: "backend-code",
+        trackLabel: "Backend code",
+        ownerRole: "Qualified accountant",
+        severity: "critical",
+        riskRank: 0,
+        blockingIssue: "Qualified accountant sign-off required",
+        requiredEvidence: "Named accountant approval record.",
+        nextAction: "Run qualified-accountant acceptance on the golden corpus.",
+        sourceActionCode: "qualified-accountant-signoff",
+        releaseChecklistCode: "accountant-final-signoff",
+        operationalGateCode: "accountant-review",
+        evidenceArtifact: "named-accountant-approval-record",
+        blocksRelease: true,
+      },
+      {
+        code: "frontend-ui-ux:light-dark-visual-regression",
+        trackCode: "frontend-ui-ux",
+        trackLabel: "Frontend UI/UX",
+        ownerRole: "Engineering",
+        severity: "high",
+        riskRank: 30,
+        blockingIssue: "Light/dark visual regression required",
+        requiredEvidence: "Screenshot review attached to CI or release checklist.",
+        nextAction: "Review each screenshot route-by-route in light and dark mode.",
+        sourceActionCode: "light-dark-visual-regression",
+        releaseChecklistCode: "visual-qa-screenshot-review",
+        operationalGateCode: "",
+        evidenceArtifact: "light-dark-desktop-mobile-screenshot-review",
+        blocksRelease: true,
       },
     ],
     completionTracks: [

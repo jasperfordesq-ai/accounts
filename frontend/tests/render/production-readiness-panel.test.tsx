@@ -315,6 +315,24 @@ function sampleReport(): ProductionReadinessReport {
         evidenceRequired: "Named accountant approval recorded against the period.",
       },
     ],
+    releaseBlockerRegister: [
+      {
+        code: "backend-code:qualified-accountant-signoff",
+        trackCode: "backend-code",
+        trackLabel: "Backend code",
+        ownerRole: "Qualified accountant",
+        severity: "critical",
+        riskRank: 0,
+        blockingIssue: "Qualified accountant sign-off required",
+        requiredEvidence: "Named accountant approval recorded against the period.",
+        nextAction: "Run qualified-accountant acceptance on the golden corpus.",
+        sourceActionCode: "qualified-accountant-signoff",
+        releaseChecklistCode: "accountant-final-signoff",
+        operationalGateCode: "qualified-accountant-review",
+        evidenceArtifact: "named-accountant-approval-record",
+        blocksRelease: true,
+      },
+    ],
     completionTracks: [
       {
         code: "backend-code",

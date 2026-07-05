@@ -27,6 +27,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
   const monitoringControls = report.monitoringControls ?? [];
   const dependencyPolicyControls = report.dependencyPolicyControls ?? [];
   const deploymentSafetyControls = report.deploymentSafetyControls ?? [];
+  const releaseBlockerRegister = report.releaseBlockerRegister ?? [];
   const releaseReviewChecklist = report.releaseReviewChecklist ?? [];
   const releaseVerificationManifest = report.releaseVerificationManifest ?? [];
   const sourceLawTraceability = report.sourceLawTraceability ?? [];
@@ -282,6 +283,76 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
               <StatusBadge key="status" tone={action.status === "complete" ? "good" : action.status === "in-progress" ? "info" : "warn"}>
                 {formatStatus(action.status)}
               </StatusBadge>,
+            ],
+          }))}
+        />
+      </ReviewPanel>
+
+      <ReviewPanel
+        title="Release blocker register"
+        description="Track-owned production blockers tied to assurance actions, release checklist evidence and the next action required to clear them."
+        actions={<StatusBadge tone={releaseBlockerRegister.some((blocker) => blocker.blocksRelease) ? "bad" : "good"}>{releaseBlockerRegister.length} blockers</StatusBadge>}
+      >
+        <DataTable
+          caption="Release blocker register"
+          filterPlaceholder="Filter release blocker register"
+          emptyState="No release blockers"
+          defaultSort={{ columnIndex: 2, direction: "asc" }}
+          columns={["Blocker", "Track", "Risk", "Evidence", "Next action", "Linked gate"]}
+          rows={releaseBlockerRegister.map((blocker) => ({
+            id: blocker.code,
+            tone: blocker.blocksRelease ? "bad" : "warn",
+            sortValues: [
+              blocker.blockingIssue,
+              blocker.trackLabel,
+              blocker.riskRank,
+              blocker.evidenceArtifact,
+              blocker.nextAction,
+              blocker.releaseChecklistCode,
+            ],
+            searchText: [
+              blocker.code,
+              blocker.trackCode,
+              blocker.trackLabel,
+              blocker.ownerRole,
+              blocker.severity,
+              blocker.riskRank,
+              blocker.blockingIssue,
+              blocker.requiredEvidence,
+              blocker.nextAction,
+              blocker.sourceActionCode,
+              blocker.releaseChecklistCode,
+              blocker.operationalGateCode,
+              blocker.evidenceArtifact,
+            ].join(" "),
+            cells: [
+              <div key="blocker" className="min-w-48 whitespace-normal">
+                <p className="font-medium">{blocker.blockingIssue}</p>
+                <code className="mt-1 block break-all text-[11px] text-[var(--muted-foreground)]">{blocker.code}</code>
+              </div>,
+              <div key="track" className="min-w-36 whitespace-normal">
+                <p className="font-medium">{blocker.trackLabel}</p>
+                <p className="mt-1 text-xs text-[var(--muted-foreground)]">{blocker.ownerRole}</p>
+                <code className="mt-1 block break-all text-[11px] text-[var(--muted-foreground)]">{blocker.trackCode}</code>
+              </div>,
+              <div key="risk" className="space-y-1">
+                <StatusBadge tone={priorityTone(blocker.severity)}>{formatStatus(blocker.severity)}</StatusBadge>
+                <StatusBadge tone={riskTone(blocker.riskRank)}>Risk {blocker.riskRank}</StatusBadge>
+              </div>,
+              <div key="evidence" className="min-w-52 whitespace-normal text-xs leading-5 text-[var(--muted-foreground)]">
+                <p className="font-medium text-[var(--foreground)]">{blocker.requiredEvidence}</p>
+                <code className="mt-1 block break-all text-[11px]">{blocker.evidenceArtifact}</code>
+              </div>,
+              <span key="next" className="min-w-52 whitespace-normal text-[var(--muted-foreground)]">{blocker.nextAction}</span>,
+              <div key="gate" className="space-y-1">
+                <code className="block break-all text-[11px] text-[var(--muted-foreground)]">{blocker.sourceActionCode}</code>
+                <code className="block break-all text-[11px] text-[var(--muted-foreground)]">{blocker.releaseChecklistCode}</code>
+                {blocker.operationalGateCode ? (
+                  <code className="block break-all text-[11px] text-[var(--muted-foreground)]">{blocker.operationalGateCode}</code>
+                ) : (
+                  <span className="text-xs text-[var(--muted-foreground)]">Checklist evidence only</span>
+                )}
+              </div>,
             ],
           }))}
         />

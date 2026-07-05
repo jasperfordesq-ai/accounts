@@ -1684,6 +1684,23 @@ export interface ProductionReadinessCompletionTrack {
   assuranceActionCodes: string[];
 }
 
+export interface ProductionReleaseBlocker {
+  code: string;
+  trackCode: string;
+  trackLabel: string;
+  ownerRole: string;
+  severity: string;
+  riskRank: number;
+  blockingIssue: string;
+  requiredEvidence: string;
+  nextAction: string;
+  sourceActionCode: string;
+  releaseChecklistCode: string;
+  operationalGateCode: string;
+  evidenceArtifact: string;
+  blocksRelease: boolean;
+}
+
 export interface ProductionAuditabilityControl {
   code: string;
   label: string;
@@ -1885,6 +1902,7 @@ export interface ProductionReadinessReport {
   operationalGates: OperationalGate[];
   assuranceActions: ProductionReadinessAssuranceAction[];
   completionTracks: ProductionReadinessCompletionTrack[];
+  releaseBlockerRegister: ProductionReleaseBlocker[];
   auditabilityControls: ProductionAuditabilityControl[];
   auditEvidenceTimeline: AuditEvidenceTimelineEntry[];
   monitoringControls: ProductionMonitoringControl[];
@@ -2062,6 +2080,23 @@ const productionReadinessCompletionTrackSchema = z.object({
   currentEvidence: z.array(z.string().min(1)),
   nextActions: z.array(z.string().min(1)),
   assuranceActionCodes: z.array(z.string().min(1)),
+});
+
+const productionReleaseBlockerSchema = z.object({
+  code: z.string().min(1),
+  trackCode: z.string().min(1),
+  trackLabel: z.string().min(1),
+  ownerRole: z.string().min(1),
+  severity: z.string().min(1),
+  riskRank: z.number().int().nonnegative(),
+  blockingIssue: z.string().min(1),
+  requiredEvidence: z.string().min(1),
+  nextAction: z.string().min(1),
+  sourceActionCode: z.string().min(1),
+  releaseChecklistCode: z.string().min(1),
+  operationalGateCode: z.string(),
+  evidenceArtifact: z.string().min(1),
+  blocksRelease: z.boolean(),
 });
 
 const productionAuditabilityControlSchema = z.object({
@@ -2249,6 +2284,7 @@ export const productionReadinessReportSchema = z.object({
   operationalGates: z.array(operationalGateSchema),
   assuranceActions: z.array(productionReadinessAssuranceActionSchema),
   completionTracks: z.array(productionReadinessCompletionTrackSchema),
+  releaseBlockerRegister: z.array(productionReleaseBlockerSchema),
   auditabilityControls: z.array(productionAuditabilityControlSchema),
   auditEvidenceTimeline: z.array(auditEvidenceTimelineEntrySchema),
   monitoringControls: z.array(productionMonitoringControlSchema),
@@ -2490,6 +2526,12 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
     );
   }
 
+  if (!report.assurancePacket.evidenceItems.includes("release-blocker-register")) {
+    throw new Error(
+      "Invalid production readiness report contract: assurancePacket.evidenceItems - release-blocker-register is required",
+    );
+  }
+
   if (!report.assurancePacket.evidenceItems.includes("release-verification-manifest")) {
     throw new Error(
       "Invalid production readiness report contract: assurancePacket.evidenceItems - release-verification-manifest is required",
@@ -2524,6 +2566,7 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
 
   assertCompletionTracks(report);
   assertReleaseReviewChecklist(report);
+  assertReleaseBlockerRegister(report);
   assertReleaseVerificationManifest(report);
 
   report.goldenFilingCorpus.forEach((scenario, scenarioIndex) => {
@@ -2803,6 +2846,87 @@ function assertCompletionTracks(report: ProductionReadinessReport) {
       }
     });
   });
+}
+
+function assertReleaseBlockerRegister(report: ProductionReadinessReport) {
+  const trackCodes = new Set(report.completionTracks.map((track) => track.code));
+  const trackLabelsByCode = new Map(report.completionTracks.map((track) => [track.code, track.label]));
+  const trackActionCodesByTrack = new Map(report.completionTracks.map((track) => [track.code, new Set(track.assuranceActionCodes)]));
+  const actionCodes = new Set(report.assuranceActions.map((action) => action.code));
+  const actionStatusesByCode = new Map(report.assuranceActions.map((action) => [action.code, action.status]));
+  const checklistByCode = new Map(report.releaseReviewChecklist.map((item) => [item.code, item]));
+  const blockerIssues = new Set<string>();
+
+  report.releaseBlockerRegister.forEach((blocker, blockerIndex) => {
+    if (!trackCodes.has(blocker.trackCode)) {
+      throw new Error(
+        `Invalid production readiness report contract: releaseBlockerRegister.${blockerIndex}.trackCode - must reference a completion track`,
+      );
+    }
+
+    if (trackLabelsByCode.get(blocker.trackCode) !== blocker.trackLabel) {
+      throw new Error(
+        `Invalid production readiness report contract: releaseBlockerRegister.${blockerIndex}.trackLabel - must mirror the completion track label`,
+      );
+    }
+
+    if (!actionCodes.has(blocker.sourceActionCode)) {
+      throw new Error(
+        `Invalid production readiness report contract: releaseBlockerRegister.${blockerIndex}.sourceActionCode - must reference an assurance action`,
+      );
+    }
+
+    if (!trackActionCodesByTrack.get(blocker.trackCode)?.has(blocker.sourceActionCode)) {
+      throw new Error(
+        `Invalid production readiness report contract: releaseBlockerRegister.${blockerIndex}.sourceActionCode - must be owned by the referenced completion track`,
+      );
+    }
+
+    const actionStatus = actionStatusesByCode.get(blocker.sourceActionCode);
+    if (actionStatus === "complete") {
+      throw new Error(
+        `Invalid production readiness report contract: releaseBlockerRegister.${blockerIndex}.sourceActionCode - completed actions must not remain release blockers`,
+      );
+    }
+
+    const checklistItem = checklistByCode.get(blocker.releaseChecklistCode);
+    if (!checklistItem) {
+      throw new Error(
+        `Invalid production readiness report contract: releaseBlockerRegister.${blockerIndex}.releaseChecklistCode - must reference a release checklist item`,
+      );
+    }
+
+    if (
+      checklistItem.assuranceActionCode !== blocker.sourceActionCode
+      || checklistItem.evidenceArtifact !== blocker.evidenceArtifact
+      || checklistItem.operationalGateCode !== blocker.operationalGateCode
+    ) {
+      throw new Error(
+        `Invalid production readiness report contract: releaseBlockerRegister.${blockerIndex}.releaseChecklistCode - must mirror linked release checklist controls`,
+      );
+    }
+
+    if (checklistItem.blocksRelease !== blocker.blocksRelease) {
+      throw new Error(
+        `Invalid production readiness report contract: releaseBlockerRegister.${blockerIndex}.blocksRelease - must mirror linked release checklist blocking state`,
+      );
+    }
+
+    blockerIssues.add(blocker.blockingIssue);
+  });
+
+  const missingPacketBlockers = report.assurancePacket.releaseBlockers
+    .filter((blocker) => !blockerIssues.has(blocker))
+    .sort();
+  const unexpectedRegisterBlockers = [...blockerIssues]
+    .filter((blocker) => !report.assurancePacket.releaseBlockers.includes(blocker))
+    .sort();
+
+  if (missingPacketBlockers.length > 0 || unexpectedRegisterBlockers.length > 0) {
+    throw new Error(
+      `Invalid production readiness report contract: releaseBlockerRegister - must cover every assurance packet release blocker; missing ${missingPacketBlockers.join(", ") || "none"}, unexpected ${unexpectedRegisterBlockers.join(", ") || "none"}`,
+    );
+  }
 }
 
 function assertReleaseReviewChecklist(report: ProductionReadinessReport) {

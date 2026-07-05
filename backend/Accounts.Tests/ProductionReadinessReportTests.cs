@@ -1117,6 +1117,64 @@ public class ProductionReadinessReportTests
     }
 
     [Fact]
+    public async Task ProductionReadinessReport_ExposesReleaseBlockerRegisterMappedToCompletionTracks()
+    {
+        await using var db = CreateDbContext();
+        var report = await new ProductionReadinessReportService(db).GetReportAsync();
+        var blockerRegisterProperty = report.GetType().GetProperty("ReleaseBlockerRegister");
+
+        Assert.NotNull(blockerRegisterProperty);
+        var blockerRegister = Assert.IsAssignableFrom<System.Collections.IEnumerable>(blockerRegisterProperty!.GetValue(report))
+            .Cast<object>()
+            .ToArray();
+
+        Assert.NotEmpty(blockerRegister);
+        Assert.Contains(report.AssurancePacket.EvidenceItems, item => item == "release-blocker-register");
+        Assert.Equal(
+            report.AssurancePacket.ReleaseBlockers.Order(StringComparer.Ordinal),
+            blockerRegister
+                .Select(item => StringProperty(item, "BlockingIssue"))
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal));
+
+        var trackCodes = report.CompletionTracks.Select(track => track.Code).ToHashSet(StringComparer.Ordinal);
+        var assuranceActionCodes = report.AssuranceActions.Select(action => action.Code).ToHashSet(StringComparer.Ordinal);
+        var checklistCodes = report.ReleaseReviewChecklist.Select(item => item.Code).ToHashSet(StringComparer.Ordinal);
+
+        Assert.Contains(blockerRegister, blocker =>
+            StringProperty(blocker, "TrackCode") == "backend-code"
+            && StringProperty(blocker, "SourceActionCode") == "qualified-accountant-signoff"
+            && StringProperty(blocker, "ReleaseChecklistCode") == "accountant-final-signoff"
+            && StringProperty(blocker, "EvidenceArtifact") == "named-accountant-approval-record"
+            && StringProperty(blocker, "BlockingIssue") == "Qualified accountant sign-off required"
+            && BooleanProperty(blocker, "BlocksRelease"));
+        Assert.Contains(blockerRegister, blocker =>
+            StringProperty(blocker, "TrackCode") == "frontend-ui-ux"
+            && StringProperty(blocker, "SourceActionCode") == "light-dark-visual-regression"
+            && StringProperty(blocker, "ReleaseChecklistCode") == "visual-qa-screenshot-review"
+            && StringProperty(blocker, "EvidenceArtifact") == "light-dark-desktop-mobile-screenshot-review"
+            && StringProperty(blocker, "RequiredEvidence").Contains("screenshot", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(blockerRegister, blocker =>
+            StringProperty(blocker, "TrackCode") == "frontend-code"
+            && StringProperty(blocker, "SourceActionCode") == "light-dark-visual-regression");
+
+        Assert.All(blockerRegister, blocker =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(blocker, "Code")));
+            Assert.Contains(StringProperty(blocker, "TrackCode"), trackCodes);
+            Assert.Contains(StringProperty(blocker, "SourceActionCode"), assuranceActionCodes);
+            Assert.Contains(StringProperty(blocker, "ReleaseChecklistCode"), checklistCodes);
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(blocker, "OwnerRole")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(blocker, "Severity")));
+            Assert.True(IntProperty(blocker, "RiskRank") >= 0);
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(blocker, "BlockingIssue")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(blocker, "RequiredEvidence")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(blocker, "EvidenceArtifact")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(blocker, "NextAction")));
+        });
+    }
+
+    [Fact]
     public async Task ProductionReadinessReport_IncludesSourceBackedStatutoryRulesMatrix()
     {
         await using var db = CreateDbContext();
