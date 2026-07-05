@@ -1552,6 +1552,20 @@ export interface SourceLawTraceabilityEntry {
   releaseGateCodes: string[];
 }
 
+export interface SourceLawMaintenanceProtocol {
+  protocolVersion: string;
+  ownerRole: string;
+  status: string;
+  reviewCadence: string;
+  nextReviewDue: string;
+  signOffGate: string;
+  changeDetection: string;
+  failurePolicy: string;
+  monitoredSourceIds: string[];
+  acceptanceCriteria: string[];
+  requiredEvidence: string[];
+}
+
 export interface ProductionReadinessArea {
   code: string;
   label: string;
@@ -1859,6 +1873,7 @@ export interface ProductionReadinessReport {
   periodsInDatabase: number;
   sourceLawSnapshot: SourceLawSnapshot;
   sourceLawTraceability: SourceLawTraceabilityEntry[];
+  sourceLawMaintenanceProtocol: SourceLawMaintenanceProtocol;
   assurancePacket: ProductionAssurancePacket;
   accountantAcceptanceCriteria: AccountantAcceptanceCriterion[];
   accountantAcceptanceSummary: AccountantAcceptanceSummary;
@@ -1903,6 +1918,20 @@ const sourceLawTraceabilityEntrySchema = z.object({
   inSnapshot: z.boolean(),
   usedBy: z.array(z.string().min(1)),
   releaseGateCodes: z.array(z.string().min(1)),
+});
+
+const sourceLawMaintenanceProtocolSchema = z.object({
+  protocolVersion: z.string().min(1),
+  ownerRole: z.string().min(1),
+  status: z.string().min(1),
+  reviewCadence: z.string().min(1),
+  nextReviewDue: z.string().min(1),
+  signOffGate: z.string().min(1),
+  changeDetection: z.string().min(1),
+  failurePolicy: z.string().min(1),
+  monitoredSourceIds: z.array(z.string().min(1)),
+  acceptanceCriteria: z.array(z.string().min(1)),
+  requiredEvidence: z.array(z.string().min(1)),
 });
 
 const productionAssurancePacketSchema = z.object({
@@ -2208,6 +2237,7 @@ export const productionReadinessReportSchema = z.object({
   periodsInDatabase: z.number(),
   sourceLawSnapshot: sourceLawSnapshotSchema,
   sourceLawTraceability: z.array(sourceLawTraceabilityEntrySchema),
+  sourceLawMaintenanceProtocol: sourceLawMaintenanceProtocolSchema,
   assurancePacket: productionAssurancePacketSchema,
   accountantAcceptanceCriteria: z.array(accountantAcceptanceCriterionSchema),
   accountantAcceptanceSummary: accountantAcceptanceSummarySchema,
@@ -2281,6 +2311,7 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
     report.assurancePacket.visualQaExpectedScreenshots,
   );
   assertAssuranceActionsRiskOrder(report.assuranceActions);
+  assertSourceLawMaintenanceProtocol(report);
   assertVisualQaArtifacts(report);
 
   const expectedWorkflowStages = [
@@ -2533,6 +2564,44 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
   if (!report.assurancePacket.evidenceItems.includes("golden-verifier-manifest")) {
     throw new Error(
       "Invalid production readiness report contract: assurancePacket.evidenceItems - golden-verifier-manifest is required",
+    );
+  }
+}
+
+function assertSourceLawMaintenanceProtocol(report: ProductionReadinessReport) {
+  const releaseChecklistCodes = new Set(report.releaseReviewChecklist.map((item) => item.code));
+  const snapshotSourceIds = report.sourceLawSnapshot.sources.map((source) => source.sourceId).sort();
+  const monitoredSourceIds = [...report.sourceLawMaintenanceProtocol.monitoredSourceIds].sort();
+
+  if (!releaseChecklistCodes.has(report.sourceLawMaintenanceProtocol.signOffGate)) {
+    throw new Error(
+      "Invalid production readiness report contract: sourceLawMaintenanceProtocol.signOffGate - must reference a release checklist item",
+    );
+  }
+
+  assertStringArrayEqual(
+    "sourceLawMaintenanceProtocol.monitoredSourceIds",
+    snapshotSourceIds,
+    monitoredSourceIds,
+  );
+
+  if (!report.assurancePacket.evidenceItems.includes("source-law-maintenance-protocol")) {
+    throw new Error(
+      "Invalid production readiness report contract: assurancePacket.evidenceItems - source-law-maintenance-protocol is required",
+    );
+  }
+
+  for (const evidence of ["source-law-snapshot-fingerprint", "source-law-traceability-index"]) {
+    if (!report.sourceLawMaintenanceProtocol.requiredEvidence.includes(evidence)) {
+      throw new Error(
+        `Invalid production readiness report contract: sourceLawMaintenanceProtocol.requiredEvidence - ${evidence} is required`,
+      );
+    }
+  }
+
+  if (report.sourceLawMaintenanceProtocol.acceptanceCriteria.length === 0) {
+    throw new Error(
+      "Invalid production readiness report contract: sourceLawMaintenanceProtocol.acceptanceCriteria - at least one criterion is required",
     );
   }
 }

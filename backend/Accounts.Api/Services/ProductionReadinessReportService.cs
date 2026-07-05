@@ -74,6 +74,19 @@ public sealed record SourceLawTraceabilityEntry(
     IReadOnlyList<string> UsedBy,
     IReadOnlyList<string> ReleaseGateCodes);
 
+public sealed record SourceLawMaintenanceProtocol(
+    string ProtocolVersion,
+    string OwnerRole,
+    string Status,
+    string ReviewCadence,
+    string NextReviewDue,
+    string SignOffGate,
+    string ChangeDetection,
+    string FailurePolicy,
+    IReadOnlyList<string> MonitoredSourceIds,
+    IReadOnlyList<string> AcceptanceCriteria,
+    IReadOnlyList<string> RequiredEvidence);
+
 public sealed record StatutoryRuleMatrixEntry(
     string Code,
     string CompanyScope,
@@ -294,6 +307,7 @@ public sealed record ProductionReadinessReport(
     int PeriodsInDatabase,
     SourceLawSnapshot SourceLawSnapshot,
     IReadOnlyList<SourceLawTraceabilityEntry> SourceLawTraceability,
+    SourceLawMaintenanceProtocol SourceLawMaintenanceProtocol,
     ProductionAssurancePacket AssurancePacket,
     IReadOnlyList<AccountantAcceptanceCriterion> AccountantAcceptanceCriteria,
     AccountantAcceptanceSummary AccountantAcceptanceSummary,
@@ -345,6 +359,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             statutoryRuleMatrix,
             statutoryRulesCoverage,
             accountantAcceptanceCriteria);
+        var sourceLawMaintenanceProtocol = BuildSourceLawMaintenanceProtocol(sourceSnapshot);
         var assurancePacket = BuildAssurancePacket(
             sourceSnapshot,
             goldenCorpus,
@@ -361,6 +376,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             periods,
             sourceSnapshot,
             sourceLawTraceability,
+            sourceLawMaintenanceProtocol,
             assurancePacket,
             accountantAcceptanceCriteria,
             accountantAcceptanceSummary,
@@ -417,6 +433,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
         {
             "source-law-snapshot-fingerprint",
             "source-law-traceability-index",
+            "source-law-maintenance-protocol",
             "golden-filing-corpus",
             "golden-verifier-manifest",
             "statutory-rules-matrix",
@@ -591,6 +608,33 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 "revenue-filing-readiness"
             ]
         };
+    }
+
+    private static SourceLawMaintenanceProtocol BuildSourceLawMaintenanceProtocol(SourceLawSnapshot sourceSnapshot)
+    {
+        var nextReviewDue = sourceSnapshot.SnapshotDate.AddMonths(1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+        return new SourceLawMaintenanceProtocol(
+            "source-law-maintenance-v1",
+            "Qualified accountant and engineering",
+            "required-review",
+            "Before every production release and at least monthly while source-backed filing logic is active.",
+            nextReviewDue,
+            "source-law-change-review",
+            "Compare CRO, Revenue, FRC and Charities Regulator guidance pages against the pinned source-law snapshot before release.",
+            "Block release if any pinned source changes, becomes unreachable, gains a newer effective date, or lacks qualified-accountant review.",
+            sourceSnapshot.Sources.Select(source => source.SourceId).Order(StringComparer.Ordinal).ToArray(),
+            [
+                "CRO, Revenue, FRC and Charities Regulator source pages are reachable and reviewed for changes.",
+                "Every changed effective date or guidance wording is reflected in source-law snapshot metadata before release.",
+                "A qualified accountant accepts the source-law review note before generated filing packs are used for real filings."
+            ],
+            [
+                "source-law-snapshot-fingerprint",
+                "source-law-traceability-index",
+                "source-law-change-review-note",
+                "qualified-accountant-source-law-signoff"
+            ]);
     }
 
     private static IReadOnlyList<ProductionReadinessArea> BuildAreas() =>
@@ -1373,6 +1417,16 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "No generated filing pack can be treated as final until a named qualified accountant has reviewed the evidence, outputs and wording.",
             "Named qualified-accountant approval recorded against the period and linked to the generated pack."),
         new(
+            "source-law-change-review",
+            "Source-law change review",
+            "Qualified accountant and engineering",
+            "critical",
+            2,
+            "source-law-maintenance",
+            "required",
+            "Pinned CRO, Revenue, FRC and charity guidance must be reviewed for effective-date or wording changes before release.",
+            "Source-law change review note and qualified-accountant sign-off recorded against the snapshot."),
+        new(
             "external-ros-validation",
             "External ROS/iXBRL validation",
             "Reviewer",
@@ -1433,11 +1487,13 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             ],
             [
                 "Run qualified-accountant acceptance on the golden corpus.",
+                "Record source-law change review evidence against the pinned snapshot.",
                 "Attach external ROS/iXBRL validation evidence for generated iXBRL packs.",
                 "Record manual handoff acceptance for audit-required paths."
             ],
             [
                 "qualified-accountant-signoff",
+                "source-law-change-review",
                 "external-ros-validation",
                 "accountant-acceptance-walkthrough"
             ]),
@@ -1543,6 +1599,19 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 ],
                 "Named professional approval must be recorded against the period before any real filing pack is treated as final."),
             Item(
+                "source-law-change-review",
+                "Source-law change review",
+                "Qualified accountant and engineering",
+                "source-law-change-review-note",
+                "source-law-change-review",
+                "qualified-accountant-review",
+                [
+                    AuditEventCodes.CroFilingStatusChanged,
+                    AuditEventCodes.IxbrlInternalCheckCompleted,
+                    AuditEventCodes.CharityFilingStatusChanged
+                ],
+                "Pinned CRO, Revenue, FRC and charity guidance must be reviewed for effective-date or wording changes before release."),
+            Item(
                 "external-ros-validation-evidence",
                 "External ROS/iXBRL validation evidence",
                 "Reviewer",
@@ -1631,6 +1700,17 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "artifacts/visual-smoke",
             "light-dark-desktop-mobile-screenshot-review",
             "Run the visual smoke locally against seeded production-like data if CI cannot capture screenshots, then review the generated artifacts manually."),
+        new(
+            "source-law-change-review",
+            "Source-law change review note",
+            "Qualified accountant and engineering",
+            "manual review: compare pinned CRO, Revenue, FRC and charity guidance against source-law snapshot",
+            "manual-release",
+            RunsInDefaultCi: false,
+            BlocksRelease: true,
+            "source-law-change-review-note",
+            "source-law-change-review-note",
+            "Before real filing release, retain a dated review note confirming each pinned source URL, effective date, wording impact and qualified-accountant acceptance."),
         new(
             "production-stack-smoke",
             "Production compose smoke",

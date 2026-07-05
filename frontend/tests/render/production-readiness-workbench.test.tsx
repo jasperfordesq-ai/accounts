@@ -141,6 +141,12 @@ describe("ProductionReadinessWorkbench", () => {
     expect(screen.getByRole("heading", { name: "Production assurance packet" })).toBeInTheDocument();
     expectText("assurance-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
     expectText("Golden corpus 1/1");
+    expect(screen.getByRole("heading", { name: "Source-law maintenance" })).toBeInTheDocument();
+    expectText("source-law-maintenance-v1");
+    expectText("Source-law change review");
+    expectText("source-law-change-review-note");
+    expectText("qualified-accountant-source-law-signoff");
+    expectText(/Block release if any pinned source changes/);
     expect(screen.getAllByText("Qualified accountant sign-off required").length).toBeGreaterThan(1);
     expect(screen.getByRole("heading", { name: "Release decision summary" })).toBeInTheDocument();
     expectText("2 professional sign-offs");
@@ -197,6 +203,28 @@ function sampleReport(): ProductionReadinessReport {
         releaseGateCodes: ["external-ros-validation", "ixbrl-taxonomy-selection"],
       },
     ],
+    sourceLawMaintenanceProtocol: {
+      protocolVersion: "source-law-maintenance-v1",
+      ownerRole: "Qualified accountant and engineering",
+      status: "required-review",
+      reviewCadence: "Before every production release and at least monthly while source-backed filing logic is active.",
+      nextReviewDue: "2026-08-03",
+      signOffGate: "source-law-change-review",
+      changeDetection: "Compare CRO, Revenue, FRC and Charities Regulator guidance pages against the pinned source-law snapshot before release.",
+      failurePolicy: "Block release if any pinned source changes, becomes unreachable, gains a newer effective date, or lacks qualified-accountant review.",
+      monitoredSourceIds: ["revenue-accepted-taxonomies"],
+      acceptanceCriteria: [
+        "CRO, Revenue, FRC and Charities Regulator source pages are reachable and reviewed for changes.",
+        "Every changed effective date or guidance wording is reflected in source-law snapshot metadata before release.",
+        "A qualified accountant accepts the source-law review note before generated filing packs are used for real filings.",
+      ],
+      requiredEvidence: [
+        "source-law-snapshot-fingerprint",
+        "source-law-traceability-index",
+        "source-law-change-review-note",
+        "qualified-accountant-source-law-signoff",
+      ],
+    },
     assurancePacket: {
       packetId: "assurance-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       packetVersion: "production-assurance-packet-v1",
@@ -390,6 +418,17 @@ function sampleReport(): ProductionReadinessReport {
         evidenceRequired: "Named accountant approval recorded against the period.",
       },
       {
+        code: "source-law-change-review",
+        label: "Source-law change review",
+        owner: "Qualified accountant and engineering",
+        priority: "critical",
+        riskRank: 2,
+        evidenceStage: "source-law-maintenance",
+        status: "required",
+        detail: "Pinned CRO, Revenue, FRC and charity guidance must be reviewed for effective-date or wording changes before release.",
+        evidenceRequired: "Source-law change review note and qualified-accountant sign-off recorded against the snapshot.",
+      },
+      {
         code: "external-ros-validation",
         label: "External ROS/iXBRL validation",
         owner: "Reviewer",
@@ -457,6 +496,7 @@ function sampleReport(): ProductionReadinessReport {
         ],
         assuranceActionCodes: [
           "qualified-accountant-signoff",
+          "source-law-change-review",
           "external-ros-validation",
           "accountant-acceptance-walkthrough",
         ],
@@ -522,6 +562,19 @@ function sampleReport(): ProductionReadinessReport {
         operationalGateCode: "accountant-review",
         auditEventCodes: ["CroFilingStatusChanged"],
         detail: "Named professional approval must be recorded against the period.",
+      },
+      {
+        code: "source-law-change-review",
+        label: "Source-law change review",
+        ownerRole: "Qualified accountant and engineering",
+        required: true,
+        status: "required",
+        blocksRelease: true,
+        evidenceArtifact: "source-law-change-review-note",
+        assuranceActionCode: "source-law-change-review",
+        operationalGateCode: "accountant-review",
+        auditEventCodes: ["CroFilingStatusChanged"],
+        detail: "Pinned CRO, Revenue, FRC and charity guidance must be reviewed for effective-date or wording changes before release.",
       },
       {
         code: "production-smoke-and-backup",

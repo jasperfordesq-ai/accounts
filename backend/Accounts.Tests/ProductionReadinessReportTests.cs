@@ -151,6 +151,60 @@ public class ProductionReadinessReportTests
     }
 
     [Fact]
+    public async Task ProductionReadinessReport_DeclaresSourceLawMaintenanceProtocolForLegalChangeControl()
+    {
+        await using var db = CreateDbContext();
+        var report = await new ProductionReadinessReportService(db).GetReportAsync();
+        var protocolProperty = report.GetType().GetProperty("SourceLawMaintenanceProtocol");
+
+        Assert.NotNull(protocolProperty);
+        var protocol = protocolProperty!.GetValue(report)!;
+        var monitoredSources = StringListProperty(protocol, "MonitoredSourceIds");
+        var signOffGate = StringProperty(protocol, "SignOffGate");
+
+        Assert.Equal("source-law-maintenance-v1", StringProperty(protocol, "ProtocolVersion"));
+        Assert.Equal("Qualified accountant and engineering", StringProperty(protocol, "OwnerRole"));
+        Assert.Equal("required-review", StringProperty(protocol, "Status"));
+        Assert.Contains("monthly", StringProperty(protocol, "ReviewCadence"), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Block release", StringProperty(protocol, "FailurePolicy"));
+        Assert.Equal("source-law-change-review", signOffGate);
+        Assert.Equal(
+            report.SourceLawSnapshot.Sources.Select(source => source.SourceId).Order(StringComparer.Ordinal),
+            monitoredSources.Order(StringComparer.Ordinal));
+        AssertListContainsAll(
+            StringListProperty(protocol, "AcceptanceCriteria"),
+            [
+                "CRO",
+                "Revenue",
+                "FRC",
+                "effective date",
+                "qualified accountant"
+            ],
+            "source-law",
+            "acceptance criteria");
+        AssertListContainsAll(
+            StringListProperty(protocol, "RequiredEvidence"),
+            [
+                "source-law-snapshot-fingerprint",
+                "source-law-traceability-index",
+                "source-law-change-review-note",
+                "qualified-accountant-source-law-signoff"
+            ],
+            "source-law",
+            "required evidence");
+        Assert.Contains(report.AssurancePacket.EvidenceItems, item => item == "source-law-maintenance-protocol");
+        Assert.Contains(report.AssuranceActions, action =>
+            action.Code == "source-law-change-review"
+            && action.Priority == "critical"
+            && action.RiskRank < 5);
+        Assert.Contains(report.ReleaseReviewChecklist, item =>
+            item.Code == signOffGate
+            && item.AssuranceActionCode == "source-law-change-review"
+            && item.EvidenceArtifact == "source-law-change-review-note"
+            && item.BlocksRelease);
+    }
+
+    [Fact]
     public async Task ProductionReadinessReport_ExposesAuditEvidenceTimelineForWhoWhatWhenReview()
     {
         await using var db = CreateDbContext();

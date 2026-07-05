@@ -30,6 +30,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
   const releaseReviewChecklist = report.releaseReviewChecklist ?? [];
   const releaseVerificationManifest = report.releaseVerificationManifest ?? [];
   const sourceLawTraceability = report.sourceLawTraceability ?? [];
+  const sourceLawMaintenanceProtocol = report.sourceLawMaintenanceProtocol;
   const visualQaCoverage = report.visualQaCoverage;
   const assurancePacket = report.assurancePacket;
   const accountantAcceptanceSummary = report.accountantAcceptanceSummary;
@@ -179,6 +180,56 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
               ) : (
                 <CompactList items={assurancePacket.releaseBlockers} />
               )}
+            </div>
+          </div>
+        </div>
+      </ReviewPanel>
+
+      <ReviewPanel
+        title="Source-law maintenance"
+        description="Release gate for keeping CRO, Revenue, FRC and charity guidance aligned with the pinned source-law snapshot before real filing use."
+        actions={<StatusBadge tone={sourceLawMaintenanceProtocol.status === "complete" ? "good" : "warn"}>{formatStatus(sourceLawMaintenanceProtocol.status)}</StatusBadge>}
+      >
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
+          <div className="rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Protocol</p>
+                <code className="mt-1 block break-all text-xs text-[var(--foreground)]">{sourceLawMaintenanceProtocol.protocolVersion}</code>
+              </div>
+              <StatusBadge tone="bad">Release gate</StatusBadge>
+            </div>
+            <div className="mt-3 space-y-3 text-xs leading-5 text-[var(--muted-foreground)]">
+              <div>
+                <p className="font-semibold uppercase text-[var(--foreground)]">Owner</p>
+                <p>{sourceLawMaintenanceProtocol.ownerRole}</p>
+              </div>
+              <div>
+                <p className="font-semibold uppercase text-[var(--foreground)]">Cadence</p>
+                <p>{sourceLawMaintenanceProtocol.reviewCadence}</p>
+                <p className="mt-1">Next review due {formatDate(sourceLawMaintenanceProtocol.nextReviewDue)}</p>
+              </div>
+              <div>
+                <p className="font-semibold uppercase text-[var(--foreground)]">Sign-off gate</p>
+                <code className="break-all text-[11px] text-[var(--foreground)]">{sourceLawMaintenanceProtocol.signOffGate}</code>
+              </div>
+              <p>{sourceLawMaintenanceProtocol.failurePolicy}</p>
+            </div>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
+              <p className="mb-2 text-xs font-semibold uppercase text-[var(--muted-foreground)]">Required evidence</p>
+              <CompactList items={sourceLawMaintenanceProtocol.requiredEvidence} />
+            </div>
+            <div className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
+              <p className="mb-2 text-xs font-semibold uppercase text-[var(--muted-foreground)]">Acceptance criteria</p>
+              <CompactList items={sourceLawMaintenanceProtocol.acceptanceCriteria} />
+            </div>
+            <div className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3 md:col-span-2">
+              <p className="mb-2 text-xs font-semibold uppercase text-[var(--muted-foreground)]">Monitored source ids</p>
+              <CodeStack items={sourceLawMaintenanceProtocol.monitoredSourceIds} />
+              <p className="mt-3 text-xs leading-5 text-[var(--muted-foreground)]">{sourceLawMaintenanceProtocol.changeDetection}</p>
             </div>
           </div>
         </div>

@@ -52,6 +52,28 @@ function sampleReport(): ProductionReadinessReport {
         releaseGateCodes: ["external-ros-validation", "ixbrl-taxonomy-selection"],
       },
     ],
+    sourceLawMaintenanceProtocol: {
+      protocolVersion: "source-law-maintenance-v1",
+      ownerRole: "Qualified accountant and engineering",
+      status: "required-review",
+      reviewCadence: "Before every production release and at least monthly while source-backed filing logic is active.",
+      nextReviewDue: "2026-08-03",
+      signOffGate: "source-law-change-review",
+      changeDetection: "Compare CRO, Revenue, FRC and Charities Regulator guidance pages against the pinned source-law snapshot before release.",
+      failurePolicy: "Block release if any pinned source changes, becomes unreachable, gains a newer effective date, or lacks qualified-accountant review.",
+      monitoredSourceIds: ["revenue-accepted-taxonomies"],
+      acceptanceCriteria: [
+        "CRO, Revenue, FRC and Charities Regulator source pages are reachable and reviewed for changes.",
+        "Every changed effective date or guidance wording is reflected in source-law snapshot metadata before release.",
+        "A qualified accountant accepts the source-law review note before generated filing packs are used for real filings.",
+      ],
+      requiredEvidence: [
+        "source-law-snapshot-fingerprint",
+        "source-law-traceability-index",
+        "source-law-change-review-note",
+        "qualified-accountant-source-law-signoff",
+      ],
+    },
     assurancePacket: {
       packetId: "assurance-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       packetVersion: "production-assurance-packet-v1",
@@ -64,7 +86,7 @@ function sampleReport(): ProductionReadinessReport {
       visualQaExpectedScreenshots: 24,
       requiredOperationalGates: 1,
       openCriticalActions: 1,
-      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "golden-filing-corpus", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "production-completion-map"],
+      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "golden-filing-corpus", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "production-completion-map"],
       releaseBlockers: ["Qualified accountant sign-off required"],
     },
     accountantAcceptanceCriteria: [
