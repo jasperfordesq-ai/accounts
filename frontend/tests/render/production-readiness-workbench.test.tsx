@@ -71,6 +71,8 @@ describe("ProductionReadinessWorkbench", () => {
     expect(screen.getByText("Dark mobile")).toBeInTheDocument();
     expect(screen.getByText("Visible text overlap")).toBeInTheDocument();
     expect(screen.getByText("Filing review")).toBeInTheDocument();
+    expect(screen.getAllByText("Capture key filing").length).toBeGreaterThan(0);
+    expect(screen.getByText("workbenchPreview")).toBeInTheDocument();
     expect(screen.getAllByText("visual-smoke-screenshots").length).toBeGreaterThan(1);
     expect(screen.getByRole("heading", { name: "Production auditability" })).toBeInTheDocument();
     expect(screen.getByText("Who changed what")).toBeInTheDocument();
@@ -600,6 +602,7 @@ function visualQaRoutes(): ProductionReadinessReport["visualQaCoverage"]["routes
   return [
     {
       code: "dashboard",
+      routeKey: "dashboard",
       label: "Dashboard",
       description: "Accountant queue and production readiness overview.",
       requiredText: "Production Readiness",
@@ -608,6 +611,7 @@ function visualQaRoutes(): ProductionReadinessReport["visualQaCoverage"]["routes
     },
     {
       code: "production-readiness",
+      routeKey: "readiness",
       label: "Production readiness",
       description: "Assurance checklist, statutory rules matrix, source snapshot and operational gates.",
       requiredText: "Production Readiness Checklist",
@@ -616,6 +620,7 @@ function visualQaRoutes(): ProductionReadinessReport["visualQaCoverage"]["routes
     },
     {
       code: "company-detail",
+      routeKey: "company",
       label: "Company detail",
       description: "Company command centre, statutory profile, officers, charity facts and accounting periods.",
       requiredText: "Company command centre",
@@ -624,6 +629,7 @@ function visualQaRoutes(): ProductionReadinessReport["visualQaCoverage"]["routes
     },
     {
       code: "period-workspace",
+      routeKey: "period",
       label: "Period workspace",
       description: "Import, classification, year-end, statements and filing readiness overview.",
       requiredText: "Filing readiness",
@@ -632,6 +638,7 @@ function visualQaRoutes(): ProductionReadinessReport["visualQaCoverage"]["routes
     },
     {
       code: "filing-review",
+      routeKey: "filing",
       label: "Filing review",
       description: "Period workspace filing tab.",
       requiredText: "Filing readiness profile",
@@ -640,6 +647,7 @@ function visualQaRoutes(): ProductionReadinessReport["visualQaCoverage"]["routes
     },
     {
       code: "workbench-preview",
+      routeKey: "workbenchPreview",
       label: "Workbench preview",
       description: "Internal component preview for accountant workflow primitives and route states.",
       requiredText: "Workbench Component Preview",
@@ -657,6 +665,7 @@ function visualQaArtifacts(): ProductionReadinessReport["visualQaCoverage"]["art
         const fileName = `${route.code}-${theme}-${viewportName}.png`;
         return {
           routeCode: route.code,
+          routeKey: route.routeKey,
           theme,
           viewportName,
           fileName,

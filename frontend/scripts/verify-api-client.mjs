@@ -318,8 +318,9 @@ function productionReadinessReportFixture() {
       layoutChecks: visualSmokeLayoutChecks,
       themes: visualSmokeThemes,
       viewports: visualSmokeViewports,
-      routes: visualSmokeRoutes.map(({ name, label, description, expectedText, workflowStages, openFilingTab }) => ({
+      routes: visualSmokeRoutes.map(({ name, routeKey, label, description, expectedText, workflowStages, openFilingTab }) => ({
         code: name,
+        routeKey,
         label,
         description,
         requiredText: expectedText,
@@ -328,6 +329,7 @@ function productionReadinessReportFixture() {
       })),
       artifacts: expectedVisualSmokeArtifacts().map(({ routeName, theme, viewportName, fileName, artifactPath, expectedText, openFilingTab, reviewStatus, layoutChecks }) => ({
         routeCode: routeName,
+        routeKey: visualSmokeRoutes.find((route) => route.name === routeName)?.routeKey ?? routeName,
         theme,
         viewportName,
         fileName,

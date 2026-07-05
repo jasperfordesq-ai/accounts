@@ -557,12 +557,13 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
               caption="Visual QA routes"
               filterPlaceholder="Filter visual QA routes"
               emptyState="No matching visual QA routes"
-              columns={["Route", "Workflow stages", "Required text", "Viewport evidence", "Tab action"]}
+              columns={["Route", "Capture key", "Workflow stages", "Required text", "Viewport evidence", "Tab action"]}
               rows={visualQaCoverage.routes.map((route) => ({
                 id: route.code,
                 tone: route.openFilingTab ? "info" : "default",
                 searchText: [
                   route.label,
+                  route.routeKey,
                   route.description,
                   route.requiredText,
                   ...route.workflowStages,
@@ -573,6 +574,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
                     <p className="font-medium">{route.label}</p>
                     <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">{route.description}</p>
                   </div>,
+                  <code key="route-key" className="break-all text-[11px] text-[var(--foreground)]">{route.routeKey}</code>,
                   <div key="workflow-stages" className="flex min-w-44 flex-wrap gap-1.5">
                     {route.workflowStages.map((stage) => (
                       <StatusBadge key={stage} tone="default">{stage}</StatusBadge>
@@ -602,6 +604,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
                     artifact.fileName,
                     artifact.artifactPath,
                     artifact.routeCode,
+                    artifact.routeKey,
                     artifact.theme,
                     artifact.viewportName,
                     artifact.requiredText,
@@ -618,6 +621,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
                     <span key="viewport" className="text-[var(--muted-foreground)]">{artifact.viewportName}</span>,
                     <div key="target" className="min-w-48 whitespace-normal text-xs leading-5 text-[var(--muted-foreground)]">
                       <p className="font-medium text-[var(--foreground)]">{artifact.requiredText}</p>
+                      <p>Capture key {artifact.routeKey}</p>
                       <p>{artifact.openFilingTab ? "Open filing tab before capture" : "Capture initial view"}</p>
                       <p>{artifact.layoutChecks.map(formatStatus).join(", ")}</p>
                     </div>,

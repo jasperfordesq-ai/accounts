@@ -1724,6 +1724,7 @@ export interface VisualQaViewport {
 
 export interface VisualQaRoute {
   code: string;
+  routeKey: string;
   label: string;
   description: string;
   requiredText: string;
@@ -1733,6 +1734,7 @@ export interface VisualQaRoute {
 
 export interface VisualQaArtifact {
   routeCode: string;
+  routeKey: string;
   theme: string;
   viewportName: string;
   fileName: string;
@@ -2003,6 +2005,7 @@ const visualQaViewportSchema = z.object({
 
 const visualQaRouteSchema = z.object({
   code: z.string().min(1),
+  routeKey: z.string().min(1),
   label: z.string().min(1),
   description: z.string().min(1),
   requiredText: z.string().min(1),
@@ -2012,6 +2015,7 @@ const visualQaRouteSchema = z.object({
 
 const visualQaArtifactSchema = z.object({
   routeCode: z.string().min(1),
+  routeKey: z.string().min(1),
   theme: z.string().min(1),
   viewportName: z.string().min(1),
   fileName: z.string().min(1),
@@ -2256,6 +2260,12 @@ function assertVisualQaArtifacts(report: ProductionReadinessReport) {
     if (artifact.fileName !== expectedFileName || artifact.artifactPath !== `artifacts/visual-smoke/${expectedFileName}`) {
       throw new Error(
         `Invalid production readiness report contract: visualQaCoverage.artifacts.${artifactIndex}.artifactPath - must match the visual smoke screenshot naming convention`,
+      );
+    }
+
+    if (artifact.routeKey !== route.routeKey) {
+      throw new Error(
+        `Invalid production readiness report contract: visualQaCoverage.artifacts.${artifactIndex}.routeKey - must mirror the visual QA route capture key`,
       );
     }
 

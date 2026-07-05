@@ -65,16 +65,18 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.deepEqual(parsed.visualQaCoverage.viewports, visualSmokeViewports);
   assert.deepEqual(parsed.visualQaCoverage.routes.find((route) => route.code === "period-workspace")?.workflowStages, ACCOUNTANT_WORKFLOW_STAGES);
   assert.deepEqual(
-    parsed.visualQaCoverage.routes.map(({ code, label, description, requiredText, workflowStages, openFilingTab }) => ({
+    parsed.visualQaCoverage.routes.map(({ code, routeKey, label, description, requiredText, workflowStages, openFilingTab }) => ({
       code,
+      routeKey,
       label,
       description,
       requiredText,
       workflowStages,
       openFilingTab,
     })),
-    visualSmokeRoutes.map(({ name, label, description, expectedText, workflowStages, openFilingTab }) => ({
+    visualSmokeRoutes.map(({ name, routeKey, label, description, expectedText, workflowStages, openFilingTab }) => ({
       code: name,
+      routeKey,
       label,
       description,
       requiredText: expectedText,
@@ -84,6 +86,7 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   );
   assert.deepEqual(parsed.visualQaCoverage.layoutChecks, visualSmokeLayoutChecks);
   assert.equal(parsed.visualQaCoverage.artifacts[0].artifactPath, "artifacts/visual-smoke/dashboard-light-desktop.png");
+  assert.equal(parsed.visualQaCoverage.artifacts[0].routeKey, "dashboard");
   assert.equal(parsed.visualQaCoverage.artifacts[0].requiredText, "Production Readiness");
   assert.deepEqual(parsed.visualQaCoverage.artifacts[0].layoutChecks, ["browser-console-errors", "page-horizontal-overflow", "visible-text-overlap"]);
 });
@@ -447,8 +450,9 @@ function sampleReport() {
       layoutChecks: visualSmokeLayoutChecks,
       themes: visualSmokeThemes,
       viewports: visualSmokeViewports,
-      routes: visualSmokeRoutes.map(({ name, label, description, expectedText, workflowStages, openFilingTab }) => ({
+      routes: visualSmokeRoutes.map(({ name, routeKey, label, description, expectedText, workflowStages, openFilingTab }) => ({
         code: name,
+        routeKey,
         label,
         description,
         requiredText: expectedText,
@@ -457,6 +461,7 @@ function sampleReport() {
       })),
       artifacts: expectedVisualSmokeArtifacts().map(({ routeName, theme, viewportName, fileName, artifactPath, expectedText, openFilingTab, reviewStatus, layoutChecks }) => ({
         routeCode: routeName,
+        routeKey: visualSmokeRoutes.find((route) => route.name === routeName)?.routeKey ?? routeName,
         theme,
         viewportName,
         fileName,

@@ -964,6 +964,38 @@ public class ProductionReadinessReportTests
         });
     }
 
+    [Fact]
+    public async Task VisualQaCoverage_ExposesCaptureRouteKeysUsedByTheBrowserSmokeRunner()
+    {
+        await using var db = CreateDbContext();
+        var report = await new ProductionReadinessReportService(db).GetReportAsync();
+        var expectedRouteKeys = new Dictionary<string, string>
+        {
+            ["dashboard"] = "dashboard",
+            ["production-readiness"] = "readiness",
+            ["company-detail"] = "company",
+            ["period-workspace"] = "period",
+            ["filing-review"] = "filing",
+            ["workbench-preview"] = "workbenchPreview"
+        };
+
+        foreach (var route in report.VisualQaCoverage.Routes)
+        {
+            var routeKeyProperty = route.GetType().GetProperty("RouteKey");
+            Assert.NotNull(routeKeyProperty);
+            Assert.Equal(expectedRouteKeys[route.Code], routeKeyProperty!.GetValue(route));
+        }
+
+        var artifacts = ObjectListProperty(report.VisualQaCoverage, "Artifacts");
+        foreach (var artifact in artifacts)
+        {
+            var routeCode = StringProperty(artifact, "RouteCode");
+            var routeKeyProperty = artifact.GetType().GetProperty("RouteKey");
+            Assert.NotNull(routeKeyProperty);
+            Assert.Equal(expectedRouteKeys[routeCode], routeKeyProperty!.GetValue(artifact));
+        }
+    }
+
     private static AccountsDbContext CreateDbContext()
     {
         var options = new DbContextOptionsBuilder<AccountsDbContext>()

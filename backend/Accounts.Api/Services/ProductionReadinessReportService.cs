@@ -170,6 +170,7 @@ public sealed record VisualQaViewport(
 
 public sealed record VisualQaRoute(
     string Code,
+    string RouteKey,
     string Label,
     string Description,
     string RequiredText,
@@ -178,6 +179,7 @@ public sealed record VisualQaRoute(
 
 public sealed record VisualQaArtifact(
     string RouteCode,
+    string RouteKey,
     string Theme,
     string ViewportName,
     string FileName,
@@ -1718,6 +1720,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
         {
             new VisualQaRoute(
                 "dashboard",
+                "dashboard",
                 "Dashboard",
                 "Accountant queue, blockers, deadlines and production readiness overview.",
                 "Production Readiness",
@@ -1725,6 +1728,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 OpenFilingTab: false),
             new VisualQaRoute(
                 "production-readiness",
+                "readiness",
                 "Production readiness",
                 "Assurance checklist, statutory rules matrix, source snapshot and operational gates.",
                 "Production Readiness Checklist",
@@ -1732,6 +1736,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 OpenFilingTab: false),
             new VisualQaRoute(
                 "company-detail",
+                "company",
                 "Company detail",
                 "Company command centre, statutory profile, officers, charity facts and accounting periods.",
                 "Company command centre",
@@ -1739,6 +1744,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 OpenFilingTab: false),
             new VisualQaRoute(
                 "period-workspace",
+                "period",
                 "Period workspace",
                 "Import, classification, year-end, statements and filing readiness overview.",
                 "Filing readiness",
@@ -1746,6 +1752,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 OpenFilingTab: false),
             new VisualQaRoute(
                 "filing-review",
+                "filing",
                 "Filing review",
                 "Period filing tab with evidence checklist, source links, outputs and filing state.",
                 "Filing readiness profile",
@@ -1753,6 +1760,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 OpenFilingTab: true),
             new VisualQaRoute(
                 "workbench-preview",
+                "workbenchPreview",
                 "Workbench preview",
                 "Internal component preview for accountant workflow primitives and route states.",
                 "Workbench Component Preview",
@@ -1766,6 +1774,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 var fileName = $"{route.Code}-{theme}-{viewport.Name}.png";
                 return new VisualQaArtifact(
                     route.Code,
+                    route.RouteKey,
                     theme,
                     viewport.Name,
                     fileName,
