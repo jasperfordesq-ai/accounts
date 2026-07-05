@@ -7,6 +7,8 @@ describe("WorkbenchPreview", () => {
     render(<WorkbenchPreview />);
 
     expect(screen.getByText("Workbench Component Preview")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Dashboard" })).toHaveAttribute("href", "/");
+    expect(screen.getByText("PageShell primitive")).toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: "Accounting Workflow" })).toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: "Accountant Workflow" })).toBeInTheDocument();
     expect(screen.getByText("Start with company setup, then move period work through evidence, statements, review and filing.")).toBeInTheDocument();

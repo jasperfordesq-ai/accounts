@@ -9,6 +9,7 @@ import {
   MetricStrip,
   MoneyField,
   MoneyInput,
+  PageShell,
   PermissionDeniedPanel,
   ReadOnlyNotice,
   ReviewPanel,
@@ -16,9 +17,7 @@ import {
   StatusBadge,
   WorkbenchEmptyState,
   WorkbenchErrorState,
-  WorkbenchHeader,
   WorkbenchLoadingState,
-  WorkbenchShell,
   WorkflowRail,
 } from "@/components/workbench";
 import { AccountantWorkflowRail } from "@/components/workbench/AccountantWorkflowRail";
@@ -84,19 +83,20 @@ export function WorkbenchPreview() {
   const [dueWithinYear, setDueWithinYear] = useState(10000);
 
   return (
-    <WorkbenchShell>
-      <WorkbenchHeader
-        title="Workbench Component Preview"
-        subtitle="Internal QA surface for accountant workflow primitives, dense review tables, evidence gates, route states and filing actions."
-        meta={
-          <>
-            <StatusBadge tone="good">Light mode ready</StatusBadge>
-            <StatusBadge tone="info">Dark mode ready</StatusBadge>
-            <StatusBadge tone="warn">Accountant review required</StatusBadge>
-          </>
-        }
-      />
-
+    <PageShell
+      title="Workbench Component Preview"
+      subtitle="Internal QA surface for accountant workflow primitives, dense review tables, evidence gates, route states and filing actions."
+      backHref="/"
+      backLabel="Dashboard"
+      meta={
+        <>
+          <StatusBadge tone="good">Light mode ready</StatusBadge>
+          <StatusBadge tone="info">Dark mode ready</StatusBadge>
+          <StatusBadge tone="warn">Accountant review required</StatusBadge>
+          <StatusBadge tone="default">PageShell primitive</StatusBadge>
+        </>
+      }
+    >
       <WorkflowRail items={workflowItems} />
       <AccountantWorkflowRail activeStage="Review" />
 
@@ -225,6 +225,6 @@ export function WorkbenchPreview() {
           </FilingActionBar>
         </div>
       </section>
-    </WorkbenchShell>
+    </PageShell>
   );
 }

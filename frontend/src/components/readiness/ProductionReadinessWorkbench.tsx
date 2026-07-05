@@ -10,11 +10,10 @@ import type { ProductionReadinessReport } from "@/lib/api";
 import {
   DataTable,
   MetricStrip,
+  PageShell,
   ReviewPanel,
   SectionHeader,
   StatusBadge,
-  WorkbenchHeader,
-  WorkbenchShell,
 } from "@/components/workbench";
 
 export function ProductionReadinessWorkbench({ report }: { report: ProductionReadinessReport }) {
@@ -39,18 +38,18 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
   const releaseReady = report.overallStatus === "ready" && assurancePacket.openCriticalActions === 0;
 
   return (
-    <WorkbenchShell>
-      <WorkbenchHeader
-        title="Production Readiness Checklist"
-        subtitle="Accountant-facing evidence for statutory rules, golden filing coverage, unsupported paths, operational controls, and professional review gates."
-        meta={
-          <>
-            <StatusBadge tone={statusTone}>{formatStatus(report.overallStatus)}</StatusBadge>
-            <span className="text-xs text-[var(--muted-foreground)]">Generated {formatDateTime(report.generatedAt)}</span>
-          </>
-        }
-      />
-
+    <PageShell
+      title="Production Readiness Checklist"
+      subtitle="Accountant-facing evidence for statutory rules, golden filing coverage, unsupported paths, operational controls, and professional review gates."
+      backHref="/"
+      backLabel="Dashboard"
+      meta={
+        <>
+          <StatusBadge tone={statusTone}>{formatStatus(report.overallStatus)}</StatusBadge>
+          <span className="text-xs text-[var(--muted-foreground)]">Generated {formatDateTime(report.generatedAt)}</span>
+        </>
+      }
+    >
       <MetricStrip
         metrics={[
           { label: "Companies in database", value: `${report.companiesInDatabase} companies`, tone: "default" },
@@ -890,7 +889,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
           </div>
         </ReviewPanel>
       </div>
-    </WorkbenchShell>
+    </PageShell>
   );
 }
 

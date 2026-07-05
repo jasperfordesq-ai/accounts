@@ -9,6 +9,7 @@ import {
   IssueDigest,
   LegalSourceList,
   MoneyInput,
+  PageShell,
   PermissionDeniedPanel,
   ReviewPanel,
   StatusBadge,
@@ -19,6 +20,28 @@ import {
 } from "@/components/workbench";
 
 describe("workbench primitives", () => {
+  it("renders a stable page shell with back navigation, metadata, actions and constrained content", () => {
+    render(
+      <PageShell
+        title="Filing readiness review"
+        subtitle="Accountant-facing evidence before the generated pack can be trusted."
+        backHref="/companies/1"
+        backLabel="Company workspace"
+        meta={<StatusBadge tone="warn">Review required</StatusBadge>}
+        actions={<button type="button">Export evidence</button>}
+      >
+        <ReviewPanel title="Evidence summary">Golden corpus evidence is linked.</ReviewPanel>
+      </PageShell>,
+    );
+
+    expect(screen.getByRole("link", { name: "Company workspace" })).toHaveAttribute("href", "/companies/1");
+    expect(screen.getByRole("heading", { name: "Filing readiness review" })).toBeInTheDocument();
+    expect(screen.getByText("Accountant-facing evidence before the generated pack can be trusted.")).toBeInTheDocument();
+    expect(screen.getByText("Review required")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Export evidence" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Evidence summary" })).toBeInTheDocument();
+  });
+
   it("renders evidence checklist completion and required states", () => {
     render(
       <EvidenceChecklist

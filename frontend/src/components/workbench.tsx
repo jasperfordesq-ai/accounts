@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   AlertTriangle,
   ArrowDown,
+  ArrowLeft,
   ArrowRight,
   ArrowUp,
   ArrowUpDown,
@@ -31,6 +32,16 @@ type DataTableSortValue = string | number | null | undefined;
 export interface DataTableSortState {
   columnIndex: number;
   direction: DataTableSortDirection;
+}
+
+export interface PageShellProps {
+  title: string;
+  subtitle?: string;
+  backHref?: string;
+  backLabel?: string;
+  meta?: ReactNode;
+  actions?: ReactNode;
+  children: ReactNode;
 }
 
 export interface WorkflowItem {
@@ -179,6 +190,32 @@ export function WorkbenchHeader({
         {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
       </div>
     </section>
+  );
+}
+
+export function PageShell({
+  title,
+  subtitle,
+  backHref,
+  backLabel = "Back",
+  meta,
+  actions,
+  children,
+}: PageShellProps) {
+  return (
+    <WorkbenchShell>
+      {backHref && (
+        <Link
+          href={backHref}
+          className="inline-flex min-h-8 items-center gap-2 text-sm font-medium text-[var(--muted-foreground)] transition hover:text-[var(--foreground)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500"
+        >
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+          {backLabel}
+        </Link>
+      )}
+      <WorkbenchHeader title={title} subtitle={subtitle} meta={meta} actions={actions} />
+      {children}
+    </WorkbenchShell>
   );
 }
 
@@ -402,11 +439,16 @@ export function ReviewPanel({
   actions?: ReactNode;
   children: ReactNode;
 }) {
+  const titleId = useId();
+
   return (
-    <section className="min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface)] shadow-sm shadow-black/[0.03]">
+    <section
+      aria-labelledby={titleId}
+      className="min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface)] shadow-sm shadow-black/[0.03]"
+    >
       <header className="flex flex-col gap-3 border-b border-[var(--border)] px-4 py-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h2 className="text-sm font-semibold text-[var(--foreground)]">{title}</h2>
+          <h2 id={titleId} className="text-sm font-semibold text-[var(--foreground)]">{title}</h2>
           {description && (
             <p className="mt-0.5 text-xs leading-5 text-[var(--muted-foreground)]">{description}</p>
           )}
