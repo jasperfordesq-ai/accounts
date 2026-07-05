@@ -47,7 +47,8 @@ describe("PeriodWorkbenchOverview", () => {
     const workflowNav = within(workflow);
     expect(screen.getByText("8 stages")).toBeInTheDocument();
     expect(workflowNav.getByRole("link", { name: /Setup/ })).toHaveAttribute("href", "/companies/7");
-    expect(workflowNav.getByRole("link", { name: /Import/ })).toHaveAttribute("href", "/companies/7/periods/3?tab=import");
+    expect(workflowNav.getByRole("link", { name: /Import/ })).toHaveAttribute("href", "/companies/7/periods/3?tab=categorise");
+    expect(workflowNav.getByRole("link", { name: /Import/ })).toHaveAttribute("aria-current", "step");
     expect(workflowNav.getByRole("link", { name: /Classify/ })).toHaveAttribute("href", "/companies/7/periods/3/classify");
     expect(workflowNav.getByRole("link", { name: /Year-End/ })).toHaveAttribute("href", "/companies/7/periods/3/year-end");
     expect(workflowNav.getByRole("link", { name: /Statements/ })).toHaveAttribute("href", "/companies/7/periods/3/statements");

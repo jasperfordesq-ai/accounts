@@ -13,7 +13,7 @@ import type {
   YearEndSummary,
 } from "@/lib/api";
 import { IssueDigest, MetricStrip, ReviewPanel, StatusBadge, type WorkflowItem } from "@/components/workbench";
-import { AccountantWorkflowRail } from "@/components/workbench/AccountantWorkflowRail";
+import { AccountantWorkflowRail, type AccountantWorkflowStage } from "@/components/workbench/AccountantWorkflowRail";
 
 interface PeriodWorkbenchOverviewProps {
   companyId: number | string;
@@ -138,6 +138,7 @@ export function PeriodWorkbenchOverview({
     ?? workflowItems.find((item) => item.state === "blocked")
     ?? workflowItems.find((item) => item.state === "todo")
     ?? null;
+  const activeWorkflowStage = activeStageForNextAction(nextAction);
   const commandCentre = {
     blockerSummary: blockingIssues.length > 0
       ? `${blockingIssues.length} ${blockingIssues.length === 1 ? "blocker requires" : "blockers require"} attention`
@@ -224,10 +225,12 @@ export function PeriodWorkbenchOverview({
       />
 
       <AccountantWorkflowRail
-        activeStage="Year-End"
+        activeStage={activeWorkflowStage}
         stageOverrides={{
           setup: pickWorkflowRailFields(workflowById.get("setup")),
-          import: pickWorkflowRailFields(workflowById.get("import")),
+          import: nextAction?.id === "categorise"
+            ? pickWorkflowRailFields(nextAction, "active")
+            : pickWorkflowRailFields(workflowById.get("import")),
           classify: pickWorkflowRailFields(workflowById.get("classify")),
           "year-end": pickWorkflowRailFields(workflowById.get("year-end")),
           statements: pickWorkflowRailFields(workflowById.get("statements")),
@@ -247,8 +250,8 @@ export function PeriodWorkbenchOverview({
   );
 }
 
-function pickWorkflowRailFields(item?: WorkflowItem) {
-  return item ? { detail: item.detail, href: item.href, state: item.state } : undefined;
+function pickWorkflowRailFields(item?: WorkflowItem, stateOverride?: WorkflowItem["state"]) {
+  return item ? { detail: item.detail, href: item.href, state: stateOverride ?? item.state } : undefined;
 }
 
 function uniqueIssues(issues: string[]) {
@@ -262,4 +265,28 @@ function nextActionDetail(nextAction: WorkflowItem | null, uncategorisedCount: n
   }
 
   return nextAction.detail;
+}
+
+function activeStageForNextAction(nextAction: WorkflowItem | null): AccountantWorkflowStage {
+  switch (nextAction?.id) {
+    case "setup":
+      return "Setup";
+    case "import":
+    case "categorise":
+      return "Import";
+    case "classify":
+      return "Classify";
+    case "year-end":
+      return "Year-End";
+    case "statements":
+      return "Statements";
+    case "notes":
+      return "Notes";
+    case "review":
+      return "Review";
+    case "filing":
+      return "Filing";
+    default:
+      return "Review";
+  }
 }
