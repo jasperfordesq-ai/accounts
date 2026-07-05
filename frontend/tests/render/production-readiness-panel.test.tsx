@@ -9,11 +9,14 @@ describe("ProductionReadinessPanel", () => {
 
     expect(screen.getByText("Production Readiness")).toBeInTheDocument();
     expect(screen.getByText("Review required")).toBeInTheDocument();
-    expect(screen.getByText("Micro LTD")).toBeInTheDocument();
-    expect(screen.getByText("CLG charity")).toBeInTheDocument();
-    expect(screen.getByText("Example Micro Limited")).toBeInTheDocument();
+    expect(screen.getAllByText("Micro LTD")).toHaveLength(2);
+    expect(screen.getAllByText("CLG charity")).toHaveLength(2);
+    expect(screen.getAllByText("Example Micro Limited")).toHaveLength(2);
     expect(screen.getByText("2025-01-01 to 2025-12-31")).toBeInTheDocument();
     expect(screen.getByText("AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl")).toBeInTheDocument();
+    expect(screen.getByText("Golden evidence ledger")).toBeInTheDocument();
+    expect(screen.getByText("Expected CT: €718.75")).toBeInTheDocument();
+    expect(screen.getByText("Readiness: ready-for-external-filing")).toBeInTheDocument();
     expect(screen.getByText("No direct CRO/ROS submission automation")).toBeInTheDocument();
     expect(screen.getByText("Revenue accepted iXBRL taxonomies")).toBeInTheDocument();
     expect(screen.getByText("Qualified accountant sign-off")).toBeInTheDocument();

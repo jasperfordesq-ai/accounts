@@ -107,32 +107,71 @@ export function ProductionReadinessPanel({
       )}
 
       <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)]">
-        <DataTable
-          columns={["Golden scenario", "Fixture", "Scope", "Outcome", "Evidence tests", "Status"]}
-          rows={report.goldenFilingCorpus.map((scenario) => [
-            <span key="label" className="font-medium">{scenario.label}</span>,
-            <div key="fixture" className="max-w-sm space-y-1 whitespace-normal text-xs text-[var(--muted-foreground)]">
-              <p className="font-semibold text-[var(--foreground)]">{scenario.fixture.legalName}</p>
-              <p>{scenario.fixture.periodStart} to {scenario.fixture.periodEnd}</p>
-              <p>{scenario.fixture.expectedSizeClass} / {scenario.fixture.expectedRegime}</p>
-            </div>,
-            <span key="scope" className="text-[var(--muted-foreground)]">{scenario.companyScope}</span>,
-            <span key="outcome" className="text-[var(--muted-foreground)]">{formatStatus(scenario.expectedOutcome)}</span>,
-            <div key="evidence" className="max-w-md space-y-1 whitespace-normal">
-              {scenario.evidenceTestNames.map((testName) => (
-                <code
-                  key={testName}
-                  className="block break-all rounded border border-[var(--border)] bg-[var(--surface-subtle)] px-2 py-1 text-[11px] text-[var(--muted-foreground)]"
-                >
-                  {testName}
-                </code>
+        <div className="space-y-4">
+          <DataTable
+            columns={["Golden scenario", "Fixture", "Scope", "Outcome", "Evidence tests", "Status"]}
+            rows={report.goldenFilingCorpus.map((scenario) => [
+              <span key="label" className="font-medium">{scenario.label}</span>,
+              <div key="fixture" className="max-w-sm space-y-1 whitespace-normal text-xs text-[var(--muted-foreground)]">
+                <p className="font-semibold text-[var(--foreground)]">{scenario.fixture.legalName}</p>
+                <p>{scenario.fixture.periodStart} to {scenario.fixture.periodEnd}</p>
+                <p>{scenario.fixture.expectedSizeClass} / {scenario.fixture.expectedRegime}</p>
+              </div>,
+              <span key="scope" className="text-[var(--muted-foreground)]">{scenario.companyScope}</span>,
+              <span key="outcome" className="text-[var(--muted-foreground)]">{formatStatus(scenario.expectedOutcome)}</span>,
+              <div key="evidence" className="max-w-md space-y-1 whitespace-normal">
+                {scenario.evidenceTestNames.map((testName) => (
+                  <code
+                    key={testName}
+                    className="block break-all rounded border border-[var(--border)] bg-[var(--surface-subtle)] px-2 py-1 text-[11px] text-[var(--muted-foreground)]"
+                  >
+                    {testName}
+                  </code>
+                ))}
+              </div>,
+              <StatusBadge key="status" tone={scenario.coverageStatus === "covered" ? "good" : "warn"}>
+                {formatStatus(scenario.coverageStatus)}
+              </StatusBadge>,
+            ])}
+          />
+
+          <section aria-label="Golden evidence ledger" className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Golden evidence ledger</p>
+                <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">
+                  Expected outputs, source traces and sign-off states for release-blocking accountant review.
+                </p>
+              </div>
+              <StatusBadge tone="warn">{report.goldenEvidenceLedger.length} entries</StatusBadge>
+            </div>
+
+            <div className="mt-3 grid gap-2">
+              {report.goldenEvidenceLedger.map((entry) => (
+                <div key={entry.scenarioCode} className="rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-3">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-[var(--foreground)]">{entry.label}</p>
+                      <p className="mt-1 text-xs text-[var(--muted-foreground)]">{entry.fixtureLegalName}</p>
+                    </div>
+                    <StatusBadge tone={entry.blocksRelease ? "warn" : "good"}>
+                      {formatStatus(entry.acceptanceStatus)}
+                    </StatusBadge>
+                  </div>
+
+                  <div className="mt-3 grid gap-2 text-xs leading-5 text-[var(--muted-foreground)] sm:grid-cols-2 xl:grid-cols-3">
+                    <LedgerFact>Readiness: {entry.filingReadinessState}</LedgerFact>
+                    <LedgerFact>Expected CT: {formatCurrency(entry.expectedCorporationTax)}</LedgerFact>
+                    <LedgerFact>Sign-off: {entry.signOffPacketState}</LedgerFact>
+                    <LedgerFact>Sources: {entry.sourceIds.join(", ")}</LedgerFact>
+                    <LedgerFact>Checks: {entry.expectedValueChecks.join(", ")}</LedgerFact>
+                    <LedgerFact>Artifacts: {entry.outputArtifacts.join(", ")}</LedgerFact>
+                  </div>
+                </div>
               ))}
-            </div>,
-            <StatusBadge key="status" tone={scenario.coverageStatus === "covered" ? "good" : "warn"}>
-              {formatStatus(scenario.coverageStatus)}
-            </StatusBadge>,
-          ])}
-        />
+            </div>
+          </section>
+        </div>
 
         <div className="space-y-3">
           <div className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
@@ -193,6 +232,14 @@ function ReadinessMetric({
   );
 }
 
+function LedgerFact({ children }: { children: ReactNode }) {
+  return (
+    <p className="min-w-0 rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 font-medium text-[var(--foreground)]">
+      {children}
+    </p>
+  );
+}
+
 function formatStatus(value: string) {
   const words = value
     .split("-")
@@ -200,4 +247,13 @@ function formatStatus(value: string) {
     .join(" ");
 
   return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat("en-IE", {
+    style: "currency",
+    currency: "EUR",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
 }
