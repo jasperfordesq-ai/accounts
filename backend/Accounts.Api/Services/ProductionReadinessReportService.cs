@@ -65,6 +65,26 @@ public sealed record GoldenFilingCorpusScenario(
     IReadOnlyList<string> Assertions,
     GoldenFilingCorpusEvidencePack EvidencePack);
 
+public sealed record GoldenEvidenceLedgerEntry(
+    string ScenarioCode,
+    string Label,
+    string FixtureLegalName,
+    string CompanyType,
+    string ExpectedOutcome,
+    string CoverageStatus,
+    string AcceptanceStatus,
+    string RequiredSignOffGate,
+    bool BlocksRelease,
+    IReadOnlyList<string> AutomatedVerifierNames,
+    IReadOnlyList<string> OutputArtifacts,
+    IReadOnlyList<string> DecisionGates,
+    IReadOnlyList<string> ExpectedValueChecks,
+    IReadOnlyList<string> ProofPointAreas,
+    IReadOnlyList<string> SourceIds,
+    decimal ExpectedCorporationTax,
+    string FilingReadinessState,
+    string SignOffPacketState);
+
 public sealed record SourceLawTraceabilityEntry(
     string SourceId,
     string Title,
@@ -329,6 +349,7 @@ public sealed record ProductionReadinessReport(
     AccountantAcceptanceSummary AccountantAcceptanceSummary,
     IReadOnlyList<ProductionReadinessArea> Areas,
     IReadOnlyList<GoldenFilingCorpusScenario> GoldenFilingCorpus,
+    IReadOnlyList<GoldenEvidenceLedgerEntry> GoldenEvidenceLedger,
     IReadOnlyList<StatutoryRuleMatrixEntry> StatutoryRuleMatrix,
     IReadOnlyList<StatutoryRulesCoverageItem> StatutoryRulesCoverage,
     IReadOnlyList<string> ManualHandoffPaths,
@@ -372,6 +393,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             assuranceActions,
             releaseReviewChecklist);
         var accountantAcceptanceCriteria = BuildAccountantAcceptanceCriteria(goldenCorpus);
+        var goldenEvidenceLedger = BuildGoldenEvidenceLedger(goldenCorpus, accountantAcceptanceCriteria);
         var accountantAcceptanceSummary = BuildAccountantAcceptanceSummary(goldenCorpus, accountantAcceptanceCriteria);
         var visualQaCoverage = BuildVisualQaCoverage();
         var sourceLawTraceability = BuildSourceLawTraceability(
@@ -403,6 +425,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             accountantAcceptanceSummary,
             areas,
             goldenCorpus,
+            goldenEvidenceLedger,
             statutoryRuleMatrix,
             statutoryRulesCoverage,
             manualHandoffPaths,
@@ -457,6 +480,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "source-law-traceability-index",
             "source-law-maintenance-protocol",
             "golden-filing-corpus",
+            "golden-evidence-ledger",
             "golden-verifier-manifest",
             "statutory-rules-matrix",
             "statutory-rules-coverage",
@@ -562,6 +586,42 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     inSnapshot,
                     pair.Value.ToArray(),
                     releaseGateCodes.TryGetValue(pair.Key, out var gates) ? gates : []);
+            })
+            .ToArray();
+    }
+
+    private static IReadOnlyList<GoldenEvidenceLedgerEntry> BuildGoldenEvidenceLedger(
+        IReadOnlyList<GoldenFilingCorpusScenario> goldenCorpus,
+        IReadOnlyList<AccountantAcceptanceCriterion> accountantAcceptanceCriteria)
+    {
+        var acceptanceByScenario = accountantAcceptanceCriteria.ToDictionary(
+            criterion => criterion.ScenarioCode,
+            StringComparer.Ordinal);
+
+        return goldenCorpus
+            .OrderBy(scenario => scenario.Code, StringComparer.Ordinal)
+            .Select(scenario =>
+            {
+                var acceptance = acceptanceByScenario[scenario.Code];
+                return new GoldenEvidenceLedgerEntry(
+                    scenario.Code,
+                    scenario.Label,
+                    scenario.Fixture.LegalName,
+                    scenario.Fixture.CompanyType,
+                    scenario.ExpectedOutcome,
+                    scenario.CoverageStatus,
+                    acceptance.AcceptanceStatus,
+                    acceptance.RequiredSignOffGate,
+                    acceptance.Required || scenario.Fixture.ManualProfessionalReviewRequired || scenario.ExpectedOutcome == "manual-handoff",
+                    scenario.EvidenceTestNames.Order(StringComparer.Ordinal).ToArray(),
+                    scenario.EvidencePack.OutputArtifacts.Order(StringComparer.Ordinal).ToArray(),
+                    scenario.EvidencePack.DecisionGates.Order(StringComparer.Ordinal).ToArray(),
+                    scenario.EvidencePack.ExpectedValueChecks.Order(StringComparer.Ordinal).ToArray(),
+                    scenario.EvidencePack.ExpectedProofPoints.Select(proof => proof.Area).Order(StringComparer.Ordinal).ToArray(),
+                    scenario.EvidencePack.SourceReferences.Select(source => source.SourceId).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
+                    scenario.EvidencePack.ExpectedOutputs.ExpectedCorporationTax,
+                    scenario.EvidencePack.ExpectedOutputs.FilingReadinessState,
+                    scenario.EvidencePack.ExpectedOutputs.SignOffPacketState);
             })
             .ToArray();
     }

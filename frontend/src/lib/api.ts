@@ -1632,6 +1632,27 @@ export interface GoldenFilingCorpusScenario {
   evidencePack: GoldenFilingCorpusEvidencePack;
 }
 
+export interface GoldenEvidenceLedgerEntry {
+  scenarioCode: string;
+  label: string;
+  fixtureLegalName: string;
+  companyType: string;
+  expectedOutcome: string;
+  coverageStatus: string;
+  acceptanceStatus: string;
+  requiredSignOffGate: string;
+  blocksRelease: boolean;
+  automatedVerifierNames: string[];
+  outputArtifacts: string[];
+  decisionGates: string[];
+  expectedValueChecks: string[];
+  proofPointAreas: string[];
+  sourceIds: string[];
+  expectedCorporationTax: number;
+  filingReadinessState: string;
+  signOffPacketState: string;
+}
+
 export interface StatutoryRuleMatrixEntry {
   code: string;
   companyScope: string;
@@ -1896,6 +1917,7 @@ export interface ProductionReadinessReport {
   accountantAcceptanceSummary: AccountantAcceptanceSummary;
   areas: ProductionReadinessArea[];
   goldenFilingCorpus: GoldenFilingCorpusScenario[];
+  goldenEvidenceLedger: GoldenEvidenceLedgerEntry[];
   statutoryRuleMatrix: StatutoryRuleMatrixEntry[];
   statutoryRulesCoverage: StatutoryRulesCoverageItem[];
   manualHandoffPaths: string[];
@@ -2028,6 +2050,27 @@ const goldenFilingCorpusScenarioSchema = z.object({
   evidenceVerifiers: z.array(goldenFilingCorpusVerifierSchema),
   assertions: z.array(z.string().min(1)),
   evidencePack: goldenFilingCorpusEvidencePackSchema,
+});
+
+const goldenEvidenceLedgerEntrySchema = z.object({
+  scenarioCode: z.string().min(1),
+  label: z.string().min(1),
+  fixtureLegalName: z.string().min(1),
+  companyType: z.string().min(1),
+  expectedOutcome: z.string().min(1),
+  coverageStatus: z.string().min(1),
+  acceptanceStatus: z.string().min(1),
+  requiredSignOffGate: z.string().min(1),
+  blocksRelease: z.boolean(),
+  automatedVerifierNames: z.array(z.string().min(1)),
+  outputArtifacts: z.array(z.string().min(1)),
+  decisionGates: z.array(z.string().min(1)),
+  expectedValueChecks: z.array(z.string().min(1)),
+  proofPointAreas: z.array(z.string().min(1)),
+  sourceIds: z.array(z.string().min(1)),
+  expectedCorporationTax: z.number().nonnegative(),
+  filingReadinessState: z.string().min(1),
+  signOffPacketState: z.string().min(1),
 });
 
 const statutoryRuleMatrixEntrySchema = z.object({
@@ -2278,6 +2321,7 @@ export const productionReadinessReportSchema = z.object({
   accountantAcceptanceSummary: accountantAcceptanceSummarySchema,
   areas: z.array(productionReadinessAreaSchema),
   goldenFilingCorpus: z.array(goldenFilingCorpusScenarioSchema),
+  goldenEvidenceLedger: z.array(goldenEvidenceLedgerEntrySchema),
   statutoryRuleMatrix: z.array(statutoryRuleMatrixEntrySchema),
   statutoryRulesCoverage: z.array(statutoryRulesCoverageItemSchema),
   manualHandoffPaths: z.array(z.string().min(1)),
@@ -2397,6 +2441,7 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
   }
 
   const scenariosByCode = new Map(report.goldenFilingCorpus.map((scenario) => [scenario.code, scenario]));
+  assertGoldenEvidenceLedger(report, scenariosByCode);
   report.accountantAcceptanceCriteria.forEach((criterion, criterionIndex) => {
     const scenario = scenariosByCode.get(criterion.scenarioCode);
 
@@ -2550,6 +2595,12 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
     );
   }
 
+  if (!report.assurancePacket.evidenceItems.includes("golden-evidence-ledger")) {
+    throw new Error(
+      "Invalid production readiness report contract: assurancePacket.evidenceItems - golden-evidence-ledger is required",
+    );
+  }
+
   report.auditEvidenceTimeline.forEach((entry, entryIndex) => {
     if (entry.auditEventCodes.length === 0) {
       throw new Error(
@@ -2608,6 +2659,145 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
     throw new Error(
       "Invalid production readiness report contract: assurancePacket.evidenceItems - golden-verifier-manifest is required",
     );
+  }
+}
+
+function assertGoldenEvidenceLedger(
+  report: ProductionReadinessReport,
+  scenariosByCode: Map<string, GoldenFilingCorpusScenario>,
+) {
+  const ledgerCodes = report.goldenEvidenceLedger.map((entry) => entry.scenarioCode);
+  const duplicateLedgerCodes = ledgerCodes.filter((code, index) => ledgerCodes.indexOf(code) !== index);
+  if (duplicateLedgerCodes.length > 0) {
+    throw new Error(
+      `Invalid production readiness report contract: goldenEvidenceLedger - duplicate scenario codes: ${[...new Set(duplicateLedgerCodes)].join(", ")}`,
+    );
+  }
+
+  const scenarioCodes = [...scenariosByCode.keys()].sort((left, right) => left.localeCompare(right));
+  const sortedLedgerCodes = [...ledgerCodes].sort((left, right) => left.localeCompare(right));
+  if (
+    scenarioCodes.length !== sortedLedgerCodes.length ||
+    scenarioCodes.some((code, index) => code !== sortedLedgerCodes[index])
+  ) {
+    const missing = scenarioCodes.filter((code) => !sortedLedgerCodes.includes(code));
+    const unexpected = sortedLedgerCodes.filter((code) => !scenarioCodes.includes(code));
+    throw new Error(
+      `Invalid production readiness report contract: goldenEvidenceLedger - expected one ledger entry per golden scenario; missing ${missing.join(", ") || "none"}, unexpected ${unexpected.join(", ") || "none"}`,
+    );
+  }
+
+  const acceptanceByScenario = new Map(report.accountantAcceptanceCriteria.map((criterion) => [criterion.scenarioCode, criterion]));
+  report.goldenEvidenceLedger.forEach((entry, entryIndex) => {
+    const scenario = scenariosByCode.get(entry.scenarioCode);
+    const acceptance = acceptanceByScenario.get(entry.scenarioCode);
+    if (!scenario || !acceptance) return;
+
+    assertLedgerValue(entryIndex, "label", scenario.label, entry.label, "must mirror golden scenario label");
+    assertLedgerValue(entryIndex, "fixtureLegalName", scenario.fixture.legalName, entry.fixtureLegalName, "must mirror golden scenario fixture");
+    assertLedgerValue(entryIndex, "companyType", scenario.fixture.companyType, entry.companyType, "must mirror golden scenario fixture");
+    assertLedgerValue(entryIndex, "expectedOutcome", scenario.expectedOutcome, entry.expectedOutcome, "must mirror golden scenario outcome");
+    assertLedgerValue(entryIndex, "coverageStatus", scenario.coverageStatus, entry.coverageStatus, "must mirror golden scenario coverage");
+    assertLedgerValue(entryIndex, "acceptanceStatus", acceptance.acceptanceStatus, entry.acceptanceStatus, "must mirror accountant acceptance status");
+    assertLedgerValue(entryIndex, "requiredSignOffGate", acceptance.requiredSignOffGate, entry.requiredSignOffGate, "must mirror accountant acceptance sign-off gate");
+    assertLedgerValue(
+      entryIndex,
+      "filingReadinessState",
+      scenario.evidencePack.expectedOutputs.filingReadinessState,
+      entry.filingReadinessState,
+      "must mirror golden scenario expected outputs",
+    );
+    assertLedgerValue(
+      entryIndex,
+      "signOffPacketState",
+      scenario.evidencePack.expectedOutputs.signOffPacketState,
+      entry.signOffPacketState,
+      "must mirror golden scenario expected outputs",
+    );
+
+    if (scenario.evidencePack.expectedOutputs.expectedCorporationTax !== entry.expectedCorporationTax) {
+      throw new Error(
+        `Invalid production readiness report contract: goldenEvidenceLedger.${entryIndex}.expectedCorporationTax - must mirror golden scenario expected outputs`,
+      );
+    }
+
+    if (!entry.blocksRelease) {
+      throw new Error(
+        `Invalid production readiness report contract: goldenEvidenceLedger.${entryIndex}.blocksRelease - golden scenarios require professional release review`,
+      );
+    }
+
+    assertLedgerStringArray(
+      entryIndex,
+      "automatedVerifierNames",
+      scenario.evidenceTestNames,
+      entry.automatedVerifierNames,
+      "must mirror golden scenario verifier manifest",
+    );
+    assertLedgerStringArray(
+      entryIndex,
+      "outputArtifacts",
+      scenario.evidencePack.outputArtifacts,
+      entry.outputArtifacts,
+      "must mirror golden scenario evidence pack",
+    );
+    assertLedgerStringArray(
+      entryIndex,
+      "decisionGates",
+      scenario.evidencePack.decisionGates,
+      entry.decisionGates,
+      "must mirror golden scenario evidence pack",
+    );
+    assertLedgerStringArray(
+      entryIndex,
+      "expectedValueChecks",
+      scenario.evidencePack.expectedValueChecks,
+      entry.expectedValueChecks,
+      "must mirror golden scenario evidence pack",
+    );
+    assertLedgerStringArray(
+      entryIndex,
+      "proofPointAreas",
+      scenario.evidencePack.expectedProofPoints.map((proofPoint) => proofPoint.area),
+      entry.proofPointAreas,
+      "must mirror golden scenario proof points",
+    );
+    assertLedgerStringArray(
+      entryIndex,
+      "sourceIds",
+      scenario.evidencePack.sourceReferences.map((source) => source.sourceId),
+      entry.sourceIds,
+      "must mirror golden scenario source references",
+    );
+  });
+}
+
+function assertLedgerValue(
+  entryIndex: number,
+  field: string,
+  expected: string,
+  received: string,
+  message: string,
+) {
+  if (expected !== received) {
+    throw new Error(`Invalid production readiness report contract: goldenEvidenceLedger.${entryIndex}.${field} - ${message}`);
+  }
+}
+
+function assertLedgerStringArray(
+  entryIndex: number,
+  field: string,
+  expected: string[],
+  received: string[],
+  message: string,
+) {
+  const sortedExpected = [...new Set(expected)].sort((left, right) => left.localeCompare(right));
+  const sortedReceived = [...received].sort((left, right) => left.localeCompare(right));
+  if (
+    sortedExpected.length !== sortedReceived.length ||
+    sortedExpected.some((value, index) => value !== sortedReceived[index])
+  ) {
+    throw new Error(`Invalid production readiness report contract: goldenEvidenceLedger.${entryIndex}.${field} - ${message}`);
   }
 }
 

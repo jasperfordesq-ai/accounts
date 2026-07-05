@@ -34,6 +34,11 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.equal(parsed.goldenFilingCorpus[0].evidencePack.expectedProofPoints[0].area, "pdf-text");
   assert.equal(parsed.goldenFilingCorpus[0].evidencePack.expectedProofPoints[0].required, true);
   assert.equal(parsed.goldenFilingCorpus[0].evidencePack.sourceReferences[0].sourceId, "frc-frs-105");
+  assert.equal(parsed.goldenEvidenceLedger[0].scenarioCode, "micro-ltd");
+  assert.equal(parsed.goldenEvidenceLedger[0].fixtureLegalName, "Example Micro Limited");
+  assert.equal(parsed.goldenEvidenceLedger[0].expectedCorporationTax, 718.75);
+  assert.deepEqual(parsed.goldenEvidenceLedger[0].automatedVerifierNames, parsed.goldenFilingCorpus[0].evidenceTestNames);
+  assert.ok(parsed.goldenEvidenceLedger[0].blocksRelease);
   const dacScenario = parsed.goldenFilingCorpus.find((scenario) => scenario.code === "dac-small");
   assert.equal(dacScenario?.fixture.legalName, "Atlantic Manufacturing DAC");
   assert.equal(dacScenario?.fixture.companyType, "DesignatedActivityCompany");
@@ -83,6 +88,7 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.equal(parsed.assurancePacket.goldenCorpusCovered, 2);
   assert.ok(parsed.assurancePacket.evidenceItems.includes("source-law-traceability-index"));
   assert.ok(parsed.assurancePacket.evidenceItems.includes("release-review-checklist"));
+  assert.ok(parsed.assurancePacket.evidenceItems.includes("golden-evidence-ledger"));
   assert.ok(parsed.assurancePacket.evidenceItems.includes("golden-verifier-manifest"));
   assert.ok(parsed.assurancePacket.evidenceItems.includes("release-blocker-register"));
   assert.equal(parsed.assurancePacket.releaseBlockers[0], "Qualified accountant sign-off required");
@@ -176,6 +182,29 @@ test("parseProductionReadinessReport rejects missing golden corpus evidence pack
   assert.throws(
     () => parseProductionReadinessReport(payload),
     /Invalid production readiness report contract: goldenFilingCorpus\.0\.evidencePack/,
+  );
+});
+
+test("parseProductionReadinessReport rejects missing golden evidence ledger", () => {
+  const payload = sampleReport();
+  delete payload.goldenEvidenceLedger;
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: goldenEvidenceLedger/,
+  );
+});
+
+test("parseProductionReadinessReport rejects golden evidence ledger drift", () => {
+  const payload = sampleReport();
+  payload.goldenEvidenceLedger[0] = {
+    ...payload.goldenEvidenceLedger[0],
+    outputArtifacts: ["spreadsheet export only"],
+  };
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: goldenEvidenceLedger\.0\.outputArtifacts - must mirror golden scenario evidence pack/,
   );
 });
 
@@ -493,7 +522,7 @@ function sampleReport() {
       visualQaExpectedScreenshots: expectedVisualSmokeScreenshotCount(),
       requiredOperationalGates: 1,
       openCriticalActions: 3,
-      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "golden-filing-corpus", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-blocker-register", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "production-completion-map"],
+      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-blocker-register", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "production-completion-map"],
       releaseBlockers: [
         "Qualified accountant sign-off required",
         "Source-law change review required",
@@ -668,6 +697,48 @@ function sampleReport() {
           ],
           sourceReferences: [source("frc-frs-102", "FRC FRS 102 current edition and amendments")],
         },
+      },
+    ],
+    goldenEvidenceLedger: [
+      {
+        scenarioCode: "micro-ltd",
+        label: "Micro LTD",
+        fixtureLegalName: "Example Micro Limited",
+        companyType: "Private",
+        expectedOutcome: "generated-pack",
+        coverageStatus: "covered",
+        acceptanceStatus: "qualified-accountant-review-required",
+        requiredSignOffGate: "Named qualified accountant must approve the generated pack before real filing use.",
+        blocksRelease: true,
+        automatedVerifierNames: ["AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl"],
+        outputArtifacts: ["accounts PDF text"],
+        decisionGates: ["named qualified-accountant review"],
+        expectedValueChecks: ["well-formed iXBRL"],
+        proofPointAreas: ["pdf-text"],
+        sourceIds: ["frc-frs-105"],
+        expectedCorporationTax: 718.75,
+        filingReadinessState: "100% filing readiness",
+        signOffPacketState: "review-required",
+      },
+      {
+        scenarioCode: "dac-small",
+        label: "Small DAC",
+        fixtureLegalName: "Atlantic Manufacturing DAC",
+        companyType: "DesignatedActivityCompany",
+        expectedOutcome: "generated-pack",
+        coverageStatus: "covered",
+        acceptanceStatus: "qualified-accountant-review-required",
+        requiredSignOffGate: "Named qualified accountant must approve the DAC generated pack before real filing use.",
+        blocksRelease: true,
+        automatedVerifierNames: ["FilingGoldenCorpusScenarioTests.GoldenCorpus_DacSmall_EmitsAccountsIxbrlAndSourceBackedReadiness"],
+        outputArtifacts: ["DAC accounts PDF text"],
+        decisionGates: ["named qualified-accountant review"],
+        expectedValueChecks: ["well-formed iXBRL"],
+        proofPointAreas: ["pdf-text"],
+        sourceIds: ["frc-frs-102"],
+        expectedCorporationTax: 62.5,
+        filingReadinessState: "ready-for-external-filing",
+        signOffPacketState: "ready-for-external-filing",
       },
     ],
     statutoryRuleMatrix: [

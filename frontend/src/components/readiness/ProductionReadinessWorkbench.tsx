@@ -1100,6 +1100,79 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
             }))}
           />
         </div>
+
+        <div className="mt-5 space-y-3">
+          <div>
+            <h3 className="text-sm font-semibold text-[var(--foreground)]">Golden evidence ledger</h3>
+            <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">
+              Accountant-facing ledger tying each sample company to its verifier, expected outputs, source ids, readiness state and release gate.
+            </p>
+          </div>
+          <DataTable
+            caption="Golden evidence ledger"
+            filterPlaceholder="Filter golden evidence ledger"
+            emptyState="No matching ledger entries"
+            columns={["Scenario", "Fixture", "Verifier", "Artifacts", "Expected state", "Sources", "Release gate"]}
+            rows={report.goldenEvidenceLedger.map((entry) => ({
+              id: `${entry.scenarioCode}-ledger`,
+              tone: entry.blocksRelease ? "warn" : "good",
+              searchText: [
+                entry.scenarioCode,
+                entry.label,
+                entry.fixtureLegalName,
+                entry.companyType,
+                entry.expectedOutcome,
+                entry.coverageStatus,
+                entry.acceptanceStatus,
+                entry.requiredSignOffGate,
+                entry.filingReadinessState,
+                entry.signOffPacketState,
+                entry.expectedCorporationTax.toString(),
+                ...entry.automatedVerifierNames,
+                ...entry.outputArtifacts,
+                ...entry.decisionGates,
+                ...entry.expectedValueChecks,
+                ...entry.proofPointAreas,
+                ...entry.sourceIds,
+              ].join(" "),
+              sortValues: [
+                entry.label,
+                entry.fixtureLegalName,
+                entry.automatedVerifierNames.join(" "),
+                entry.outputArtifacts.length,
+                entry.filingReadinessState,
+                entry.sourceIds.join(" "),
+                entry.acceptanceStatus,
+              ],
+              cells: [
+                <div key="scenario" className="min-w-40">
+                  <p className="font-medium text-[var(--foreground)]">{entry.label}</p>
+                  <code className="mt-1 block break-all text-[11px] text-[var(--muted-foreground)]">{entry.scenarioCode}</code>
+                </div>,
+                <div key="fixture" className="min-w-48 text-xs leading-5 text-[var(--muted-foreground)]">
+                  <p className="font-semibold text-[var(--foreground)]">{entry.fixtureLegalName}</p>
+                  <p>{entry.companyType}</p>
+                  <p>{formatStatus(entry.expectedOutcome)} / {formatStatus(entry.coverageStatus)}</p>
+                </div>,
+                <CodeStack key="verifier" items={entry.automatedVerifierNames} />,
+                <CompactList key="artifacts" items={entry.outputArtifacts} />,
+                <div key="state" className="min-w-48 space-y-1 text-xs leading-5 text-[var(--muted-foreground)]">
+                  <p className="font-medium text-[var(--foreground)]">Expected CT: {formatCurrency(entry.expectedCorporationTax)}</p>
+                  <p>{entry.filingReadinessState}</p>
+                  <p>{entry.signOffPacketState}</p>
+                  <p>{entry.expectedValueChecks.join(", ")}</p>
+                </div>,
+                <CodeStack key="sources" items={entry.sourceIds} />,
+                <div key="gate" className="min-w-48 space-y-2">
+                  <StatusBadge tone={entry.blocksRelease ? "warn" : "good"}>
+                    {formatStatus(entry.acceptanceStatus)}
+                  </StatusBadge>
+                  <p className="text-xs leading-5 text-[var(--muted-foreground)]">{entry.requiredSignOffGate}</p>
+                </div>,
+              ],
+            }))}
+          />
+        </div>
       </section>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">

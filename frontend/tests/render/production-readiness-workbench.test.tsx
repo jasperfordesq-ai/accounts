@@ -23,9 +23,11 @@ describe("ProductionReadinessWorkbench", () => {
     expect(screen.getByRole("searchbox", { name: "Filter Statutory rules matrix" })).toBeInTheDocument();
     expect(screen.getByRole("searchbox", { name: "Filter Golden filing corpus" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Golden filing corpus" })).toBeInTheDocument();
-    expect(screen.getAllByText("Micro LTD")).toHaveLength(2);
+    expect(screen.getAllByText("Micro LTD").length).toBeGreaterThanOrEqual(2);
     expect(screen.getAllByText("AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl").length).toBeGreaterThan(1);
     expect(screen.getByRole("heading", { name: "Golden evidence pack" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Golden evidence ledger" })).toBeInTheDocument();
+    expect(screen.getByRole("searchbox", { name: "Filter Golden evidence ledger" })).toBeInTheDocument();
     expectText("accounts PDF text");
     expectText("accountant sign-off packet");
     expectText("accountant-signoff-packet");
@@ -248,7 +250,7 @@ function sampleReport(): ProductionReadinessReport {
       visualQaExpectedScreenshots: 24,
       requiredOperationalGates: 1,
       openCriticalActions: 1,
-      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "golden-filing-corpus", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "production-completion-map"],
+      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "production-completion-map"],
       releaseBlockers: ["Qualified accountant sign-off required"],
     },
     accountantAcceptanceCriteria: [
@@ -404,6 +406,28 @@ function sampleReport(): ProductionReadinessReport {
             },
           ],
         },
+      },
+    ],
+    goldenEvidenceLedger: [
+      {
+        scenarioCode: "micro-ltd",
+        label: "Micro LTD",
+        fixtureLegalName: "Example Micro Limited",
+        companyType: "Private",
+        expectedOutcome: "generated-pack",
+        coverageStatus: "covered",
+        acceptanceStatus: "qualified-accountant-review-required",
+        requiredSignOffGate: "Named qualified accountant must approve the generated pack before real filing use.",
+        blocksRelease: true,
+        automatedVerifierNames: ["AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl"],
+        outputArtifacts: ["accounts PDF text", "CRO filing pack", "iXBRL XML", "accountant sign-off packet"],
+        decisionGates: ["named qualified-accountant review", "director and secretary certification", "accountant sign-off packet state"],
+        expectedValueChecks: ["Micro regime", "100% filing readiness", "well-formed iXBRL"],
+        proofPointAreas: ["pdf-text", "signatory-gates", "accountant-signoff-packet"],
+        sourceIds: ["frc-frs-105"],
+        expectedCorporationTax: 718.75,
+        filingReadinessState: "100% filing readiness",
+        signOffPacketState: "review-required",
       },
     ],
     manualHandoffPaths: ["PLC and public-company workflows"],

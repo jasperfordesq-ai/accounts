@@ -725,6 +725,57 @@ public class ProductionReadinessReportTests
     }
 
     [Fact]
+    public async Task ProductionReadinessReport_ExposesGoldenEvidenceLedgerForAccountantReview()
+    {
+        await using var db = CreateDbContext();
+        var report = await new ProductionReadinessReportService(db).GetReportAsync();
+        var ledgerProperty = report.GetType().GetProperty("GoldenEvidenceLedger");
+
+        Assert.NotNull(ledgerProperty);
+        var ledger = Assert.IsAssignableFrom<System.Collections.IEnumerable>(ledgerProperty!.GetValue(report))
+            .Cast<object>()
+            .ToArray();
+
+        Assert.Equal(
+            report.GoldenFilingCorpus.Select(scenario => scenario.Code).Order(StringComparer.Ordinal),
+            ledger.Select(entry => StringProperty(entry, "ScenarioCode")).Order(StringComparer.Ordinal));
+        Assert.Contains(report.AssurancePacket.EvidenceItems, item => item == "golden-evidence-ledger");
+
+        foreach (var scenario in report.GoldenFilingCorpus)
+        {
+            var entry = Assert.Single(ledger, item => StringProperty(item, "ScenarioCode") == scenario.Code);
+            var acceptance = Assert.Single(report.AccountantAcceptanceCriteria, item => item.ScenarioCode == scenario.Code);
+
+            Assert.Equal(scenario.Label, StringProperty(entry, "Label"));
+            Assert.Equal(scenario.Fixture.LegalName, StringProperty(entry, "FixtureLegalName"));
+            Assert.Equal(scenario.Fixture.CompanyType, StringProperty(entry, "CompanyType"));
+            Assert.Equal(scenario.ExpectedOutcome, StringProperty(entry, "ExpectedOutcome"));
+            Assert.Equal(scenario.CoverageStatus, StringProperty(entry, "CoverageStatus"));
+            Assert.Equal(acceptance.AcceptanceStatus, StringProperty(entry, "AcceptanceStatus"));
+            Assert.Equal(acceptance.RequiredSignOffGate, StringProperty(entry, "RequiredSignOffGate"));
+            Assert.True(BooleanProperty(entry, "BlocksRelease"));
+            Assert.Equal(scenario.EvidenceTestNames.Order(StringComparer.Ordinal), StringListProperty(entry, "AutomatedVerifierNames").Order(StringComparer.Ordinal));
+            Assert.Equal(scenario.EvidencePack.OutputArtifacts.Order(StringComparer.Ordinal), StringListProperty(entry, "OutputArtifacts").Order(StringComparer.Ordinal));
+            Assert.Equal(scenario.EvidencePack.DecisionGates.Order(StringComparer.Ordinal), StringListProperty(entry, "DecisionGates").Order(StringComparer.Ordinal));
+            Assert.Equal(scenario.EvidencePack.ExpectedValueChecks.Order(StringComparer.Ordinal), StringListProperty(entry, "ExpectedValueChecks").Order(StringComparer.Ordinal));
+            Assert.Equal(
+                scenario.EvidencePack.ExpectedProofPoints.Select(proof => proof.Area).Order(StringComparer.Ordinal),
+                StringListProperty(entry, "ProofPointAreas").Order(StringComparer.Ordinal));
+            Assert.Equal(
+                scenario.EvidencePack.SourceReferences.Select(source => source.SourceId).Order(StringComparer.Ordinal),
+                StringListProperty(entry, "SourceIds").Order(StringComparer.Ordinal));
+            Assert.Equal(scenario.EvidencePack.ExpectedOutputs.ExpectedCorporationTax, DecimalProperty(entry, "ExpectedCorporationTax"));
+            Assert.Equal(scenario.EvidencePack.ExpectedOutputs.FilingReadinessState, StringProperty(entry, "FilingReadinessState"));
+            Assert.Equal(scenario.EvidencePack.ExpectedOutputs.SignOffPacketState, StringProperty(entry, "SignOffPacketState"));
+        }
+
+        Assert.Contains(ledger, entry =>
+            StringProperty(entry, "ScenarioCode") == "medium-audit-required"
+            && StringProperty(entry, "AcceptanceStatus") == "manual-handoff-review-required"
+            && StringListProperty(entry, "DecisionGates").Any(gate => gate.Contains("auditor", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    [Fact]
     public async Task GoldenCorpusScenarios_ExposeConcreteFixtureIdentityForAccountantAcceptance()
     {
         await using var db = CreateDbContext();
