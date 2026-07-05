@@ -113,7 +113,7 @@ function productionReadinessReportFixture() {
       goldenCorpusTotal: 1,
       statutoryRuleMatrixPaths: 1,
       statutoryRuleCoverageFamilies: 1,
-      visualQaExpectedScreenshots: 24,
+      visualQaExpectedScreenshots: 4,
       requiredOperationalGates: 1,
       openCriticalActions: 1,
       evidenceItems: ["source-law-snapshot-fingerprint", "golden-filing-corpus", "visual-smoke-screenshots"],
@@ -255,7 +255,7 @@ function productionReadinessReportFixture() {
     visualQaCoverage: {
       artifactName: "visual-smoke-screenshots",
       enforcement: "ci-production-smoke",
-      expectedScreenshotCount: 24,
+      expectedScreenshotCount: 4,
       layoutChecks: ["browser-console-errors", "page-horizontal-overflow", "visible-text-overlap"],
       themes: ["light", "dark"],
       viewports: [{ name: "desktop", width: 1440, height: 1000 }],
