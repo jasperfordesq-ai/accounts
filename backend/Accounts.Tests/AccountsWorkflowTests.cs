@@ -9264,7 +9264,9 @@ public class AccountsWorkflowTests
         Assert.Contains("croSubmissionReference", source);
         Assert.Contains("CORE submission reference", source);
         Assert.Contains("CORE submission reference is required", source);
-        Assert.Contains("onMarkCroSubmitted(croSubmissionReference.trim())", source);
+        Assert.Contains("const trimmedReference = croSubmissionReference.trim();", source);
+        Assert.Contains("const missingSubmissionReference = trimmedReference.length === 0;", source);
+        Assert.Contains("onMarkCroSubmitted(trimmedReference)", source);
         Assert.Contains("status: \"Submitted\", submissionReference", source);
     }
 
