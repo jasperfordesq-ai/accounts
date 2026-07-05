@@ -61,6 +61,7 @@ export function DashboardCompanyDirectory({
         filterPlaceholder="Filter companies, deadlines, reviewers or status"
         emptyState="No matching companies"
         columns={["Company", "Activity", "Periods", "Deadline", "Reviewer", "Next action"]}
+        sortableColumns={[true, true, true, true, true, false]}
         rows={rows.map((row) => ({
           id: row.company.id,
           tone: row.rowTone,

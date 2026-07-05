@@ -301,6 +301,25 @@ describe("workbench primitives", () => {
     expect(rows[1]).toHaveAttribute("data-tone", "bad");
   });
 
+  it("keeps command columns unsortable while data columns remain sortable", () => {
+    render(
+      <DataTable
+        caption="Filing action queue"
+        columns={["Company", "Deadline", "Next action"]}
+        sortableColumns={[true, true, false]}
+        rows={[
+          ["Alpha Limited", "23 Sep 2026", "Open filing"],
+          ["Bravo DAC", "15 Jul 2026", "Review handoff"],
+        ]}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Sort by Company" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sort by Deadline" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Sort by Next action" })).not.toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Next action" })).not.toHaveAttribute("aria-sort");
+  });
+
   it("renders totals, warning cues, and a useful empty state", async () => {
     const user = userEvent.setup();
     render(

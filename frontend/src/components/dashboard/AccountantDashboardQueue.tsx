@@ -85,6 +85,7 @@ export function AccountantDashboardQueue({
             filterPlaceholder="Filter companies, blockers, reviewers or actions"
             emptyState="No matching companies in the work queue"
             columns={["Company", "Deadline", "Blockers", "Assigned reviewer", "Next action"]}
+            sortableColumns={[true, true, true, true, false]}
             defaultSort={{ columnIndex: 1, direction: "asc" }}
             rows={rows.map((row) => ({
               id: row.company.id,

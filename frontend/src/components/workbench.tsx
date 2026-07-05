@@ -687,6 +687,7 @@ export function DataTable({
   emptyState = "No rows to show",
   totals,
   defaultSort = null,
+  sortableColumns,
 }: {
   columns: string[];
   rows: DataTableRow[];
@@ -695,9 +696,13 @@ export function DataTable({
   emptyState?: ReactNode;
   totals?: ReactNode[];
   defaultSort?: DataTableSortState | null;
+  sortableColumns?: boolean[];
 }) {
+  const isColumnSortable = (columnIndex: number) => sortableColumns?.[columnIndex] ?? true;
   const [filter, setFilter] = useState("");
-  const [sortState, setSortState] = useState<DataTableSortState | null>(defaultSort);
+  const [sortState, setSortState] = useState<DataTableSortState | null>(
+    defaultSort && isColumnSortable(defaultSort.columnIndex) ? defaultSort : null,
+  );
   const normalizedRows = useMemo(() => rows.map(normalizeDataTableRow), [rows]);
   const normalizedFilter = filter.trim().toLowerCase();
   const visibleRows = useMemo(() => {
@@ -718,6 +723,8 @@ export function DataTable({
   const tableLabel = caption ?? "Workbench data table";
   const showFilter = Boolean(filterPlaceholder);
   const toggleSort = (columnIndex: number) => {
+    if (!isColumnSortable(columnIndex)) return;
+
     setSortState((current) => {
       if (current?.columnIndex !== columnIndex) {
         return { columnIndex, direction: "asc" };
@@ -761,21 +768,28 @@ export function DataTable({
           <tr>
             {columns.map((column, columnIndex) => {
               const isSorted = sortState?.columnIndex === columnIndex;
+              const isSortable = isColumnSortable(columnIndex);
               return (
                 <th
                   key={column}
-                  aria-sort={isSorted ? (sortState.direction === "asc" ? "ascending" : "descending") : "none"}
+                  aria-sort={isSortable ? (isSorted ? (sortState.direction === "asc" ? "ascending" : "descending") : "none") : undefined}
                   className="whitespace-nowrap border-b border-[var(--border)] px-4 py-3"
                 >
-                  <button
-                    type="button"
-                    aria-label={`Sort by ${column}`}
-                    onClick={() => toggleSort(columnIndex)}
-                    className="inline-flex min-h-7 items-center gap-1.5 rounded-sm text-left font-semibold uppercase text-[var(--muted-foreground)] transition hover:text-[var(--foreground)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500"
-                  >
-                    <span>{column}</span>
-                    <SortIcon direction={isSorted ? sortState.direction : null} />
-                  </button>
+                  {isSortable ? (
+                    <button
+                      type="button"
+                      aria-label={`Sort by ${column}`}
+                      onClick={() => toggleSort(columnIndex)}
+                      className="inline-flex min-h-7 items-center gap-1.5 rounded-sm text-left font-semibold uppercase text-[var(--muted-foreground)] transition hover:text-[var(--foreground)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500"
+                    >
+                      <span>{column}</span>
+                      <SortIcon direction={isSorted ? sortState.direction : null} />
+                    </button>
+                  ) : (
+                    <span className="inline-flex min-h-7 items-center text-left font-semibold uppercase text-[var(--muted-foreground)]">
+                      {column}
+                    </span>
+                  )}
                 </th>
               );
             })}
