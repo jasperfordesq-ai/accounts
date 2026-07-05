@@ -597,16 +597,27 @@ function CroWorkflowActions({
   }
 
   if (filingStatus.cro.status === "Approved") {
+    const trimmedReference = croSubmissionReference.trim();
+    const missingSubmissionReference = trimmedReference.length === 0;
+
     return (
-      <Button
-        variant="primary"
-        size="sm"
-        onPress={() => {
-          void onMarkCroSubmitted(croSubmissionReference.trim());
-        }}
-      >
-        <Upload className="w-4 h-4 mr-1" /> Mark as Submitted
-      </Button>
+      <div className="flex min-w-0 flex-col gap-2">
+        <Button
+          variant="primary"
+          size="sm"
+          isDisabled={missingSubmissionReference}
+          onPress={() => {
+            void onMarkCroSubmitted(trimmedReference);
+          }}
+        >
+          <Upload className="w-4 h-4 mr-1" /> Mark as Submitted
+        </Button>
+        {missingSubmissionReference && (
+          <p className="max-w-xl text-xs leading-5 text-[var(--muted-foreground)]">
+            CORE submission reference is required before recording CRO submission.
+          </p>
+        )}
+      </div>
     );
   }
 

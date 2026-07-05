@@ -130,6 +130,37 @@ describe("FilingReviewCentre", () => {
     expect(onMarkSubmitted).toHaveBeenCalledWith("CORE-2026-0007");
   });
 
+  it("blocks marking a CRO filing as submitted until a CORE reference is recorded", () => {
+    const onMarkSubmitted = vi.fn();
+
+    render(
+      <FilingReviewCentre
+        filingStatus={sampleWorkflowStatus({
+          croStatus: "Approved",
+          readyToFile: true,
+        })}
+        filingReadinessProfile={sampleReadinessProfile({
+          supportedPath: true,
+          manualProfessionalReviewRequired: false,
+        })}
+        croSubmissionReference="   "
+        validatingIxbrl={false}
+        onCroSubmissionReferenceChange={vi.fn()}
+        onRunIxbrlChecks={vi.fn()}
+        onApproveForFiling={vi.fn()}
+        onMarkCroSubmitted={onMarkSubmitted}
+        onConfirmCroPayment={vi.fn()}
+        onMarkCroAccepted={vi.fn()}
+        onRecordCroSendBack={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("textbox", { name: "CORE submission reference" })).toHaveValue("   ");
+    expect(screen.getByRole("button", { name: /Mark as Submitted/i })).toBeDisabled();
+    expect(screen.getByText("CORE submission reference is required before recording CRO submission.")).toBeInTheDocument();
+    expect(onMarkSubmitted).not.toHaveBeenCalled();
+  });
+
   it("summarises filing issues before exposing the full blocker list", () => {
     render(
       <FilingReviewCentre
