@@ -83,10 +83,12 @@ export function AccountantDashboardQueue({
             filterPlaceholder="Filter companies, blockers, reviewers or actions"
             emptyState="No matching companies in the work queue"
             columns={["Company", "Deadline", "Blockers", "Assigned reviewer", "Next action"]}
+            defaultSort={{ columnIndex: 1, direction: "asc" }}
             rows={rows.map((row) => ({
               id: row.company.id,
               tone: queueRowTone(row),
               searchText: queueSearchText(row),
+              sortValues: queueSortValues(row),
               cells: [
                 <div key="company" className="min-w-56">
                   <div className="font-medium text-[var(--foreground)]">{row.company.legalName}</div>
@@ -266,6 +268,24 @@ function queueSearchText(row: QueueRow) {
     row.company.assignedReviewerEmail,
     row.nextActionLabel,
   ].filter(Boolean).join(" ");
+}
+
+function queueSortValues(row: QueueRow) {
+  return [
+    row.company.legalName,
+    queueUrgencySortValue(row),
+    `${queuePriority(row)}:${row.blockerLabel}:${row.blockerDetail}`,
+    row.company.assignedReviewerName?.trim() || "zz-unassigned",
+    row.nextActionLabel,
+  ];
+}
+
+function queueUrgencySortValue(row: QueueRow) {
+  return [
+    queuePriority(row),
+    row.deadline?.dueDate ?? "9999-12-31",
+    row.company.legalName,
+  ].join(":");
 }
 
 function deadlineSortValue(row: QueueRow) {

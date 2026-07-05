@@ -42,6 +42,7 @@ describe("AccountantDashboardQueue", () => {
     expect(screen.getByText("2 unassigned")).toBeInTheDocument();
     expect(screen.getByRole("searchbox", { name: "Filter Accountant work queue" })).toBeInTheDocument();
     expect(screen.getByText("3 of 3 rows")).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Deadline" })).toHaveAttribute("aria-sort", "ascending");
     expect(screen.getByRole("columnheader", { name: "Assigned reviewer" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Next action" })).toBeInTheDocument();
     expect(screen.getAllByRole("row")[1]).toHaveTextContent("Atlantic Public Limited Company");

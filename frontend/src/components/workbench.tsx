@@ -28,6 +28,11 @@ type DataTableRowTone = Tone;
 type DataTableSortDirection = "asc" | "desc";
 type DataTableSortValue = string | number | null | undefined;
 
+export interface DataTableSortState {
+  columnIndex: number;
+  direction: DataTableSortDirection;
+}
+
 export interface WorkflowItem {
   id?: string;
   label: string;
@@ -646,6 +651,7 @@ export function DataTable({
   filterPlaceholder,
   emptyState = "No rows to show",
   totals,
+  defaultSort = null,
 }: {
   columns: string[];
   rows: DataTableRow[];
@@ -653,12 +659,10 @@ export function DataTable({
   filterPlaceholder?: string;
   emptyState?: ReactNode;
   totals?: ReactNode[];
+  defaultSort?: DataTableSortState | null;
 }) {
   const [filter, setFilter] = useState("");
-  const [sortState, setSortState] = useState<{
-    columnIndex: number;
-    direction: DataTableSortDirection;
-  } | null>(null);
+  const [sortState, setSortState] = useState<DataTableSortState | null>(defaultSort);
   const normalizedRows = useMemo(() => rows.map(normalizeDataTableRow), [rows]);
   const normalizedFilter = filter.trim().toLowerCase();
   const visibleRows = useMemo(() => {

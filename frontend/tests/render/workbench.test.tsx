@@ -246,6 +246,35 @@ describe("workbench primitives", () => {
     expect(rows[1]).toHaveAttribute("data-tone", "good");
   });
 
+  it("opens dense tables with a declared default sort state", () => {
+    render(
+      <DataTable
+        caption="Review urgency queue"
+        columns={["Company", "Urgency"]}
+        defaultSort={{ columnIndex: 1, direction: "asc" }}
+        rows={[
+          {
+            id: "ready",
+            cells: ["Ready Client Limited", "On track"],
+            sortValues: ["Ready Client Limited", "2:on-track"],
+            tone: "good",
+          },
+          {
+            id: "blocked",
+            cells: ["Blocked Client Limited", "Manual handoff"],
+            sortValues: ["Blocked Client Limited", "0:manual-handoff"],
+            tone: "bad",
+          },
+        ]}
+      />,
+    );
+
+    const rows = screen.getAllByRole("row");
+    expect(screen.getByRole("columnheader", { name: "Urgency" })).toHaveAttribute("aria-sort", "ascending");
+    expect(within(rows[1]).getByText("Blocked Client Limited")).toBeInTheDocument();
+    expect(rows[1]).toHaveAttribute("data-tone", "bad");
+  });
+
   it("renders totals, warning cues, and a useful empty state", async () => {
     const user = userEvent.setup();
     render(
