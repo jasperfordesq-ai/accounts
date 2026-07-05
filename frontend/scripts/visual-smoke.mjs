@@ -240,7 +240,38 @@ async function checkNoPageOverflow(page, routeName) {
     clientWidth: document.documentElement.clientWidth,
   }));
   if (result.scrollWidth > result.clientWidth + 2) {
-    throw new Error(`${routeName} has page-level horizontal overflow: ${result.scrollWidth}px > ${result.clientWidth}px.`);
+    const overflowingElements = await page.evaluate(() => {
+      const viewportWidth = document.documentElement.clientWidth;
+      return Array.from(document.querySelectorAll("body *"))
+        .map((element) => {
+          const rect = element.getBoundingClientRect();
+          const overflowsRight = rect.right > viewportWidth + 2;
+          const overflowsLeft = rect.left < -2;
+          if (!overflowsRight && !overflowsLeft) return null;
+
+          return {
+            tag: element.tagName.toLowerCase(),
+            className: String(element.getAttribute("class") || "").slice(0, 180),
+            text: String(element.textContent || "").replace(/\s+/g, " ").trim().slice(0, 120),
+            left: Math.round(rect.left),
+            right: Math.round(rect.right),
+            width: Math.round(rect.width),
+          };
+        })
+        .filter(Boolean)
+        .sort((a, b) => b.right - a.right)
+        .slice(0, 8);
+    });
+    const diagnostics = overflowingElements
+      .map(
+        (element) =>
+          `- <${element.tag}> ${element.width}px [${element.left}, ${element.right}] class="${element.className}" text="${element.text}"`,
+      )
+      .join("\n");
+    throw new Error(
+      `${routeName} has page-level horizontal overflow: ${result.scrollWidth}px > ${result.clientWidth}px.` +
+        (diagnostics ? `\nOverflowing elements:\n${diagnostics}` : ""),
+    );
   }
 }
 
