@@ -994,7 +994,7 @@ function parseMoneyInputDraft(rawValue: string, allowNegative: boolean) {
 
 export function FilingActionBar({ children }: { children: ReactNode }) {
   return (
-    <div className="z-20 flex flex-col gap-3 rounded-md border border-[var(--border)] bg-[var(--surface)] p-3 shadow-lg shadow-black/10 sm:sticky sm:bottom-4 sm:flex-row sm:items-center sm:justify-end">
+    <div className="flex flex-col gap-3 rounded-md border border-[var(--border)] bg-[var(--surface)] p-3 shadow-lg shadow-black/10 sm:flex-row sm:items-center sm:justify-end">
       {children}
     </div>
   );
