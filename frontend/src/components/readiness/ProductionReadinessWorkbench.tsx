@@ -36,6 +36,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
   const visualQaCoverage = report.visualQaCoverage;
   const assurancePacket = report.assurancePacket;
   const accountantAcceptanceSummary = report.accountantAcceptanceSummary;
+  const accountantWorkflowWalkthroughProtocol = report.accountantWorkflowWalkthroughProtocol;
   const hardenedAreas = report.areas.filter((area) => area.status === "hardened").length;
   const coveredScenarios = report.goldenFilingCorpus.filter((scenario) => scenario.coverageStatus === "covered").length;
   const enforcedGates = report.operationalGates.filter((gate) => gate.status === "enforced").length;
@@ -511,6 +512,60 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
             ],
           }))}
         />
+      </ReviewPanel>
+
+      <ReviewPanel
+        title="Accountant workflow walkthrough"
+        description="Named qualified-accountant walkthrough protocol for taking the seeded golden companies through the live accountant journey."
+        actions={<StatusBadge tone="warn">{formatStatus(accountantWorkflowWalkthroughProtocol.status)}</StatusBadge>}
+      >
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+          <div className="rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Reviewer</p>
+                <p className="mt-1 text-sm font-semibold text-[var(--foreground)]">
+                  {accountantWorkflowWalkthroughProtocol.reviewerRole}
+                </p>
+                <code className="mt-1 block break-all text-[11px] text-[var(--muted-foreground)]">
+                  {accountantWorkflowWalkthroughProtocol.protocolVersion}
+                </code>
+              </div>
+              <StatusBadge tone="bad">Blocks release</StatusBadge>
+            </div>
+            <div className="mt-4 space-y-3 text-xs leading-5 text-[var(--muted-foreground)]">
+              <div>
+                <p className="mb-1 font-semibold uppercase text-[var(--foreground)]">Sign-off gate</p>
+                <code className="break-all text-[11px] text-[var(--foreground)]">
+                  {accountantWorkflowWalkthroughProtocol.signOffGate}
+                </code>
+              </div>
+              <div>
+                <p className="mb-1 font-semibold uppercase text-[var(--foreground)]">Seeded scenarios</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {accountantWorkflowWalkthroughProtocol.seededScenarioCodes.map((code) => (
+                    <StatusBadge key={code} tone="default">{code}</StatusBadge>
+                  ))}
+                </div>
+              </div>
+              <p>{accountantWorkflowWalkthroughProtocol.failurePolicy}</p>
+            </div>
+          </div>
+          <div className="grid gap-3 lg:grid-cols-3">
+            <div className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
+              <p className="mb-2 text-xs font-semibold uppercase text-[var(--foreground)]">Route sequence</p>
+              <CompactList items={accountantWorkflowWalkthroughProtocol.routeSequence} />
+            </div>
+            <div className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
+              <p className="mb-2 text-xs font-semibold uppercase text-[var(--foreground)]">Acceptance criteria</p>
+              <CompactList items={accountantWorkflowWalkthroughProtocol.acceptanceCriteria} />
+            </div>
+            <div className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
+              <p className="mb-2 text-xs font-semibold uppercase text-[var(--foreground)]">Required evidence</p>
+              <CompactList items={accountantWorkflowWalkthroughProtocol.requiredEvidence} />
+            </div>
+          </div>
+        </div>
       </ReviewPanel>
 
       <ReviewPanel

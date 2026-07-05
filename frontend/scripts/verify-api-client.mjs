@@ -176,7 +176,7 @@ function productionReadinessReportFixture() {
       visualQaExpectedScreenshots: expectedVisualSmokeScreenshotCount(),
       requiredOperationalGates: 1,
       openCriticalActions: 1,
-      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-blocker-register", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "production-completion-map"],
+      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-blocker-register", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "production-completion-map"],
       releaseBlockers: [
         "Qualified accountant sign-off required",
         "Source-law change review required",
@@ -236,6 +236,35 @@ function productionReadinessReportFixture() {
         "Named qualified accountant must approve the generated pack before real filing use.",
       ],
       status: "qualified-accountant-review-required",
+    },
+    accountantWorkflowWalkthroughProtocol: {
+      protocolVersion: "accountant-workflow-walkthrough-v1",
+      reviewerRole: "Qualified accountant",
+      status: "required-review",
+      signOffGate: "accountant-final-signoff",
+      failurePolicy: "Block release if a named qualified accountant has not walked the seeded golden corpus through the live accountant workflow and accepted the outputs, gates, wording and evidence.",
+      seededScenarioCodes: ["dac-small", "micro-ltd"],
+      routeSequence: [
+        "Dashboard: identify the client, deadline pressure, blockers, reviewer owner and next action.",
+        "Company detail: confirm statutory profile, company type, officers, charity flags and period setup.",
+        "Period workspace: review import, classification, year-end evidence, statements, notes and workflow rail state.",
+        "Filing review: inspect readiness profile, legal source links, generated outputs, signatory gates and accountant sign-off packet.",
+        "Production readiness: confirm golden corpus, statutory rules coverage, visual QA, release blockers and operational controls.",
+      ],
+      acceptanceCriteria: [
+        "Micro LTD walkthrough confirms PDF wording, iXBRL XML, tax computation, notes, signatory gates and 100% filing readiness.",
+        "Small abridged LTD walkthrough confirms full accounts, abridged CRO pack, Section 352 evidence, iXBRL and audit-exemption gates.",
+        "CLG charity walkthrough confirms charity number, SoFA, trustees annual report, charity notes and Charities Regulator evidence.",
+        "Medium/audit-required walkthrough confirms auditor handoff blocks normal approval until signed auditor report evidence and manual acceptance are recorded.",
+        "A named qualified accountant states that the generated outputs, gates, wording and evidence are professionally acceptable for the supported scope.",
+      ],
+      requiredEvidence: [
+        "seeded golden corpus walkthrough note",
+        "named qualified-accountant approval",
+        "visual QA screenshot review",
+        "generated PDF and iXBRL evidence",
+        "manual handoff acceptance",
+      ],
     },
     areas: [
       {

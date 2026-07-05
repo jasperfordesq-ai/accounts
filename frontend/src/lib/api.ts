@@ -1824,6 +1824,18 @@ export interface AccountantAcceptanceSummary {
   status: string;
 }
 
+export interface AccountantWorkflowWalkthroughProtocol {
+  protocolVersion: string;
+  reviewerRole: string;
+  status: string;
+  signOffGate: string;
+  failurePolicy: string;
+  seededScenarioCodes: string[];
+  routeSequence: string[];
+  acceptanceCriteria: string[];
+  requiredEvidence: string[];
+}
+
 export interface VisualQaViewport {
   name: string;
   width: number;
@@ -1915,6 +1927,7 @@ export interface ProductionReadinessReport {
   assurancePacket: ProductionAssurancePacket;
   accountantAcceptanceCriteria: AccountantAcceptanceCriterion[];
   accountantAcceptanceSummary: AccountantAcceptanceSummary;
+  accountantWorkflowWalkthroughProtocol: AccountantWorkflowWalkthroughProtocol;
   areas: ProductionReadinessArea[];
   goldenFilingCorpus: GoldenFilingCorpusScenario[];
   goldenEvidenceLedger: GoldenEvidenceLedgerEntry[];
@@ -2244,6 +2257,18 @@ const accountantAcceptanceSummarySchema = z.object({
   status: z.string().min(1),
 });
 
+const accountantWorkflowWalkthroughProtocolSchema = z.object({
+  protocolVersion: z.string().min(1),
+  reviewerRole: z.string().min(1),
+  status: z.string().min(1),
+  signOffGate: z.string().min(1),
+  failurePolicy: z.string().min(1),
+  seededScenarioCodes: z.array(z.string().min(1)),
+  routeSequence: z.array(z.string().min(1)),
+  acceptanceCriteria: z.array(z.string().min(1)),
+  requiredEvidence: z.array(z.string().min(1)),
+});
+
 const visualQaViewportSchema = z.object({
   name: z.string().min(1),
   width: z.number(),
@@ -2319,6 +2344,7 @@ export const productionReadinessReportSchema = z.object({
   assurancePacket: productionAssurancePacketSchema,
   accountantAcceptanceCriteria: z.array(accountantAcceptanceCriterionSchema),
   accountantAcceptanceSummary: accountantAcceptanceSummarySchema,
+  accountantWorkflowWalkthroughProtocol: accountantWorkflowWalkthroughProtocolSchema,
   areas: z.array(productionReadinessAreaSchema),
   goldenFilingCorpus: z.array(goldenFilingCorpusScenarioSchema),
   goldenEvidenceLedger: z.array(goldenEvidenceLedgerEntrySchema),
@@ -2523,6 +2549,8 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
       `Invalid production readiness report contract: accountantAcceptanceSummary.status - expected ${expectedAcceptanceSummaryStatus}, received ${acceptanceSummary.status}`,
     );
   }
+
+  assertAccountantWorkflowWalkthroughProtocol(report);
 
   const snapshotSourceIds = new Set(report.sourceLawSnapshot.sources.map((source) => source.sourceId));
   const traceabilitySourceIds = new Set(report.sourceLawTraceability.map((entry) => entry.sourceId));
@@ -2835,6 +2863,63 @@ function assertSourceLawMaintenanceProtocol(report: ProductionReadinessReport) {
   if (report.sourceLawMaintenanceProtocol.acceptanceCriteria.length === 0) {
     throw new Error(
       "Invalid production readiness report contract: sourceLawMaintenanceProtocol.acceptanceCriteria - at least one criterion is required",
+    );
+  }
+}
+
+function assertAccountantWorkflowWalkthroughProtocol(report: ProductionReadinessReport) {
+  const protocol = report.accountantWorkflowWalkthroughProtocol;
+  const releaseChecklistCodes = new Set(report.releaseReviewChecklist.map((item) => item.code));
+  const expectedScenarioCodes = report.goldenFilingCorpus
+    .map((scenario) => scenario.code)
+    .sort((left, right) => left.localeCompare(right));
+  const protocolScenarioCodes = [...protocol.seededScenarioCodes].sort((left, right) => left.localeCompare(right));
+
+  assertStringArrayEqual(
+    "accountantWorkflowWalkthroughProtocol.seededScenarioCodes",
+    expectedScenarioCodes,
+    protocolScenarioCodes,
+  );
+
+  if (!releaseChecklistCodes.has(protocol.signOffGate)) {
+    throw new Error(
+      "Invalid production readiness report contract: accountantWorkflowWalkthroughProtocol.signOffGate - must reference a release checklist item",
+    );
+  }
+
+  if (!report.assurancePacket.evidenceItems.includes("accountant-workflow-walkthrough-protocol")) {
+    throw new Error(
+      "Invalid production readiness report contract: assurancePacket.evidenceItems - accountant-workflow-walkthrough-protocol is required",
+    );
+  }
+
+  for (const evidence of ["seeded golden corpus walkthrough note", "named qualified-accountant approval", "visual QA screenshot review"]) {
+    if (!protocol.requiredEvidence.includes(evidence)) {
+      throw new Error(
+        `Invalid production readiness report contract: accountantWorkflowWalkthroughProtocol.requiredEvidence - ${evidence} is required`,
+      );
+    }
+  }
+
+  for (const route of ["Dashboard", "Company detail", "Period workspace", "Filing review", "Production readiness"]) {
+    if (!protocol.routeSequence.some((step) => step.includes(route))) {
+      throw new Error(
+        `Invalid production readiness report contract: accountantWorkflowWalkthroughProtocol.routeSequence - ${route} is required`,
+      );
+    }
+  }
+
+  for (const criterion of ["Micro LTD", "Small abridged LTD", "CLG charity", "Medium/audit-required", "outputs, gates, wording and evidence"]) {
+    if (!protocol.acceptanceCriteria.some((item) => item.includes(criterion))) {
+      throw new Error(
+        `Invalid production readiness report contract: accountantWorkflowWalkthroughProtocol.acceptanceCriteria - ${criterion} is required`,
+      );
+    }
+  }
+
+  if (!protocol.failurePolicy.includes("Block release")) {
+    throw new Error(
+      "Invalid production readiness report contract: accountantWorkflowWalkthroughProtocol.failurePolicy - must block release when accountant walkthrough evidence is missing",
     );
   }
 }

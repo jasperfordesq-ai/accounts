@@ -83,6 +83,12 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
     "Named qualified accountant must approve the generated pack before real filing use.",
   ]);
   assert.equal(parsed.accountantAcceptanceSummary.status, "qualified-accountant-review-required");
+  assert.equal(parsed.accountantWorkflowWalkthroughProtocol.protocolVersion, "accountant-workflow-walkthrough-v1");
+  assert.equal(parsed.accountantWorkflowWalkthroughProtocol.signOffGate, "golden-corpus-accountant-acceptance");
+  assert.deepEqual(parsed.accountantWorkflowWalkthroughProtocol.seededScenarioCodes, ["dac-small", "micro-ltd"]);
+  assert.match(parsed.accountantWorkflowWalkthroughProtocol.routeSequence[0], /Dashboard/);
+  assert.match(parsed.accountantWorkflowWalkthroughProtocol.acceptanceCriteria.at(-1), /outputs, gates, wording and evidence/);
+  assert.ok(parsed.accountantWorkflowWalkthroughProtocol.requiredEvidence.includes("seeded golden corpus walkthrough note"));
   assert.equal(parsed.assurancePacket.packetVersion, "production-assurance-packet-v1");
   assert.equal(parsed.assurancePacket.sourceLawSnapshotHash, "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
   assert.equal(parsed.assurancePacket.goldenCorpusCovered, 2);
@@ -296,6 +302,38 @@ test("parseProductionReadinessReport rejects source-law maintenance protocols wi
   assert.throws(
     () => parseProductionReadinessReport(payload),
     /Invalid production readiness report contract: sourceLawMaintenanceProtocol\.signOffGate - must reference a release checklist item/,
+  );
+});
+
+test("parseProductionReadinessReport rejects accountant walkthrough protocols without a release checklist sign-off gate", () => {
+  const payload = sampleReport();
+  payload.accountantWorkflowWalkthroughProtocol.signOffGate = "missing-accountant-walkthrough-gate";
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: accountantWorkflowWalkthroughProtocol\.signOffGate - must reference a release checklist item/,
+  );
+});
+
+test("parseProductionReadinessReport rejects accountant walkthrough protocols that drift from the golden corpus", () => {
+  const payload = sampleReport();
+  payload.accountantWorkflowWalkthroughProtocol.seededScenarioCodes = ["micro-ltd"];
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: accountantWorkflowWalkthroughProtocol\.seededScenarioCodes - expected dac-small, micro-ltd, received micro-ltd/,
+  );
+});
+
+test("parseProductionReadinessReport rejects accountant walkthrough protocols without assurance packet evidence", () => {
+  const payload = sampleReport();
+  payload.assurancePacket.evidenceItems = payload.assurancePacket.evidenceItems.filter(
+    (item) => item !== "accountant-workflow-walkthrough-protocol",
+  );
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: assurancePacket\.evidenceItems - accountant-workflow-walkthrough-protocol is required/,
   );
 });
 
@@ -522,7 +560,7 @@ function sampleReport() {
       visualQaExpectedScreenshots: expectedVisualSmokeScreenshotCount(),
       requiredOperationalGates: 1,
       openCriticalActions: 3,
-      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-blocker-register", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "production-completion-map"],
+      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-blocker-register", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "production-completion-map"],
       releaseBlockers: [
         "Qualified accountant sign-off required",
         "Source-law change review required",
@@ -584,6 +622,35 @@ function sampleReport() {
         "Named qualified accountant must approve the generated pack before real filing use.",
       ],
       status: "qualified-accountant-review-required",
+    },
+    accountantWorkflowWalkthroughProtocol: {
+      protocolVersion: "accountant-workflow-walkthrough-v1",
+      reviewerRole: "Qualified accountant",
+      status: "required-review",
+      signOffGate: "golden-corpus-accountant-acceptance",
+      failurePolicy: "Block release if a named qualified accountant has not walked the seeded golden corpus through the live accountant workflow and accepted the outputs, gates, wording and evidence.",
+      seededScenarioCodes: ["dac-small", "micro-ltd"],
+      routeSequence: [
+        "Dashboard: identify the client, deadline pressure, blockers, reviewer owner and next action.",
+        "Company detail: confirm statutory profile, company type, officers, charity flags and period setup.",
+        "Period workspace: review import, classification, year-end evidence, statements, notes and workflow rail state.",
+        "Filing review: inspect readiness profile, legal source links, generated outputs, signatory gates and accountant sign-off packet.",
+        "Production readiness: confirm golden corpus, statutory rules coverage, visual QA, release blockers and operational controls.",
+      ],
+      acceptanceCriteria: [
+        "Micro LTD walkthrough confirms PDF wording, iXBRL XML, tax computation, notes, signatory gates and 100% filing readiness.",
+        "Small abridged LTD walkthrough confirms full accounts, abridged CRO pack, Section 352 evidence, iXBRL and audit-exemption gates.",
+        "CLG charity walkthrough confirms charity number, SoFA, trustees annual report, charity notes and Charities Regulator evidence.",
+        "Medium/audit-required walkthrough confirms auditor handoff blocks normal approval until signed auditor report evidence and manual acceptance are recorded.",
+        "A named qualified accountant states that the generated outputs, gates, wording and evidence are professionally acceptable for the supported scope.",
+      ],
+      requiredEvidence: [
+        "seeded golden corpus walkthrough note",
+        "named qualified-accountant approval",
+        "visual QA screenshot review",
+        "generated PDF and iXBRL evidence",
+        "manual handoff acceptance",
+      ],
     },
     areas: [
       {

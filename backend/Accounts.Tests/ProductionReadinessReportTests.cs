@@ -287,6 +287,64 @@ public class ProductionReadinessReportTests
     }
 
     [Fact]
+    public async Task ProductionReadinessReport_ExposesAccountantWorkflowWalkthroughProtocolForSeededSignOff()
+    {
+        await using var db = CreateDbContext();
+        var report = await new ProductionReadinessReportService(db).GetReportAsync();
+        var protocolProperty = report.GetType().GetProperty("AccountantWorkflowWalkthroughProtocol");
+
+        Assert.NotNull(protocolProperty);
+        var protocol = protocolProperty!.GetValue(report)!;
+
+        Assert.Equal("accountant-workflow-walkthrough-v1", StringProperty(protocol, "ProtocolVersion"));
+        Assert.Equal("Qualified accountant", StringProperty(protocol, "ReviewerRole"));
+        Assert.Equal("required-review", StringProperty(protocol, "Status"));
+        Assert.Equal("golden-corpus-accountant-acceptance", StringProperty(protocol, "SignOffGate"));
+        Assert.Contains("Block release", StringProperty(protocol, "FailurePolicy"), StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(
+            report.GoldenFilingCorpus.Select(scenario => scenario.Code).Order(StringComparer.Ordinal),
+            StringListProperty(protocol, "SeededScenarioCodes").Order(StringComparer.Ordinal));
+        AssertListContainsAll(
+            StringListProperty(protocol, "RouteSequence"),
+            [
+                "Dashboard",
+                "Company detail",
+                "Period workspace",
+                "Filing review",
+                "Production readiness"
+            ],
+            "accountant-walkthrough",
+            "route sequence");
+        AssertListContainsAll(
+            StringListProperty(protocol, "AcceptanceCriteria"),
+            [
+                "micro LTD",
+                "small abridged LTD",
+                "CLG charity",
+                "medium/audit-required",
+                "outputs, gates, wording and evidence"
+            ],
+            "accountant-walkthrough",
+            "acceptance criteria");
+        AssertListContainsAll(
+            StringListProperty(protocol, "RequiredEvidence"),
+            [
+                "seeded golden corpus walkthrough note",
+                "named qualified-accountant approval",
+                "visual QA screenshot review",
+                "generated PDF and iXBRL evidence",
+                "manual handoff acceptance"
+            ],
+            "accountant-walkthrough",
+            "required evidence");
+        Assert.Contains(report.AssurancePacket.EvidenceItems, item => item == "accountant-workflow-walkthrough-protocol");
+        Assert.Contains(report.ReleaseReviewChecklist, item =>
+            item.Code == "golden-corpus-accountant-acceptance"
+            && item.EvidenceArtifact == "signed-golden-corpus-acceptance-note"
+            && item.BlocksRelease);
+    }
+
+    [Fact]
     public async Task ProductionReadinessReport_ExposesCompletionTracksForBackendUiAndFrontendCode()
     {
         await using var db = CreateDbContext();

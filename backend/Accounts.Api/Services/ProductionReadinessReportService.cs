@@ -263,6 +263,17 @@ public sealed record AccountantAcceptanceSummary(
     IReadOnlyList<string> RequiredSignOffGates,
     string Status);
 
+public sealed record AccountantWorkflowWalkthroughProtocol(
+    string ProtocolVersion,
+    string ReviewerRole,
+    string Status,
+    string SignOffGate,
+    string FailurePolicy,
+    IReadOnlyList<string> SeededScenarioCodes,
+    IReadOnlyList<string> RouteSequence,
+    IReadOnlyList<string> AcceptanceCriteria,
+    IReadOnlyList<string> RequiredEvidence);
+
 public sealed record VisualQaViewport(
     string Name,
     int Width,
@@ -347,6 +358,7 @@ public sealed record ProductionReadinessReport(
     ProductionAssurancePacket AssurancePacket,
     IReadOnlyList<AccountantAcceptanceCriterion> AccountantAcceptanceCriteria,
     AccountantAcceptanceSummary AccountantAcceptanceSummary,
+    AccountantWorkflowWalkthroughProtocol AccountantWorkflowWalkthroughProtocol,
     IReadOnlyList<ProductionReadinessArea> Areas,
     IReadOnlyList<GoldenFilingCorpusScenario> GoldenFilingCorpus,
     IReadOnlyList<GoldenEvidenceLedgerEntry> GoldenEvidenceLedger,
@@ -395,6 +407,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
         var accountantAcceptanceCriteria = BuildAccountantAcceptanceCriteria(goldenCorpus);
         var goldenEvidenceLedger = BuildGoldenEvidenceLedger(goldenCorpus, accountantAcceptanceCriteria);
         var accountantAcceptanceSummary = BuildAccountantAcceptanceSummary(goldenCorpus, accountantAcceptanceCriteria);
+        var accountantWorkflowWalkthroughProtocol = BuildAccountantWorkflowWalkthroughProtocol(goldenCorpus);
         var visualQaCoverage = BuildVisualQaCoverage();
         var sourceLawTraceability = BuildSourceLawTraceability(
             sourceSnapshot,
@@ -423,6 +436,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             assurancePacket,
             accountantAcceptanceCriteria,
             accountantAcceptanceSummary,
+            accountantWorkflowWalkthroughProtocol,
             areas,
             goldenCorpus,
             goldenEvidenceLedger,
@@ -494,6 +508,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "release-verification-manifest",
             "accountant-acceptance-criteria",
             "accountant-acceptance-summary",
+            "accountant-workflow-walkthrough-protocol",
             "production-completion-map"
         };
         var releaseBlockers = assuranceActions
@@ -2421,6 +2436,39 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             releaseBlockingScenarioCodes,
             requiredSignOffGates,
             releaseBlockingScenarioCodes.Length == 0 ? "accepted" : "qualified-accountant-review-required");
+    }
+
+    private static AccountantWorkflowWalkthroughProtocol BuildAccountantWorkflowWalkthroughProtocol(
+        IReadOnlyList<GoldenFilingCorpusScenario> goldenCorpus)
+    {
+        return new AccountantWorkflowWalkthroughProtocol(
+            "accountant-workflow-walkthrough-v1",
+            "Qualified accountant",
+            "required-review",
+            "golden-corpus-accountant-acceptance",
+            "Block release if a named qualified accountant has not walked the seeded golden corpus through the live accountant workflow and accepted the outputs, gates, wording and evidence.",
+            goldenCorpus.Select(scenario => scenario.Code).Order(StringComparer.Ordinal).ToArray(),
+            [
+                "Dashboard: identify the client, deadline pressure, blockers, reviewer owner and next action.",
+                "Company detail: confirm statutory profile, company type, officers, charity flags and period setup.",
+                "Period workspace: review import, classification, year-end evidence, statements, notes and workflow rail state.",
+                "Filing review: inspect readiness profile, legal source links, generated outputs, signatory gates and accountant sign-off packet.",
+                "Production readiness: confirm golden corpus, statutory rules coverage, visual QA, release blockers and operational controls."
+            ],
+            [
+                "Micro LTD walkthrough confirms PDF wording, iXBRL XML, tax computation, notes, signatory gates and 100% filing readiness.",
+                "Small abridged LTD walkthrough confirms full accounts, abridged CRO pack, Section 352 evidence, iXBRL and audit-exemption gates.",
+                "CLG charity walkthrough confirms charity number, SoFA, trustees annual report, charity notes and Charities Regulator evidence.",
+                "Medium/audit-required walkthrough confirms auditor handoff blocks normal approval until signed auditor report evidence and manual acceptance are recorded.",
+                "A named qualified accountant states that the generated outputs, gates, wording and evidence are professionally acceptable for the supported scope."
+            ],
+            [
+                "seeded golden corpus walkthrough note",
+                "named qualified-accountant approval",
+                "visual QA screenshot review",
+                "generated PDF and iXBRL evidence",
+                "manual handoff acceptance"
+            ]);
     }
 
     private static IReadOnlyList<GoldenFilingCorpusVerifier> AcceptanceVerifiers(
