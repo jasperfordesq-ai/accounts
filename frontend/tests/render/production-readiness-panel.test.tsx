@@ -8,7 +8,7 @@ describe("ProductionReadinessPanel", () => {
     render(<ProductionReadinessPanel report={sampleReport()} />);
 
     expect(screen.getByText("Production Readiness")).toBeInTheDocument();
-    expect(screen.getByText("Review required")).toBeInTheDocument();
+    expect(screen.getAllByText("Review required")).toHaveLength(2);
     expect(screen.getAllByText("Micro LTD")).toHaveLength(2);
     expect(screen.getAllByText("CLG charity")).toHaveLength(2);
     expect(screen.getAllByText("Example Micro Limited")).toHaveLength(2);
@@ -17,6 +17,13 @@ describe("ProductionReadinessPanel", () => {
     expect(screen.getByText("Golden evidence ledger")).toBeInTheDocument();
     expect(screen.getByText("Expected CT: €718.75")).toBeInTheDocument();
     expect(screen.getByText("Readiness: ready-for-external-filing")).toBeInTheDocument();
+    expect(screen.getByText("Completion tracks")).toBeInTheDocument();
+    expect(screen.getByText("Backend code")).toBeInTheDocument();
+    expect(screen.getByText("Frontend UI/UX")).toBeInTheDocument();
+    expect(screen.getByText("Frontend code")).toBeInTheDocument();
+    expect(screen.getByText("Run qualified-accountant acceptance on the golden corpus.")).toBeInTheDocument();
+    expect(screen.getByText("Review each screenshot route-by-route.")).toBeInTheDocument();
+    expect(screen.getByText("Continue extracting large route files.")).toBeInTheDocument();
     expect(screen.getByText("No direct CRO/ROS submission automation")).toBeInTheDocument();
     expect(screen.getByText("Revenue accepted iXBRL taxonomies")).toBeInTheDocument();
     expect(screen.getByText("Qualified accountant sign-off")).toBeInTheDocument();

@@ -175,6 +175,37 @@ export function ProductionReadinessPanel({
 
         <div className="space-y-3">
           <div className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Completion tracks</p>
+              <StatusBadge tone={report.completionTracks.every((track) => track.status === "complete") ? "good" : "warn"}>
+                {report.completionTracks.length} tracks
+              </StatusBadge>
+            </div>
+            <div className="mt-3 space-y-2">
+              {report.completionTracks.map((track) => (
+                <div key={track.code} className="rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-[var(--foreground)]">{track.label}</p>
+                      <p className="mt-1 text-xs text-[var(--muted-foreground)]">{track.ownerRole}</p>
+                    </div>
+                    <StatusBadge tone={completionTrackTone(track.status)}>{formatStatus(track.status)}</StatusBadge>
+                  </div>
+                  {track.nextActions.length > 0 && (
+                    <div className="mt-3 space-y-1">
+                      {track.nextActions.slice(0, 2).map((action) => (
+                        <p key={action} className="rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 text-xs leading-5 text-[var(--foreground)]">
+                          {action}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
             <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Required gates</p>
             <div className="mt-3 space-y-2">
               {report.operationalGates.map((gate) => (
@@ -247,6 +278,18 @@ function formatStatus(value: string) {
     .join(" ");
 
   return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+function completionTrackTone(status: string) {
+  if (status === "complete") {
+    return "good";
+  }
+
+  if (status === "in-progress") {
+    return "info";
+  }
+
+  return "warn";
 }
 
 function formatCurrency(value: number) {
