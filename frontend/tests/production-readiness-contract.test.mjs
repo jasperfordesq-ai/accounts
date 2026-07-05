@@ -65,6 +65,12 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.equal(parsed.releaseReviewChecklist[0].code, "accountant-final-signoff");
   assert.equal(parsed.releaseReviewChecklist[0].assuranceActionCode, "qualified-accountant-signoff");
   assert.equal(parsed.releaseReviewChecklist[0].evidenceArtifact, "named-accountant-approval-record");
+  assert.equal(parsed.releaseVerificationManifest[0].code, "backend-golden-corpus");
+  assert.equal(parsed.releaseVerificationManifest[0].command, "dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art");
+  assert.equal(parsed.releaseVerificationManifest[0].releaseChecklistEvidenceArtifact, "named-accountant-approval-record");
+  assert.equal(parsed.releaseVerificationManifest[1].ciScope, "environment-gated");
+  assert.equal(parsed.releaseVerificationManifest[1].runsInDefaultCi, false);
+  assert.match(parsed.releaseVerificationManifest[1].manualFallback, /ACCOUNTS_POSTGRES_TEST_CONNECTION/);
   assert.equal(parsed.auditEvidenceTimeline[0].code, "data-change-capture");
   assert.equal(parsed.auditEvidenceTimeline[0].capturedWhen, "At every authenticated write before regenerated outputs can be reviewed.");
   assert.equal(parsed.auditEvidenceTimeline[1].blockingGateCodes[0], "generated-output-review");
@@ -252,6 +258,16 @@ test("parseProductionReadinessReport rejects missing audit evidence timeline", (
   );
 });
 
+test("parseProductionReadinessReport rejects missing release verification manifest", () => {
+  const payload = sampleReport();
+  delete payload.releaseVerificationManifest;
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: releaseVerificationManifest/,
+  );
+});
+
 function sampleReport() {
   return {
     generatedAt: "2026-07-04T12:00:00Z",
@@ -290,7 +306,7 @@ function sampleReport() {
       visualQaExpectedScreenshots: expectedVisualSmokeScreenshotCount(),
       requiredOperationalGates: 1,
       openCriticalActions: 1,
-      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "golden-filing-corpus", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-review-checklist"],
+      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "golden-filing-corpus", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-review-checklist", "release-verification-manifest"],
       releaseBlockers: ["Qualified accountant sign-off required"],
     },
     accountantAcceptanceCriteria: [
@@ -436,6 +452,32 @@ function sampleReport() {
         operationalGateCode: "qualified-accountant-review",
         auditEventCodes: ["CroFilingStatusChanged"],
         detail: "Named professional approval must be recorded against the period.",
+      },
+    ],
+    releaseVerificationManifest: [
+      {
+        code: "backend-golden-corpus",
+        label: "Backend golden corpus and statutory rules",
+        ownerRole: "Engineering",
+        command: "dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art",
+        ciScope: "default-ci",
+        runsInDefaultCi: true,
+        blocksRelease: true,
+        evidenceArtifact: "backend-test-results",
+        releaseChecklistEvidenceArtifact: "named-accountant-approval-record",
+        manualFallback: "Run the same command locally from backend/ when GitHub Actions is unavailable.",
+      },
+      {
+        code: "postgres-gated-audit-tests",
+        label: "PostgreSQL-gated audit durability tests",
+        ownerRole: "Engineering",
+        command: "dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter FullyQualifiedName~PostgresIntegration",
+        ciScope: "environment-gated",
+        runsInDefaultCi: false,
+        blocksRelease: true,
+        evidenceArtifact: "postgres-integration-test-results",
+        releaseChecklistEvidenceArtifact: "named-accountant-approval-record",
+        manualFallback: "Set ACCOUNTS_POSTGRES_TEST_CONNECTION to a disposable PostgreSQL database before relying on audit durability evidence.",
       },
     ],
     auditabilityControls: [

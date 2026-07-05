@@ -27,6 +27,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
   const dependencyPolicyControls = report.dependencyPolicyControls ?? [];
   const deploymentSafetyControls = report.deploymentSafetyControls ?? [];
   const releaseReviewChecklist = report.releaseReviewChecklist ?? [];
+  const releaseVerificationManifest = report.releaseVerificationManifest ?? [];
   const sourceLawTraceability = report.sourceLawTraceability ?? [];
   const visualQaCoverage = report.visualQaCoverage;
   const assurancePacket = report.assurancePacket;
@@ -258,6 +259,64 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
               <StatusBadge key="status" tone={item.blocksRelease ? "bad" : item.status === "complete" ? "good" : "warn"}>
                 {item.blocksRelease ? "Blocks release" : formatStatus(item.status)}
               </StatusBadge>,
+            ],
+          }))}
+        />
+      </ReviewPanel>
+
+      <ReviewPanel
+        title="Release verification manifest"
+        description="Executable commands and manual fallbacks that produce the release evidence pack when CI is unavailable, skipped, or environment-gated."
+        actions={<StatusBadge tone={releaseVerificationManifest.some((item) => item.blocksRelease) ? "bad" : "good"}>{releaseVerificationManifest.filter((item) => item.blocksRelease).length} blocking checks</StatusBadge>}
+      >
+        <DataTable
+          caption="Release verification manifest"
+          filterPlaceholder="Filter release verification manifest"
+          emptyState="No release verification commands"
+          defaultSort={{ columnIndex: 4, direction: "desc" }}
+          columns={["Verification", "Owner", "Command", "CI scope", "Evidence linkage", "Fallback"]}
+          rows={releaseVerificationManifest.map((item) => ({
+            id: item.code,
+            tone: item.blocksRelease ? "bad" : item.runsInDefaultCi ? "good" : "warn",
+            sortValues: [
+              item.label,
+              item.ownerRole,
+              item.command,
+              item.ciScope,
+              item.blocksRelease ? 1 : 0,
+              item.manualFallback,
+            ],
+            searchText: [
+              item.code,
+              item.label,
+              item.ownerRole,
+              item.command,
+              item.ciScope,
+              item.evidenceArtifact,
+              item.releaseChecklistEvidenceArtifact,
+              item.manualFallback,
+            ].join(" "),
+            cells: [
+              <div key="verification" className="min-w-48 whitespace-normal">
+                <p className="font-medium">{item.label}</p>
+                <code className="mt-1 block break-all text-[11px] text-[var(--muted-foreground)]">{item.code}</code>
+              </div>,
+              <span key="owner" className="text-[var(--muted-foreground)]">{item.ownerRole}</span>,
+              <code key="command" className="block min-w-56 whitespace-normal break-all rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-2 text-[11px] leading-5 text-[var(--foreground)]">
+                {item.command}
+              </code>,
+              <div key="scope" className="space-y-1">
+                <StatusBadge tone={ciScopeTone(item.ciScope)}>{item.ciScope}</StatusBadge>
+                <StatusBadge tone={item.runsInDefaultCi ? "good" : "warn"}>
+                  {item.runsInDefaultCi ? "Default CI" : "Manual evidence"}
+                </StatusBadge>
+              </div>,
+              <div key="evidence" className="min-w-48 space-y-1">
+                <code className="block break-all text-[11px] text-[var(--foreground)]">{item.evidenceArtifact}</code>
+                <p className="text-xs text-[var(--muted-foreground)]">Checklist: {item.releaseChecklistEvidenceArtifact}</p>
+                {item.blocksRelease && <StatusBadge tone="bad">Blocks release</StatusBadge>}
+              </div>,
+              <span key="fallback" className="whitespace-normal text-[var(--muted-foreground)]">{item.manualFallback}</span>,
             ],
           }))}
         />
@@ -1134,6 +1193,13 @@ function supportTone(supportLevel: string): "good" | "warn" | "bad" | "info" | "
   if (supportLevel === "supported-with-review") return "info";
   if (supportLevel === "manual-handoff") return "warn";
   if (supportLevel === "unsupported") return "bad";
+  return "default";
+}
+
+function ciScopeTone(scope: string): "good" | "warn" | "bad" | "info" | "default" {
+  if (scope === "default-ci") return "good";
+  if (scope === "environment-gated") return "warn";
+  if (scope === "manual-release") return "bad";
   return "default";
 }
 

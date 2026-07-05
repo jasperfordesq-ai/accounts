@@ -265,6 +265,66 @@ public class ProductionReadinessReportTests
     }
 
     [Fact]
+    public async Task ProductionReadinessReport_ExposesReleaseVerificationManifestForEveryProductionGate()
+    {
+        await using var db = CreateDbContext();
+        var report = await new ProductionReadinessReportService(db).GetReportAsync();
+        var manifestProperty = report.GetType().GetProperty("ReleaseVerificationManifest");
+
+        Assert.NotNull(manifestProperty);
+        var manifest = Assert.IsAssignableFrom<System.Collections.IEnumerable>(manifestProperty!.GetValue(report))
+            .Cast<object>()
+            .ToArray();
+
+        Assert.Contains(report.AssurancePacket.EvidenceItems, item => item == "release-verification-manifest");
+        Assert.Contains(manifest, item =>
+            StringProperty(item, "Code") == "backend-golden-corpus"
+            && StringProperty(item, "OwnerRole") == "Engineering"
+            && StringProperty(item, "Command").Contains("dotnet test Accounts.slnx", StringComparison.Ordinal)
+            && StringProperty(item, "EvidenceArtifact") == "backend-test-results"
+            && BooleanProperty(item, "RunsInDefaultCi")
+            && BooleanProperty(item, "BlocksRelease"));
+        Assert.Contains(manifest, item =>
+            StringProperty(item, "Code") == "frontend-workbench-contract"
+            && StringProperty(item, "Command") == "npm test"
+            && BooleanProperty(item, "RunsInDefaultCi"));
+        Assert.Contains(manifest, item =>
+            StringProperty(item, "Code") == "visual-smoke-light-dark"
+            && StringProperty(item, "Command").Contains("visual-smoke", StringComparison.OrdinalIgnoreCase)
+            && StringProperty(item, "EvidenceArtifact") == "artifacts/visual-smoke"
+            && BooleanProperty(item, "BlocksRelease"));
+        Assert.Contains(manifest, item =>
+            StringProperty(item, "Code") == "production-stack-smoke"
+            && StringProperty(item, "Command").Contains("smoke-production", StringComparison.OrdinalIgnoreCase)
+            && BooleanProperty(item, "RunsInDefaultCi"));
+        Assert.Contains(manifest, item =>
+            StringProperty(item, "Code") == "backup-restore-drill"
+            && StringProperty(item, "Command").Contains("verify-postgres-backup", StringComparison.OrdinalIgnoreCase)
+            && StringProperty(item, "CiScope") == "default-ci");
+        Assert.Contains(manifest, item =>
+            StringProperty(item, "Code") == "postgres-gated-audit-tests"
+            && StringProperty(item, "CiScope") == "environment-gated"
+            && !BooleanProperty(item, "RunsInDefaultCi")
+            && StringProperty(item, "ManualFallback").Contains("ACCOUNTS_POSTGRES_TEST_CONNECTION", StringComparison.Ordinal));
+
+        var checklistArtifactCodes = report.ReleaseReviewChecklist
+            .Select(item => item.EvidenceArtifact)
+            .ToHashSet(StringComparer.Ordinal);
+        Assert.All(manifest, item =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(item, "Code")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(item, "Label")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(item, "OwnerRole")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(item, "Command")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(item, "CiScope")));
+            Assert.Contains(StringProperty(item, "CiScope"), new[] { "default-ci", "environment-gated", "manual-release" });
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(item, "EvidenceArtifact")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(item, "ManualFallback")));
+            Assert.Contains(StringProperty(item, "ReleaseChecklistEvidenceArtifact"), checklistArtifactCodes);
+        });
+    }
+
+    [Fact]
     public async Task GoldenCorpusScenarios_ExposeFormalEvidencePacksForArtifactsGatesValuesAndSources()
     {
         await using var db = CreateDbContext();

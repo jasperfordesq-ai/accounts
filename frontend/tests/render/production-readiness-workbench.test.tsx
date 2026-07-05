@@ -53,6 +53,13 @@ describe("ProductionReadinessWorkbench", () => {
     expect(screen.getByText("Named accountant final sign-off")).toBeInTheDocument();
     expect(screen.getByText("named-accountant-approval-record")).toBeInTheDocument();
     expect(screen.getByText("ci-production-stack-smoke-and-backup-restore")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Release verification manifest" })).toBeInTheDocument();
+    expect(screen.getByRole("searchbox", { name: "Filter Release verification manifest" })).toBeInTheDocument();
+    expect(screen.getByText("Backend golden corpus and statutory rules")).toBeInTheDocument();
+    expect(screen.getByText("dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art")).toBeInTheDocument();
+    expect(screen.getByText("PostgreSQL-gated audit durability tests")).toBeInTheDocument();
+    expect(screen.getByText("environment-gated")).toBeInTheDocument();
+    expect(screen.getByText(/ACCOUNTS_POSTGRES_TEST_CONNECTION/)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Statutory rules matrix" })).toBeInTheDocument();
     expect(screen.getByText("LTD micro")).toBeInTheDocument();
     expect(screen.getByText("CLG charity")).toBeInTheDocument();
@@ -173,7 +180,7 @@ function sampleReport(): ProductionReadinessReport {
       visualQaExpectedScreenshots: 24,
       requiredOperationalGates: 1,
       openCriticalActions: 1,
-      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "golden-filing-corpus", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-review-checklist"],
+      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "golden-filing-corpus", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-review-checklist", "release-verification-manifest"],
       releaseBlockers: ["Qualified accountant sign-off required"],
     },
     accountantAcceptanceCriteria: [
@@ -403,6 +410,32 @@ function sampleReport(): ProductionReadinessReport {
         operationalGateCode: "",
         auditEventCodes: [],
         detail: "Desktop and mobile screenshots in light and dark mode must be reviewed.",
+      },
+    ],
+    releaseVerificationManifest: [
+      {
+        code: "backend-golden-corpus",
+        label: "Backend golden corpus and statutory rules",
+        ownerRole: "Engineering",
+        command: "dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art",
+        ciScope: "default-ci",
+        runsInDefaultCi: true,
+        blocksRelease: true,
+        evidenceArtifact: "backend-test-results",
+        releaseChecklistEvidenceArtifact: "named-accountant-approval-record",
+        manualFallback: "Run the same command locally from backend/ when GitHub Actions is unavailable.",
+      },
+      {
+        code: "postgres-gated-audit-tests",
+        label: "PostgreSQL-gated audit durability tests",
+        ownerRole: "Engineering",
+        command: "dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter FullyQualifiedName~PostgresIntegration",
+        ciScope: "environment-gated",
+        runsInDefaultCi: false,
+        blocksRelease: true,
+        evidenceArtifact: "postgres-integration-test-results",
+        releaseChecklistEvidenceArtifact: "ci-production-stack-smoke-and-backup-restore",
+        manualFallback: "Set ACCOUNTS_POSTGRES_TEST_CONNECTION to a disposable PostgreSQL database before relying on audit durability evidence.",
       },
     ],
     auditabilityControls: [

@@ -1726,6 +1726,19 @@ export interface ReleaseReviewChecklistItem {
   detail: string;
 }
 
+export interface ReleaseVerificationManifestItem {
+  code: string;
+  label: string;
+  ownerRole: string;
+  command: string;
+  ciScope: string;
+  runsInDefaultCi: boolean;
+  blocksRelease: boolean;
+  evidenceArtifact: string;
+  releaseChecklistEvidenceArtifact: string;
+  manualFallback: string;
+}
+
 export interface AccountantAcceptanceCriterion {
   scenarioCode: string;
   label: string;
@@ -1816,6 +1829,7 @@ export interface ProductionReadinessReport {
   dependencyPolicyControls: DependencyPolicyControl[];
   deploymentSafetyControls: DeploymentSafetyControl[];
   releaseReviewChecklist: ReleaseReviewChecklistItem[];
+  releaseVerificationManifest: ReleaseVerificationManifestItem[];
   visualQaCoverage: VisualQaCoverage;
 }
 
@@ -2030,6 +2044,19 @@ const releaseReviewChecklistItemSchema = z.object({
   detail: z.string().min(1),
 });
 
+const releaseVerificationManifestItemSchema = z.object({
+  code: z.string().min(1),
+  label: z.string().min(1),
+  ownerRole: z.string().min(1),
+  command: z.string().min(1),
+  ciScope: z.string().min(1),
+  runsInDefaultCi: z.boolean(),
+  blocksRelease: z.boolean(),
+  evidenceArtifact: z.string().min(1),
+  releaseChecklistEvidenceArtifact: z.string().min(1),
+  manualFallback: z.string().min(1),
+});
+
 const accountantAcceptanceCriterionSchema = z.object({
   scenarioCode: z.string().min(1),
   label: z.string().min(1),
@@ -2104,6 +2131,7 @@ export const productionReadinessReportSchema = z.object({
   dependencyPolicyControls: z.array(dependencyPolicyControlSchema),
   deploymentSafetyControls: z.array(deploymentSafetyControlSchema),
   releaseReviewChecklist: z.array(releaseReviewChecklistItemSchema),
+  releaseVerificationManifest: z.array(releaseVerificationManifestItemSchema),
   visualQaCoverage: visualQaCoverageSchema,
 });
 
@@ -2289,6 +2317,12 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
     );
   }
 
+  if (!report.assurancePacket.evidenceItems.includes("release-verification-manifest")) {
+    throw new Error(
+      "Invalid production readiness report contract: assurancePacket.evidenceItems - release-verification-manifest is required",
+    );
+  }
+
   if (!report.assurancePacket.evidenceItems.includes("audit-evidence-timeline")) {
     throw new Error(
       "Invalid production readiness report contract: assurancePacket.evidenceItems - audit-evidence-timeline is required",
@@ -2310,6 +2344,7 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
   });
 
   assertReleaseReviewChecklist(report);
+  assertReleaseVerificationManifest(report);
 
   report.goldenFilingCorpus.forEach((scenario, scenarioIndex) => {
     const evidenceTests = new Set(scenario.evidenceTestNames);
@@ -2465,6 +2500,45 @@ function assertReleaseReviewChecklist(report: ProductionReadinessReport) {
   if (missingActions.length > 0) {
     throw new Error(
       `Invalid production readiness report contract: releaseReviewChecklist - missing checklist items for assurance actions: ${missingActions.join(", ")}`,
+    );
+  }
+}
+
+function assertReleaseVerificationManifest(report: ProductionReadinessReport) {
+  const checklistEvidenceArtifacts = new Set(report.releaseReviewChecklist.map((item) => item.evidenceArtifact));
+  const validScopes = new Set(["default-ci", "environment-gated", "manual-release"]);
+  const manifestCodes = new Set<string>();
+
+  report.releaseVerificationManifest.forEach((item, itemIndex) => {
+    if (manifestCodes.has(item.code)) {
+      throw new Error(
+        `Invalid production readiness report contract: releaseVerificationManifest.${itemIndex}.code - duplicate manifest code`,
+      );
+    }
+    manifestCodes.add(item.code);
+
+    if (!validScopes.has(item.ciScope)) {
+      throw new Error(
+        `Invalid production readiness report contract: releaseVerificationManifest.${itemIndex}.ciScope - must be default-ci, environment-gated or manual-release`,
+      );
+    }
+
+    if (!checklistEvidenceArtifacts.has(item.releaseChecklistEvidenceArtifact)) {
+      throw new Error(
+        `Invalid production readiness report contract: releaseVerificationManifest.${itemIndex}.releaseChecklistEvidenceArtifact - must reference release checklist evidence`,
+      );
+    }
+
+    if (item.blocksRelease && !item.manualFallback.trim()) {
+      throw new Error(
+        `Invalid production readiness report contract: releaseVerificationManifest.${itemIndex}.manualFallback - blocking checks need a manual fallback`,
+      );
+    }
+  });
+
+  if (report.releaseVerificationManifest.length === 0) {
+    throw new Error(
+      "Invalid production readiness report contract: releaseVerificationManifest - at least one verification command is required",
     );
   }
 }

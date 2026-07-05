@@ -172,6 +172,18 @@ public sealed record ReleaseReviewChecklistItem(
     IReadOnlyList<string> AuditEventCodes,
     string Detail);
 
+public sealed record ReleaseVerificationManifestItem(
+    string Code,
+    string Label,
+    string OwnerRole,
+    string Command,
+    string CiScope,
+    bool RunsInDefaultCi,
+    bool BlocksRelease,
+    string EvidenceArtifact,
+    string ReleaseChecklistEvidenceArtifact,
+    string ManualFallback);
+
 public sealed record AccountantAcceptanceCriterion(
     string ScenarioCode,
     string Label,
@@ -256,6 +268,7 @@ public sealed record ProductionReadinessReport(
     IReadOnlyList<DependencyPolicyControl> DependencyPolicyControls,
     IReadOnlyList<DeploymentSafetyControl> DeploymentSafetyControls,
     IReadOnlyList<ReleaseReviewChecklistItem> ReleaseReviewChecklist,
+    IReadOnlyList<ReleaseVerificationManifestItem> ReleaseVerificationManifest,
     VisualQaCoverage VisualQaCoverage);
 
 public class ProductionReadinessReportService(AccountsDbContext db)
@@ -278,6 +291,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
         var dependencyPolicyControls = BuildDependencyPolicyControls();
         var deploymentSafetyControls = BuildDeploymentSafetyControls();
         var releaseReviewChecklist = BuildReleaseReviewChecklist(assuranceActions, operationalGates);
+        var releaseVerificationManifest = BuildReleaseVerificationManifest();
         var accountantAcceptanceCriteria = BuildAccountantAcceptanceCriteria(goldenCorpus);
         var visualQaCoverage = BuildVisualQaCoverage();
         var sourceLawTraceability = BuildSourceLawTraceability(
@@ -317,6 +331,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             dependencyPolicyControls,
             deploymentSafetyControls,
             releaseReviewChecklist,
+            releaseVerificationManifest,
             visualQaCoverage);
     }
 
@@ -365,6 +380,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "dependency-policy-controls",
             "deployment-safety-controls",
             "release-review-checklist",
+            "release-verification-manifest",
             "accountant-acceptance-criteria"
         };
         var releaseBlockers = assuranceActions
@@ -1443,6 +1459,98 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 "Desktop and mobile screenshots in light and dark mode must be reviewed for the accountant workflow before release.")
         ];
     }
+
+    private static IReadOnlyList<ReleaseVerificationManifestItem> BuildReleaseVerificationManifest() =>
+    [
+        new(
+            "backend-golden-corpus",
+            "Backend golden corpus and statutory rules",
+            "Engineering",
+            "dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art",
+            "default-ci",
+            RunsInDefaultCi: true,
+            BlocksRelease: true,
+            "backend-test-results",
+            "signed-golden-corpus-acceptance-note",
+            "Run the same command locally from backend/ when GitHub Actions is unavailable, then retain the console output with the release evidence pack."),
+        new(
+            "frontend-workbench-contract",
+            "Frontend workbench contract, render and API checks",
+            "Engineering",
+            "npm test",
+            "default-ci",
+            RunsInDefaultCi: true,
+            BlocksRelease: true,
+            "frontend-test-results",
+            "light-dark-desktop-mobile-screenshot-review",
+            "Run from frontend/ and retain the unit, render, readiness, proxy, auth and API-client verifier output."),
+        new(
+            "frontend-production-build",
+            "Frontend lint, type-check and production build",
+            "Engineering",
+            "npm run lint; npx tsc --noEmit --incremental false; npm run build",
+            "default-ci",
+            RunsInDefaultCi: true,
+            BlocksRelease: true,
+            "frontend-build-results",
+            "light-dark-desktop-mobile-screenshot-review",
+            "Run from frontend/ and retain lint, TypeScript and Next production build output when CI is unavailable."),
+        new(
+            "visual-smoke-light-dark",
+            "Light/dark desktop/mobile visual smoke",
+            "Engineering",
+            "node --experimental-strip-types scripts/visual-smoke.mjs",
+            "default-ci",
+            RunsInDefaultCi: true,
+            BlocksRelease: true,
+            "artifacts/visual-smoke",
+            "light-dark-desktop-mobile-screenshot-review",
+            "Run the visual smoke locally against seeded production-like data if CI cannot capture screenshots, then review the generated artifacts manually."),
+        new(
+            "production-stack-smoke",
+            "Production compose smoke",
+            "Operations",
+            "pwsh ./scripts/smoke-production.ps1",
+            "default-ci",
+            RunsInDefaultCi: true,
+            BlocksRelease: true,
+            "ci-production-stack-smoke-and-backup-restore",
+            "ci-production-stack-smoke-and-backup-restore",
+            "Run the production smoke script against the production compose profile and retain health, login and filing-workflow output."),
+        new(
+            "backup-restore-drill",
+            "PostgreSQL backup and restore drill",
+            "Operations",
+            "pwsh ./scripts/verify-postgres-backup.ps1",
+            "default-ci",
+            RunsInDefaultCi: true,
+            BlocksRelease: true,
+            "ci-production-stack-smoke-and-backup-restore",
+            "ci-production-stack-smoke-and-backup-restore",
+            "Run the backup verification script after creating a fresh production-shape dump and retain the checksum and restore verification output."),
+        new(
+            "postgres-gated-audit-tests",
+            "PostgreSQL-gated audit durability tests",
+            "Engineering",
+            "dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter FullyQualifiedName~PostgresIntegration",
+            "environment-gated",
+            RunsInDefaultCi: false,
+            BlocksRelease: true,
+            "postgres-integration-test-results",
+            "ci-production-stack-smoke-and-backup-restore",
+            "Set ACCOUNTS_POSTGRES_TEST_CONNECTION to a disposable PostgreSQL database and run the command from backend/ before relying on audit durability evidence."),
+        new(
+            "manual-accountant-acceptance",
+            "Named accountant acceptance walkthrough",
+            "Qualified accountant",
+            "manual walkthrough: micro LTD, small abridged LTD, CLG charity and medium/audit-required handoff",
+            "manual-release",
+            RunsInDefaultCi: false,
+            BlocksRelease: true,
+            "signed-golden-corpus-acceptance-note",
+            "signed-golden-corpus-acceptance-note",
+            "A named qualified accountant must review the generated outputs, gates, wording and source-law evidence before any real filing pack is treated as final.")
+    ];
 
     private static IReadOnlyList<GoldenFilingCorpusProofPoint> ProofPoints(
         string automatedVerifier,
