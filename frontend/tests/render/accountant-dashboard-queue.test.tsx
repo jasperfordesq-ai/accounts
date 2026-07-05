@@ -59,7 +59,7 @@ describe("AccountantDashboardQueue", () => {
     expect(within(triage).getByText("Reviewer ownership")).toBeInTheDocument();
     expect(within(triage).getByText("Unassigned reviewer")).toBeInTheDocument();
     expect(within(triage).getByText("What must I do next")).toBeInTheDocument();
-    expect(within(triage).getByRole("link", { name: "Review handoff" })).toHaveAttribute("href", "/companies/8");
+    expect(within(triage).getByRole("link", { name: "Review handoff" })).toHaveAttribute("href", "/companies/8/periods/4?tab=filing");
     expect(screen.getByRole("searchbox", { name: "Filter Accountant work queue" })).toBeInTheDocument();
     expect(screen.getByText("3 of 3 rows")).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Deadline" })).toHaveAttribute("aria-sort", "ascending");
@@ -86,13 +86,13 @@ describe("AccountantDashboardQueue", () => {
     expect(screen.getByText("Niamh Reviewer")).toBeInTheDocument();
     expect(screen.getByText("niamh.reviewer@example.ie")).toBeInTheDocument();
     expect(screen.getAllByText("Unassigned")).toHaveLength(2);
-    expect(screen.getByRole("link", { name: "Open filing" })).toHaveAttribute("href", "/companies/7/periods/3");
+    expect(screen.getByRole("link", { name: "Open filing" })).toHaveAttribute("href", "/companies/7/periods/3?tab=filing");
 
     expect(screen.getAllByText("Atlantic Public Limited Company").length).toBeGreaterThan(1);
     expect(screen.getByText("Manual handoff")).toBeInTheDocument();
     expect(screen.getByText("PLC/public-company workflow requires manual review")).toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: "Review handoff" })).toHaveLength(2);
-    expect(screen.getAllByRole("link", { name: "Review handoff" })[1]).toHaveAttribute("href", "/companies/8");
+    expect(screen.getAllByRole("link", { name: "Review handoff" })[1]).toHaveAttribute("href", "/companies/8/periods/4?tab=filing");
 
     expect(screen.getByText("New Client Limited")).toBeInTheDocument();
     expect(screen.getByText("No period")).toBeInTheDocument();

@@ -66,6 +66,7 @@ describe("ProductionReadinessWorkbench", () => {
     expectText("Frontend code");
     expectText(/Golden filing corpus proves PDF text/);
     expectText(/Accountant workflow rail is visually coherent/);
+    expectText(/Dashboard filing deep links send deadline-pressure and manual-handoff work directly to the period filing review tab/);
     expectText(/Permission-denied filing action state keeps evidence visible/);
     expectText(/Typed API contract blocks frontend\/backend readiness drift/);
     expectText(/FilingReviewCentre permission gate blocks approval\/submission actions behind canReview/);
@@ -641,6 +642,7 @@ function sampleReport(): ProductionReadinessReport {
         ],
         currentEvidence: [
           "Visual QA route audit covers the accountant workbench routes.",
+          "Dashboard filing deep links send deadline-pressure and manual-handoff work directly to the period filing review tab.",
           "Route-level loading/error states exist for main dynamic routes.",
           "Permission-denied filing action state keeps evidence visible while blocking ineligible review actions.",
           "Workbench primitives are used in the readiness and period review surfaces.",

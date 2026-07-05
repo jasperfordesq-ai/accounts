@@ -1142,6 +1142,7 @@ function sampleReport() {
         ],
         currentEvidence: [
           "Visual QA route audit covers the accountant workbench routes.",
+          "Dashboard filing deep links send deadline-pressure and manual-handoff work directly to the period filing review tab.",
           "Route-level loading/error states exist for main dynamic routes.",
           "Permission-denied filing action state keeps evidence visible while blocking ineligible review actions.",
           "Workbench primitives are used in the readiness and period review surfaces.",

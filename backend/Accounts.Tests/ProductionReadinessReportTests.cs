@@ -439,7 +439,7 @@ public class ProductionReadinessReportTests
             "Frontend UI/UX",
             "Product design",
             ["accountant workflow rail", "light/dark visual regression", "dense review workbench"],
-            ["visual QA route audit", "route-level loading/error states", "permission-denied filing action state", "workbench primitives"],
+            ["visual QA route audit", "dashboard filing deep links", "route-level loading/error states", "permission-denied filing action state", "workbench primitives"],
             ["light-dark-visual-regression", "accountant-acceptance-walkthrough"]);
 
         AssertCompletionTrack(

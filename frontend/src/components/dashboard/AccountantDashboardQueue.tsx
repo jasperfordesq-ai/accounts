@@ -266,7 +266,7 @@ function buildQueueRow(company: Company, deadline: FilingDeadline | null, today:
       blockerTone: "bad",
       readyDetail: "Active period exists; manual-handoff risk is identified.",
       nextActionLabel: "Review handoff",
-      nextActionHref: `/companies/${company.id}`,
+      nextActionHref: periodFilingHref(company.id, period.id),
     };
   }
 
@@ -295,8 +295,14 @@ function buildQueueRow(company: Company, deadline: FilingDeadline | null, today:
       ? "Active period and filing deadline are available for review."
       : "Active period is ready for deadline calculation.",
     nextActionLabel: hasDeadlinePressure ? "Open filing" : "Continue workbench",
-    nextActionHref: `/companies/${company.id}/periods/${period.id}`,
+    nextActionHref: hasDeadlinePressure
+      ? periodFilingHref(company.id, period.id)
+      : `/companies/${company.id}/periods/${period.id}`,
   };
+}
+
+function periodFilingHref(companyId: number, periodId: number) {
+  return `/companies/${companyId}/periods/${periodId}?tab=filing`;
 }
 
 function compareQueueRows(a: QueueRow, b: QueueRow) {
