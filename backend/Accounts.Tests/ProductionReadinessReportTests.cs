@@ -571,6 +571,16 @@ public class ProductionReadinessReportTests
             && StringProperty(item, "EvidenceArtifact") == "artifacts/visual-smoke"
             && BooleanProperty(item, "BlocksRelease"));
         Assert.Contains(manifest, item =>
+            StringProperty(item, "Code") == "qualified-accountant-final-signoff"
+            && StringProperty(item, "CiScope") == "manual-release"
+            && StringProperty(item, "ReleaseChecklistEvidenceArtifact") == "named-accountant-approval-record"
+            && StringProperty(item, "ManualFallback").Contains("named qualified accountant", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(manifest, item =>
+            StringProperty(item, "Code") == "external-ros-validation-evidence"
+            && StringProperty(item, "CiScope") == "manual-release"
+            && StringProperty(item, "ReleaseChecklistEvidenceArtifact") == "external-ros-validation-reference"
+            && StringProperty(item, "ManualFallback").Contains("external validation", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(manifest, item =>
             StringProperty(item, "Code") == "production-stack-smoke"
             && StringProperty(item, "Command").Contains("smoke-production", StringComparison.OrdinalIgnoreCase)
             && BooleanProperty(item, "RunsInDefaultCi"));
@@ -587,6 +597,16 @@ public class ProductionReadinessReportTests
         var checklistArtifactCodes = report.ReleaseReviewChecklist
             .Select(item => item.EvidenceArtifact)
             .ToHashSet(StringComparer.Ordinal);
+        var manifestChecklistArtifacts = manifest
+            .Select(item => StringProperty(item, "ReleaseChecklistEvidenceArtifact"))
+            .ToHashSet(StringComparer.Ordinal);
+        var missingBlockingChecklistArtifacts = report.ReleaseReviewChecklist
+            .Where(item => item.BlocksRelease)
+            .Select(item => item.EvidenceArtifact)
+            .Where(artifact => !manifestChecklistArtifacts.Contains(artifact))
+            .ToArray();
+
+        Assert.Empty(missingBlockingChecklistArtifacts);
         Assert.All(manifest, item =>
         {
             Assert.False(string.IsNullOrWhiteSpace(StringProperty(item, "Code")));

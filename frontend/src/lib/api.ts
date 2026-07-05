@@ -3369,6 +3369,7 @@ function assertReleaseVerificationManifest(report: ProductionReadinessReport) {
   const checklistEvidenceArtifacts = new Set(report.releaseReviewChecklist.map((item) => item.evidenceArtifact));
   const validScopes = new Set(["default-ci", "environment-gated", "manual-release"]);
   const manifestCodes = new Set<string>();
+  const manifestChecklistEvidenceArtifacts = new Set<string>();
 
   report.releaseVerificationManifest.forEach((item, itemIndex) => {
     if (manifestCodes.has(item.code)) {
@@ -3389,6 +3390,7 @@ function assertReleaseVerificationManifest(report: ProductionReadinessReport) {
         `Invalid production readiness report contract: releaseVerificationManifest.${itemIndex}.releaseChecklistEvidenceArtifact - must reference release checklist evidence`,
       );
     }
+    manifestChecklistEvidenceArtifacts.add(item.releaseChecklistEvidenceArtifact);
 
     if (item.blocksRelease && !item.manualFallback.trim()) {
       throw new Error(
@@ -3400,6 +3402,18 @@ function assertReleaseVerificationManifest(report: ProductionReadinessReport) {
   if (report.releaseVerificationManifest.length === 0) {
     throw new Error(
       "Invalid production readiness report contract: releaseVerificationManifest - at least one verification command is required",
+    );
+  }
+
+  const missingBlockingChecklistEvidence = report.releaseReviewChecklist
+    .filter((item) => item.blocksRelease)
+    .map((item) => item.evidenceArtifact)
+    .filter((artifact) => !manifestChecklistEvidenceArtifacts.has(artifact))
+    .sort();
+
+  if (missingBlockingChecklistEvidence.length > 0) {
+    throw new Error(
+      `Invalid production readiness report contract: releaseVerificationManifest - missing verification coverage for blocking checklist evidence: ${missingBlockingChecklistEvidence.join(", ")}`,
     );
   }
 }

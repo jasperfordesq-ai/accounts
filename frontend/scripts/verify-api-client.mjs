@@ -652,6 +652,18 @@ function productionReadinessReportFixture() {
         releaseChecklistEvidenceArtifact: "visual-smoke-screenshots",
         manualFallback: "Run visual smoke locally, then retain the manifest verification output and review the generated artifacts manually.",
       },
+      {
+        code: "source-law-change-review",
+        label: "Source-law change review note",
+        ownerRole: "Qualified accountant and engineering",
+        command: "manual review: compare pinned CRO, Revenue, FRC and charity guidance against source-law snapshot",
+        ciScope: "manual-release",
+        runsInDefaultCi: false,
+        blocksRelease: true,
+        evidenceArtifact: "source-law-change-review-note",
+        releaseChecklistEvidenceArtifact: "source-law-change-review-note",
+        manualFallback: "Retain a dated source-law review note before relying on the generated packs for real filing use.",
+      },
     ],
     auditabilityControls: [
       {

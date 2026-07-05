@@ -544,6 +544,18 @@ test("parseProductionReadinessReport rejects missing release verification manife
   );
 });
 
+test("parseProductionReadinessReport rejects release verification manifest that misses blocking checklist evidence", () => {
+  const payload = sampleReport();
+  payload.releaseVerificationManifest = payload.releaseVerificationManifest.filter(
+    (item) => item.releaseChecklistEvidenceArtifact !== "named-accountant-approval-record",
+  );
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: releaseVerificationManifest - missing verification coverage for blocking checklist evidence: named-accountant-approval-record/,
+  );
+});
+
 function sampleReport() {
   return {
     generatedAt: "2026-07-04T12:00:00Z",
@@ -1269,6 +1281,42 @@ function sampleReport() {
         evidenceArtifact: "artifacts/visual-smoke",
         releaseChecklistEvidenceArtifact: "visual-smoke-screenshots",
         manualFallback: "Run visual smoke locally, then retain the manifest verification output and review the generated artifacts manually.",
+      },
+      {
+        code: "source-law-change-review",
+        label: "Source-law change review note",
+        ownerRole: "Qualified accountant and engineering",
+        command: "manual review: compare pinned CRO, Revenue, FRC and charity guidance against source-law snapshot",
+        ciScope: "manual-release",
+        runsInDefaultCi: false,
+        blocksRelease: true,
+        evidenceArtifact: "source-law-change-review-note",
+        releaseChecklistEvidenceArtifact: "source-law-change-review-note",
+        manualFallback: "Retain a dated source-law review note before relying on the generated packs for real filing use.",
+      },
+      {
+        code: "external-ros-validation-evidence",
+        label: "External ROS/iXBRL validation evidence",
+        ownerRole: "Reviewer",
+        command: "manual review: retain external ROS/iXBRL validation reference for the exact generated iXBRL pack",
+        ciScope: "manual-release",
+        runsInDefaultCi: false,
+        blocksRelease: true,
+        evidenceArtifact: "external-ros-validation-reference",
+        releaseChecklistEvidenceArtifact: "external-ros-validation-reference",
+        manualFallback: "Retain the external ROS validation reference before final approval.",
+      },
+      {
+        code: "manual-accountant-acceptance",
+        label: "Named accountant acceptance walkthrough",
+        ownerRole: "Qualified accountant",
+        command: "manual walkthrough: micro LTD, small abridged LTD, CLG charity and medium/audit-required handoff",
+        ciScope: "manual-release",
+        runsInDefaultCi: false,
+        blocksRelease: true,
+        evidenceArtifact: "signed-golden-corpus-acceptance-note",
+        releaseChecklistEvidenceArtifact: "signed-golden-corpus-acceptance-note",
+        manualFallback: "A named qualified accountant must accept the generated outputs, gates, wording and source-law evidence.",
       },
     ],
     auditabilityControls: [
