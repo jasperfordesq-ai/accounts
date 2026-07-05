@@ -67,3 +67,12 @@ test("dynamic accountant workflow routes have local not-found states", () => {
     assert.match(source, /Return to dashboard|Return to company/, `${route}/not-found.tsx should offer an accountant-safe recovery action`);
   }
 });
+
+test("period filing route wires reviewer permission into the filing review centre", () => {
+  const periodRoute = new URL("companies/[companyId]/periods/[periodId]/page.tsx", appDir);
+  const source = readFileSync(periodRoute, "utf8");
+
+  assert.match(source, /useAuth/, "period route should read authenticated workflow permissions");
+  assert.match(source, /const\s*\{\s*canReview\s*\}\s*=\s*useAuth\(\)/, "period route should read canReview from auth context");
+  assert.match(source, /<FilingReviewCentre[\s\S]*canReview=\{canReview\}/, "period route should pass canReview into FilingReviewCentre");
+});

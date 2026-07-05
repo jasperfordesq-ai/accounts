@@ -1712,6 +1712,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             [
                 "Visual QA route audit covers the accountant workbench routes.",
                 "Route-level loading/error states exist for main dynamic routes.",
+                "Permission-denied filing action state keeps evidence visible while blocking ineligible review actions.",
                 "Workbench primitives are used in the readiness and period review surfaces."
             ],
             [
@@ -1736,6 +1737,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             [
                 "API client invariants validate production readiness contracts.",
                 "Component-preview route exercises shared workbench primitives.",
+                "FilingReviewCentre permission gate blocks approval/submission actions behind canReview and renders PermissionDeniedPanel for ineligible roles.",
                 "Render tests cover accountant dashboards, review panels and workflow routes."
             ],
             [

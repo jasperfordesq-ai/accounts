@@ -439,7 +439,7 @@ public class ProductionReadinessReportTests
             "Frontend UI/UX",
             "Product design",
             ["accountant workflow rail", "light/dark visual regression", "dense review workbench"],
-            ["visual QA route audit", "route-level loading/error states", "workbench primitives"],
+            ["visual QA route audit", "route-level loading/error states", "permission-denied filing action state", "workbench primitives"],
             ["light-dark-visual-regression", "accountant-acceptance-walkthrough"]);
 
         AssertCompletionTrack(
@@ -448,7 +448,7 @@ public class ProductionReadinessReportTests
             "Frontend code",
             "Frontend engineering",
             ["shared workbench primitives", "typed API contract", "route-level states"],
-            ["API client invariants", "component-preview route", "render tests"],
+            ["API client invariants", "component-preview route", "render tests", "FilingReviewCentre permission gate"],
             ["light-dark-visual-regression"]);
 
         Assert.All(tracks, track =>

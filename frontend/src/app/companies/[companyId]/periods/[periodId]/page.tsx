@@ -101,6 +101,7 @@ import { PeriodAuditTrailPanel } from "@/components/period/PeriodAuditTrailPanel
 import { FilingOutputsPanel } from "@/components/period/FilingOutputsPanel";
 import { StatutoryWarningsPanel } from "@/components/period/StatutoryWarningsPanel";
 import { StatementsReadinessPanel } from "@/components/period/StatementsReadinessPanel";
+import { useAuth } from "@/components/AuthProvider";
 import { formatPeriodRange } from "@/lib/format";
 
 function formatCurrency(amount: number): string {
@@ -138,6 +139,7 @@ export default function PeriodWorkspacePage({
   const cId = Number(companyId);
   const pId = Number(periodId);
   const searchParams = useSearchParams();
+  const { canReview } = useAuth();
   const [selectedWorkspaceTab, setSelectedWorkspaceTab] = useState<WorkspaceTabId>(() =>
     normaliseWorkspaceTab(searchParams.get("tab")),
   );
@@ -1882,6 +1884,7 @@ export default function PeriodWorkspacePage({
               filingReadinessProfile={filingReadinessProfile}
               croSubmissionReference={croSubmissionReference}
               validatingIxbrl={validatingIxbrl}
+              canReview={canReview}
               onCroSubmissionReferenceChange={setCroSubmissionReference}
               onRunIxbrlChecks={async () => {
                 setValidatingIxbrl(true);

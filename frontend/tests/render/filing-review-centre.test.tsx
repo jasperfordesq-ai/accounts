@@ -215,6 +215,38 @@ describe("FilingReviewCentre", () => {
     expect(onMarkSubmitted).not.toHaveBeenCalled();
   });
 
+  it("shows a permission-denied filing action state for users who cannot review", () => {
+    render(
+      <FilingReviewCentre
+        filingStatus={sampleWorkflowStatus({
+          croStatus: "Approved",
+          readyToFile: true,
+        })}
+        filingReadinessProfile={sampleReadinessProfile({
+          supportedPath: true,
+          manualProfessionalReviewRequired: false,
+        })}
+        croSubmissionReference="CORE-2026-0007"
+        validatingIxbrl={false}
+        canReview={false}
+        onCroSubmissionReferenceChange={vi.fn()}
+        onRunIxbrlChecks={vi.fn()}
+        onApproveForFiling={vi.fn()}
+        onMarkCroSubmitted={vi.fn()}
+        onConfirmCroPayment={vi.fn()}
+        onMarkCroAccepted={vi.fn()}
+        onRecordCroSendBack={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Filing readiness profile")).toBeInTheDocument();
+    expect(screen.getByText("Professional filing gate")).toBeInTheDocument();
+    expect(screen.getByText("Review permission required")).toBeInTheDocument();
+    expect(screen.getByText(/Evidence remains visible/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Mark as Submitted/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Approve for Filing/i })).toBeNull();
+  });
+
   it("shows the exact open sign-off gates beside a disabled approval action", () => {
     render(
       <FilingReviewCentre

@@ -11,6 +11,7 @@ import {
   FilingActionBar,
   IssueDigest,
   LegalSourceList,
+  PermissionDeniedPanel,
   ReviewPanel,
   SectionHeader,
   StatusBadge,
@@ -23,6 +24,7 @@ interface FilingReviewCentreProps {
   filingReadinessProfile: FilingReadinessProfile | null;
   croSubmissionReference: string;
   validatingIxbrl: boolean;
+  canReview?: boolean;
   onCroSubmissionReferenceChange: (value: string) => void;
   onRunIxbrlChecks: FilingReviewAction;
   onApproveForFiling: FilingReviewAction;
@@ -37,6 +39,7 @@ export function FilingReviewCentre({
   filingReadinessProfile,
   croSubmissionReference,
   validatingIxbrl,
+  canReview = true,
   onCroSubmissionReferenceChange,
   onRunIxbrlChecks,
   onApproveForFiling,
@@ -179,16 +182,23 @@ export function FilingReviewCentre({
               </StatusBadge>
             }
           >
-            <CroWorkflowActions
-              filingStatus={filingStatus}
-              filingReadinessProfile={filingReadinessProfile}
-              croSubmissionReference={croSubmissionReference}
-              onApproveForFiling={onApproveForFiling}
-              onMarkCroSubmitted={onMarkCroSubmitted}
-              onConfirmCroPayment={onConfirmCroPayment}
-              onMarkCroAccepted={onMarkCroAccepted}
-              onRecordCroSendBack={onRecordCroSendBack}
-            />
+            {canReview ? (
+              <CroWorkflowActions
+                filingStatus={filingStatus}
+                filingReadinessProfile={filingReadinessProfile}
+                croSubmissionReference={croSubmissionReference}
+                onApproveForFiling={onApproveForFiling}
+                onMarkCroSubmitted={onMarkCroSubmitted}
+                onConfirmCroPayment={onConfirmCroPayment}
+                onMarkCroAccepted={onMarkCroAccepted}
+                onRecordCroSendBack={onRecordCroSendBack}
+              />
+            ) : (
+              <PermissionDeniedPanel
+                title="Review permission required"
+                description="Evidence remains visible; ask an Owner or Reviewer to approve, submit, or close the filing workflow."
+              />
+            )}
           </FilingActionBar>
         </div>
       ) : (

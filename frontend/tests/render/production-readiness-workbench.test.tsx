@@ -66,7 +66,9 @@ describe("ProductionReadinessWorkbench", () => {
     expectText("Frontend code");
     expectText(/Golden filing corpus proves PDF text/);
     expectText(/Accountant workflow rail is visually coherent/);
+    expectText(/Permission-denied filing action state keeps evidence visible/);
     expectText(/Typed API contract blocks frontend\/backend readiness drift/);
+    expectText(/FilingReviewCentre permission gate blocks approval\/submission actions behind canReview/);
     expect(screen.getByRole("heading", { name: "Release review checklist" })).toBeInTheDocument();
     expectText("Named accountant final sign-off");
     expectText("named-accountant-approval-record");
@@ -640,6 +642,7 @@ function sampleReport(): ProductionReadinessReport {
         currentEvidence: [
           "Visual QA route audit covers the accountant workbench routes.",
           "Route-level loading/error states exist for main dynamic routes.",
+          "Permission-denied filing action state keeps evidence visible while blocking ineligible review actions.",
           "Workbench primitives are used in the readiness and period review surfaces.",
         ],
         nextActions: [
@@ -665,6 +668,7 @@ function sampleReport(): ProductionReadinessReport {
         currentEvidence: [
           "API client invariants validate production readiness contracts.",
           "Component-preview route exercises shared workbench primitives.",
+          "FilingReviewCentre permission gate blocks approval/submission actions behind canReview and renders PermissionDeniedPanel for ineligible roles.",
           "Render tests cover accountant dashboards, review panels and workflow routes.",
         ],
         nextActions: [
