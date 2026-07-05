@@ -459,9 +459,9 @@ function sampleReport() {
         workflowStages,
         openFilingTab,
       })),
-      artifacts: expectedVisualSmokeArtifacts().map(({ routeName, theme, viewportName, fileName, artifactPath, expectedText, openFilingTab, reviewStatus, layoutChecks }) => ({
+      artifacts: expectedVisualSmokeArtifacts().map(({ routeName, routeKey, theme, viewportName, fileName, artifactPath, expectedText, openFilingTab, reviewStatus, layoutChecks }) => ({
         routeCode: routeName,
-        routeKey: visualSmokeRoutes.find((route) => route.name === routeName)?.routeKey ?? routeName,
+        routeKey,
         theme,
         viewportName,
         fileName,

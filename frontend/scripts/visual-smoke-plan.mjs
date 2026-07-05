@@ -92,6 +92,7 @@ export function expectedVisualSmokeArtifacts(outputDir = "artifacts/visual-smoke
         const fileName = `${route.name}-${theme}-${viewport.name}.png`;
         return {
           routeName: route.name,
+          routeKey: route.routeKey,
           theme,
           viewportName: viewport.name,
           fileName,

@@ -42,6 +42,7 @@ describe("visual smoke plan", () => {
     assert.equal(expectedVisualSmokeArtifacts().length, 24);
     assert.deepEqual(expectedVisualSmokeArtifacts()[0], {
       routeName: "dashboard",
+      routeKey: "dashboard",
       theme: "light",
       viewportName: "desktop",
       fileName: "dashboard-light-desktop.png",
@@ -55,6 +56,7 @@ describe("visual smoke plan", () => {
       expectedVisualSmokeArtifacts().at(-1)?.artifactPath,
       "artifacts/visual-smoke/workbench-preview-dark-mobile.png",
     );
+    assert.equal(expectedVisualSmokeArtifacts().at(-1)?.routeKey, "workbenchPreview");
 
     assert.deepEqual(
       visualSmokeRoutes.map((route) => route.name),
