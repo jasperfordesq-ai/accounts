@@ -235,19 +235,38 @@ async function discoverRoutes(page, baseUrl) {
 }
 
 async function checkNoPageOverflow(page, routeName) {
-  const result = await page.evaluate(() => ({
-    scrollWidth: document.documentElement.scrollWidth,
-    clientWidth: document.documentElement.clientWidth,
-  }));
-  if (result.scrollWidth > result.clientWidth + 2) {
-    const overflowingElements = await page.evaluate(() => {
+  const result = await page.evaluate(() => {
+    function isContainedByHorizontalScroller(element) {
+      let current = element.parentElement;
+      while (current && current !== document.body && current !== document.documentElement) {
+        const style = window.getComputedStyle(current);
+        const clipsHorizontalOverflow = ["auto", "scroll", "hidden", "clip"].includes(style.overflowX);
+        if (clipsHorizontalOverflow) {
+          const rect = current.getBoundingClientRect();
+          if (rect.left >= -2 && rect.right <= document.documentElement.clientWidth + 2) {
+            return true;
+          }
+        }
+        current = current.parentElement;
+      }
+
+      return false;
+    }
+
+    const scrollWidth = document.documentElement.scrollWidth;
+    const clientWidth = document.documentElement.clientWidth;
+    const overflowingElements = [];
+
+    if (scrollWidth > clientWidth + 2) {
       const viewportWidth = document.documentElement.clientWidth;
-      return Array.from(document.querySelectorAll("body *"))
+      overflowingElements.push(
+        ...Array.from(document.querySelectorAll("body *"))
         .map((element) => {
           const rect = element.getBoundingClientRect();
           const overflowsRight = rect.right > viewportWidth + 2;
           const overflowsLeft = rect.left < -2;
           if (!overflowsRight && !overflowsLeft) return null;
+          if (isContainedByHorizontalScroller(element)) return null;
 
           return {
             tag: element.tagName.toLowerCase(),
@@ -260,9 +279,18 @@ async function checkNoPageOverflow(page, routeName) {
         })
         .filter(Boolean)
         .sort((a, b) => b.right - a.right)
-        .slice(0, 8);
-    });
-    const diagnostics = overflowingElements
+        .slice(0, 8),
+      );
+    }
+
+    return {
+      clientWidth,
+      overflowingElements,
+      scrollWidth,
+    };
+  });
+  if (result.overflowingElements.length > 0) {
+    const diagnostics = result.overflowingElements
       .map(
         (element) =>
           `- <${element.tag}> ${element.width}px [${element.left}, ${element.right}] class="${element.className}" text="${element.text}"`,
