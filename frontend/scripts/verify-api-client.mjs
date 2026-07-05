@@ -31,6 +31,14 @@ import {
   updateDividend,
   getProductionReadinessReport,
 } from "../src/lib/api.ts";
+import {
+  expectedVisualSmokeArtifacts,
+  expectedVisualSmokeScreenshotCount,
+  visualSmokeLayoutChecks,
+  visualSmokeRoutes,
+  visualSmokeThemes,
+  visualSmokeViewports,
+} from "./visual-smoke-plan.mjs";
 
 const calls = [];
 globalThis.fetch = async (url, init) => {
@@ -126,7 +134,7 @@ function productionReadinessReportFixture() {
       goldenCorpusTotal: 1,
       statutoryRuleMatrixPaths: 1,
       statutoryRuleCoverageFamilies: 1,
-      visualQaExpectedScreenshots: 6,
+      visualQaExpectedScreenshots: expectedVisualSmokeScreenshotCount(),
       requiredOperationalGates: 1,
       openCriticalActions: 1,
       evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "golden-filing-corpus", "visual-smoke-screenshots", "release-review-checklist"],
@@ -306,64 +314,30 @@ function productionReadinessReportFixture() {
     visualQaCoverage: {
       artifactName: "visual-smoke-screenshots",
       enforcement: "ci-production-smoke",
-      expectedScreenshotCount: 6,
-      layoutChecks: ["browser-console-errors", "page-horizontal-overflow", "visible-text-overlap"],
-      themes: ["light", "dark"],
-      viewports: [{ name: "desktop", width: 1440, height: 1000 }],
-      routes: [
-        {
-          code: "dashboard",
-          label: "Dashboard",
-          description: "Accountant queue and production readiness overview.",
-          requiredText: "Production Readiness",
-          workflowStages: accountantWorkflowStages(),
-          openFilingTab: false,
-        },
-        {
-          code: "period-workspace",
-          label: "Period workspace",
-          description: "Import, classification, year-end, statements and filing readiness overview.",
-          requiredText: "Filing readiness",
-          workflowStages: accountantWorkflowStages(),
-          openFilingTab: false,
-        },
-        {
-          code: "workbench-preview",
-          label: "Workbench preview",
-          description: "Internal component preview for accountant workflow primitives and route states.",
-          requiredText: "Workbench Component Preview",
-          workflowStages: accountantWorkflowStages(),
-          openFilingTab: false,
-        },
-      ],
-      artifacts: [
-        visualArtifact("dashboard", "light", "desktop", "Production Readiness", false),
-        visualArtifact("period-workspace", "light", "desktop", "Filing readiness", false),
-        visualArtifact("workbench-preview", "light", "desktop", "Workbench Component Preview", false),
-        visualArtifact("dashboard", "dark", "desktop", "Production Readiness", false),
-        visualArtifact("period-workspace", "dark", "desktop", "Filing readiness", false),
-        visualArtifact("workbench-preview", "dark", "desktop", "Workbench Component Preview", false),
-      ],
+      expectedScreenshotCount: expectedVisualSmokeScreenshotCount(),
+      layoutChecks: visualSmokeLayoutChecks,
+      themes: visualSmokeThemes,
+      viewports: visualSmokeViewports,
+      routes: visualSmokeRoutes.map(({ name, label, description, expectedText, workflowStages, openFilingTab }) => ({
+        code: name,
+        label,
+        description,
+        requiredText: expectedText,
+        workflowStages,
+        openFilingTab,
+      })),
+      artifacts: expectedVisualSmokeArtifacts().map(({ routeName, theme, viewportName, fileName, artifactPath, expectedText, openFilingTab, reviewStatus, layoutChecks }) => ({
+        routeCode: routeName,
+        theme,
+        viewportName,
+        fileName,
+        artifactPath,
+        requiredText: expectedText,
+        openFilingTab,
+        reviewStatus,
+        layoutChecks,
+      })),
     },
-  };
-}
-
-function accountantWorkflowStages() {
-  return ["Setup", "Import", "Classify", "Year-End", "Statements", "Notes", "Review", "Filing"];
-}
-
-function visualArtifact(routeCode, theme, viewportName, requiredText, openFilingTab) {
-  const fileName = `${routeCode}-${theme}-${viewportName}.png`;
-  return {
-    routeCode,
-    theme,
-    viewportName,
-    fileName,
-    artifactPath: `artifacts/visual-smoke/${fileName}`,
-    requiredText,
-    openFilingTab,
-    reviewStatus: "required-review",
-    layoutChecks: ["browser-console-errors", "page-horizontal-overflow", "visible-text-overlap"],
   };
 }
 
