@@ -1596,6 +1596,15 @@ export interface GoldenFilingCorpusFixture {
   manualProfessionalReviewRequired: boolean;
 }
 
+export interface GoldenFilingCorpusVerifier {
+  name: string;
+  command: string;
+  ciScope: string;
+  runsInDefaultCi: boolean;
+  environment: string;
+  evidenceLevel: string;
+}
+
 export interface GoldenFilingCorpusScenario {
   code: string;
   label: string;
@@ -1604,6 +1613,7 @@ export interface GoldenFilingCorpusScenario {
   coverageStatus: string;
   fixture: GoldenFilingCorpusFixture;
   evidenceTestNames: string[];
+  evidenceVerifiers: GoldenFilingCorpusVerifier[];
   assertions: string[];
   evidencePack: GoldenFilingCorpusEvidencePack;
 }
@@ -1877,6 +1887,15 @@ const goldenFilingCorpusFixtureSchema = z.object({
   manualProfessionalReviewRequired: z.boolean(),
 });
 
+const goldenFilingCorpusVerifierSchema = z.object({
+  name: z.string().min(1),
+  command: z.string().min(1),
+  ciScope: z.string().min(1),
+  runsInDefaultCi: z.boolean(),
+  environment: z.string().min(1),
+  evidenceLevel: z.string().min(1),
+});
+
 const goldenFilingCorpusScenarioSchema = z.object({
   code: z.string().min(1),
   label: z.string().min(1),
@@ -1885,6 +1904,7 @@ const goldenFilingCorpusScenarioSchema = z.object({
   coverageStatus: z.string().min(1),
   fixture: goldenFilingCorpusFixtureSchema,
   evidenceTestNames: z.array(z.string().min(1)),
+  evidenceVerifiers: z.array(goldenFilingCorpusVerifierSchema),
   assertions: z.array(z.string().min(1)),
   evidencePack: goldenFilingCorpusEvidencePackSchema,
 });
@@ -2212,6 +2232,30 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
 
   report.goldenFilingCorpus.forEach((scenario, scenarioIndex) => {
     const evidenceTests = new Set(scenario.evidenceTestNames);
+    const verifierNames = new Set(scenario.evidenceVerifiers.map((verifier) => verifier.name));
+
+    scenario.evidenceTestNames.forEach((testName) => {
+      if (!verifierNames.has(testName)) {
+        throw new Error(
+          `Invalid production readiness report contract: goldenFilingCorpus.${scenarioIndex}.evidenceVerifiers - every evidenceTestNames entry must have verifier metadata`,
+        );
+      }
+    });
+
+    scenario.evidenceVerifiers.forEach((verifier, verifierIndex) => {
+      if (!evidenceTests.has(verifier.name)) {
+        throw new Error(
+          `Invalid production readiness report contract: goldenFilingCorpus.${scenarioIndex}.evidenceVerifiers.${verifierIndex}.name - verifier must be listed in evidenceTestNames`,
+        );
+      }
+
+      if (scenario.coverageStatus === "covered" && !verifier.runsInDefaultCi) {
+        throw new Error(
+          `Invalid production readiness report contract: goldenFilingCorpus.${scenarioIndex}.evidenceVerifiers.${verifierIndex}.runsInDefaultCi - covered scenarios must run in default CI`,
+        );
+      }
+    });
+
     scenario.evidencePack.expectedProofPoints.forEach((proofPoint, proofPointIndex) => {
       if (!evidenceTests.has(proofPoint.automatedVerifier)) {
         throw new Error(
@@ -2220,6 +2264,12 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
       }
     });
   });
+
+  if (!report.assurancePacket.evidenceItems.includes("golden-verifier-manifest")) {
+    throw new Error(
+      "Invalid production readiness report contract: assurancePacket.evidenceItems - golden-verifier-manifest is required",
+    );
+  }
 }
 
 function assertVisualQaArtifacts(report: ProductionReadinessReport) {

@@ -137,7 +137,7 @@ function productionReadinessReportFixture() {
       visualQaExpectedScreenshots: expectedVisualSmokeScreenshotCount(),
       requiredOperationalGates: 1,
       openCriticalActions: 1,
-      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "golden-filing-corpus", "visual-smoke-screenshots", "release-review-checklist"],
+      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "golden-filing-corpus", "golden-verifier-manifest", "visual-smoke-screenshots", "release-review-checklist"],
       releaseBlockers: ["Qualified accountant sign-off required"],
     },
     accountantAcceptanceCriteria: [
@@ -178,6 +178,16 @@ function productionReadinessReportFixture() {
           manualProfessionalReviewRequired: false,
         },
         evidenceTestNames: ["AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl"],
+        evidenceVerifiers: [
+          {
+            name: "AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl",
+            command: "dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter FullyQualifiedName~AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl",
+            ciScope: "default-ci",
+            runsInDefaultCi: true,
+            environment: "EF Core InMemory golden fixture; CI also runs the broader backend suite on Linux",
+            evidenceLevel: "end-to-end golden filing scenario",
+          },
+        ],
         assertions: ["PDF text", "iXBRL parse"],
         evidencePack: {
           outputArtifacts: ["accounts PDF text"],

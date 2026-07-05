@@ -45,6 +45,14 @@ public sealed record GoldenFilingCorpusFixture(
     bool AuditExempt,
     bool ManualProfessionalReviewRequired);
 
+public sealed record GoldenFilingCorpusVerifier(
+    string Name,
+    string Command,
+    string CiScope,
+    bool RunsInDefaultCi,
+    string Environment,
+    string EvidenceLevel);
+
 public sealed record GoldenFilingCorpusScenario(
     string Code,
     string Label,
@@ -53,6 +61,7 @@ public sealed record GoldenFilingCorpusScenario(
     string CoverageStatus,
     GoldenFilingCorpusFixture Fixture,
     IReadOnlyList<string> EvidenceTestNames,
+    IReadOnlyList<GoldenFilingCorpusVerifier> EvidenceVerifiers,
     IReadOnlyList<string> Assertions,
     GoldenFilingCorpusEvidencePack EvidencePack);
 
@@ -333,6 +342,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "source-law-snapshot-fingerprint",
             "source-law-traceability-index",
             "golden-filing-corpus",
+            "golden-verifier-manifest",
             "statutory-rules-matrix",
             "statutory-rules-coverage",
             "visual-smoke-screenshots",
@@ -547,6 +557,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             [
                 "AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl"
             ],
+            Verifiers("AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl"),
             [
                 "classification selects Micro",
                 "readiness has no missing items",
@@ -635,6 +646,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             [
                 "AccountsWorkflowTests.GoldenPath_SmallAuditExemptCompany_MixedAccrualSetBalancesThroughPdfAndIxbrl"
             ],
+            Verifiers("AccountsWorkflowTests.GoldenPath_SmallAuditExemptCompany_MixedAccrualSetBalancesThroughPdfAndIxbrl"),
             [
                 "classification selects SmallAbridged",
                 "mixed cash/accrual facts reconcile",
@@ -726,6 +738,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             [
                 "FilingGoldenCorpusScenarioTests.GoldenCorpus_ClgCharity_EmitsAccountsIxbrlAndSourceBackedCharityReadiness"
             ],
+            Verifiers("FilingGoldenCorpusScenarioTests.GoldenCorpus_ClgCharity_EmitsAccountsIxbrlAndSourceBackedCharityReadiness"),
             [
                 "CLG remains in the supported company scope",
                 "charity number evidence is required",
@@ -811,6 +824,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             [
                 "FilingGoldenCorpusScenarioTests.GoldenCorpus_MediumAuditRequired_BlocksFinalOutputsAndRequiresManualHandoffUntilAuditorEvidence"
             ],
+            Verifiers("FilingGoldenCorpusScenarioTests.GoldenCorpus_MediumAuditRequired_BlocksFinalOutputsAndRequiresManualHandoffUntilAuditorEvidence"),
             [
                 "audit report evidence is mandatory",
                 "normal filing approval is blocked until auditor evidence exists",
@@ -1424,6 +1438,17 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 proof.ExpectedEvidence,
                 automatedVerifier,
                 Required: true))
+            .ToArray();
+
+    private static IReadOnlyList<GoldenFilingCorpusVerifier> Verifiers(params string[] verifierNames) =>
+        verifierNames
+            .Select(name => new GoldenFilingCorpusVerifier(
+                name,
+                $"dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter FullyQualifiedName~{name}",
+                "default-ci",
+                RunsInDefaultCi: true,
+                "EF Core InMemory golden fixture; CI also runs the broader backend suite on Linux",
+                "end-to-end golden filing scenario"))
             .ToArray();
 
     private static IReadOnlyList<ProductionAuditabilityControl> BuildAuditabilityControls() =>

@@ -647,7 +647,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
           caption="Golden filing corpus"
           filterPlaceholder="Filter golden scenarios"
           emptyState="No matching golden filing scenarios"
-          columns={["Scenario", "Fixture", "Company scope", "Expected outcome", "Evidence tests", "Assertions", "Status"]}
+          columns={["Scenario", "Fixture", "Company scope", "Expected outcome", "Evidence tests", "Verifier scope", "Assertions", "Status"]}
           rows={report.goldenFilingCorpus.map((scenario) => ({
             id: scenario.code,
             tone: scenario.coverageStatus === "covered" ? "good" : "warn",
@@ -661,6 +661,12 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
               scenario.expectedOutcome,
               scenario.coverageStatus,
               ...scenario.evidenceTestNames,
+              ...scenario.evidenceVerifiers.flatMap((verifier) => [
+                verifier.ciScope,
+                verifier.environment,
+                verifier.evidenceLevel,
+                verifier.command,
+              ]),
               ...scenario.assertions,
             ].join(" "),
             cells: [
@@ -674,6 +680,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
               <span key="scope" className="whitespace-normal text-[var(--muted-foreground)]">{scenario.companyScope}</span>,
               <span key="outcome" className="text-[var(--muted-foreground)]">{formatStatus(scenario.expectedOutcome)}</span>,
               <CodeStack key="tests" items={scenario.evidenceTestNames} />,
+              <VerifierScopeList key="verifiers" verifiers={scenario.evidenceVerifiers} />,
               <AssertionList key="assertions" items={scenario.assertions} />,
               <StatusBadge key="status" tone={scenario.coverageStatus === "covered" ? "good" : "warn"}>
                 {formatStatus(scenario.coverageStatus)}
@@ -900,6 +907,31 @@ function CodeStack({ items }: { items: string[] }) {
         >
           {item}
         </code>
+      ))}
+    </div>
+  );
+}
+
+function VerifierScopeList({
+  verifiers,
+}: {
+  verifiers: ProductionReadinessReport["goldenFilingCorpus"][number]["evidenceVerifiers"];
+}) {
+  return (
+    <div className="max-w-lg space-y-2 whitespace-normal">
+      {verifiers.map((verifier) => (
+        <div key={verifier.name} className="rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-2 text-xs leading-5">
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusBadge tone={verifier.runsInDefaultCi ? "good" : "warn"}>
+              {verifier.runsInDefaultCi ? "Default CI" : "Environment gated"}
+            </StatusBadge>
+            <span className="font-medium text-[var(--foreground)]">{formatStatus(verifier.ciScope)}</span>
+          </div>
+          <p className="mt-1 text-[var(--muted-foreground)]">{verifier.environment}</p>
+          <code className="mt-1 block break-all rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-[11px] text-[var(--muted-foreground)]">
+            {verifier.command}
+          </code>
+        </div>
       ))}
     </div>
   );

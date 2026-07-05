@@ -191,6 +191,36 @@ public class ProductionReadinessReportTests
     }
 
     [Fact]
+    public async Task GoldenCorpusCoverage_ExposesVerifierManifestWithCiScope()
+    {
+        await using var db = CreateDbContext();
+        var report = await new ProductionReadinessReportService(db).GetReportAsync();
+
+        foreach (var scenario in report.GoldenFilingCorpus)
+        {
+            var verifiers = ObjectListProperty(scenario, "EvidenceVerifiers");
+
+            Assert.Equal(scenario.EvidenceTestNames.Order(StringComparer.Ordinal), verifiers.Select(verifier => StringProperty(verifier, "Name")).Order(StringComparer.Ordinal));
+            Assert.NotEmpty(verifiers);
+            Assert.All(verifiers, verifier =>
+            {
+                Assert.False(string.IsNullOrWhiteSpace(StringProperty(verifier, "Name")));
+                Assert.Contains(StringProperty(verifier, "Name"), scenario.EvidenceTestNames);
+                Assert.Contains("dotnet test Accounts.slnx", StringProperty(verifier, "Command"), StringComparison.Ordinal);
+                Assert.Contains(StringProperty(verifier, "Name"), StringProperty(verifier, "Command"), StringComparison.Ordinal);
+                Assert.Contains(StringProperty(verifier, "CiScope"), new[] { "default-ci", "environment-gated" });
+                Assert.False(string.IsNullOrWhiteSpace(StringProperty(verifier, "Environment")));
+                Assert.False(string.IsNullOrWhiteSpace(StringProperty(verifier, "EvidenceLevel")));
+            });
+
+            if (scenario.CoverageStatus == "covered")
+                Assert.All(verifiers, verifier => Assert.True(BooleanProperty(verifier, "RunsInDefaultCi")));
+        }
+
+        Assert.Contains(report.AssurancePacket.EvidenceItems, item => item == "golden-verifier-manifest");
+    }
+
+    [Fact]
     public async Task GoldenCorpusScenarios_ExposeFormalEvidencePacksForArtifactsGatesValuesAndSources()
     {
         await using var db = CreateDbContext();

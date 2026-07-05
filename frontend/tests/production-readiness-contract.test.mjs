@@ -18,6 +18,9 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.equal(parsed.goldenFilingCorpus[0].fixture.expectedRegime, "Micro");
   assert.equal(parsed.goldenFilingCorpus[0].fixture.auditExempt, true);
   assert.equal(parsed.goldenFilingCorpus[0].fixture.manualProfessionalReviewRequired, false);
+  assert.equal(parsed.goldenFilingCorpus[0].evidenceVerifiers[0].name, "AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl");
+  assert.equal(parsed.goldenFilingCorpus[0].evidenceVerifiers[0].ciScope, "default-ci");
+  assert.equal(parsed.goldenFilingCorpus[0].evidenceVerifiers[0].runsInDefaultCi, true);
   assert.equal(parsed.goldenFilingCorpus[0].evidencePack.outputArtifacts[0], "accounts PDF text");
   assert.equal(parsed.goldenFilingCorpus[0].evidencePack.decisionGates[0], "named qualified-accountant review");
   assert.equal(parsed.goldenFilingCorpus[0].evidencePack.expectedValueChecks[0], "well-formed iXBRL");
@@ -53,6 +56,7 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.equal(parsed.assurancePacket.goldenCorpusCovered, 1);
   assert.ok(parsed.assurancePacket.evidenceItems.includes("source-law-traceability-index"));
   assert.ok(parsed.assurancePacket.evidenceItems.includes("release-review-checklist"));
+  assert.ok(parsed.assurancePacket.evidenceItems.includes("golden-verifier-manifest"));
   assert.equal(parsed.assurancePacket.releaseBlockers[0], "Qualified accountant sign-off required");
   assert.equal(parsed.assuranceActions[0].riskRank, 0);
   assert.equal(parsed.assuranceActions[0].evidenceStage, "accountant-review-gate");
@@ -260,7 +264,7 @@ function sampleReport() {
       visualQaExpectedScreenshots: expectedVisualSmokeScreenshotCount(),
       requiredOperationalGates: 1,
       openCriticalActions: 1,
-      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "golden-filing-corpus", "visual-smoke-screenshots", "release-review-checklist"],
+      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "golden-filing-corpus", "golden-verifier-manifest", "visual-smoke-screenshots", "release-review-checklist"],
       releaseBlockers: ["Qualified accountant sign-off required"],
     },
     accountantAcceptanceCriteria: [
@@ -301,6 +305,16 @@ function sampleReport() {
           manualProfessionalReviewRequired: false,
         },
         evidenceTestNames: ["AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl"],
+        evidenceVerifiers: [
+          {
+            name: "AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl",
+            command: "dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter FullyQualifiedName~AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl",
+            ciScope: "default-ci",
+            runsInDefaultCi: true,
+            environment: "EF Core InMemory golden fixture; CI also runs the broader backend suite on Linux",
+            evidenceLevel: "end-to-end golden filing scenario",
+          },
+        ],
         assertions: ["PDF text", "iXBRL parse"],
         evidencePack: {
           outputArtifacts: ["accounts PDF text"],
