@@ -286,13 +286,13 @@ const workflowStateClasses: Record<WorkflowState, string> = {
 
 export function WorkflowRail({ items, title = "Accounting Workflow" }: { items: WorkflowItem[]; title?: string }) {
   return (
-    <nav aria-label={title} className="mb-6 overflow-hidden rounded-md border border-[var(--border)] bg-[var(--surface)]">
+    <nav aria-label={title} className="mb-6 min-w-0 max-w-full overflow-hidden rounded-md border border-[var(--border)] bg-[var(--surface)]">
       <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] px-4 py-3">
         <h2 className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">{title}</h2>
         <span className="text-xs text-[var(--muted-foreground)]">{items.length} stages</span>
       </div>
-      <div className="overflow-x-auto">
-        <ol className="grid auto-cols-[minmax(9rem,1fr)] grid-flow-col divide-x divide-[var(--border)]">
+      <div className="min-w-0 max-w-full overflow-x-auto">
+        <ol className="grid w-max min-w-full auto-cols-[minmax(9rem,1fr)] grid-flow-col divide-x divide-[var(--border)]">
           {items.map((item) => (
             <li key={item.id ?? item.label} className="min-w-0">
               <WorkflowRailItem item={item} />
