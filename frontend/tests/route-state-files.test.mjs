@@ -47,3 +47,22 @@ test("main accountant workflow routes have local loading and error states", () =
     assert.match(`${loadingSource}\n${errorSource}`, new RegExp(title), `${route} states should name the local workspace`);
   }
 });
+
+test("dynamic accountant workflow routes have local not-found states", () => {
+  const routeExpectations = [
+    ["companies/[companyId]", "Company workspace not found"],
+    ["companies/[companyId]/periods/[periodId]", "Period workspace not found"],
+  ];
+
+  for (const [route, title] of routeExpectations) {
+    const routeDir = new URL(`${route}/`, appDir);
+    const notFoundFile = new URL("not-found.tsx", routeDir);
+
+    assert.ok(existsSync(notFoundFile), `${route}/not-found.tsx must exist for local missing-resource recovery`);
+
+    const source = readFileSync(notFoundFile, "utf8");
+    assert.match(source, /WorkbenchEmptyState/, `${route}/not-found.tsx should use the workbench empty-state primitive`);
+    assert.match(source, new RegExp(title), `${route}/not-found.tsx should name the missing workspace`);
+    assert.match(source, /Return to dashboard|Return to company/, `${route}/not-found.tsx should offer an accountant-safe recovery action`);
+  }
+});
