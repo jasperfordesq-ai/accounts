@@ -78,6 +78,7 @@ export function AccountantDashboardQueue({
               },
             ]}
           />
+          <QueueTriage row={rows[0]} />
           <DataTable
             caption="Accountant work queue"
             filterPlaceholder="Filter companies, blockers, reviewers or actions"
@@ -128,6 +129,57 @@ export function AccountantDashboardQueue({
         </div>
       )}
     </ReviewPanel>
+  );
+}
+
+function QueueTriage({ row }: { row: QueueRow }) {
+  const reviewerName = row.company.assignedReviewerName?.trim();
+  return (
+    <section
+      aria-label="Queue triage"
+      className="grid gap-3 rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)_auto] md:items-center"
+    >
+      <TriageItem
+        label="Highest-risk client"
+        value={row.company.legalName}
+        detail={row.deadlineLabel}
+      />
+      <TriageItem
+        label="What is wrong"
+        value={`${row.blockerLabel}: ${row.blockerDetail}`}
+        detail={row.deadlineState}
+      />
+      <TriageItem
+        label="Reviewer ownership"
+        value={reviewerName || "Unassigned reviewer"}
+        detail={reviewerName ? row.company.assignedReviewerEmail : "Assign before approval"}
+      />
+      <Link
+        href={row.nextActionHref}
+        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 text-sm font-semibold text-[var(--foreground)] shadow-sm transition hover:border-[var(--ring)]"
+      >
+        {row.nextActionLabel}
+        <ArrowRight className="h-4 w-4" />
+      </Link>
+    </section>
+  );
+}
+
+function TriageItem({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: string;
+  detail?: string;
+}) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[11px] font-semibold uppercase text-[var(--muted-foreground)]">{label}</p>
+      <p className="mt-1 text-sm font-semibold leading-5 text-[var(--foreground)]">{value}</p>
+      {detail && <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">{detail}</p>}
+    </div>
   );
 }
 
