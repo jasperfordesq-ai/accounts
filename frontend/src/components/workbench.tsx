@@ -66,6 +66,13 @@ export interface IssueDigestProps {
   className?: string;
 }
 
+export interface FilingActionBarProps {
+  children: ReactNode;
+  title?: string;
+  description?: ReactNode;
+  status?: ReactNode;
+}
+
 export interface WorkbenchStatePanelProps {
   title: string;
   description?: ReactNode;
@@ -992,10 +999,36 @@ function parseMoneyInputDraft(rawValue: string, allowNegative: boolean) {
   return Number.isFinite(value) ? value : null;
 }
 
-export function FilingActionBar({ children }: { children: ReactNode }) {
+export function FilingActionBar({
+  children,
+  title = "Filing workflow actions",
+  description,
+  status,
+}: FilingActionBarProps) {
+  const titleId = useId();
+
   return (
-    <div className="flex flex-col gap-3 rounded-md border border-[var(--border)] bg-[var(--surface)] p-3 shadow-lg shadow-black/10 sm:flex-row sm:items-center sm:justify-end">
-      {children}
-    </div>
+    <section
+      aria-labelledby={titleId}
+      data-workbench-filing-action-bar="true"
+      className="grid gap-3 rounded-md border border-[var(--border)] bg-[var(--surface)] p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+    >
+      <div className="min-w-0">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <h3 id={titleId} className="text-sm font-semibold text-[var(--foreground)]">
+            {title}
+          </h3>
+          {status}
+        </div>
+        {description && (
+          <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">
+            {description}
+          </p>
+        )}
+      </div>
+      <div role="group" aria-label="Available filing actions" className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
+        {children}
+      </div>
+    </section>
   );
 }

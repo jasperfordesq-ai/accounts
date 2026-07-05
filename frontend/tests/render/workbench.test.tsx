@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   DataTable,
   EvidenceChecklist,
+  FilingActionBar,
   IssueDigest,
   LegalSourceList,
   MoneyInput,
@@ -50,6 +51,31 @@ describe("workbench primitives", () => {
     render(<StatusBadge tone="warn">Recorded only</StatusBadge>);
 
     expect(screen.getByText("Recorded only")).toBeInTheDocument();
+  });
+
+  it("renders filing workflow actions as a labelled normal-flow control", () => {
+    render(
+      <FilingActionBar
+        title="CRO filing controls"
+        description="Only record workflow states after the external evidence is present."
+        status={<StatusBadge tone="warn">Manual evidence open</StatusBadge>}
+      >
+        <button type="button" disabled>
+          Approve for filing
+        </button>
+        <button type="button">Record send-back</button>
+      </FilingActionBar>,
+    );
+
+    const actionBar = screen.getByRole("region", { name: "CRO filing controls" });
+
+    expect(actionBar).toHaveAttribute("data-workbench-filing-action-bar", "true");
+    expect(actionBar.className).not.toContain("fixed");
+    expect(actionBar.className).not.toContain("sticky");
+    expect(screen.getByText("Only record workflow states after the external evidence is present.")).toBeInTheDocument();
+    expect(screen.getByText("Manual evidence open")).toBeInTheDocument();
+    expect(within(actionBar).getByRole("group", { name: "Available filing actions" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Approve for filing" })).toBeDisabled();
   });
 
   it("renders deduplicated legal source links with effective dates", () => {

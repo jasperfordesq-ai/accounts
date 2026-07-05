@@ -170,7 +170,15 @@ export function FilingReviewCentre({
             </div>
           )}
 
-          <FilingActionBar>
+          <FilingActionBar
+            title="CRO filing controls"
+            description={croActionBarDescription(filingStatus, filingReadinessProfile)}
+            status={
+              <StatusBadge tone={filingStatusTone(filingStatus.cro.status)}>
+                {croActionBarStatusLabel(filingStatus.cro.status)}
+              </StatusBadge>
+            }
+          >
             <CroWorkflowActions
               filingStatus={filingStatus}
               filingReadinessProfile={filingReadinessProfile}
@@ -794,6 +802,43 @@ function filingStatusTone(status?: string): "default" | "good" | "warn" | "bad" 
 
 function shouldShowCroReference(status: string) {
   return status === "Approved" || status === "Submitted" || status === "Accepted";
+}
+
+function croActionBarStatusLabel(status: FilingWorkflowStatus["cro"]["status"]) {
+  if (status === "Approved") return "Approved for external filing";
+  if (status === "Submitted") return "Submission evidence open";
+  if (status === "Accepted") return "Accepted by CRO";
+  if (status === "CorrectionRequired") return "Correction required";
+  if (status === "PackageGenerated") return "Pack generated";
+  if (status === "InProgress") return "Workflow in progress";
+  return "Workflow not started";
+}
+
+function croActionBarDescription(
+  filingStatus: FilingWorkflowStatus,
+  filingReadinessProfile: FilingReadinessProfile | null,
+) {
+  if (filingReadinessProfile?.manualProfessionalReviewRequired === true) {
+    return "Manual professional handoff is required before any filing approval can be recorded.";
+  }
+
+  if (filingStatus.cro.status === "Approved") {
+    return "Record the external CORE reference only after the filing has been submitted outside this system.";
+  }
+
+  if (filingStatus.cro.status === "Submitted") {
+    return "Confirm the CORE payment and final CRO outcome from external evidence.";
+  }
+
+  if (filingStatus.cro.status === "Accepted") {
+    return "The filing record is closed because CRO acceptance evidence has been recorded.";
+  }
+
+  if (filingStatus.cro.status === "CorrectionRequired") {
+    return "Track the CRO send-back and correction deadline before generating corrected output.";
+  }
+
+  return "Approve only after all evidence, sign-off gates and internal checks support the filing pack.";
 }
 
 function buildFilingIssueGroups(
