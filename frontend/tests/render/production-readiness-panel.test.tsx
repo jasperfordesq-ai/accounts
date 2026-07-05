@@ -271,6 +271,7 @@ function sampleReport(): ProductionReadinessReport {
           label: "Dashboard",
           description: "Accountant queue and production readiness overview.",
           requiredText: "Production Readiness",
+          workflowStages: accountantWorkflowStages(),
           openFilingTab: false,
         },
         {
@@ -278,9 +279,14 @@ function sampleReport(): ProductionReadinessReport {
           label: "Workbench preview",
           description: "Internal component preview for accountant workflow primitives and route states.",
           requiredText: "Workbench Component Preview",
+          workflowStages: accountantWorkflowStages(),
           openFilingTab: false,
         },
       ],
     },
   };
+}
+
+function accountantWorkflowStages() {
+  return ["Setup", "Import", "Classify", "Year-End", "Statements", "Notes", "Review", "Filing"];
 }

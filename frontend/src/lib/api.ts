@@ -1685,6 +1685,7 @@ export interface VisualQaRoute {
   label: string;
   description: string;
   requiredText: string;
+  workflowStages: string[];
   openFilingTab: boolean;
 }
 
@@ -1909,6 +1910,7 @@ const visualQaRouteSchema = z.object({
   label: z.string().min(1),
   description: z.string().min(1),
   requiredText: z.string().min(1),
+  workflowStages: z.array(z.string().min(1)),
   openFilingTab: z.boolean(),
 });
 
@@ -1986,6 +1988,45 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
     report.visualQaCoverage.themes.length * report.visualQaCoverage.viewports.length * report.visualQaCoverage.routes.length,
     report.visualQaCoverage.expectedScreenshotCount,
   );
+  assertExpectedNumber(
+    "assurancePacket.visualQaExpectedScreenshots",
+    report.visualQaCoverage.expectedScreenshotCount,
+    report.assurancePacket.visualQaExpectedScreenshots,
+  );
+
+  const expectedWorkflowStages = [
+    "Setup",
+    "Import",
+    "Classify",
+    "Year-End",
+    "Statements",
+    "Notes",
+    "Review",
+    "Filing",
+  ];
+  const coveredWorkflowStages = new Set(report.visualQaCoverage.routes.flatMap((route) => route.workflowStages));
+  const missingWorkflowStages = expectedWorkflowStages.filter((stage) => !coveredWorkflowStages.has(stage));
+
+  if (missingWorkflowStages.length > 0) {
+    throw new Error(
+      `Invalid production readiness report contract: visualQaCoverage.routes.workflowStages - missing accountant workflow stages: ${missingWorkflowStages.join(", ")}`,
+    );
+  }
+
+  report.visualQaCoverage.routes.forEach((route, routeIndex) => {
+    if (route.workflowStages.length === 0) {
+      throw new Error(
+        `Invalid production readiness report contract: visualQaCoverage.routes.${routeIndex}.workflowStages - every visual QA route must state the workflow stages it proves`,
+      );
+    }
+  });
+
+  const periodWorkspace = report.visualQaCoverage.routes.find((route) => route.code === "period-workspace");
+  if (!periodWorkspace || expectedWorkflowStages.some((stage) => !periodWorkspace.workflowStages.includes(stage))) {
+    throw new Error(
+      "Invalid production readiness report contract: visualQaCoverage.routes.period-workspace.workflowStages - period workspace must prove the full accountant workflow rail",
+    );
+  }
 
   const scenarioCodes = new Set(report.goldenFilingCorpus.map((scenario) => scenario.code));
   const acceptanceCodes = new Set(report.accountantAcceptanceCriteria.map((criterion) => criterion.scenarioCode));

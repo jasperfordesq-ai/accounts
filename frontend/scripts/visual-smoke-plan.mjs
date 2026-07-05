@@ -1,5 +1,16 @@
 export const VISUAL_SMOKE_ARTIFACT_NAME = "visual-smoke-screenshots";
 
+export const ACCOUNTANT_WORKFLOW_STAGES = [
+  "Setup",
+  "Import",
+  "Classify",
+  "Year-End",
+  "Statements",
+  "Notes",
+  "Review",
+  "Filing",
+];
+
 export const visualSmokeViewports = [
   { name: "desktop", width: 1440, height: 1000 },
   { name: "mobile", width: 390, height: 844 },
@@ -20,6 +31,7 @@ export const visualSmokeRoutes = [
     description: "Accountant queue, blockers, deadlines and production readiness overview.",
     routeKey: "dashboard",
     expectedText: "Production Readiness",
+    workflowStages: ACCOUNTANT_WORKFLOW_STAGES,
     openFilingTab: false,
   },
   {
@@ -28,6 +40,7 @@ export const visualSmokeRoutes = [
     description: "Assurance checklist, statutory rules matrix, source snapshot and operational gates.",
     routeKey: "readiness",
     expectedText: "Production Readiness Checklist",
+    workflowStages: ["Review", "Filing"],
     openFilingTab: false,
   },
   {
@@ -36,6 +49,7 @@ export const visualSmokeRoutes = [
     description: "Company command centre, statutory profile, officers, charity facts and accounting periods.",
     routeKey: "company",
     expectedText: "Company command centre",
+    workflowStages: ["Setup"],
     openFilingTab: false,
   },
   {
@@ -44,6 +58,7 @@ export const visualSmokeRoutes = [
     description: "Import, classification, year-end, statements and filing readiness overview.",
     routeKey: "period",
     expectedText: "Filing readiness",
+    workflowStages: ACCOUNTANT_WORKFLOW_STAGES,
     openFilingTab: false,
   },
   {
@@ -52,6 +67,7 @@ export const visualSmokeRoutes = [
     description: "Period filing tab with evidence checklist, source links, outputs and filing state.",
     routeKey: "filing",
     expectedText: "Filing readiness profile",
+    workflowStages: ["Review", "Filing"],
     openFilingTab: true,
   },
   {
@@ -60,6 +76,7 @@ export const visualSmokeRoutes = [
     description: "Internal component preview for accountant workflow primitives and route states.",
     routeKey: "workbenchPreview",
     expectedText: "Workbench Component Preview",
+    workflowStages: ACCOUNTANT_WORKFLOW_STAGES,
     openFilingTab: false,
   },
 ];

@@ -134,6 +134,7 @@ public sealed record VisualQaRoute(
     string Label,
     string Description,
     string RequiredText,
+    IReadOnlyList<string> WorkflowStages,
     bool OpenFilingTab);
 
 public sealed record VisualQaCoverage(
@@ -1323,6 +1324,17 @@ public class ProductionReadinessReportService(AccountsDbContext db)
 
     private static VisualQaCoverage BuildVisualQaCoverage()
     {
+        var accountantWorkflowStages = new[]
+        {
+            "Setup",
+            "Import",
+            "Classify",
+            "Year-End",
+            "Statements",
+            "Notes",
+            "Review",
+            "Filing"
+        };
         var themes = new[] { "light", "dark" };
         var layoutChecks = new[]
         {
@@ -1342,36 +1354,42 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 "Dashboard",
                 "Accountant queue, blockers, deadlines and production readiness overview.",
                 "Production Readiness",
+                accountantWorkflowStages,
                 OpenFilingTab: false),
             new VisualQaRoute(
                 "production-readiness",
                 "Production readiness",
                 "Assurance checklist, statutory rules matrix, source snapshot and operational gates.",
                 "Production Readiness Checklist",
+                ["Review", "Filing"],
                 OpenFilingTab: false),
             new VisualQaRoute(
                 "company-detail",
                 "Company detail",
                 "Company command centre, statutory profile, officers, charity facts and accounting periods.",
                 "Company command centre",
+                ["Setup"],
                 OpenFilingTab: false),
             new VisualQaRoute(
                 "period-workspace",
                 "Period workspace",
                 "Import, classification, year-end, statements and filing readiness overview.",
                 "Filing readiness",
+                accountantWorkflowStages,
                 OpenFilingTab: false),
             new VisualQaRoute(
                 "filing-review",
                 "Filing review",
                 "Period filing tab with evidence checklist, source links, outputs and filing state.",
                 "Filing readiness profile",
+                ["Review", "Filing"],
                 OpenFilingTab: true),
             new VisualQaRoute(
                 "workbench-preview",
                 "Workbench preview",
                 "Internal component preview for accountant workflow primitives and route states.",
                 "Workbench Component Preview",
+                accountantWorkflowStages,
                 OpenFilingTab: false)
         };
 

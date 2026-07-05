@@ -485,15 +485,26 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
               caption="Visual QA routes"
               filterPlaceholder="Filter visual QA routes"
               emptyState="No matching visual QA routes"
-              columns={["Route", "Required text", "Viewport evidence", "Tab action"]}
+              columns={["Route", "Workflow stages", "Required text", "Viewport evidence", "Tab action"]}
               rows={visualQaCoverage.routes.map((route) => ({
                 id: route.code,
                 tone: route.openFilingTab ? "info" : "default",
-                searchText: [route.label, route.description, route.requiredText, route.openFilingTab ? "filing tab" : "initial view"].join(" "),
+                searchText: [
+                  route.label,
+                  route.description,
+                  route.requiredText,
+                  ...route.workflowStages,
+                  route.openFilingTab ? "filing tab" : "initial view",
+                ].join(" "),
                 cells: [
                   <div key="route" className="min-w-44 whitespace-normal">
                     <p className="font-medium">{route.label}</p>
                     <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">{route.description}</p>
+                  </div>,
+                  <div key="workflow-stages" className="flex min-w-44 flex-wrap gap-1.5">
+                    {route.workflowStages.map((stage) => (
+                      <StatusBadge key={stage} tone="default">{stage}</StatusBadge>
+                    ))}
                   </div>,
                   <span key="required-text" className="whitespace-normal text-[var(--muted-foreground)]">{route.requiredText}</span>,
                   <span key="viewport-evidence" className="text-[var(--muted-foreground)]">

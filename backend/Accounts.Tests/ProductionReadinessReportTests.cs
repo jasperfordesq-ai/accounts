@@ -729,10 +729,32 @@ public class ProductionReadinessReportTests
             route.Code == "filing-review" && route.OpenFilingTab && route.RequiredText == "Filing readiness profile");
         Assert.Contains(report.VisualQaCoverage.Routes, route =>
             route.Code == "workbench-preview" && route.RequiredText == "Workbench Component Preview");
+        var expectedWorkflowStages = new[]
+        {
+            "Setup",
+            "Import",
+            "Classify",
+            "Year-End",
+            "Statements",
+            "Notes",
+            "Review",
+            "Filing"
+        };
+        var periodWorkspace = Assert.Single(report.VisualQaCoverage.Routes, route => route.Code == "period-workspace");
+        Assert.Equal(expectedWorkflowStages, periodWorkspace.WorkflowStages);
+        var coveredWorkflowStages = report.VisualQaCoverage.Routes
+            .SelectMany(route => route.WorkflowStages)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(
+            expectedWorkflowStages.Order(StringComparer.Ordinal),
+            coveredWorkflowStages);
         Assert.All(report.VisualQaCoverage.Routes, route =>
         {
             Assert.False(string.IsNullOrWhiteSpace(route.Label));
             Assert.False(string.IsNullOrWhiteSpace(route.Description));
+            Assert.NotEmpty(route.WorkflowStages);
         });
     }
 

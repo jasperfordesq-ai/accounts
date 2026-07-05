@@ -83,7 +83,15 @@ test("parseProductionReadinessReport rejects inconsistent production assurance c
 
   assert.throws(
     () => parseProductionReadinessReport(visualPayload),
-    /Invalid production readiness report contract: visualQaCoverage\.expectedScreenshotCount - expected 4, received 7/,
+    /Invalid production readiness report contract: visualQaCoverage\.expectedScreenshotCount - expected 6, received 7/,
+  );
+
+  const visualAssurancePayload = sampleReport();
+  visualAssurancePayload.assurancePacket.visualQaExpectedScreenshots = 99;
+
+  assert.throws(
+    () => parseProductionReadinessReport(visualAssurancePayload),
+    /Invalid production readiness report contract: assurancePacket\.visualQaExpectedScreenshots - expected 6, received 99/,
   );
 });
 
@@ -151,7 +159,7 @@ function sampleReport() {
       goldenCorpusTotal: 1,
       statutoryRuleMatrixPaths: 1,
       statutoryRuleCoverageFamilies: 1,
-      visualQaExpectedScreenshots: 4,
+      visualQaExpectedScreenshots: 6,
       requiredOperationalGates: 1,
       openCriticalActions: 1,
       evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "golden-filing-corpus", "visual-smoke-screenshots"],
@@ -302,7 +310,7 @@ function sampleReport() {
     visualQaCoverage: {
       artifactName: "visual-smoke-screenshots",
       enforcement: "ci-production-smoke",
-      expectedScreenshotCount: 4,
+      expectedScreenshotCount: 6,
       layoutChecks: ["browser-console-errors", "page-horizontal-overflow", "visible-text-overlap"],
       themes: ["light", "dark"],
       viewports: [{ name: "desktop", width: 1440, height: 1000 }],
@@ -312,6 +320,15 @@ function sampleReport() {
           label: "Dashboard",
           description: "Accountant queue and production readiness overview.",
           requiredText: "Production Readiness",
+          workflowStages: accountantWorkflowStages(),
+          openFilingTab: false,
+        },
+        {
+          code: "period-workspace",
+          label: "Period workspace",
+          description: "Import, classification, year-end, statements and filing readiness overview.",
+          requiredText: "Filing readiness",
+          workflowStages: accountantWorkflowStages(),
           openFilingTab: false,
         },
         {
@@ -319,11 +336,16 @@ function sampleReport() {
           label: "Workbench preview",
           description: "Internal component preview for accountant workflow primitives and route states.",
           requiredText: "Workbench Component Preview",
+          workflowStages: accountantWorkflowStages(),
           openFilingTab: false,
         },
       ],
     },
   };
+}
+
+function accountantWorkflowStages() {
+  return ["Setup", "Import", "Classify", "Year-End", "Statements", "Notes", "Review", "Filing"];
 }
 
 function source(sourceId, title) {

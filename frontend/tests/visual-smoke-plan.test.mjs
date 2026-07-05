@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
 import {
+  ACCOUNTANT_WORKFLOW_STAGES,
   VISUAL_SMOKE_ARTIFACT_NAME,
   visualSmokeLayoutChecks,
   visualSmokeRoutes,
@@ -14,6 +15,16 @@ describe("visual smoke plan", () => {
   it("covers the accountant workbench routes in light/dark desktop/mobile", () => {
     assert.equal(VISUAL_SMOKE_ARTIFACT_NAME, "visual-smoke-screenshots");
     assert.deepEqual(visualSmokeThemes, ["light", "dark"]);
+    assert.deepEqual(ACCOUNTANT_WORKFLOW_STAGES, [
+      "Setup",
+      "Import",
+      "Classify",
+      "Year-End",
+      "Statements",
+      "Notes",
+      "Review",
+      "Filing",
+    ]);
     assert.deepEqual(visualSmokeLayoutChecks, [
       "browser-console-errors",
       "page-horizontal-overflow",
@@ -40,6 +51,18 @@ describe("visual smoke plan", () => {
       ],
     );
     assert.equal(visualSmokeRoutes.find((route) => route.name === "filing-review")?.openFilingTab, true);
+    assert.deepEqual(
+      visualSmokeRoutes.find((route) => route.name === "period-workspace")?.workflowStages,
+      ACCOUNTANT_WORKFLOW_STAGES,
+    );
+    assert.deepEqual(
+      [...new Set(visualSmokeRoutes.flatMap((route) => route.workflowStages))].sort(),
+      [...ACCOUNTANT_WORKFLOW_STAGES].sort(),
+    );
+    assert.ok(
+      visualSmokeRoutes.every((route) => route.workflowStages.length > 0),
+      "every visual smoke route must state the accountant workflow stages it proves",
+    );
     assert.equal(
       visualSmokeRoutes.find((route) => route.name === "company-detail")?.expectedText,
       "Company command centre",
