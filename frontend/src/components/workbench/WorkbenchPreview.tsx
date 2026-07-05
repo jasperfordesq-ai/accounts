@@ -12,6 +12,7 @@ import {
   PageShell,
   PermissionDeniedPanel,
   ReadOnlyNotice,
+  ReleaseBlockerSummary,
   ReviewPanel,
   SectionHeader,
   StatusBadge,
@@ -78,6 +79,42 @@ const reviewRows = [
   },
 ];
 
+const releaseBlockers = [
+  {
+    code: "accountant-signoff",
+    trackCode: "backend-code",
+    trackLabel: "Backend code",
+    severity: "critical",
+    riskRank: 1,
+    blockingIssue: "Qualified accountant sign-off required",
+    evidenceArtifact: "named-accountant-approval-record",
+    nextAction: "Run qualified-accountant acceptance on the golden corpus.",
+    blocksRelease: true,
+  },
+  {
+    code: "visual-regression-review",
+    trackCode: "frontend-ui-ux",
+    trackLabel: "Frontend UI/UX",
+    severity: "high",
+    riskRank: 7,
+    blockingIssue: "Light and dark visual regression review required",
+    evidenceArtifact: "light-dark-desktop-mobile-screenshot-review",
+    nextAction: "Complete seeded production screenshot review for every main route.",
+    blocksRelease: true,
+  },
+  {
+    code: "backup-restore-drill",
+    trackCode: "operations",
+    trackLabel: "Operations",
+    severity: "high",
+    riskRank: 11,
+    blockingIssue: "Backup restore drill evidence required",
+    evidenceArtifact: "production-backup-restore-drill-log",
+    nextAction: "Run the restore drill and attach the generated verification log.",
+    blocksRelease: true,
+  },
+];
+
 export function WorkbenchPreview() {
   const [balanceOutstanding, setBalanceOutstanding] = useState(40000);
   const [dueWithinYear, setDueWithinYear] = useState(10000);
@@ -108,6 +145,8 @@ export function WorkbenchPreview() {
           { label: "Manual handoffs", value: "2", tone: "bad" },
         ]}
       />
+
+      <ReleaseBlockerSummary blockers={releaseBlockers} />
 
       <section className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(20rem,0.85fr)]">
         <ReviewPanel

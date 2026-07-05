@@ -15,6 +15,7 @@ describe("WorkbenchPreview", () => {
     expect(screen.getByText("Evidence checklist")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Trial balance review" })).toBeInTheDocument();
     expect(screen.getByText("Route states")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Production release blockers" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Accounting inputs" })).toBeInTheDocument();
     expect(screen.getByLabelText("Balance outstanding")).toHaveAttribute("data-money-input", "true");
     expect(screen.getByText("Permission denied")).toBeInTheDocument();
