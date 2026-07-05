@@ -10,6 +10,7 @@ import {
   visualSmokeViewports,
   expectedVisualSmokeScreenshotCount,
   expectedVisualSmokeArtifacts,
+  expectedVisualSmokeManifest,
 } from "../scripts/visual-smoke-plan.mjs";
 
 describe("visual smoke plan", () => {
@@ -57,6 +58,13 @@ describe("visual smoke plan", () => {
       "artifacts/visual-smoke/workbench-preview-dark-mobile.png",
     );
     assert.equal(expectedVisualSmokeArtifacts().at(-1)?.routeKey, "workbenchPreview");
+    assert.deepEqual(expectedVisualSmokeManifest(), {
+      artifactName: VISUAL_SMOKE_ARTIFACT_NAME,
+      manifestFileName: "visual-smoke-manifest.json",
+      expectedScreenshotCount: 24,
+      layoutChecks: visualSmokeLayoutChecks,
+      screenshots: expectedVisualSmokeArtifacts(),
+    });
 
     assert.deepEqual(
       visualSmokeRoutes.map((route) => route.name),
@@ -100,6 +108,8 @@ describe("visual smoke plan", () => {
     const script = await readFile(new URL("../scripts/visual-smoke.mjs", import.meta.url), "utf8");
 
     assert.match(script, /function companyHrefFromPeriodHref/);
+    assert.match(script, /writeFile/);
+    assert.match(script, /visual-smoke-manifest\.json/);
     assert.match(script, /a\[href\^="\/companies\/"\]\[href\*="\/periods\/"\]/);
     assert.match(script, /Company command centre/);
     assert.doesNotMatch(script, /mainText\(page, "Accounting Periods"\)/);

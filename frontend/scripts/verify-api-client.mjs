@@ -360,6 +360,7 @@ function productionReadinessReportFixture() {
     visualQaCoverage: {
       artifactName: "visual-smoke-screenshots",
       enforcement: "ci-production-smoke",
+      manifestFileName: "visual-smoke-manifest.json",
       expectedScreenshotCount: expectedVisualSmokeScreenshotCount(),
       layoutChecks: visualSmokeLayoutChecks,
       themes: visualSmokeThemes,

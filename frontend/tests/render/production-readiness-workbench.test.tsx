@@ -74,6 +74,7 @@ describe("ProductionReadinessWorkbench", () => {
       .toEqual(expect.arrayContaining([expect.objectContaining({ href: "https://cro.ie/" })]));
     expect(screen.getByRole("heading", { name: "Visual QA coverage" })).toBeInTheDocument();
     expect(screen.getByText("24 screenshots")).toBeInTheDocument();
+    expect(screen.getByText("visual-smoke-manifest.json")).toBeInTheDocument();
     expect(screen.getByText("Light desktop")).toBeInTheDocument();
     expect(screen.getByText("Dark mobile")).toBeInTheDocument();
     expect(screen.getByText("Visible text overlap")).toBeInTheDocument();
@@ -673,6 +674,7 @@ function sampleReport(): ProductionReadinessReport {
     visualQaCoverage: {
       artifactName: "visual-smoke-screenshots",
       enforcement: "ci-production-smoke",
+      manifestFileName: "visual-smoke-manifest.json",
       expectedScreenshotCount: 24,
       layoutChecks: ["browser-console-errors", "page-horizontal-overflow", "visible-text-overlap"],
       themes: ["light", "dark"],

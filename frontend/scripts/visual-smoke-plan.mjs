@@ -106,3 +106,13 @@ export function expectedVisualSmokeArtifacts(outputDir = "artifacts/visual-smoke
     ),
   );
 }
+
+export function expectedVisualSmokeManifest(outputDir = "artifacts/visual-smoke") {
+  return {
+    artifactName: VISUAL_SMOKE_ARTIFACT_NAME,
+    manifestFileName: "visual-smoke-manifest.json",
+    expectedScreenshotCount: expectedVisualSmokeScreenshotCount(),
+    layoutChecks: visualSmokeLayoutChecks,
+    screenshots: expectedVisualSmokeArtifacts(outputDir),
+  };
+}

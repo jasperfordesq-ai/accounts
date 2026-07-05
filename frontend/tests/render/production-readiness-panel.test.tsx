@@ -374,6 +374,7 @@ function sampleReport(): ProductionReadinessReport {
     visualQaCoverage: {
       artifactName: "visual-smoke-screenshots",
       enforcement: "ci-production-smoke",
+      manifestFileName: "visual-smoke-manifest.json",
       expectedScreenshotCount: 24,
       layoutChecks: ["browser-console-errors", "page-horizontal-overflow", "visible-text-overlap"],
       themes: ["light", "dark"],

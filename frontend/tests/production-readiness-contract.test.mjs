@@ -75,6 +75,7 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.equal(parsed.auditEvidenceTimeline[0].capturedWhen, "At every authenticated write before regenerated outputs can be reviewed.");
   assert.equal(parsed.auditEvidenceTimeline[1].blockingGateCodes[0], "generated-output-review");
   assert.equal(parsed.visualQaCoverage.expectedScreenshotCount, expectedVisualSmokeScreenshotCount());
+  assert.equal(parsed.visualQaCoverage.manifestFileName, "visual-smoke-manifest.json");
   assert.equal(parsed.visualQaCoverage.artifacts.length, expectedVisualSmokeArtifacts().length);
   assert.deepEqual(parsed.visualQaCoverage.themes, visualSmokeThemes);
   assert.deepEqual(parsed.visualQaCoverage.viewports, visualSmokeViewports);
@@ -560,6 +561,7 @@ function sampleReport() {
     visualQaCoverage: {
       artifactName: "visual-smoke-screenshots",
       enforcement: "ci-production-smoke",
+      manifestFileName: "visual-smoke-manifest.json",
       expectedScreenshotCount: expectedVisualSmokeScreenshotCount(),
       layoutChecks: visualSmokeLayoutChecks,
       themes: visualSmokeThemes,

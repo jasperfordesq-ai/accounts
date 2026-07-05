@@ -1783,6 +1783,7 @@ export interface VisualQaArtifact {
 export interface VisualQaCoverage {
   artifactName: string;
   enforcement: string;
+  manifestFileName: string;
   expectedScreenshotCount: number;
   layoutChecks: string[];
   themes: string[];
@@ -2101,6 +2102,7 @@ const visualQaArtifactSchema = z.object({
 const visualQaCoverageSchema = z.object({
   artifactName: z.string().min(1),
   enforcement: z.string().min(1),
+  manifestFileName: z.string().min(1),
   expectedScreenshotCount: z.number(),
   layoutChecks: z.array(z.string().min(1)),
   themes: z.array(z.string().min(1)),

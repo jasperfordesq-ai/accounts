@@ -1038,6 +1038,7 @@ public class ProductionReadinessReportTests
 
         Assert.Equal("visual-smoke-screenshots", report.VisualQaCoverage.ArtifactName);
         Assert.Equal("ci-production-smoke", report.VisualQaCoverage.Enforcement);
+        Assert.Equal("visual-smoke-manifest.json", StringProperty(report.VisualQaCoverage, "ManifestFileName"));
         Assert.Equal(24, report.VisualQaCoverage.ExpectedScreenshotCount);
         var artifacts = ObjectListProperty(report.VisualQaCoverage, "Artifacts");
         Assert.Equal(report.VisualQaCoverage.ExpectedScreenshotCount, artifacts.Count);

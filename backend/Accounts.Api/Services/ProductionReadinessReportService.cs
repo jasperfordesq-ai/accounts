@@ -224,6 +224,7 @@ public sealed record VisualQaArtifact(
 public sealed record VisualQaCoverage(
     string ArtifactName,
     string Enforcement,
+    string ManifestFileName,
     int ExpectedScreenshotCount,
     IReadOnlyList<string> LayoutChecks,
     IReadOnlyList<string> Themes,
@@ -2020,6 +2021,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
         return new VisualQaCoverage(
             "visual-smoke-screenshots",
             "ci-production-smoke",
+            "visual-smoke-manifest.json",
             routes.Length * themes.Length * viewports.Length,
             layoutChecks,
             themes,

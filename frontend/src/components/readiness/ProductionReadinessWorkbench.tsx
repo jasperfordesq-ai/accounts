@@ -635,6 +635,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
               <div className="rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-3">
                 <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Artifact</p>
                 <p className="mt-1 break-all text-sm font-medium text-[var(--foreground)]">{visualQaCoverage.artifactName}</p>
+                <p className="mt-1 break-all text-xs font-medium text-[var(--foreground)]">{visualQaCoverage.manifestFileName}</p>
                 <p className="mt-2 text-xs leading-5 text-[var(--muted-foreground)]">
                   Enforced by {formatStatus(visualQaCoverage.enforcement)}
                 </p>

@@ -1,8 +1,14 @@
-import { mkdir } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { chromium, expect } from "@playwright/test";
 import { findOverlappingTextBlocks, formatLayoutIssues } from "./visual-smoke-layout.mjs";
-import { visualSmokeRoutes, visualSmokeThemes, visualSmokeViewports } from "./visual-smoke-plan.mjs";
+import {
+  expectedVisualSmokeManifest,
+  visualSmokeLayoutChecks,
+  visualSmokeRoutes,
+  visualSmokeThemes,
+  visualSmokeViewports,
+} from "./visual-smoke-plan.mjs";
 
 function arg(name, fallback) {
   const prefix = `--${name}=`;
@@ -542,7 +548,18 @@ async function run() {
             outputPath,
             openFilingTab: spec.openFilingTab,
           });
-          captures.push(outputPath);
+          captures.push({
+            routeName: spec.name,
+            routeKey: spec.routeKey,
+            theme,
+            viewportName: viewport.name,
+            fileName,
+            artifactPath: outputPath,
+            expectedText: spec.expectedText,
+            openFilingTab: spec.openFilingTab,
+            reviewStatus: "required-review",
+            layoutChecks: visualSmokeLayoutChecks,
+          });
         }
 
         await context.close();
@@ -552,7 +569,17 @@ async function run() {
     await browser.close();
   }
 
-  console.log(JSON.stringify({ ok: true, screenshots: captures }, null, 2));
+  const manifestTemplate = expectedVisualSmokeManifest(outputDir);
+  const manifest = {
+    ...manifestTemplate,
+    generatedAt: new Date().toISOString(),
+    screenshots: captures,
+  };
+  const manifestFileName = "visual-smoke-manifest.json";
+  const manifestPath = path.join(outputDir, manifestFileName);
+  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+
+  console.log(JSON.stringify({ ok: true, manifestPath, screenshots: captures }, null, 2));
 }
 
 run().catch((error) => {
