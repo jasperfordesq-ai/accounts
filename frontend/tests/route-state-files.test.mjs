@@ -23,6 +23,7 @@ test("Next app shell has production route-state files wired to workbench primiti
 test("main accountant workflow routes have local loading and error states", () => {
   const routeExpectations = [
     ["production-readiness", "Production readiness"],
+    ["companies/new", "Company onboarding"],
     ["companies/[companyId]", "Company workspace"],
     ["companies/[companyId]/periods/[periodId]", "Period workspace"],
     ["companies/[companyId]/periods/[periodId]/classify", "Classification workspace"],
