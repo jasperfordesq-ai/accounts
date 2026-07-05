@@ -11,6 +11,7 @@ import {
   CircleCheck,
   CircleDot,
   CircleSlash,
+  ExternalLink,
   FileCheck2,
   FileSearch,
   LoaderCircle,
@@ -37,6 +38,13 @@ export interface EvidenceItem {
   required?: boolean;
   satisfied: boolean;
   detail?: string | null;
+}
+
+export interface LegalSourceItem {
+  sourceId: string;
+  title: string;
+  effectiveDate: string;
+  url: string;
 }
 
 export interface IssueDigestProps {
@@ -549,6 +557,80 @@ export function EvidenceChecklist({ items }: { items: EvidenceItem[] }) {
       })}
     </div>
   );
+}
+
+export function LegalSourceList({
+  sources,
+  limit,
+}: {
+  sources: LegalSourceItem[];
+  limit?: number;
+}) {
+  const unique = uniqueLegalSources(sources);
+  const visible = typeof limit === "number" ? unique.slice(0, limit) : unique;
+  const remaining = Math.max(0, unique.length - visible.length);
+
+  if (visible.length === 0) {
+    return <p className="text-sm text-[var(--muted-foreground)]">No legal sources attached.</p>;
+  }
+
+  return (
+    <ul className="flex max-w-full flex-wrap gap-2 whitespace-normal">
+      {visible.map((source) => (
+        <li key={source.sourceId || source.url} className="min-w-0">
+          <a
+            href={source.url}
+            target="_blank"
+            rel="noreferrer"
+            className="group inline-flex max-w-full items-start gap-2 rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] px-3 py-2 text-xs font-medium text-[var(--foreground)] transition hover:border-[var(--ring)] hover:bg-[var(--surface)]"
+          >
+            <span className="min-w-0">
+              <span className="block truncate">{source.title}</span>
+              <span className="mt-0.5 block text-[11px] font-normal text-[var(--muted-foreground)]">
+                Effective {formatLegalSourceDate(source.effectiveDate)}
+              </span>
+            </span>
+            <ExternalLink className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--muted-foreground)] group-hover:text-[var(--foreground)]" />
+          </a>
+        </li>
+      ))}
+      {remaining > 0 && (
+        <li className="inline-flex min-h-9 items-center rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] px-3 text-xs font-semibold text-[var(--muted-foreground)]">
+          {remaining} more {remaining === 1 ? "source" : "sources"}
+        </li>
+      )}
+    </ul>
+  );
+}
+
+function uniqueLegalSources(sources: LegalSourceItem[]) {
+  const seen = new Set<string>();
+  return sources.filter((source) => {
+    const key = source.sourceId || source.url;
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function formatLegalSourceDate(value: string) {
+  const calendarDate = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  const date = calendarDate
+    ? new Date(
+        Date.UTC(
+          Number(calendarDate[1]),
+          Number(calendarDate[2]) - 1,
+          Number(calendarDate[3]),
+        ),
+      )
+    : new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("en-IE", {
+    day: "2-digit",
+    month: "short",
+    timeZone: "UTC",
+    year: "numeric",
+  }).format(date);
 }
 
 export function DataTable({

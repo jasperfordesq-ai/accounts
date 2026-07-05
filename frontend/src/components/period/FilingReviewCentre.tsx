@@ -10,6 +10,7 @@ import {
   EvidenceChecklist,
   FilingActionBar,
   IssueDigest,
+  LegalSourceList,
   ReviewPanel,
   SectionHeader,
   StatusBadge,
@@ -109,18 +110,8 @@ export function FilingReviewCentre({
                   </div>
                   <div className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-4">
                     <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Legal sources</p>
-                    <div className="mt-3 space-y-2">
-                      {filingReadinessProfile.sourceReferences.slice(0, 6).map((source) => (
-                        <a
-                          key={source.sourceId}
-                          href={source.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="block rounded border border-[var(--border)] px-3 py-2 text-xs font-medium text-[var(--foreground)] hover:bg-[var(--surface-subtle)]"
-                        >
-                          {source.title}
-                        </a>
-                      ))}
+                    <div className="mt-3">
+                      <LegalSourceList sources={filingReadinessProfile.sourceReferences} limit={6} />
                     </div>
                   </div>
                 </div>
@@ -414,7 +405,6 @@ function SpecialistEvidenceGates({ steps }: { steps: FilingReadinessSignOffStep[
 
 function SpecialistEvidenceGateCard({ step }: { step: FilingReadinessSignOffStep }) {
   const tone = signOffStepTone(step.state);
-  const sources = uniqueSources(step.sources);
 
   return (
     <article className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
@@ -433,19 +423,9 @@ function SpecialistEvidenceGateCard({ step }: { step: FilingReadinessSignOffStep
         <StatusBadge tone={tone}>{formatStateLabel(step.state)}</StatusBadge>
       </div>
 
-      {sources.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-2">
-          {sources.map((source) => (
-            <a
-              key={source.sourceId}
-              href={source.url}
-              target="_blank"
-              rel="noreferrer"
-              className="rounded-full border border-[var(--border)] bg-[var(--surface-subtle)] px-2.5 py-1 text-xs font-semibold text-[var(--foreground)] hover:bg-[var(--surface)]"
-            >
-              {source.title}
-            </a>
-          ))}
+      {step.sources.length > 0 && (
+        <div className="mt-3">
+          <LegalSourceList sources={step.sources} />
         </div>
       )}
     </article>
@@ -468,16 +448,6 @@ function SignOffStepItem({ step }: { step: FilingReadinessSignOffStep }) {
 
 function isSpecialistSignOffStep(step: FilingReadinessSignOffStep) {
   return step.code === "charity-reporting" || step.code === "auditor-handoff";
-}
-
-function uniqueSources(sources: FilingReadinessSignOffStep["sources"]) {
-  const seen = new Set<string>();
-  return sources.filter((source) => {
-    const key = source.sourceId || source.url;
-    if (!key || seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
 }
 
 function signOffStateTone(state: string): "default" | "good" | "warn" | "bad" | "info" {

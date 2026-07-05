@@ -6,6 +6,7 @@ import {
   DataTable,
   EvidenceChecklist,
   IssueDigest,
+  LegalSourceList,
   MoneyInput,
   PermissionDeniedPanel,
   ReviewPanel,
@@ -49,6 +50,41 @@ describe("workbench primitives", () => {
     render(<StatusBadge tone="warn">Recorded only</StatusBadge>);
 
     expect(screen.getByText("Recorded only")).toBeInTheDocument();
+  });
+
+  it("renders deduplicated legal source links with effective dates", () => {
+    render(
+      <LegalSourceList
+        sources={[
+          {
+            sourceId: "cro-financial-statements-requirements",
+            title: "CRO financial statements requirements",
+            effectiveDate: "2026-07-03",
+            url: "https://cro.ie/annual-return/financial-statements-requirements/",
+          },
+          {
+            sourceId: "cro-financial-statements-requirements",
+            title: "CRO financial statements requirements",
+            effectiveDate: "2026-07-03",
+            url: "https://cro.ie/annual-return/financial-statements-requirements/",
+          },
+          {
+            sourceId: "revenue-accepted-taxonomies",
+            title: "Revenue accepted iXBRL taxonomies",
+            effectiveDate: "2025-11-06",
+            url: "https://www.revenue.ie/en/companies-and-charities/corporation-tax-for-companies/submitting-financial-statements/accepted-taxonomies.aspx",
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getAllByRole("link", { name: /CRO financial statements requirements/ })).toHaveLength(1);
+    expect(screen.getByRole("link", { name: /Revenue accepted iXBRL taxonomies/ })).toHaveAttribute(
+      "href",
+      "https://www.revenue.ie/en/companies-and-charities/corporation-tax-for-companies/submitting-financial-statements/accepted-taxonomies.aspx",
+    );
+    expect(screen.getByText("Effective 03 Jul 2026")).toBeInTheDocument();
+    expect(screen.getByText("Effective 06 Nov 2025")).toBeInTheDocument();
   });
 
   it("renders a dedicated accountant money input without browser number steppers", async () => {
