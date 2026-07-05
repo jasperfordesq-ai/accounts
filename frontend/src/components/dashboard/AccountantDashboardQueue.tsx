@@ -23,6 +23,7 @@ interface QueueRow {
   blockerLabel: string;
   blockerDetail: string;
   blockerTone: QueueTone;
+  readyDetail: string;
   nextActionLabel: string;
   nextActionHref: string;
 }
@@ -137,7 +138,7 @@ function QueueTriage({ row }: { row: QueueRow }) {
   return (
     <section
       aria-label="Queue triage"
-      className="grid gap-3 rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)_auto] md:items-center"
+      className="grid gap-3 rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)_minmax(0,1fr)_minmax(0,0.8fr)_auto] lg:items-center"
     >
       <TriageItem
         label="Highest-risk client"
@@ -150,17 +151,25 @@ function QueueTriage({ row }: { row: QueueRow }) {
         detail={row.deadlineState}
       />
       <TriageItem
+        label="What is ready"
+        value={row.readyDetail}
+        detail={row.deadlineLabel}
+      />
+      <TriageItem
         label="Reviewer ownership"
         value={reviewerName || "Unassigned reviewer"}
         detail={reviewerName ? row.company.assignedReviewerEmail : "Assign before approval"}
       />
-      <Link
-        href={row.nextActionHref}
-        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 text-sm font-semibold text-[var(--foreground)] shadow-sm transition hover:border-[var(--ring)]"
-      >
-        {row.nextActionLabel}
-        <ArrowRight className="h-4 w-4" />
-      </Link>
+      <div className="min-w-0">
+        <p className="mb-1 text-[11px] font-semibold uppercase text-[var(--muted-foreground)]">What must I do next</p>
+        <Link
+          href={row.nextActionHref}
+          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 text-sm font-semibold text-[var(--foreground)] shadow-sm transition hover:border-[var(--ring)]"
+        >
+          {row.nextActionLabel}
+          <ArrowRight className="h-4 w-4" />
+        </Link>
+      </div>
     </section>
   );
 }
@@ -234,6 +243,7 @@ function buildQueueRow(company: Company, deadline: FilingDeadline | null, today:
       blockerLabel: "No period",
       blockerDetail: "Create the first accounting period before production work can start.",
       blockerTone: "bad",
+      readyDetail: "Company profile is ready for period setup.",
       nextActionLabel: "Create period",
       nextActionHref: `/companies/${company.id}`,
     };
@@ -250,6 +260,7 @@ function buildQueueRow(company: Company, deadline: FilingDeadline | null, today:
       blockerLabel: "Manual handoff",
       blockerDetail: manualHandoffDetail,
       blockerTone: "bad",
+      readyDetail: "Active period exists; manual-handoff risk is identified.",
       nextActionLabel: "Review handoff",
       nextActionHref: `/companies/${company.id}`,
     };
@@ -276,6 +287,9 @@ function buildQueueRow(company: Company, deadline: FilingDeadline | null, today:
         ? "No dashboard-level blockers detected from current company and deadline data."
         : "Calculate filing deadlines for the active accounting period.",
     blockerTone: deadlineState.label === "Overdue" || !deadline ? "bad" : "good",
+    readyDetail: deadline
+      ? "Active period and filing deadline are available for review."
+      : "Active period is ready for deadline calculation.",
     nextActionLabel: hasDeadlinePressure ? "Open filing" : "Continue workbench",
     nextActionHref: `/companies/${company.id}/periods/${period.id}`,
   };
@@ -316,6 +330,7 @@ function queueSearchText(row: QueueRow) {
     row.deadlineState,
     row.blockerLabel,
     row.blockerDetail,
+    row.readyDetail,
     row.company.assignedReviewerName,
     row.company.assignedReviewerEmail,
     row.nextActionLabel,

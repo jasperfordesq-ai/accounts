@@ -45,8 +45,11 @@ describe("AccountantDashboardQueue", () => {
     expect(within(triage).getByText("Atlantic Public Limited Company")).toBeInTheDocument();
     expect(within(triage).getByText("What is wrong")).toBeInTheDocument();
     expect(within(triage).getByText("Manual handoff: PLC/public-company workflow requires manual review")).toBeInTheDocument();
+    expect(within(triage).getByText("What is ready")).toBeInTheDocument();
+    expect(within(triage).getByText("Active period exists; manual-handoff risk is identified.")).toBeInTheDocument();
     expect(within(triage).getByText("Reviewer ownership")).toBeInTheDocument();
     expect(within(triage).getByText("Unassigned reviewer")).toBeInTheDocument();
+    expect(within(triage).getByText("What must I do next")).toBeInTheDocument();
     expect(within(triage).getByRole("link", { name: "Review handoff" })).toHaveAttribute("href", "/companies/8");
     expect(screen.getByRole("searchbox", { name: "Filter Accountant work queue" })).toBeInTheDocument();
     expect(screen.getByText("3 of 3 rows")).toBeInTheDocument();
