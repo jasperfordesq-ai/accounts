@@ -1173,6 +1173,7 @@ function sampleReport() {
           "Component-preview route exercises shared workbench primitives.",
           "FilingReviewCentre permission gate blocks approval/submission actions behind canReview and renders PermissionDeniedPanel for ineligible roles.",
           "PeriodFilingWorkspace extraction composes review, deadline, warning, output and audit panels behind one focused filing workflow component.",
+          "PeriodImportWorkspace extraction composes classification, bank account, opening-balance, CSV upload and import-status panels behind one focused import workflow component.",
           "Render tests cover accountant dashboards, review panels and workflow routes.",
         ],
         nextActions: [

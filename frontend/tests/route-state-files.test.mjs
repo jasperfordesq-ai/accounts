@@ -101,3 +101,33 @@ test("period filing workspace composes the accountant review panels", () => {
 
   assert.match(source, /Review Notes/, "PeriodFilingWorkspace should keep the filing notes review action");
 });
+
+test("period import route delegates import workflow composition", () => {
+  const periodRoute = new URL("companies/[companyId]/periods/[periodId]/page.tsx", appDir);
+  const source = readFileSync(periodRoute, "utf8");
+
+  assert.match(source, /PeriodImportWorkspace/, "period route should import the focused import workspace");
+  assert.match(source, /<PeriodImportWorkspace[\s\S]*classificationHref=/, "period route should render PeriodImportWorkspace with workflow links");
+  assert.match(source, /<PeriodImportWorkspace[\s\S]*onUploadFile=\{handleFileUpload\}/, "period route should pass upload orchestration into PeriodImportWorkspace");
+  assert.doesNotMatch(source, /<Card\.Title[^>]*>Bank Accounts<\/Card\.Title>/, "period route should not own bank account import panel markup");
+  assert.doesNotMatch(source, /<Card\.Title[^>]*>Opening Balances & Reserves<\/Card\.Title>/, "period route should not own opening-balance panel markup");
+  assert.doesNotMatch(source, /<Card\.Title[^>]*>Import Transactions<\/Card\.Title>/, "period route should not own CSV upload panel markup");
+});
+
+test("period import workspace composes the accountant import panels", () => {
+  const componentFile = new URL("../src/components/period/PeriodImportWorkspace.tsx", import.meta.url);
+
+  assert.ok(existsSync(componentFile), "PeriodImportWorkspace should exist as the focused import workflow component");
+
+  const source = readFileSync(componentFile, "utf8");
+  for (const marker of [
+    "Company Size Classification",
+    "Bank Accounts",
+    "Chart of Accounts",
+    "Opening Balances & Reserves",
+    "Import Transactions",
+    "Import Status",
+  ]) {
+    assert.match(source, new RegExp(marker.replace(/[&]/g, "\\&")), `PeriodImportWorkspace should render ${marker}`);
+  }
+});

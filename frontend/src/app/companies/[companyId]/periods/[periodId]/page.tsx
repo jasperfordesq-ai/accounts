@@ -19,7 +19,6 @@ import { useSearchParams } from "next/navigation";
 import {
   Upload,
   Settings,
-  HelpCircle,
   Calculator,
   FileText,
   Download,
@@ -32,7 +31,6 @@ import {
   ClipboardList,
   Eye,
   Heart,
-  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -96,6 +94,7 @@ import { PeriodWorkspaceSkeleton } from "@/components/Skeleton";
 import { WorkbenchHeader } from "@/components/workbench";
 import { PeriodWorkbenchOverview } from "@/components/period/PeriodWorkbenchOverview";
 import { PeriodFilingWorkspace } from "@/components/period/PeriodFilingWorkspace";
+import { PeriodImportWorkspace } from "@/components/period/PeriodImportWorkspace";
 import { StatementsReadinessPanel } from "@/components/period/StatementsReadinessPanel";
 import { useAuth } from "@/components/AuthProvider";
 import { formatPeriodRange } from "@/lib/format";
@@ -190,7 +189,6 @@ export default function PeriodWorkspacePage({
   }, []);
 
   // Import tab state
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedBankAccountId, setSelectedBankAccountId] = useState<number | "">("");
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState<{
@@ -199,7 +197,6 @@ export default function PeriodWorkspacePage({
     autoCategorised: number;
   } | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [dragOver, setDragOver] = useState(false);
 
   // Categorise tab state
   const [transactions, setTransactions] = useState<ImportedTransaction[]>([]);
@@ -400,20 +397,6 @@ export default function PeriodWorkspacePage({
     }
   }
 
-  function handleFileInputChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (file) handleFileUpload(file);
-    e.target.value = "";
-  }
-
-  function handleDropzoneDrop(e: React.DragEvent<HTMLDivElement>) {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragOver(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file) handleFileUpload(file);
-  }
-
   async function handleCreateBankAccount() {
     if (!bankForm.name.trim()) {
       toast.error("Bank account name is required");
@@ -494,6 +477,16 @@ export default function PeriodWorkspacePage({
       toast.error(err instanceof Error ? err.message : "Failed to remove opening balance");
     } finally {
       setDeletingOpeningCategoryId(null);
+    }
+  }
+
+  async function handleSeedCategories() {
+    try {
+      const cats = await seedCategories(cId);
+      setCategories(cats);
+      toast.success(`${cats.length} categories seeded`);
+    } catch {
+      toast.error("Failed to seed categories");
     }
   }
 
@@ -804,423 +797,34 @@ export default function PeriodWorkspacePage({
 
         {/* Import Tab */}
         <TabPanel id="import">
-          <div className="space-y-6">
-            {/* Classify Company Size Link */}
-            <Card className="shadow-sm border border-blue-200 dark:border-blue-800 bg-blue-50/30 dark:bg-blue-900/10">
-              <Card.Content className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Scale className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                    <div>
-                      <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Company Size Classification</h3>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                        Determine micro/small/medium/large status and filing regime.
-                      </p>
-                    </div>
-                  </div>
-                  <Link href={`/companies/${companyId}/periods/${periodId}/classify`}>
-                    <Button variant="outline" size="sm">
-                      Classify Company Size
-                      <ArrowRight className="w-4 h-4 ml-1.5" />
-                    </Button>
-                  </Link>
-                </div>
-              </Card.Content>
-            </Card>
-
-            {/* Bank Accounts */}
-            <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
-              <Card.Header>
-                <div className="flex w-full flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <Card.Title className="text-gray-900 dark:text-gray-100">Bank Accounts</Card.Title>
-                    <Card.Description>
-                      {bankAccounts.length} bank account{bankAccounts.length !== 1 ? "s" : ""} linked for import and reconciliation.
-                    </Card.Description>
-                  </div>
-                  <Button variant="outline" size="sm" onPress={() => setShowBankForm((open) => !open)}>
-                    {showBankForm ? "Cancel" : "Add Bank Account"}
-                  </Button>
-                </div>
-              </Card.Header>
-              <Card.Content>
-                <div className="space-y-4">
-                  {showBankForm && (
-                    <div className="rounded-md border border-gray-200 bg-gray-50 p-4 dark:border-neutral-700 dark:bg-neutral-800/40">
-                      <div className="grid gap-3 md:grid-cols-5">
-                        <div>
-                          <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Account name</label>
-                          <input
-                            value={bankForm.name}
-                            onChange={(e) => setBankForm((current) => ({ ...current, name: e.target.value }))}
-                            className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-gray-100"
-                            placeholder="Main current account"
-                          />
-                        </div>
-                        <div>
-                          <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">IBAN</label>
-                          <input
-                            value={bankForm.iban}
-                            onChange={(e) => setBankForm((current) => ({ ...current, iban: e.target.value }))}
-                            className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-gray-100"
-                            placeholder="IE00..."
-                          />
-                        </div>
-                        <div>
-                          <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Opening balance</label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={bankForm.openingBalance}
-                            onChange={(e) => setBankForm((current) => ({ ...current, openingBalance: e.target.value }))}
-                            className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-gray-100"
-                          />
-                        </div>
-                        <div>
-                          <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Balance date</label>
-                          <input
-                            type="date"
-                            value={bankForm.openingBalanceDate || period?.periodStart || ""}
-                            onChange={(e) => setBankForm((current) => ({ ...current, openingBalanceDate: e.target.value }))}
-                            className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-gray-100"
-                          />
-                        </div>
-                        <div>
-                          <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Currency</label>
-                          <select
-                            value={bankForm.currency}
-                            onChange={(e) => setBankForm((current) => ({ ...current, currency: e.target.value }))}
-                            className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-gray-100"
-                          >
-                            <option value="EUR">EUR</option>
-                            <option value="GBP">GBP</option>
-                            <option value="USD">USD</option>
-                          </select>
-                        </div>
-                      </div>
-                      <div className="mt-3 flex justify-end">
-                        <Button variant="primary" size="sm" onPress={handleCreateBankAccount} isDisabled={savingBankAccount}>
-                          {savingBankAccount ? <Spinner size="sm" /> : "Save Bank Account"}
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-
-                  {bankAccounts.length === 0 ? (
-                    <div className="rounded-md border border-dashed border-gray-300 px-4 py-6 text-sm text-gray-500 dark:border-neutral-700 dark:text-gray-400">
-                      No bank accounts linked yet. Add the account that matches the year-end bank statement before importing transactions.
-                    </div>
-                  ) : (
-                    <div className="overflow-hidden rounded-md border border-gray-200 dark:border-neutral-700">
-                      <div className="hidden grid-cols-12 gap-2 bg-gray-50 px-4 py-2 text-xs font-semibold uppercase text-gray-500 dark:bg-neutral-800 dark:text-gray-400 md:grid">
-                        <div className="col-span-5">Account</div>
-                        <div className="col-span-2">Currency</div>
-                        <div className="col-span-3 text-right">Opening balance</div>
-                        <div className="col-span-2 text-right">Import target</div>
-                      </div>
-                      <div className="divide-y divide-gray-100 dark:divide-neutral-800">
-                        {bankAccounts.map((ba) => (
-                          <div
-                            key={ba.id}
-                            className="grid gap-3 px-4 py-3 text-sm md:grid-cols-12 md:items-center md:gap-2"
-                          >
-                            <div className="min-w-0 md:col-span-5">
-                              <p className="font-medium text-gray-900 dark:text-gray-100">{ba.name}</p>
-                              <p className="truncate text-xs text-gray-500 dark:text-gray-400">{ba.iban || "No IBAN recorded"}</p>
-                            </div>
-                            <div className="grid grid-cols-[8rem_minmax(0,1fr)] items-center gap-3 md:col-span-2 md:block">
-                              <span className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 md:hidden">Currency</span>
-                              <span className="text-gray-600 dark:text-gray-300">{ba.currency}</span>
-                            </div>
-                            <div className="grid grid-cols-[8rem_minmax(0,1fr)] items-center gap-3 md:col-span-3 md:block md:text-right">
-                              <span className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 md:hidden">Opening balance</span>
-                              <span className="font-mono text-gray-900 dark:text-gray-100">{formatCurrency(ba.openingBalance)}</span>
-                            </div>
-                            <div className="grid grid-cols-[8rem_minmax(0,1fr)] items-center gap-3 md:col-span-2 md:block md:text-right">
-                              <span className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 md:hidden">Import target</span>
-                              {selectedBankAccountId === ba.id ? (
-                                <Chip color="success" variant="soft" size="sm">Selected</Chip>
-                              ) : (
-                                <Button variant="ghost" size="sm" onPress={() => setSelectedBankAccountId(ba.id)}>Use</Button>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </Card.Content>
-            </Card>
-
-            {/* Chart of Accounts Seed */}
-            {categories.length === 0 && (
-              <Card className="shadow-sm border border-amber-200 dark:border-amber-800 bg-amber-50/30 dark:bg-amber-900/10">
-                <Card.Content className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <Settings className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-                      <div>
-                        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Chart of Accounts</h3>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">No categories configured. Seed the default Irish chart of accounts.</p>
-                      </div>
-                    </div>
-                    <Button variant="outline" size="sm" onPress={async () => {
-                      try {
-                        const cats = await seedCategories(cId);
-                        setCategories(cats);
-                        toast.success(`${cats.length} categories seeded`);
-                      } catch { toast.error("Failed to seed categories"); }
-                    }}>
-                      Seed Categories
-                    </Button>
-                  </div>
-                </Card.Content>
-              </Card>
-            )}
-
-            {/* Opening Balances */}
-            <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
-              <Card.Header>
-                <div className="flex w-full flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <Card.Title className="text-gray-900 dark:text-gray-100">Opening Balances & Reserves</Card.Title>
-                    <Card.Description>
-                      Enter reviewed opening reserves, share capital, creditors, and other balance-sheet balances before finalising.
-                    </Card.Description>
-                  </div>
-                  <Chip color={Math.abs(openingDifference) < 0.01 ? "success" : "warning"} variant="soft" size="sm">
-                    Difference {formatCurrency(openingDifference)}
-                  </Chip>
-                </div>
-              </Card.Header>
-              <Card.Content>
-                <div className="grid gap-3 md:grid-cols-5">
-                  <div className="md:col-span-2">
-                    <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Account</label>
-                    <select
-                      value={openingBalanceForm.categoryId}
-                      onChange={(e) => setOpeningBalanceForm((current) => ({ ...current, categoryId: e.target.value }))}
-                      className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-gray-100"
-                    >
-                      <option value="">Select account...</option>
-                      {openingBalanceCategories.map((category) => (
-                        <option key={category.id} value={category.id}>
-                          {category.code} - {category.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Side</label>
-                    <select
-                      value={openingBalanceForm.side}
-                      onChange={(e) => setOpeningBalanceForm((current) => ({ ...current, side: e.target.value }))}
-                      className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-gray-100"
-                    >
-                      <option value="debit">Debit</option>
-                      <option value="credit">Credit</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Amount</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={openingBalanceForm.amount}
-                      onChange={(e) => setOpeningBalanceForm((current) => ({ ...current, amount: e.target.value }))}
-                      className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-gray-100"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Evidence note</label>
-                    <input
-                      value={openingBalanceForm.sourceNote}
-                      onChange={(e) => setOpeningBalanceForm((current) => ({ ...current, sourceNote: e.target.value }))}
-                      className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-gray-100"
-                      placeholder="Prior accounts / TB"
-                    />
-                  </div>
-                </div>
-                <div className="mt-3 flex justify-end">
-                  <Button variant="primary" size="sm" onPress={handleSaveOpeningBalance} isDisabled={savingOpeningBalance || categories.length === 0}>
-                    {savingOpeningBalance ? <Spinner size="sm" /> : "Save Reviewed Balance"}
-                  </Button>
-                </div>
-
-                <div className="mt-4 overflow-hidden rounded-md border border-gray-200 dark:border-neutral-700">
-                  <div className="hidden grid-cols-12 gap-2 bg-gray-50 px-4 py-2 text-xs font-semibold uppercase text-gray-500 dark:bg-neutral-800 dark:text-gray-400 md:grid">
-                    <div className="col-span-5">Account</div>
-                    <div className="col-span-2 text-right">Debit</div>
-                    <div className="col-span-2 text-right">Credit</div>
-                    <div className="col-span-2">Evidence</div>
-                    <div className="col-span-1 text-right">Action</div>
-                  </div>
-                  {openingBalances.length === 0 ? (
-                    <div className="px-4 py-5 text-sm text-gray-500 dark:text-gray-400">
-                      No reviewed opening balances entered yet. Bank account opening balances are included automatically, but reserves/equity need an explicit balancing entry.
-                    </div>
-                  ) : (
-                    openingBalances.map((balance) => (
-                      <div key={balance.id} className="grid gap-3 border-t border-gray-100 px-4 py-3 text-sm dark:border-neutral-800 md:grid-cols-12 md:gap-2">
-                        <div className="md:col-span-5">
-                          <span className="font-mono text-xs text-gray-500">{balance.accountCategory.code}</span>{" "}
-                          <span className="font-medium text-gray-900 dark:text-gray-100">{balance.accountCategory.name}</span>
-                        </div>
-                        <div className="grid grid-cols-[6rem_minmax(0,1fr)] items-center gap-3 md:col-span-2 md:block md:text-right">
-                          <span className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 md:hidden">Debit</span>
-                          <span className="font-mono">{balance.debit ? formatCurrency(balance.debit) : "-"}</span>
-                        </div>
-                        <div className="grid grid-cols-[6rem_minmax(0,1fr)] items-center gap-3 md:col-span-2 md:block md:text-right">
-                          <span className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 md:hidden">Credit</span>
-                          <span className="font-mono">{balance.credit ? formatCurrency(balance.credit) : "-"}</span>
-                        </div>
-                        <div className="grid grid-cols-[6rem_minmax(0,1fr)] items-center gap-3 md:col-span-2 md:block" title={balance.sourceNote ?? ""}>
-                          <span className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 md:hidden">Evidence</span>
-                          <span className="min-w-0 truncate text-xs text-gray-500">
-                            {balance.reviewed ? "Reviewed" : "Unreviewed"}{balance.sourceNote ? ` - ${balance.sourceNote}` : ""}
-                          </span>
-                        </div>
-                        <div className="grid grid-cols-[6rem_minmax(0,1fr)] items-center gap-3 md:col-span-1 md:block md:text-right">
-                          <span className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 md:hidden">Action</span>
-                          <Button variant="ghost" size="sm" onPress={() => handleDeleteOpeningBalance(balance.accountCategoryId)} isDisabled={deletingOpeningCategoryId === balance.accountCategoryId}>
-                            {deletingOpeningCategoryId === balance.accountCategoryId ? <Spinner size="sm" /> : <Trash2 className="h-4 w-4" />}
-                          </Button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </Card.Content>
-            </Card>
-
-            {/* Upload Area */}
-            <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
-              <Card.Header>
-                <Card.Title className="text-gray-900 dark:text-gray-100">Import Transactions</Card.Title>
-                <Card.Description>Upload bank statements in CSV format (AIB, BOI, Revolut, Stripe)</Card.Description>
-              </Card.Header>
-              <Card.Content>
-                <div className="mb-4">
-                  <label htmlFor="bank-account-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                    Import into bank account
-                  </label>
-                  <select
-                    id="bank-account-select"
-                    value={selectedBankAccountId}
-                    onChange={(e) => setSelectedBankAccountId(e.target.value ? Number(e.target.value) : "")}
-                    className="w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-colors"
-                    title="Select bank account"
-                    aria-label="Select bank account"
-                  >
-                    <option value="">Select a bank account...</option>
-                    {bankAccounts.map((ba) => (
-                      <option key={ba.id} value={ba.id}>
-                        {ba.name}{ba.iban ? ` (${ba.iban})` : ""} - {ba.currency}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".csv"
-                  className="hidden"
-                  onChange={handleFileInputChange}
-                  aria-label="Upload CSV file"
-                />
-
-                {/* Dropzone with drag feedback */}
-                <div
-                  className={`border-2 border-dashed rounded-xl p-10 text-center transition-all cursor-pointer ${
-                    dragOver
-                      ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 scale-[1.01]"
-                      : "border-gray-300 dark:border-neutral-600 hover:border-emerald-400 dark:hover:border-emerald-600"
-                  }`}
-                  onClick={() => fileInputRef.current?.click()}
-                  onDrop={handleDropzoneDrop}
-                  onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDragOver(true); }}
-                  onDragEnter={(e) => { e.preventDefault(); setDragOver(true); }}
-                  onDragLeave={(e) => { e.preventDefault(); setDragOver(false); }}
-                  role="button"
-                  tabIndex={0}
-                  aria-label="Upload CSV file by clicking or dragging"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") fileInputRef.current?.click();
-                  }}
-                >
-                  {uploading ? (
-                    <>
-                      <Spinner size="sm" className="mx-auto mb-3" />
-                      <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                        Uploading and processing...
-                      </p>
-                    </>
-                  ) : dragOver ? (
-                    <>
-                      <Upload className="w-10 h-10 text-emerald-500 mx-auto mb-3" />
-                      <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
-                        Drop your CSV file here
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="w-10 h-10 text-gray-400 dark:text-gray-500 mx-auto mb-3" />
-                      <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                        Drag and drop a CSV file here, or click to browse
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        Supports AIB, BOI, Revolut, and Stripe CSV formats
-                      </p>
-                    </>
-                  )}
-                </div>
-
-                {uploadError && (
-                  <div className="mt-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-400 animate-fade-in">
-                    {uploadError}
-                  </div>
-                )}
-              </Card.Content>
-            </Card>
-
-            {/* Import Result */}
-            <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
-              <Card.Header>
-                <Card.Title className="text-gray-900 dark:text-gray-100">Import Status</Card.Title>
-              </Card.Header>
-              <Card.Content>
-                {uploadResult ? (
-                  <div className="space-y-3 animate-fade-in">
-                    <div className="flex items-center gap-3 text-sm text-emerald-700 dark:text-emerald-400">
-                      <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-500" />
-                      <span className="font-medium">Import completed successfully</span>
-                    </div>
-                    <div className="grid grid-cols-3 gap-4">
-                      <div className="rounded-lg bg-emerald-50 dark:bg-emerald-900/20 p-4 text-center">
-                        <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">{uploadResult.rowsImported}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Rows Imported</p>
-                      </div>
-                      <div className="rounded-lg bg-gray-50 dark:bg-neutral-800 p-4 text-center">
-                        <p className="text-2xl font-bold text-gray-700 dark:text-gray-300">{uploadResult.duplicatesSkipped}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Duplicates Skipped</p>
-                      </div>
-                      <div className="rounded-lg bg-blue-50 dark:bg-blue-900/20 p-4 text-center">
-                        <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">{uploadResult.autoCategorised}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Auto-Categorised</p>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-3 text-sm text-gray-500 dark:text-gray-400">
-                    <HelpCircle className="w-5 h-5" />
-                    <span>No imports have been processed for this period yet.</span>
-                  </div>
-                )}
-              </Card.Content>
-            </Card>
-          </div>
+          <PeriodImportWorkspace
+            classificationHref={`/companies/${companyId}/periods/${periodId}/classify`}
+            period={period}
+            bankAccounts={bankAccounts}
+            showBankForm={showBankForm}
+            savingBankAccount={savingBankAccount}
+            bankForm={bankForm}
+            selectedBankAccountId={selectedBankAccountId}
+            categories={categories}
+            openingBalances={openingBalances}
+            openingBalanceCategories={openingBalanceCategories}
+            openingBalanceForm={openingBalanceForm}
+            openingDifference={openingDifference}
+            savingOpeningBalance={savingOpeningBalance}
+            deletingOpeningCategoryId={deletingOpeningCategoryId}
+            uploading={uploading}
+            uploadResult={uploadResult}
+            uploadError={uploadError}
+            onToggleBankForm={() => setShowBankForm((open) => !open)}
+            onBankFormChange={setBankForm}
+            onCreateBankAccount={handleCreateBankAccount}
+            onSeedCategories={handleSeedCategories}
+            onOpeningBalanceFormChange={setOpeningBalanceForm}
+            onSaveOpeningBalance={handleSaveOpeningBalance}
+            onDeleteOpeningBalance={handleDeleteOpeningBalance}
+            onSelectBankAccount={setSelectedBankAccountId}
+            onUploadFile={handleFileUpload}
+          />
         </TabPanel>
 
         {/* Categorise Tab */}

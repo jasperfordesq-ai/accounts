@@ -584,6 +584,7 @@ function productionReadinessReportFixture() {
         currentEvidence: [
           "API client invariants validate readiness contracts.",
           "PeriodFilingWorkspace extraction composes review, deadline, warning, output and audit panels behind one focused filing workflow component.",
+          "PeriodImportWorkspace extraction composes classification, bank account, opening-balance, CSV upload and import-status panels behind one focused import workflow component.",
         ],
         nextActions: ["Continue extracting large route files."],
         assuranceActionCodes: ["qualified-accountant-signoff"],
