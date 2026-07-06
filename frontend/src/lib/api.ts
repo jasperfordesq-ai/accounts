@@ -1918,6 +1918,20 @@ export interface AccountantWorkflowEvidencePackItem {
   failurePolicy: string;
 }
 
+export interface WorkbenchVisualAcceptanceRegisterItem {
+  routeCode: string;
+  routeLabel: string;
+  workflowStages: string[];
+  acceptanceAreas: string[];
+  screenshotArtifactNames: string[];
+  evidenceArtifact: string;
+  requiredEvidence: string[];
+  releaseGateCode: string;
+  status: string;
+  failurePolicy: string;
+  nextAction: string;
+}
+
 export interface VisualQaViewport {
   name: string;
   width: number;
@@ -2028,6 +2042,7 @@ export interface ProductionReadinessReport {
   accountantWorkflowWalkthroughProtocol: AccountantWorkflowWalkthroughProtocol;
   accountantJourneyAcceptanceChecklist: AccountantJourneyAcceptanceChecklistItem[];
   accountantWorkflowEvidencePack: AccountantWorkflowEvidencePackItem[];
+  workbenchVisualAcceptanceRegister: WorkbenchVisualAcceptanceRegisterItem[];
   areas: ProductionReadinessArea[];
   goldenFilingCorpus: GoldenFilingCorpusScenario[];
   goldenEvidenceLedger: GoldenEvidenceLedgerEntry[];
@@ -2467,6 +2482,20 @@ const accountantWorkflowEvidencePackItemSchema = z.object({
   failurePolicy: z.string().min(1),
 });
 
+const workbenchVisualAcceptanceRegisterItemSchema = z.object({
+  routeCode: z.string().min(1),
+  routeLabel: z.string().min(1),
+  workflowStages: z.array(z.string().min(1)),
+  acceptanceAreas: z.array(z.string().min(1)),
+  screenshotArtifactNames: z.array(z.string().min(1)),
+  evidenceArtifact: z.string().min(1),
+  requiredEvidence: z.array(z.string().min(1)),
+  releaseGateCode: z.string().min(1),
+  status: z.string().min(1),
+  failurePolicy: z.string().min(1),
+  nextAction: z.string().min(1),
+});
+
 const visualQaViewportSchema = z.object({
   name: z.string().min(1),
   width: z.number(),
@@ -2547,6 +2576,7 @@ export const productionReadinessReportSchema = z.object({
   accountantWorkflowWalkthroughProtocol: accountantWorkflowWalkthroughProtocolSchema,
   accountantJourneyAcceptanceChecklist: z.array(accountantJourneyAcceptanceChecklistItemSchema),
   accountantWorkflowEvidencePack: z.array(accountantWorkflowEvidencePackItemSchema),
+  workbenchVisualAcceptanceRegister: z.array(workbenchVisualAcceptanceRegisterItemSchema),
   areas: z.array(productionReadinessAreaSchema),
   goldenFilingCorpus: z.array(goldenFilingCorpusScenarioSchema),
   goldenEvidenceLedger: z.array(goldenEvidenceLedgerEntrySchema),
@@ -2758,6 +2788,7 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
   assertAccountantWorkflowWalkthroughProtocol(report);
   assertAccountantJourneyAcceptanceChecklist(report);
   assertAccountantWorkflowEvidencePack(report);
+  assertWorkbenchVisualAcceptanceRegister(report);
 
   const snapshotSourceIds = new Set(report.sourceLawSnapshot.sources.map((source) => source.sourceId));
   const traceabilitySourceIds = new Set(report.sourceLawTraceability.map((entry) => entry.sourceId));
@@ -3692,6 +3723,83 @@ function assertAccountantWorkflowEvidencePack(report: ProductionReadinessReport)
     if (!item.failurePolicy.includes("Block release")) {
       throw new Error(
         `Invalid production readiness report contract: accountantWorkflowEvidencePack.${itemIndex}.failurePolicy - must block release until accountant route acceptance evidence is complete`,
+      );
+    }
+  });
+}
+
+function assertWorkbenchVisualAcceptanceRegister(report: ProductionReadinessReport) {
+  const register = report.workbenchVisualAcceptanceRegister;
+  const routeAudits = report.visualQaCoverage.routeAudits;
+  const routeAuditByCode = new Map(routeAudits.map((audit) => [audit.routeCode, audit]));
+  const releaseChecklistCodes = new Set(report.releaseReviewChecklist.map((item) => item.code));
+  const registerRouteCodes = register.map((item) => item.routeCode).sort((left, right) => left.localeCompare(right));
+  const auditRouteCodes = routeAudits.map((item) => item.routeCode).sort((left, right) => left.localeCompare(right));
+
+  if (!report.assurancePacket.evidenceItems.includes("workbench-visual-acceptance-register")) {
+    throw new Error(
+      "Invalid production readiness report contract: assurancePacket.evidenceItems - workbench-visual-acceptance-register is required",
+    );
+  }
+
+  assertStringArrayEqual(
+    "workbenchVisualAcceptanceRegister.routeCodes",
+    auditRouteCodes,
+    registerRouteCodes,
+  );
+
+  register.forEach((item, itemIndex) => {
+    const routeAudit = routeAuditByCode.get(item.routeCode);
+    if (!routeAudit) {
+      throw new Error(
+        `Invalid production readiness report contract: workbenchVisualAcceptanceRegister.${itemIndex}.routeCode - must reference a visual QA route audit`,
+      );
+    }
+
+    if (item.routeLabel !== routeAudit.label) {
+      throw new Error(
+        `Invalid production readiness report contract: workbenchVisualAcceptanceRegister.${itemIndex}.routeLabel - must mirror visual QA route audit label for ${item.routeCode}`,
+      );
+    }
+
+    assertStringArrayEqual(
+      `workbenchVisualAcceptanceRegister.${itemIndex}.workflowStages`,
+      routeAudit.workflowStages,
+      item.workflowStages,
+    );
+    assertStringArrayEqual(
+      `workbenchVisualAcceptanceRegister.${itemIndex}.acceptanceAreas`,
+      [...routeAudit.reviewChecks].sort((left, right) => left.localeCompare(right)),
+      [...item.acceptanceAreas].sort((left, right) => left.localeCompare(right)),
+    );
+
+    const expectedArtifactNames = report.visualQaCoverage.artifacts
+      .filter((artifact) => artifact.routeCode === item.routeCode)
+      .map((artifact) => artifact.fileName)
+      .sort((left, right) => left.localeCompare(right));
+    assertStringArrayEqual(
+      `workbenchVisualAcceptanceRegister.${itemIndex}.screenshotArtifactNames`,
+      expectedArtifactNames,
+      [...item.screenshotArtifactNames].sort((left, right) => left.localeCompare(right)),
+    );
+
+    if (!releaseChecklistCodes.has(item.releaseGateCode) || item.releaseGateCode !== report.visualQaCoverage.reviewProtocol.signOffGate) {
+      throw new Error(
+        `Invalid production readiness report contract: workbenchVisualAcceptanceRegister.${itemIndex}.releaseGateCode - must mirror the visual QA review sign-off gate`,
+      );
+    }
+
+    for (const evidence of ["route-state acceptance note", "light/dark desktop/mobile screenshot review", "named visual QA reviewer sign-off"]) {
+      if (!item.requiredEvidence.includes(evidence)) {
+        throw new Error(
+          `Invalid production readiness report contract: workbenchVisualAcceptanceRegister.${itemIndex}.requiredEvidence - ${evidence} is required`,
+        );
+      }
+    }
+
+    if (!item.failurePolicy.includes("Block release")) {
+      throw new Error(
+        `Invalid production readiness report contract: workbenchVisualAcceptanceRegister.${itemIndex}.failurePolicy - must block release until visual acceptance is complete`,
       );
     }
   });

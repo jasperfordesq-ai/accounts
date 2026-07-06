@@ -363,6 +363,19 @@ public sealed record AccountantWorkflowEvidencePackItem(
     string SignOffGate,
     string FailurePolicy);
 
+public sealed record WorkbenchVisualAcceptanceRegisterItem(
+    string RouteCode,
+    string RouteLabel,
+    IReadOnlyList<string> WorkflowStages,
+    IReadOnlyList<string> AcceptanceAreas,
+    IReadOnlyList<string> ScreenshotArtifactNames,
+    string EvidenceArtifact,
+    IReadOnlyList<string> RequiredEvidence,
+    string ReleaseGateCode,
+    string Status,
+    string FailurePolicy,
+    string NextAction);
+
 public sealed record VisualQaViewport(
     string Name,
     int Width,
@@ -452,6 +465,7 @@ public sealed record ProductionReadinessReport(
     AccountantWorkflowWalkthroughProtocol AccountantWorkflowWalkthroughProtocol,
     IReadOnlyList<AccountantJourneyAcceptanceChecklistItem> AccountantJourneyAcceptanceChecklist,
     IReadOnlyList<AccountantWorkflowEvidencePackItem> AccountantWorkflowEvidencePack,
+    IReadOnlyList<WorkbenchVisualAcceptanceRegisterItem> WorkbenchVisualAcceptanceRegister,
     IReadOnlyList<ProductionReadinessArea> Areas,
     IReadOnlyList<GoldenFilingCorpusScenario> GoldenFilingCorpus,
     IReadOnlyList<GoldenEvidenceLedgerEntry> GoldenEvidenceLedger,
@@ -508,6 +522,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
         var visualQaCoverage = BuildVisualQaCoverage();
         var accountantJourneyAcceptanceChecklist = BuildAccountantJourneyAcceptanceChecklist(goldenCorpus, visualQaCoverage);
         var accountantWorkflowEvidencePack = BuildAccountantWorkflowEvidencePack(accountantJourneyAcceptanceChecklist);
+        var workbenchVisualAcceptanceRegister = BuildWorkbenchVisualAcceptanceRegister(visualQaCoverage);
         var sourceLawTraceability = BuildSourceLawTraceability(
             sourceSnapshot,
             goldenCorpus,
@@ -542,6 +557,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             accountantWorkflowWalkthroughProtocol,
             accountantJourneyAcceptanceChecklist,
             accountantWorkflowEvidencePack,
+            workbenchVisualAcceptanceRegister,
             areas,
             goldenCorpus,
             goldenEvidenceLedger,
@@ -622,6 +638,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "accountant-workflow-walkthrough-protocol",
             "accountant-journey-acceptance-checklist",
             "accountant-workflow-evidence-pack",
+            "workbench-visual-acceptance-register",
             "production-completion-map"
         };
         var releaseBlockers = assuranceActions
@@ -3198,6 +3215,54 @@ public class ProductionReadinessReportService(AccountsDbContext db)
         }
 
         return $"Does the {item.RouteLabel} route let a qualified accountant accept the workflow state, blockers, next action, outputs, gates, wording and evidence for every seeded golden scenario?";
+    }
+
+    private static IReadOnlyList<WorkbenchVisualAcceptanceRegisterItem> BuildWorkbenchVisualAcceptanceRegister(
+        VisualQaCoverage visualQaCoverage)
+    {
+        var artifactNamesByRoute = visualQaCoverage.Artifacts
+            .GroupBy(artifact => artifact.RouteCode, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<string>)group
+                    .Select(artifact => artifact.FileName)
+                    .Order(StringComparer.Ordinal)
+                    .ToArray(),
+                StringComparer.Ordinal);
+
+        return visualQaCoverage.RouteAudits
+            .Select(audit => new WorkbenchVisualAcceptanceRegisterItem(
+                audit.RouteCode,
+                audit.Label,
+                audit.WorkflowStages,
+                audit.ReviewChecks,
+                artifactNamesByRoute.TryGetValue(audit.RouteCode, out var artifactNames) ? artifactNames : [],
+                $"{audit.RouteCode}-visual-acceptance-note",
+                [
+                    "route-state acceptance note",
+                    "light/dark desktop/mobile screenshot review",
+                    "named visual QA reviewer sign-off"
+                ],
+                visualQaCoverage.ReviewProtocol.SignOffGate,
+                audit.ReviewStatus,
+                "Block release until this accountant workbench route is visually accepted across workflow hierarchy, table scanability, theme contrast, mobile density and route states.",
+                BuildWorkbenchVisualAcceptanceNextAction(audit)))
+            .ToArray();
+    }
+
+    private static string BuildWorkbenchVisualAcceptanceNextAction(VisualQaRouteAudit audit)
+    {
+        if (audit.RouteCode == "filing-review")
+        {
+            return "Accept the filing review screen only after its evidence checklist, source links, generated outputs and filing-state actions are visually clear in light/dark desktop/mobile screenshots.";
+        }
+
+        if (audit.RouteCode == "production-readiness")
+        {
+            return "Accept the production readiness screen only after release blockers, rule coverage, visual QA, operational readiness and accountant review state are visually clear in light/dark desktop/mobile screenshots.";
+        }
+
+        return $"Accept the {audit.Label} route only after its workflow hierarchy, tables, contrast, mobile layout, loading/error/empty states and screenshots are professionally reviewed.";
     }
 
     private static int JourneyRouteOrder(string routeCode) => routeCode switch

@@ -43,6 +43,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
   const accountantWorkflowWalkthroughProtocol = report.accountantWorkflowWalkthroughProtocol;
   const accountantJourneyAcceptanceChecklist = report.accountantJourneyAcceptanceChecklist ?? [];
   const accountantWorkflowEvidencePack = report.accountantWorkflowEvidencePack ?? [];
+  const workbenchVisualAcceptanceRegister = report.workbenchVisualAcceptanceRegister ?? [];
   const hardenedAreas = report.areas.filter((area) => area.status === "hardened").length;
   const coveredScenarios = report.goldenFilingCorpus.filter((scenario) => scenario.coverageStatus === "covered").length;
   const enforcedGates = report.operationalGates.filter((gate) => gate.status === "enforced").length;
@@ -794,6 +795,60 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
               <p key="failure-policy" className="min-w-72 text-xs leading-5 text-[var(--muted-foreground)]">
                 {item.failurePolicy}
               </p>,
+            ],
+          }))}
+        />
+      </ReviewPanel>
+
+      <ReviewPanel
+        title="Workbench visual acceptance register"
+        description="Route-level UI polish queue for proving each accountant workflow surface is visually acceptable before release."
+        actions={<StatusBadge tone="warn">{workbenchVisualAcceptanceRegister.length} visual reviews</StatusBadge>}
+      >
+        <DataGrid
+          caption="Workbench visual acceptance register"
+          filterPlaceholder="Filter workbench visual acceptance register"
+          emptyState="No matching workbench visual acceptance entries"
+          columns={["Route", "Acceptance areas", "Screenshot evidence", "Required evidence", "Next action", "Release gate", "Status"]}
+          rows={workbenchVisualAcceptanceRegister.map((item) => ({
+            id: item.routeCode,
+            tone: item.status === "accepted" ? "good" : "warn",
+            searchText: [
+              item.routeCode,
+              item.routeLabel,
+              item.evidenceArtifact,
+              item.releaseGateCode,
+              item.status,
+              item.failurePolicy,
+              item.nextAction,
+              ...item.workflowStages,
+              ...item.acceptanceAreas,
+              ...item.screenshotArtifactNames,
+              ...item.requiredEvidence,
+            ].join(" "),
+            cells: [
+              <div key="route" className="min-w-44 whitespace-normal">
+                <p className="font-medium">{item.routeLabel}</p>
+                <code className="mt-1 block break-all text-[11px] text-[var(--muted-foreground)]">{item.routeCode}</code>
+                <code className="mt-1 block break-all text-[11px] text-[var(--foreground)]">{item.evidenceArtifact}</code>
+              </div>,
+              <div key="acceptance-areas" className="flex min-w-52 flex-wrap gap-1.5">
+                {item.acceptanceAreas.map((area) => (
+                  <StatusBadge key={area} tone="info">{formatStatus(area)}</StatusBadge>
+                ))}
+              </div>,
+              <CodeStack key="screenshots" items={item.screenshotArtifactNames} />,
+              <CompactList key="required-evidence" items={item.requiredEvidence} />,
+              <p key="next-action" className="min-w-72 text-xs leading-5 text-[var(--foreground)]">
+                {item.nextAction}
+              </p>,
+              <div key="release-gate" className="min-w-48 whitespace-normal text-xs leading-5">
+                <code className="break-all text-[var(--foreground)]">{item.releaseGateCode}</code>
+                <p className="mt-2 text-[var(--muted-foreground)]">{item.failurePolicy}</p>
+              </div>,
+              <StatusBadge key="status" tone={item.status === "accepted" ? "good" : "warn"}>
+                {formatStatus(item.status)}
+              </StatusBadge>,
             ],
           }))}
         />

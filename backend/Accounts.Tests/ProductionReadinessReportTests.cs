@@ -657,6 +657,58 @@ public class ProductionReadinessReportTests
     }
 
     [Fact]
+    public async Task ProductionReadinessReport_ExposesWorkbenchVisualAcceptanceRegisterForUiPolish()
+    {
+        await using var db = CreateDbContext();
+        var report = await new ProductionReadinessReportService(db).GetReportAsync();
+        var registerProperty = report.GetType().GetProperty("WorkbenchVisualAcceptanceRegister");
+
+        Assert.NotNull(registerProperty);
+        var register = Assert.IsAssignableFrom<System.Collections.IEnumerable>(registerProperty!.GetValue(report))
+            .Cast<object>()
+            .ToArray();
+
+        Assert.Contains(report.AssurancePacket.EvidenceItems, item => item == "workbench-visual-acceptance-register");
+        Assert.Equal(
+            report.VisualQaCoverage.RouteAudits.Select(audit => audit.RouteCode).Order(StringComparer.Ordinal),
+            register.Select(item => StringProperty(item, "RouteCode")).Order(StringComparer.Ordinal));
+
+        foreach (var item in register)
+        {
+            var routeCode = StringProperty(item, "RouteCode");
+            var routeAudit = Assert.Single(report.VisualQaCoverage.RouteAudits, audit => audit.RouteCode == routeCode);
+            var artifactNames = report.VisualQaCoverage.Artifacts
+                .Where(artifact => artifact.RouteCode == routeCode)
+                .Select(artifact => artifact.FileName)
+                .Order(StringComparer.Ordinal)
+                .ToArray();
+
+            Assert.Equal(routeAudit.Label, StringProperty(item, "RouteLabel"));
+            Assert.Equal(routeAudit.WorkflowStages, StringListProperty(item, "WorkflowStages"));
+            Assert.Equal(routeAudit.ReviewChecks.Order(StringComparer.Ordinal), StringListProperty(item, "AcceptanceAreas").Order(StringComparer.Ordinal));
+            Assert.Equal(artifactNames, StringListProperty(item, "ScreenshotArtifactNames").Order(StringComparer.Ordinal));
+            Assert.Equal("visual-qa-screenshot-review", StringProperty(item, "ReleaseGateCode"));
+            Assert.Equal("required-review", StringProperty(item, "Status"));
+            Assert.Contains("Block release", StringProperty(item, "FailurePolicy"), StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("route-state acceptance note", StringListProperty(item, "RequiredEvidence"));
+            Assert.Contains("light/dark desktop/mobile screenshot review", StringListProperty(item, "RequiredEvidence"));
+            Assert.Contains("named visual QA reviewer sign-off", StringListProperty(item, "RequiredEvidence"));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(item, "EvidenceArtifact")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(item, "NextAction")));
+        }
+
+        Assert.Contains(register, item =>
+            StringProperty(item, "RouteCode") == "dashboard"
+            && StringListProperty(item, "AcceptanceAreas").Contains("accountant-workflow-hierarchy"));
+        Assert.Contains(register, item =>
+            StringProperty(item, "RouteCode") == "filing-review"
+            && StringProperty(item, "NextAction").Contains("evidence checklist", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(register, item =>
+            StringProperty(item, "RouteCode") == "production-readiness"
+            && StringProperty(item, "NextAction").Contains("release blockers", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task ProductionReadinessReport_ExposesCompletionTracksForBackendUiAndFrontendCode()
     {
         await using var db = CreateDbContext();

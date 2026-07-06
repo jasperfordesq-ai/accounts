@@ -139,7 +139,7 @@ function sampleReport(): ProductionReadinessReport {
       visualQaExpectedScreenshots: 28,
       requiredOperationalGates: 1,
       openCriticalActions: 1,
-      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "source-law-review-ledger", "revenue-taxonomy-range-evidence", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "production-audit-evidence-pack", "operations-evidence-pack", "visual-smoke-screenshots", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "accountant-journey-acceptance-checklist", "accountant-workflow-evidence-pack", "production-completion-map"],
+      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "source-law-review-ledger", "revenue-taxonomy-range-evidence", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "production-audit-evidence-pack", "operations-evidence-pack", "visual-smoke-screenshots", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "accountant-journey-acceptance-checklist", "accountant-workflow-evidence-pack", "workbench-visual-acceptance-register", "production-completion-map"],
       releaseBlockers: ["Qualified accountant sign-off required"],
     },
     accountantAcceptanceCriteria: [
@@ -228,6 +228,7 @@ function sampleReport(): ProductionReadinessReport {
       ]),
     ],
     accountantWorkflowEvidencePack: accountantWorkflowEvidencePack(),
+    workbenchVisualAcceptanceRegister: workbenchVisualAcceptanceRegister(),
     areas: [
       {
         code: "backend-accounting-engine",
@@ -1052,6 +1053,61 @@ function accountantRouteEvidence(
     ],
     signOffGate: "accountant-final-signoff",
     failurePolicy: "Block release until a named qualified accountant accepts this route's outputs, gates, wording and evidence against the seeded golden corpus and reviewed visual artifacts.",
+  };
+}
+
+function workbenchVisualAcceptanceRegister(): ProductionReadinessReport["workbenchVisualAcceptanceRegister"] {
+  return [
+    workbenchVisualAcceptance("dashboard", "Dashboard", accountantWorkflowStages()),
+    workbenchVisualAcceptance("company-detail", "Company detail", ["Setup"]),
+    workbenchVisualAcceptance("period-workspace", "Period workspace", accountantWorkflowStages()),
+    workbenchVisualAcceptance("financial-statements", "Financial statements", ["Statements"]),
+    workbenchVisualAcceptance(
+      "filing-review",
+      "Filing review",
+      ["Review", "Filing"],
+      "Accept the filing review screen only after its evidence checklist, source links, generated outputs and filing-state actions are visually clear in light/dark desktop/mobile screenshots.",
+    ),
+    workbenchVisualAcceptance(
+      "production-readiness",
+      "Production readiness",
+      ["Review", "Filing"],
+      "Accept the production readiness screen only after release blockers, rule coverage, visual QA, operational readiness and accountant review state are visually clear in light/dark desktop/mobile screenshots.",
+    ),
+    workbenchVisualAcceptance("workbench-preview", "Workbench preview", accountantWorkflowStages()),
+  ];
+}
+
+function workbenchVisualAcceptance(
+  routeCode: string,
+  routeLabel: string,
+  workflowStages: string[],
+  nextAction?: string,
+): ProductionReadinessReport["workbenchVisualAcceptanceRegister"][number] {
+  return {
+    routeCode,
+    routeLabel,
+    workflowStages,
+    acceptanceAreas: [
+      "accountant-workflow-hierarchy",
+      "table-scanability",
+      "theme-contrast",
+      "mobile-density",
+      "loading-error-empty-states",
+    ],
+    screenshotArtifactNames: ["light-desktop", "light-mobile", "dark-desktop", "dark-mobile"].map(
+      (suffix) => `${routeCode}-${suffix}.png`,
+    ),
+    evidenceArtifact: `${routeCode}-visual-acceptance-note`,
+    requiredEvidence: [
+      "route-state acceptance note",
+      "light/dark desktop/mobile screenshot review",
+      "named visual QA reviewer sign-off",
+    ],
+    releaseGateCode: "visual-qa-screenshot-review",
+    status: "required-review",
+    failurePolicy: "Block release until this accountant workbench route is visually accepted across workflow hierarchy, table scanability, theme contrast, mobile density and route states.",
+    nextAction: nextAction ?? `Accept the ${routeLabel} route only after its workflow hierarchy, tables, contrast, mobile layout, loading/error/empty states and screenshots are professionally reviewed.`,
   };
 }
 
