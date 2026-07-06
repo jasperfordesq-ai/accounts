@@ -399,6 +399,26 @@ html {
   background-color: var(--muted);
 }
 
+@media (min-width: 768px) {
+  [data-workbench-table-shell="true"][data-sticky-first-column="true"] th[data-sticky-column="true"],
+  [data-workbench-table-shell="true"][data-sticky-first-column="true"] td[data-sticky-column="true"] {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: var(--surface);
+    box-shadow: 1px 0 0 var(--border), 10px 0 14px -14px rgba(15, 23, 42, 0.45);
+  }
+
+  [data-workbench-table-shell="true"][data-sticky-first-column="true"] th[data-sticky-column="true"] {
+    z-index: 2;
+    background: var(--surface-subtle);
+  }
+
+  [data-workbench-table-shell="true"][data-scroll-affordance="true"] {
+    scrollbar-gutter: stable both-edges;
+  }
+}
+
 @media (max-width: 767px) {
   .workbench-data-table {
     overflow-x: visible;

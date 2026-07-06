@@ -987,7 +987,14 @@ function DataGridBase({
       <div
         className={`${surfaceClassName} min-w-0 overflow-x-auto rounded-md border border-[var(--border)] bg-[var(--surface)]`}
         data-responsive="card"
+        data-scroll-affordance="true"
+        data-sticky-first-column="true"
+        data-workbench-table-shell="true"
+        aria-describedby={`${filterId(tableLabel)}-scroll-cue`}
       >
+      <p id={`${filterId(tableLabel)}-scroll-cue`} className="sr-only">
+        Scroll horizontally to review all evidence columns.
+      </p>
       <table className="min-w-full border-collapse text-left text-sm" aria-label={tableLabel}>
         {caption && <caption className="sr-only">{caption}</caption>}
         <thead className="bg-[var(--surface-subtle)] text-xs font-semibold uppercase text-[var(--muted-foreground)]">
@@ -999,6 +1006,7 @@ function DataGridBase({
                 <th
                   key={column}
                   aria-sort={isSortable ? (isSorted ? (sortState.direction === "asc" ? "ascending" : "descending") : "none") : undefined}
+                  data-sticky-column={columnIndex === 0 ? "true" : undefined}
                   className="whitespace-nowrap border-b border-[var(--border)] px-4 py-3"
                 >
                   {isSortable ? (
@@ -1032,6 +1040,7 @@ function DataGridBase({
                 <td
                   key={cellIndex}
                   data-label={columns[cellIndex] ?? ""}
+                  data-sticky-column={cellIndex === 0 ? "true" : undefined}
                   className="px-4 py-3 align-top text-[var(--foreground)]"
                 >
                   {cell}
@@ -1054,6 +1063,7 @@ function DataGridBase({
                 <td
                   key={cellIndex}
                   data-label={columns[cellIndex] ?? ""}
+                  data-sticky-column={cellIndex === 0 ? "true" : undefined}
                   className="px-4 py-3 align-top"
                 >
                   {cell}

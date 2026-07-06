@@ -362,6 +362,38 @@ describe("workbench primitives", () => {
     expect(container.querySelector('td[data-label="Next action"]')).toHaveTextContent("Continue workbench");
   });
 
+  it("keeps wide accountant tables scan-friendly with a sticky first column and scroll cue", () => {
+    const { container } = render(
+      <DataGrid
+        caption="Production readiness evidence matrix"
+        columns={["Route", "Workflow", "Evidence artifact", "Decision question", "Visual evidence", "Failure policy"]}
+        rows={[
+          {
+            id: "filing-review",
+            cells: [
+              "Filing review",
+              "Review, Filing",
+              "filing-review-visual-acceptance-note",
+              "Are outputs, gates, wording and evidence readable?",
+              "light desktop, dark desktop, light mobile, dark mobile",
+              "Block release until accepted.",
+            ],
+            tone: "warn",
+          },
+        ]}
+      />,
+    );
+
+    const tableShell = container.querySelector("[data-workbench-table-shell='true']");
+    expect(tableShell).toBeInTheDocument();
+    expect(tableShell).toHaveAttribute("data-sticky-first-column", "true");
+    expect(tableShell).toHaveAttribute("data-scroll-affordance", "true");
+    expect(tableShell).toHaveClass("workbench-data-grid");
+    expect(container.querySelector("th[data-sticky-column='true']")).toHaveTextContent("Route");
+    expect(container.querySelector("td[data-sticky-column='true']")).toHaveTextContent("Filing review");
+    expect(screen.getByText("Scroll horizontally to review all evidence columns.")).toBeInTheDocument();
+  });
+
   it("filters dense tables and reports visible row counts", async () => {
     const user = userEvent.setup();
     render(
