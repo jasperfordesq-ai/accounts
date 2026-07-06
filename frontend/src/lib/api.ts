@@ -2521,7 +2521,7 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
   }
 
   const scenariosByCode = new Map(report.goldenFilingCorpus.map((scenario) => [scenario.code, scenario]));
-  assertSmallAbridgedGoldenScenario(scenariosByCode);
+  assertProductionSprintGoldenScenarios(scenariosByCode);
   assertGoldenEvidenceLedger(report, scenariosByCode);
   report.accountantAcceptanceCriteria.forEach((criterion, criterionIndex) => {
     const scenario = scenariosByCode.get(criterion.scenarioCode);
@@ -2754,6 +2754,28 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
   }
 }
 
+function assertProductionSprintGoldenScenarios(
+  scenariosByCode: Map<string, GoldenFilingCorpusScenario>,
+) {
+  const requiredScenarioCodes = [
+    "micro-ltd",
+    "small-abridged-ltd",
+    "clg-charity",
+    "medium-audit-required",
+  ];
+  const missingScenarioCodes = requiredScenarioCodes.filter((code) => !scenariosByCode.has(code));
+
+  if (missingScenarioCodes.length > 0) {
+    throw new Error(
+      `Invalid production readiness report contract: goldenFilingCorpus - missing required production sprint scenarios: ${missingScenarioCodes.join(", ")}`,
+    );
+  }
+
+  assertSmallAbridgedGoldenScenario(scenariosByCode);
+  assertClgCharityGoldenScenario(scenariosByCode);
+  assertMediumAuditRequiredGoldenScenario(scenariosByCode);
+}
+
 function assertSmallAbridgedGoldenScenario(
   scenariosByCode: Map<string, GoldenFilingCorpusScenario>,
 ) {
@@ -2800,6 +2822,104 @@ function assertSmallAbridgedGoldenScenario(
   if (!evidencePack.expectedOutputs.filingGateStates.some((gate) => gate.toLowerCase().includes("abridgement eligibility"))) {
     throw new Error(
       "Invalid production readiness report contract: goldenFilingCorpus.small-abridged-ltd.evidencePack.expectedOutputs.filingGateStates - abridgement eligibility gate is required",
+    );
+  }
+}
+
+function assertClgCharityGoldenScenario(
+  scenariosByCode: Map<string, GoldenFilingCorpusScenario>,
+) {
+  const scenario = scenariosByCode.get("clg-charity");
+  const requiredVerifier = "FilingGoldenCorpusScenarioTests.GoldenCorpus_ClgCharity_EmitsAccountsIxbrlAndSourceBackedCharityReadiness";
+
+  if (!scenario) return;
+
+  if (!scenario.evidenceTestNames.includes(requiredVerifier)) {
+    throw new Error(
+      "Invalid production readiness report contract: goldenFilingCorpus.clg-charity - dedicated CLG charity verifier is required",
+    );
+  }
+
+  if (scenario.fixture.companyType !== "CompanyLimitedByGuarantee") {
+    throw new Error(
+      "Invalid production readiness report contract: goldenFilingCorpus.clg-charity.fixture.companyType - CLG charity fixture must use CompanyLimitedByGuarantee",
+    );
+  }
+
+  const evidencePack = scenario.evidencePack;
+  if (!evidencePack.outputArtifacts.some((artifact) => artifact.toLowerCase().includes("charity readiness profile"))) {
+    throw new Error(
+      "Invalid production readiness report contract: goldenFilingCorpus.clg-charity.evidencePack.outputArtifacts - charity readiness profile evidence is required",
+    );
+  }
+
+  if (!evidencePack.decisionGates.some((gate) => gate.toLowerCase().includes("charity annual return review"))) {
+    throw new Error(
+      "Invalid production readiness report contract: goldenFilingCorpus.clg-charity.evidencePack.decisionGates - charity annual return review gate is required",
+    );
+  }
+
+  if (!evidencePack.expectedValueChecks.some((check) => check.toLowerCase().includes("charities regulator"))) {
+    throw new Error(
+      "Invalid production readiness report contract: goldenFilingCorpus.clg-charity.evidencePack.expectedValueChecks - Charities Regulator source evidence is required",
+    );
+  }
+
+  if (!evidencePack.expectedOutputs.filingGateStates.some((gate) => gate.toLowerCase().includes("sofa"))) {
+    throw new Error(
+      "Invalid production readiness report contract: goldenFilingCorpus.clg-charity.evidencePack.expectedOutputs.filingGateStates - SoFA and trustees report evidence gate is required",
+    );
+  }
+}
+
+function assertMediumAuditRequiredGoldenScenario(
+  scenariosByCode: Map<string, GoldenFilingCorpusScenario>,
+) {
+  const scenario = scenariosByCode.get("medium-audit-required");
+  const requiredVerifier = "FilingGoldenCorpusScenarioTests.GoldenCorpus_MediumAuditRequired_BlocksFinalOutputsAndRequiresManualHandoffUntilAuditorEvidence";
+
+  if (!scenario) return;
+
+  if (!scenario.evidenceTestNames.includes(requiredVerifier)) {
+    throw new Error(
+      "Invalid production readiness report contract: goldenFilingCorpus.medium-audit-required - dedicated medium audit-required verifier is required",
+    );
+  }
+
+  if (!scenario.expectedOutcome.toLowerCase().includes("manual-handoff")) {
+    throw new Error(
+      "Invalid production readiness report contract: goldenFilingCorpus.medium-audit-required.expectedOutcome - manual handoff outcome is required",
+    );
+  }
+
+  if (!scenario.fixture.manualProfessionalReviewRequired || scenario.fixture.auditExempt) {
+    throw new Error(
+      "Invalid production readiness report contract: goldenFilingCorpus.medium-audit-required.fixture - audit-required manual professional review fixture is required",
+    );
+  }
+
+  const evidencePack = scenario.evidencePack;
+  if (!evidencePack.outputArtifacts.some((artifact) => artifact.toLowerCase().includes("auditor report evidence"))) {
+    throw new Error(
+      "Invalid production readiness report contract: goldenFilingCorpus.medium-audit-required.evidencePack.outputArtifacts - auditor report evidence is required",
+    );
+  }
+
+  if (!evidencePack.decisionGates.some((gate) => gate.toLowerCase().includes("auditor handoff"))) {
+    throw new Error(
+      "Invalid production readiness report contract: goldenFilingCorpus.medium-audit-required.evidencePack.decisionGates - auditor handoff gate is required",
+    );
+  }
+
+  if (!evidencePack.expectedOutputs.filingGateStates.some((gate) => gate.toLowerCase().includes("normal cro approval blocked"))) {
+    throw new Error(
+      "Invalid production readiness report contract: goldenFilingCorpus.medium-audit-required.evidencePack.expectedOutputs.filingGateStates - CRO approval blocker is required",
+    );
+  }
+
+  if (evidencePack.expectedOutputs.signOffPacketState !== "manual-handoff") {
+    throw new Error(
+      "Invalid production readiness report contract: goldenFilingCorpus.medium-audit-required.evidencePack.expectedOutputs.signOffPacketState - manual handoff sign-off state is required",
     );
   }
 }

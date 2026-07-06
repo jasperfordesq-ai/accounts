@@ -52,7 +52,24 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.ok(smallAbridgedScenario?.evidencePack.expectedValueChecks.includes("Section 352 wording"));
   assert.ok(smallAbridgedScenario?.evidencePack.expectedOutputs.pdfTextMarkers.includes("Section 352"));
   assert.ok(smallAbridgedScenario?.evidencePack.expectedOutputs.filingGateStates.includes("abridgement eligibility confirmed"));
-  assert.equal(parsed.sourceLawSnapshot.sourceCount, 2);
+  const clgCharityScenario = parsed.goldenFilingCorpus.find((scenario) => scenario.code === "clg-charity");
+  assert.equal(clgCharityScenario?.fixture.legalName, "Dublin Community Support CLG");
+  assert.equal(clgCharityScenario?.fixture.companyType, "CompanyLimitedByGuarantee");
+  assert.ok(clgCharityScenario?.evidenceTestNames.includes("FilingGoldenCorpusScenarioTests.GoldenCorpus_ClgCharity_EmitsAccountsIxbrlAndSourceBackedCharityReadiness"));
+  assert.ok(clgCharityScenario?.evidencePack.outputArtifacts.includes("charity readiness profile"));
+  assert.ok(clgCharityScenario?.evidencePack.decisionGates.includes("charity annual return review"));
+  assert.ok(clgCharityScenario?.evidencePack.expectedOutputs.filingGateStates.includes("SoFA and trustees annual report evidence satisfied"));
+  const mediumScenario = parsed.goldenFilingCorpus.find((scenario) => scenario.code === "medium-audit-required");
+  assert.equal(mediumScenario?.fixture.legalName, "Midlands Manufacturing Limited");
+  assert.equal(mediumScenario?.expectedOutcome, "manual-handoff");
+  assert.equal(mediumScenario?.fixture.auditExempt, false);
+  assert.equal(mediumScenario?.fixture.manualProfessionalReviewRequired, true);
+  assert.ok(mediumScenario?.evidenceTestNames.includes("FilingGoldenCorpusScenarioTests.GoldenCorpus_MediumAuditRequired_BlocksFinalOutputsAndRequiresManualHandoffUntilAuditorEvidence"));
+  assert.ok(mediumScenario?.evidencePack.outputArtifacts.includes("auditor report evidence"));
+  assert.ok(mediumScenario?.evidencePack.decisionGates.includes("auditor handoff"));
+  assert.ok(mediumScenario?.evidencePack.expectedOutputs.filingGateStates.includes("normal CRO approval blocked until auditor evidence"));
+  assert.equal(mediumScenario?.evidencePack.expectedOutputs.signOffPacketState, "manual-handoff");
+  assert.equal(parsed.sourceLawSnapshot.sourceCount, 6);
   assert.equal(parsed.sourceLawSnapshot.contentHash, "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
   assert.equal(parsed.sourceLawTraceability[0].sourceId, "frc-frs-105");
   assert.equal(parsed.sourceLawTraceability[0].inSnapshot, true);
@@ -61,7 +78,7 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.equal(parsed.sourceLawMaintenanceProtocol.protocolVersion, "source-law-maintenance-v1");
   assert.equal(parsed.sourceLawMaintenanceProtocol.ownerRole, "Qualified accountant and engineering");
   assert.equal(parsed.sourceLawMaintenanceProtocol.signOffGate, "source-law-change-review");
-  assert.deepEqual(parsed.sourceLawMaintenanceProtocol.monitoredSourceIds, ["frc-frs-105", "frc-frs-102"]);
+  assert.deepEqual(parsed.sourceLawMaintenanceProtocol.monitoredSourceIds, ["frc-frs-105", "frc-frs-102", "cro-guarantee-company", "charities-regulator-annual-report", "cro-medium-company", "cro-auditors-report"]);
   assert.match(parsed.sourceLawMaintenanceProtocol.failurePolicy, /Block release/);
   assert.match(parsed.sourceLawMaintenanceProtocol.acceptanceCriteria[0], /CRO/);
   assert.ok(parsed.sourceLawMaintenanceProtocol.requiredEvidence.includes("source-law-change-review-note"));
@@ -86,20 +103,22 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.match(parsed.accountantAcceptanceCriteria[0].requiredSignOffGate, /qualified accountant/i);
   assert.equal(parsed.accountantAcceptanceCriteria[0].evidenceVerifiers[0].name, parsed.goldenFilingCorpus[0].evidenceVerifiers[0].name);
   assert.equal(parsed.accountantAcceptanceCriteria[0].evidenceVerifiers[0].command, parsed.goldenFilingCorpus[0].evidenceVerifiers[0].command);
-  assert.equal(parsed.accountantAcceptanceSummary.scenarioCount, 3);
-  assert.equal(parsed.accountantAcceptanceSummary.professionalSignOffRequiredCount, 3);
-  assert.equal(parsed.accountantAcceptanceSummary.automatedVerifierCount, 4);
-  assert.equal(parsed.accountantAcceptanceSummary.manualHandoffScenarioCount, 0);
-  assert.deepEqual(parsed.accountantAcceptanceSummary.releaseBlockingScenarioCodes, ["dac-small", "micro-ltd", "small-abridged-ltd"]);
+  assert.equal(parsed.accountantAcceptanceSummary.scenarioCount, 5);
+  assert.equal(parsed.accountantAcceptanceSummary.professionalSignOffRequiredCount, 5);
+  assert.equal(parsed.accountantAcceptanceSummary.automatedVerifierCount, 6);
+  assert.equal(parsed.accountantAcceptanceSummary.manualHandoffScenarioCount, 1);
+  assert.deepEqual(parsed.accountantAcceptanceSummary.releaseBlockingScenarioCodes, ["clg-charity", "dac-small", "medium-audit-required", "micro-ltd", "small-abridged-ltd"]);
   assert.deepEqual(parsed.accountantAcceptanceSummary.requiredSignOffGates, [
+    "Named qualified accountant must approve the CLG charity pack and charity evidence before real filing use.",
     "Named qualified accountant must approve the DAC generated pack before real filing use.",
     "Named qualified accountant must approve both the full accounts pack and abridged CRO pack before real filing use.",
     "Named qualified accountant must approve the generated pack before real filing use.",
+    "Qualified accountant must record manual handoff acceptance before relying on outputs.",
   ]);
   assert.equal(parsed.accountantAcceptanceSummary.status, "qualified-accountant-review-required");
   assert.equal(parsed.accountantWorkflowWalkthroughProtocol.protocolVersion, "accountant-workflow-walkthrough-v1");
   assert.equal(parsed.accountantWorkflowWalkthroughProtocol.signOffGate, "golden-corpus-accountant-acceptance");
-  assert.deepEqual(parsed.accountantWorkflowWalkthroughProtocol.seededScenarioCodes, ["dac-small", "micro-ltd", "small-abridged-ltd"]);
+  assert.deepEqual(parsed.accountantWorkflowWalkthroughProtocol.seededScenarioCodes, ["clg-charity", "dac-small", "medium-audit-required", "micro-ltd", "small-abridged-ltd"]);
   assert.match(parsed.accountantWorkflowWalkthroughProtocol.routeSequence[0], /Dashboard/);
   assert.match(parsed.accountantWorkflowWalkthroughProtocol.acceptanceCriteria.at(-1), /outputs, gates, wording and evidence/);
   assert.ok(parsed.accountantWorkflowWalkthroughProtocol.requiredEvidence.includes("seeded golden corpus walkthrough note"));
@@ -109,12 +128,12 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
     ["company-detail", "dashboard", "filing-review", "period-workspace", "production-readiness"],
   );
   assert.equal(parsed.accountantJourneyAcceptanceChecklist[0].signOffGate, "golden-corpus-accountant-acceptance");
-  assert.deepEqual(parsed.accountantJourneyAcceptanceChecklist[0].seededScenarioCodes, ["dac-small", "micro-ltd", "small-abridged-ltd"]);
+  assert.deepEqual(parsed.accountantJourneyAcceptanceChecklist[0].seededScenarioCodes, ["clg-charity", "dac-small", "medium-audit-required", "micro-ltd", "small-abridged-ltd"]);
   assert.equal(parsed.accountantJourneyAcceptanceChecklist[0].visualArtifactNames.length, 4);
   assert.match(parsed.accountantJourneyAcceptanceChecklist[2].acceptanceCriteria[0], /Period workspace/);
   assert.equal(parsed.assurancePacket.packetVersion, "production-assurance-packet-v1");
   assert.equal(parsed.assurancePacket.sourceLawSnapshotHash, "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
-  assert.equal(parsed.assurancePacket.goldenCorpusCovered, 3);
+  assert.equal(parsed.assurancePacket.goldenCorpusCovered, 5);
   assert.ok(parsed.assurancePacket.evidenceItems.includes("source-law-traceability-index"));
   assert.ok(parsed.assurancePacket.evidenceItems.includes("release-review-checklist"));
   assert.ok(parsed.assurancePacket.evidenceItems.includes("golden-evidence-ledger"));
@@ -245,15 +264,15 @@ test("parseProductionReadinessReport rejects golden corpus without matching acco
   const payload = sampleReport();
   payload.goldenFilingCorpus.push({
     ...payload.goldenFilingCorpus[0],
-    code: "clg-charity",
-    label: "CLG charity",
+    code: "unmodelled-plc",
+    label: "Unmodelled PLC",
   });
-  payload.assurancePacket.goldenCorpusTotal = 4;
-  payload.assurancePacket.goldenCorpusCovered = 4;
+  payload.assurancePacket.goldenCorpusTotal = 6;
+  payload.assurancePacket.goldenCorpusCovered = 6;
 
   assert.throws(
     () => parseProductionReadinessReport(payload),
-    /Invalid production readiness report contract: accountantAcceptanceCriteria - missing acceptance criteria for golden scenarios: clg-charity/,
+    /Invalid production readiness report contract: accountantAcceptanceCriteria - missing acceptance criteria for golden scenarios: unmodelled-plc/,
   );
 });
 
@@ -274,15 +293,15 @@ test("parseProductionReadinessReport rejects inconsistent production assurance c
 
   assert.throws(
     () => parseProductionReadinessReport(payload),
-    /Invalid production readiness report contract: sourceLawSnapshot\.sourceCount - expected 2, received 3/,
+    /Invalid production readiness report contract: sourceLawSnapshot\.sourceCount - expected 6, received 3/,
   );
 
   const corpusPayload = sampleReport();
-  corpusPayload.assurancePacket.goldenCorpusTotal = 4;
+  corpusPayload.assurancePacket.goldenCorpusTotal = 6;
 
   assert.throws(
     () => parseProductionReadinessReport(corpusPayload),
-    /Invalid production readiness report contract: assurancePacket\.goldenCorpusTotal - expected 3, received 4/,
+    /Invalid production readiness report contract: assurancePacket\.goldenCorpusTotal - expected 5, received 6/,
   );
 
   const visualPayload = sampleReport();
@@ -359,7 +378,7 @@ test("parseProductionReadinessReport rejects accountant walkthrough protocols th
 
   assert.throws(
     () => parseProductionReadinessReport(payload),
-    /Invalid production readiness report contract: accountantWorkflowWalkthroughProtocol\.seededScenarioCodes - expected dac-small, micro-ltd, small-abridged-ltd, received micro-ltd/,
+    /Invalid production readiness report contract: accountantWorkflowWalkthroughProtocol\.seededScenarioCodes - expected clg-charity, dac-small, medium-audit-required, micro-ltd, small-abridged-ltd, received micro-ltd/,
   );
 });
 
@@ -411,11 +430,11 @@ test("parseProductionReadinessReport rejects accountant journey acceptance witho
 
 test("parseProductionReadinessReport rejects inconsistent accountant acceptance summaries", () => {
   const payload = sampleReport();
-  payload.accountantAcceptanceSummary.scenarioCount = 4;
+  payload.accountantAcceptanceSummary.scenarioCount = 6;
 
   assert.throws(
     () => parseProductionReadinessReport(payload),
-    /Invalid production readiness report contract: accountantAcceptanceSummary\.scenarioCount - expected 3, received 4/,
+    /Invalid production readiness report contract: accountantAcceptanceSummary\.scenarioCount - expected 5, received 6/,
   );
 });
 
@@ -491,6 +510,26 @@ test("parseProductionReadinessReport rejects small abridged corpus without Secti
   assert.throws(
     () => parseProductionReadinessReport(payload),
     /Invalid production readiness report contract: goldenFilingCorpus\.small-abridged-ltd - dedicated small abridged verifier is required/,
+  );
+});
+
+test("parseProductionReadinessReport rejects production sprint corpus without CLG charity and medium audit-required evidence", () => {
+  const payload = sampleReport();
+  payload.goldenFilingCorpus = payload.goldenFilingCorpus.filter(
+    (scenario) => !["clg-charity", "medium-audit-required"].includes(scenario.code),
+  );
+  payload.accountantAcceptanceCriteria = payload.accountantAcceptanceCriteria.filter(
+    (criterion) => !["clg-charity", "medium-audit-required"].includes(criterion.scenarioCode),
+  );
+  payload.goldenEvidenceLedger = payload.goldenEvidenceLedger.filter(
+    (entry) => !["clg-charity", "medium-audit-required"].includes(entry.scenarioCode),
+  );
+  payload.assurancePacket.goldenCorpusCovered = 3;
+  payload.assurancePacket.goldenCorpusTotal = 3;
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: goldenFilingCorpus - missing required production sprint scenarios: clg-charity, medium-audit-required/,
   );
 });
 
@@ -617,10 +656,14 @@ function sampleReport() {
       snapshotDate: "2026-07-03",
       snapshotVersion: "irish-statutory-accounts-sources-2026-07-03",
       contentHash: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      sourceCount: 2,
+      sourceCount: 6,
       sources: [
         source("frc-frs-105", "FRC FRS 105 current edition and amendments"),
         source("frc-frs-102", "FRC FRS 102 current edition and amendments"),
+        source("cro-guarantee-company", "CRO guarantee company financial statements requirements"),
+        source("charities-regulator-annual-report", "Charities Regulator annual report guidance"),
+        source("cro-medium-company", "CRO medium company financial statements requirements"),
+        source("cro-auditors-report", "CRO auditors report requirements"),
       ],
     },
     sourceLawTraceability: [
@@ -643,10 +686,54 @@ function sampleReport() {
         usedBy: [
           "golden-corpus:dac-small",
           "golden-corpus:small-abridged-ltd",
+          "golden-corpus:clg-charity",
+          "golden-corpus:medium-audit-required",
           "accountant-acceptance:dac-small",
           "accountant-acceptance:small-abridged-ltd",
+          "accountant-acceptance:clg-charity",
+          "accountant-acceptance:medium-audit-required",
         ],
         releaseGateCodes: ["qualified-accountant-review"],
+      },
+      {
+        ...source("cro-guarantee-company", "CRO guarantee company financial statements requirements"),
+        inSnapshot: true,
+        usedBy: [
+          "golden-corpus:clg-charity",
+          "statutory-rule-matrix:clg-charity",
+          "accountant-acceptance:clg-charity",
+        ],
+        releaseGateCodes: ["qualified-accountant-review", "charity-annual-return-review"],
+      },
+      {
+        ...source("charities-regulator-annual-report", "Charities Regulator annual report guidance"),
+        inSnapshot: true,
+        usedBy: [
+          "golden-corpus:clg-charity",
+          "statutory-rule-matrix:clg-charity",
+          "accountant-acceptance:clg-charity",
+        ],
+        releaseGateCodes: ["charity-annual-return-review"],
+      },
+      {
+        ...source("cro-medium-company", "CRO medium company financial statements requirements"),
+        inSnapshot: true,
+        usedBy: [
+          "golden-corpus:medium-audit-required",
+          "statutory-rule-matrix:medium-audit-required",
+          "accountant-acceptance:medium-audit-required",
+        ],
+        releaseGateCodes: ["auditor-handoff", "manual-professional-handoff"],
+      },
+      {
+        ...source("cro-auditors-report", "CRO auditors report requirements"),
+        inSnapshot: true,
+        usedBy: [
+          "golden-corpus:medium-audit-required",
+          "statutory-rule-matrix:medium-audit-required",
+          "accountant-acceptance:medium-audit-required",
+        ],
+        releaseGateCodes: ["auditor-handoff"],
       },
     ],
     sourceLawMaintenanceProtocol: {
@@ -658,7 +745,7 @@ function sampleReport() {
       signOffGate: "source-law-change-review",
       changeDetection: "Compare CRO, Revenue, FRC and Charities Regulator guidance pages against the pinned source-law snapshot before release.",
       failurePolicy: "Block release if any pinned source changes, becomes unreachable, gains a newer effective date, or lacks qualified-accountant review.",
-      monitoredSourceIds: ["frc-frs-105", "frc-frs-102"],
+      monitoredSourceIds: ["frc-frs-105", "frc-frs-102", "cro-guarantee-company", "charities-regulator-annual-report", "cro-medium-company", "cro-auditors-report"],
       acceptanceCriteria: [
         "CRO, Revenue, FRC and Charities Regulator source pages are reachable and reviewed for changes.",
         "Every changed effective date or guidance wording is reflected in source-law snapshot metadata before release.",
@@ -674,14 +761,18 @@ function sampleReport() {
     sourceLawReviewLedger: [
       sourceLawReviewEntry("frc-frs-105", "FRC FRS 105 current edition and amendments"),
       sourceLawReviewEntry("frc-frs-102", "FRC FRS 102 current edition and amendments"),
+      sourceLawReviewEntry("cro-guarantee-company", "CRO guarantee company financial statements requirements"),
+      sourceLawReviewEntry("charities-regulator-annual-report", "Charities Regulator annual report guidance"),
+      sourceLawReviewEntry("cro-medium-company", "CRO medium company financial statements requirements"),
+      sourceLawReviewEntry("cro-auditors-report", "CRO auditors report requirements"),
     ],
     assurancePacket: {
       packetId: "assurance-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       packetVersion: "production-assurance-packet-v1",
       status: "review-required",
       sourceLawSnapshotHash: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      goldenCorpusCovered: 3,
-      goldenCorpusTotal: 3,
+      goldenCorpusCovered: 5,
+      goldenCorpusTotal: 5,
       statutoryRuleMatrixPaths: 1,
       statutoryRuleCoverageFamilies: 1,
       visualQaExpectedScreenshots: expectedVisualSmokeScreenshotCount(),
@@ -765,17 +856,73 @@ function sampleReport() {
         ],
         sources: [source("frc-frs-102", "FRC FRS 102 current edition and amendments")],
       },
+      {
+        scenarioCode: "clg-charity",
+        label: "CLG charity accountant acceptance",
+        required: true,
+        acceptanceStatus: "qualified-accountant-review-required",
+        reviewScope: ["CLG accounts PDF", "charity number", "SoFA and trustees annual report evidence", "iXBRL XML", "tax computation", "charity notes", "charity annual return review gates"],
+        requiredEvidence: [
+          "Named qualified-accountant approval recorded against the CLG charity pack.",
+          "Charity annual report evidence reviewed before charity filing state advances.",
+        ],
+        requiredSignOffGate: "Named qualified accountant must approve the CLG charity pack and charity evidence before real filing use.",
+        evidenceVerifiers: [
+          {
+            name: "FilingGoldenCorpusScenarioTests.GoldenCorpus_ClgCharity_EmitsAccountsIxbrlAndSourceBackedCharityReadiness",
+            command: "dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter FullyQualifiedName~FilingGoldenCorpusScenarioTests.GoldenCorpus_ClgCharity_EmitsAccountsIxbrlAndSourceBackedCharityReadiness",
+            ciScope: "default-ci",
+            runsInDefaultCi: true,
+            environment: "EF Core InMemory golden fixture; CI also runs the broader backend suite on Linux",
+            evidenceLevel: "end-to-end golden filing scenario",
+          },
+        ],
+        sources: [
+          source("cro-guarantee-company", "CRO guarantee company financial statements requirements"),
+          source("charities-regulator-annual-report", "Charities Regulator annual report guidance"),
+          source("frc-frs-102", "FRC FRS 102 current edition and amendments"),
+        ],
+      },
+      {
+        scenarioCode: "medium-audit-required",
+        label: "Medium audit-required accountant acceptance",
+        required: true,
+        acceptanceStatus: "qualified-accountant-review-required",
+        reviewScope: ["audit report blocker", "manual handoff state", "full accounts PDF", "iXBRL XML", "tax computation", "notes", "auditor evidence"],
+        requiredEvidence: [
+          "Signed auditor report and manual handoff note reviewed by the qualified accountant.",
+          "Normal filing approval remains blocked until auditor evidence is present.",
+        ],
+        requiredSignOffGate: "Qualified accountant must record manual handoff acceptance before relying on outputs.",
+        evidenceVerifiers: [
+          {
+            name: "FilingGoldenCorpusScenarioTests.GoldenCorpus_MediumAuditRequired_BlocksFinalOutputsAndRequiresManualHandoffUntilAuditorEvidence",
+            command: "dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter FullyQualifiedName~FilingGoldenCorpusScenarioTests.GoldenCorpus_MediumAuditRequired_BlocksFinalOutputsAndRequiresManualHandoffUntilAuditorEvidence",
+            ciScope: "default-ci",
+            runsInDefaultCi: true,
+            environment: "EF Core InMemory golden fixture; CI also runs the broader backend suite on Linux",
+            evidenceLevel: "end-to-end golden filing scenario",
+          },
+        ],
+        sources: [
+          source("cro-medium-company", "CRO medium company financial statements requirements"),
+          source("cro-auditors-report", "CRO auditors report requirements"),
+          source("frc-frs-102", "FRC FRS 102 current edition and amendments"),
+        ],
+      },
     ],
     accountantAcceptanceSummary: {
-      scenarioCount: 3,
-      automatedVerifierCount: 4,
-      professionalSignOffRequiredCount: 3,
-      manualHandoffScenarioCount: 0,
-      releaseBlockingScenarioCodes: ["dac-small", "micro-ltd", "small-abridged-ltd"],
+      scenarioCount: 5,
+      automatedVerifierCount: 6,
+      professionalSignOffRequiredCount: 5,
+      manualHandoffScenarioCount: 1,
+      releaseBlockingScenarioCodes: ["clg-charity", "dac-small", "medium-audit-required", "micro-ltd", "small-abridged-ltd"],
       requiredSignOffGates: [
+        "Named qualified accountant must approve the CLG charity pack and charity evidence before real filing use.",
         "Named qualified accountant must approve the DAC generated pack before real filing use.",
         "Named qualified accountant must approve both the full accounts pack and abridged CRO pack before real filing use.",
         "Named qualified accountant must approve the generated pack before real filing use.",
+        "Qualified accountant must record manual handoff acceptance before relying on outputs.",
       ],
       status: "qualified-accountant-review-required",
     },
@@ -785,7 +932,7 @@ function sampleReport() {
       status: "required-review",
       signOffGate: "golden-corpus-accountant-acceptance",
       failurePolicy: "Block release if a named qualified accountant has not walked the seeded golden corpus through the live accountant workflow and accepted the outputs, gates, wording and evidence.",
-      seededScenarioCodes: ["dac-small", "micro-ltd", "small-abridged-ltd"],
+      seededScenarioCodes: ["clg-charity", "dac-small", "medium-audit-required", "micro-ltd", "small-abridged-ltd"],
       routeSequence: [
         "Dashboard: identify the client, deadline pressure, blockers, reviewer owner and next action.",
         "Company detail: confirm statutory profile, company type, officers, charity flags and period setup.",
@@ -1003,6 +1150,134 @@ function sampleReport() {
           sourceReferences: [source("frc-frs-102", "FRC FRS 102 current edition and amendments")],
         },
       },
+      {
+        code: "clg-charity",
+        label: "CLG charity annual reporting",
+        companyScope: "Company limited by guarantee with charity evidence",
+        expectedOutcome: "generated-pack-with-charity-gates",
+        coverageStatus: "covered",
+        fixture: {
+          legalName: "Dublin Community Support CLG",
+          companyType: "CompanyLimitedByGuarantee",
+          periodStart: "2026-01-01",
+          periodEnd: "2026-12-31",
+          expectedSizeClass: "Small",
+          expectedRegime: "Small",
+          auditExempt: true,
+          manualProfessionalReviewRequired: false,
+        },
+        evidenceTestNames: [
+          "FilingGoldenCorpusScenarioTests.GoldenCorpus_ClgCharity_EmitsAccountsIxbrlAndSourceBackedCharityReadiness",
+        ],
+        evidenceVerifiers: [
+          {
+            name: "FilingGoldenCorpusScenarioTests.GoldenCorpus_ClgCharity_EmitsAccountsIxbrlAndSourceBackedCharityReadiness",
+            command: "dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter FullyQualifiedName~FilingGoldenCorpusScenarioTests.GoldenCorpus_ClgCharity_EmitsAccountsIxbrlAndSourceBackedCharityReadiness",
+            ciScope: "default-ci",
+            runsInDefaultCi: true,
+            environment: "EF Core InMemory golden fixture; CI also runs the broader backend suite on Linux",
+            evidenceLevel: "end-to-end golden filing scenario",
+          },
+        ],
+        assertions: ["CLG support", "charity number evidence", "SoFA evidence", "trustees report evidence", "source-backed readiness"],
+        evidencePack: {
+          outputArtifacts: ["CLG accounts PDF text", "charity readiness profile", "SoFA evidence", "trustees annual report evidence", "iXBRL XML", "tax computation", "notes disclosure set", "accountant sign-off packet"],
+          decisionGates: ["charity number", "charity annual return review", "named qualified-accountant review", "accountant sign-off packet state"],
+          expectedValueChecks: ["charity evidence satisfied", "Charities Regulator source attached", "CLG source attached", "well-formed iXBRL"],
+          expectedOutputs: {
+            pdfTextMarkers: ["Dublin Community Support CLG", "Community support and education."],
+            ixbrlRequiredTags: ["core:EntityCurrentLegalOrRegisteredName"],
+            filingReadinessState: "ready-for-external-filing",
+            expectedCorporationTax: 62.5,
+            requiredNotes: ["Accounting Policies", "Charity reporting disclosures"],
+            filingGateStates: ["charity number satisfied", "SoFA and trustees annual report evidence satisfied", "qualified-accountant review recorded"],
+            signOffPacketState: "ready-for-external-filing",
+          },
+          expectedProofPoints: [
+            {
+              area: "pdf-text",
+              expectedEvidence: "CLG accounts PDF text contains company name and charity objectives.",
+              automatedVerifier: "FilingGoldenCorpusScenarioTests.GoldenCorpus_ClgCharity_EmitsAccountsIxbrlAndSourceBackedCharityReadiness",
+              required: true,
+            },
+            {
+              area: "filing-readiness",
+              expectedEvidence: "Filing readiness confirms charity number, SoFA and trustees report evidence.",
+              automatedVerifier: "FilingGoldenCorpusScenarioTests.GoldenCorpus_ClgCharity_EmitsAccountsIxbrlAndSourceBackedCharityReadiness",
+              required: true,
+            },
+          ],
+          sourceReferences: [
+            source("cro-guarantee-company", "CRO guarantee company financial statements requirements"),
+            source("charities-regulator-annual-report", "Charities Regulator annual report guidance"),
+            source("frc-frs-102", "FRC FRS 102 current edition and amendments"),
+          ],
+        },
+      },
+      {
+        code: "medium-audit-required",
+        label: "Medium audit-required handoff",
+        companyScope: "Medium company or non-audit-exempt filing",
+        expectedOutcome: "manual-handoff",
+        coverageStatus: "covered",
+        fixture: {
+          legalName: "Midlands Manufacturing Limited",
+          companyType: "Private",
+          periodStart: "2026-01-01",
+          periodEnd: "2026-12-31",
+          expectedSizeClass: "Medium",
+          expectedRegime: "Medium",
+          auditExempt: false,
+          manualProfessionalReviewRequired: true,
+        },
+        evidenceTestNames: [
+          "FilingGoldenCorpusScenarioTests.GoldenCorpus_MediumAuditRequired_BlocksFinalOutputsAndRequiresManualHandoffUntilAuditorEvidence",
+        ],
+        evidenceVerifiers: [
+          {
+            name: "FilingGoldenCorpusScenarioTests.GoldenCorpus_MediumAuditRequired_BlocksFinalOutputsAndRequiresManualHandoffUntilAuditorEvidence",
+            command: "dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter FullyQualifiedName~FilingGoldenCorpusScenarioTests.GoldenCorpus_MediumAuditRequired_BlocksFinalOutputsAndRequiresManualHandoffUntilAuditorEvidence",
+            ciScope: "default-ci",
+            runsInDefaultCi: true,
+            environment: "EF Core InMemory golden fixture; CI also runs the broader backend suite on Linux",
+            evidenceLevel: "end-to-end golden filing scenario",
+          },
+        ],
+        assertions: ["audit report blocker", "manual handoff", "auditor evidence", "full accounts PDF", "medium iXBRL facts"],
+        evidencePack: {
+          outputArtifacts: ["full accounts PDF text", "auditor report evidence", "cash flow statement", "statement of changes in equity", "iXBRL XML", "filing readiness profile", "tax computation", "accountant sign-off packet"],
+          decisionGates: ["auditor handoff", "manual professional review", "normal CRO approval blocked until auditor evidence", "accountant sign-off packet state"],
+          expectedValueChecks: ["Medium regime selected", "audit report blocker present before auditor evidence", "tagged P&L facts present after auditor evidence", "auditor reference appears in PDF text"],
+          expectedOutputs: {
+            pdfTextMarkers: ["Midlands Manufacturing Limited", "INDEPENDENT AUDITOR'S REPORT", "AUD-2026-MIDLANDS-001", "CASH FLOW STATEMENT", "STATEMENT OF CHANGES IN EQUITY"],
+            ixbrlRequiredTags: ["core:TurnoverGrossRevenue", "core:ProfitLossOnOrdinaryActivitiesBeforeTax"],
+            filingReadinessState: "manual-handoff-until-auditor-evidence",
+            expectedCorporationTax: 62.5,
+            requiredNotes: ["Turnover", "Tax on Profit on Ordinary Activities"],
+            filingGateStates: ["auditor handoff blocked until signed auditor report", "normal CRO approval blocked until auditor evidence", "manual professional review required"],
+            signOffPacketState: "manual-handoff",
+          },
+          expectedProofPoints: [
+            {
+              area: "auditor-handoff",
+              expectedEvidence: "Signed auditor report reference is mandatory before final output generation.",
+              automatedVerifier: "FilingGoldenCorpusScenarioTests.GoldenCorpus_MediumAuditRequired_BlocksFinalOutputsAndRequiresManualHandoffUntilAuditorEvidence",
+              required: true,
+            },
+            {
+              area: "filing-readiness",
+              expectedEvidence: "Filing readiness blocks approval before signed auditor report evidence and clears that blocker when evidence is recorded.",
+              automatedVerifier: "FilingGoldenCorpusScenarioTests.GoldenCorpus_MediumAuditRequired_BlocksFinalOutputsAndRequiresManualHandoffUntilAuditorEvidence",
+              required: true,
+            },
+          ],
+          sourceReferences: [
+            source("cro-medium-company", "CRO medium company financial statements requirements"),
+            source("cro-auditors-report", "CRO auditors report requirements"),
+            source("frc-frs-102", "FRC FRS 102 current edition and amendments"),
+          ],
+        },
+      },
     ],
     goldenEvidenceLedger: [
       {
@@ -1067,6 +1342,50 @@ function sampleReport() {
         expectedCorporationTax: 62.5,
         filingReadinessState: "ready-for-external-filing",
         signOffPacketState: "ready-for-external-filing",
+      },
+      {
+        scenarioCode: "clg-charity",
+        label: "CLG charity annual reporting",
+        fixtureLegalName: "Dublin Community Support CLG",
+        companyType: "CompanyLimitedByGuarantee",
+        expectedOutcome: "generated-pack-with-charity-gates",
+        coverageStatus: "covered",
+        acceptanceStatus: "qualified-accountant-review-required",
+        requiredSignOffGate: "Named qualified accountant must approve the CLG charity pack and charity evidence before real filing use.",
+        blocksRelease: true,
+        automatedVerifierNames: [
+          "FilingGoldenCorpusScenarioTests.GoldenCorpus_ClgCharity_EmitsAccountsIxbrlAndSourceBackedCharityReadiness",
+        ],
+        outputArtifacts: ["CLG accounts PDF text", "charity readiness profile", "SoFA evidence", "trustees annual report evidence", "iXBRL XML", "tax computation", "notes disclosure set", "accountant sign-off packet"],
+        decisionGates: ["charity number", "charity annual return review", "named qualified-accountant review", "accountant sign-off packet state"],
+        expectedValueChecks: ["charity evidence satisfied", "Charities Regulator source attached", "CLG source attached", "well-formed iXBRL"],
+        proofPointAreas: ["pdf-text", "filing-readiness"],
+        sourceIds: ["cro-guarantee-company", "charities-regulator-annual-report", "frc-frs-102"],
+        expectedCorporationTax: 62.5,
+        filingReadinessState: "ready-for-external-filing",
+        signOffPacketState: "ready-for-external-filing",
+      },
+      {
+        scenarioCode: "medium-audit-required",
+        label: "Medium audit-required handoff",
+        fixtureLegalName: "Midlands Manufacturing Limited",
+        companyType: "Private",
+        expectedOutcome: "manual-handoff",
+        coverageStatus: "covered",
+        acceptanceStatus: "qualified-accountant-review-required",
+        requiredSignOffGate: "Qualified accountant must record manual handoff acceptance before relying on outputs.",
+        blocksRelease: true,
+        automatedVerifierNames: [
+          "FilingGoldenCorpusScenarioTests.GoldenCorpus_MediumAuditRequired_BlocksFinalOutputsAndRequiresManualHandoffUntilAuditorEvidence",
+        ],
+        outputArtifacts: ["full accounts PDF text", "auditor report evidence", "cash flow statement", "statement of changes in equity", "iXBRL XML", "filing readiness profile", "tax computation", "accountant sign-off packet"],
+        decisionGates: ["auditor handoff", "manual professional review", "normal CRO approval blocked until auditor evidence", "accountant sign-off packet state"],
+        expectedValueChecks: ["Medium regime selected", "audit report blocker present before auditor evidence", "tagged P&L facts present after auditor evidence", "auditor reference appears in PDF text"],
+        proofPointAreas: ["auditor-handoff", "filing-readiness"],
+        sourceIds: ["cro-medium-company", "cro-auditors-report", "frc-frs-102"],
+        expectedCorporationTax: 62.5,
+        filingReadinessState: "manual-handoff-until-auditor-evidence",
+        signOffPacketState: "manual-handoff",
       },
     ],
     statutoryRuleMatrix: [
@@ -1634,7 +1953,7 @@ function journeyAcceptance(routeCode, routeLabel, routeKey, workflowStages, acce
     routeLabel,
     routeKey,
     workflowStages,
-    seededScenarioCodes: ["dac-small", "micro-ltd", "small-abridged-ltd"],
+    seededScenarioCodes: ["clg-charity", "dac-small", "medium-audit-required", "micro-ltd", "small-abridged-ltd"],
     visualArtifactNames: ["dark-desktop", "dark-mobile", "light-desktop", "light-mobile"].map(
       (suffix) => `${routeCode}-${suffix}.png`,
     ),
