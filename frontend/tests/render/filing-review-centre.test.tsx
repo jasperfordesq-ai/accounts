@@ -445,6 +445,49 @@ describe("FilingReviewCentre", () => {
     );
     expect(screen.getAllByText("Effective 03 Jul 2026").length).toBeGreaterThan(0);
   });
+
+  it("shows a production decision ledger for final-use filing gates", () => {
+    render(
+      <FilingReviewCentre
+        filingStatus={sampleWorkflowStatus({
+          croStatus: "Approved",
+          readyToFile: true,
+          warningIssues: ["External ROS validation evidence remains required."],
+        })}
+        filingReadinessProfile={sampleReadinessProfile({
+          supportedPath: true,
+          manualProfessionalReviewRequired: false,
+          warningIssues: [
+            readinessIssue("external-ros-validation", "External ROS/iXBRL validation remains a manual evidence gate.", "warning"),
+          ],
+        })}
+        croSubmissionReference="CORE-2026-0007"
+        validatingIxbrl={false}
+        onCroSubmissionReferenceChange={vi.fn()}
+        onRunIxbrlChecks={vi.fn()}
+        onApproveForFiling={vi.fn()}
+        onMarkCroSubmitted={vi.fn()}
+        onConfirmCroPayment={vi.fn()}
+        onMarkCroAccepted={vi.fn()}
+        onRecordCroSendBack={vi.fn()}
+      />,
+    );
+
+    const ledger = screen.getByRole("region", { name: "Production decision ledger" });
+    const ledgerScope = within(ledger);
+
+    expect(ledgerScope.getByText("Production decision ledger")).toBeInTheDocument();
+    expect(ledgerScope.getByText("Supported company path")).toBeInTheDocument();
+    expect(ledgerScope.getByText("Supported")).toBeInTheDocument();
+    expect(ledgerScope.getByText("Accountant approval")).toBeInTheDocument();
+    expect(ledgerScope.getByText("Ready for accountant review")).toBeInTheDocument();
+    expect(ledgerScope.getByText("External ROS/iXBRL validation")).toBeInTheDocument();
+    expect(ledgerScope.getByText("Evidence open")).toBeInTheDocument();
+    expect(ledgerScope.getByText("Direct submission automation")).toBeInTheDocument();
+    expect(ledgerScope.getByText("Recorded workflow only")).toBeInTheDocument();
+    expect(ledgerScope.getByText("CRO filing evidence")).toBeInTheDocument();
+    expect(ledgerScope.getByText("CORE-2026-0007")).toBeInTheDocument();
+  });
 });
 
 function sampleWorkflowStatus({

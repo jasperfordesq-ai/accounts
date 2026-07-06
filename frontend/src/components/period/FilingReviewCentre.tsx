@@ -89,6 +89,12 @@ export function FilingReviewCentre({
                 filingIssues={filingIssues}
               />
 
+              <ProductionDecisionLedger
+                filingStatus={filingStatus}
+                filingReadinessProfile={filingReadinessProfile}
+                croSubmissionReference={croSubmissionReference}
+              />
+
               <SignOffPacketPanel packet={filingReadinessProfile.signOffPacket} />
 
               <div className="grid min-w-0 max-w-full gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
@@ -214,6 +220,182 @@ export function FilingReviewCentre({
       )}
     </ReviewPanel>
   );
+}
+
+function ProductionDecisionLedger({
+  filingStatus,
+  filingReadinessProfile,
+  croSubmissionReference,
+}: {
+  filingStatus: FilingWorkflowStatus;
+  filingReadinessProfile: FilingReadinessProfile;
+  croSubmissionReference: string;
+}) {
+  const rows = [
+    {
+      label: "Supported company path",
+      value: filingReadinessProfile.supportedPath ? "Supported" : "Manual handoff required",
+      detail: filingReadinessProfile.supportedPath
+        ? "Core statutory path can continue inside the platform."
+        : "This company path requires manual professional handoff.",
+      tone: filingReadinessProfile.supportedPath ? "good" : "bad",
+    },
+    {
+      label: "Accountant approval",
+      value: filingReadinessProfile.signOffPacket.stateLabel,
+      detail: filingReadinessProfile.signOffPacket.readyForAccountantApproval
+        ? "Named accountant review can be recorded once the reviewer accepts the evidence."
+        : "Approval remains blocked by open evidence or manual handoff.",
+      tone: signOffStateTone(filingReadinessProfile.signOffPacket.state),
+    },
+    {
+      label: "External ROS/iXBRL validation",
+      value: externalValidationLedgerValue(filingStatus, filingReadinessProfile),
+      detail: externalValidationLedgerDetail(filingStatus, filingReadinessProfile),
+      tone: externalValidationLedgerTone(filingStatus, filingReadinessProfile),
+    },
+    {
+      label: "Direct submission automation",
+      value: directSubmissionLedgerValue(filingReadinessProfile),
+      detail: filingReadinessProfile.directCroSubmissionSupported || filingReadinessProfile.directRosSubmissionSupported
+        ? "Direct submission support is enabled for at least one external filing channel."
+        : "CRO and ROS final submission remain external actions recorded in workflow state.",
+      tone: filingReadinessProfile.directCroSubmissionSupported || filingReadinessProfile.directRosSubmissionSupported ? "warn" : "good",
+    },
+    {
+      label: "CRO filing evidence",
+      value: croFilingEvidenceLedgerValue(filingStatus, croSubmissionReference),
+      detail: croFilingEvidenceLedgerDetail(filingStatus, croSubmissionReference),
+      tone: croFilingEvidenceLedgerTone(filingStatus, croSubmissionReference),
+    },
+  ] satisfies Array<{
+    label: string;
+    value: string;
+    detail: string;
+    tone: "default" | "good" | "warn" | "bad" | "info";
+  }>;
+
+  return (
+    <section
+      aria-label="Production decision ledger"
+      className="rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-4"
+    >
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Production decision ledger</p>
+          <p className="mt-1 max-w-3xl text-sm leading-6 text-[var(--muted-foreground)]">
+            Final-use gates for supported path, accountant approval, external validation, direct submission controls and CRO evidence.
+          </p>
+        </div>
+        <StatusBadge tone={rows.some((row) => row.tone === "bad") ? "bad" : rows.some((row) => row.tone === "warn") ? "warn" : "good"}>
+          {rows.filter((row) => row.tone === "bad" || row.tone === "warn").length} open
+        </StatusBadge>
+      </div>
+
+      <div className="mt-4 grid gap-2 lg:grid-cols-5">
+        {rows.map((row) => (
+          <article key={row.label} className="min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
+            <div className="flex min-w-0 items-start justify-between gap-2">
+              <p className="min-w-0 text-xs font-semibold uppercase text-[var(--muted-foreground)]">{row.label}</p>
+              <StatusBadge tone={row.tone}>{row.value}</StatusBadge>
+            </div>
+            <p className="mt-2 text-xs leading-5 text-[var(--muted-foreground)]">{row.detail}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function externalValidationLedgerValue(
+  filingStatus: FilingWorkflowStatus,
+  filingReadinessProfile: FilingReadinessProfile,
+) {
+  if (filingStatus.revenue.ixbrlValid)
+    return "Evidence retained";
+
+  const hasOpenExternalEvidence = filingReadinessProfile.signOffPacket.openWarnings.some(isExternalValidationIssue)
+    || filingReadinessProfile.warningIssues.some((issue) => isExternalValidationIssue(issue.message))
+    || filingStatus.warningIssues.some(isExternalValidationIssue);
+
+  return hasOpenExternalEvidence ? "Evidence open" : "Manual validation required";
+}
+
+function externalValidationLedgerDetail(
+  filingStatus: FilingWorkflowStatus,
+  filingReadinessProfile: FilingReadinessProfile,
+) {
+  if (filingStatus.revenue.ixbrlValid)
+    return "External ROS/iXBRL validation evidence is recorded for the generated pack.";
+
+  if (externalValidationLedgerValue(filingStatus, filingReadinessProfile) === "Evidence open")
+    return "External validation remains a retained-evidence gate before real Revenue use.";
+
+  return "Run internal iXBRL checks and retain external ROS validation evidence.";
+}
+
+function externalValidationLedgerTone(
+  filingStatus: FilingWorkflowStatus,
+  filingReadinessProfile: FilingReadinessProfile,
+): "good" | "warn" | "bad" {
+  if (filingStatus.revenue.ixbrlValid)
+    return "good";
+
+  return externalValidationLedgerValue(filingStatus, filingReadinessProfile) === "Evidence open" ? "warn" : "bad";
+}
+
+function directSubmissionLedgerValue(filingReadinessProfile: FilingReadinessProfile) {
+  return filingReadinessProfile.directCroSubmissionSupported || filingReadinessProfile.directRosSubmissionSupported
+    ? "Direct channel enabled"
+    : "Recorded workflow only";
+}
+
+function croFilingEvidenceLedgerValue(filingStatus: FilingWorkflowStatus, croSubmissionReference: string) {
+  const trimmedReference = croSubmissionReference.trim();
+  if (trimmedReference.length > 0)
+    return trimmedReference;
+
+  if (filingStatus.cro.status === "Accepted")
+    return "Accepted evidence recorded";
+
+  if (filingStatus.cro.status === "Submitted")
+    return "Submission reference missing";
+
+  if (filingStatus.cro.status === "Approved")
+    return "CORE reference required";
+
+  return croActionBarStatusLabel(filingStatus.cro.status);
+}
+
+function croFilingEvidenceLedgerDetail(filingStatus: FilingWorkflowStatus, croSubmissionReference: string) {
+  if (croSubmissionReference.trim().length > 0)
+    return "External CORE reference is retained against the filing workflow.";
+
+  if (filingStatus.cro.status === "Approved")
+    return "Record the external CORE reference before marking the filing submitted.";
+
+  if (filingStatus.cro.status === "Submitted")
+    return "Submission is recorded, but the CORE reference still needs evidence.";
+
+  return "CRO filing evidence appears as recorded workflow states only.";
+}
+
+function croFilingEvidenceLedgerTone(
+  filingStatus: FilingWorkflowStatus,
+  croSubmissionReference: string,
+): "default" | "good" | "warn" | "bad" | "info" {
+  if (croSubmissionReference.trim().length > 0 || filingStatus.cro.status === "Accepted")
+    return "good";
+
+  if (filingStatus.cro.status === "Approved" || filingStatus.cro.status === "Submitted")
+    return "warn";
+
+  return filingStatusTone(filingStatus.cro.status);
+}
+
+function isExternalValidationIssue(value: string) {
+  const normalized = value.toLowerCase();
+  return normalized.includes("external ros") || normalized.includes("ixbrl validation");
 }
 
 function sortFilingEvidenceByRisk(items: FilingReadinessProfile["requiredEvidence"]) {
