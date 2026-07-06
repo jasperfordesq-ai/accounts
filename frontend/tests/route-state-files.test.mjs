@@ -161,3 +161,35 @@ test("period categorise workspace composes transaction review panels", () => {
     assert.match(source, new RegExp(marker), `PeriodCategoriseWorkspace should render ${marker}`);
   }
 });
+
+test("period year-end route delegates questionnaire and completeness composition", () => {
+  const periodRoute = new URL("companies/[companyId]/periods/[periodId]/page.tsx", appDir);
+  const source = readFileSync(periodRoute, "utf8");
+
+  assert.match(source, /PeriodYearEndWorkspace/, "period route should import the focused year-end workspace");
+  assert.match(source, /<PeriodYearEndWorkspace[\s\S]*yearEnd=\{yearEnd\}/, "period route should render PeriodYearEndWorkspace with summary data");
+  assert.match(source, /<PeriodYearEndWorkspace[\s\S]*questionnaireHref=/, "period route should pass the questionnaire route into PeriodYearEndWorkspace");
+  assert.doesNotMatch(source, /<Card\.Title[^>]*>Year-End Completeness<\/Card\.Title>/, "period route should not own year-end completeness markup");
+  assert.doesNotMatch(source, /Year-End Questionnaire/, "period route should not own questionnaire CTA markup");
+  assert.doesNotMatch(source, /Complete the import and categorisation steps first/, "period route should not own year-end empty-state markup");
+});
+
+test("period year-end workspace composes questionnaire, completeness and summary panels", () => {
+  const componentFile = new URL("../src/components/period/PeriodYearEndWorkspace.tsx", import.meta.url);
+
+  assert.ok(existsSync(componentFile), "PeriodYearEndWorkspace should exist as the focused year-end workflow component");
+
+  const source = readFileSync(componentFile, "utf8");
+  for (const marker of [
+    "Year-End Questionnaire",
+    "Year-End Completeness",
+    "Debtors",
+    "Creditors",
+    "Fixed Assets",
+    "Inventory",
+    "Tax Liabilities",
+    "Complete the import and categorisation steps first",
+  ]) {
+    assert.match(source, new RegExp(marker), `PeriodYearEndWorkspace should render ${marker}`);
+  }
+});

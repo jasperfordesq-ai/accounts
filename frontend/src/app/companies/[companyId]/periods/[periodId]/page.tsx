@@ -10,9 +10,6 @@ import {
   TabList,
   Tab,
   TabPanel,
-  ProgressBar,
-  ProgressBarTrack,
-  ProgressBarFill,
 } from "@heroui/react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -96,6 +93,7 @@ import { PeriodWorkbenchOverview } from "@/components/period/PeriodWorkbenchOver
 import { PeriodCategoriseWorkspace } from "@/components/period/PeriodCategoriseWorkspace";
 import { PeriodFilingWorkspace } from "@/components/period/PeriodFilingWorkspace";
 import { PeriodImportWorkspace } from "@/components/period/PeriodImportWorkspace";
+import { PeriodYearEndWorkspace } from "@/components/period/PeriodYearEndWorkspace";
 import { StatementsReadinessPanel } from "@/components/period/StatementsReadinessPanel";
 import { useAuth } from "@/components/AuthProvider";
 import { formatPeriodRange } from "@/lib/format";
@@ -883,89 +881,10 @@ export default function PeriodWorkspacePage({
 
         {/* Year-End Tab */}
         <TabPanel id="yearend">
-          <div className="space-y-6">
-            <Card className="shadow-sm border border-emerald-200 dark:border-emerald-800 bg-emerald-50/30 dark:bg-emerald-900/10">
-              <Card.Content className="p-5">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Year-End Questionnaire</h3>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                      Walk through all 9 sections to capture debtors, creditors, assets, payroll, tax, and more.
-                    </p>
-                  </div>
-                  <Link href={`/companies/${companyId}/periods/${periodId}/year-end`}>
-                    <Button variant="primary">
-                      Open Year-End Questionnaire
-                      <ArrowRight className="w-4 h-4 ml-1.5" />
-                    </Button>
-                  </Link>
-                </div>
-              </Card.Content>
-            </Card>
-
-            {yearEnd && (
-              <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
-                <Card.Header>
-                  <Card.Title className="text-gray-900 dark:text-gray-100">Year-End Completeness</Card.Title>
-                  <Card.Description>
-                    {yearEnd.completeness.completed} of {yearEnd.completeness.total} items completed
-                  </Card.Description>
-                </Card.Header>
-                <Card.Content>
-                  <div className="mb-2 flex items-center justify-between text-sm">
-                    <span className="text-gray-600 dark:text-gray-400">Progress</span>
-                    <span className="font-medium text-gray-900 dark:text-gray-100">{yearEnd.completeness.score}%</span>
-                  </div>
-                  <ProgressBar
-                    value={yearEnd.completeness.score}
-                    minValue={0}
-                    maxValue={100}
-                    aria-label="Year-end completeness"
-                    color={yearEnd.completeness.score >= 80 ? "success" : yearEnd.completeness.score >= 50 ? "warning" : "danger"}
-                  >
-                    <ProgressBarTrack>
-                      <ProgressBarFill />
-                    </ProgressBarTrack>
-                  </ProgressBar>
-                  {yearEnd.completeness.incomplete.length > 0 && (
-                    <div className="mt-4">
-                      <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Incomplete items:</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {yearEnd.completeness.incomplete.map((item) => (
-                          <Chip key={item} color="warning" variant="soft" size="sm">{item}</Chip>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </Card.Content>
-              </Card>
-            )}
-
-            <div className="grid grid-cols-2 gap-4">
-              <SummaryCard title="Debtors" value={yearEnd ? formatCurrency(yearEnd.debtors.total) : "--"} subtitle={yearEnd ? `${yearEnd.debtors.count} entries` : "No data"} />
-              <SummaryCard title="Creditors" value={yearEnd ? formatCurrency(yearEnd.creditors.total) : "--"} subtitle={yearEnd ? `${yearEnd.creditors.count} entries` : "No data"} />
-              <SummaryCard title="Fixed Assets" value={yearEnd ? formatCurrency(yearEnd.fixedAssets.totalCost) : "--"} subtitle={yearEnd ? `${yearEnd.fixedAssets.count} assets` : "No data"} />
-              <SummaryCard title="Inventory" value={yearEnd ? formatCurrency(yearEnd.inventory.totalValue) : "--"} subtitle={yearEnd ? `${yearEnd.inventory.count} items` : "No data"} />
-              <SummaryCard title="Loans" value={yearEnd ? formatCurrency(yearEnd.loans.totalBalance) : "--"} subtitle={yearEnd ? `${yearEnd.loans.count} loans` : "No data"} />
-              <SummaryCard title="Payroll" value={yearEnd?.payroll ? formatCurrency(yearEnd.payroll.grossWages) : "--"} subtitle={yearEnd?.payroll ? `${yearEnd.payroll.staffCount} staff` : "Not applicable"} />
-              <SummaryCard title="Tax Liabilities" value={yearEnd ? formatCurrency(yearEnd.taxes.totalLiability) : "--"} subtitle={yearEnd ? `${yearEnd.taxes.count} items` : "No data"} />
-              <SummaryCard title="Dividends" value={yearEnd ? formatCurrency(yearEnd.dividends.total) : "--"} subtitle={yearEnd ? `${yearEnd.dividends.count} distributions` : "No data"} />
-            </div>
-
-            {!yearEnd && (
-              <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
-                <Card.Content className="text-center py-8">
-                  <BarChart3 className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    Year-end summary data is not yet available for this period.
-                  </p>
-                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                    Complete the import and categorisation steps first.
-                  </p>
-                </Card.Content>
-              </Card>
-            )}
-          </div>
+          <PeriodYearEndWorkspace
+            yearEnd={yearEnd}
+            questionnaireHref={`/companies/${companyId}/periods/${periodId}/year-end`}
+          />
         </TabPanel>
 
         {/* Adjustments Tab */}
@@ -1322,19 +1241,5 @@ export default function PeriodWorkspacePage({
         </TabPanel>
       </TabsRoot>
     </div>
-  );
-}
-
-/* --- Helper Components --- */
-
-function SummaryCard({ title, value, subtitle }: { title: string; value: string; subtitle: string }) {
-  return (
-    <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 card-hover">
-      <Card.Content className="p-5">
-        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">{title}</p>
-        <p className="text-xl font-bold text-gray-900 dark:text-gray-100 mt-1">{value}</p>
-        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{subtitle}</p>
-      </Card.Content>
-    </Card>
   );
 }
