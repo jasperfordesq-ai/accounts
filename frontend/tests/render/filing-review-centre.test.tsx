@@ -50,6 +50,14 @@ describe("FilingReviewCentre", () => {
     expect(within(decisionCentre).getByText("What must I do next?")).toBeInTheDocument();
     expect(within(decisionCentre).getByText("Approve CRO pack")).toBeInTheDocument();
     expect(within(decisionCentre).getByText("External ROS/iXBRL validation remains a manual evidence gate.")).toBeInTheDocument();
+
+    const approvalDocket = screen.getByRole("region", { name: "Accountant approval docket" });
+    expect(within(approvalDocket).getByText("Reviewer state")).toBeInTheDocument();
+    expect(within(approvalDocket).getByText("Ready for accountant review")).toBeInTheDocument();
+    expect(within(approvalDocket).getByText("Open evidence")).toBeInTheDocument();
+    expect(within(approvalDocket).getByText("1 blocker / 1 warning")).toBeInTheDocument();
+    expect(within(approvalDocket).getByText("Next workflow action")).toBeInTheDocument();
+    expect(within(approvalDocket).getByText("Approve CRO pack")).toBeInTheDocument();
   });
 
   it("surfaces source-backed evidence and blocks approval for manual handoff paths", () => {
@@ -83,7 +91,7 @@ describe("FilingReviewCentre", () => {
     expect(screen.getByText("Filing readiness profile")).toBeInTheDocument();
     expect(screen.getByText("Manual handoff")).toBeInTheDocument();
     expect(screen.getByText("Accountant sign-off packet")).toBeInTheDocument();
-    expect(screen.getByText("Manual professional handoff")).toBeInTheDocument();
+    expect(screen.getAllByText("Manual professional handoff").length).toBeGreaterThan(0);
     expect(screen.getByText("Audit report")).toBeInTheDocument();
     expect(screen.getAllByText("Signed auditor report must be reviewed manually before final filing.").length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: /CRO financial statements requirements/ })).toHaveAttribute(
@@ -317,7 +325,7 @@ describe("FilingReviewCentre", () => {
     );
 
     expect(screen.getByText("Filing issue digest")).toBeInTheDocument();
-    expect(screen.getByText("Ready for accountant review")).toBeInTheDocument();
+    expect(screen.getAllByText("Ready for accountant review").length).toBeGreaterThan(0);
     expect(screen.getByText("External ROS validation evidence pending")).toBeInTheDocument();
     expect(screen.getAllByText("Approve CRO pack").length).toBeGreaterThan(0);
     expect(screen.getAllByText("5 blockers").length).toBeGreaterThan(0);

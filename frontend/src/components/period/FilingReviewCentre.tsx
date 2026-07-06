@@ -361,6 +361,9 @@ function SignOffPacketPanel({ packet }: { packet: FilingReadinessSignOffPacket }
   const openIssueCount = packet.openBlockers.length + packet.openWarnings.length;
   const specialistSteps = packet.steps.filter(isSpecialistSignOffStep);
   const standardSteps = packet.steps.filter((step) => !isSpecialistSignOffStep(step));
+  const nextWorkflowAction = packet.allowedNextActions.length > 0
+    ? formatActionLabel(packet.allowedNextActions[0])
+    : "No workflow action allowed";
 
   return (
     <section className="rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-4" aria-label="Accountant sign-off packet">
@@ -382,6 +385,29 @@ function SignOffPacketPanel({ packet }: { packet: FilingReadinessSignOffPacket }
           <StatusBadge tone={openIssueCount > 0 ? "warn" : "good"}>{openIssueCount} open</StatusBadge>
         </div>
       </div>
+
+      <section
+        aria-label="Accountant approval docket"
+        className="mt-4 grid gap-3 rounded-md border border-[var(--border)] bg-[var(--surface)] p-3 md:grid-cols-3"
+      >
+        <ApprovalDocketItem
+          label="Reviewer state"
+          value={packet.stateLabel}
+          detail={packet.readyForAccountantApproval ? "Ready for named accountant review." : "Approval remains blocked by open evidence."}
+        />
+        <ApprovalDocketItem
+          label="Open evidence"
+          value={`${packet.openBlockers.length} ${packet.openBlockers.length === 1 ? "blocker" : "blockers"} / ${packet.openWarnings.length} ${packet.openWarnings.length === 1 ? "warning" : "warnings"}`}
+          detail={openIssueCount > 0 ? "Resolve or evidence every open item before final use." : "No blocker or warning evidence remains open."}
+        />
+        <ApprovalDocketItem
+          label="Next workflow action"
+          value={nextWorkflowAction}
+          detail={packet.allowedNextActions.length > 1
+            ? `${packet.allowedNextActions.length - 1} further actions available after this step.`
+            : "This is the next permitted filing workflow action."}
+        />
+      </section>
 
       {specialistSteps.length > 0 && <SpecialistEvidenceGates steps={specialistSteps} />}
 
@@ -407,6 +433,24 @@ function SignOffPacketPanel({ packet }: { packet: FilingReadinessSignOffPacket }
         </div>
       </div>
     </section>
+  );
+}
+
+function ApprovalDocketItem({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+}) {
+  return (
+    <div className="min-w-0">
+      <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">{label}</p>
+      <p className="mt-1 text-sm font-semibold text-[var(--foreground)]">{value}</p>
+      <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">{detail}</p>
+    </div>
   );
 }
 
