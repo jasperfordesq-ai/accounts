@@ -176,16 +176,38 @@ public class FilingReadinessProfileTests
         Assert.Contains(selection.Sources, s => s.SourceId == IrishStatutoryRuleSources.RevenueAcceptedTaxonomies.SourceId);
     }
 
+    [Theory]
+    [InlineData(2023, "irish-extension-2023-frs-102", "2023-01-01", 2023)]
+    [InlineData(2022, "irish-extension-2022-frs-102", "2022-01-01", 2019)]
+    [InlineData(2019, "irish-extension-2022-frs-102", "2022-01-01", 2019)]
+    public void RevenueTaxonomySelector_UsesLatestRevenueAcceptedFrs102TaxonomyForPeriodDate(
+        int periodStartYear,
+        string expectedKey,
+        string expectedTaxonomyDate,
+        int expectedEffectiveYear)
+    {
+        var selection = RevenueIxbrlTaxonomySelector.Select(
+            new DateOnly(periodStartYear, 1, 1),
+            ElectedRegime.Small);
+
+        Assert.True(selection.AcceptedByRevenue);
+        Assert.Equal(expectedKey, selection.TaxonomyKey);
+        Assert.Equal(expectedTaxonomyDate, selection.TaxonomyDate);
+        Assert.Contains($"/FRS-102/{expectedTaxonomyDate}/", selection.SchemaRef);
+        Assert.Equal(new DateOnly(expectedEffectiveYear, 1, 1), selection.EffectiveForPeriodsStartingOnOrAfter);
+        Assert.Contains(selection.Sources, s => s.SourceId == IrishStatutoryRuleSources.RevenueAcceptedTaxonomies.SourceId);
+    }
+
     [Fact]
-    public async Task ReadinessProfile_ForPeriodBeforeRevenueTaxonomyEffectiveDate_FailsClosedToManualHandoff()
+    public async Task ReadinessProfile_ForPeriodBeforeRevenueAcceptedFrs102EffectiveDate_FailsClosedToManualHandoff()
     {
         await using var db = CreateDbContext();
         var period = await SeedCompanyPeriodAsync(
             db,
             CompanyType.Private,
             CompanySizeClass.Small,
-            new DateOnly(2023, 1, 1),
-            new DateOnly(2023, 12, 31));
+            new DateOnly(2018, 1, 1),
+            new DateOnly(2018, 12, 31));
         await SeedOfficersAsync(db, period.CompanyId);
         await SeedCroPackageAsync(db, period.Id, approvedBy: "Qualified Accountant");
         await SeedRevenuePackageAsync(db, period.Id, internalChecksPassed: true, externallyValidated: true);
@@ -195,7 +217,7 @@ public class FilingReadinessProfileTests
 
         Assert.False(selection.AcceptedByRevenue);
         Assert.Equal("manual-revenue-taxonomy-review-required", selection.TaxonomyKey);
-        Assert.Equal(new DateOnly(2024, 1, 1), selection.EffectiveForPeriodsStartingOnOrAfter);
+        Assert.Equal(new DateOnly(2019, 1, 1), selection.EffectiveForPeriodsStartingOnOrAfter);
         Assert.Contains(selection.Sources, source => source.SourceId == IrishStatutoryRuleSources.RevenueAcceptedTaxonomies.SourceId);
         Assert.False(profile.SupportedPath);
         Assert.True(profile.ManualProfessionalReviewRequired);

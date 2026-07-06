@@ -8944,12 +8944,30 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
-    public async Task IxbrlService_RejectsPeriodsBeforePinnedRevenueTaxonomyEffectiveDate()
+    public async Task IxbrlService_UsesRevenueAcceptedIrishExtension2023TaxonomyFor2023Periods()
     {
         await using var db = CreateDbContext();
         var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
         period.PeriodStart = new DateOnly(2023, 1, 1);
         period.PeriodEnd = new DateOnly(2023, 12, 31);
+        await db.SaveChangesAsync();
+        await MakePeriodReadyForCroDocumentsAsync(db, period);
+
+        var service = new IxbrlService(db, new FinancialStatementsService(db));
+
+        var xhtml = Encoding.UTF8.GetString(await service.GenerateIxbrlAsync(period.CompanyId, period.Id));
+
+        Assert.Contains("ie-FRS-102-2023-01-01.xsd", xhtml);
+        Assert.Contains("xmlns:ie-common=\"https://xbrl.frc.org.uk/ireland/common/2023-01-01\"", xhtml);
+    }
+
+    [Fact]
+    public async Task IxbrlService_RejectsPeriodsBeforeRevenueAcceptedFrs102EffectiveDate()
+    {
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        period.PeriodStart = new DateOnly(2018, 1, 1);
+        period.PeriodEnd = new DateOnly(2018, 12, 31);
         await db.SaveChangesAsync();
 
         var service = new IxbrlService(db, new FinancialStatementsService(db));
@@ -8958,7 +8976,7 @@ public class AccountsWorkflowTests
             service.GenerateIxbrlAsync(period.CompanyId, period.Id));
 
         Assert.Contains("no Revenue-accepted taxonomy is pinned", error.Message);
-        Assert.Contains("2023-01-01", error.Message);
+        Assert.Contains("2018-01-01", error.Message);
     }
 
     [Fact]
