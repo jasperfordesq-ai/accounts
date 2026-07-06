@@ -1,8 +1,4 @@
-import {
-  AlertTriangle,
-  ArrowRight,
-  CheckCircle2,
-} from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import type {
   AccountingPeriod,
@@ -12,7 +8,7 @@ import type {
   ReadinessScore,
   YearEndSummary,
 } from "@/lib/api";
-import { IssueDigest, MetricStrip, ReviewPanel, StatusBadge, type WorkflowItem } from "@/components/workbench";
+import { IssueDigest, MetricStrip, ReviewPanel, StatusBadge, WorkflowDecisionSummary, type WorkflowItem } from "@/components/workbench";
 import { AccountantWorkflowRail, type AccountantWorkflowStage } from "@/components/workbench/AccountantWorkflowRail";
 
 interface PeriodWorkbenchOverviewProps {
@@ -176,12 +172,6 @@ export function PeriodWorkbenchOverview({
     nextActionDetail: nextActionDetail(nextAction, uncategorisedCount),
   };
   const commandCentreTone = blockingIssues.length > 0 ? "bad" : warningIssues.length > 0 ? "warn" : "good";
-  const commandCentreIssueClass = {
-    bad: "text-red-800 dark:text-red-100",
-    warn: "text-amber-800 dark:text-amber-100",
-    good: "text-emerald-800 dark:text-emerald-100",
-  }[commandCentreTone];
-  const CommandCentreIssueIcon = commandCentreTone === "good" ? CheckCircle2 : AlertTriangle;
   const filingReviewHref = `${periodWorkspaceHref}?tab=filing`;
   const filingGatePathLabel = filingReadinessProfile?.manualProfessionalReviewRequired
     ? "Manual professional review"
@@ -207,37 +197,29 @@ export function PeriodWorkbenchOverview({
         description="Current blocker, completed evidence and next workflow action for this accounting period."
         actions={<StatusBadge tone={commandCentreTone}>{commandCentre.blockerSummary}</StatusBadge>}
       >
-        <div className="grid overflow-hidden rounded-md border border-[var(--border)] bg-[var(--surface)] md:grid-cols-3 md:divide-x md:divide-y-0 divide-y divide-[var(--border)]">
-          <div className="min-w-0 p-4">
-            <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">What is wrong?</p>
-            <p className="mt-2 text-sm font-semibold text-[var(--foreground)]">{commandCentre.blockerSummary}</p>
-            <div className={`mt-3 flex min-w-0 items-start gap-2 text-sm leading-6 ${commandCentreIssueClass}`}>
-              <CommandCentreIssueIcon className="mt-1 h-4 w-4 shrink-0" />
-              <span>{commandCentre.primaryIssue}</span>
-            </div>
-          </div>
-
-          <div className="min-w-0 p-4">
-            <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">What is ready?</p>
-            <p className="mt-2 text-sm font-semibold text-[var(--foreground)]">{commandCentre.readySummary}</p>
-            <p className="mt-3 text-sm leading-6 text-[var(--muted-foreground)]">{commandCentre.readyDetail}</p>
-          </div>
-
-          <div className="min-w-0 p-4">
-            <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">What must I do next?</p>
-            <p className="mt-2 text-sm font-semibold text-[var(--foreground)]">{commandCentre.nextActionLabel}</p>
-            <p className="mt-3 text-sm leading-6 text-[var(--muted-foreground)]">{commandCentre.nextActionDetail}</p>
-            {nextAction?.href && (
-              <Link
-                href={nextAction.href}
-                className="mt-4 inline-flex min-h-8 items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] px-3 text-xs font-semibold text-[var(--foreground)] hover:border-[var(--ring)]"
-              >
-                Open {nextAction.label}
-                <ArrowRight className="h-3.5 w-3.5" />
-              </Link>
-            )}
-          </div>
-        </div>
+        <WorkflowDecisionSummary
+          items={[
+            {
+              title: "What is wrong?",
+              tone: commandCentreTone,
+              summary: commandCentre.blockerSummary,
+              detail: commandCentre.primaryIssue,
+            },
+            {
+              title: "What is ready?",
+              tone: readyStages.length > 0 ? "good" : "warn",
+              summary: commandCentre.readySummary,
+              detail: commandCentre.readyDetail,
+            },
+            {
+              title: "What must I do next?",
+              tone: nextAction?.state === "blocked" ? "bad" : nextAction?.state === "active" ? "info" : "warn",
+              summary: commandCentre.nextActionLabel,
+              detail: commandCentre.nextActionDetail,
+              action: nextAction?.href ? { href: nextAction.href, label: `Open ${nextAction.label}` } : undefined,
+            },
+          ]}
+        />
       </ReviewPanel>
 
       <ReviewPanel

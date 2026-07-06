@@ -77,6 +77,22 @@ export interface IssueDigestProps {
   className?: string;
 }
 
+export interface WorkflowDecisionSummaryItem {
+  title: string;
+  tone: Tone;
+  summary: ReactNode;
+  detail: ReactNode;
+  action?: {
+    href: string;
+    label: string;
+  };
+}
+
+export interface WorkflowDecisionSummaryProps {
+  items: WorkflowDecisionSummaryItem[];
+  ariaLabel?: string;
+}
+
 export interface ReleaseBlockerSummaryItem {
   code: string;
   trackCode?: string;
@@ -612,6 +628,43 @@ export function ReleaseBlockerSummary({
   );
 }
 
+export function WorkflowDecisionSummary({
+  items,
+  ariaLabel = "Workflow decision summary",
+}: WorkflowDecisionSummaryProps) {
+  return (
+    <section
+      aria-label={ariaLabel}
+      data-workbench-decision-summary="true"
+      className="grid overflow-hidden rounded-md border border-[var(--border)] bg-[var(--surface)] md:grid-cols-3 md:divide-x md:divide-y-0 divide-y divide-[var(--border)]"
+    >
+      {items.map((item) => {
+        const Icon = item.tone === "good" ? CheckCircle2 : item.tone === "info" ? CircleDot : AlertTriangle;
+
+        return (
+          <div key={item.title} className="min-w-0 p-4">
+            <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">{item.title}</p>
+            <p className="mt-2 text-sm font-semibold text-[var(--foreground)]">{item.summary}</p>
+            <div className={`mt-3 flex min-w-0 items-start gap-2 text-sm leading-6 ${decisionSummaryToneClass(item.tone)}`}>
+              <Icon className="mt-1 h-4 w-4 shrink-0" />
+              <span>{item.detail}</span>
+            </div>
+            {item.action && (
+              <Link
+                href={item.action.href}
+                className="mt-4 inline-flex min-h-8 items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] px-3 text-xs font-semibold text-[var(--foreground)] hover:border-[var(--ring)]"
+              >
+                {item.action.label}
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            )}
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+
 export function IssueDigest({
   title,
   description,
@@ -709,6 +762,14 @@ function releaseBlockerTone(blocker: ReleaseBlockerSummaryItem): Tone {
   if (blocker.severity === "critical" || blocker.riskRank <= 5) return "bad";
   if (blocker.severity === "high" || blocker.riskRank <= 30) return "warn";
   return "info";
+}
+
+function decisionSummaryToneClass(tone: Tone) {
+  if (tone === "bad") return "text-red-800 dark:text-red-100";
+  if (tone === "warn") return "text-amber-800 dark:text-amber-100";
+  if (tone === "good") return "text-emerald-800 dark:text-emerald-100";
+  if (tone === "info") return "text-sky-800 dark:text-sky-100";
+  return "text-[var(--muted-foreground)]";
 }
 
 function issueKey(message: string, index: number) {

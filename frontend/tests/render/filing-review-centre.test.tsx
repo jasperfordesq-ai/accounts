@@ -43,6 +43,7 @@ describe("FilingReviewCentre", () => {
 
     const decisionCentre = screen.getByLabelText("Filing decision centre");
     expect(within(decisionCentre).getByText("Filing decision centre")).toBeInTheDocument();
+    expect(decisionCentre.querySelector("[data-workbench-decision-summary='true']")).toBeInTheDocument();
     expect(within(decisionCentre).getByText("What is wrong?")).toBeInTheDocument();
     expect(within(decisionCentre).getByText("Generate the CRO accounts PDF before approval or submission.")).toBeInTheDocument();
     expect(within(decisionCentre).getByText("What is ready?")).toBeInTheDocument();

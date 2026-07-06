@@ -16,6 +16,7 @@ import {
   ReviewPanel,
   SectionHeader,
   StatusBadge,
+  WorkflowDecisionSummary,
 } from "@/components/workbench";
 
 type FilingReviewAction = () => void | Promise<void>;
@@ -540,24 +541,28 @@ function FilingDecisionCentre({
         </StatusBadge>
       </div>
 
-      <div className="mt-4 grid gap-3 lg:grid-cols-3">
-        <DecisionSummaryCard
-          title="What is wrong?"
-          tone={filingIssues.blockers.length > 0 ? "bad" : filingIssues.warnings.length > 0 ? "warn" : "good"}
-          items={wrongItems}
-          maxItems={2}
-        />
-        <DecisionSummaryCard
-          title="What is ready?"
-          tone={readyItems.length > 0 ? "good" : "warn"}
-          items={readyItems.length > 0 ? readyItems : ["No required evidence is complete yet."]}
-          maxItems={3}
-        />
-        <DecisionSummaryCard
-          title="What must I do next?"
-          tone={nextActions.length > 0 ? "info" : filingReadinessProfile.manualProfessionalReviewRequired ? "bad" : "warn"}
-          items={nextItems}
-          maxItems={3}
+      <div className="mt-4">
+        <WorkflowDecisionSummary
+          items={[
+            {
+              title: "What is wrong?",
+              tone: filingIssues.blockers.length > 0 ? "bad" : filingIssues.warnings.length > 0 ? "warn" : "good",
+              summary: formatDecisionItemCount(wrongItems.length, "issue"),
+              detail: formatDecisionItems(wrongItems, 2),
+            },
+            {
+              title: "What is ready?",
+              tone: readyItems.length > 0 ? "good" : "warn",
+              summary: formatDecisionItemCount(readyItems.length, "evidence item"),
+              detail: formatDecisionItems(readyItems.length > 0 ? readyItems : ["No required evidence is complete yet."], 3),
+            },
+            {
+              title: "What must I do next?",
+              tone: nextActions.length > 0 ? "info" : filingReadinessProfile.manualProfessionalReviewRequired ? "bad" : "warn",
+              summary: formatDecisionItemCount(nextItems.length, "action"),
+              detail: formatDecisionItems(nextItems, 3),
+            },
+          ]}
         />
       </div>
 
@@ -577,45 +582,16 @@ function FilingDecisionCentre({
   );
 }
 
-function DecisionSummaryCard({
-  title,
-  tone,
-  items,
-  maxItems,
-}: {
-  title: string;
-  tone: "default" | "good" | "warn" | "bad" | "info";
-  items: string[];
-  maxItems: number;
-}) {
+function formatDecisionItems(items: string[], maxItems: number) {
   const visibleItems = items.slice(0, maxItems);
   const hiddenCount = Math.max(0, items.length - maxItems);
-  const textClass = tone === "bad"
-    ? "text-red-800 dark:text-red-100"
-    : tone === "warn"
-      ? "text-amber-900 dark:text-amber-100"
-      : "text-[var(--foreground)]";
+  const visibleText = visibleItems.join("; ");
 
-  return (
-    <article className="min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
-      <div className="flex items-start justify-between gap-3">
-        <h3 className="text-sm font-semibold text-[var(--foreground)]">{title}</h3>
-        <StatusBadge tone={tone}>{visibleItems.length}</StatusBadge>
-      </div>
-      <ul className="mt-3 space-y-1.5">
-        {visibleItems.map((item) => (
-          <li key={item} className={`text-sm leading-6 ${textClass}`}>
-            {item}
-          </li>
-        ))}
-      </ul>
-      {hiddenCount > 0 && (
-        <p className="mt-2 text-xs font-medium text-[var(--muted-foreground)]">
-          {hiddenCount} more {hiddenCount === 1 ? "item" : "items"}
-        </p>
-      )}
-    </article>
-  );
+  return hiddenCount > 0 ? `${visibleText}; ${hiddenCount} more ${hiddenCount === 1 ? "item" : "items"}` : visibleText;
+}
+
+function formatDecisionItemCount(count: number, singular: string) {
+  return `${count} ${count === 1 ? singular : `${singular}s`}`;
 }
 
 function SignOffPacketPanel({ packet }: { packet: FilingReadinessSignOffPacket }) {

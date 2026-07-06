@@ -18,6 +18,7 @@ import {
   WorkbenchEmptyState,
   WorkbenchErrorState,
   WorkbenchLoadingState,
+  WorkflowDecisionSummary,
   WorkflowRail,
 } from "@/components/workbench";
 
@@ -192,6 +193,46 @@ describe("workbench primitives", () => {
     expect(screen.getByText("Manual evidence open")).toBeInTheDocument();
     expect(within(actionBar).getByRole("group", { name: "Available filing actions" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Approve for filing" })).toBeDisabled();
+  });
+
+  it("renders the shared what-is-wrong-ready-next workflow decision summary", () => {
+    render(
+      <WorkflowDecisionSummary
+        items={[
+          {
+            title: "What is wrong?",
+            tone: "bad",
+            summary: "2 blockers require attention",
+            detail: "Balance sheet does not balance",
+          },
+          {
+            title: "What is ready?",
+            tone: "good",
+            summary: "3 stages ready",
+            detail: "Setup, Import, Classify",
+          },
+          {
+            title: "What must I do next?",
+            tone: "info",
+            summary: "Categorise",
+            detail: "4 uncategorised transactions",
+            action: { href: "/companies/7/periods/3?tab=categorise", label: "Open Categorise" },
+          },
+        ]}
+      />,
+    );
+
+    const summary = screen.getByRole("region", { name: "Workflow decision summary" });
+    expect(summary).toHaveAttribute("data-workbench-decision-summary", "true");
+    expect(within(summary).getByText("What is wrong?")).toBeInTheDocument();
+    expect(within(summary).getByText("2 blockers require attention")).toBeInTheDocument();
+    expect(within(summary).getByText("Balance sheet does not balance")).toBeInTheDocument();
+    expect(within(summary).getByText("What is ready?")).toBeInTheDocument();
+    expect(within(summary).getByText("Setup, Import, Classify")).toBeInTheDocument();
+    expect(within(summary).getByRole("link", { name: "Open Categorise" })).toHaveAttribute(
+      "href",
+      "/companies/7/periods/3?tab=categorise",
+    );
   });
 
   it("renders deduplicated legal source links with effective dates", () => {

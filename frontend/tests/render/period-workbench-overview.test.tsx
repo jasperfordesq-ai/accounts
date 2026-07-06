@@ -30,6 +30,7 @@ describe("PeriodWorkbenchOverview", () => {
     const commandCentre = screen.getByRole("heading", { name: "Period command centre" }).closest("section");
     expect(commandCentre).not.toBeNull();
     const command = within(commandCentre!);
+    expect(commandCentre!.querySelector("[data-workbench-decision-summary='true']")).toBeInTheDocument();
     expect(command.getByText("What is wrong?")).toBeInTheDocument();
     expect(command.getAllByText("5 blockers require attention")).toHaveLength(2);
     expect(command.getByText("What is ready?")).toBeInTheDocument();
