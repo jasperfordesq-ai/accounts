@@ -58,6 +58,26 @@ public class FilingReadinessProfileTests
             source => source.SourceId == IrishStatutoryRuleSources.CroFinancialStatementsRequirements.SourceId);
     }
 
+    [Fact]
+    public async Task ReadinessProfile_ForMicroRegime_TiesFilingRegimeEvidenceToFrs105()
+    {
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, CompanyType.Private, CompanySizeClass.Micro);
+        await SeedOfficersAsync(db, period.CompanyId);
+        await SeedCroPackageAsync(db, period.Id, approvedBy: "Qualified Accountant");
+        await SeedRevenuePackageAsync(db, period.Id, internalChecksPassed: true, externallyValidated: true);
+
+        var service = new FilingReadinessProfileService(db);
+
+        var profile = await service.GetProfileAsync(period.CompanyId, period.Id);
+
+        var filingRegimeEvidence = Assert.Single(profile.RequiredEvidence, e => e.Code == "filing-regime");
+        Assert.Contains(filingRegimeEvidence.Sources, source => source.SourceId == IrishStatutoryRuleSources.FrcFrs105.SourceId);
+        var statutoryBasisStep = Assert.Single(profile.SignOffPacket.Steps, step => step.Code == "statutory-basis");
+        Assert.Contains(statutoryBasisStep.Sources, source => source.SourceId == IrishStatutoryRuleSources.FrcFrs105.SourceId);
+        Assert.Contains(profile.SourceReferences, source => source.SourceId == IrishStatutoryRuleSources.FrcFrs105.SourceId);
+    }
+
     [Theory]
     [InlineData(CompanyType.PublicLimitedCompany)]
     [InlineData(CompanyType.PrivateUnlimited)]

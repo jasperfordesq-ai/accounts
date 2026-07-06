@@ -171,13 +171,16 @@ public class FilingReadinessProfileService(AccountsDbContext db)
         if (!sizeClass.HasValue)
             Block("size-classification-required", "Size classification must be completed before filing readiness can be assessed.", IrishStatutoryRuleSources.CroFinancialStatementsRequirements);
 
+        LegalSourceReference[] filingRegimeSources = regime == ElectedRegime.Micro
+            ? [IrishStatutoryRuleSources.CroFinancialStatementsRequirements, IrishStatutoryRuleSources.FrcFrs105]
+            : [IrishStatutoryRuleSources.CroFinancialStatementsRequirements, IrishStatutoryRuleSources.FrcFrs102];
+
         RequireEvidence(
             "filing-regime",
             "Filing regime and required statement set determined",
             period.FilingRegime is not null,
             regime?.ToString() ?? "Run filing regime determination after classification.",
-            IrishStatutoryRuleSources.CroFinancialStatementsRequirements,
-            IrishStatutoryRuleSources.FrcFrs102);
+            filingRegimeSources);
         if (period.FilingRegime is null)
             Block("filing-regime-required", "Filing regime must be determined before statutory outputs are approved.", IrishStatutoryRuleSources.CroFinancialStatementsRequirements);
 
@@ -318,6 +321,7 @@ public class FilingReadinessProfileService(AccountsDbContext db)
             manualHandoff,
             company.IsCharitableOrganisation,
             auditRequired,
+            regime,
             reviewState,
             cro,
             revenue,
@@ -423,6 +427,7 @@ public class FilingReadinessProfileService(AccountsDbContext db)
         bool manualHandoff,
         bool charityReportingRequired,
         bool auditReportRequired,
+        ElectedRegime? regime,
         string reviewState,
         CroFilingPackage? cro,
         RevenueFilingPackage? revenue,
@@ -463,6 +468,7 @@ public class FilingReadinessProfileService(AccountsDbContext db)
                 manualHandoff,
                 charityReportingRequired,
                 auditReportRequired,
+                regime,
                 accountantApproved,
                 reviewState,
                 cro,
@@ -499,6 +505,7 @@ public class FilingReadinessProfileService(AccountsDbContext db)
         bool manualHandoff,
         bool charityReportingRequired,
         bool auditReportRequired,
+        ElectedRegime? regime,
         bool accountantApproved,
         string reviewState,
         CroFilingPackage? cro,
@@ -513,6 +520,9 @@ public class FilingReadinessProfileService(AccountsDbContext db)
         var generatedOutputsComplete = EvidenceSatisfied(evidence, "cro-accounts-pdf")
             && EvidenceSatisfied(evidence, "ixbrl-internal-checks");
         var externalValidationComplete = revenue?.IxbrlValidated == true;
+        var accountingStandardSource = regime == ElectedRegime.Micro
+            ? IrishStatutoryRuleSources.FrcFrs105
+            : IrishStatutoryRuleSources.FrcFrs102;
 
         var steps = new List<FilingReadinessSignOffStep>
         {
@@ -531,7 +541,7 @@ public class FilingReadinessProfileService(AccountsDbContext db)
                 statutoryEvidenceComplete
                     ? "Size classification and filing regime evidence are recorded."
                     : "Complete size classification and filing regime evidence before review.",
-                [IrishStatutoryRuleSources.CroFinancialStatementsRequirements, IrishStatutoryRuleSources.FrcFrs102]),
+                [IrishStatutoryRuleSources.CroFinancialStatementsRequirements, accountingStandardSource]),
             new FilingReadinessSignOffStep(
                 "directors-certification",
                 "Director and secretary certification",
