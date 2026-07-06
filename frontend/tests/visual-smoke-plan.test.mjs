@@ -78,7 +78,7 @@ describe("visual smoke plan", () => {
       viewportName: "desktop",
       fileName: "dashboard-light-desktop.png",
       artifactPath: "artifacts/visual-smoke/dashboard-light-desktop.png",
-      expectedText: "Production Readiness",
+      expectedText: "Firm command centre",
       openFilingTab: false,
       reviewStatus: "required-review",
       layoutChecks: visualSmokeLayoutChecks,
@@ -156,6 +156,8 @@ describe("visual smoke plan", () => {
     assert.match(script, /visual-smoke-manifest\.json/);
     assert.match(script, /routeAudits/);
     assert.match(script, /reviewProtocol/);
+    assert.match(script, /Firm command centre/);
+    assert.doesNotMatch(script, /mainText\(page, "Dashboard", \{ exact: true \}\)/);
     assert.match(script, /a\[href\^="\/companies\/"\]\[href\*="\/periods\/"\]/);
     assert.match(script, /Company command centre/);
     assert.doesNotMatch(script, /mainText\(page, "Accounting Periods"\)/);

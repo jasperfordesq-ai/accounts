@@ -59,7 +59,7 @@ export const visualSmokeRoutes = [
     label: "Dashboard",
     description: "Accountant queue, blockers, deadlines and production readiness overview.",
     routeKey: "dashboard",
-    expectedText: "Production Readiness",
+    expectedText: "Firm command centre",
     workflowStages: ACCOUNTANT_WORKFLOW_STAGES,
     openFilingTab: false,
   },

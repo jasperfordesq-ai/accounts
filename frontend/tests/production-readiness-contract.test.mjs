@@ -232,7 +232,7 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.deepEqual(parsed.visualQaCoverage.layoutChecks, visualSmokeLayoutChecks);
   assert.equal(parsed.visualQaCoverage.artifacts[0].artifactPath, "artifacts/visual-smoke/dashboard-light-desktop.png");
   assert.equal(parsed.visualQaCoverage.artifacts[0].routeKey, "dashboard");
-  assert.equal(parsed.visualQaCoverage.artifacts[0].requiredText, "Production Readiness");
+  assert.equal(parsed.visualQaCoverage.artifacts[0].requiredText, "Firm command centre");
   assert.deepEqual(parsed.visualQaCoverage.artifacts[0].layoutChecks, ["browser-console-errors", "page-horizontal-overflow", "visible-text-overlap"]);
 });
 
