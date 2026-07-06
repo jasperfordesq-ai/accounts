@@ -150,8 +150,25 @@ public static class IrishStatutoryRuleSources
 
 public static class RevenueIxbrlTaxonomySelector
 {
+    private static readonly DateOnly IrishExtension2025EffectiveDate = new(2024, 1, 1);
+
     public static RevenueIxbrlTaxonomySelection Select(DateOnly periodStart, ElectedRegime? regime)
     {
+        if (periodStart < IrishExtension2025EffectiveDate)
+        {
+            return new RevenueIxbrlTaxonomySelection(
+                "manual-revenue-taxonomy-review-required",
+                "",
+                "Manual Revenue taxonomy review required for periods before 2024-01-01",
+                "",
+                false,
+                IrishExtension2025EffectiveDate,
+                [
+                    IrishStatutoryRuleSources.RevenueAcceptedTaxonomies,
+                    IrishStatutoryRuleSources.RevenueIxbrlOverview
+                ]);
+        }
+
         var sources = new[]
         {
             IrishStatutoryRuleSources.RevenueAcceptedTaxonomies,
@@ -164,7 +181,7 @@ public static class RevenueIxbrlTaxonomySelector
             "Irish Extension 2025 FRS 102 taxonomy accepted by Revenue",
             "https://xbrl.frc.org.uk/ireland/FRS-102/2025-01-01/ie-FRS-102-2025-01-01.xsd",
             true,
-            new DateOnly(2024, 1, 1),
+            IrishExtension2025EffectiveDate,
             sources);
     }
 }

@@ -176,6 +176,34 @@ public class FilingReadinessProfileTests
         Assert.Contains(selection.Sources, s => s.SourceId == IrishStatutoryRuleSources.RevenueAcceptedTaxonomies.SourceId);
     }
 
+    [Fact]
+    public async Task ReadinessProfile_ForPeriodBeforeRevenueTaxonomyEffectiveDate_FailsClosedToManualHandoff()
+    {
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(
+            db,
+            CompanyType.Private,
+            CompanySizeClass.Small,
+            new DateOnly(2023, 1, 1),
+            new DateOnly(2023, 12, 31));
+        await SeedOfficersAsync(db, period.CompanyId);
+        await SeedCroPackageAsync(db, period.Id, approvedBy: "Qualified Accountant");
+        await SeedRevenuePackageAsync(db, period.Id, internalChecksPassed: true, externallyValidated: true);
+
+        var selection = RevenueIxbrlTaxonomySelector.Select(period.PeriodStart, ElectedRegime.SmallAbridged);
+        var profile = await new FilingReadinessProfileService(db).GetProfileAsync(period.CompanyId, period.Id);
+
+        Assert.False(selection.AcceptedByRevenue);
+        Assert.Equal("manual-revenue-taxonomy-review-required", selection.TaxonomyKey);
+        Assert.Equal(new DateOnly(2024, 1, 1), selection.EffectiveForPeriodsStartingOnOrAfter);
+        Assert.Contains(selection.Sources, source => source.SourceId == IrishStatutoryRuleSources.RevenueAcceptedTaxonomies.SourceId);
+        Assert.False(profile.SupportedPath);
+        Assert.True(profile.ManualProfessionalReviewRequired);
+        Assert.Empty(profile.AllowedNextActions);
+        Assert.Contains(profile.BlockingIssues, issue => issue.Code == "taxonomy-not-revenue-accepted");
+        Assert.Equal("manual-handoff", profile.SignOffPacket.State);
+    }
+
     private static AccountsDbContext CreateDbContext()
     {
         var options = new DbContextOptionsBuilder<AccountsDbContext>()
@@ -187,7 +215,9 @@ public class FilingReadinessProfileTests
     private static async Task<AccountingPeriod> SeedCompanyPeriodAsync(
         AccountsDbContext db,
         CompanyType companyType,
-        CompanySizeClass sizeClass)
+        CompanySizeClass sizeClass,
+        DateOnly? periodStart = null,
+        DateOnly? periodEnd = null)
     {
         var company = new Company
         {
@@ -206,8 +236,8 @@ public class FilingReadinessProfileTests
         {
             CompanyId = company.Id,
             Company = company,
-            PeriodStart = new DateOnly(2026, 1, 1),
-            PeriodEnd = new DateOnly(2026, 12, 31),
+            PeriodStart = periodStart ?? new DateOnly(2026, 1, 1),
+            PeriodEnd = periodEnd ?? new DateOnly(2026, 12, 31),
             IsFirstYear = false
         };
         db.AccountingPeriods.Add(period);

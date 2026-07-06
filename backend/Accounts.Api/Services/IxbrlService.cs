@@ -42,6 +42,10 @@ public class IxbrlService(AccountsDbContext db, FinancialStatementsService state
 
         var company = period.Company;
         var taxonomy = RevenueIxbrlTaxonomySelector.Select(period.PeriodStart, period.FilingRegime?.ElectedRegime);
+        if (!taxonomy.AcceptedByRevenue)
+            throw new BusinessRuleException(
+                $"Cannot generate iXBRL for period start {period.PeriodStart:yyyy-MM-dd} because no Revenue-accepted taxonomy is pinned for that effective date.");
+
         var irishFrs102Namespace = $"https://xbrl.frc.org.uk/ireland/FRS-102/{taxonomy.TaxonomyDate}";
         var irishCommonNamespace = $"https://xbrl.frc.org.uk/ireland/common/{taxonomy.TaxonomyDate}";
         var coreFrs102Namespace = $"http://xbrl.frc.org.uk/FRS-102/{taxonomy.TaxonomyDate}";

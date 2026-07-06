@@ -8944,6 +8944,24 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task IxbrlService_RejectsPeriodsBeforePinnedRevenueTaxonomyEffectiveDate()
+    {
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        period.PeriodStart = new DateOnly(2023, 1, 1);
+        period.PeriodEnd = new DateOnly(2023, 12, 31);
+        await db.SaveChangesAsync();
+
+        var service = new IxbrlService(db, new FinancialStatementsService(db));
+
+        var error = await Assert.ThrowsAsync<BusinessRuleException>(() =>
+            service.GenerateIxbrlAsync(period.CompanyId, period.Id));
+
+        Assert.Contains("no Revenue-accepted taxonomy is pinned", error.Message);
+        Assert.Contains("2023-01-01", error.Message);
+    }
+
+    [Fact]
     public async Task IxbrlService_RejectsMismatchedCompanyPeriodForRawGeneration()
     {
         await using var db = CreateDbContext();
