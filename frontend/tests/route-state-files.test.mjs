@@ -195,6 +195,23 @@ test("period year-end workspace composes questionnaire, completeness and summary
   }
 });
 
+test("year-end questionnaire route delegates reusable section shell to a focused component", () => {
+  const routeFile = new URL("companies/[companyId]/periods/[periodId]/year-end/page.tsx", appDir);
+  const componentFile = new URL("../src/components/period/YearEndQuestionnaireSection.tsx", import.meta.url);
+
+  assert.ok(existsSync(componentFile), "YearEndQuestionnaireSection should exist as the reusable questionnaire section shell");
+
+  const routeSource = readFileSync(routeFile, "utf8");
+  const componentSource = readFileSync(componentFile, "utf8");
+
+  assert.match(routeSource, /YearEndQuestionnaireSection/, "year-end questionnaire route should import the focused section shell");
+  assert.doesNotMatch(routeSource, /function\s+Section\s*\(/, "year-end questionnaire route should not own reusable section shell markup");
+  assert.doesNotMatch(routeSource, /Collapse.+section/, "year-end questionnaire route should not own section expand/collapse accessibility text");
+  assert.match(componentSource, /export function YearEndQuestionnaireSection/, "section shell should be exported for reuse and render tests");
+  assert.match(componentSource, /Confirm reviewed/, "section shell should own accountant section review action copy");
+  assert.match(componentSource, /aria-expanded/, "section shell should own accessible collapse state");
+});
+
 test("period adjustments route delegates generation, filters and approval composition", () => {
   const periodRoute = new URL("companies/[companyId]/periods/[periodId]/page.tsx", appDir);
   const source = readFileSync(periodRoute, "utf8");
