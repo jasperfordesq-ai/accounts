@@ -246,6 +246,23 @@ test("year-end questionnaire route delegates debtor and creditor money-list sect
   assert.match(componentSource, /Due < 1 year/, "money-list shell should preserve creditor maturity cues");
 });
 
+test("year-end questionnaire route delegates fixed asset working-paper section", () => {
+  const routeFile = new URL("companies/[companyId]/periods/[periodId]/year-end/page.tsx", appDir);
+  const componentFile = new URL("../src/components/period/YearEndFixedAssetsSection.tsx", import.meta.url);
+
+  assert.ok(existsSync(componentFile), "YearEndFixedAssetsSection should exist for fixed asset working-paper capture");
+
+  const routeSource = readFileSync(routeFile, "utf8");
+  const componentSource = readFileSync(componentFile, "utf8");
+
+  assert.match(routeSource, /YearEndFixedAssetsSection/, "year-end questionnaire route should render the focused fixed asset shell");
+  assert.doesNotMatch(routeSource, /aria-label="Asset name"/, "year-end questionnaire route should not own asset entry fields");
+  assert.doesNotMatch(routeSource, /aria-label="Asset category"/, "year-end questionnaire route should not own asset category fields");
+  assert.doesNotMatch(routeSource, /Delete asset/, "year-end questionnaire route should not own fixed asset delete copy");
+  assert.match(componentSource, /Useful Life \(years\)/, "fixed asset shell should preserve useful-life capture");
+  assert.match(componentSource, /Depreciation Method/, "fixed asset shell should preserve depreciation method capture");
+});
+
 test("period adjustments route delegates generation, filters and approval composition", () => {
   const periodRoute = new URL("companies/[companyId]/periods/[periodId]/page.tsx", appDir);
   const source = readFileSync(periodRoute, "utf8");

@@ -27,6 +27,7 @@ import { LoansManager } from "@/components/LoansManager";
 import { DirectorLoansManager, type DirectorOption } from "@/components/DirectorLoansManager";
 import { useAuth } from "@/components/AuthProvider";
 import { YearEndQuestionnaireHeader } from "@/components/period/YearEndQuestionnaireHeader";
+import { YearEndFixedAssetsSection } from "@/components/period/YearEndFixedAssetsSection";
 import { YearEndMoneyListSection } from "@/components/period/YearEndMoneyListSection";
 import { YearEndQuestionnaireSection as Section } from "@/components/period/YearEndQuestionnaireSection";
 import { useUnsavedChanges } from "@/lib/useUnsavedChanges";
@@ -671,131 +672,14 @@ export default function YearEndQuestionnairePage({
           reviewSaving={savingReviewKey === "fixed-assets"}
           onConfirmReview={() => handleConfirmReview("fixed-assets", fixedAssets.length === 0 ? "Confirmed no fixed assets requiring disclosure or depreciation for this period." : undefined)}
         >
-          {fixedAssets.length > 0 && (
-            <div className="space-y-2 mb-4">
-              {fixedAssets.map((a) => (
-                <div
-                  key={a.id}
-                  className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-neutral-700 px-4 py-3 dark:bg-neutral-800/50"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{a.name}</p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <Chip variant="soft" size="sm" color="default">{a.category}</Chip>
-                      <span className="text-xs text-gray-400 dark:text-gray-500">
-                        {a.usefulLifeYears}yr {a.depreciationMethod}
-                      </span>
-                      <span className="text-xs text-gray-400 dark:text-gray-500">
-                        Acquired {new Date(a.acquisitionDate).toLocaleDateString("en-IE")}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                      {formatCurrency(a.cost)}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => a.id && handleDeleteAsset(a.id)}
-                      className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400"
-                      aria-label={`Delete asset ${a.name}`}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="space-y-3">
-            <div className="grid grid-cols-12 gap-3 items-end">
-              <div className="col-span-4">
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Asset Name</label>
-                <input
-                  type="text"
-                  className={inputClass}
-                  placeholder="e.g. Company Van"
-                  value={newAsset.name}
-                  onChange={(e) => setNewAsset({ ...newAsset, name: e.target.value })}
-                  aria-label="Asset name"
-                />
-              </div>
-              <div className="col-span-3">
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Category</label>
-                <select
-                  className={selectClass}
-                  value={newAsset.category}
-                  onChange={(e) => setNewAsset({ ...newAsset, category: e.target.value })}
-                  title="Asset category"
-                  aria-label="Asset category"
-                >
-                  <option value="Equipment">Equipment</option>
-                  <option value="Vehicles">Vehicles</option>
-                  <option value="Property">Property</option>
-                  <option value="Furniture">Furniture &amp; Fixtures</option>
-                  <option value="IT">IT Equipment</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
-              <div className="col-span-2">
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Cost</label>
-                <input
-                  type="number"
-                  className={inputClass}
-                  placeholder="0.00"
-                  value={newAsset.cost || ""}
-                  onChange={(e) => setNewAsset({ ...newAsset, cost: Number(e.target.value) })}
-                  aria-label="Asset cost"
-                />
-              </div>
-              <div className="col-span-3">
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Acquisition Date</label>
-                <input
-                  type="date"
-                  className={inputClass}
-                  value={newAsset.acquisitionDate}
-                  onChange={(e) => setNewAsset({ ...newAsset, acquisitionDate: e.target.value })}
-                  aria-label="Asset acquisition date"
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-12 gap-3 items-end">
-              <div className="col-span-3">
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Useful Life (years)</label>
-                <input
-                  type="number"
-                  className={inputClass}
-                  value={newAsset.usefulLifeYears}
-                  onChange={(e) => setNewAsset({ ...newAsset, usefulLifeYears: Number(e.target.value) })}
-                  aria-label="Useful life in years"
-                />
-              </div>
-              <div className="col-span-4">
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Depreciation Method</label>
-                <select
-                  className={selectClass}
-                  value={newAsset.depreciationMethod}
-                  onChange={(e) => setNewAsset({ ...newAsset, depreciationMethod: e.target.value })}
-                  title="Depreciation method"
-                  aria-label="Depreciation method"
-                >
-                  <option value="StraightLine">Straight Line</option>
-                  <option value="ReducingBalance">Reducing Balance</option>
-                </select>
-              </div>
-              <div className="col-span-5 flex justify-end">
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onPress={handleAddAsset}
-                  isDisabled={savingSection === "assets"}
-                >
-                  {savingSection === "assets" ? <Spinner size="sm" /> : <><Plus className="w-4 h-4 mr-1" /> Add Asset</>}
-                </Button>
-              </div>
-            </div>
-          </div>
+          <YearEndFixedAssetsSection
+            assets={fixedAssets}
+            draft={newAsset}
+            saving={savingSection === "assets"}
+            onDraftChange={setNewAsset}
+            onAdd={handleAddAsset}
+            onDelete={handleDeleteAsset}
+          />
         </Section>
 
         {/* 4. Stock & Inventory */}
