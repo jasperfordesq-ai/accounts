@@ -407,6 +407,24 @@ test("year-end questionnaire route delegates contingent-liabilities working-pape
   assert.match(componentSource, /danger/, "contingent-liabilities shell should preserve probable risk colour");
 });
 
+test("year-end questionnaire route delegates going-concern working-paper section", () => {
+  const routeFile = new URL("companies/[companyId]/periods/[periodId]/year-end/page.tsx", appDir);
+  const componentFile = new URL("../src/components/period/YearEndGoingConcernSection.tsx", import.meta.url);
+
+  assert.ok(existsSync(componentFile), "YearEndGoingConcernSection should exist for going-concern evidence review");
+
+  const routeSource = readFileSync(routeFile, "utf8");
+  const componentSource = readFileSync(componentFile, "utf8");
+
+  assert.match(routeSource, /YearEndGoingConcernSection/, "year-end questionnaire route should render the focused going-concern shell");
+  assert.doesNotMatch(routeSource, /aria-label="Going concern note"/, "year-end questionnaire route should not own going-concern note fields");
+  assert.doesNotMatch(routeSource, /Warning: Going concern is not confirmed/, "year-end questionnaire route should not own going-concern warning copy");
+  assert.doesNotMatch(routeSource, /Save Going Concern/, "year-end questionnaire route should not own going-concern save copy");
+  assert.match(componentSource, /Warning: Going concern is not confirmed/, "going-concern shell should preserve material uncertainty warning");
+  assert.match(componentSource, /Material uncertainty \/ going concern note/, "going-concern shell should preserve note prompt");
+  assert.match(componentSource, /The directors confirm the company is a going concern/, "going-concern shell should preserve director confirmation copy");
+});
+
 test("period adjustments route delegates generation, filters and approval composition", () => {
   const periodRoute = new URL("companies/[companyId]/periods/[periodId]/page.tsx", appDir);
   const source = readFileSync(periodRoute, "utf8");
