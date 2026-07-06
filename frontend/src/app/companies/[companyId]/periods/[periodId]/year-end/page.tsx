@@ -26,6 +26,7 @@ import { toast } from "sonner";
 import { LoansManager } from "@/components/LoansManager";
 import { DirectorLoansManager, type DirectorOption } from "@/components/DirectorLoansManager";
 import { useAuth } from "@/components/AuthProvider";
+import { YearEndDividendsSection } from "@/components/period/YearEndDividendsSection";
 import { YearEndQuestionnaireHeader } from "@/components/period/YearEndQuestionnaireHeader";
 import { YearEndFixedAssetsSection } from "@/components/period/YearEndFixedAssetsSection";
 import { YearEndInventorySection } from "@/components/period/YearEndInventorySection";
@@ -766,87 +767,14 @@ export default function YearEndQuestionnairePage({
           reviewSaving={savingReviewKey === "dividends"}
           onConfirmReview={() => handleConfirmReview("dividends", dividends.length === 0 ? "Confirmed no dividends were declared or paid during the period." : undefined)}
         >
-          {dividends.length > 0 && (
-            <div className="space-y-2 mb-4">
-              {dividends.map((d) => (
-                <div
-                  key={d.id}
-                  className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-neutral-700 px-4 py-3 dark:bg-neutral-800/50"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                      {formatCurrency(d.amount)}
-                    </p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      {d.dateDeclared && (
-                        <span className="text-xs text-gray-400 dark:text-gray-500">
-                          Declared: {new Date(d.dateDeclared).toLocaleDateString("en-IE")}
-                        </span>
-                      )}
-                      {d.datePaid && (
-                        <span className="text-xs text-gray-400 dark:text-gray-500">
-                          Paid: {new Date(d.datePaid).toLocaleDateString("en-IE")}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => d.id && handleDeleteDividend(d.id)}
-                    className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400"
-                    aria-label={`Delete dividend of ${formatCurrency(d.amount)}`}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="grid grid-cols-12 gap-3 items-end">
-            <div className="col-span-3">
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Amount</label>
-              <input
-                type="number"
-                className={inputClass}
-                placeholder="0.00"
-                value={newDividend.amount || ""}
-                onChange={(e) => setNewDividend({ ...newDividend, amount: Number(e.target.value) })}
-                aria-label="Dividend amount"
-              />
-            </div>
-            <div className="col-span-3">
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Date Declared</label>
-              <input
-                type="date"
-                className={inputClass}
-                value={newDividend.dateDeclared}
-                onChange={(e) => setNewDividend({ ...newDividend, dateDeclared: e.target.value })}
-                aria-label="Date dividend declared"
-              />
-            </div>
-            <div className="col-span-3">
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Date Paid</label>
-              <input
-                type="date"
-                className={inputClass}
-                value={newDividend.datePaid}
-                onChange={(e) => setNewDividend({ ...newDividend, datePaid: e.target.value })}
-                aria-label="Date dividend paid"
-              />
-            </div>
-            <div className="col-span-3">
-              <Button
-                variant="primary"
-                size="sm"
-                onPress={handleAddDividend}
-                isDisabled={savingSection === "dividends"}
-                className="w-full"
-              >
-                {savingSection === "dividends" ? <Spinner size="sm" /> : <><Plus className="w-4 h-4 mr-1" /> Add</>}
-              </Button>
-            </div>
-          </div>
+          <YearEndDividendsSection
+            dividends={dividends}
+            draft={newDividend}
+            saving={savingSection === "dividends"}
+            onDraftChange={setNewDividend}
+            onAdd={handleAddDividend}
+            onDelete={handleDeleteDividend}
+          />
         </Section>
 
         {/* 9. Director Loans */}

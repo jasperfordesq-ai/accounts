@@ -316,6 +316,24 @@ test("year-end questionnaire route delegates tax balance working-paper section",
   assert.match(componentSource, /tax creditor\/debtor balances/i, "tax balance shell should stay explicit about tax creditor/debtor evidence");
 });
 
+test("year-end questionnaire route delegates dividends working-paper section", () => {
+  const routeFile = new URL("companies/[companyId]/periods/[periodId]/year-end/page.tsx", appDir);
+  const componentFile = new URL("../src/components/period/YearEndDividendsSection.tsx", import.meta.url);
+
+  assert.ok(existsSync(componentFile), "YearEndDividendsSection should exist for dividend declaration/payment capture");
+
+  const routeSource = readFileSync(routeFile, "utf8");
+  const componentSource = readFileSync(componentFile, "utf8");
+
+  assert.match(routeSource, /YearEndDividendsSection/, "year-end questionnaire route should render the focused dividends shell");
+  assert.doesNotMatch(routeSource, /aria-label="Dividend amount"/, "year-end questionnaire route should not own dividend amount fields");
+  assert.doesNotMatch(routeSource, /aria-label="Date dividend declared"/, "year-end questionnaire route should not own dividend declaration date fields");
+  assert.doesNotMatch(routeSource, /aria-label="Date dividend paid"/, "year-end questionnaire route should not own dividend payment date fields");
+  assert.doesNotMatch(routeSource, /Delete dividend of/, "year-end questionnaire route should not own dividend delete copy");
+  assert.match(componentSource, /Declared:/, "dividends shell should preserve declaration date row copy");
+  assert.match(componentSource, /Paid:/, "dividends shell should preserve payment date row copy");
+});
+
 test("period adjustments route delegates generation, filters and approval composition", () => {
   const periodRoute = new URL("companies/[companyId]/periods/[periodId]/page.tsx", appDir);
   const source = readFileSync(periodRoute, "utf8");
