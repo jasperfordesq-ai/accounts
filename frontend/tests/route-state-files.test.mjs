@@ -193,3 +193,36 @@ test("period year-end workspace composes questionnaire, completeness and summary
     assert.match(source, new RegExp(marker), `PeriodYearEndWorkspace should render ${marker}`);
   }
 });
+
+test("period adjustments route delegates generation, filters and approval composition", () => {
+  const periodRoute = new URL("companies/[companyId]/periods/[periodId]/page.tsx", appDir);
+  const source = readFileSync(periodRoute, "utf8");
+
+  assert.match(source, /PeriodAdjustmentsWorkspace/, "period route should import the focused adjustments workspace");
+  assert.match(source, /<PeriodAdjustmentsWorkspace[\s\S]*adjustments=\{adjustments\}/, "period route should render PeriodAdjustmentsWorkspace with adjustment data");
+  assert.match(source, /<PeriodAdjustmentsWorkspace[\s\S]*onGenerateAdjustments=\{handleGenerateAdjustments\}/, "period route should pass generation orchestration into PeriodAdjustmentsWorkspace");
+  assert.match(source, /<PeriodAdjustmentsWorkspace[\s\S]*onApproveAdjustment=\{handleApproveAdjustment\}/, "period route should pass approval orchestration into PeriodAdjustmentsWorkspace");
+  assert.doesNotMatch(source, /<Card\.Title[^>]*>Period Adjustments<\/Card\.Title>/, "period route should not own adjustment action-card markup");
+  assert.doesNotMatch(source, /<Card\.Title[^>]*>Adjustment Summary<\/Card\.Title>/, "period route should not own adjustment summary markup");
+  assert.doesNotMatch(source, /<Card\.Title[^>]*>Adjustment Details<\/Card\.Title>/, "period route should not own adjustment detail markup");
+});
+
+test("period adjustments workspace composes generation, summary, filters and review cards", () => {
+  const componentFile = new URL("../src/components/period/PeriodAdjustmentsWorkspace.tsx", import.meta.url);
+
+  assert.ok(existsSync(componentFile), "PeriodAdjustmentsWorkspace should exist as the focused adjustments workflow component");
+
+  const source = readFileSync(componentFile, "utf8");
+  for (const marker of [
+    "Period Adjustments",
+    "Generate Adjustments",
+    "Adjustment Summary",
+    "Adjustment Details",
+    "Approval status",
+    "Apply Filters",
+    "Pending Approval",
+    "No adjustments yet",
+  ]) {
+    assert.match(source, new RegExp(marker), `PeriodAdjustmentsWorkspace should render ${marker}`);
+  }
+});

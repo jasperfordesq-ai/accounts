@@ -448,7 +448,7 @@ public class ProductionReadinessReportTests
             "Frontend code",
             "Frontend engineering",
             ["shared workbench primitives", "typed API contract", "route-level states"],
-            ["API client invariants", "component-preview route", "render tests", "FilingReviewCentre permission gate", "PeriodFilingWorkspace extraction", "PeriodImportWorkspace extraction", "PeriodCategoriseWorkspace extraction", "PeriodYearEndWorkspace extraction"],
+            ["API client invariants", "component-preview route", "render tests", "FilingReviewCentre permission gate", "PeriodFilingWorkspace extraction", "PeriodImportWorkspace extraction", "PeriodCategoriseWorkspace extraction", "PeriodYearEndWorkspace extraction", "PeriodAdjustmentsWorkspace extraction"],
             ["light-dark-visual-regression"]);
 
         Assert.All(tracks, track =>
