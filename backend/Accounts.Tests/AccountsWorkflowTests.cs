@@ -9231,15 +9231,17 @@ public class AccountsWorkflowTests
     {
         var root = RepositoryRoot();
         var page = File.ReadAllText(Path.Combine(root, "frontend/src/app/companies/[companyId]/periods/[periodId]/page.tsx"));
+        var filingWorkspace = File.ReadAllText(Path.Combine(root, "frontend/src/components/period/PeriodFilingWorkspace.tsx"));
         var deadlinesPanel = File.ReadAllText(Path.Combine(root, "frontend/src/components/period/FilingDeadlinesPanel.tsx"));
-        var source = page + deadlinesPanel;
+        var source = page + filingWorkspace + deadlinesPanel;
         var api = File.ReadAllText(Path.Combine(root, "frontend/src/lib/api.ts"));
         var endpoint = File.ReadAllText(Path.Combine(root, "backend/Accounts.Api/Endpoints/DeadlineEndpoints.cs"));
 
         Assert.Contains("filingReference?: string", api);
         Assert.Contains("string? FilingReference", endpoint);
         Assert.Contains("input.FilingReference", endpoint);
-        Assert.Contains("<FilingDeadlinesPanel", page);
+        Assert.Contains("<PeriodFilingWorkspace", page);
+        Assert.Contains("<FilingDeadlinesPanel", filingWorkspace);
         Assert.Contains("handleMarkDeadlineFiled", page);
         Assert.Contains("Revenue ROS or CT1 filing reference", source);
         Assert.Contains("ROS/CT1 reference", source);
@@ -9328,11 +9330,13 @@ public class AccountsWorkflowTests
     {
         var root = RepositoryRoot();
         var page = File.ReadAllText(Path.Combine(root, "frontend/src/app/companies/[companyId]/periods/[periodId]/page.tsx"));
+        var filingWorkspace = File.ReadAllText(Path.Combine(root, "frontend/src/components/period/PeriodFilingWorkspace.tsx"));
         var auditPanel = File.ReadAllText(Path.Combine(root, "frontend/src/components/period/PeriodAuditTrailPanel.tsx"));
-        var source = page + auditPanel;
+        var source = page + filingWorkspace + auditPanel;
 
         Assert.Contains("getAuditLog(cId, pId, 1, 50)", page);
-        Assert.Contains("<PeriodAuditTrailPanel", page);
+        Assert.Contains("<PeriodFilingWorkspace", page);
+        Assert.Contains("<PeriodAuditTrailPanel", filingWorkspace);
         Assert.Contains("Audit details", source);
         Assert.Contains("entry.oldValueJson", auditPanel);
         Assert.Contains("entry.newValueJson", auditPanel);

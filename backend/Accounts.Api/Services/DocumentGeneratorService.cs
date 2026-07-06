@@ -168,6 +168,7 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
             c.Item().AlignCenter().Text(company.LegalName).Bold().FontSize(22);
             if (!string.IsNullOrEmpty(company.TradingName))
                 c.Item().AlignCenter().Text($"(trading as {company.TradingName})").FontSize(12).Italic();
+            c.Item().AlignCenter().Text($"Registered company name: {company.LegalName}").FontSize(10);
 
             c.Item().PaddingTop(20).AlignCenter().Text("FINANCIAL STATEMENTS").Bold().FontSize(14);
 

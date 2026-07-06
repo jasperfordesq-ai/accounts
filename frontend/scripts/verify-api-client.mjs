@@ -581,7 +581,10 @@ function productionReadinessReportFixture() {
         ownerRole: "Frontend engineering",
         status: "in-progress",
         completionCriteria: ["Typed API contract blocks readiness drift."],
-        currentEvidence: ["API client invariants validate readiness contracts."],
+        currentEvidence: [
+          "API client invariants validate readiness contracts.",
+          "PeriodFilingWorkspace extraction composes review, deadline, warning, output and audit panels behind one focused filing workflow component.",
+        ],
         nextActions: ["Continue extracting large route files."],
         assuranceActionCodes: ["qualified-accountant-signoff"],
       },

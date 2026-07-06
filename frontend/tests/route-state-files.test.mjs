@@ -68,11 +68,36 @@ test("dynamic accountant workflow routes have local not-found states", () => {
   }
 });
 
-test("period filing route wires reviewer permission into the filing review centre", () => {
+test("period filing route wires reviewer permission into the filing workspace", () => {
   const periodRoute = new URL("companies/[companyId]/periods/[periodId]/page.tsx", appDir);
   const source = readFileSync(periodRoute, "utf8");
 
   assert.match(source, /useAuth/, "period route should read authenticated workflow permissions");
   assert.match(source, /const\s*\{\s*canReview\s*\}\s*=\s*useAuth\(\)/, "period route should read canReview from auth context");
-  assert.match(source, /<FilingReviewCentre[\s\S]*canReview=\{canReview\}/, "period route should pass canReview into FilingReviewCentre");
+  assert.match(source, /PeriodFilingWorkspace/, "period route should import the focused filing workspace");
+  assert.match(source, /<PeriodFilingWorkspace[\s\S]*canReview=\{canReview\}/, "period route should pass canReview into PeriodFilingWorkspace");
+  assert.doesNotMatch(source, /import\s+\{\s*FilingReviewCentre\s*\}/, "period route should not import the low-level filing review centre directly");
+  assert.doesNotMatch(source, /import\s+\{\s*FilingDeadlinesPanel\s*\}/, "period route should not import filing deadlines panel directly");
+  assert.doesNotMatch(source, /import\s+\{\s*FilingOutputsPanel\s*\}/, "period route should not import filing outputs panel directly");
+  assert.doesNotMatch(source, /import\s+\{\s*PeriodAuditTrailPanel\s*\}/, "period route should not import filing audit trail panel directly");
+  assert.doesNotMatch(source, /import\s+\{\s*StatutoryWarningsPanel\s*\}/, "period route should not import statutory warnings panel directly");
+});
+
+test("period filing workspace composes the accountant review panels", () => {
+  const componentFile = new URL("../src/components/period/PeriodFilingWorkspace.tsx", import.meta.url);
+
+  assert.ok(existsSync(componentFile), "PeriodFilingWorkspace should exist as the focused filing workflow component");
+
+  const source = readFileSync(componentFile, "utf8");
+  for (const componentName of [
+    "FilingReviewCentre",
+    "FilingDeadlinesPanel",
+    "StatutoryWarningsPanel",
+    "FilingOutputsPanel",
+    "PeriodAuditTrailPanel",
+  ]) {
+    assert.match(source, new RegExp(`<${componentName}`), `PeriodFilingWorkspace should render ${componentName}`);
+  }
+
+  assert.match(source, /Review Notes/, "PeriodFilingWorkspace should keep the filing notes review action");
 });

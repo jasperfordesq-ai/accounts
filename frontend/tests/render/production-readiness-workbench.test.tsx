@@ -71,6 +71,7 @@ describe("ProductionReadinessWorkbench", () => {
     expectText(/Permission-denied filing action state keeps evidence visible/);
     expectText(/Typed API contract blocks frontend\/backend readiness drift/);
     expectText(/FilingReviewCentre permission gate blocks approval\/submission actions behind canReview/);
+    expectText(/PeriodFilingWorkspace extraction composes review, deadline, warning, output and audit panels/);
     expect(screen.getByRole("heading", { name: "Release review checklist" })).toBeInTheDocument();
     expectText("Named accountant final sign-off");
     expectText("named-accountant-approval-record");
@@ -673,6 +674,7 @@ function sampleReport(): ProductionReadinessReport {
           "API client invariants validate production readiness contracts.",
           "Component-preview route exercises shared workbench primitives.",
           "FilingReviewCentre permission gate blocks approval/submission actions behind canReview and renders PermissionDeniedPanel for ineligible roles.",
+          "PeriodFilingWorkspace extraction composes review, deadline, warning, output and audit panels behind one focused filing workflow component.",
           "Render tests cover accountant dashboards, review panels and workflow routes.",
         ],
         nextActions: [
