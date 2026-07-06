@@ -111,6 +111,80 @@ public class FilingGoldenCorpusScenarioTests
     }
 
     [Fact]
+    public async Task GoldenCorpus_SmallAbridgedLtd_EmitsFullAccountsAbridgedCroPackIxbrlAndReadiness()
+    {
+        await using var db = CreateDbContext();
+        var period = await SeedBasicScenarioAsync(
+            db,
+            "Connacht Digital Solutions Limited",
+            CompanyType.Private,
+            CompanySizeClass.Small,
+            ElectedRegime.SmallAbridged,
+            auditExempt: true,
+            charity: false);
+
+        var statements = new FinancialStatementsService(db);
+        var documents = new DocumentGeneratorService(db, statements);
+        var fullAccountsPdf = await documents.GenerateAccountsPackageAsync(period.CompanyId, period.Id);
+        var abridgedCroPack = await documents.GenerateCroFilingPackAsync(period.CompanyId, period.Id);
+        var signaturePage = await documents.GenerateSignaturePageAsync(period.CompanyId, period.Id);
+        var ixbrl = Encoding.UTF8.GetString(await new IxbrlService(db, statements).GenerateIxbrlAsync(period.CompanyId, period.Id));
+
+        await MarkGeneratedReviewedAndExternallyValidatedAsync(db, period, includeCharityReports: false);
+        var profile = await new FilingReadinessProfileService(db).GetProfileAsync(period.CompanyId, period.Id);
+        var tax = await new TaxComputationService(db, statements).ComputeAsync(period.CompanyId, period.Id);
+        var notes = await db.NotesDisclosures.Where(n => n.PeriodId == period.Id && n.IsIncluded).ToListAsync();
+
+        var fullAccountsText = ExtractPdfText(fullAccountsPdf);
+        var croPackText = ExtractPdfText(abridgedCroPack);
+        var signatureText = ExtractPdfText(signaturePage);
+
+        Assert.True(fullAccountsPdf.Length > 1_000);
+        Assert.Equal("%PDF", Encoding.ASCII.GetString(fullAccountsPdf, 0, 4));
+        Assert.Contains("Connacht Digital Solutions Limited", fullAccountsText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("DIRECTORS' REPORT", fullAccountsText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PROFIT AND LOSS ACCOUNT", fullAccountsText, StringComparison.OrdinalIgnoreCase);
+
+        Assert.True(abridgedCroPack.Length > 1_000);
+        Assert.Equal("%PDF", Encoding.ASCII.GetString(abridgedCroPack, 0, 4));
+        Assert.Contains("Abridged Financial Statements for filing with the CRO", croPackText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("section 352", croPackText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("DIRECTORS' REPORT", croPackText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Turnover", croPackText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Cost of sales", croPackText, StringComparison.OrdinalIgnoreCase);
+
+        Assert.True(signaturePage.Length > 1_000);
+        Assert.Equal("%PDF", Encoding.ASCII.GetString(signaturePage, 0, 4));
+        Assert.Contains("CRO ACCOUNTS CERTIFICATION", signatureText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Aisling Director", signatureText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Brian Secretary", signatureText, StringComparison.OrdinalIgnoreCase);
+
+        AssertWellFormedXml(ixbrl);
+        Assert.Contains("Connacht Digital Solutions Limited", ixbrl);
+        Assert.Contains("No profit and loss account is published with these abridged financial statements.", ixbrl);
+        Assert.DoesNotContain("core:TurnoverGrossRevenue", ixbrl);
+
+        Assert.True(profile.SupportedPath);
+        Assert.Equal(CompanySizeClass.Small, profile.SizeClass);
+        Assert.Equal(ElectedRegime.SmallAbridged, profile.ElectedRegime);
+        Assert.True(profile.AuditExempt);
+        Assert.False(profile.ManualProfessionalReviewRequired);
+        var abridgementEvidence = Assert.Single(profile.RequiredEvidence, e => e.Code == "cro-abridgement-election");
+        Assert.True(abridgementEvidence.Satisfied);
+        Assert.Contains(abridgementEvidence.Sources, s => s.SourceId == IrishStatutoryRuleSources.CroFinancialStatementsRequirements.SourceId);
+        Assert.Contains(abridgementEvidence.Sources, s => s.SourceId == IrishStatutoryRuleSources.FrcFrs102.SourceId);
+        Assert.Contains(profile.SourceReferences, s => s.SourceId == IrishStatutoryRuleSources.CroFinancialStatementsRequirements.SourceId);
+        Assert.Contains(profile.SourceReferences, s => s.SourceId == IrishStatutoryRuleSources.FrcFrs102.SourceId);
+        Assert.Contains(profile.SourceReferences, s => s.SourceId == IrishStatutoryRuleSources.RevenueAcceptedTaxonomies.SourceId);
+        Assert.Equal("ready-for-external-filing", profile.SignOffPacket.State);
+        Assert.Contains(profile.SignOffPacket.Steps, step => step.Code == "statutory-basis" && step.Detail.Contains("abridgement", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains("mark-cro-submitted", profile.AllowedNextActions);
+
+        Assert.Equal(62.50m, tax.TotalCorporationTax);
+        Assert.Contains(notes, n => n.Title == "Accounting Policies" && n.IsIncluded);
+    }
+
+    [Fact]
     public async Task GoldenCorpus_MediumAuditRequired_BlocksFinalOutputsAndRequiresManualHandoffUntilAuditorEvidence()
     {
         await using var db = CreateDbContext();

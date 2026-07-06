@@ -78,6 +78,29 @@ public class FilingReadinessProfileTests
         Assert.Contains(profile.SourceReferences, source => source.SourceId == IrishStatutoryRuleSources.FrcFrs105.SourceId);
     }
 
+    [Fact]
+    public async Task ReadinessProfile_ForSmallAbridgedRegime_RequiresSourceBackedSection352AbridgementEvidence()
+    {
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, CompanyType.Private, CompanySizeClass.Small);
+        await SeedOfficersAsync(db, period.CompanyId);
+        await SeedCroPackageAsync(db, period.Id, approvedBy: "Qualified Accountant");
+        await SeedRevenuePackageAsync(db, period.Id, internalChecksPassed: true, externallyValidated: true);
+
+        var profile = await new FilingReadinessProfileService(db).GetProfileAsync(period.CompanyId, period.Id);
+
+        var abridgementEvidence = Assert.Single(profile.RequiredEvidence, e => e.Code == "cro-abridgement-election");
+        Assert.True(abridgementEvidence.Required);
+        Assert.True(abridgementEvidence.Satisfied);
+        Assert.Contains("Section 352", abridgementEvidence.Detail);
+        Assert.Contains(abridgementEvidence.Sources, source => source.SourceId == IrishStatutoryRuleSources.CroFinancialStatementsRequirements.SourceId);
+        Assert.Contains(abridgementEvidence.Sources, source => source.SourceId == IrishStatutoryRuleSources.FrcFrs102.SourceId);
+        Assert.Contains(profile.SignOffPacket.Steps, step =>
+            step.Code == "statutory-basis"
+            && step.State == "complete"
+            && step.Detail.Contains("abridgement", StringComparison.OrdinalIgnoreCase));
+    }
+
     [Theory]
     [InlineData(CompanyType.PublicLimitedCompany)]
     [InlineData(CompanyType.PrivateUnlimited)]

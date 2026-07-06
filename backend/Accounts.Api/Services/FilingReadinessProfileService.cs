@@ -184,6 +184,27 @@ public class FilingReadinessProfileService(AccountsDbContext db)
         if (period.FilingRegime is null)
             Block("filing-regime-required", "Filing regime must be determined before statutory outputs are approved.", IrishStatutoryRuleSources.CroFinancialStatementsRequirements);
 
+        if (regime == ElectedRegime.SmallAbridged)
+        {
+            var abridgementEligible = period.FilingRegime?.CanFileAbridged == true
+                && sizeClass is CompanySizeClass.Small or CompanySizeClass.Micro;
+            RequireEvidence(
+                "cro-abridgement-election",
+                "Small-company Section 352 abridgement eligibility confirmed",
+                abridgementEligible,
+                abridgementEligible
+                    ? "Section 352 abridgement election recorded for an eligible small company; full accounts remain required for members."
+                    : "Small abridged CRO filing was elected, but abridgement eligibility has not been proven.",
+                IrishStatutoryRuleSources.CroFinancialStatementsRequirements,
+                IrishStatutoryRuleSources.FrcFrs102);
+            if (!abridgementEligible)
+                Block(
+                    "abridgement-election-required",
+                    "Section 352 abridgement eligibility must be confirmed before a small abridged CRO filing pack is approved.",
+                    IrishStatutoryRuleSources.CroFinancialStatementsRequirements,
+                    IrishStatutoryRuleSources.FrcFrs102);
+        }
+
         var hasDirector = await db.CompanyOfficers.AnyAsync(o =>
             o.CompanyId == companyId && o.Role == OfficerRole.Director && o.ResignedDate == null);
         var hasSecretary = await db.CompanyOfficers.AnyAsync(o =>
@@ -513,8 +534,10 @@ public class FilingReadinessProfileService(AccountsDbContext db)
         IReadOnlyList<FilingReadinessEvidenceItem> evidence,
         bool readyForAccountantApproval)
     {
+        var abridgementEvidenceComplete = EvidenceSatisfiedOrNotRequired(evidence, "cro-abridgement-election");
         var statutoryEvidenceComplete = EvidenceSatisfied(evidence, "size-classification")
-            && EvidenceSatisfied(evidence, "filing-regime");
+            && EvidenceSatisfied(evidence, "filing-regime")
+            && abridgementEvidenceComplete;
         var directorCertificationComplete = EvidenceSatisfied(evidence, "cro-signatories")
             && EvidenceSatisfied(evidence, "cro-signature-page");
         var generatedOutputsComplete = EvidenceSatisfied(evidence, "cro-accounts-pdf")
@@ -539,7 +562,9 @@ public class FilingReadinessProfileService(AccountsDbContext db)
                 "Statutory basis",
                 statutoryEvidenceComplete ? "complete" : "blocked",
                 statutoryEvidenceComplete
-                    ? "Size classification and filing regime evidence are recorded."
+                    ? regime == ElectedRegime.SmallAbridged
+                        ? "Size classification, filing regime and Section 352 abridgement evidence are recorded."
+                        : "Size classification and filing regime evidence are recorded."
                     : "Complete size classification and filing regime evidence before review.",
                 [IrishStatutoryRuleSources.CroFinancialStatementsRequirements, accountingStandardSource]),
             new FilingReadinessSignOffStep(
@@ -620,5 +645,11 @@ public class FilingReadinessProfileService(AccountsDbContext db)
     private static bool EvidenceSatisfied(IReadOnlyList<FilingReadinessEvidenceItem> evidence, string code)
     {
         return evidence.FirstOrDefault(item => item.Code == code)?.Satisfied == true;
+    }
+
+    private static bool EvidenceSatisfiedOrNotRequired(IReadOnlyList<FilingReadinessEvidenceItem> evidence, string code)
+    {
+        var item = evidence.FirstOrDefault(evidenceItem => evidenceItem.Code == code);
+        return item is null || item.Satisfied;
     }
 }
