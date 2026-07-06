@@ -57,6 +57,11 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.match(parsed.sourceLawMaintenanceProtocol.failurePolicy, /Block release/);
   assert.match(parsed.sourceLawMaintenanceProtocol.acceptanceCriteria[0], /CRO/);
   assert.ok(parsed.sourceLawMaintenanceProtocol.requiredEvidence.includes("source-law-change-review-note"));
+  assert.equal(parsed.sourceLawReviewLedger[0].sourceId, "frc-frs-105");
+  assert.equal(parsed.sourceLawReviewLedger[0].releaseChecklistCode, "source-law-change-review");
+  assert.ok(parsed.sourceLawReviewLedger[0].blocksRelease);
+  assert.match(parsed.sourceLawReviewLedger[0].reviewChecks[0], /reachable/);
+  assert.ok(parsed.sourceLawReviewLedger[0].requiredEvidence.includes("qualified-accountant-source-law-signoff"));
   assert.equal(parsed.statutoryRulesCoverage[0].code, "size-classification-thresholds");
   assert.equal(parsed.statutoryRulesCoverage[0].automatedVerifierNames[0], "AccountsWorkflowTests.SizeClassification_FirstYearMicro_AllowsMicroAndAuditExemption");
   assert.equal(parsed.statutoryRulesCoverage[0].edgeCases[0], "two-of-three threshold rule");
@@ -432,6 +437,26 @@ test("parseProductionReadinessReport rejects incomplete source-law traceability"
   );
 });
 
+test("parseProductionReadinessReport rejects missing source-law review ledger", () => {
+  const payload = sampleReport();
+  delete payload.sourceLawReviewLedger;
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: sourceLawReviewLedger/,
+  );
+});
+
+test("parseProductionReadinessReport rejects source-law review ledger drift", () => {
+  const payload = sampleReport();
+  payload.sourceLawReviewLedger = payload.sourceLawReviewLedger.slice(0, 1);
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: sourceLawReviewLedger - expected snapshot source ids only/,
+  );
+});
+
 test("parseProductionReadinessReport rejects proof points whose verifier is not listed on the scenario", () => {
   const payload = sampleReport();
   payload.goldenFilingCorpus[0].evidencePack.expectedProofPoints[0].automatedVerifier =
@@ -618,6 +643,10 @@ function sampleReport() {
         "qualified-accountant-source-law-signoff",
       ],
     },
+    sourceLawReviewLedger: [
+      sourceLawReviewEntry("frc-frs-105", "FRC FRS 105 current edition and amendments"),
+      sourceLawReviewEntry("frc-frs-102", "FRC FRS 102 current edition and amendments"),
+    ],
     assurancePacket: {
       packetId: "assurance-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       packetVersion: "production-assurance-packet-v1",
@@ -630,7 +659,7 @@ function sampleReport() {
       visualQaExpectedScreenshots: expectedVisualSmokeScreenshotCount(),
       requiredOperationalGates: 1,
       openCriticalActions: 3,
-      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-blocker-register", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "accountant-journey-acceptance-checklist", "production-completion-map"],
+      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "source-law-review-ledger", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-blocker-register", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "accountant-journey-acceptance-checklist", "production-completion-map"],
       releaseBlockers: [
         "Qualified accountant sign-off required",
         "Source-law change review required",
@@ -1480,5 +1509,29 @@ function source(sourceId, title) {
     title,
     effectiveDate: "2026-07-03",
     url: "https://www.frc.org.uk/",
+  };
+}
+
+function sourceLawReviewEntry(sourceId, title) {
+  const legalSource = source(sourceId, title);
+
+  return {
+    sourceId: legalSource.sourceId,
+    title: legalSource.title,
+    url: legalSource.url,
+    pinnedEffectiveDate: legalSource.effectiveDate,
+    ownerRole: "Accounting standards reviewer",
+    releaseChecklistCode: "source-law-change-review",
+    blocksRelease: true,
+    reviewChecks: [
+      "Confirm source page is reachable at the pinned URL.",
+      "Compare pinned effective date against the current source page.",
+      "Review guidance wording for statutory filing, exemption, note or taxonomy changes.",
+      "Record qualified accountant acceptance before generated packs are used for real filings.",
+    ],
+    requiredEvidence: [
+      "source-law-change-review-note",
+      "qualified-accountant-source-law-signoff",
+    ],
   };
 }

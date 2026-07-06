@@ -1566,6 +1566,18 @@ export interface SourceLawMaintenanceProtocol {
   requiredEvidence: string[];
 }
 
+export interface SourceLawReviewLedgerEntry {
+  sourceId: string;
+  title: string;
+  url: string;
+  pinnedEffectiveDate: string;
+  ownerRole: string;
+  releaseChecklistCode: string;
+  blocksRelease: boolean;
+  reviewChecks: string[];
+  requiredEvidence: string[];
+}
+
 export interface ProductionReadinessArea {
   code: string;
   label: string;
@@ -1937,6 +1949,7 @@ export interface ProductionReadinessReport {
   sourceLawSnapshot: SourceLawSnapshot;
   sourceLawTraceability: SourceLawTraceabilityEntry[];
   sourceLawMaintenanceProtocol: SourceLawMaintenanceProtocol;
+  sourceLawReviewLedger: SourceLawReviewLedgerEntry[];
   assurancePacket: ProductionAssurancePacket;
   accountantAcceptanceCriteria: AccountantAcceptanceCriterion[];
   accountantAcceptanceSummary: AccountantAcceptanceSummary;
@@ -1998,6 +2011,18 @@ const sourceLawMaintenanceProtocolSchema = z.object({
   failurePolicy: z.string().min(1),
   monitoredSourceIds: z.array(z.string().min(1)),
   acceptanceCriteria: z.array(z.string().min(1)),
+  requiredEvidence: z.array(z.string().min(1)),
+});
+
+const sourceLawReviewLedgerEntrySchema = z.object({
+  sourceId: z.string().min(1),
+  title: z.string().min(1),
+  url: z.string().url(),
+  pinnedEffectiveDate: z.string().min(1),
+  ownerRole: z.string().min(1),
+  releaseChecklistCode: z.string().min(1),
+  blocksRelease: z.boolean(),
+  reviewChecks: z.array(z.string().min(1)),
   requiredEvidence: z.array(z.string().min(1)),
 });
 
@@ -2368,6 +2393,7 @@ export const productionReadinessReportSchema = z.object({
   sourceLawSnapshot: sourceLawSnapshotSchema,
   sourceLawTraceability: z.array(sourceLawTraceabilityEntrySchema),
   sourceLawMaintenanceProtocol: sourceLawMaintenanceProtocolSchema,
+  sourceLawReviewLedger: z.array(sourceLawReviewLedgerEntrySchema),
   assurancePacket: productionAssurancePacketSchema,
   accountantAcceptanceCriteria: z.array(accountantAcceptanceCriterionSchema),
   accountantAcceptanceSummary: accountantAcceptanceSummarySchema,
@@ -2616,6 +2642,8 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
     }
   });
 
+  assertSourceLawReviewLedger(report, snapshotSourceIds);
+
   if (!report.assurancePacket.evidenceItems.includes("source-law-traceability-index")) {
     throw new Error(
       "Invalid production readiness report contract: assurancePacket.evidenceItems - source-law-traceability-index is required",
@@ -2655,6 +2683,12 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
   if (!report.assurancePacket.evidenceItems.includes("golden-evidence-ledger")) {
     throw new Error(
       "Invalid production readiness report contract: assurancePacket.evidenceItems - golden-evidence-ledger is required",
+    );
+  }
+
+  if (!report.assurancePacket.evidenceItems.includes("source-law-review-ledger")) {
+    throw new Error(
+      "Invalid production readiness report contract: assurancePacket.evidenceItems - source-law-review-ledger is required",
     );
   }
 
@@ -2894,6 +2928,51 @@ function assertSourceLawMaintenanceProtocol(report: ProductionReadinessReport) {
       "Invalid production readiness report contract: sourceLawMaintenanceProtocol.acceptanceCriteria - at least one criterion is required",
     );
   }
+}
+
+function assertSourceLawReviewLedger(report: ProductionReadinessReport, snapshotSourceIds: Set<string>) {
+  const releaseChecklistCodes = new Set(report.releaseReviewChecklist.map((item) => item.code));
+  const ledgerSourceIds = new Set(report.sourceLawReviewLedger.map((entry) => entry.sourceId));
+  const missingLedger = [...snapshotSourceIds]
+    .filter((sourceId) => !ledgerSourceIds.has(sourceId))
+    .sort();
+  const unexpectedLedger = [...ledgerSourceIds]
+    .filter((sourceId) => !snapshotSourceIds.has(sourceId))
+    .sort();
+
+  if (missingLedger.length > 0 || unexpectedLedger.length > 0) {
+    throw new Error(
+      `Invalid production readiness report contract: sourceLawReviewLedger - expected snapshot source ids only; missing ${missingLedger.join(", ") || "none"}, unexpected ${unexpectedLedger.join(", ") || "none"}`,
+    );
+  }
+
+  report.sourceLawReviewLedger.forEach((entry, entryIndex) => {
+    if (!releaseChecklistCodes.has(entry.releaseChecklistCode)) {
+      throw new Error(
+        `Invalid production readiness report contract: sourceLawReviewLedger.${entryIndex}.releaseChecklistCode - must reference a release checklist item`,
+      );
+    }
+
+    if (!entry.blocksRelease) {
+      throw new Error(
+        `Invalid production readiness report contract: sourceLawReviewLedger.${entryIndex}.blocksRelease - source-law review must block release`,
+      );
+    }
+
+    if (entry.reviewChecks.length === 0) {
+      throw new Error(
+        `Invalid production readiness report contract: sourceLawReviewLedger.${entryIndex}.reviewChecks - at least one source-law review check is required`,
+      );
+    }
+
+    for (const evidence of ["source-law-change-review-note", "qualified-accountant-source-law-signoff"]) {
+      if (!entry.requiredEvidence.includes(evidence)) {
+        throw new Error(
+          `Invalid production readiness report contract: sourceLawReviewLedger.${entryIndex}.requiredEvidence - ${evidence} is required`,
+        );
+      }
+    }
+  });
 }
 
 function assertAccountantWorkflowWalkthroughProtocol(report: ProductionReadinessReport) {

@@ -265,6 +265,27 @@ function sampleReport(): ProductionReadinessReport {
         "qualified-accountant-source-law-signoff",
       ],
     },
+    sourceLawReviewLedger: [
+      {
+        sourceId: "revenue-accepted-taxonomies",
+        title: "Revenue accepted iXBRL taxonomies",
+        url: "https://www.revenue.ie/",
+        pinnedEffectiveDate: "2025-11-06",
+        ownerRole: "Taxonomy and corporation tax reviewer",
+        releaseChecklistCode: "source-law-change-review",
+        blocksRelease: true,
+        reviewChecks: [
+          "Confirm source page is reachable at the pinned URL.",
+          "Compare pinned effective date against the current source page.",
+          "Review guidance wording for statutory filing, exemption, note or taxonomy changes.",
+          "Confirm Revenue-accepted taxonomy and iXBRL content guidance still match generated output assumptions.",
+        ],
+        requiredEvidence: [
+          "source-law-change-review-note",
+          "qualified-accountant-source-law-signoff",
+        ],
+      },
+    ],
     assurancePacket: {
       packetId: "assurance-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       packetVersion: "production-assurance-packet-v1",
@@ -277,7 +298,7 @@ function sampleReport(): ProductionReadinessReport {
       visualQaExpectedScreenshots: 24,
       requiredOperationalGates: 1,
       openCriticalActions: 1,
-      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "accountant-journey-acceptance-checklist", "production-completion-map"],
+      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "source-law-review-ledger", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "accountant-journey-acceptance-checklist", "production-completion-map"],
       releaseBlockers: ["Qualified accountant sign-off required"],
     },
     accountantAcceptanceCriteria: [

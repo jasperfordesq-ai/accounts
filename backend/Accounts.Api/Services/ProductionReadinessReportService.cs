@@ -94,6 +94,17 @@ public sealed record SourceLawTraceabilityEntry(
     IReadOnlyList<string> UsedBy,
     IReadOnlyList<string> ReleaseGateCodes);
 
+public sealed record SourceLawReviewLedgerEntry(
+    string SourceId,
+    string Title,
+    string Url,
+    string PinnedEffectiveDate,
+    string OwnerRole,
+    string ReleaseChecklistCode,
+    bool BlocksRelease,
+    IReadOnlyList<string> ReviewChecks,
+    IReadOnlyList<string> RequiredEvidence);
+
 public sealed record SourceLawMaintenanceProtocol(
     string ProtocolVersion,
     string OwnerRole,
@@ -367,6 +378,7 @@ public sealed record ProductionReadinessReport(
     SourceLawSnapshot SourceLawSnapshot,
     IReadOnlyList<SourceLawTraceabilityEntry> SourceLawTraceability,
     SourceLawMaintenanceProtocol SourceLawMaintenanceProtocol,
+    IReadOnlyList<SourceLawReviewLedgerEntry> SourceLawReviewLedger,
     ProductionAssurancePacket AssurancePacket,
     IReadOnlyList<AccountantAcceptanceCriterion> AccountantAcceptanceCriteria,
     AccountantAcceptanceSummary AccountantAcceptanceSummary,
@@ -430,6 +442,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             statutoryRulesCoverage,
             accountantAcceptanceCriteria);
         var sourceLawMaintenanceProtocol = BuildSourceLawMaintenanceProtocol(sourceSnapshot);
+        var sourceLawReviewLedger = BuildSourceLawReviewLedger(sourceSnapshot, releaseReviewChecklist);
         var assurancePacket = BuildAssurancePacket(
             sourceSnapshot,
             goldenCorpus,
@@ -447,6 +460,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             sourceSnapshot,
             sourceLawTraceability,
             sourceLawMaintenanceProtocol,
+            sourceLawReviewLedger,
             assurancePacket,
             accountantAcceptanceCriteria,
             accountantAcceptanceSummary,
@@ -508,6 +522,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "source-law-snapshot-fingerprint",
             "source-law-traceability-index",
             "source-law-maintenance-protocol",
+            "source-law-review-ledger",
             "golden-filing-corpus",
             "golden-evidence-ledger",
             "golden-verifier-manifest",
@@ -749,6 +764,63 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 "source-law-change-review-note",
                 "qualified-accountant-source-law-signoff"
             ]);
+    }
+
+    private static IReadOnlyList<SourceLawReviewLedgerEntry> BuildSourceLawReviewLedger(
+        SourceLawSnapshot sourceSnapshot,
+        IReadOnlyList<ReleaseReviewChecklistItem> releaseReviewChecklist)
+    {
+        var checklistItem = releaseReviewChecklist.Single(item => item.Code == "source-law-change-review");
+
+        return sourceSnapshot.Sources
+            .OrderBy(source => source.SourceId, StringComparer.Ordinal)
+            .Select(source => new SourceLawReviewLedgerEntry(
+                source.SourceId,
+                source.Title,
+                source.Url,
+                source.EffectiveDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                SelectSourceLawOwnerRole(source.SourceId),
+                checklistItem.Code,
+                checklistItem.BlocksRelease,
+                BuildSourceLawReviewChecks(source.SourceId),
+                new[]
+                {
+                    "source-law-change-review-note",
+                    "qualified-accountant-source-law-signoff",
+                    checklistItem.EvidenceArtifact
+                }.Distinct(StringComparer.Ordinal).ToArray()))
+            .ToArray();
+    }
+
+    private static string SelectSourceLawOwnerRole(string sourceId) =>
+        sourceId switch
+        {
+            var id when id.StartsWith("revenue-", StringComparison.Ordinal) => "Taxonomy and corporation tax reviewer",
+            var id when id.StartsWith("frc-", StringComparison.Ordinal) => "Accounting standards reviewer",
+            var id when id.StartsWith("charities-", StringComparison.Ordinal) => "Charity reporting reviewer",
+            _ => "Qualified accountant and engineering"
+        };
+
+    private static IReadOnlyList<string> BuildSourceLawReviewChecks(string sourceId)
+    {
+        var checks = new List<string>
+        {
+            "Confirm source page is reachable at the pinned URL.",
+            "Compare pinned effective date against the current source page.",
+            "Review guidance wording for statutory filing, exemption, note or taxonomy changes.",
+            "Record qualified accountant acceptance before generated packs are used for real filings."
+        };
+
+        if (sourceId.StartsWith("revenue-", StringComparison.Ordinal))
+            checks.Add("Confirm Revenue-accepted taxonomy and iXBRL content guidance still match generated output assumptions.");
+        if (sourceId == IrishStatutoryRuleSources.CroAuditorsReport.SourceId)
+            checks.Add("Confirm auditor report requirements still support audit-required manual handoff gates.");
+        if (sourceId == IrishStatutoryRuleSources.CroUnlimitedCompany.SourceId)
+            checks.Add("Confirm unlimited-company variants remain manual professional handoff unless explicitly modelled.");
+        if (sourceId == IrishStatutoryRuleSources.CharitiesRegulatorAnnualReport.SourceId)
+            checks.Add("Confirm charity annual-report deadlines and SoFA/TAR evidence expectations remain current.");
+
+        return checks;
     }
 
     private static IReadOnlyList<ProductionReadinessArea> BuildAreas() =>

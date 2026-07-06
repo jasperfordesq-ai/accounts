@@ -205,6 +205,50 @@ public class ProductionReadinessReportTests
     }
 
     [Fact]
+    public async Task ProductionReadinessReport_ExposesPerSourceLawReviewLedgerForReleaseEvidence()
+    {
+        await using var db = CreateDbContext();
+        var report = await new ProductionReadinessReportService(db).GetReportAsync();
+        var ledgerProperty = report.GetType().GetProperty("SourceLawReviewLedger");
+
+        Assert.NotNull(ledgerProperty);
+        var ledger = Assert.IsAssignableFrom<System.Collections.IEnumerable>(ledgerProperty!.GetValue(report))
+            .Cast<object>()
+            .ToArray();
+
+        Assert.Equal(report.SourceLawSnapshot.SourceCount, ledger.Length);
+        Assert.Contains(report.AssurancePacket.EvidenceItems, item => item == "source-law-review-ledger");
+
+        var snapshotSources = report.SourceLawSnapshot.Sources.ToDictionary(source => source.SourceId);
+        Assert.All(ledger, entry =>
+        {
+            var sourceId = StringProperty(entry, "SourceId");
+            Assert.True(snapshotSources.ContainsKey(sourceId));
+            Assert.Equal(snapshotSources[sourceId].EffectiveDate.ToString("yyyy-MM-dd"), StringProperty(entry, "PinnedEffectiveDate"));
+            Assert.Equal("source-law-change-review", StringProperty(entry, "ReleaseChecklistCode"));
+            Assert.True(BooleanProperty(entry, "BlocksRelease"));
+            AssertListContainsAll(
+                StringListProperty(entry, "ReviewChecks"),
+                ["reachable", "effective date", "guidance wording", "qualified accountant"],
+                sourceId,
+                "source-law review checks");
+            AssertListContainsAll(
+                StringListProperty(entry, "RequiredEvidence"),
+                ["source-law-change-review-note", "qualified-accountant-source-law-signoff"],
+                sourceId,
+                "source-law review evidence");
+        });
+
+        Assert.Contains(ledger, entry =>
+            StringProperty(entry, "SourceId") == IrishStatutoryRuleSources.RevenueAcceptedTaxonomies.SourceId
+            && StringProperty(entry, "OwnerRole").Contains("Taxonomy", StringComparison.OrdinalIgnoreCase)
+            && StringListProperty(entry, "ReviewChecks").Any(check => check.Contains("Revenue-accepted taxonomy", StringComparison.OrdinalIgnoreCase)));
+        Assert.Contains(ledger, entry =>
+            StringProperty(entry, "SourceId") == IrishStatutoryRuleSources.CroAuditorsReport.SourceId
+            && StringListProperty(entry, "ReviewChecks").Any(check => check.Contains("auditor", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    [Fact]
     public async Task ProductionReadinessReport_ExposesAuditEvidenceTimelineForWhoWhatWhenReview()
     {
         await using var db = CreateDbContext();

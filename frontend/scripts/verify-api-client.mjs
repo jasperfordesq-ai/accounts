@@ -165,6 +165,10 @@ function productionReadinessReportFixture() {
         "qualified-accountant-source-law-signoff",
       ],
     },
+    sourceLawReviewLedger: [
+      sourceLawReviewEntry("frc-frs-105", "FRC FRS 105 current edition and amendments"),
+      sourceLawReviewEntry("frc-frs-102", "FRC FRS 102 current edition and amendments"),
+    ],
     assurancePacket: {
       packetId: "assurance-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       packetVersion: "production-assurance-packet-v1",
@@ -177,7 +181,7 @@ function productionReadinessReportFixture() {
       visualQaExpectedScreenshots: expectedVisualSmokeScreenshotCount(),
       requiredOperationalGates: 1,
       openCriticalActions: 1,
-      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-blocker-register", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "accountant-journey-acceptance-checklist", "production-completion-map"],
+      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "source-law-review-ledger", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-blocker-register", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "accountant-journey-acceptance-checklist", "production-completion-map"],
       releaseBlockers: [
         "Qualified accountant sign-off required",
         "Source-law change review required",
@@ -805,6 +809,30 @@ function source(sourceId, title) {
     title,
     effectiveDate: "2026-07-03",
     url: "https://www.frc.org.uk/",
+  };
+}
+
+function sourceLawReviewEntry(sourceId, title) {
+  const legalSource = source(sourceId, title);
+
+  return {
+    sourceId: legalSource.sourceId,
+    title: legalSource.title,
+    url: legalSource.url,
+    pinnedEffectiveDate: legalSource.effectiveDate,
+    ownerRole: "Accounting standards reviewer",
+    releaseChecklistCode: "source-law-change-review",
+    blocksRelease: true,
+    reviewChecks: [
+      "Confirm source page is reachable at the pinned URL.",
+      "Compare pinned effective date against the current source page.",
+      "Review guidance wording for statutory filing, exemption, note or taxonomy changes.",
+      "Record qualified accountant acceptance before generated packs are used for real filings.",
+    ],
+    requiredEvidence: [
+      "source-law-change-review-note",
+      "qualified-accountant-source-law-signoff",
+    ],
   };
 }
 

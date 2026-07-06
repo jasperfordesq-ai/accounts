@@ -84,6 +84,27 @@ function sampleReport(): ProductionReadinessReport {
         "qualified-accountant-source-law-signoff",
       ],
     },
+    sourceLawReviewLedger: [
+      {
+        sourceId: "revenue-accepted-taxonomies",
+        title: "Revenue accepted iXBRL taxonomies",
+        url: "https://www.revenue.ie/",
+        pinnedEffectiveDate: "2025-11-06",
+        ownerRole: "Taxonomy and corporation tax reviewer",
+        releaseChecklistCode: "source-law-change-review",
+        blocksRelease: true,
+        reviewChecks: [
+          "Confirm source page is reachable at the pinned URL.",
+          "Compare pinned effective date against the current source page.",
+          "Review guidance wording for statutory filing, exemption, note or taxonomy changes.",
+          "Confirm Revenue-accepted taxonomy and iXBRL content guidance still match generated output assumptions.",
+        ],
+        requiredEvidence: [
+          "source-law-change-review-note",
+          "qualified-accountant-source-law-signoff",
+        ],
+      },
+    ],
     assurancePacket: {
       packetId: "assurance-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       packetVersion: "production-assurance-packet-v1",
@@ -96,7 +117,7 @@ function sampleReport(): ProductionReadinessReport {
       visualQaExpectedScreenshots: 24,
       requiredOperationalGates: 1,
       openCriticalActions: 1,
-      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "accountant-journey-acceptance-checklist", "production-completion-map"],
+      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "source-law-review-ledger", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "accountant-journey-acceptance-checklist", "production-completion-map"],
       releaseBlockers: ["Qualified accountant sign-off required"],
     },
     accountantAcceptanceCriteria: [
@@ -473,6 +494,19 @@ function sampleReport(): ProductionReadinessReport {
         auditEventCodes: ["CroFilingStatusChanged"],
         detail: "Named professional approval must be recorded against the period.",
       },
+      {
+        code: "source-law-change-review",
+        label: "Source-law change review",
+        ownerRole: "Qualified accountant and engineering",
+        required: true,
+        status: "required",
+        blocksRelease: true,
+        evidenceArtifact: "source-law-change-review-note",
+        assuranceActionCode: "qualified-accountant-signoff",
+        operationalGateCode: "qualified-accountant-review",
+        auditEventCodes: ["CroFilingStatusChanged"],
+        detail: "Pinned CRO, Revenue, FRC and charity guidance must be reviewed before release.",
+      },
     ],
     releaseVerificationManifest: [
       {
@@ -486,6 +520,18 @@ function sampleReport(): ProductionReadinessReport {
         evidenceArtifact: "backend-test-results",
         releaseChecklistEvidenceArtifact: "named-accountant-approval-record",
         manualFallback: "Run the same command locally from backend/ when GitHub Actions is unavailable.",
+      },
+      {
+        code: "source-law-review",
+        label: "Source-law review evidence",
+        ownerRole: "Qualified accountant and engineering",
+        command: "node --test tests/production-readiness-contract.test.mjs",
+        ciScope: "default-ci",
+        runsInDefaultCi: true,
+        blocksRelease: true,
+        evidenceArtifact: "source-law-review-ledger",
+        releaseChecklistEvidenceArtifact: "source-law-change-review-note",
+        manualFallback: "Review pinned CRO, Revenue, FRC and charity source pages and attach the signed review note.",
       },
     ],
     auditabilityControls: [
