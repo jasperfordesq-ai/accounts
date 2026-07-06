@@ -212,6 +212,22 @@ test("year-end questionnaire route delegates reusable section shell to a focused
   assert.match(componentSource, /aria-expanded/, "section shell should own accessible collapse state");
 });
 
+test("year-end questionnaire route delegates header and progress shell to a focused component", () => {
+  const routeFile = new URL("companies/[companyId]/periods/[periodId]/year-end/page.tsx", appDir);
+  const componentFile = new URL("../src/components/period/YearEndQuestionnaireHeader.tsx", import.meta.url);
+
+  assert.ok(existsSync(componentFile), "YearEndQuestionnaireHeader should exist as the reusable questionnaire header shell");
+
+  const routeSource = readFileSync(routeFile, "utf8");
+  const componentSource = readFileSync(componentFile, "utf8");
+
+  assert.match(routeSource, /YearEndQuestionnaireHeader/, "year-end questionnaire route should render the focused header shell");
+  assert.doesNotMatch(routeSource, /Back to Period Workspace/, "year-end questionnaire route should not own back-link header copy");
+  assert.doesNotMatch(routeSource, /sections completed/, "year-end questionnaire route should not own progress summary copy");
+  assert.match(componentSource, /export function YearEndQuestionnaireHeader/, "header shell should be exported for reuse and render tests");
+  assert.match(componentSource, /aria-valuenow/, "header shell should expose accessible progress semantics");
+});
+
 test("period adjustments route delegates generation, filters and approval composition", () => {
   const periodRoute = new URL("companies/[companyId]/periods/[periodId]/page.tsx", appDir);
   const source = readFileSync(periodRoute, "utf8");

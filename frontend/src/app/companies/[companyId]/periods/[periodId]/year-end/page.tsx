@@ -1,17 +1,14 @@
 "use client";
 
 import { use, useState, useEffect, useCallback, useMemo } from "react";
-import Link from "next/link";
 import {
   Button,
-  Card,
   Chip,
   Spinner,
 } from "@heroui/react";
 import {
   Plus,
   Trash2,
-  ArrowLeft,
   Users,
   Building2,
   Package,
@@ -26,10 +23,10 @@ import {
   HeartPulse,
 } from "lucide-react";
 import { toast } from "sonner";
-import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { LoansManager } from "@/components/LoansManager";
 import { DirectorLoansManager, type DirectorOption } from "@/components/DirectorLoansManager";
 import { useAuth } from "@/components/AuthProvider";
+import { YearEndQuestionnaireHeader } from "@/components/period/YearEndQuestionnaireHeader";
 import { YearEndQuestionnaireSection as Section } from "@/components/period/YearEndQuestionnaireSection";
 import { useUnsavedChanges } from "@/lib/useUnsavedChanges";
 import { PeriodWorkspaceSkeleton } from "@/components/Skeleton";
@@ -605,58 +602,15 @@ export default function YearEndQuestionnairePage({
 
   return (
     <div className="max-w-4xl mx-auto animate-fade-in">
-      {/* Breadcrumbs */}
-      <Breadcrumbs
-        items={[
-          { label: company?.legalName ?? "Company", href: `/companies/${companyId}` },
-          { label: periodLabel, href: `/companies/${companyId}/periods/${periodId}` },
-          { label: "Year-End" },
-        ]}
+      <YearEndQuestionnaireHeader
+        companyId={companyId}
+        periodId={periodId}
+        companyName={company?.legalName ?? "Company"}
+        periodLabel={periodLabel}
+        backHref={`/companies/${companyId}/periods/${periodId}`}
+        completedCount={completedCount}
+        totalSections={totalSections}
       />
-
-      {/* Header */}
-      <div className="mb-6">
-        <Link
-          href={`/companies/${companyId}/periods/${periodId}`}
-          className="inline-flex items-center gap-1.5 text-sm text-emerald-700 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300 mb-3"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Back to Period Workspace
-        </Link>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-          Year-End Questionnaire
-        </h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          {company?.legalName ?? "Company"} &mdash;{" "}
-          {periodLabel}
-        </p>
-      </div>
-
-      {/* Progress */}
-      <div className="mb-6">
-        <Card className="bg-white dark:bg-neutral-900 shadow-sm border border-gray-200 dark:border-neutral-700">
-          <Card.Content className="p-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Progress
-              </span>
-              <Chip
-                color={completedCount >= totalSections - 2 ? "success" : completedCount >= Math.floor(totalSections / 2) ? "warning" : "default"}
-                variant="soft"
-                size="sm"
-              >
-                {completedCount} of {totalSections} sections completed
-              </Chip>
-            </div>
-            <div className="w-full bg-gray-200 dark:bg-neutral-700 rounded-full h-2.5">
-              <div
-                className="bg-emerald-500 h-2.5 rounded-full transition-all"
-                style={{ width: `${Math.round((completedCount / totalSections) * 100)}%` }}
-              />
-            </div>
-          </Card.Content>
-        </Card>
-      </div>
 
       {/* 9 Sections */}
       <div className="space-y-4">
