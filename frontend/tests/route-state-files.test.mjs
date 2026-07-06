@@ -388,6 +388,25 @@ test("year-end questionnaire route delegates related-party-transactions working-
   assert.match(componentSource, /Management Fee/, "related-party shell should preserve transaction type options");
 });
 
+test("year-end questionnaire route delegates contingent-liabilities working-paper section", () => {
+  const routeFile = new URL("companies/[companyId]/periods/[periodId]/year-end/page.tsx", appDir);
+  const componentFile = new URL("../src/components/period/YearEndContingentLiabilitiesSection.tsx", import.meta.url);
+
+  assert.ok(existsSync(componentFile), "YearEndContingentLiabilitiesSection should exist for contingent-liability evidence review");
+
+  const routeSource = readFileSync(routeFile, "utf8");
+  const componentSource = readFileSync(componentFile, "utf8");
+
+  assert.match(routeSource, /YearEndContingentLiabilitiesSection/, "year-end questionnaire route should render the focused contingent-liabilities shell");
+  assert.doesNotMatch(routeSource, /aria-label="Contingency description"/, "year-end questionnaire route should not own contingency description fields");
+  assert.doesNotMatch(routeSource, /aria-label="Estimated amount"/, "year-end questionnaire route should not own contingency amount fields");
+  assert.doesNotMatch(routeSource, /Delete contingency/, "year-end questionnaire route should not own contingency delete copy");
+  assert.match(componentSource, /Legal Claim/, "contingent-liabilities shell should preserve nature options");
+  assert.match(componentSource, /Environmental/, "contingent-liabilities shell should preserve environmental option");
+  assert.match(componentSource, /Probable/, "contingent-liabilities shell should preserve likelihood options");
+  assert.match(componentSource, /danger/, "contingent-liabilities shell should preserve probable risk colour");
+});
+
 test("period adjustments route delegates generation, filters and approval composition", () => {
   const periodRoute = new URL("companies/[companyId]/periods/[periodId]/page.tsx", appDir);
   const source = readFileSync(periodRoute, "utf8");
