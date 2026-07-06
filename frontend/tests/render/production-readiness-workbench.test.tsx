@@ -111,6 +111,10 @@ describe("ProductionReadinessWorkbench", () => {
     expectText("Dark mobile");
     expectText("Visible text overlap");
     expectText("Route audit summary");
+    expect(screen.getByRole("heading", { name: "Visual route review board" })).toBeInTheDocument();
+    expectText("6 route reviews open");
+    expectText("24 screenshots requiring review");
+    expectText("visual-qa-screenshot-review");
     expect(screen.getAllByText("Table scanability").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Theme contrast").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Mobile density").length).toBeGreaterThan(0);

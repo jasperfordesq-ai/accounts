@@ -45,6 +45,11 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
   const completedAssuranceActions = assuranceActions.filter((action) => action.status === "complete").length;
   const statusTone = report.overallStatus === "ready" ? "good" : "warn";
   const releaseReady = report.overallStatus === "ready" && assurancePacket.openCriticalActions === 0;
+  const openVisualRouteReviews = visualQaCoverage?.routeAudits.filter((audit) => audit.reviewStatus !== "accepted") ?? [];
+  const visualScreenshotsRequiringReview = openVisualRouteReviews.reduce(
+    (total, audit) => total + audit.screenshotCount,
+    0,
+  );
 
   return (
     <PageShell
@@ -1078,6 +1083,71 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
                 ],
               }))}
             />
+
+            <div className="mt-4">
+              <div className="mb-3 flex flex-col gap-2 border-b border-[var(--border)] pb-3 md:flex-row md:items-end md:justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold text-[var(--foreground)]">Visual route review board</h3>
+                  <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">
+                    Route-level visual sign-off queue for accountant workflow hierarchy, table scanability, contrast, mobile density and route states.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <StatusBadge tone={openVisualRouteReviews.length === 0 ? "good" : "warn"}>
+                    {openVisualRouteReviews.length} {openVisualRouteReviews.length === 1 ? "route review" : "route reviews"} open
+                  </StatusBadge>
+                  <StatusBadge tone={visualScreenshotsRequiringReview === 0 ? "good" : "warn"}>
+                    {visualScreenshotsRequiringReview} screenshots requiring review
+                  </StatusBadge>
+                  <StatusBadge tone="info">{visualQaCoverage.reviewProtocol.signOffGate}</StatusBadge>
+                </div>
+              </div>
+              <DataTable
+                caption="Visual route review board"
+                filterPlaceholder="Filter visual route review board"
+                emptyState="No matching visual route reviews"
+                columns={["Route", "Evidence package", "Reviewer checks", "Required sign-off", "Status"]}
+                rows={visualQaCoverage.routeAudits.map((audit) => ({
+                  id: audit.routeCode,
+                  tone: audit.reviewStatus === "accepted" ? "good" : "warn",
+                  searchText: [
+                    audit.label,
+                    audit.routeCode,
+                    audit.routeKey,
+                    audit.reviewStatus,
+                    visualQaCoverage.reviewProtocol.signOffGate,
+                    ...audit.workflowStages,
+                    ...audit.reviewChecks,
+                    ...visualQaCoverage.reviewProtocol.requiredEvidence,
+                  ].join(" "),
+                  cells: [
+                    <div key="route" className="min-w-44 whitespace-normal">
+                      <p className="font-medium">{audit.label}</p>
+                      <code className="mt-1 block break-all text-[11px] text-[var(--muted-foreground)]">{audit.routeCode}</code>
+                    </div>,
+                    <div key="evidence" className="min-w-48 whitespace-normal text-xs leading-5 text-[var(--muted-foreground)]">
+                      <p className="font-medium text-[var(--foreground)]">{audit.screenshotCount} screenshots</p>
+                      <p>{visualQaCoverage.manifestFileName}</p>
+                      <p>{audit.workflowStages.join(", ")}</p>
+                    </div>,
+                    <div key="checks" className="flex min-w-52 flex-wrap gap-1.5">
+                      {audit.reviewChecks.map((check) => (
+                        <StatusBadge key={check} tone="info">{formatStatus(check)}</StatusBadge>
+                      ))}
+                    </div>,
+                    <div key="sign-off" className="min-w-48 whitespace-normal">
+                      <CodeStack items={[visualQaCoverage.reviewProtocol.signOffGate]} />
+                      <div className="mt-2">
+                        <CompactList items={visualQaCoverage.reviewProtocol.requiredEvidence.slice(0, 2)} />
+                      </div>
+                    </div>,
+                    <StatusBadge key="status" tone={audit.reviewStatus === "accepted" ? "good" : "warn"}>
+                      {formatStatus(audit.reviewStatus)}
+                    </StatusBadge>,
+                  ],
+                }))}
+              />
+            </div>
 
             <div className="mt-4">
               <DataTable
