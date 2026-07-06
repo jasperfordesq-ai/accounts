@@ -2521,6 +2521,7 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
   }
 
   const scenariosByCode = new Map(report.goldenFilingCorpus.map((scenario) => [scenario.code, scenario]));
+  assertSmallAbridgedGoldenScenario(scenariosByCode);
   assertGoldenEvidenceLedger(report, scenariosByCode);
   report.accountantAcceptanceCriteria.forEach((criterion, criterionIndex) => {
     const scenario = scenariosByCode.get(criterion.scenarioCode);
@@ -2749,6 +2750,56 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
   if (!report.assurancePacket.evidenceItems.includes("golden-verifier-manifest")) {
     throw new Error(
       "Invalid production readiness report contract: assurancePacket.evidenceItems - golden-verifier-manifest is required",
+    );
+  }
+}
+
+function assertSmallAbridgedGoldenScenario(
+  scenariosByCode: Map<string, GoldenFilingCorpusScenario>,
+) {
+  const scenario = scenariosByCode.get("small-abridged-ltd");
+  const requiredVerifier = "FilingGoldenCorpusScenarioTests.GoldenCorpus_SmallAbridgedLtd_EmitsFullAccountsAbridgedCroPackIxbrlAndReadiness";
+
+  if (!scenario) {
+    throw new Error(
+      "Invalid production readiness report contract: goldenFilingCorpus.small-abridged-ltd - scenario is required",
+    );
+  }
+
+  if (!scenario.evidenceTestNames.includes(requiredVerifier)) {
+    throw new Error(
+      "Invalid production readiness report contract: goldenFilingCorpus.small-abridged-ltd - dedicated small abridged verifier is required",
+    );
+  }
+
+  if (!scenario.evidenceVerifiers.some((verifier) => verifier.name === requiredVerifier)) {
+    throw new Error(
+      "Invalid production readiness report contract: goldenFilingCorpus.small-abridged-ltd - dedicated small abridged verifier metadata is required",
+    );
+  }
+
+  const evidencePack = scenario.evidencePack;
+  if (!evidencePack.outputArtifacts.some((artifact) => artifact.toLowerCase().includes("abridged cro filing pack"))) {
+    throw new Error(
+      "Invalid production readiness report contract: goldenFilingCorpus.small-abridged-ltd.evidencePack.outputArtifacts - abridged CRO filing pack evidence is required",
+    );
+  }
+
+  if (!evidencePack.expectedValueChecks.some((check) => check.toLowerCase().includes("section 352"))) {
+    throw new Error(
+      "Invalid production readiness report contract: goldenFilingCorpus.small-abridged-ltd.evidencePack.expectedValueChecks - Section 352 evidence is required",
+    );
+  }
+
+  if (!evidencePack.expectedOutputs.pdfTextMarkers.some((marker) => marker.toLowerCase().includes("section 352"))) {
+    throw new Error(
+      "Invalid production readiness report contract: goldenFilingCorpus.small-abridged-ltd.evidencePack.expectedOutputs.pdfTextMarkers - Section 352 PDF marker is required",
+    );
+  }
+
+  if (!evidencePack.expectedOutputs.filingGateStates.some((gate) => gate.toLowerCase().includes("abridgement eligibility"))) {
+    throw new Error(
+      "Invalid production readiness report contract: goldenFilingCorpus.small-abridged-ltd.evidencePack.expectedOutputs.filingGateStates - abridgement eligibility gate is required",
     );
   }
 }

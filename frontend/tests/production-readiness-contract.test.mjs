@@ -44,6 +44,14 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.equal(dacScenario?.fixture.companyType, "DesignatedActivityCompany");
   assert.equal(dacScenario?.evidenceVerifiers[0].name, "FilingGoldenCorpusScenarioTests.GoldenCorpus_DacSmall_EmitsAccountsIxbrlAndSourceBackedReadiness");
   assert.equal(dacScenario?.evidencePack.expectedOutputs.ixbrlRequiredTags[0], "bus:EntityCurrentLegalOrRegisteredName");
+  const smallAbridgedScenario = parsed.goldenFilingCorpus.find((scenario) => scenario.code === "small-abridged-ltd");
+  assert.equal(smallAbridgedScenario?.fixture.legalName, "Connacht Digital Solutions Limited");
+  assert.equal(smallAbridgedScenario?.fixture.expectedRegime, "SmallAbridged");
+  assert.ok(smallAbridgedScenario?.evidenceTestNames.includes("FilingGoldenCorpusScenarioTests.GoldenCorpus_SmallAbridgedLtd_EmitsFullAccountsAbridgedCroPackIxbrlAndReadiness"));
+  assert.ok(smallAbridgedScenario?.evidencePack.outputArtifacts.includes("abridged CRO filing pack"));
+  assert.ok(smallAbridgedScenario?.evidencePack.expectedValueChecks.includes("Section 352 wording"));
+  assert.ok(smallAbridgedScenario?.evidencePack.expectedOutputs.pdfTextMarkers.includes("Section 352"));
+  assert.ok(smallAbridgedScenario?.evidencePack.expectedOutputs.filingGateStates.includes("abridgement eligibility confirmed"));
   assert.equal(parsed.sourceLawSnapshot.sourceCount, 2);
   assert.equal(parsed.sourceLawSnapshot.contentHash, "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
   assert.equal(parsed.sourceLawTraceability[0].sourceId, "frc-frs-105");
@@ -78,19 +86,20 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.match(parsed.accountantAcceptanceCriteria[0].requiredSignOffGate, /qualified accountant/i);
   assert.equal(parsed.accountantAcceptanceCriteria[0].evidenceVerifiers[0].name, parsed.goldenFilingCorpus[0].evidenceVerifiers[0].name);
   assert.equal(parsed.accountantAcceptanceCriteria[0].evidenceVerifiers[0].command, parsed.goldenFilingCorpus[0].evidenceVerifiers[0].command);
-  assert.equal(parsed.accountantAcceptanceSummary.scenarioCount, 2);
-  assert.equal(parsed.accountantAcceptanceSummary.professionalSignOffRequiredCount, 2);
-  assert.equal(parsed.accountantAcceptanceSummary.automatedVerifierCount, 2);
+  assert.equal(parsed.accountantAcceptanceSummary.scenarioCount, 3);
+  assert.equal(parsed.accountantAcceptanceSummary.professionalSignOffRequiredCount, 3);
+  assert.equal(parsed.accountantAcceptanceSummary.automatedVerifierCount, 4);
   assert.equal(parsed.accountantAcceptanceSummary.manualHandoffScenarioCount, 0);
-  assert.deepEqual(parsed.accountantAcceptanceSummary.releaseBlockingScenarioCodes, ["dac-small", "micro-ltd"]);
+  assert.deepEqual(parsed.accountantAcceptanceSummary.releaseBlockingScenarioCodes, ["dac-small", "micro-ltd", "small-abridged-ltd"]);
   assert.deepEqual(parsed.accountantAcceptanceSummary.requiredSignOffGates, [
     "Named qualified accountant must approve the DAC generated pack before real filing use.",
+    "Named qualified accountant must approve both the full accounts pack and abridged CRO pack before real filing use.",
     "Named qualified accountant must approve the generated pack before real filing use.",
   ]);
   assert.equal(parsed.accountantAcceptanceSummary.status, "qualified-accountant-review-required");
   assert.equal(parsed.accountantWorkflowWalkthroughProtocol.protocolVersion, "accountant-workflow-walkthrough-v1");
   assert.equal(parsed.accountantWorkflowWalkthroughProtocol.signOffGate, "golden-corpus-accountant-acceptance");
-  assert.deepEqual(parsed.accountantWorkflowWalkthroughProtocol.seededScenarioCodes, ["dac-small", "micro-ltd"]);
+  assert.deepEqual(parsed.accountantWorkflowWalkthroughProtocol.seededScenarioCodes, ["dac-small", "micro-ltd", "small-abridged-ltd"]);
   assert.match(parsed.accountantWorkflowWalkthroughProtocol.routeSequence[0], /Dashboard/);
   assert.match(parsed.accountantWorkflowWalkthroughProtocol.acceptanceCriteria.at(-1), /outputs, gates, wording and evidence/);
   assert.ok(parsed.accountantWorkflowWalkthroughProtocol.requiredEvidence.includes("seeded golden corpus walkthrough note"));
@@ -100,12 +109,12 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
     ["company-detail", "dashboard", "filing-review", "period-workspace", "production-readiness"],
   );
   assert.equal(parsed.accountantJourneyAcceptanceChecklist[0].signOffGate, "golden-corpus-accountant-acceptance");
-  assert.deepEqual(parsed.accountantJourneyAcceptanceChecklist[0].seededScenarioCodes, ["dac-small", "micro-ltd"]);
+  assert.deepEqual(parsed.accountantJourneyAcceptanceChecklist[0].seededScenarioCodes, ["dac-small", "micro-ltd", "small-abridged-ltd"]);
   assert.equal(parsed.accountantJourneyAcceptanceChecklist[0].visualArtifactNames.length, 4);
   assert.match(parsed.accountantJourneyAcceptanceChecklist[2].acceptanceCriteria[0], /Period workspace/);
   assert.equal(parsed.assurancePacket.packetVersion, "production-assurance-packet-v1");
   assert.equal(parsed.assurancePacket.sourceLawSnapshotHash, "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
-  assert.equal(parsed.assurancePacket.goldenCorpusCovered, 2);
+  assert.equal(parsed.assurancePacket.goldenCorpusCovered, 3);
   assert.ok(parsed.assurancePacket.evidenceItems.includes("source-law-traceability-index"));
   assert.ok(parsed.assurancePacket.evidenceItems.includes("release-review-checklist"));
   assert.ok(parsed.assurancePacket.evidenceItems.includes("golden-evidence-ledger"));
@@ -236,15 +245,15 @@ test("parseProductionReadinessReport rejects golden corpus without matching acco
   const payload = sampleReport();
   payload.goldenFilingCorpus.push({
     ...payload.goldenFilingCorpus[0],
-    code: "small-abridged-ltd",
-    label: "Small abridged LTD",
+    code: "clg-charity",
+    label: "CLG charity",
   });
-  payload.assurancePacket.goldenCorpusTotal = 3;
-  payload.assurancePacket.goldenCorpusCovered = 3;
+  payload.assurancePacket.goldenCorpusTotal = 4;
+  payload.assurancePacket.goldenCorpusCovered = 4;
 
   assert.throws(
     () => parseProductionReadinessReport(payload),
-    /Invalid production readiness report contract: accountantAcceptanceCriteria - missing acceptance criteria for golden scenarios: small-abridged-ltd/,
+    /Invalid production readiness report contract: accountantAcceptanceCriteria - missing acceptance criteria for golden scenarios: clg-charity/,
   );
 });
 
@@ -269,11 +278,11 @@ test("parseProductionReadinessReport rejects inconsistent production assurance c
   );
 
   const corpusPayload = sampleReport();
-  corpusPayload.assurancePacket.goldenCorpusTotal = 3;
+  corpusPayload.assurancePacket.goldenCorpusTotal = 4;
 
   assert.throws(
     () => parseProductionReadinessReport(corpusPayload),
-    /Invalid production readiness report contract: assurancePacket\.goldenCorpusTotal - expected 2, received 3/,
+    /Invalid production readiness report contract: assurancePacket\.goldenCorpusTotal - expected 3, received 4/,
   );
 
   const visualPayload = sampleReport();
@@ -350,7 +359,7 @@ test("parseProductionReadinessReport rejects accountant walkthrough protocols th
 
   assert.throws(
     () => parseProductionReadinessReport(payload),
-    /Invalid production readiness report contract: accountantWorkflowWalkthroughProtocol\.seededScenarioCodes - expected dac-small, micro-ltd, received micro-ltd/,
+    /Invalid production readiness report contract: accountantWorkflowWalkthroughProtocol\.seededScenarioCodes - expected dac-small, micro-ltd, small-abridged-ltd, received micro-ltd/,
   );
 });
 
@@ -402,11 +411,11 @@ test("parseProductionReadinessReport rejects accountant journey acceptance witho
 
 test("parseProductionReadinessReport rejects inconsistent accountant acceptance summaries", () => {
   const payload = sampleReport();
-  payload.accountantAcceptanceSummary.scenarioCount = 3;
+  payload.accountantAcceptanceSummary.scenarioCount = 4;
 
   assert.throws(
     () => parseProductionReadinessReport(payload),
-    /Invalid production readiness report contract: accountantAcceptanceSummary\.scenarioCount - expected 2, received 3/,
+    /Invalid production readiness report contract: accountantAcceptanceSummary\.scenarioCount - expected 3, received 4/,
   );
 });
 
@@ -465,6 +474,23 @@ test("parseProductionReadinessReport rejects proof points whose verifier is not 
   assert.throws(
     () => parseProductionReadinessReport(payload),
     /Invalid production readiness report contract: goldenFilingCorpus\.0\.evidencePack\.expectedProofPoints\.0\.automatedVerifier - verifier must be listed in evidenceTestNames/,
+  );
+});
+
+test("parseProductionReadinessReport rejects small abridged corpus without Section 352 verifier evidence", () => {
+  const payload = sampleReport();
+  const scenario = payload.goldenFilingCorpus.find((item) => item.code === "small-abridged-ltd");
+  assert.ok(scenario);
+  scenario.evidenceTestNames = scenario.evidenceTestNames.filter(
+    (name) => name !== "FilingGoldenCorpusScenarioTests.GoldenCorpus_SmallAbridgedLtd_EmitsFullAccountsAbridgedCroPackIxbrlAndReadiness",
+  );
+  scenario.evidenceVerifiers = scenario.evidenceVerifiers.filter(
+    (verifier) => verifier.name !== "FilingGoldenCorpusScenarioTests.GoldenCorpus_SmallAbridgedLtd_EmitsFullAccountsAbridgedCroPackIxbrlAndReadiness",
+  );
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: goldenFilingCorpus\.small-abridged-ltd - dedicated small abridged verifier is required/,
   );
 });
 
@@ -616,7 +642,9 @@ function sampleReport() {
         inSnapshot: true,
         usedBy: [
           "golden-corpus:dac-small",
+          "golden-corpus:small-abridged-ltd",
           "accountant-acceptance:dac-small",
+          "accountant-acceptance:small-abridged-ltd",
         ],
         releaseGateCodes: ["qualified-accountant-review"],
       },
@@ -652,8 +680,8 @@ function sampleReport() {
       packetVersion: "production-assurance-packet-v1",
       status: "review-required",
       sourceLawSnapshotHash: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      goldenCorpusCovered: 2,
-      goldenCorpusTotal: 2,
+      goldenCorpusCovered: 3,
+      goldenCorpusTotal: 3,
       statutoryRuleMatrixPaths: 1,
       statutoryRuleCoverageFamilies: 1,
       visualQaExpectedScreenshots: expectedVisualSmokeScreenshotCount(),
@@ -690,6 +718,34 @@ function sampleReport() {
         sources: [source("frc-frs-105", "FRC FRS 105 current edition and amendments")],
       },
       {
+        scenarioCode: "small-abridged-ltd",
+        label: "Small abridged LTD accountant acceptance",
+        required: true,
+        acceptanceStatus: "qualified-accountant-review-required",
+        reviewScope: ["Full accounts PDF", "Abridged CRO pack", "Section 352 evidence", "iXBRL XML", "tax computation", "notes", "signatory gates"],
+        requiredEvidence: ["Named qualified-accountant approval recorded against full and abridged generated packs."],
+        requiredSignOffGate: "Named qualified accountant must approve both the full accounts pack and abridged CRO pack before real filing use.",
+        evidenceVerifiers: [
+          {
+            name: "AccountsWorkflowTests.GoldenPath_SmallAuditExemptCompany_MixedAccrualSetBalancesThroughPdfAndIxbrl",
+            command: "dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter FullyQualifiedName~AccountsWorkflowTests.GoldenPath_SmallAuditExemptCompany_MixedAccrualSetBalancesThroughPdfAndIxbrl",
+            ciScope: "default-ci",
+            runsInDefaultCi: true,
+            environment: "EF Core InMemory golden fixture; CI also runs the broader backend suite on Linux",
+            evidenceLevel: "end-to-end golden filing scenario",
+          },
+          {
+            name: "FilingGoldenCorpusScenarioTests.GoldenCorpus_SmallAbridgedLtd_EmitsFullAccountsAbridgedCroPackIxbrlAndReadiness",
+            command: "dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter FullyQualifiedName~FilingGoldenCorpusScenarioTests.GoldenCorpus_SmallAbridgedLtd_EmitsFullAccountsAbridgedCroPackIxbrlAndReadiness",
+            ciScope: "default-ci",
+            runsInDefaultCi: true,
+            environment: "EF Core InMemory golden fixture; CI also runs the broader backend suite on Linux",
+            evidenceLevel: "end-to-end golden filing scenario",
+          },
+        ],
+        sources: [source("frc-frs-102", "FRC FRS 102 current edition and amendments")],
+      },
+      {
         scenarioCode: "dac-small",
         label: "Small DAC accountant acceptance",
         required: true,
@@ -711,13 +767,14 @@ function sampleReport() {
       },
     ],
     accountantAcceptanceSummary: {
-      scenarioCount: 2,
-      automatedVerifierCount: 2,
-      professionalSignOffRequiredCount: 2,
+      scenarioCount: 3,
+      automatedVerifierCount: 4,
+      professionalSignOffRequiredCount: 3,
       manualHandoffScenarioCount: 0,
-      releaseBlockingScenarioCodes: ["dac-small", "micro-ltd"],
+      releaseBlockingScenarioCodes: ["dac-small", "micro-ltd", "small-abridged-ltd"],
       requiredSignOffGates: [
         "Named qualified accountant must approve the DAC generated pack before real filing use.",
+        "Named qualified accountant must approve both the full accounts pack and abridged CRO pack before real filing use.",
         "Named qualified accountant must approve the generated pack before real filing use.",
       ],
       status: "qualified-accountant-review-required",
@@ -728,7 +785,7 @@ function sampleReport() {
       status: "required-review",
       signOffGate: "golden-corpus-accountant-acceptance",
       failurePolicy: "Block release if a named qualified accountant has not walked the seeded golden corpus through the live accountant workflow and accepted the outputs, gates, wording and evidence.",
-      seededScenarioCodes: ["dac-small", "micro-ltd"],
+      seededScenarioCodes: ["dac-small", "micro-ltd", "small-abridged-ltd"],
       routeSequence: [
         "Dashboard: identify the client, deadline pressure, blockers, reviewer owner and next action.",
         "Company detail: confirm statutory profile, company type, officers, charity flags and period setup.",
@@ -877,6 +934,75 @@ function sampleReport() {
           sourceReferences: [source("frc-frs-102", "FRC FRS 102 current edition and amendments")],
         },
       },
+      {
+        code: "small-abridged-ltd",
+        label: "Small abridged LTD",
+        companyScope: "Private company limited by shares",
+        expectedOutcome: "generated-pack",
+        coverageStatus: "covered",
+        fixture: {
+          legalName: "Connacht Digital Solutions Limited",
+          companyType: "Private",
+          periodStart: "2025-01-01",
+          periodEnd: "2025-12-31",
+          expectedSizeClass: "Small",
+          expectedRegime: "SmallAbridged",
+          auditExempt: true,
+          manualProfessionalReviewRequired: false,
+        },
+        evidenceTestNames: [
+          "AccountsWorkflowTests.GoldenPath_SmallAuditExemptCompany_MixedAccrualSetBalancesThroughPdfAndIxbrl",
+          "FilingGoldenCorpusScenarioTests.GoldenCorpus_SmallAbridgedLtd_EmitsFullAccountsAbridgedCroPackIxbrlAndReadiness",
+        ],
+        evidenceVerifiers: [
+          {
+            name: "AccountsWorkflowTests.GoldenPath_SmallAuditExemptCompany_MixedAccrualSetBalancesThroughPdfAndIxbrl",
+            command: "dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter FullyQualifiedName~AccountsWorkflowTests.GoldenPath_SmallAuditExemptCompany_MixedAccrualSetBalancesThroughPdfAndIxbrl",
+            ciScope: "default-ci",
+            runsInDefaultCi: true,
+            environment: "EF Core InMemory golden fixture; CI also runs the broader backend suite on Linux",
+            evidenceLevel: "end-to-end golden filing scenario",
+          },
+          {
+            name: "FilingGoldenCorpusScenarioTests.GoldenCorpus_SmallAbridgedLtd_EmitsFullAccountsAbridgedCroPackIxbrlAndReadiness",
+            command: "dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter FullyQualifiedName~FilingGoldenCorpusScenarioTests.GoldenCorpus_SmallAbridgedLtd_EmitsFullAccountsAbridgedCroPackIxbrlAndReadiness",
+            ciScope: "default-ci",
+            runsInDefaultCi: true,
+            environment: "EF Core InMemory golden fixture; CI also runs the broader backend suite on Linux",
+            evidenceLevel: "end-to-end golden filing scenario",
+          },
+        ],
+        assertions: ["full accounts PDF", "abridged CRO pack", "Section 352 evidence", "iXBRL parse", "source-backed readiness"],
+        evidencePack: {
+          outputArtifacts: ["full accounts PDF text", "abridged CRO filing pack", "CRO signature page", "iXBRL XML", "tax computation", "notes disclosure set", "filing readiness profile"],
+          decisionGates: ["abridgement eligibility", "director and secretary certification", "named qualified-accountant review", "external ROS/iXBRL validation"],
+          expectedValueChecks: ["SmallAbridged regime", "Section 352 wording", "public P&L turnover omitted from iXBRL"],
+          expectedOutputs: {
+            pdfTextMarkers: ["Connacht Digital Solutions Limited", "Section 352", "PROFIT AND LOSS ACCOUNT"],
+            ixbrlRequiredTags: ["core:EntityCurrentLegalOrRegisteredName"],
+            filingReadinessState: "ready-for-external-filing",
+            expectedCorporationTax: 62.5,
+            requiredNotes: ["Accounting Policies"],
+            filingGateStates: ["abridgement eligibility confirmed", "director and secretary certification satisfied", "qualified-accountant review recorded"],
+            signOffPacketState: "ready-for-external-filing",
+          },
+          expectedProofPoints: [
+            {
+              area: "pdf-text",
+              expectedEvidence: "Full accounts PDF and abridged CRO filing pack contain the required Section 352 evidence.",
+              automatedVerifier: "FilingGoldenCorpusScenarioTests.GoldenCorpus_SmallAbridgedLtd_EmitsFullAccountsAbridgedCroPackIxbrlAndReadiness",
+              required: true,
+            },
+            {
+              area: "ixbrl-xml",
+              expectedEvidence: "iXBRL XML is well-formed and omits public profit-and-loss turnover for the abridged pack.",
+              automatedVerifier: "FilingGoldenCorpusScenarioTests.GoldenCorpus_SmallAbridgedLtd_EmitsFullAccountsAbridgedCroPackIxbrlAndReadiness",
+              required: true,
+            },
+          ],
+          sourceReferences: [source("frc-frs-102", "FRC FRS 102 current edition and amendments")],
+        },
+      },
     ],
     goldenEvidenceLedger: [
       {
@@ -914,6 +1040,29 @@ function sampleReport() {
         decisionGates: ["named qualified-accountant review"],
         expectedValueChecks: ["well-formed iXBRL"],
         proofPointAreas: ["pdf-text"],
+        sourceIds: ["frc-frs-102"],
+        expectedCorporationTax: 62.5,
+        filingReadinessState: "ready-for-external-filing",
+        signOffPacketState: "ready-for-external-filing",
+      },
+      {
+        scenarioCode: "small-abridged-ltd",
+        label: "Small abridged LTD",
+        fixtureLegalName: "Connacht Digital Solutions Limited",
+        companyType: "Private",
+        expectedOutcome: "generated-pack",
+        coverageStatus: "covered",
+        acceptanceStatus: "qualified-accountant-review-required",
+        requiredSignOffGate: "Named qualified accountant must approve both the full accounts pack and abridged CRO pack before real filing use.",
+        blocksRelease: true,
+        automatedVerifierNames: [
+          "AccountsWorkflowTests.GoldenPath_SmallAuditExemptCompany_MixedAccrualSetBalancesThroughPdfAndIxbrl",
+          "FilingGoldenCorpusScenarioTests.GoldenCorpus_SmallAbridgedLtd_EmitsFullAccountsAbridgedCroPackIxbrlAndReadiness",
+        ],
+        outputArtifacts: ["full accounts PDF text", "abridged CRO filing pack", "CRO signature page", "iXBRL XML", "tax computation", "notes disclosure set", "filing readiness profile"],
+        decisionGates: ["abridgement eligibility", "director and secretary certification", "named qualified-accountant review", "external ROS/iXBRL validation"],
+        expectedValueChecks: ["SmallAbridged regime", "Section 352 wording", "public P&L turnover omitted from iXBRL"],
+        proofPointAreas: ["pdf-text", "ixbrl-xml"],
         sourceIds: ["frc-frs-102"],
         expectedCorporationTax: 62.5,
         filingReadinessState: "ready-for-external-filing",
@@ -1485,7 +1634,7 @@ function journeyAcceptance(routeCode, routeLabel, routeKey, workflowStages, acce
     routeLabel,
     routeKey,
     workflowStages,
-    seededScenarioCodes: ["dac-small", "micro-ltd"],
+    seededScenarioCodes: ["dac-small", "micro-ltd", "small-abridged-ltd"],
     visualArtifactNames: ["dark-desktop", "dark-mobile", "light-desktop", "light-mobile"].map(
       (suffix) => `${routeCode}-${suffix}.png`,
     ),
