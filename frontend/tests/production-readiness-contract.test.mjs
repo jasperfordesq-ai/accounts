@@ -48,6 +48,12 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.deepEqual(parsed.goldenEvidenceLedger[0].ciScopes, ["default-ci"]);
   assert.deepEqual(parsed.goldenEvidenceLedger[0].evidenceLevels, ["end-to-end golden filing scenario"]);
   assert.ok(parsed.goldenEvidenceLedger[0].blocksRelease);
+  assert.equal(parsed.goldenVerifierManifest[0].scenarioCode, "micro-ltd");
+  assert.equal(parsed.goldenVerifierManifest[0].scenarioLabel, "Micro LTD");
+  assert.equal(parsed.goldenVerifierManifest[0].verifierName, parsed.goldenFilingCorpus[0].evidenceVerifiers[0].name);
+  assert.equal(parsed.goldenVerifierManifest[0].command, parsed.goldenFilingCorpus[0].evidenceVerifiers[0].command);
+  assert.ok(parsed.goldenVerifierManifest[0].blocksRelease);
+  assert.deepEqual(parsed.goldenVerifierManifest[0].outputArtifacts, parsed.goldenFilingCorpus[0].evidencePack.outputArtifacts);
   const dacScenario = parsed.goldenFilingCorpus.find((scenario) => scenario.code === "dac-small");
   assert.equal(dacScenario?.fixture.legalName, "Atlantic Manufacturing DAC");
   assert.equal(dacScenario?.fixture.companyType, "DesignatedActivityCompany");
@@ -316,6 +322,19 @@ test("parseProductionReadinessReport rejects golden evidence ledger drift", () =
   assert.throws(
     () => parseProductionReadinessReport(payload),
     /Invalid production readiness report contract: goldenEvidenceLedger\.0\.outputArtifacts - must mirror golden scenario evidence pack/,
+  );
+});
+
+test("parseProductionReadinessReport rejects golden verifier manifest drift", () => {
+  const payload = sampleReport();
+  payload.goldenVerifierManifest[0] = {
+    ...payload.goldenVerifierManifest[0],
+    command: "dotnet test Accounts.slnx --filter WrongVerifier",
+  };
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: goldenVerifierManifest\.0\.command - must mirror golden scenario verifier command/,
   );
 });
 
@@ -2262,13 +2281,36 @@ function sampleReport() {
 }
 
 function withGoldenLegalBasisSnapshots(report) {
+  const goldenFilingCorpus = report.goldenFilingCorpus.map((scenario) => ({
+    ...scenario,
+    legalBasisSnapshot: goldenLegalBasisSnapshot(scenario),
+  }));
+
   return {
     ...report,
-    goldenFilingCorpus: report.goldenFilingCorpus.map((scenario) => ({
-      ...scenario,
-      legalBasisSnapshot: goldenLegalBasisSnapshot(scenario),
-    })),
+    goldenFilingCorpus,
+    goldenVerifierManifest: buildGoldenVerifierManifest(goldenFilingCorpus),
   };
+}
+
+function buildGoldenVerifierManifest(goldenFilingCorpus) {
+  return goldenFilingCorpus.flatMap((scenario) =>
+    scenario.evidenceVerifiers.map((verifier) => ({
+      scenarioCode: scenario.code,
+      scenarioLabel: scenario.label,
+      expectedOutcome: scenario.expectedOutcome,
+      coverageStatus: scenario.coverageStatus,
+      verifierName: verifier.name,
+      command: verifier.command,
+      ciScope: verifier.ciScope,
+      runsInDefaultCi: verifier.runsInDefaultCi,
+      evidenceLevel: verifier.evidenceLevel,
+      blocksRelease: true,
+      outputArtifacts: scenario.evidencePack.outputArtifacts,
+      decisionGates: scenario.evidencePack.decisionGates,
+      proofPointAreas: scenario.evidencePack.expectedProofPoints.map((proofPoint) => proofPoint.area),
+    })),
+  );
 }
 
 function goldenLegalBasisSnapshot(scenario) {

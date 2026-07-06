@@ -101,6 +101,21 @@ public sealed record GoldenEvidenceLedgerEntry(
     string FilingReadinessState,
     string SignOffPacketState);
 
+public sealed record GoldenVerifierManifestEntry(
+    string ScenarioCode,
+    string ScenarioLabel,
+    string ExpectedOutcome,
+    string CoverageStatus,
+    string VerifierName,
+    string Command,
+    string CiScope,
+    bool RunsInDefaultCi,
+    string EvidenceLevel,
+    bool BlocksRelease,
+    IReadOnlyList<string> OutputArtifacts,
+    IReadOnlyList<string> DecisionGates,
+    IReadOnlyList<string> ProofPointAreas);
+
 public sealed record SourceLawTraceabilityEntry(
     string SourceId,
     string Title,
@@ -469,6 +484,7 @@ public sealed record ProductionReadinessReport(
     IReadOnlyList<ProductionReadinessArea> Areas,
     IReadOnlyList<GoldenFilingCorpusScenario> GoldenFilingCorpus,
     IReadOnlyList<GoldenEvidenceLedgerEntry> GoldenEvidenceLedger,
+    IReadOnlyList<GoldenVerifierManifestEntry> GoldenVerifierManifest,
     IReadOnlyList<StatutoryRuleMatrixEntry> StatutoryRuleMatrix,
     IReadOnlyList<StatutoryRulesCoverageItem> StatutoryRulesCoverage,
     IReadOnlyList<string> ManualHandoffPaths,
@@ -517,6 +533,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             releaseReviewChecklist);
         var accountantAcceptanceCriteria = BuildAccountantAcceptanceCriteria(goldenCorpus);
         var goldenEvidenceLedger = BuildGoldenEvidenceLedger(goldenCorpus, accountantAcceptanceCriteria);
+        var goldenVerifierManifest = BuildGoldenVerifierManifest(goldenCorpus);
         var accountantAcceptanceSummary = BuildAccountantAcceptanceSummary(goldenCorpus, accountantAcceptanceCriteria);
         var accountantWorkflowWalkthroughProtocol = BuildAccountantWorkflowWalkthroughProtocol(goldenCorpus);
         var visualQaCoverage = BuildVisualQaCoverage();
@@ -561,6 +578,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             areas,
             goldenCorpus,
             goldenEvidenceLedger,
+            goldenVerifierManifest,
             statutoryRuleMatrix,
             statutoryRulesCoverage,
             manualHandoffPaths,
@@ -773,6 +791,28 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             })
             .ToArray();
     }
+
+    private static IReadOnlyList<GoldenVerifierManifestEntry> BuildGoldenVerifierManifest(
+        IReadOnlyList<GoldenFilingCorpusScenario> goldenCorpus) =>
+        goldenCorpus
+            .OrderBy(scenario => scenario.Code, StringComparer.Ordinal)
+            .SelectMany(scenario => scenario.EvidenceVerifiers
+                .OrderBy(verifier => verifier.Name, StringComparer.Ordinal)
+                .Select(verifier => new GoldenVerifierManifestEntry(
+                    scenario.Code,
+                    scenario.Label,
+                    scenario.ExpectedOutcome,
+                    scenario.CoverageStatus,
+                    verifier.Name,
+                    verifier.Command,
+                    verifier.CiScope,
+                    verifier.RunsInDefaultCi,
+                    verifier.EvidenceLevel,
+                    BlocksRelease: true,
+                    scenario.EvidencePack.OutputArtifacts.Order(StringComparer.Ordinal).ToArray(),
+                    scenario.EvidencePack.DecisionGates.Order(StringComparer.Ordinal).ToArray(),
+                    scenario.EvidencePack.ExpectedProofPoints.Select(proof => proof.Area).Order(StringComparer.Ordinal).ToArray())))
+            .ToArray();
 
     private static IReadOnlyDictionary<string, IReadOnlyList<string>> BuildSourceReleaseGateCodes()
     {

@@ -846,6 +846,54 @@ public class ProductionReadinessReportTests
     }
 
     [Fact]
+    public async Task ProductionReadinessReport_ExposesFlattenedGoldenVerifierManifestForReleaseEvidence()
+    {
+        await using var db = CreateDbContext();
+        var report = await new ProductionReadinessReportService(db).GetReportAsync();
+        var manifestProperty = report.GetType().GetProperty("GoldenVerifierManifest");
+
+        Assert.NotNull(manifestProperty);
+        var manifest = Assert.IsAssignableFrom<System.Collections.IEnumerable>(manifestProperty!.GetValue(report))
+            .Cast<object>()
+            .ToArray();
+        var expectedEntries = report.GoldenFilingCorpus.Sum(scenario => scenario.EvidenceVerifiers.Count);
+
+        Assert.Equal(expectedEntries, manifest.Length);
+        Assert.Contains(report.AssurancePacket.EvidenceItems, item => item == "golden-verifier-manifest");
+
+        foreach (var scenario in report.GoldenFilingCorpus)
+        {
+            var scenarioEntries = manifest
+                .Where(entry => StringProperty(entry, "ScenarioCode") == scenario.Code)
+                .ToArray();
+            var ledgerEntry = Assert.Single(report.GoldenEvidenceLedger, entry => entry.ScenarioCode == scenario.Code);
+
+            Assert.Equal(scenario.EvidenceVerifiers.Count, scenarioEntries.Length);
+            Assert.Equal(
+                scenario.EvidenceTestNames.Order(StringComparer.Ordinal),
+                scenarioEntries.Select(entry => StringProperty(entry, "VerifierName")).Order(StringComparer.Ordinal));
+            Assert.All(scenarioEntries, entry =>
+            {
+                var verifier = Assert.Single(scenario.EvidenceVerifiers, item => item.Name == StringProperty(entry, "VerifierName"));
+
+                Assert.Equal(scenario.Label, StringProperty(entry, "ScenarioLabel"));
+                Assert.Equal(scenario.ExpectedOutcome, StringProperty(entry, "ExpectedOutcome"));
+                Assert.Equal(scenario.CoverageStatus, StringProperty(entry, "CoverageStatus"));
+                Assert.Equal(verifier.Command, StringProperty(entry, "Command"));
+                Assert.Equal(verifier.CiScope, StringProperty(entry, "CiScope"));
+                Assert.Equal(verifier.RunsInDefaultCi, BooleanProperty(entry, "RunsInDefaultCi"));
+                Assert.Equal(verifier.EvidenceLevel, StringProperty(entry, "EvidenceLevel"));
+                Assert.True(BooleanProperty(entry, "BlocksRelease"));
+                Assert.Equal(scenario.EvidencePack.OutputArtifacts.Order(StringComparer.Ordinal), StringListProperty(entry, "OutputArtifacts").Order(StringComparer.Ordinal));
+                Assert.Equal(scenario.EvidencePack.DecisionGates.Order(StringComparer.Ordinal), StringListProperty(entry, "DecisionGates").Order(StringComparer.Ordinal));
+                Assert.Equal(scenario.EvidencePack.ExpectedProofPoints.Select(proof => proof.Area).Order(StringComparer.Ordinal), StringListProperty(entry, "ProofPointAreas").Order(StringComparer.Ordinal));
+                Assert.Contains(StringProperty(entry, "Command"), ledgerEntry.AutomatedVerifierCommands);
+                AssertGoldenEvidenceTestExists(StringProperty(entry, "VerifierName"));
+            });
+        }
+    }
+
+    [Fact]
     public async Task ProductionReadinessReport_ExposesReleaseVerificationManifestForEveryProductionGate()
     {
         await using var db = CreateDbContext();

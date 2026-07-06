@@ -1682,6 +1682,22 @@ export interface GoldenEvidenceLedgerEntry {
   signOffPacketState: string;
 }
 
+export interface GoldenVerifierManifestEntry {
+  scenarioCode: string;
+  scenarioLabel: string;
+  expectedOutcome: string;
+  coverageStatus: string;
+  verifierName: string;
+  command: string;
+  ciScope: string;
+  runsInDefaultCi: boolean;
+  evidenceLevel: string;
+  blocksRelease: boolean;
+  outputArtifacts: string[];
+  decisionGates: string[];
+  proofPointAreas: string[];
+}
+
 export interface StatutoryRuleMatrixEntry {
   code: string;
   companyScope: string;
@@ -2046,6 +2062,7 @@ export interface ProductionReadinessReport {
   areas: ProductionReadinessArea[];
   goldenFilingCorpus: GoldenFilingCorpusScenario[];
   goldenEvidenceLedger: GoldenEvidenceLedgerEntry[];
+  goldenVerifierManifest: GoldenVerifierManifestEntry[];
   statutoryRuleMatrix: StatutoryRuleMatrixEntry[];
   statutoryRulesCoverage: StatutoryRulesCoverageItem[];
   manualHandoffPaths: string[];
@@ -2244,6 +2261,22 @@ const goldenEvidenceLedgerEntrySchema = z.object({
   expectedCorporationTax: z.number().nonnegative(),
   filingReadinessState: z.string().min(1),
   signOffPacketState: z.string().min(1),
+});
+
+const goldenVerifierManifestEntrySchema = z.object({
+  scenarioCode: z.string().min(1),
+  scenarioLabel: z.string().min(1),
+  expectedOutcome: z.string().min(1),
+  coverageStatus: z.string().min(1),
+  verifierName: z.string().min(1),
+  command: z.string().min(1),
+  ciScope: z.string().min(1),
+  runsInDefaultCi: z.boolean(),
+  evidenceLevel: z.string().min(1),
+  blocksRelease: z.boolean(),
+  outputArtifacts: z.array(z.string().min(1)),
+  decisionGates: z.array(z.string().min(1)),
+  proofPointAreas: z.array(z.string().min(1)),
 });
 
 const statutoryRuleMatrixEntrySchema = z.object({
@@ -2580,6 +2613,7 @@ export const productionReadinessReportSchema = z.object({
   areas: z.array(productionReadinessAreaSchema),
   goldenFilingCorpus: z.array(goldenFilingCorpusScenarioSchema),
   goldenEvidenceLedger: z.array(goldenEvidenceLedgerEntrySchema),
+  goldenVerifierManifest: z.array(goldenVerifierManifestEntrySchema),
   statutoryRuleMatrix: z.array(statutoryRuleMatrixEntrySchema),
   statutoryRulesCoverage: z.array(statutoryRulesCoverageItemSchema),
   manualHandoffPaths: z.array(z.string().min(1)),
@@ -2703,6 +2737,7 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
   const scenariosByCode = new Map(report.goldenFilingCorpus.map((scenario) => [scenario.code, scenario]));
   assertProductionSprintGoldenScenarios(scenariosByCode);
   assertGoldenEvidenceLedger(report, scenariosByCode);
+  assertGoldenVerifierManifest(report, scenariosByCode);
   report.accountantAcceptanceCriteria.forEach((criterion, criterionIndex) => {
     const scenario = scenariosByCode.get(criterion.scenarioCode);
 
@@ -3352,6 +3387,126 @@ function assertGoldenEvidenceLedger(
       "must mirror golden scenario source references",
     );
   });
+}
+
+function assertGoldenVerifierManifest(
+  report: ProductionReadinessReport,
+  scenariosByCode: Map<string, GoldenFilingCorpusScenario>,
+) {
+  const expectedEntryCount = report.goldenFilingCorpus.reduce(
+    (count, scenario) => count + scenario.evidenceVerifiers.length,
+    0,
+  );
+
+  if (report.goldenVerifierManifest.length !== expectedEntryCount) {
+    throw new Error(
+      `Invalid production readiness report contract: goldenVerifierManifest - expected ${expectedEntryCount} verifier entries, received ${report.goldenVerifierManifest.length}`,
+    );
+  }
+
+  const ledgerByScenario = new Map(report.goldenEvidenceLedger.map((entry) => [entry.scenarioCode, entry]));
+  const seenKeys = new Set<string>();
+
+  report.goldenVerifierManifest.forEach((entry, entryIndex) => {
+    const scenario = scenariosByCode.get(entry.scenarioCode);
+    const ledger = ledgerByScenario.get(entry.scenarioCode);
+    if (!scenario || !ledger) {
+      throw new Error(
+        `Invalid production readiness report contract: goldenVerifierManifest.${entryIndex}.scenarioCode - must reference a golden scenario and ledger entry`,
+      );
+    }
+
+    const key = `${entry.scenarioCode}:${entry.verifierName}`;
+    if (seenKeys.has(key)) {
+      throw new Error(
+        `Invalid production readiness report contract: goldenVerifierManifest.${entryIndex}.verifierName - duplicate verifier for scenario`,
+      );
+    }
+    seenKeys.add(key);
+
+    const verifier = scenario.evidenceVerifiers.find((item) => item.name === entry.verifierName);
+    if (!verifier) {
+      throw new Error(
+        `Invalid production readiness report contract: goldenVerifierManifest.${entryIndex}.verifierName - must be listed on the golden scenario`,
+      );
+    }
+
+    assertVerifierManifestValue(entryIndex, "scenarioLabel", scenario.label, entry.scenarioLabel, "must mirror golden scenario label");
+    assertVerifierManifestValue(entryIndex, "expectedOutcome", scenario.expectedOutcome, entry.expectedOutcome, "must mirror golden scenario outcome");
+    assertVerifierManifestValue(entryIndex, "coverageStatus", scenario.coverageStatus, entry.coverageStatus, "must mirror golden scenario coverage");
+    assertVerifierManifestValue(entryIndex, "command", verifier.command, entry.command, "must mirror golden scenario verifier command");
+    assertVerifierManifestValue(entryIndex, "ciScope", verifier.ciScope, entry.ciScope, "must mirror golden scenario verifier CI scope");
+    assertVerifierManifestValue(entryIndex, "evidenceLevel", verifier.evidenceLevel, entry.evidenceLevel, "must mirror golden scenario verifier evidence level");
+
+    if (entry.runsInDefaultCi !== verifier.runsInDefaultCi) {
+      throw new Error(
+        `Invalid production readiness report contract: goldenVerifierManifest.${entryIndex}.runsInDefaultCi - must mirror golden scenario verifier CI behavior`,
+      );
+    }
+
+    if (!entry.blocksRelease) {
+      throw new Error(
+        `Invalid production readiness report contract: goldenVerifierManifest.${entryIndex}.blocksRelease - golden verifiers require release blocking evidence`,
+      );
+    }
+
+    if (!ledger.automatedVerifierCommands.includes(entry.command)) {
+      throw new Error(
+        `Invalid production readiness report contract: goldenVerifierManifest.${entryIndex}.command - must mirror golden evidence ledger commands`,
+      );
+    }
+
+    assertVerifierManifestStringArray(
+      entryIndex,
+      "outputArtifacts",
+      scenario.evidencePack.outputArtifacts,
+      entry.outputArtifacts,
+      "must mirror golden scenario evidence pack",
+    );
+    assertVerifierManifestStringArray(
+      entryIndex,
+      "decisionGates",
+      scenario.evidencePack.decisionGates,
+      entry.decisionGates,
+      "must mirror golden scenario evidence pack",
+    );
+    assertVerifierManifestStringArray(
+      entryIndex,
+      "proofPointAreas",
+      scenario.evidencePack.expectedProofPoints.map((proofPoint) => proofPoint.area),
+      entry.proofPointAreas,
+      "must mirror golden scenario proof points",
+    );
+  });
+}
+
+function assertVerifierManifestValue(
+  entryIndex: number,
+  field: string,
+  expected: string,
+  received: string,
+  message: string,
+) {
+  if (expected !== received) {
+    throw new Error(`Invalid production readiness report contract: goldenVerifierManifest.${entryIndex}.${field} - ${message}`);
+  }
+}
+
+function assertVerifierManifestStringArray(
+  entryIndex: number,
+  field: string,
+  expected: string[],
+  received: string[],
+  message: string,
+) {
+  const sortedExpected = [...new Set(expected)].sort((left, right) => left.localeCompare(right));
+  const sortedReceived = [...received].sort((left, right) => left.localeCompare(right));
+  if (
+    sortedExpected.length !== sortedReceived.length ||
+    sortedExpected.some((value, index) => value !== sortedReceived[index])
+  ) {
+    throw new Error(`Invalid production readiness report contract: goldenVerifierManifest.${entryIndex}.${field} - ${message}`);
+  }
 }
 
 function assertLedgerValue(

@@ -776,6 +776,7 @@ function sampleReport(): ProductionReadinessReport {
         signOffPacketState: "manual-handoff",
       }),
     ],
+    goldenVerifierManifest: [],
     manualHandoffPaths: ["PLC and public-company workflows"],
     operationalGates: [
       {

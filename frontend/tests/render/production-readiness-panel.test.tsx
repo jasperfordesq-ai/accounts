@@ -527,6 +527,7 @@ function sampleReport(): ProductionReadinessReport {
         signOffPacketState: "manual-handoff",
       }),
     ],
+    goldenVerifierManifest: [],
     statutoryRuleMatrix: [
       {
         code: "ltd-micro",
