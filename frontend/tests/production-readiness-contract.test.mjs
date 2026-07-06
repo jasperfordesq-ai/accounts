@@ -38,6 +38,9 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.equal(parsed.goldenEvidenceLedger[0].fixtureLegalName, "Example Micro Limited");
   assert.equal(parsed.goldenEvidenceLedger[0].expectedCorporationTax, 62.5);
   assert.deepEqual(parsed.goldenEvidenceLedger[0].automatedVerifierNames, parsed.goldenFilingCorpus[0].evidenceTestNames);
+  assert.deepEqual(parsed.goldenEvidenceLedger[0].automatedVerifierCommands, parsed.goldenFilingCorpus[0].evidenceVerifiers.map((verifier) => verifier.command));
+  assert.deepEqual(parsed.goldenEvidenceLedger[0].ciScopes, ["default-ci"]);
+  assert.deepEqual(parsed.goldenEvidenceLedger[0].evidenceLevels, ["end-to-end golden filing scenario"]);
   assert.ok(parsed.goldenEvidenceLedger[0].blocksRelease);
   const dacScenario = parsed.goldenFilingCorpus.find((scenario) => scenario.code === "dac-small");
   assert.equal(dacScenario?.fixture.legalName, "Atlantic Manufacturing DAC");
@@ -1396,6 +1399,9 @@ function sampleReport() {
         requiredSignOffGate: "Named qualified accountant must approve the generated pack before real filing use.",
         blocksRelease: true,
         automatedVerifierNames: ["AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl"],
+        automatedVerifierCommands: ["dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter FullyQualifiedName~AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl"],
+        ciScopes: ["default-ci"],
+        evidenceLevels: ["end-to-end golden filing scenario"],
         outputArtifacts: ["accounts PDF text"],
         decisionGates: ["named qualified-accountant review"],
         expectedValueChecks: ["well-formed iXBRL"],
@@ -1416,6 +1422,9 @@ function sampleReport() {
         requiredSignOffGate: "Named qualified accountant must approve the DAC generated pack before real filing use.",
         blocksRelease: true,
         automatedVerifierNames: ["FilingGoldenCorpusScenarioTests.GoldenCorpus_DacSmall_EmitsAccountsIxbrlAndSourceBackedReadiness"],
+        automatedVerifierCommands: ["dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter FullyQualifiedName~FilingGoldenCorpusScenarioTests.GoldenCorpus_DacSmall_EmitsAccountsIxbrlAndSourceBackedReadiness"],
+        ciScopes: ["default-ci"],
+        evidenceLevels: ["end-to-end golden filing scenario"],
         outputArtifacts: ["DAC accounts PDF text"],
         decisionGates: ["named qualified-accountant review"],
         expectedValueChecks: ["well-formed iXBRL"],
@@ -1439,6 +1448,12 @@ function sampleReport() {
           "AccountsWorkflowTests.GoldenPath_SmallAuditExemptCompany_MixedAccrualSetBalancesThroughPdfAndIxbrl",
           "FilingGoldenCorpusScenarioTests.GoldenCorpus_SmallAbridgedLtd_EmitsFullAccountsAbridgedCroPackIxbrlAndReadiness",
         ],
+        automatedVerifierCommands: [
+          "dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter FullyQualifiedName~AccountsWorkflowTests.GoldenPath_SmallAuditExemptCompany_MixedAccrualSetBalancesThroughPdfAndIxbrl",
+          "dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter FullyQualifiedName~FilingGoldenCorpusScenarioTests.GoldenCorpus_SmallAbridgedLtd_EmitsFullAccountsAbridgedCroPackIxbrlAndReadiness",
+        ],
+        ciScopes: ["default-ci"],
+        evidenceLevels: ["end-to-end golden filing scenario"],
         outputArtifacts: ["full accounts PDF text", "abridged CRO filing pack", "CRO signature page", "iXBRL XML", "tax computation", "notes disclosure set", "filing readiness profile"],
         decisionGates: ["abridgement eligibility", "director and secretary certification", "named qualified-accountant review", "external ROS/iXBRL validation"],
         expectedValueChecks: ["SmallAbridged regime", "Section 352 wording", "public P&L turnover omitted from iXBRL"],
@@ -1461,6 +1476,11 @@ function sampleReport() {
         automatedVerifierNames: [
           "FilingGoldenCorpusScenarioTests.GoldenCorpus_ClgCharity_EmitsAccountsIxbrlAndSourceBackedCharityReadiness",
         ],
+        automatedVerifierCommands: [
+          "dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter FullyQualifiedName~FilingGoldenCorpusScenarioTests.GoldenCorpus_ClgCharity_EmitsAccountsIxbrlAndSourceBackedCharityReadiness",
+        ],
+        ciScopes: ["default-ci"],
+        evidenceLevels: ["end-to-end golden filing scenario"],
         outputArtifacts: ["CLG accounts PDF text", "charity readiness profile", "SoFA evidence", "trustees annual report evidence", "iXBRL XML", "tax computation", "notes disclosure set", "accountant sign-off packet"],
         decisionGates: ["charity number", "charity annual return review", "named qualified-accountant review", "accountant sign-off packet state"],
         expectedValueChecks: ["charity evidence satisfied", "Charities Regulator source attached", "CLG source attached", "well-formed iXBRL"],
@@ -1483,6 +1503,11 @@ function sampleReport() {
         automatedVerifierNames: [
           "FilingGoldenCorpusScenarioTests.GoldenCorpus_MediumAuditRequired_BlocksFinalOutputsAndRequiresManualHandoffUntilAuditorEvidence",
         ],
+        automatedVerifierCommands: [
+          "dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter FullyQualifiedName~FilingGoldenCorpusScenarioTests.GoldenCorpus_MediumAuditRequired_BlocksFinalOutputsAndRequiresManualHandoffUntilAuditorEvidence",
+        ],
+        ciScopes: ["default-ci"],
+        evidenceLevels: ["end-to-end golden filing scenario"],
         outputArtifacts: ["full accounts PDF text", "auditor report evidence", "cash flow statement", "statement of changes in equity", "iXBRL XML", "filing readiness profile", "tax computation", "accountant sign-off packet"],
         decisionGates: ["auditor handoff", "manual professional review", "normal CRO approval blocked until auditor evidence", "accountant sign-off packet state"],
         expectedValueChecks: ["Medium regime selected", "audit report blocker present before auditor evidence", "tagged P&L facts present after auditor evidence", "auditor reference appears in PDF text"],

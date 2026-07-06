@@ -1408,7 +1408,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
             caption="Golden evidence ledger"
             filterPlaceholder="Filter golden evidence ledger"
             emptyState="No matching ledger entries"
-            columns={["Scenario", "Fixture", "Verifier", "Artifacts", "Expected state", "Sources", "Release gate"]}
+            columns={["Scenario", "Fixture", "Verifier", "Verifier evidence", "Artifacts", "Expected state", "Sources", "Release gate"]}
             rows={report.goldenEvidenceLedger.map((entry) => ({
               id: `${entry.scenarioCode}-ledger`,
               tone: entry.blocksRelease ? "warn" : "good",
@@ -1425,6 +1425,9 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
                 entry.signOffPacketState,
                 entry.expectedCorporationTax.toString(),
                 ...entry.automatedVerifierNames,
+                ...entry.automatedVerifierCommands,
+                ...entry.ciScopes,
+                ...entry.evidenceLevels,
                 ...entry.outputArtifacts,
                 ...entry.decisionGates,
                 ...entry.expectedValueChecks,
@@ -1435,6 +1438,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
                 entry.label,
                 entry.fixtureLegalName,
                 entry.automatedVerifierNames.join(" "),
+                entry.automatedVerifierCommands.join(" "),
                 entry.outputArtifacts.length,
                 entry.filingReadinessState,
                 entry.sourceIds.join(" "),
@@ -1451,6 +1455,15 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
                   <p>{formatStatus(entry.expectedOutcome)} / {formatStatus(entry.coverageStatus)}</p>
                 </div>,
                 <CodeStack key="verifier" items={entry.automatedVerifierNames} />,
+                <div key="verifier-evidence" className="min-w-56 space-y-2 text-xs leading-5 text-[var(--muted-foreground)]">
+                  <CodeStack items={entry.automatedVerifierCommands} />
+                  <div className="flex flex-wrap gap-1.5">
+                    {entry.ciScopes.map((scope) => (
+                      <StatusBadge key={scope} tone={ciScopeTone(scope)}>{formatStatus(scope)}</StatusBadge>
+                    ))}
+                  </div>
+                  <CompactList items={entry.evidenceLevels} />
+                </div>,
                 <CompactList key="artifacts" items={entry.outputArtifacts} />,
                 <div key="state" className="min-w-48 space-y-1 text-xs leading-5 text-[var(--muted-foreground)]">
                   <p className="font-medium text-[var(--foreground)]">Expected CT: {formatCurrency(entry.expectedCorporationTax)}</p>

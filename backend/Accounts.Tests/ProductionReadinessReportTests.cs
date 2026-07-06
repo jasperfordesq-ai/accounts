@@ -1052,6 +1052,9 @@ public class ProductionReadinessReportTests
             Assert.Equal(acceptance.RequiredSignOffGate, StringProperty(entry, "RequiredSignOffGate"));
             Assert.True(BooleanProperty(entry, "BlocksRelease"));
             Assert.Equal(scenario.EvidenceTestNames.Order(StringComparer.Ordinal), StringListProperty(entry, "AutomatedVerifierNames").Order(StringComparer.Ordinal));
+            Assert.Equal(scenario.EvidenceVerifiers.Select(verifier => verifier.Command).Order(StringComparer.Ordinal), StringListProperty(entry, "AutomatedVerifierCommands").Order(StringComparer.Ordinal));
+            Assert.Equal(scenario.EvidenceVerifiers.Select(verifier => verifier.CiScope).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal), StringListProperty(entry, "CiScopes").Order(StringComparer.Ordinal));
+            Assert.Equal(scenario.EvidenceVerifiers.Select(verifier => verifier.EvidenceLevel).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal), StringListProperty(entry, "EvidenceLevels").Order(StringComparer.Ordinal));
             Assert.Equal(scenario.EvidencePack.OutputArtifacts.Order(StringComparer.Ordinal), StringListProperty(entry, "OutputArtifacts").Order(StringComparer.Ordinal));
             Assert.Equal(scenario.EvidencePack.DecisionGates.Order(StringComparer.Ordinal), StringListProperty(entry, "DecisionGates").Order(StringComparer.Ordinal));
             Assert.Equal(scenario.EvidencePack.ExpectedValueChecks.Order(StringComparer.Ordinal), StringListProperty(entry, "ExpectedValueChecks").Order(StringComparer.Ordinal));

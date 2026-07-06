@@ -1655,6 +1655,9 @@ export interface GoldenEvidenceLedgerEntry {
   requiredSignOffGate: string;
   blocksRelease: boolean;
   automatedVerifierNames: string[];
+  automatedVerifierCommands: string[];
+  ciScopes: string[];
+  evidenceLevels: string[];
   outputArtifacts: string[];
   decisionGates: string[];
   expectedValueChecks: string[];
@@ -2144,6 +2147,9 @@ const goldenEvidenceLedgerEntrySchema = z.object({
   requiredSignOffGate: z.string().min(1),
   blocksRelease: z.boolean(),
   automatedVerifierNames: z.array(z.string().min(1)),
+  automatedVerifierCommands: z.array(z.string().min(1)),
+  ciScopes: z.array(z.string().min(1)),
+  evidenceLevels: z.array(z.string().min(1)),
   outputArtifacts: z.array(z.string().min(1)),
   decisionGates: z.array(z.string().min(1)),
   expectedValueChecks: z.array(z.string().min(1)),
@@ -3026,6 +3032,27 @@ function assertGoldenEvidenceLedger(
       scenario.evidenceTestNames,
       entry.automatedVerifierNames,
       "must mirror golden scenario verifier manifest",
+    );
+    assertLedgerStringArray(
+      entryIndex,
+      "automatedVerifierCommands",
+      scenario.evidenceVerifiers.map((verifier) => verifier.command),
+      entry.automatedVerifierCommands,
+      "must mirror golden scenario verifier commands",
+    );
+    assertLedgerStringArray(
+      entryIndex,
+      "ciScopes",
+      [...new Set(scenario.evidenceVerifiers.map((verifier) => verifier.ciScope))],
+      entry.ciScopes,
+      "must mirror golden scenario verifier CI scopes",
+    );
+    assertLedgerStringArray(
+      entryIndex,
+      "evidenceLevels",
+      [...new Set(scenario.evidenceVerifiers.map((verifier) => verifier.evidenceLevel))],
+      entry.evidenceLevels,
+      "must mirror golden scenario verifier evidence levels",
     );
     assertLedgerStringArray(
       entryIndex,
