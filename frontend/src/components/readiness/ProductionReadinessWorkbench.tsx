@@ -1399,6 +1399,58 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
 
         <div className="mt-5 space-y-3">
           <div>
+            <h3 className="text-sm font-semibold text-[var(--foreground)]">Legal basis snapshots</h3>
+            <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">
+              Source-backed filing basis each accountant reviewer can trace back to the fixture, required outputs, professional gates and statutory source IDs.
+            </p>
+          </div>
+          <DataGrid
+            caption="Legal basis snapshots"
+            filterPlaceholder="Filter legal basis snapshots"
+            emptyState="No matching legal basis snapshots"
+            columns={["Scenario", "Legal basis", "Fixture match", "Required outputs", "Professional gates", "Source IDs"]}
+            rows={report.goldenFilingCorpus.map((scenario) => {
+              const snapshot = scenario.legalBasisSnapshot;
+
+              return {
+                id: `${scenario.code}-legal-basis`,
+                tone: snapshot.manualProfessionalReviewRequired ? "warn" : "good",
+                searchText: [
+                  scenario.label,
+                  snapshot.legalBasis,
+                  snapshot.companyType,
+                  snapshot.sizeClass,
+                  snapshot.electedRegime,
+                  snapshot.auditExempt ? "audit exempt" : "audit required",
+                  snapshot.manualProfessionalReviewRequired ? "manual review required" : "manual review no",
+                  ...snapshot.requiredOutputs,
+                  ...snapshot.professionalGates,
+                  ...snapshot.sourceIds,
+                ].join(" "),
+                cells: [
+                  <span key="scenario" className="font-medium">{scenario.label}</span>,
+                  <p key="basis" className="min-w-64 whitespace-normal text-xs leading-5 text-[var(--muted-foreground)]">
+                    {snapshot.legalBasis}
+                  </p>,
+                  <div key="fixture" className="space-y-1 text-xs leading-5 text-[var(--muted-foreground)]">
+                    <p className="font-semibold text-[var(--foreground)]">{snapshot.companyType}</p>
+                    <p>{snapshot.sizeClass} / {snapshot.electedRegime}</p>
+                    <p>{snapshot.auditExempt ? "Audit exempt: yes" : "Audit exempt: no"}</p>
+                    <p>{snapshot.manualProfessionalReviewRequired ? "Manual review: yes" : "Manual review: no"}</p>
+                  </div>,
+                  <CompactList key="outputs" items={snapshot.requiredOutputs} />,
+                  <CompactList key="gates" items={snapshot.professionalGates} />,
+                  <p key="sources" className="min-w-48 whitespace-normal text-xs leading-5 text-[var(--muted-foreground)]">
+                    Snapshot sources: {snapshot.sourceIds.join(", ")}
+                  </p>,
+                ],
+              };
+            })}
+          />
+        </div>
+
+        <div className="mt-5 space-y-3">
+          <div>
             <h3 className="text-sm font-semibold text-[var(--foreground)]">Golden evidence ledger</h3>
             <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">
               Accountant-facing ledger tying each sample company to its verifier, expected outputs, source ids, readiness state and release gate.

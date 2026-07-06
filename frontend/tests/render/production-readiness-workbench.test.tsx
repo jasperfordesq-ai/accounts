@@ -31,6 +31,11 @@ describe("ProductionReadinessWorkbench", () => {
     expect(screen.getAllByText("Medium audit-required").length).toBeGreaterThanOrEqual(2);
     expect(screen.getAllByText("AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl").length).toBeGreaterThan(1);
     expect(screen.getByRole("heading", { name: "Golden evidence pack" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Legal basis snapshots" })).toBeInTheDocument();
+    expect(screen.getByRole("searchbox", { name: "Filter Legal basis snapshots" })).toBeInTheDocument();
+    expectText("FRS 105 micro-entities regime with CRO financial-statement and Revenue iXBRL filing evidence.");
+    expectText("Manual review: no");
+    expectText("Snapshot sources: frc-frs-105");
     expect(screen.getByRole("heading", { name: "Golden evidence ledger" })).toBeInTheDocument();
     expect(screen.getByRole("searchbox", { name: "Filter Golden evidence ledger" })).toBeInTheDocument();
     expectText("accounts PDF text");

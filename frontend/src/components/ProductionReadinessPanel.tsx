@@ -135,6 +135,40 @@ export function ProductionReadinessPanel({
             ])}
           />
 
+          <section aria-label="Legal basis snapshots" className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Legal basis snapshots</p>
+                <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">
+                  Fixture, filing basis, source IDs and professional gates that must remain aligned before accountant sign-off.
+                </p>
+              </div>
+              <StatusBadge tone="info">{report.goldenFilingCorpus.length} snapshots</StatusBadge>
+            </div>
+
+            <div className="mt-3 grid gap-2">
+              {report.goldenFilingCorpus.slice(0, 3).map((scenario) => (
+                <div key={scenario.code} className="rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-3">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-[var(--foreground)]">{scenario.label}</p>
+                      <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">
+                        {scenario.legalBasisSnapshot.legalBasis}
+                      </p>
+                    </div>
+                    <StatusBadge tone={scenario.legalBasisSnapshot.manualProfessionalReviewRequired ? "warn" : "good"}>
+                      {scenario.legalBasisSnapshot.manualProfessionalReviewRequired ? "Manual review" : "Standard gate"}
+                    </StatusBadge>
+                  </div>
+                  <div className="mt-3 grid gap-2 text-xs leading-5 text-[var(--muted-foreground)] sm:grid-cols-2">
+                    <LedgerFact>{scenario.legalBasisSnapshot.companyType} / {scenario.legalBasisSnapshot.sizeClass} / {scenario.legalBasisSnapshot.electedRegime}</LedgerFact>
+                    <LedgerFact>Sources: {scenario.legalBasisSnapshot.sourceIds.join(", ")}</LedgerFact>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
           <section aria-label="Golden evidence ledger" className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
               <div>

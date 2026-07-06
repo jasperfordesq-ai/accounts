@@ -9,15 +9,18 @@ describe("ProductionReadinessPanel", () => {
 
     expect(screen.getByText("Production Readiness")).toBeInTheDocument();
     expect(screen.getAllByText("Review required")).toHaveLength(2);
-    expect(screen.getAllByText("Micro LTD")).toHaveLength(2);
+    expect(screen.getAllByText("Micro LTD").length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText("5/5")).toBeInTheDocument();
-    expect(screen.getAllByText("Small abridged LTD")).toHaveLength(2);
-    expect(screen.getAllByText("DAC small")).toHaveLength(2);
+    expect(screen.getAllByText("Small abridged LTD").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText("DAC small").length).toBeGreaterThanOrEqual(2);
     expect(screen.getAllByText("CLG charity")).toHaveLength(2);
     expect(screen.getAllByText("Medium audit-required")).toHaveLength(2);
     expect(screen.getAllByText("Example Micro Limited")).toHaveLength(2);
     expect(screen.getAllByText("2025-01-01 to 2025-12-31").length).toBeGreaterThanOrEqual(4);
     expect(screen.getByText("AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl")).toBeInTheDocument();
+    expect(screen.getByText("Legal basis snapshots")).toBeInTheDocument();
+    expect(screen.getByText("FRS 105 micro-entities regime with CRO financial-statement and Revenue iXBRL filing evidence.")).toBeInTheDocument();
+    expect(screen.getAllByText("Sources: frc-frs-105").length).toBeGreaterThan(0);
     expect(screen.getByText("Golden evidence ledger")).toBeInTheDocument();
     expect(screen.getAllByText("Expected CT: €62.50").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Readiness: ready-for-external-filing").length).toBeGreaterThanOrEqual(3);
