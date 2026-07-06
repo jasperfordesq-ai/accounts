@@ -1567,6 +1567,62 @@ public class ProductionReadinessReportTests
     }
 
     [Fact]
+    public async Task ProductionReadinessReport_ExposesOperationsEvidencePackForReleaseReview()
+    {
+        await using var db = CreateDbContext();
+        var report = await new ProductionReadinessReportService(db).GetReportAsync();
+        var packProperty = report.GetType().GetProperty("OperationsEvidencePack");
+
+        Assert.NotNull(packProperty);
+        var pack = Assert.IsAssignableFrom<System.Collections.IEnumerable>(packProperty!.GetValue(report))
+            .Cast<object>()
+            .ToArray();
+
+        Assert.Contains(report.AssurancePacket.EvidenceItems, item => item == "operations-evidence-pack");
+        Assert.Contains(pack, item =>
+            StringProperty(item, "Code") == "sentry-error-routing"
+            && StringProperty(item, "Category") == "Monitoring"
+            && StringProperty(item, "RequiredArtifact") == "sentry-production-error-routing-check"
+            && StringProperty(item, "Command").Contains("Monitoring:ErrorTrackingDsn", StringComparison.Ordinal)
+            && StringProperty(item, "FailurePolicy").Contains("Block release", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(pack, item =>
+            StringProperty(item, "Code") == "structured-log-correlation"
+            && StringProperty(item, "RequiredArtifact") == "structured-json-log-sample"
+            && StringProperty(item, "Verification").Contains("correlation", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(pack, item =>
+            StringProperty(item, "Code") == "dependency-audit"
+            && StringProperty(item, "Command").Contains("npm audit", StringComparison.OrdinalIgnoreCase)
+            && StringProperty(item, "Command").Contains("dotnet restore", StringComparison.OrdinalIgnoreCase)
+            && StringProperty(item, "ReleaseGateCode") == "dependency-policy-controls");
+        Assert.Contains(pack, item =>
+            StringProperty(item, "Code") == "migration-safety"
+            && StringProperty(item, "Command").Contains("--migrate-only", StringComparison.Ordinal)
+            && StringProperty(item, "RequiredArtifact") == "controlled-migration-release-note");
+        Assert.Contains(pack, item =>
+            StringProperty(item, "Code") == "production-seed-block"
+            && StringProperty(item, "Command").Contains("SeedDemoData", StringComparison.Ordinal)
+            && StringProperty(item, "FailurePolicy").Contains("demo seed", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(pack, item =>
+            StringProperty(item, "Code") == "backup-restore-drill"
+            && StringProperty(item, "Command").Contains("verify-postgres-backup", StringComparison.Ordinal)
+            && StringProperty(item, "RequiredArtifact") == "postgres-backup-restore-drill-report");
+
+        Assert.All(pack, item =>
+        {
+            Assert.True(BooleanProperty(item, "Required"));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(item, "Code")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(item, "Label")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(item, "Category")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(item, "OwnerRole")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(item, "Command")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(item, "RequiredArtifact")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(item, "ReleaseGateCode")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(item, "Verification")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(item, "FailurePolicy")));
+        });
+    }
+
+    [Fact]
     public async Task ProductionReadinessReport_ExposesReleaseReviewChecklistTiedToAssuranceActionsAndAuditEvidence()
     {
         await using var db = CreateDbContext();

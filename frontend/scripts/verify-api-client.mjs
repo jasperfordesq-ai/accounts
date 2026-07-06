@@ -289,7 +289,7 @@ function productionReadinessReportFixture() {
       visualQaExpectedScreenshots: expectedVisualSmokeScreenshotCount(),
       requiredOperationalGates: 1,
       openCriticalActions: 1,
-      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "source-law-review-ledger", "revenue-taxonomy-range-evidence", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "production-audit-evidence-pack", "visual-smoke-screenshots", "release-blocker-register", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "accountant-journey-acceptance-checklist", "production-completion-map"],
+      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "source-law-review-ledger", "revenue-taxonomy-range-evidence", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "production-audit-evidence-pack", "operations-evidence-pack", "visual-smoke-screenshots", "release-blocker-register", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "accountant-journey-acceptance-checklist", "production-completion-map"],
       releaseBlockers: [
         "Qualified accountant sign-off required",
         "Source-law change review required",
@@ -1278,6 +1278,20 @@ function productionReadinessReportFixture() {
         evidenceCaptured: "CI production image contract and release runbook prove migrations are a separate controlled step.",
         verification: "Program.cs handles --migrate-only and ProductionSafetyService blocks unsafe AutoMigrateOnStartup.",
         failurePolicy: "Fail production startup when AutoMigrateOnStartup is enabled without explicit production approval.",
+      },
+    ],
+    operationsEvidencePack: [
+      {
+        code: "backup-restore-drill",
+        label: "Backup restore drill",
+        category: "Deployment safety",
+        ownerRole: "Platform owner",
+        required: true,
+        command: "Run scripts/backup-postgres.ps1 and scripts/verify-postgres-backup.ps1 against the production compose shape before approving the release.",
+        requiredArtifact: "postgres-backup-restore-drill-report",
+        releaseGateCode: "deployment-safety-controls",
+        verification: "Evidence must include the PostgreSQL custom-format dump, sha256 sidecar and successful restore verification report.",
+        failurePolicy: "Block release if backup creation, checksum verification or restore verification fails.",
       },
     ],
     visualQaCoverage: {

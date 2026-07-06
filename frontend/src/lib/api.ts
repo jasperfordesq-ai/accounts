@@ -1818,6 +1818,19 @@ export interface DeploymentSafetyControl {
   failurePolicy: string;
 }
 
+export interface OperationsEvidencePackItem {
+  code: string;
+  label: string;
+  category: string;
+  ownerRole: string;
+  required: boolean;
+  command: string;
+  requiredArtifact: string;
+  releaseGateCode: string;
+  verification: string;
+  failurePolicy: string;
+}
+
 export interface ReleaseReviewChecklistItem {
   code: string;
   label: string;
@@ -2017,6 +2030,7 @@ export interface ProductionReadinessReport {
   monitoringControls: ProductionMonitoringControl[];
   dependencyPolicyControls: DependencyPolicyControl[];
   deploymentSafetyControls: DeploymentSafetyControl[];
+  operationsEvidencePack: OperationsEvidencePackItem[];
   releaseReviewChecklist: ReleaseReviewChecklistItem[];
   releaseVerificationManifest: ReleaseVerificationManifestItem[];
   visualQaCoverage: VisualQaCoverage;
@@ -2339,6 +2353,19 @@ const deploymentSafetyControlSchema = z.object({
   failurePolicy: z.string().min(1),
 });
 
+const operationsEvidencePackItemSchema = z.object({
+  code: z.string().min(1),
+  label: z.string().min(1),
+  category: z.string().min(1),
+  ownerRole: z.string().min(1),
+  required: z.boolean(),
+  command: z.string().min(1),
+  requiredArtifact: z.string().min(1),
+  releaseGateCode: z.string().min(1),
+  verification: z.string().min(1),
+  failurePolicy: z.string().min(1),
+});
+
 const releaseReviewChecklistItemSchema = z.object({
   code: z.string().min(1),
   label: z.string().min(1),
@@ -2508,6 +2535,7 @@ export const productionReadinessReportSchema = z.object({
   monitoringControls: z.array(productionMonitoringControlSchema),
   dependencyPolicyControls: z.array(dependencyPolicyControlSchema),
   deploymentSafetyControls: z.array(deploymentSafetyControlSchema),
+  operationsEvidencePack: z.array(operationsEvidencePackItemSchema),
   releaseReviewChecklist: z.array(releaseReviewChecklistItemSchema),
   releaseVerificationManifest: z.array(releaseVerificationManifestItemSchema),
   visualQaCoverage: visualQaCoverageSchema,
@@ -2782,6 +2810,12 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
     );
   }
 
+  if (!report.assurancePacket.evidenceItems.includes("operations-evidence-pack")) {
+    throw new Error(
+      "Invalid production readiness report contract: assurancePacket.evidenceItems - operations-evidence-pack is required",
+    );
+  }
+
   if (!report.assurancePacket.evidenceItems.includes("golden-evidence-ledger")) {
     throw new Error(
       "Invalid production readiness report contract: assurancePacket.evidenceItems - golden-evidence-ledger is required",
@@ -2818,6 +2852,33 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
     if (item.blockingGateCodes.length === 0) {
       throw new Error(
         `Invalid production readiness report contract: auditEvidencePack.${itemIndex}.blockingGateCodes - at least one blocking gate code is required`,
+      );
+    }
+  });
+
+  const operationalGateCodes = new Set(report.operationalGates.map((gate) => gate.code));
+  const operationsControlGateCodes = new Set([
+    "production-monitoring",
+    "dependency-policy-controls",
+    "deployment-safety-controls",
+  ]);
+
+  report.operationsEvidencePack.forEach((item, itemIndex) => {
+    if (!item.required) {
+      throw new Error(
+        `Invalid production readiness report contract: operationsEvidencePack.${itemIndex}.required - operations release evidence must be required`,
+      );
+    }
+
+    if (!operationalGateCodes.has(item.releaseGateCode) && !operationsControlGateCodes.has(item.releaseGateCode)) {
+      throw new Error(
+        `Invalid production readiness report contract: operationsEvidencePack.${itemIndex}.releaseGateCode - unknown release gate ${item.releaseGateCode}`,
+      );
+    }
+
+    if (!item.failurePolicy.toLowerCase().includes("block release")) {
+      throw new Error(
+        `Invalid production readiness report contract: operationsEvidencePack.${itemIndex}.failurePolicy - must block release when evidence is missing`,
       );
     }
   });

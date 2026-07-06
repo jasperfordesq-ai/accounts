@@ -207,6 +207,10 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.equal(parsed.auditEvidencePack[0].retainedIn, "audit_logs");
   assert.equal(parsed.auditEvidencePack[0].failurePolicy, "Block release when a supported write path can alter filing evidence without an audit row linked into the integrity chain.");
   assert.equal(parsed.auditEvidencePack[1].requiredArtifact, "named-accountant-approval-record");
+  assert.equal(parsed.operationsEvidencePack[0].code, "sentry-error-routing");
+  assert.equal(parsed.operationsEvidencePack[0].requiredArtifact, "sentry-production-error-routing-check");
+  assert.equal(parsed.operationsEvidencePack[2].releaseGateCode, "dependency-policy-controls");
+  assert.match(parsed.operationsEvidencePack[5].command, /verify-postgres-backup/);
   assert.equal(parsed.visualQaCoverage.expectedScreenshotCount, expectedVisualSmokeScreenshotCount());
   assert.equal(parsed.visualQaCoverage.manifestFileName, "visual-smoke-manifest.json");
   assert.equal(parsed.visualQaCoverage.artifacts.length, expectedVisualSmokeArtifacts().length);
@@ -902,7 +906,7 @@ function sampleReport() {
       visualQaExpectedScreenshots: expectedVisualSmokeScreenshotCount(),
       requiredOperationalGates: 1,
       openCriticalActions: 3,
-      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "source-law-review-ledger", "revenue-taxonomy-range-evidence", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "production-audit-evidence-pack", "visual-smoke-screenshots", "release-blocker-register", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "accountant-journey-acceptance-checklist", "production-completion-map"],
+      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "source-law-review-ledger", "revenue-taxonomy-range-evidence", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "production-audit-evidence-pack", "operations-evidence-pack", "visual-smoke-screenshots", "release-blocker-register", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "accountant-journey-acceptance-checklist", "production-completion-map"],
       releaseBlockers: [
         "Qualified accountant sign-off required",
         "Source-law change review required",
@@ -2081,6 +2085,80 @@ function sampleReport() {
         failurePolicy: "Block release when approval can be recorded without a named qualified-accountant identity and linked readiness evidence.",
         auditEventCodes: ["CroFilingStatusChanged"],
         blockingGateCodes: ["qualified-accountant-review"],
+      },
+    ],
+    operationsEvidencePack: [
+      {
+        code: "sentry-error-routing",
+        label: "Sentry production error routing",
+        category: "Monitoring",
+        ownerRole: "Platform owner",
+        required: true,
+        command: "Verify Monitoring:ErrorTrackingDsn is configured with an HTTPS DSN and send a controlled non-PII smoke error through the production error pipeline.",
+        requiredArtifact: "sentry-production-error-routing-check",
+        releaseGateCode: "production-monitoring",
+        verification: "Evidence must show the event reached the production error-tracking project with environment, request path and correlation id while default PII capture remains disabled.",
+        failurePolicy: "Block release if production exceptions cannot be routed to the on-call owner with a usable correlation id.",
+      },
+      {
+        code: "structured-log-correlation",
+        label: "Structured log correlation sample",
+        category: "Monitoring",
+        ownerRole: "Platform owner",
+        required: true,
+        command: "Run production stack smoke and retain a structured JSON log sample containing timestamp, level, category, request id and correlation id.",
+        requiredArtifact: "structured-json-log-sample",
+        releaseGateCode: "production-monitoring",
+        verification: "Evidence must prove safe error responses can be matched to server logs through the trace identifier/correlation id.",
+        failurePolicy: "Block release if logs cannot be parsed or support tickets cannot be correlated to server evidence.",
+      },
+      {
+        code: "dependency-audit",
+        label: "Dependency and lockfile audit",
+        category: "Dependency policy",
+        ownerRole: "Engineering",
+        required: true,
+        command: "Run npm ci, npm audit --audit-level=moderate, dotnet restore and the CI action hygiene verifier against the release commit.",
+        requiredArtifact: "dependency-audit-release-note",
+        releaseGateCode: "dependency-policy-controls",
+        verification: "Evidence must include npm audit result, lockfile reproducibility, NuGet restore/build status and GitHub Actions version-hygiene output.",
+        failurePolicy: "Block release for moderate/high/critical advisories, unreproducible lockfiles, failed restore/build, or unverified CI action versions.",
+      },
+      {
+        code: "migration-safety",
+        label: "Controlled migration safety",
+        category: "Deployment safety",
+        ownerRole: "Platform owner",
+        required: true,
+        command: "Run dotnet Accounts.Api.dll --migrate-only with production startup flags proving AutoMigrateOnStartup is disabled for normal web startup.",
+        requiredArtifact: "controlled-migration-release-note",
+        releaseGateCode: "deployment-safety-controls",
+        verification: "Evidence must show migrations run as a separate release step and normal production startup remains guarded by ProductionSafetyService.",
+        failurePolicy: "Block release if production startup can auto-migrate without explicit release approval.",
+      },
+      {
+        code: "production-seed-block",
+        label: "Production seed blocking",
+        category: "Deployment safety",
+        ownerRole: "Platform owner",
+        required: true,
+        command: "Review production configuration and run startup validation proving DatabaseStartup:SeedDemoData is false outside development.",
+        requiredArtifact: "production-seed-block-validation",
+        releaseGateCode: "deployment-safety-controls",
+        verification: "Evidence must show demo users, sample companies and preview-only accounting records cannot be inserted into a production database.",
+        failurePolicy: "Block release if demo seed data can run outside development.",
+      },
+      {
+        code: "backup-restore-drill",
+        label: "Backup restore drill",
+        category: "Deployment safety",
+        ownerRole: "Platform owner",
+        required: true,
+        command: "Run scripts/backup-postgres.ps1 and scripts/verify-postgres-backup.ps1 against the production compose shape before approving the release.",
+        requiredArtifact: "postgres-backup-restore-drill-report",
+        releaseGateCode: "deployment-safety-controls",
+        verification: "Evidence must include the PostgreSQL custom-format dump, sha256 sidecar and successful restore verification report.",
+        failurePolicy: "Block release if backup creation, checksum verification or restore verification fails.",
       },
     ],
     monitoringControls: [

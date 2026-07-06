@@ -29,6 +29,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
   const monitoringControls = report.monitoringControls ?? [];
   const dependencyPolicyControls = report.dependencyPolicyControls ?? [];
   const deploymentSafetyControls = report.deploymentSafetyControls ?? [];
+  const operationsEvidencePack = report.operationsEvidencePack ?? [];
   const releaseBlockerRegister = report.releaseBlockerRegister ?? [];
   const releaseReviewChecklist = report.releaseReviewChecklist ?? [];
   const releaseVerificationManifest = report.releaseVerificationManifest ?? [];
@@ -1017,6 +1018,51 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
               <span key="evidence" className="whitespace-normal text-[var(--muted-foreground)]">{control.evidenceCaptured}</span>,
               <span key="verification" className="whitespace-normal text-[var(--muted-foreground)]">{control.verification}</span>,
               <span key="failure-policy" className="whitespace-normal text-[var(--muted-foreground)]">{control.failurePolicy}</span>,
+            ],
+          }))}
+        />
+      </ReviewPanel>
+
+      <ReviewPanel
+        title="Operations evidence pack"
+        description="Release-review artifacts for monitoring, dependency hygiene, migration safety, production seed blocking, and backup restore evidence."
+        actions={<StatusBadge tone={operationsEvidencePack.every((item) => item.required) ? "good" : "warn"}>{operationsEvidencePack.length} artifacts</StatusBadge>}
+      >
+        <DataGrid
+          caption="Operations evidence pack"
+          filterPlaceholder="Filter operations evidence pack"
+          emptyState="No operations evidence artifacts"
+          columns={["Artifact", "Category", "Owner", "Command", "Release gate", "Verification", "Failure policy", "Status"]}
+          rows={operationsEvidencePack.map((item) => ({
+            id: item.code,
+            tone: item.failurePolicy.toLowerCase().includes("block release") ? "warn" : "info",
+            searchText: [
+              item.code,
+              item.label,
+              item.category,
+              item.ownerRole,
+              item.command,
+              item.requiredArtifact,
+              item.releaseGateCode,
+              item.verification,
+              item.failurePolicy,
+            ].join(" "),
+            cells: [
+              <div key="artifact" className="min-w-56 whitespace-normal">
+                <p className="font-medium">{item.label}</p>
+                <code className="mt-1 block break-all text-[11px] text-[var(--muted-foreground)]">{item.requiredArtifact}</code>
+              </div>,
+              <span key="category" className="whitespace-normal text-[var(--muted-foreground)]">{item.category}</span>,
+              <span key="owner" className="whitespace-normal text-[var(--muted-foreground)]">{item.ownerRole}</span>,
+              <span key="command" className="whitespace-normal text-[var(--muted-foreground)]">{item.command}</span>,
+              <code key="gate" className="break-all rounded border border-[var(--border)] bg-[var(--surface-subtle)] px-2 py-1 text-[11px] text-[var(--muted-foreground)]">
+                {item.releaseGateCode}
+              </code>,
+              <span key="verification" className="whitespace-normal text-[var(--muted-foreground)]">{item.verification}</span>,
+              <span key="failure-policy" className="whitespace-normal text-[var(--muted-foreground)]">{item.failurePolicy}</span>,
+              <StatusBadge key="status" tone={item.required ? "good" : "warn"}>
+                {item.required ? "Required" : "Advisory"}
+              </StatusBadge>,
             ],
           }))}
         />

@@ -271,6 +271,18 @@ public sealed record DeploymentSafetyControl(
     string Verification,
     string FailurePolicy);
 
+public sealed record OperationsEvidencePackItem(
+    string Code,
+    string Label,
+    string Category,
+    string OwnerRole,
+    bool Required,
+    string Command,
+    string RequiredArtifact,
+    string ReleaseGateCode,
+    string Verification,
+    string FailurePolicy);
+
 public sealed record ReleaseReviewChecklistItem(
     string Code,
     string Label,
@@ -443,6 +455,7 @@ public sealed record ProductionReadinessReport(
     IReadOnlyList<ProductionMonitoringControl> MonitoringControls,
     IReadOnlyList<DependencyPolicyControl> DependencyPolicyControls,
     IReadOnlyList<DeploymentSafetyControl> DeploymentSafetyControls,
+    IReadOnlyList<OperationsEvidencePackItem> OperationsEvidencePack,
     IReadOnlyList<ReleaseReviewChecklistItem> ReleaseReviewChecklist,
     IReadOnlyList<ReleaseVerificationManifestItem> ReleaseVerificationManifest,
     VisualQaCoverage VisualQaCoverage);
@@ -468,6 +481,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
         var monitoringControls = BuildMonitoringControls();
         var dependencyPolicyControls = BuildDependencyPolicyControls();
         var deploymentSafetyControls = BuildDeploymentSafetyControls();
+        var operationsEvidencePack = BuildOperationsEvidencePack();
         var releaseReviewChecklist = BuildReleaseReviewChecklist(assuranceActions, operationalGates);
         var releaseVerificationManifest = BuildReleaseVerificationManifest();
         var releaseBlockerRegister = BuildReleaseBlockerRegister(
@@ -529,6 +543,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             monitoringControls,
             dependencyPolicyControls,
             deploymentSafetyControls,
+            operationsEvidencePack,
             releaseReviewChecklist,
             releaseVerificationManifest,
             visualQaCoverage);
@@ -583,6 +598,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "production-operational-gates",
             "dependency-policy-controls",
             "deployment-safety-controls",
+            "operations-evidence-pack",
             "release-blocker-register",
             "release-review-checklist",
             "release-verification-manifest",
@@ -2812,6 +2828,76 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "The release evidence includes a PostgreSQL custom-format backup dump, sha256 sidecar and backup restore verification before the production smoke job can pass.",
             ".github/workflows/ci.yml Run production backup restore drill step invokes verify-postgres-backup after creating the dump.",
             "Fail the release if backup creation, checksum verification or restore verification fails.")
+    ];
+
+    private static IReadOnlyList<OperationsEvidencePackItem> BuildOperationsEvidencePack() =>
+    [
+        new(
+            "sentry-error-routing",
+            "Sentry production error routing",
+            "Monitoring",
+            "Platform owner",
+            true,
+            "Verify Monitoring:ErrorTrackingDsn is configured with an HTTPS DSN and send a controlled non-PII smoke error through the production error pipeline.",
+            "sentry-production-error-routing-check",
+            "production-monitoring",
+            "Evidence must show the event reached the production error-tracking project with environment, request path and correlation id while default PII capture remains disabled.",
+            "Block release if production exceptions cannot be routed to the on-call owner with a usable correlation id."),
+        new(
+            "structured-log-correlation",
+            "Structured log correlation sample",
+            "Monitoring",
+            "Platform owner",
+            true,
+            "Run production stack smoke and retain a structured JSON log sample containing timestamp, level, category, request id and correlation id.",
+            "structured-json-log-sample",
+            "production-monitoring",
+            "Evidence must prove safe error responses can be matched to server logs through the trace identifier/correlation id.",
+            "Block release if logs cannot be parsed or support tickets cannot be correlated to server evidence."),
+        new(
+            "dependency-audit",
+            "Dependency and lockfile audit",
+            "Dependency policy",
+            "Engineering",
+            true,
+            "Run npm ci, npm audit --audit-level=moderate, dotnet restore and the CI action hygiene verifier against the release commit.",
+            "dependency-audit-release-note",
+            "dependency-policy-controls",
+            "Evidence must include npm audit result, lockfile reproducibility, NuGet restore/build status and GitHub Actions version-hygiene output.",
+            "Block release for moderate/high/critical advisories, unreproducible lockfiles, failed restore/build, or unverified CI action versions."),
+        new(
+            "migration-safety",
+            "Controlled migration safety",
+            "Deployment safety",
+            "Platform owner",
+            true,
+            "Run dotnet Accounts.Api.dll --migrate-only with production startup flags proving AutoMigrateOnStartup is disabled for normal web startup.",
+            "controlled-migration-release-note",
+            "deployment-safety-controls",
+            "Evidence must show migrations run as a separate release step and normal production startup remains guarded by ProductionSafetyService.",
+            "Block release if production startup can auto-migrate without explicit release approval."),
+        new(
+            "production-seed-block",
+            "Production seed blocking",
+            "Deployment safety",
+            "Platform owner",
+            true,
+            "Review production configuration and run startup validation proving DatabaseStartup:SeedDemoData is false outside development.",
+            "production-seed-block-validation",
+            "deployment-safety-controls",
+            "Evidence must show demo users, sample companies and preview-only accounting records cannot be inserted into a production database.",
+            "Block release if demo seed data can run outside development."),
+        new(
+            "backup-restore-drill",
+            "Backup restore drill",
+            "Deployment safety",
+            "Platform owner",
+            true,
+            "Run scripts/backup-postgres.ps1 and scripts/verify-postgres-backup.ps1 against the production compose shape before approving the release.",
+            "postgres-backup-restore-drill-report",
+            "deployment-safety-controls",
+            "Evidence must include the PostgreSQL custom-format dump, sha256 sidecar and successful restore verification report.",
+            "Block release if backup creation, checksum verification or restore verification fails.")
     ];
 
     private static IReadOnlyList<AccountantAcceptanceCriterion> BuildAccountantAcceptanceCriteria(IReadOnlyList<GoldenFilingCorpusScenario> goldenCorpus) =>
