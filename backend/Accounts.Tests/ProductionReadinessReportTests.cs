@@ -730,6 +730,11 @@ public class ProductionReadinessReportTests
             && StringProperty(item, "ReleaseChecklistEvidenceArtifact") == "external-ros-validation-reference"
             && StringProperty(item, "ManualFallback").Contains("external validation", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(manifest, item =>
+            StringProperty(item, "Code") == "no-direct-cro-ros-submission-control"
+            && StringProperty(item, "CiScope") == "manual-release"
+            && StringProperty(item, "ReleaseChecklistEvidenceArtifact") == "no-direct-cro-ros-submission-control"
+            && StringProperty(item, "ManualFallback").Contains("recorded workflow states only", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(manifest, item =>
             StringProperty(item, "Code") == "production-stack-smoke"
             && StringProperty(item, "Command").Contains("smoke-production", StringComparison.OrdinalIgnoreCase)
             && BooleanProperty(item, "RunsInDefaultCi"));
@@ -1434,6 +1439,13 @@ public class ProductionReadinessReportTests
             && StringProperty(item, "AssuranceActionCode") == "production-monitoring"
             && StringProperty(item, "EvidenceArtifact") == "ci-production-stack-smoke-and-backup-restore"
             && StringProperty(item, "Status") == "required");
+        Assert.Contains(checklist, item =>
+            StringProperty(item, "Code") == "no-direct-cro-ros-submission"
+            && StringProperty(item, "OwnerRole") == "Engineering"
+            && StringProperty(item, "AssuranceActionCode") == "no-direct-cro-ros-submission"
+            && StringProperty(item, "OperationalGateCode") == "no-direct-cro-ros-submission"
+            && StringProperty(item, "EvidenceArtifact") == "no-direct-cro-ros-submission-control"
+            && StringProperty(item, "Status") == "complete");
 
         var assuranceActionCodes = report.AssuranceActions.Select(action => action.Code).ToHashSet(StringComparer.Ordinal);
         var operationalGateCodes = report.OperationalGates.Select(gate => gate.Code).ToHashSet(StringComparer.Ordinal);

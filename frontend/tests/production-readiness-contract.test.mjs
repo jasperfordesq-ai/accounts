@@ -162,6 +162,7 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
     "qualified-accountant-signoff",
     "source-law-change-review",
     "external-ros-validation",
+    "no-direct-cro-ros-submission",
     "accountant-acceptance-walkthrough",
   ]);
   assert.match(parsed.completionTracks[1].completionCriteria[0], /accountant workflow rail/i);
@@ -182,6 +183,13 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   const visualSmokeVerification = parsed.releaseVerificationManifest.find((item) => item.code === "visual-smoke-light-dark");
   assert.match(visualSmokeVerification?.command ?? "", /verify-visual-smoke-artifacts/);
   assert.equal(visualSmokeVerification?.evidenceArtifact, "artifacts/visual-smoke");
+  const noDirectSubmissionVerification = parsed.releaseVerificationManifest.find((item) => item.code === "no-direct-cro-ros-submission-control");
+  assert.equal(noDirectSubmissionVerification?.releaseChecklistEvidenceArtifact, "no-direct-cro-ros-submission-control");
+  assert.match(noDirectSubmissionVerification?.manualFallback ?? "", /recorded workflow states only/);
+  const noDirectSubmissionChecklist = parsed.releaseReviewChecklist.find((item) => item.code === "no-direct-cro-ros-submission");
+  assert.equal(noDirectSubmissionChecklist?.assuranceActionCode, "no-direct-cro-ros-submission");
+  assert.equal(noDirectSubmissionChecklist?.operationalGateCode, "no-direct-cro-ros-submission");
+  assert.equal(noDirectSubmissionChecklist?.evidenceArtifact, "no-direct-cro-ros-submission-control");
   assert.equal(parsed.auditEvidenceTimeline[0].code, "data-change-capture");
   assert.equal(parsed.auditEvidenceTimeline[0].capturedWhen, "At every authenticated write before regenerated outputs can be reviewed.");
   assert.equal(parsed.auditEvidenceTimeline[1].blockingGateCodes[0], "generated-output-review");
@@ -1524,6 +1532,13 @@ function sampleReport() {
         status: "required",
         detail: "External validation evidence must be retained before Revenue filing use.",
       },
+      {
+        code: "no-direct-cro-ros-submission",
+        label: "No direct CRO/ROS submission automation",
+        required: true,
+        status: "enforced",
+        detail: "Final filing operations remain recorded workflow states only.",
+      },
     ],
     assuranceActions: [
       {
@@ -1558,6 +1573,17 @@ function sampleReport() {
         status: "required",
         detail: "Internal XML checks are not a Revenue acceptance check.",
         evidenceRequired: "External ROS validation evidence uploaded or referenced.",
+      },
+      {
+        code: "no-direct-cro-ros-submission",
+        label: "No direct CRO/ROS submission automation",
+        owner: "Engineering",
+        priority: "critical",
+        riskRank: 6,
+        evidenceStage: "unsupported-path-gate",
+        status: "complete",
+        detail: "The platform never automates final CRO or ROS submission.",
+        evidenceRequired: "Release reviewer confirms final filing operations remain recorded workflow states only.",
       },
       {
         code: "accountant-acceptance-walkthrough",
@@ -1711,6 +1737,7 @@ function sampleReport() {
           "Backend golden corpus scenarios are covered by automated verifiers.",
           "Statutory rules coverage is mapped to executable tests.",
           "Production auditability controls and audit evidence timeline are declared.",
+          "No direct CRO/ROS submission automation is enforced as recorded workflow states only.",
         ],
         nextActions: [
           "Run qualified-accountant acceptance on the golden corpus.",
@@ -1721,6 +1748,7 @@ function sampleReport() {
           "qualified-accountant-signoff",
           "source-law-change-review",
           "external-ros-validation",
+          "no-direct-cro-ros-submission",
           "accountant-acceptance-walkthrough",
         ],
       },
@@ -1823,6 +1851,19 @@ function sampleReport() {
         detail: "External ROS validation evidence must be retained before real Revenue filing use.",
       },
       {
+        code: "no-direct-cro-ros-submission",
+        label: "No direct CRO/ROS submission automation",
+        ownerRole: "Engineering",
+        required: true,
+        status: "complete",
+        blocksRelease: false,
+        evidenceArtifact: "no-direct-cro-ros-submission-control",
+        assuranceActionCode: "no-direct-cro-ros-submission",
+        operationalGateCode: "no-direct-cro-ros-submission",
+        auditEventCodes: [],
+        detail: "Release reviewer confirms final filing operations remain recorded workflow states only.",
+      },
+      {
         code: "golden-corpus-accountant-acceptance",
         label: "Golden corpus accountant acceptance",
         ownerRole: "Qualified accountant",
@@ -1909,6 +1950,18 @@ function sampleReport() {
         evidenceArtifact: "external-ros-validation-reference",
         releaseChecklistEvidenceArtifact: "external-ros-validation-reference",
         manualFallback: "Retain the external ROS validation reference before final approval.",
+      },
+      {
+        code: "no-direct-cro-ros-submission-control",
+        label: "No direct CRO/ROS submission automation control",
+        ownerRole: "Engineering",
+        command: "manual review: confirm final CRO and ROS operations remain recorded workflow states only with no direct submission client configured",
+        ciScope: "manual-release",
+        runsInDefaultCi: false,
+        blocksRelease: true,
+        evidenceArtifact: "no-direct-cro-ros-submission-control",
+        releaseChecklistEvidenceArtifact: "no-direct-cro-ros-submission-control",
+        manualFallback: "Confirm final filing operations remain recorded workflow states only: generated, reviewed, approved, marked submitted, payment confirmed, accepted, rejected or corrected.",
       },
       {
         code: "manual-accountant-acceptance",

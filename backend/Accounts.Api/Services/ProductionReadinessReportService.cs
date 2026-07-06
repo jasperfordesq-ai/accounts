@@ -1775,6 +1775,16 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "Internal XML parsing is not a Revenue acceptance check, so real filings need a recorded external ROS validation result.",
             "External ROS validation evidence uploaded or referenced before any Revenue filing state is marked accepted."),
         new(
+            "no-direct-cro-ros-submission",
+            "No direct CRO/ROS submission automation",
+            "Engineering",
+            "critical",
+            6,
+            "unsupported-path-gate",
+            "complete",
+            "The platform must never automate final CRO or ROS submission; it records workflow states and external references only.",
+            "Release reviewer confirms final filing operations remain recorded workflow states only and no direct submission client is wired."),
+        new(
             "accountant-acceptance-walkthrough",
             "Accountant acceptance walkthrough",
             "Qualified accountant",
@@ -1821,7 +1831,8 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             [
                 "Backend golden corpus scenarios are covered by automated verifiers.",
                 "Statutory rules coverage is mapped to executable tests.",
-                "Production auditability controls and audit evidence timeline are declared."
+                "Production auditability controls and audit evidence timeline are declared.",
+                "No direct CRO/ROS submission automation is enforced as recorded workflow states only."
             ],
             [
                 "Run qualified-accountant acceptance on the golden corpus.",
@@ -1834,6 +1845,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 "qualified-accountant-signoff",
                 "source-law-change-review",
                 "external-ros-validation",
+                "no-direct-cro-ros-submission",
                 "accountant-acceptance-walkthrough",
                 "production-monitoring"
             ]),
@@ -2045,6 +2057,15 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 [AuditEventCodes.IxbrlInternalCheckCompleted],
                 "Internal XML checks are not enough for Revenue acceptance; the reviewer must retain external validation evidence."),
             Item(
+                "no-direct-cro-ros-submission",
+                "No direct CRO/ROS submission automation",
+                "Engineering",
+                "no-direct-cro-ros-submission-control",
+                "no-direct-cro-ros-submission",
+                "no-direct-cro-ros-submission",
+                [],
+                "Release reviewer confirms final filing operations remain generated, reviewed, approved, marked submitted, payment confirmed, accepted, rejected or corrected recorded workflow states only."),
+            Item(
                 "golden-corpus-accountant-acceptance",
                 "Golden corpus accountant acceptance",
                 "Qualified accountant",
@@ -2157,6 +2178,17 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "external-ros-validation-reference",
             "external-ros-validation-reference",
             "Internal XML checks are not sufficient for real Revenue filing use; retain the external validation reference before final approval."),
+        new(
+            "no-direct-cro-ros-submission-control",
+            "No direct CRO/ROS submission automation control",
+            "Engineering",
+            "manual review: confirm final CRO and ROS operations remain recorded workflow states only with no direct submission client configured",
+            "manual-release",
+            RunsInDefaultCi: false,
+            BlocksRelease: true,
+            "no-direct-cro-ros-submission-control",
+            "no-direct-cro-ros-submission-control",
+            "Confirm final filing operations remain recorded workflow states only: generated, reviewed, approved, marked submitted, payment confirmed, accepted, rejected or corrected."),
         new(
             "production-stack-smoke",
             "Production compose smoke",
