@@ -46,7 +46,7 @@ export const visualSmokeReviewProtocol = {
   ],
   requiredEvidence: [
     "visual-smoke-manifest.json",
-    "24 visual smoke screenshots",
+    "28 visual smoke screenshots",
     "screenshot SHA-256 checksums",
     "route audit summary",
     "named visual QA reviewer sign-off",
@@ -98,6 +98,15 @@ export const visualSmokeRoutes = [
     expectedText: "Filing readiness profile",
     workflowStages: ["Review", "Filing"],
     openFilingTab: true,
+  },
+  {
+    name: "financial-statements",
+    label: "Financial statements",
+    description: "Statement preview, tax computation, source trail and directors' report workbench.",
+    routeKey: "financialStatements",
+    expectedText: "Financial Statements",
+    workflowStages: ["Statements"],
+    openFilingTab: false,
   },
   {
     name: "workbench-preview",

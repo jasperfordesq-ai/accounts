@@ -1635,7 +1635,7 @@ public class ProductionReadinessReportTests
         Assert.Equal("visual-smoke-screenshots", report.VisualQaCoverage.ArtifactName);
         Assert.Equal("ci-production-smoke", report.VisualQaCoverage.Enforcement);
         Assert.Equal("visual-smoke-manifest.json", StringProperty(report.VisualQaCoverage, "ManifestFileName"));
-        Assert.Equal(24, report.VisualQaCoverage.ExpectedScreenshotCount);
+        Assert.Equal(28, report.VisualQaCoverage.ExpectedScreenshotCount);
         var artifacts = ObjectListProperty(report.VisualQaCoverage, "Artifacts");
         var routeAudits = ObjectListProperty(report.VisualQaCoverage, "RouteAudits");
         var reviewProtocol = ObjectProperty(report.VisualQaCoverage, "ReviewProtocol");
@@ -1660,7 +1660,7 @@ public class ProductionReadinessReportTests
             StringListProperty(reviewProtocol, "RequiredEvidence"),
             [
                 "visual-smoke-manifest.json",
-                "24 visual smoke screenshots",
+                "28 visual smoke screenshots",
                 "screenshot SHA-256 checksums",
                 "route audit summary",
                 "named visual QA reviewer sign-off"
@@ -1686,6 +1686,8 @@ public class ProductionReadinessReportTests
             route.Code == "period-workspace" && route.RequiredText == "Filing readiness");
         Assert.Contains(report.VisualQaCoverage.Routes, route =>
             route.Code == "filing-review" && route.OpenFilingTab && route.RequiredText == "Filing readiness profile");
+        Assert.Contains(report.VisualQaCoverage.Routes, route =>
+            route.Code == "financial-statements" && route.RequiredText == "Financial Statements");
         Assert.Contains(report.VisualQaCoverage.Routes, route =>
             route.Code == "workbench-preview" && route.RequiredText == "Workbench Component Preview");
         foreach (var route in report.VisualQaCoverage.Routes)
@@ -1762,6 +1764,7 @@ public class ProductionReadinessReportTests
             ["company-detail"] = "company",
             ["period-workspace"] = "period",
             ["filing-review"] = "filing",
+            ["financial-statements"] = "financialStatements",
             ["workbench-preview"] = "workbenchPreview"
         };
 

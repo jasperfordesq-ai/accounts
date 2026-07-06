@@ -192,7 +192,7 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.match(parsed.visualQaCoverage.reviewProtocol.acceptanceCriteria[0], /light desktop/);
   assert.deepEqual(parsed.visualQaCoverage.reviewProtocol.requiredEvidence, [
     "visual-smoke-manifest.json",
-    "24 visual smoke screenshots",
+    "28 visual smoke screenshots",
     "screenshot SHA-256 checksums",
     "route audit summary",
     "named visual QA reviewer sign-off",
@@ -318,7 +318,7 @@ test("parseProductionReadinessReport rejects inconsistent production assurance c
 
   assert.throws(
     () => parseProductionReadinessReport(visualPayload),
-    /Invalid production readiness report contract: visualQaCoverage\.expectedScreenshotCount - expected 24, received 7/,
+    /Invalid production readiness report contract: visualQaCoverage\.expectedScreenshotCount - expected 28, received 7/,
   );
 
   const visualAssurancePayload = sampleReport();
@@ -326,7 +326,7 @@ test("parseProductionReadinessReport rejects inconsistent production assurance c
 
   assert.throws(
     () => parseProductionReadinessReport(visualAssurancePayload),
-    /Invalid production readiness report contract: assurancePacket\.visualQaExpectedScreenshots - expected 24, received 99/,
+    /Invalid production readiness report contract: assurancePacket\.visualQaExpectedScreenshots - expected 28, received 99/,
   );
 });
 

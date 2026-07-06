@@ -99,7 +99,7 @@ describe("ProductionReadinessWorkbench", () => {
     expect(screen.getAllByRole("link", { name: "CRO financial statements requirements" }))
       .toEqual(expect.arrayContaining([expect.objectContaining({ href: "https://cro.ie/" })]));
     expect(screen.getByRole("heading", { name: "Visual QA coverage" })).toBeInTheDocument();
-    expectText("24 screenshots");
+    expectText("28 screenshots");
     expect(screen.getAllByText("visual-smoke-manifest.json").length).toBeGreaterThan(1);
     expectText("Visual review protocol");
     expectText("Design reviewer");
@@ -112,8 +112,8 @@ describe("ProductionReadinessWorkbench", () => {
     expectText("Visible text overlap");
     expectText("Route audit summary");
     expect(screen.getByRole("heading", { name: "Visual route review board" })).toBeInTheDocument();
-    expectText("6 route reviews open");
-    expectText("24 screenshots requiring review");
+    expectText("7 route reviews open");
+    expectText("28 screenshots requiring review");
     expectText("visual-qa-screenshot-review");
     expect(screen.getAllByText("Table scanability").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Theme contrast").length).toBeGreaterThan(0);
@@ -197,7 +197,7 @@ describe("ProductionReadinessWorkbench", () => {
     expectText("Golden corpus covered");
     expectText("1 of 1 scenarios");
     expectText("Visual QA evidence");
-    expectText("24 required screenshots");
+    expectText("28 required screenshots");
     expectText("Accountant acceptance");
     expect(screen.getByRole("heading", { name: "Accountant workflow walkthrough" })).toBeInTheDocument();
     expectText("accountant-workflow-walkthrough-v1");
@@ -364,7 +364,7 @@ function sampleReport(): ProductionReadinessReport {
       goldenCorpusTotal: 1,
       statutoryRuleMatrixPaths: 2,
       statutoryRuleCoverageFamilies: 1,
-      visualQaExpectedScreenshots: 24,
+      visualQaExpectedScreenshots: 28,
       requiredOperationalGates: 1,
       openCriticalActions: 1,
       evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "source-law-review-ledger", "revenue-taxonomy-range-evidence", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "accountant-journey-acceptance-checklist", "production-completion-map"],
@@ -1101,7 +1101,7 @@ function sampleReport(): ProductionReadinessReport {
       artifactName: "visual-smoke-screenshots",
       enforcement: "ci-production-smoke",
       manifestFileName: "visual-smoke-manifest.json",
-      expectedScreenshotCount: 24,
+      expectedScreenshotCount: 28,
       layoutChecks: ["browser-console-errors", "page-horizontal-overflow", "visible-text-overlap"],
       reviewChecks: visualQaReviewChecks(),
       reviewProtocol: visualQaReviewProtocol(),
@@ -1170,7 +1170,7 @@ function visualQaReviewProtocol(): ProductionReadinessReport["visualQaCoverage"]
     ],
     requiredEvidence: [
       "visual-smoke-manifest.json",
-      "24 visual smoke screenshots",
+      "28 visual smoke screenshots",
       "screenshot SHA-256 checksums",
       "route audit summary",
       "named visual QA reviewer sign-off",
@@ -1224,6 +1224,15 @@ function visualQaRoutes(): ProductionReadinessReport["visualQaCoverage"]["routes
       requiredText: "Filing readiness profile",
       workflowStages: ["Review", "Filing"],
       openFilingTab: true,
+    },
+    {
+      code: "financial-statements",
+      routeKey: "financialStatements",
+      label: "Financial statements",
+      description: "Statement preview, tax computation, source trail and directors' report workbench.",
+      requiredText: "Financial Statements",
+      workflowStages: ["Statements"],
+      openFilingTab: false,
     },
     {
       code: "workbench-preview",

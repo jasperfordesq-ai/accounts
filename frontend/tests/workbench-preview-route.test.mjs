@@ -17,5 +17,5 @@ test("workbench component preview route is wired into visual QA", () => {
   assert.ok(previewRoute, "Visual smoke should cover the workbench component preview.");
   assert.equal(previewRoute.routeKey, "workbenchPreview");
   assert.equal(previewRoute.expectedText, "Workbench Component Preview");
-  assert.equal(expectedVisualSmokeScreenshotCount(), 24);
+  assert.equal(expectedVisualSmokeScreenshotCount(), 28);
 });

@@ -56,7 +56,7 @@ describe("visual smoke plan", () => {
       ],
       requiredEvidence: [
         "visual-smoke-manifest.json",
-        "24 visual smoke screenshots",
+        "28 visual smoke screenshots",
         "screenshot SHA-256 checksums",
         "route audit summary",
         "named visual QA reviewer sign-off",
@@ -69,8 +69,8 @@ describe("visual smoke plan", () => {
         { name: "mobile", width: 390, height: 844 },
       ],
     );
-    assert.equal(expectedVisualSmokeScreenshotCount(), 24);
-    assert.equal(expectedVisualSmokeArtifacts().length, 24);
+    assert.equal(expectedVisualSmokeScreenshotCount(), 28);
+    assert.equal(expectedVisualSmokeArtifacts().length, 28);
     assert.deepEqual(expectedVisualSmokeArtifacts()[0], {
       routeName: "dashboard",
       routeKey: "dashboard",
@@ -100,7 +100,7 @@ describe("visual smoke plan", () => {
     assert.deepEqual(expectedVisualSmokeManifest(), {
       artifactName: VISUAL_SMOKE_ARTIFACT_NAME,
       manifestFileName: "visual-smoke-manifest.json",
-      expectedScreenshotCount: 24,
+      expectedScreenshotCount: 28,
       layoutChecks: visualSmokeLayoutChecks,
       reviewChecks: visualSmokeReviewChecks,
       reviewProtocol: visualSmokeReviewProtocol,
@@ -116,6 +116,7 @@ describe("visual smoke plan", () => {
         "company-detail",
         "period-workspace",
         "filing-review",
+        "financial-statements",
         "workbench-preview",
       ],
     );
@@ -139,6 +140,22 @@ describe("visual smoke plan", () => {
     assert.equal(
       visualSmokeRoutes.find((route) => route.name === "period-workspace")?.expectedText,
       "Filing readiness",
+    );
+    assert.equal(
+      visualSmokeRoutes.find((route) => route.name === "financial-statements")?.expectedText,
+      "Financial Statements",
+    );
+    assert.deepEqual(
+      visualSmokeRoutes.find((route) => route.name === "financial-statements")?.workflowStages,
+      ["Statements"],
+    );
+    assert.ok(
+      expectedVisualSmokeArtifacts().some(
+        (artifact) =>
+          artifact.routeName === "financial-statements"
+          && artifact.routeKey === "financialStatements"
+          && artifact.artifactPath === "artifacts/visual-smoke/financial-statements-light-desktop.png",
+      ),
     );
     assert.equal(
       visualSmokeRoutes.find((route) => route.name === "workbench-preview")?.expectedText,

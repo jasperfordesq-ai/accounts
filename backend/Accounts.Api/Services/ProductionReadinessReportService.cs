@@ -2773,7 +2773,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             ],
             [
                 "visual-smoke-manifest.json",
-                "24 visual smoke screenshots",
+                "28 visual smoke screenshots",
                 "screenshot SHA-256 checksums",
                 "route audit summary",
                 "named visual QA reviewer sign-off"
@@ -2825,6 +2825,14 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 "Filing readiness profile",
                 ["Review", "Filing"],
                 OpenFilingTab: true),
+            new VisualQaRoute(
+                "financial-statements",
+                "financialStatements",
+                "Financial statements",
+                "Statement preview, tax computation, source trail and directors' report workbench.",
+                "Financial Statements",
+                ["Statements"],
+                OpenFilingTab: false),
             new VisualQaRoute(
                 "workbench-preview",
                 "workbenchPreview",
