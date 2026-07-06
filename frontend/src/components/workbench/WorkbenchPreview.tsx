@@ -22,6 +22,8 @@ import {
   WorkflowRail,
 } from "@/components/workbench";
 import { AccountantWorkflowRail } from "@/components/workbench/AccountantWorkflowRail";
+import { DashboardPracticeSummary } from "@/components/dashboard/DashboardPracticeSummary";
+import type { Company, FilingDeadline } from "@/lib/api";
 
 const workflowItems = [
   { id: "setup", label: "Setup", detail: "Company identity, officers and filing profile recorded.", state: "done" as const },
@@ -115,6 +117,145 @@ const releaseBlockers = [
   },
 ];
 
+const dashboardCompanies: Company[] = [
+  {
+    id: 101,
+    legalName: "Preview Micro Limited",
+    companyType: "Private",
+    incorporationDate: "2023-01-01",
+    financialYearStartMonth: 1,
+    ardMonth: 9,
+    isGroupMember: false,
+    isHolding: false,
+    isInvestment: false,
+    isSubsidiary: false,
+    isDormant: false,
+    isTrading: true,
+    isVatRegistered: false,
+    isEmployer: false,
+    hasStock: false,
+    ownsAssets: false,
+    hasBorrowings: false,
+    hasDirectorLoans: false,
+    isListedSecurities: false,
+    isCreditInstitution: false,
+    isInsuranceUndertaking: false,
+    isPensionFund: false,
+    isCharitableOrganisation: false,
+    assignedReviewerName: "Niamh Reviewer",
+    assignedReviewerEmail: "niamh.reviewer@example.ie",
+    periodCount: 2,
+    latestPeriod: {
+      id: 201,
+      companyId: 101,
+      periodStart: "2026-01-01",
+      periodEnd: "2026-12-31",
+      status: "Review",
+      isFirstYear: false,
+      memberAuditNoticeReceived: false,
+      goingConcernConfirmed: true,
+    },
+  },
+  {
+    id: 102,
+    legalName: "Preview Charity CLG",
+    companyType: "CompanyLimitedByGuarantee",
+    incorporationDate: "2022-01-01",
+    financialYearStartMonth: 1,
+    ardMonth: 8,
+    isGroupMember: false,
+    isHolding: false,
+    isInvestment: false,
+    isSubsidiary: false,
+    isDormant: false,
+    isTrading: true,
+    isVatRegistered: false,
+    isEmployer: true,
+    hasStock: false,
+    ownsAssets: false,
+    hasBorrowings: false,
+    hasDirectorLoans: false,
+    isListedSecurities: false,
+    isCreditInstitution: false,
+    isInsuranceUndertaking: false,
+    isPensionFund: false,
+    isCharitableOrganisation: true,
+    assignedReviewerName: "Oisin Reviewer",
+    assignedReviewerEmail: "oisin.reviewer@example.ie",
+    periodCount: 1,
+    latestPeriod: {
+      id: 202,
+      companyId: 102,
+      periodStart: "2026-01-01",
+      periodEnd: "2026-12-31",
+      status: "Review",
+      isFirstYear: false,
+      memberAuditNoticeReceived: false,
+      goingConcernConfirmed: true,
+    },
+  },
+  {
+    id: 103,
+    legalName: "Preview Dormant Limited",
+    companyType: "Private",
+    incorporationDate: "2024-01-01",
+    financialYearStartMonth: 1,
+    ardMonth: 10,
+    isGroupMember: false,
+    isHolding: false,
+    isInvestment: false,
+    isSubsidiary: false,
+    isDormant: true,
+    isTrading: false,
+    isVatRegistered: false,
+    isEmployer: false,
+    hasStock: false,
+    ownsAssets: false,
+    hasBorrowings: false,
+    hasDirectorLoans: false,
+    isListedSecurities: false,
+    isCreditInstitution: false,
+    isInsuranceUndertaking: false,
+    isPensionFund: false,
+    isCharitableOrganisation: false,
+    assignedReviewerName: undefined,
+    assignedReviewerEmail: undefined,
+    periodCount: 1,
+    latestPeriod: {
+      id: 203,
+      companyId: 103,
+      periodStart: "2026-01-01",
+      periodEnd: "2026-12-31",
+      status: "Draft",
+      isFirstYear: false,
+      memberAuditNoticeReceived: false,
+      goingConcernConfirmed: false,
+    },
+  },
+];
+
+const dashboardDeadlines: Record<number, FilingDeadline | null> = {
+  101: {
+    id: 301,
+    companyId: 101,
+    periodId: 201,
+    deadlineType: "CRO",
+    dueDate: "2026-07-10",
+    isLate: false,
+    penaltyAmount: 0,
+  },
+  102: {
+    id: 302,
+    companyId: 102,
+    periodId: 202,
+    deadlineType: "Revenue",
+    dueDate: "2026-06-20",
+    isLate: true,
+    penaltyAmount: 100,
+  },
+  103: null,
+};
+
 export function WorkbenchPreview() {
   const [balanceOutstanding, setBalanceOutstanding] = useState(40000);
   const [dueWithinYear, setDueWithinYear] = useState(10000);
@@ -144,6 +285,12 @@ export function WorkbenchPreview() {
           { label: "Ready packs", value: "7", tone: "good" },
           { label: "Manual handoffs", value: "2", tone: "bad" },
         ]}
+      />
+
+      <DashboardPracticeSummary
+        companies={dashboardCompanies}
+        deadlines={dashboardDeadlines}
+        today="2026-07-03"
       />
 
       <ReleaseBlockerSummary blockers={releaseBlockers} />

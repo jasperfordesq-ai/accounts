@@ -9,6 +9,9 @@ describe("WorkbenchPreview", () => {
     expect(screen.getByText("Workbench Component Preview")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Dashboard" })).toHaveAttribute("href", "/");
     expect(screen.getByText("PageShell primitive")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Practice command summary" })).toBeInTheDocument();
+    expect(screen.getByText("Nearest filing gate")).toBeInTheDocument();
+    expect(screen.getAllByText("3 deadline pressure").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByRole("navigation", { name: "Accounting Workflow" })).toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: "Accountant Workflow" })).toBeInTheDocument();
     expect(screen.getByText("Start with company setup, then move period work through evidence, statements, review and filing.")).toBeInTheDocument();
