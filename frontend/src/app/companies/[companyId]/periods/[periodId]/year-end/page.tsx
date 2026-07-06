@@ -28,6 +28,7 @@ import { DirectorLoansManager, type DirectorOption } from "@/components/Director
 import { useAuth } from "@/components/AuthProvider";
 import { YearEndQuestionnaireHeader } from "@/components/period/YearEndQuestionnaireHeader";
 import { YearEndFixedAssetsSection } from "@/components/period/YearEndFixedAssetsSection";
+import { YearEndInventorySection } from "@/components/period/YearEndInventorySection";
 import { YearEndMoneyListSection } from "@/components/period/YearEndMoneyListSection";
 import { YearEndQuestionnaireSection as Section } from "@/components/period/YearEndQuestionnaireSection";
 import { useUnsavedChanges } from "@/lib/useUnsavedChanges";
@@ -692,84 +693,14 @@ export default function YearEndQuestionnairePage({
           reviewSaving={savingReviewKey === "inventory"}
           onConfirmReview={() => handleConfirmReview("inventory", inventory.length === 0 ? "Confirmed no stock or work in progress at year-end." : undefined)}
         >
-          {inventory.length > 0 && (
-            <div className="space-y-2 mb-4">
-              {inventory.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-neutral-700 px-4 py-3 dark:bg-neutral-800/50"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{item.description}</p>
-                    <Chip variant="soft" size="sm" color="default">{item.valuationMethod}</Chip>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                      {formatCurrency(item.value)}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => item.id && handleDeleteInventory(item.id)}
-                      className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400"
-                      aria-label={`Delete inventory item ${item.description}`}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="grid grid-cols-12 gap-3 items-end">
-            <div className="col-span-4">
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Description</label>
-              <input
-                type="text"
-                className={inputClass}
-                placeholder="e.g. Finished goods"
-                value={newInventoryItem.description}
-                onChange={(e) => setNewInventoryItem({ ...newInventoryItem, description: e.target.value })}
-                aria-label="Inventory item description"
-              />
-            </div>
-            <div className="col-span-3">
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Value</label>
-              <input
-                type="number"
-                className={inputClass}
-                placeholder="0.00"
-                value={newInventoryItem.value || ""}
-                onChange={(e) => setNewInventoryItem({ ...newInventoryItem, value: Number(e.target.value) })}
-                aria-label="Inventory item value"
-              />
-            </div>
-            <div className="col-span-3">
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Valuation Method</label>
-              <select
-                className={selectClass}
-                value={newInventoryItem.valuationMethod}
-                onChange={(e) => setNewInventoryItem({ ...newInventoryItem, valuationMethod: e.target.value })}
-                title="Valuation method"
-                aria-label="Valuation method"
-              >
-                <option value="FIFO">FIFO</option>
-                <option value="WeightedAverage">Weighted Average</option>
-                <option value="LIFO">LIFO</option>
-              </select>
-            </div>
-            <div className="col-span-2">
-              <Button
-                variant="primary"
-                size="sm"
-                onPress={handleAddInventory}
-                isDisabled={savingSection === "inventory"}
-                className="w-full"
-              >
-                {savingSection === "inventory" ? <Spinner size="sm" /> : <><Plus className="w-4 h-4 mr-1" /> Add</>}
-              </Button>
-            </div>
-          </div>
+          <YearEndInventorySection
+            items={inventory}
+            draft={newInventoryItem}
+            saving={savingSection === "inventory"}
+            onDraftChange={setNewInventoryItem}
+            onAdd={handleAddInventory}
+            onDelete={handleDeleteInventory}
+          />
         </Section>
 
         {/* 5. Loans */}

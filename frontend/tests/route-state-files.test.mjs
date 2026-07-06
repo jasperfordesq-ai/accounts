@@ -263,6 +263,23 @@ test("year-end questionnaire route delegates fixed asset working-paper section",
   assert.match(componentSource, /Depreciation Method/, "fixed asset shell should preserve depreciation method capture");
 });
 
+test("year-end questionnaire route delegates inventory working-paper section", () => {
+  const routeFile = new URL("companies/[companyId]/periods/[periodId]/year-end/page.tsx", appDir);
+  const componentFile = new URL("../src/components/period/YearEndInventorySection.tsx", import.meta.url);
+
+  assert.ok(existsSync(componentFile), "YearEndInventorySection should exist for stock and work-in-progress capture");
+
+  const routeSource = readFileSync(routeFile, "utf8");
+  const componentSource = readFileSync(componentFile, "utf8");
+
+  assert.match(routeSource, /YearEndInventorySection/, "year-end questionnaire route should render the focused inventory shell");
+  assert.doesNotMatch(routeSource, /aria-label="Inventory item description"/, "year-end questionnaire route should not own inventory description fields");
+  assert.doesNotMatch(routeSource, /aria-label="Inventory item value"/, "year-end questionnaire route should not own inventory value fields");
+  assert.doesNotMatch(routeSource, /Delete inventory item/, "year-end questionnaire route should not own inventory delete copy");
+  assert.match(componentSource, /Weighted Average/, "inventory shell should preserve valuation method options");
+  assert.match(componentSource, /work in progress/i, "inventory shell should stay explicit about stock and work in progress");
+});
+
 test("period adjustments route delegates generation, filters and approval composition", () => {
   const periodRoute = new URL("companies/[companyId]/periods/[periodId]/page.tsx", appDir);
   const source = readFileSync(periodRoute, "utf8");
