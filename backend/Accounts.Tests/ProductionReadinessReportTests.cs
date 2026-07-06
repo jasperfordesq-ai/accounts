@@ -452,6 +452,7 @@ public class ProductionReadinessReportTests
                 "Dashboard",
                 "Company detail",
                 "Period workspace",
+                "Financial statements",
                 "Filing review",
                 "Production readiness"
             ],

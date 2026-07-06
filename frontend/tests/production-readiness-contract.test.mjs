@@ -395,6 +395,18 @@ test("parseProductionReadinessReport rejects accountant walkthrough protocols th
   );
 });
 
+test("parseProductionReadinessReport rejects accountant walkthrough protocols without financial statements review", () => {
+  const payload = sampleReport();
+  payload.accountantWorkflowWalkthroughProtocol.routeSequence = payload.accountantWorkflowWalkthroughProtocol.routeSequence.filter(
+    (step) => !step.includes("Financial statements"),
+  );
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: accountantWorkflowWalkthroughProtocol\.routeSequence - Financial statements is required/,
+  );
+});
+
 test("parseProductionReadinessReport rejects accountant walkthrough protocols without assurance packet evidence", () => {
   const payload = sampleReport();
   payload.assurancePacket.evidenceItems = payload.assurancePacket.evidenceItems.filter(

@@ -3237,7 +3237,7 @@ function assertAccountantWorkflowWalkthroughProtocol(report: ProductionReadiness
     }
   }
 
-  for (const route of ["Dashboard", "Company detail", "Period workspace", "Filing review", "Production readiness"]) {
+  for (const route of ["Dashboard", "Company detail", "Period workspace", "Financial statements", "Filing review", "Production readiness"]) {
     if (!protocol.routeSequence.some((step) => step.includes(route))) {
       throw new Error(
         `Invalid production readiness report contract: accountantWorkflowWalkthroughProtocol.routeSequence - ${route} is required`,
