@@ -30,6 +30,7 @@ import { YearEndQuestionnaireHeader } from "@/components/period/YearEndQuestionn
 import { YearEndFixedAssetsSection } from "@/components/period/YearEndFixedAssetsSection";
 import { YearEndInventorySection } from "@/components/period/YearEndInventorySection";
 import { YearEndMoneyListSection } from "@/components/period/YearEndMoneyListSection";
+import { YearEndPayrollSection } from "@/components/period/YearEndPayrollSection";
 import { YearEndQuestionnaireSection as Section } from "@/components/period/YearEndQuestionnaireSection";
 import { useUnsavedChanges } from "@/lib/useUnsavedChanges";
 import { PeriodWorkspaceSkeleton } from "@/components/Skeleton";
@@ -726,62 +727,12 @@ export default function YearEndQuestionnairePage({
           reviewSaving={savingReviewKey === "payroll"}
           onConfirmReview={() => handleConfirmReview("payroll", payroll === null ? "Confirmed no payroll or staff costs for this period." : undefined)}
         >
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Number of Staff</label>
-              <input
-                type="number"
-                className={inputClass}
-                placeholder="0"
-                value={payrollForm.staffCount || ""}
-                onChange={(e) => setPayrollForm({ ...payrollForm, staffCount: Number(e.target.value) })}
-                aria-label="Number of staff"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Gross Wages</label>
-              <input
-                type="number"
-                className={inputClass}
-                placeholder="0.00"
-                value={payrollForm.grossWages || ""}
-                onChange={(e) => setPayrollForm({ ...payrollForm, grossWages: Number(e.target.value) })}
-                aria-label="Gross wages"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Employer PRSI</label>
-              <input
-                type="number"
-                className={inputClass}
-                placeholder="0.00"
-                value={payrollForm.employerPrsi || ""}
-                onChange={(e) => setPayrollForm({ ...payrollForm, employerPrsi: Number(e.target.value) })}
-                aria-label="Employer PRSI"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Pension Contributions</label>
-              <input
-                type="number"
-                className={inputClass}
-                placeholder="0.00"
-                value={payrollForm.pensionContributions || ""}
-                onChange={(e) => setPayrollForm({ ...payrollForm, pensionContributions: Number(e.target.value) })}
-                aria-label="Pension contributions"
-              />
-            </div>
-          </div>
-          <div className="mt-4 flex justify-end">
-            <Button
-              variant="primary"
-              size="sm"
-              onPress={handleSavePayroll}
-              isDisabled={savingSection === "payroll"}
-            >
-              {savingSection === "payroll" ? <Spinner size="sm" /> : "Save Payroll"}
-            </Button>
-          </div>
+          <YearEndPayrollSection
+            form={payrollForm}
+            saving={savingSection === "payroll"}
+            onFormChange={setPayrollForm}
+            onSave={handleSavePayroll}
+          />
         </Section>
 
         {/* 7. Tax */}

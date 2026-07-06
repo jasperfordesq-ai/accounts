@@ -280,6 +280,24 @@ test("year-end questionnaire route delegates inventory working-paper section", (
   assert.match(componentSource, /work in progress/i, "inventory shell should stay explicit about stock and work in progress");
 });
 
+test("year-end questionnaire route delegates payroll working-paper section", () => {
+  const routeFile = new URL("companies/[companyId]/periods/[periodId]/year-end/page.tsx", appDir);
+  const componentFile = new URL("../src/components/period/YearEndPayrollSection.tsx", import.meta.url);
+
+  assert.ok(existsSync(componentFile), "YearEndPayrollSection should exist for payroll and staff-cost capture");
+
+  const routeSource = readFileSync(routeFile, "utf8");
+  const componentSource = readFileSync(componentFile, "utf8");
+
+  assert.match(routeSource, /YearEndPayrollSection/, "year-end questionnaire route should render the focused payroll shell");
+  assert.doesNotMatch(routeSource, /aria-label="Number of staff"/, "year-end questionnaire route should not own staff-count fields");
+  assert.doesNotMatch(routeSource, /aria-label="Gross wages"/, "year-end questionnaire route should not own gross-wages fields");
+  assert.doesNotMatch(routeSource, /aria-label="Employer PRSI"/, "year-end questionnaire route should not own employer PRSI fields");
+  assert.doesNotMatch(routeSource, /aria-label="Pension contributions"/, "year-end questionnaire route should not own pension-contribution fields");
+  assert.match(componentSource, /Employer PRSI/, "payroll shell should preserve employer PRSI capture");
+  assert.match(componentSource, /staff costs/i, "payroll shell should stay explicit about payroll and staff costs");
+});
+
 test("period adjustments route delegates generation, filters and approval composition", () => {
   const periodRoute = new URL("companies/[companyId]/periods/[periodId]/page.tsx", appDir);
   const source = readFileSync(periodRoute, "utf8");
