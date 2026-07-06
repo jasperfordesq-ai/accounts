@@ -801,6 +801,10 @@ public class ProductionReadinessReportTests
                 IrishStatutoryRuleSources.FrcFrs105.SourceId,
                 IrishStatutoryRuleSources.RevenueAcceptedTaxonomies.SourceId
             ]);
+        var microScenario = Assert.Single(report.GoldenFilingCorpus, scenario => scenario.Code == "micro-ltd");
+        Assert.Contains(
+            "FilingGoldenCorpusScenarioTests.GoldenCorpus_MicroLtd_EmitsAccountsIxbrlTaxNotesReadinessAndSignatoryGates",
+            microScenario.EvidenceTestNames);
 
         AssertGoldenEvidencePack(
             report,

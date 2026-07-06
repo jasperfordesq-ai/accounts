@@ -925,9 +925,12 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 AuditExempt: true,
                 ManualProfessionalReviewRequired: false),
             [
+                "FilingGoldenCorpusScenarioTests.GoldenCorpus_MicroLtd_EmitsAccountsIxbrlTaxNotesReadinessAndSignatoryGates",
                 "AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl"
             ],
-            Verifiers("AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl"),
+            Verifiers(
+                "FilingGoldenCorpusScenarioTests.GoldenCorpus_MicroLtd_EmitsAccountsIxbrlTaxNotesReadinessAndSignatoryGates",
+                "AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl"),
             [
                 "classification selects Micro",
                 "readiness has no missing items",
@@ -982,7 +985,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     ],
                     "review-required"),
                 ProofPoints(
-                    "AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl",
+                    "FilingGoldenCorpusScenarioTests.GoldenCorpus_MicroLtd_EmitsAccountsIxbrlTaxNotesReadinessAndSignatoryGates",
                     [
                         new("pdf-text", "PDF text contains company name, period and micro statutory statement."),
                         new("ixbrl-xml", "iXBRL XML is well-formed and contains the company legal name."),
