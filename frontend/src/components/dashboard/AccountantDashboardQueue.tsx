@@ -2,7 +2,7 @@ import Link from "next/link";
 import { AlertTriangle, ArrowRight, CalendarClock, UserRound } from "lucide-react";
 import type { Company, FilingDeadline, ProductionReleaseBlocker } from "@/lib/api";
 import { formatCompanyType, formatDateIE } from "@/lib/format";
-import { DataTable, MetricStrip, ReleaseBlockerSummary, ReviewPanel, StatusBadge } from "@/components/workbench";
+import { DataGrid, MetricStrip, ReleaseBlockerSummary, ReviewPanel, StatusBadge } from "@/components/workbench";
 import { AccountantWorkflowRail } from "@/components/workbench/AccountantWorkflowRail";
 
 interface AccountantDashboardQueueProps {
@@ -83,7 +83,7 @@ export function AccountantDashboardQueue({
           />
           <ReleaseBlockerSummary blockers={productionReleaseBlockers} />
           <QueueTriage row={rows[0]} />
-          <DataTable
+          <DataGrid
             caption="Accountant work queue"
             filterPlaceholder="Filter companies, blockers, reviewers or actions"
             emptyState="No matching companies in the work queue"

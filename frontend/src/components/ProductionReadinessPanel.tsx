@@ -9,7 +9,7 @@ import {
 import Link from "next/link";
 import type { ReactNode } from "react";
 import type { ProductionReadinessReport } from "@/lib/api";
-import { DataTable, ReviewPanel, StatusBadge } from "@/components/workbench";
+import { DataGrid, ReviewPanel, StatusBadge } from "@/components/workbench";
 
 export function ProductionReadinessPanel({
   report,
@@ -108,7 +108,7 @@ export function ProductionReadinessPanel({
 
       <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)]">
         <div className="space-y-4">
-          <DataTable
+          <DataGrid
             columns={["Golden scenario", "Fixture", "Scope", "Outcome", "Evidence tests", "Status"]}
             rows={report.goldenFilingCorpus.map((scenario) => [
               <span key="label" className="font-medium">{scenario.label}</span>,

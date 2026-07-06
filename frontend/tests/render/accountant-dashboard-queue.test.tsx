@@ -68,7 +68,7 @@ describe("AccountantDashboardQueue", () => {
     expect(screen.getAllByRole("row")[1]).toHaveTextContent("Atlantic Public Limited Company");
     expect(screen.getAllByRole("row")[2]).toHaveTextContent("New Client Limited");
     expect(screen.getAllByRole("row")[3]).toHaveTextContent("Connacht Visual Limited");
-    expect(container.querySelector(".workbench-data-table")).toHaveAttribute("data-responsive", "card");
+    expect(container.querySelector(".workbench-data-grid")).toHaveAttribute("data-responsive", "card");
     const companyCells = container.querySelectorAll('td[data-label="Company"]');
     const deadlineCells = container.querySelectorAll('td[data-label="Deadline"]');
     const blockerCells = container.querySelectorAll('td[data-label="Blockers"]');

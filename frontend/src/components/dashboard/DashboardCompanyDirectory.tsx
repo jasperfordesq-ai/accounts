@@ -4,7 +4,7 @@ import Link from "next/link";
 import { ArrowRight, Building2, CalendarClock, Plus, UserRound } from "lucide-react";
 import type { Company, FilingDeadline } from "@/lib/api";
 import { formatCompanyType, formatDateIE } from "@/lib/format";
-import { DataTable, ReviewPanel, StatusBadge, WorkbenchEmptyState } from "@/components/workbench";
+import { DataGrid, ReviewPanel, StatusBadge, WorkbenchEmptyState } from "@/components/workbench";
 
 interface DashboardCompanyDirectoryProps {
   companies: Company[];
@@ -56,7 +56,7 @@ export function DashboardCompanyDirectory({
       description="Dense company navigation with statutory status, filing pressure, reviewer ownership and the next workspace action."
       actions={isOwner ? <AddCompanyLink /> : undefined}
     >
-      <DataTable
+      <DataGrid
         caption="Company directory"
         filterPlaceholder="Filter companies, deadlines, reviewers or status"
         emptyState="No matching companies"

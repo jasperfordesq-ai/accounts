@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { test } from "node:test";
 
 const appDir = new URL("../src/app/", import.meta.url);
+const componentsDir = new URL("../src/components/", import.meta.url);
 
 test("Next app shell has production route-state files wired to workbench primitives", () => {
   const expectations = [
@@ -256,3 +257,44 @@ test("period statements workspace composes readiness, notes and charity navigati
     assert.match(source, new RegExp(marker), `PeriodStatementsWorkspace should render ${marker}`);
   }
 });
+
+test("accountant workflow components use DataGrid as the canonical dense table primitive", () => {
+  const allowedDataTableFiles = new Set([
+    "workbench.tsx",
+  ]);
+  const offenders = [];
+
+  for (const fileUrl of componentSourceFiles(componentsDir)) {
+    const relativePath = decodeURIComponent(fileUrl.pathname.split("/src/components/").at(-1) ?? "");
+    if (allowedDataTableFiles.has(relativePath)) continue;
+
+    const source = readFileSync(fileUrl, "utf8");
+    if (/\bDataTable\b/.test(source)) {
+      offenders.push(relativePath);
+    }
+  }
+
+  assert.deepEqual(
+    offenders.sort(),
+    [],
+    `Accountant workflow components should import/render DataGrid, not DataTable: ${offenders.join(", ")}`,
+  );
+});
+
+function componentSourceFiles(directoryUrl) {
+  const files = [];
+
+  for (const entry of readdirSync(directoryUrl, { withFileTypes: true })) {
+    const entryUrl = new URL(entry.name + (entry.isDirectory() ? "/" : ""), directoryUrl);
+    if (entry.isDirectory()) {
+      files.push(...componentSourceFiles(entryUrl));
+      continue;
+    }
+
+    if (entry.isFile() && /\.(tsx|ts)$/.test(entry.name)) {
+      files.push(entryUrl);
+    }
+  }
+
+  return files.filter((fileUrl) => statSync(fileUrl).isFile());
+}

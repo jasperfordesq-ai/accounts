@@ -5,7 +5,7 @@ import { Button } from "@heroui/react";
 import { ArrowRight, Calendar, Plus } from "lucide-react";
 import type { AccountingPeriod, Company } from "@/lib/api";
 import { formatPeriodRange } from "@/lib/format";
-import { DataTable, ReviewPanel, StatusBadge } from "@/components/workbench";
+import { DataGrid, ReviewPanel, StatusBadge } from "@/components/workbench";
 
 interface CompanyPeriodsWorkbenchProps {
   company: Company;
@@ -91,7 +91,7 @@ export function CompanyPeriodsWorkbench({
           </p>
         </div>
       ) : (
-        <DataTable
+        <DataGrid
           columns={["Period", "Status", "Size and regime", "Evidence cues", "Next action"]}
           rows={periods.map((period, index) => [
             <PeriodLabel key="period" period={period} />,

@@ -3,7 +3,7 @@
 import { Button } from "@heroui/react";
 import { Pencil, Plus, Save, Trash2, UserRound, X } from "lucide-react";
 import type { Officer } from "@/lib/api";
-import { DataTable, ReviewPanel, StatusBadge } from "@/components/workbench";
+import { DataGrid, ReviewPanel, StatusBadge } from "@/components/workbench";
 
 interface CompanyOfficersPanelProps {
   officers?: Officer[];
@@ -104,7 +104,7 @@ export function CompanyOfficersPanel({
           </p>
         </div>
       ) : (
-        <DataTable
+        <DataGrid
           columns={["Officer", "Role", "Status", "Actions"]}
           rows={officers.map((officer) => {
             const isEditing = editingOfficerId === officer.id;

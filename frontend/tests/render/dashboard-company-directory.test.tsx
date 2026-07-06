@@ -23,7 +23,7 @@ describe("DashboardCompanyDirectory", () => {
     expect(screen.getByRole("link", { name: "Add Company" })).toHaveAttribute("href", "/companies/new");
     expect(screen.getByRole("searchbox", { name: "Filter Company directory" })).toBeInTheDocument();
     expect(screen.getByText("2 of 2 rows")).toBeInTheDocument();
-    expect(container.querySelector(".workbench-data-table")).toHaveAttribute("data-responsive", "card");
+    expect(container.querySelector(".workbench-data-grid")).toHaveAttribute("data-responsive", "card");
     expect(screen.getByRole("columnheader", { name: "Company" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Deadline" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Reviewer" })).toBeInTheDocument();

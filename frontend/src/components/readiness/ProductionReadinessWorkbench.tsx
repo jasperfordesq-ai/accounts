@@ -8,7 +8,7 @@ import {
 import type { ReactNode } from "react";
 import type { ProductionReadinessReport } from "@/lib/api";
 import {
-  DataTable,
+  DataGrid,
   MetricStrip,
   PageShell,
   ReleaseBlockerSummary,
@@ -250,7 +250,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
         description="Per-source release evidence proving every pinned legal source has a named owner, review checks, and accountant sign-off before generated packs are used."
         actions={<StatusBadge tone="bad">{sourceLawReviewLedger.length} blocking reviews</StatusBadge>}
       >
-        <DataTable
+        <DataGrid
           caption="Source-law review ledger"
           filterPlaceholder="Filter source-law review ledger"
           emptyState="No source-law review ledger entries"
@@ -311,7 +311,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
         description="Priority-ranked work that must be evidenced before the platform can be treated as production-ready for real statutory accounts."
         actions={<StatusBadge tone="warn">{assuranceActions.length - completedAssuranceActions} open</StatusBadge>}
       >
-        <DataTable
+        <DataGrid
           caption="Next assurance actions"
           filterPlaceholder="Filter assurance actions"
           emptyState="No matching assurance actions"
@@ -366,7 +366,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
         <div className="mb-4">
           <ReleaseBlockerSummary blockers={releaseBlockerRegister} actionHref="" />
         </div>
-        <DataTable
+        <DataGrid
           caption="Release blocker register"
           filterPlaceholder="Filter release blocker register"
           emptyState="No release blockers"
@@ -436,7 +436,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
         description="The remaining production work split into backend code, frontend UI/UX and frontend code, with evidence and release actions tied together."
         actions={<StatusBadge tone={completionTracks.every((track) => track.status === "complete") ? "good" : "warn"}>{completionTracks.length} tracks</StatusBadge>}
       >
-        <DataTable
+        <DataGrid
           caption="Production completion map"
           filterPlaceholder="Filter production completion map"
           emptyState="No completion tracks"
@@ -477,7 +477,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
         description="Role-owned evidence checklist tying release blockers to assurance actions, operational gates, audit events and CI artifacts."
         actions={<StatusBadge tone={releaseReviewChecklist.some((item) => item.blocksRelease) ? "bad" : "good"}>{releaseReviewChecklist.filter((item) => item.blocksRelease).length} blocking</StatusBadge>}
       >
-        <DataTable
+        <DataGrid
           caption="Release review checklist"
           filterPlaceholder="Filter release checklist"
           emptyState="No release checklist items"
@@ -529,7 +529,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
         description="Executable commands and manual fallbacks that produce the release evidence pack when CI is unavailable, skipped, or environment-gated."
         actions={<StatusBadge tone={releaseVerificationManifest.some((item) => item.blocksRelease) ? "bad" : "good"}>{releaseVerificationManifest.filter((item) => item.blocksRelease).length} blocking checks</StatusBadge>}
       >
-        <DataTable
+        <DataGrid
           caption="Release verification manifest"
           filterPlaceholder="Filter release verification manifest"
           emptyState="No release verification commands"
@@ -641,7 +641,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
         description="Route-by-route acceptance evidence tying the live accountant workbench journey to seeded golden scenarios and visual smoke artifacts."
         actions={<StatusBadge tone="warn">{accountantJourneyAcceptanceChecklist.length} routes</StatusBadge>}
       >
-        <DataTable
+        <DataGrid
           caption="Accountant journey acceptance checklist"
           filterPlaceholder="Filter accountant journey acceptance"
           emptyState="No matching accountant journey acceptance entries"
@@ -689,7 +689,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
         description="Scenario-by-scenario acceptance gates a named qualified accountant must review before generated packs are trusted for real statutory use."
         actions={<StatusBadge tone="warn">{accountantAcceptanceCriteria.length} required</StatusBadge>}
       >
-        <DataTable
+        <DataGrid
           caption="Accountant acceptance criteria"
           filterPlaceholder="Filter accountant acceptance criteria"
           emptyState="No matching accountant acceptance criteria"
@@ -735,7 +735,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
         description="Controls proving who changed data, who approved outputs, what evidence was present, what was generated, and how the audit chain is checked."
         actions={<StatusBadge tone={auditabilityControls.every((control) => control.required) ? "good" : "warn"}>{auditabilityControls.length} controls</StatusBadge>}
       >
-        <DataTable
+        <DataGrid
           caption="Production auditability"
           filterPlaceholder="Filter auditability controls"
           emptyState="No matching auditability controls"
@@ -769,7 +769,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
         description="Chronological evidence capture points proving when data changed, outputs were generated, professional approval happened, and external validation evidence was present."
         actions={<StatusBadge tone="info">{auditEvidenceTimeline.length} capture points</StatusBadge>}
       >
-        <DataTable
+        <DataGrid
           caption="Audit evidence timeline"
           filterPlaceholder="Filter audit evidence timeline"
           emptyState="No audit evidence timeline entries"
@@ -808,7 +808,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
         description="Operational controls proving production errors are routed, logs are structured, and every safe error response can be traced back to server evidence."
         actions={<StatusBadge tone={monitoringControls.every((control) => control.required) ? "good" : "warn"}>{monitoringControls.length} controls</StatusBadge>}
       >
-        <DataTable
+        <DataGrid
           caption="Production monitoring"
           filterPlaceholder="Filter monitoring controls"
           emptyState="No matching monitoring controls"
@@ -851,7 +851,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
         description="Release controls proving frontend, backend and CI dependency hygiene is reproducible, audited, and fails closed before production use."
         actions={<StatusBadge tone={dependencyPolicyControls.every((control) => control.required) ? "good" : "warn"}>{dependencyPolicyControls.length} controls</StatusBadge>}
       >
-        <DataTable
+        <DataGrid
           caption="Dependency policy controls"
           filterPlaceholder="Filter dependency controls"
           emptyState="No matching dependency controls"
@@ -885,7 +885,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
         description="Release controls proving migrations, demo data and backup restoration are handled deliberately before production filing packs are trusted."
         actions={<StatusBadge tone={deploymentSafetyControls.every((control) => control.required) ? "good" : "warn"}>{deploymentSafetyControls.length} controls</StatusBadge>}
       >
-        <DataTable
+        <DataGrid
           caption="Deployment safety controls"
           filterPlaceholder="Filter deployment safety controls"
           emptyState="No matching deployment safety controls"
@@ -919,7 +919,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
         description="Accountant-readable filing paths, required evidence, outputs, fail-closed gates, and source references for the supported and unsupported Irish company workflows."
         actions={<StatusBadge tone="info">{statutoryRuleMatrix.length} paths</StatusBadge>}
       >
-        <DataTable
+        <DataGrid
           caption="Statutory rules matrix"
           filterPlaceholder="Filter rules, regimes, gates or sources"
           emptyState="No matching statutory rule paths"
@@ -956,7 +956,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
         description="Granular rule families, edge cases, executable tests, and legal sources proving the accounting engine is covered beyond the four golden paths."
         actions={<StatusBadge tone={statutoryRulesCoverage.every((item) => item.coverageStatus === "covered") ? "good" : "warn"}>{statutoryRulesCoverage.length} rule families</StatusBadge>}
       >
-        <DataTable
+        <DataGrid
           caption="Statutory rules coverage"
           filterPlaceholder="Filter rule coverage"
           emptyState="No matching statutory rule coverage"
@@ -1046,7 +1046,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
               </div>
             </div>
 
-            <DataTable
+            <DataGrid
               caption="Visual QA routes"
               filterPlaceholder="Filter visual QA routes"
               emptyState="No matching visual QA routes"
@@ -1102,7 +1102,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
                   <StatusBadge tone="info">{visualQaCoverage.reviewProtocol.signOffGate}</StatusBadge>
                 </div>
               </div>
-              <DataTable
+              <DataGrid
                 caption="Visual route review board"
                 filterPlaceholder="Filter visual route review board"
                 emptyState="No matching visual route reviews"
@@ -1150,7 +1150,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
             </div>
 
             <div className="mt-4">
-              <DataTable
+              <DataGrid
                 caption="Route audit summary"
                 filterPlaceholder="Filter visual route audits"
                 emptyState="No matching visual route audits"
@@ -1193,7 +1193,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
             </div>
 
             <div className="mt-4">
-              <DataTable
+              <DataGrid
                 caption="Visual QA artifact manifest"
                 filterPlaceholder="Filter visual QA artifacts"
                 emptyState="No matching visual QA artifacts"
@@ -1244,7 +1244,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
           description="Seed scenarios that prove the end-to-end accounting path, generated outputs, legal gates, PDF text, and iXBRL XML parsing."
           actions={<StatusBadge tone={coveredScenarios === report.goldenFilingCorpus.length ? "good" : "warn"}>{coveredScenarios}/{report.goldenFilingCorpus.length} covered</StatusBadge>}
         />
-        <DataTable
+        <DataGrid
           caption="Golden filing corpus"
           filterPlaceholder="Filter golden scenarios"
           emptyState="No matching golden filing scenarios"
@@ -1297,7 +1297,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
               The concrete generated artifacts, decision gates, expected values and statutory sources each scenario must prove.
             </p>
           </div>
-          <DataTable
+          <DataGrid
             caption="Golden evidence pack"
             filterPlaceholder="Filter evidence packs"
             emptyState="No matching evidence packs"
@@ -1344,7 +1344,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
               Accountant-facing ledger tying each sample company to its verifier, expected outputs, source ids, readiness state and release gate.
             </p>
           </div>
-          <DataTable
+          <DataGrid
             caption="Golden evidence ledger"
             filterPlaceholder="Filter golden evidence ledger"
             emptyState="No matching ledger entries"
@@ -1482,7 +1482,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
               {report.sourceLawSnapshot.contentHash}
             </code>
           </div>
-          <DataTable
+          <DataGrid
             columns={["Source", "Effective date", "Reference"]}
             rows={report.sourceLawSnapshot.sources.map((source) => [
               <span key="title" className="font-medium">{source.title}</span>,
@@ -1500,7 +1500,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
             ])}
           />
           <div className="mt-4">
-          <DataTable
+          <DataGrid
             columns={["Traceability", "Used by", "Release gates", "Pinned"]}
             rows={sourceLawTraceability.map((entry) => [
               <span key="title" className="font-medium">{entry.title}</span>,
