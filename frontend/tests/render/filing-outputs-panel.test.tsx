@@ -35,6 +35,15 @@ describe("FilingOutputsPanel", () => {
     expect(within(outputReadiness).getByText("CRO Filing Pack, Signature Page")).toBeInTheDocument();
     expect(within(outputReadiness).getByText("What must I do next?")).toBeInTheDocument();
     expect(within(outputReadiness).getByText("Complete filing regime before CRO downloads")).toBeInTheDocument();
+
+    const evidenceDocket = screen.getByRole("region", { name: "Output evidence docket" });
+    expect(within(evidenceDocket).getByText("Generated filing evidence")).toBeInTheDocument();
+    expect(within(evidenceDocket).getByText("1 of 2 generated")).toBeInTheDocument();
+    expect(within(evidenceDocket).getByText("Open checklist evidence")).toBeInTheDocument();
+    expect(within(evidenceDocket).getByText("3 open")).toBeInTheDocument();
+    expect(within(evidenceDocket).getByText("Final-use gate")).toBeInTheDocument();
+    expect(within(evidenceDocket).getByText("Complete filing regime before CRO downloads")).toBeInTheDocument();
+
     expect(screen.getByText("AGM Pack")).toBeInTheDocument();
     expect(screen.getByText("CRO Filing Pack")).toBeInTheDocument();
     expect(screen.getByText("Signature Page")).toBeInTheDocument();

@@ -40,6 +40,11 @@ export function FilingOutputsPanel({
   onDownloadIxbrl,
 }: FilingOutputsPanelProps) {
   const completeCount = checklistLabels.filter((item) => checklist[item.key]).length;
+  const generatedEvidenceCount = [
+    checklist.accountsPdfGenerated,
+    checklist.croPackAndSignatureGenerated,
+  ].filter(Boolean).length;
+  const openChecklistCount = checklistLabels.length - completeCount;
   const anyDownloadInProgress = downloadingDocument !== null;
   const outputStates = [
     { title: "AGM Pack", isBlocked: anyDownloadInProgress },
@@ -71,6 +76,13 @@ export function FilingOutputsPanel({
         <OutputReadinessSummary
           availableOutputs={availableOutputs}
           blockedOutputs={blockedOutputs}
+          nextOutputGate={nextOutputGate}
+        />
+
+        <OutputEvidenceDocket
+          generatedEvidenceCount={generatedEvidenceCount}
+          generatedEvidenceTotal={2}
+          openChecklistCount={openChecklistCount}
           nextOutputGate={nextOutputGate}
         />
 
@@ -123,6 +135,67 @@ export function FilingOutputsPanel({
         </div>
       </div>
     </ReviewPanel>
+  );
+}
+
+function OutputEvidenceDocket({
+  generatedEvidenceCount,
+  generatedEvidenceTotal,
+  openChecklistCount,
+  nextOutputGate,
+}: {
+  generatedEvidenceCount: number;
+  generatedEvidenceTotal: number;
+  openChecklistCount: number;
+  nextOutputGate: string;
+}) {
+  return (
+    <section
+      aria-label="Output evidence docket"
+      className="grid gap-3 rounded-md border border-[var(--border)] bg-[var(--surface)] p-4 md:grid-cols-3"
+    >
+      <OutputDocketItem
+        label="Generated filing evidence"
+        value={`${generatedEvidenceCount} of ${generatedEvidenceTotal} generated`}
+        detail="CRO accounts PDF plus filing pack/signature evidence."
+        tone={generatedEvidenceCount === generatedEvidenceTotal ? "good" : "warn"}
+      />
+      <OutputDocketItem
+        label="Open checklist evidence"
+        value={`${openChecklistCount} open`}
+        detail={openChecklistCount === 0 ? "Every filing checklist item is complete." : "Open evidence remains before final use."}
+        tone={openChecklistCount === 0 ? "good" : "warn"}
+      />
+      <OutputDocketItem
+        label="Final-use gate"
+        value={nextOutputGate}
+        detail="Generated outputs stay draft evidence until this gate is clear."
+        tone={openChecklistCount === 0 ? "good" : "info"}
+      />
+    </section>
+  );
+}
+
+function OutputDocketItem({
+  label,
+  value,
+  detail,
+  tone,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+  tone: "good" | "warn" | "info";
+}) {
+  return (
+    <div className="min-w-0">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">{label}</p>
+        <StatusBadge tone={tone}>{tone === "good" ? "Clear" : tone === "warn" ? "Open" : "Gate"}</StatusBadge>
+      </div>
+      <p className="mt-2 text-sm font-semibold leading-5 text-[var(--foreground)]">{value}</p>
+      <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">{detail}</p>
+    </div>
   );
 }
 
