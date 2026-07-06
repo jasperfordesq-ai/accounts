@@ -68,6 +68,26 @@ export function PeriodWorkbenchOverview({
     ...(filingReadinessProfile?.warningIssues.map((issue) => issue.message) ?? []),
     ...(readiness?.warnings ?? []),
   ]);
+  const issueSources = [
+    {
+      label: "Filing workflow",
+      blockers: filingStatus?.blockingIssues.length ?? 0,
+      warnings: filingStatus?.warningIssues.length ?? 0,
+      detail: "Generated output and workflow-state blockers from CRO, Revenue and charity filing status.",
+    },
+    {
+      label: "Filing readiness profile",
+      blockers: filingReadinessProfile?.blockingIssues.length ?? 0,
+      warnings: filingReadinessProfile?.warningIssues.length ?? 0,
+      detail: "Source-backed professional review, sign-off packet and allowed-action gates.",
+    },
+    {
+      label: "Statutory readiness score",
+      blockers: readiness?.missingItems.length ?? 0,
+      warnings: readiness?.warnings.length ?? 0,
+      detail: "Accounts readiness checks from statements, balances and statutory warning signals.",
+    },
+  ];
   const periodWorkspaceHref = `/companies/${companyId}/periods/${periodId}`;
 
   const workflowItems: WorkflowItem[] = [
@@ -264,6 +284,24 @@ export function PeriodWorkbenchOverview({
         ]}
       />
 
+      <ReviewPanel
+        title="Issue source breakdown"
+        description="Where the current blockers are coming from, so reviewers know which workbench surface to fix first."
+        actions={<StatusBadge tone={blockingIssues.length > 0 ? "bad" : warningIssues.length > 0 ? "warn" : "good"}>{blockingIssues.length + warningIssues.length} total issues</StatusBadge>}
+      >
+        <div className="grid gap-3 md:grid-cols-3">
+          {issueSources.map((source) => (
+            <div key={source.label} className="rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-3">
+              <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">{source.label}</p>
+              <p className="mt-2 text-sm font-semibold text-[var(--foreground)]">
+                {formatIssueSourceCount(source.blockers, "blocker")} / {formatIssueSourceCount(source.warnings, "warning")}
+              </p>
+              <p className="mt-2 text-xs leading-5 text-[var(--muted-foreground)]">{source.detail}</p>
+            </div>
+          ))}
+        </div>
+      </ReviewPanel>
+
       <AccountantWorkflowRail
         activeStage={activeWorkflowStage}
         stageOverrides={{
@@ -314,6 +352,10 @@ function nextActionDetail(nextAction: WorkflowItem | null, uncategorisedCount: n
   }
 
   return nextAction.detail;
+}
+
+function formatIssueSourceCount(count: number, label: "blocker" | "warning") {
+  return `${count} ${count === 1 ? label : `${label}s`}`;
 }
 
 function activeStageForNextAction(nextAction: WorkflowItem | null): AccountantWorkflowStage {

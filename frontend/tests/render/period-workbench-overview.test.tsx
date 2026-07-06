@@ -70,6 +70,14 @@ describe("PeriodWorkbenchOverview", () => {
     expect(screen.getByText("4 uncategorised transactions")).toBeInTheDocument();
     expect(screen.getByText("Filing readiness")).toBeInTheDocument();
     expect(screen.getByText("79%")).toBeInTheDocument();
+    const sourceBreakdown = screen.getByRole("region", { name: "Issue source breakdown" });
+    expect(within(sourceBreakdown).getByText("Issue source breakdown")).toBeInTheDocument();
+    expect(within(sourceBreakdown).getByText("Filing workflow")).toBeInTheDocument();
+    expect(within(sourceBreakdown).getByText("3 blockers / 1 warning")).toBeInTheDocument();
+    expect(within(sourceBreakdown).getByText("Filing readiness profile")).toBeInTheDocument();
+    expect(within(sourceBreakdown).getByText("2 blockers / 0 warnings")).toBeInTheDocument();
+    expect(within(sourceBreakdown).getByText("Statutory readiness score")).toBeInTheDocument();
+    expect(within(sourceBreakdown).getByText("1 blocker / 0 warnings")).toBeInTheDocument();
     expect(screen.getByText("Readiness issue digest")).toBeInTheDocument();
     expect(screen.getByText("5 blockers")).toBeInTheDocument();
     expect(screen.getByText("1 warning")).toBeInTheDocument();
