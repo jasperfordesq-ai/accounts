@@ -55,6 +55,15 @@ function eur(amount: number): string {
   return amount < 0 ? `(${formatted})` : formatted;
 }
 
+function formatDate(value: string): string {
+  return new Intl.DateTimeFormat("en-IE", {
+    day: "2-digit",
+    month: "short",
+    timeZone: "UTC",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
 export function FinancialStatementsWorkbench({
   company,
   period,
@@ -85,7 +94,7 @@ export function FinancialStatementsWorkbench({
     <PageShell
       title="Financial Statements"
       subtitle={company && period
-        ? `${company.legalName} - ${new Date(period.periodStart).toLocaleDateString("en-IE")} to ${new Date(period.periodEnd).toLocaleDateString("en-IE")}`
+        ? `${company.legalName} - ${formatDate(period.periodStart)} to ${formatDate(period.periodEnd)}`
         : "Statement preview, tax computation and source trail."}
       backHref={`/companies/${companyId}/periods/${periodId}`}
       backLabel="Back to Period Workspace"
