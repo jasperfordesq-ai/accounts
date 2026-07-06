@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import {
-  DataTable,
+  DataGrid,
   EvidenceChecklist,
   FilingActionBar,
   IssueDigest,
@@ -301,7 +301,7 @@ export function WorkbenchPreview() {
           description="Dense tables keep source, amount, warning and reconciliation status visible."
           actions={<StatusBadge tone="warn">One blocker</StatusBadge>}
         >
-          <DataTable
+          <DataGrid
             caption="Trial balance review"
             filterPlaceholder="Filter review evidence"
             columns={["Area", "Evidence", "Amount", "Status"]}

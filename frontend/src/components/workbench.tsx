@@ -161,7 +161,18 @@ export interface DataTableRichRow {
   sortValues?: DataTableSortValue[];
 }
 
-type DataTableRow = ReactNode[] | DataTableRichRow;
+export type DataTableRow = ReactNode[] | DataTableRichRow;
+
+export interface DataGridProps {
+  columns: string[];
+  rows: DataTableRow[];
+  caption?: string;
+  filterPlaceholder?: string;
+  emptyState?: ReactNode;
+  totals?: ReactNode[];
+  defaultSort?: DataTableSortState | null;
+  sortableColumns?: boolean[];
+}
 
 const toneClasses: Record<Tone, string> = {
   default: "border-[var(--border)] bg-[var(--surface-subtle)] text-[var(--foreground)]",
@@ -891,6 +902,18 @@ function formatLegalSourceDate(value: string) {
 }
 
 export function DataTable({
+  ...props
+}: DataGridProps) {
+  return <DataGridBase {...props} surfaceClassName="workbench-data-table" />;
+}
+
+export function DataGrid({
+  ...props
+}: DataGridProps) {
+  return <DataGridBase {...props} surfaceClassName="workbench-data-grid" />;
+}
+
+function DataGridBase({
   columns,
   rows,
   caption,
@@ -899,16 +922,8 @@ export function DataTable({
   totals,
   defaultSort = null,
   sortableColumns,
-}: {
-  columns: string[];
-  rows: DataTableRow[];
-  caption?: string;
-  filterPlaceholder?: string;
-  emptyState?: ReactNode;
-  totals?: ReactNode[];
-  defaultSort?: DataTableSortState | null;
-  sortableColumns?: boolean[];
-}) {
+  surfaceClassName,
+}: DataGridProps & { surfaceClassName: string }) {
   const isColumnSortable = (columnIndex: number) => sortableColumns?.[columnIndex] ?? true;
   const [filter, setFilter] = useState("");
   const [sortState, setSortState] = useState<DataTableSortState | null>(
@@ -970,7 +985,7 @@ export function DataTable({
         </div>
       )}
       <div
-        className="workbench-data-table min-w-0 overflow-x-auto rounded-md border border-[var(--border)] bg-[var(--surface)]"
+        className={`${surfaceClassName} min-w-0 overflow-x-auto rounded-md border border-[var(--border)] bg-[var(--surface)]`}
         data-responsive="card"
       >
       <table className="min-w-full border-collapse text-left text-sm" aria-label={tableLabel}>

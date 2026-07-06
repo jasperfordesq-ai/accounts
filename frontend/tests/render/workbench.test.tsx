@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import {
+  DataGrid,
   DataTable,
   EvidenceChecklist,
   FilingActionBar,
@@ -302,6 +303,45 @@ describe("workbench primitives", () => {
 
     expect(container.querySelector("section.min-w-0")).toBeInTheDocument();
     expect(container.querySelector(".overflow-x-auto.min-w-0")).toBeInTheDocument();
+  });
+
+  it("exports DataGrid as the canonical accountant table primitive", async () => {
+    const user = userEvent.setup();
+    const { container } = render(
+      <DataGrid
+        caption="Golden corpus evidence grid"
+        filterPlaceholder="Filter golden corpus"
+        columns={["Scenario", "Evidence", "Status"]}
+        rows={[
+          {
+            id: "micro",
+            cells: ["Micro LTD", "PDF and iXBRL", "Covered"],
+            searchText: "micro pdf ixbrl covered",
+            sortValues: ["Micro LTD", "PDF and iXBRL", "covered"],
+            tone: "good",
+          },
+          {
+            id: "medium",
+            cells: ["Medium audit-required", "Auditor handoff", "Manual"],
+            searchText: "medium auditor handoff manual",
+            sortValues: ["Medium audit-required", "Auditor handoff", "manual"],
+            tone: "bad",
+          },
+        ]}
+        totals={["2 scenarios", "6 proof points", "1 manual handoff"]}
+      />,
+    );
+
+    expect(screen.getByRole("table", { name: "Golden corpus evidence grid" })).toBeInTheDocument();
+    expect(container.querySelector(".workbench-data-grid")).toBeInTheDocument();
+    expect(container.querySelector('td[data-label="Evidence"]')).toHaveTextContent("PDF and iXBRL");
+    expect(screen.getByText("1 manual handoff")).toBeInTheDocument();
+
+    await user.type(screen.getByRole("searchbox", { name: "Filter Golden corpus evidence grid" }), "auditor");
+
+    expect(screen.getByText("1 of 2 rows")).toBeInTheDocument();
+    expect(screen.getByText("Medium audit-required")).toBeInTheDocument();
+    expect(screen.queryByText("Micro LTD")).not.toBeInTheDocument();
   });
 
   it("labels each table cell so mobile card rows retain column context", () => {
