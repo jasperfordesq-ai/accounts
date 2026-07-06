@@ -46,10 +46,8 @@ describe("ProductionReadinessWorkbench", () => {
     expectText("Operations and security");
     expectText("Named qualified-accountant review");
     expect(screen.getByRole("heading", { name: "Source-backed statutory rules" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Revenue accepted iXBRL taxonomies" })).toHaveAttribute(
-      "href",
-      "https://www.revenue.ie/",
-    );
+    expect(screen.getAllByRole("link", { name: "Revenue accepted iXBRL taxonomies" }))
+      .toEqual(expect.arrayContaining([expect.objectContaining({ href: "https://www.revenue.ie/" })]));
     expect(screen.getAllByText("external-ros-validation").length).toBeGreaterThan(0);
     expect(screen.getAllByText("ixbrl-taxonomy-selection").length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Next assurance actions" })).toBeInTheDocument();
@@ -159,6 +157,9 @@ describe("ProductionReadinessWorkbench", () => {
     expectText("Source-law change review");
     expectText("source-law-change-review-note");
     expectText("qualified-accountant-source-law-signoff");
+    expect(screen.getByRole("heading", { name: "Source-law review ledger" })).toBeInTheDocument();
+    expectText("Taxonomy and corporation tax reviewer");
+    expectText("Confirm Revenue-accepted taxonomy and iXBRL content guidance still match generated output assumptions.");
     expectText(/Block release if any pinned source changes/);
     expect(screen.getAllByText("Qualified accountant sign-off required").length).toBeGreaterThan(1);
     expect(screen.getByRole("heading", { name: "Release blocker register" })).toBeInTheDocument();

@@ -32,6 +32,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
   const releaseReviewChecklist = report.releaseReviewChecklist ?? [];
   const releaseVerificationManifest = report.releaseVerificationManifest ?? [];
   const sourceLawTraceability = report.sourceLawTraceability ?? [];
+  const sourceLawReviewLedger = report.sourceLawReviewLedger ?? [];
   const sourceLawMaintenanceProtocol = report.sourceLawMaintenanceProtocol;
   const visualQaCoverage = report.visualQaCoverage;
   const assurancePacket = report.assurancePacket;
@@ -237,6 +238,67 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
             </div>
           </div>
         </div>
+      </ReviewPanel>
+
+      <ReviewPanel
+        title="Source-law review ledger"
+        description="Per-source release evidence proving every pinned legal source has a named owner, review checks, and accountant sign-off before generated packs are used."
+        actions={<StatusBadge tone="bad">{sourceLawReviewLedger.length} blocking reviews</StatusBadge>}
+      >
+        <DataTable
+          caption="Source-law review ledger"
+          filterPlaceholder="Filter source-law review ledger"
+          emptyState="No source-law review ledger entries"
+          columns={["Source", "Owner", "Pinned date", "Release gate", "Review checks", "Required evidence"]}
+          rows={sourceLawReviewLedger.map((entry) => ({
+            id: entry.sourceId,
+            tone: entry.blocksRelease ? "bad" : "warn",
+            sortValues: [
+              entry.title,
+              entry.ownerRole,
+              entry.pinnedEffectiveDate,
+              entry.releaseChecklistCode,
+              entry.reviewChecks.join(" "),
+              entry.requiredEvidence.join(" "),
+            ],
+            searchText: [
+              entry.sourceId,
+              entry.title,
+              entry.url,
+              entry.ownerRole,
+              entry.pinnedEffectiveDate,
+              entry.releaseChecklistCode,
+              ...entry.reviewChecks,
+              ...entry.requiredEvidence,
+            ].join(" "),
+            cells: [
+              <div key="source" className="min-w-56 whitespace-normal">
+                <a
+                  href={entry.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex max-w-sm items-start gap-1.5 whitespace-normal break-words text-sm font-medium text-emerald-700 hover:text-emerald-800 dark:text-emerald-300 dark:hover:text-emerald-200"
+                >
+                  {entry.title}
+                  <ExternalLink className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                </a>
+                <code className="mt-2 block break-all rounded border border-[var(--border)] bg-[var(--surface-subtle)] px-2 py-1 text-[11px] text-[var(--muted-foreground)]">
+                  {entry.sourceId}
+                </code>
+              </div>,
+              <span key="owner" className="text-[var(--muted-foreground)]">{entry.ownerRole}</span>,
+              <span key="pinned-date" className="text-[var(--muted-foreground)]">{formatDate(entry.pinnedEffectiveDate)}</span>,
+              <div key="gate" className="space-y-2">
+                <CodeStack items={[entry.releaseChecklistCode]} />
+                <StatusBadge tone={entry.blocksRelease ? "bad" : "warn"}>
+                  {entry.blocksRelease ? "Blocks release" : "Advisory"}
+                </StatusBadge>
+              </div>,
+              <CompactList key="review-checks" items={entry.reviewChecks} />,
+              <CompactList key="required-evidence" items={entry.requiredEvidence} />,
+            ],
+          }))}
+        />
       </ReviewPanel>
 
       <ReviewPanel
