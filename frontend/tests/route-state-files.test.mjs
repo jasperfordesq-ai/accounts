@@ -370,6 +370,24 @@ test("year-end questionnaire route delegates post-balance-sheet-events working-p
   assert.match(componentSource, /Impact:/, "post-balance-sheet-events shell should preserve financial impact cue");
 });
 
+test("year-end questionnaire route delegates related-party-transactions working-paper section", () => {
+  const routeFile = new URL("companies/[companyId]/periods/[periodId]/year-end/page.tsx", appDir);
+  const componentFile = new URL("../src/components/period/YearEndRelatedPartyTransactionsSection.tsx", import.meta.url);
+
+  assert.ok(existsSync(componentFile), "YearEndRelatedPartyTransactionsSection should exist for related-party evidence review");
+
+  const routeSource = readFileSync(routeFile, "utf8");
+  const componentSource = readFileSync(componentFile, "utf8");
+
+  assert.match(routeSource, /YearEndRelatedPartyTransactionsSection/, "year-end questionnaire route should render the focused related-party shell");
+  assert.doesNotMatch(routeSource, /aria-label="Party name"/, "year-end questionnaire route should not own related-party name fields");
+  assert.doesNotMatch(routeSource, /aria-label="Transaction amount"/, "year-end questionnaire route should not own related-party amount fields");
+  assert.doesNotMatch(routeSource, /Delete transaction with/, "year-end questionnaire route should not own related-party delete copy");
+  assert.match(componentSource, /Balance owed:/, "related-party shell should preserve balance owed cue");
+  assert.match(componentSource, /Connected Person/, "related-party shell should preserve relationship options");
+  assert.match(componentSource, /Management Fee/, "related-party shell should preserve transaction type options");
+});
+
 test("period adjustments route delegates generation, filters and approval composition", () => {
   const periodRoute = new URL("companies/[companyId]/periods/[periodId]/page.tsx", appDir);
   const source = readFileSync(periodRoute, "utf8");

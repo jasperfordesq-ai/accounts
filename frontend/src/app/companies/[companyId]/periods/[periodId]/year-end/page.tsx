@@ -35,6 +35,7 @@ import { YearEndMoneyListSection } from "@/components/period/YearEndMoneyListSec
 import { YearEndPayrollSection } from "@/components/period/YearEndPayrollSection";
 import { YearEndPostBalanceSheetEventsSection } from "@/components/period/YearEndPostBalanceSheetEventsSection";
 import { YearEndQuestionnaireSection as Section } from "@/components/period/YearEndQuestionnaireSection";
+import { YearEndRelatedPartyTransactionsSection } from "@/components/period/YearEndRelatedPartyTransactionsSection";
 import { YearEndTaxBalancesSection } from "@/components/period/YearEndTaxBalancesSection";
 import { useUnsavedChanges } from "@/lib/useUnsavedChanges";
 import { PeriodWorkspaceSkeleton } from "@/components/Skeleton";
@@ -843,109 +844,24 @@ export default function YearEndQuestionnairePage({
           reviewSaving={savingReviewKey === "related-parties"}
           onConfirmReview={() => handleConfirmReview("related-parties", relatedParties.length === 0 ? "Confirmed no related party transactions requiring disclosure were identified." : undefined)}
         >
-          {relatedParties.length > 0 && (
-            <div className="space-y-2 mb-4">
-              {relatedParties.map((rpt) => (
-                <div
-                  key={rpt.id}
-                  className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-neutral-700 px-4 py-3 dark:bg-neutral-800/50"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{rpt.partyName}</p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <Chip variant="soft" size="sm" color="default">{rpt.relationship}</Chip>
-                      <Chip variant="soft" size="sm" color="default">{rpt.transactionType}</Chip>
-                      {rpt.balanceOwed != null && rpt.balanceOwed !== 0 && (
-                        <span className="text-xs text-gray-500 dark:text-gray-400">
-                          Balance owed: {formatCurrency(rpt.balanceOwed)}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                      {formatCurrency(rpt.amount)}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => rpt.id && handleDeleteRpt(rpt.id)}
-                      className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400"
-                      aria-label={`Delete transaction with ${rpt.partyName}`}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="grid grid-cols-12 gap-3 items-end">
-            <div className="col-span-3">
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Party Name</label>
-              <input
-                type="text"
-                className={inputClass}
-                placeholder="e.g. John Smith"
-                value={newRptName}
-                onChange={(e) => setNewRptName(e.target.value)}
-                aria-label="Party name"
-              />
-            </div>
-            <div className="col-span-3">
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Relationship</label>
-              <select
-                className={selectClass}
-                value={newRptRelationship}
-                onChange={(e) => setNewRptRelationship(e.target.value)}
-                title="Relationship"
-                aria-label="Relationship"
-              >
-                <option value="Director">Director</option>
-                <option value="Connected Person">Connected Person</option>
-                <option value="Group Company">Group Company</option>
-                <option value="Key Management">Key Management</option>
-              </select>
-            </div>
-            <div className="col-span-2">
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Type</label>
-              <select
-                className={selectClass}
-                value={newRptType}
-                onChange={(e) => setNewRptType(e.target.value)}
-                title="Transaction type"
-                aria-label="Transaction type"
-              >
-                <option value="Sale">Sale</option>
-                <option value="Purchase">Purchase</option>
-                <option value="Loan">Loan</option>
-                <option value="Management Fee">Management Fee</option>
-                <option value="Other">Other</option>
-              </select>
-            </div>
-            <div className="col-span-2">
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Amount</label>
-              <input
-                type="number"
-                className={inputClass}
-                placeholder="0.00"
-                value={newRptAmount || ""}
-                onChange={(e) => setNewRptAmount(Number(e.target.value))}
-                aria-label="Transaction amount"
-              />
-            </div>
-            <div className="col-span-2">
-              <Button
-                variant="primary"
-                size="sm"
-                onPress={handleAddRpt}
-                isDisabled={savingSection === "rpt"}
-                className="w-full"
-              >
-                {savingSection === "rpt" ? <Spinner size="sm" /> : <><Plus className="w-4 h-4 mr-1" /> Add</>}
-              </Button>
-            </div>
-          </div>
+          <YearEndRelatedPartyTransactionsSection
+            transactions={relatedParties}
+            draft={{
+              partyName: newRptName,
+              relationship: newRptRelationship,
+              transactionType: newRptType,
+              amount: newRptAmount,
+            }}
+            saving={savingSection === "rpt"}
+            onDraftChange={(draft) => {
+              setNewRptName(draft.partyName);
+              setNewRptRelationship(draft.relationship);
+              setNewRptType(draft.transactionType);
+              setNewRptAmount(draft.amount);
+            }}
+            onAdd={handleAddRpt}
+            onDelete={handleDeleteRpt}
+          />
         </Section>
 
         {/* 12. Contingent Liabilities */}
