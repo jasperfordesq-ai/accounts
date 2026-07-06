@@ -1124,7 +1124,7 @@ public class ProductionReadinessReportTests
             "micro-ltd",
             expectedPdfMarker: "280D",
             expectedIxbrlTag: "core:EntityCurrentLegalOrRegisteredName",
-            expectedTax: 718.75m,
+            expectedTax: 62.50m,
             readinessState: "100% filing readiness",
             signOffState: "review-required");
         AssertGoldenExpectedOutputs(
@@ -1132,7 +1132,7 @@ public class ProductionReadinessReportTests
             "small-abridged-ltd",
             expectedPdfMarker: "Section 352",
             expectedIxbrlTag: "core:EntityCurrentLegalOrRegisteredName",
-            expectedTax: 950m,
+            expectedTax: 62.50m,
             readinessState: "generated-output-evidence-required",
             signOffState: "review-required");
         AssertGoldenExpectedOutputs(
@@ -1159,6 +1159,29 @@ public class ProductionReadinessReportTests
             expectedTax: 62.50m,
             readinessState: "manual-handoff-until-auditor-evidence",
             signOffState: "manual-handoff");
+    }
+
+    [Fact]
+    public async Task GoldenCorpusExpectedTaxValues_MirrorTheFormalFilingCorpusScenarioFixtures()
+    {
+        await using var db = CreateDbContext();
+        var report = await new ProductionReadinessReportService(db).GetReportAsync();
+        var expectedTaxByScenario = new Dictionary<string, decimal>(StringComparer.Ordinal)
+        {
+            ["micro-ltd"] = 62.50m,
+            ["small-abridged-ltd"] = 62.50m,
+            ["dac-small"] = 62.50m,
+            ["clg-charity"] = 62.50m,
+            ["medium-audit-required"] = 62.50m
+        };
+
+        foreach (var scenario in report.GoldenFilingCorpus)
+        {
+            var expectedOutputs = ObjectProperty(scenario.EvidencePack, "ExpectedOutputs");
+
+            Assert.True(expectedTaxByScenario.ContainsKey(scenario.Code), $"{scenario.Code} must have a pinned expected tax value.");
+            Assert.Equal(expectedTaxByScenario[scenario.Code], DecimalProperty(expectedOutputs, "ExpectedCorporationTax"));
+        }
     }
 
     [Fact]

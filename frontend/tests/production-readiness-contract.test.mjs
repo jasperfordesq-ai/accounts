@@ -29,14 +29,14 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.equal(parsed.goldenFilingCorpus[0].evidencePack.expectedValueChecks[0], "well-formed iXBRL");
   assert.equal(parsed.goldenFilingCorpus[0].evidencePack.expectedOutputs.pdfTextMarkers[0], "Example Micro Limited");
   assert.equal(parsed.goldenFilingCorpus[0].evidencePack.expectedOutputs.ixbrlRequiredTags[0], "core:EntityCurrentLegalOrRegisteredName");
-  assert.equal(parsed.goldenFilingCorpus[0].evidencePack.expectedOutputs.expectedCorporationTax, 718.75);
+  assert.equal(parsed.goldenFilingCorpus[0].evidencePack.expectedOutputs.expectedCorporationTax, 62.5);
   assert.equal(parsed.goldenFilingCorpus[0].evidencePack.expectedOutputs.signOffPacketState, "review-required");
   assert.equal(parsed.goldenFilingCorpus[0].evidencePack.expectedProofPoints[0].area, "pdf-text");
   assert.equal(parsed.goldenFilingCorpus[0].evidencePack.expectedProofPoints[0].required, true);
   assert.equal(parsed.goldenFilingCorpus[0].evidencePack.sourceReferences[0].sourceId, "frc-frs-105");
   assert.equal(parsed.goldenEvidenceLedger[0].scenarioCode, "micro-ltd");
   assert.equal(parsed.goldenEvidenceLedger[0].fixtureLegalName, "Example Micro Limited");
-  assert.equal(parsed.goldenEvidenceLedger[0].expectedCorporationTax, 718.75);
+  assert.equal(parsed.goldenEvidenceLedger[0].expectedCorporationTax, 62.5);
   assert.deepEqual(parsed.goldenEvidenceLedger[0].automatedVerifierNames, parsed.goldenFilingCorpus[0].evidenceTestNames);
   assert.ok(parsed.goldenEvidenceLedger[0].blocksRelease);
   const dacScenario = parsed.goldenFilingCorpus.find((scenario) => scenario.code === "dac-small");
@@ -1118,7 +1118,7 @@ function sampleReport() {
             pdfTextMarkers: ["Example Micro Limited", "280D"],
             ixbrlRequiredTags: ["core:EntityCurrentLegalOrRegisteredName"],
             filingReadinessState: "100% filing readiness",
-            expectedCorporationTax: 718.75,
+            expectedCorporationTax: 62.5,
             requiredNotes: ["Accounting Policies"],
             filingGateStates: ["director and secretary certification required", "qualified-accountant review required"],
             signOffPacketState: "review-required",
@@ -1401,7 +1401,7 @@ function sampleReport() {
         expectedValueChecks: ["well-formed iXBRL"],
         proofPointAreas: ["pdf-text"],
         sourceIds: ["frc-frs-105"],
-        expectedCorporationTax: 718.75,
+        expectedCorporationTax: 62.5,
         filingReadinessState: "100% filing readiness",
         signOffPacketState: "review-required",
       },

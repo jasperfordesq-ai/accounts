@@ -974,7 +974,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                         "core:EntityCurrentLegalOrRegisteredName"
                     ],
                     "100% filing readiness",
-                    718.75m,
+                    62.50m,
                     [
                         "Accounting Policies"
                     ],
@@ -1067,7 +1067,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                         "core:EntityCurrentLegalOrRegisteredName"
                     ],
                     "generated-output-evidence-required",
-                    950m,
+                    62.50m,
                     [
                         "Accounting Policies",
                         "Tangible Fixed Assets",

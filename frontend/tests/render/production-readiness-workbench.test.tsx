@@ -40,7 +40,7 @@ describe("ProductionReadinessWorkbench", () => {
     expectText("director and secretary certification");
     expectText("well-formed iXBRL");
     expectText("Expected CT:");
-    expectText("€718.75");
+    expectText("€62.50");
     expectText("Expected proof points");
     expectText("PDF text contains company name and micro statutory statement.");
     expectText("signatory-gates");
@@ -539,7 +539,7 @@ function sampleReport(): ProductionReadinessReport {
             pdfTextMarkers: ["Example Micro Limited", "280D"],
             ixbrlRequiredTags: ["core:EntityCurrentLegalOrRegisteredName"],
             filingReadinessState: "100% filing readiness",
-            expectedCorporationTax: 718.75,
+            expectedCorporationTax: 62.5,
             requiredNotes: ["Accounting Policies"],
             filingGateStates: ["director and secretary certification required", "qualified-accountant review required"],
             signOffPacketState: "review-required",
@@ -658,7 +658,7 @@ function sampleReport(): ProductionReadinessReport {
         expectedValueChecks: ["Micro regime", "100% filing readiness", "well-formed iXBRL"],
         proofPointAreas: ["pdf-text", "signatory-gates", "accountant-signoff-packet"],
         sourceIds: ["frc-frs-105"],
-        expectedCorporationTax: 718.75,
+        expectedCorporationTax: 62.5,
         filingReadinessState: "100% filing readiness",
         signOffPacketState: "review-required",
       },

@@ -19,7 +19,7 @@ describe("ProductionReadinessPanel", () => {
     expect(screen.getAllByText("2025-01-01 to 2025-12-31").length).toBeGreaterThanOrEqual(4);
     expect(screen.getByText("AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl")).toBeInTheDocument();
     expect(screen.getByText("Golden evidence ledger")).toBeInTheDocument();
-    expect(screen.getByText("Expected CT: €718.75")).toBeInTheDocument();
+    expect(screen.getAllByText("Expected CT: €62.50").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Readiness: ready-for-external-filing").length).toBeGreaterThanOrEqual(3);
     expect(screen.getByText("Completion tracks")).toBeInTheDocument();
     expect(screen.getByText("Backend code")).toBeInTheDocument();
@@ -269,7 +269,7 @@ function sampleReport(): ProductionReadinessReport {
             pdfTextMarkers: ["Example Micro Limited", "280D"],
             ixbrlRequiredTags: ["core:EntityCurrentLegalOrRegisteredName"],
             filingReadinessState: "100% filing readiness",
-            expectedCorporationTax: 718.75,
+            expectedCorporationTax: 62.5,
             requiredNotes: ["Accounting Policies"],
             filingGateStates: ["director and secretary certification required", "qualified-accountant review required"],
             signOffPacketState: "review-required",
@@ -419,7 +419,7 @@ function sampleReport(): ProductionReadinessReport {
         expectedValueChecks: ["well-formed iXBRL"],
         proofPointAreas: ["pdf-text"],
         sourceIds: ["frc-frs-105"],
-        expectedCorporationTax: 718.75,
+        expectedCorporationTax: 62.5,
         filingReadinessState: "100% filing readiness",
         signOffPacketState: "review-required",
       },
