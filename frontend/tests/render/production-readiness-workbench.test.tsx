@@ -170,6 +170,9 @@ describe("ProductionReadinessWorkbench", () => {
     expectText("2024-01-01 onward");
     expectText("Irish Extension 2023 FRS 102 taxonomy accepted by Revenue");
     expectText("2023-01-01 to 2024-01-01");
+    expectText("Irish Extension 2025 FRS 101 taxonomy accepted by Revenue");
+    expectText("EU IFRS Irish Extension 2023 taxonomy accepted by Revenue");
+    expect(screen.getAllByText("Manual handoff").length).toBeGreaterThan(0);
     expectText("revenue-taxonomy-range-evidence");
     expectText(/Block release if any pinned source changes/);
     expect(screen.getAllByText("Qualified accountant sign-off required").length).toBeGreaterThan(1);
@@ -306,6 +309,7 @@ function sampleReport(): ProductionReadinessReport {
         label: "Irish Extension 2025 FRS 102 taxonomy accepted by Revenue",
         schemaRef: "https://xbrl.frc.org.uk/ireland/FRS-102/2025-01-01/ie-FRS-102-2025-01-01.xsd",
         acceptedByRevenue: true,
+        automatedPlatformSelectionSupported: true,
         effectiveForPeriodsStartingOnOrAfter: "2024-01-01",
         effectiveForPeriodsStartingBefore: "",
         sourceIds: ["frc-frs-102", "revenue-accepted-taxonomies"],
@@ -318,10 +322,37 @@ function sampleReport(): ProductionReadinessReport {
         label: "Irish Extension 2023 FRS 102 taxonomy accepted by Revenue",
         schemaRef: "https://xbrl.frc.org.uk/ireland/FRS-102/2023-01-01/ie-FRS-102-2023-01-01.xsd",
         acceptedByRevenue: true,
+        automatedPlatformSelectionSupported: true,
         effectiveForPeriodsStartingOnOrAfter: "2023-01-01",
         effectiveForPeriodsStartingBefore: "2024-01-01",
         sourceIds: ["frc-frs-102", "revenue-accepted-taxonomies"],
         releaseGateCodes: ["external-ros-validation", "ixbrl-taxonomy-selection", "source-law-change-review"],
+      },
+      {
+        taxonomyKey: "irish-extension-2025-frs-101",
+        accountingStandard: "FRS 101",
+        taxonomyDate: "2025-01-01",
+        label: "Irish Extension 2025 FRS 101 taxonomy accepted by Revenue",
+        schemaRef: "https://xbrl.frc.org.uk/ireland/FRS-101/2025-01-01/ie-FRS-101-2025-01-01.xsd",
+        acceptedByRevenue: true,
+        automatedPlatformSelectionSupported: false,
+        effectiveForPeriodsStartingOnOrAfter: "2024-01-01",
+        effectiveForPeriodsStartingBefore: "",
+        sourceIds: ["revenue-accepted-taxonomies"],
+        releaseGateCodes: ["external-ros-validation", "ixbrl-taxonomy-selection", "source-law-change-review", "manual-professional-handoff"],
+      },
+      {
+        taxonomyKey: "irish-extension-2023-ifrs",
+        accountingStandard: "EU IFRS",
+        taxonomyDate: "2023-01-01",
+        label: "EU IFRS Irish Extension 2023 taxonomy accepted by Revenue",
+        schemaRef: "https://xbrl.frc.org.uk/ireland/IFRS/2023-01-01/ie-IFRS-2023-01-01.xsd",
+        acceptedByRevenue: true,
+        automatedPlatformSelectionSupported: false,
+        effectiveForPeriodsStartingOnOrAfter: "2023-01-01",
+        effectiveForPeriodsStartingBefore: "2024-01-01",
+        sourceIds: ["revenue-accepted-taxonomies"],
+        releaseGateCodes: ["external-ros-validation", "ixbrl-taxonomy-selection", "source-law-change-review", "manual-professional-handoff"],
       },
     ],
     assurancePacket: {

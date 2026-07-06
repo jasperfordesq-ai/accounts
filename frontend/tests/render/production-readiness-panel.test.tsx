@@ -113,6 +113,7 @@ function sampleReport(): ProductionReadinessReport {
         label: "Irish Extension 2025 FRS 102 taxonomy accepted by Revenue",
         schemaRef: "https://xbrl.frc.org.uk/ireland/FRS-102/2025-01-01/ie-FRS-102-2025-01-01.xsd",
         acceptedByRevenue: true,
+        automatedPlatformSelectionSupported: true,
         effectiveForPeriodsStartingOnOrAfter: "2024-01-01",
         effectiveForPeriodsStartingBefore: "",
         sourceIds: ["revenue-accepted-taxonomies"],

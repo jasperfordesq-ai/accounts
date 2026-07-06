@@ -33,6 +33,7 @@ public sealed record RevenueIxbrlAcceptedTaxonomyRange(
     string Label,
     string SchemaRef,
     DateOnly EffectiveForPeriodsStartingOnOrAfter,
+    bool AutomatedPlatformSelectionSupported,
     IReadOnlyList<LegalSourceReference> Sources);
 
 public static class IrishStatutoryRuleSources
@@ -168,6 +169,7 @@ public static class RevenueIxbrlTaxonomySelector
             "Irish Extension 2025 FRS 102 taxonomy accepted by Revenue",
             "https://xbrl.frc.org.uk/ireland/FRS-102/2025-01-01/ie-FRS-102-2025-01-01.xsd",
             new DateOnly(2024, 1, 1),
+            true,
             [
                 IrishStatutoryRuleSources.RevenueAcceptedTaxonomies,
                 IrishStatutoryRuleSources.FrcFrs102
@@ -179,6 +181,7 @@ public static class RevenueIxbrlTaxonomySelector
             "Irish Extension 2023 FRS 102 taxonomy accepted by Revenue",
             "https://xbrl.frc.org.uk/ireland/FRS-102/2023-01-01/ie-FRS-102-2023-01-01.xsd",
             new DateOnly(2023, 1, 1),
+            true,
             [
                 IrishStatutoryRuleSources.RevenueAcceptedTaxonomies,
                 IrishStatutoryRuleSources.FrcFrs102
@@ -190,13 +193,75 @@ public static class RevenueIxbrlTaxonomySelector
             "Irish Extension 2022 FRS 102 taxonomy accepted by Revenue",
             "https://xbrl.frc.org.uk/ireland/FRS-102/2022-01-01/ie-FRS-102-2022-01-01.xsd",
             new DateOnly(2019, 1, 1),
+            true,
             [
                 IrishStatutoryRuleSources.RevenueAcceptedTaxonomies,
                 IrishStatutoryRuleSources.FrcFrs102
             ])
     ];
 
+    private static readonly RevenueIxbrlAcceptedTaxonomyRange[] ManualReviewOptions =
+    [
+        new(
+            "irish-extension-2025-frs-101",
+            "FRS 101",
+            "2025-01-01",
+            "Irish Extension 2025 FRS 101 taxonomy accepted by Revenue",
+            "https://xbrl.frc.org.uk/ireland/FRS-101/2025-01-01/ie-FRS-101-2025-01-01.xsd",
+            new DateOnly(2024, 1, 1),
+            false,
+            [IrishStatutoryRuleSources.RevenueAcceptedTaxonomies]),
+        new(
+            "irish-extension-2025-ifrs",
+            "EU IFRS",
+            "2025-01-01",
+            "EU IFRS Irish Extension 2025 taxonomy accepted by Revenue",
+            "https://xbrl.frc.org.uk/ireland/IFRS/2025-01-01/ie-IFRS-2025-01-01.xsd",
+            new DateOnly(2024, 1, 1),
+            false,
+            [IrishStatutoryRuleSources.RevenueAcceptedTaxonomies]),
+        new(
+            "irish-extension-2023-frs-101",
+            "FRS 101",
+            "2023-01-01",
+            "Irish Extension 2023 FRS 101 taxonomy accepted by Revenue",
+            "https://xbrl.frc.org.uk/ireland/FRS-101/2023-01-01/ie-FRS-101-2023-01-01.xsd",
+            new DateOnly(2023, 1, 1),
+            false,
+            [IrishStatutoryRuleSources.RevenueAcceptedTaxonomies]),
+        new(
+            "irish-extension-2023-ifrs",
+            "EU IFRS",
+            "2023-01-01",
+            "EU IFRS Irish Extension 2023 taxonomy accepted by Revenue",
+            "https://xbrl.frc.org.uk/ireland/IFRS/2023-01-01/ie-IFRS-2023-01-01.xsd",
+            new DateOnly(2023, 1, 1),
+            false,
+            [IrishStatutoryRuleSources.RevenueAcceptedTaxonomies]),
+        new(
+            "irish-extension-2022-frs-101",
+            "FRS 101",
+            "2022-01-01",
+            "Irish Extension 2022 FRS 101 taxonomy accepted by Revenue",
+            "https://xbrl.frc.org.uk/ireland/FRS-101/2022-01-01/ie-FRS-101-2022-01-01.xsd",
+            new DateOnly(2018, 1, 1),
+            false,
+            [IrishStatutoryRuleSources.RevenueAcceptedTaxonomies]),
+        new(
+            "irish-extension-2022-ifrs",
+            "EU IFRS",
+            "2022-01-01",
+            "EU IFRS Irish Extension 2022 taxonomy accepted by Revenue",
+            "https://xbrl.frc.org.uk/ireland/IFRS/2022-01-01/ie-IFRS-2022-01-01.xsd",
+            new DateOnly(2018, 1, 1),
+            false,
+            [IrishStatutoryRuleSources.RevenueAcceptedTaxonomies])
+    ];
+
     public static IReadOnlyList<RevenueIxbrlAcceptedTaxonomyRange> AcceptedFrs102Ranges() => Frs102Options;
+
+    public static IReadOnlyList<RevenueIxbrlAcceptedTaxonomyRange> AcceptedTaxonomyRanges() =>
+        [.. Frs102Options, .. ManualReviewOptions];
 
     public static RevenueIxbrlTaxonomySelection Select(DateOnly periodStart, ElectedRegime? regime)
     {

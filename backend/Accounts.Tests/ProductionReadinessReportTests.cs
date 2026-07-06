@@ -260,8 +260,11 @@ public class ProductionReadinessReportTests
             .Cast<object>()
             .ToArray();
 
-        Assert.Equal(3, ranges.Length);
+        Assert.Equal(9, ranges.Length);
         Assert.Contains(report.AssurancePacket.EvidenceItems, item => item == "revenue-taxonomy-range-evidence");
+        Assert.Equal(3, ranges.Count(range => StringProperty(range, "AccountingStandard") == "FRS 101"));
+        Assert.Equal(3, ranges.Count(range => StringProperty(range, "AccountingStandard") == "FRS 102"));
+        Assert.Equal(3, ranges.Count(range => StringProperty(range, "AccountingStandard") == "EU IFRS"));
         AssertRevenueTaxonomyRange(
             ranges,
             "irish-extension-2025-frs-102",
@@ -286,15 +289,61 @@ public class ProductionReadinessReportTests
             "2019-01-01",
             "2023-01-01",
             "/FRS-102/2022-01-01/");
+        AssertRevenueTaxonomyRange(
+            ranges,
+            "irish-extension-2025-frs-101",
+            "FRS 101",
+            "2025-01-01",
+            "2024-01-01",
+            "",
+            "/FRS-101/2025-01-01/");
+        AssertRevenueTaxonomyRange(
+            ranges,
+            "irish-extension-2023-ifrs",
+            "EU IFRS",
+            "2023-01-01",
+            "2023-01-01",
+            "2024-01-01",
+            "/IFRS/2023-01-01/");
+        AssertRevenueTaxonomyRange(
+            ranges,
+            "irish-extension-2022-frs-101",
+            "FRS 101",
+            "2022-01-01",
+            "2018-01-01",
+            "2023-01-01",
+            "/FRS-101/2022-01-01/");
+        AssertRevenueTaxonomyRange(
+            ranges,
+            "irish-extension-2022-ifrs",
+            "EU IFRS",
+            "2022-01-01",
+            "2018-01-01",
+            "2023-01-01",
+            "/IFRS/2022-01-01/");
 
         Assert.All(ranges, range =>
         {
             Assert.True(BooleanProperty(range, "AcceptedByRevenue"));
             Assert.Contains(IrishStatutoryRuleSources.RevenueAcceptedTaxonomies.SourceId, StringListProperty(range, "SourceIds"));
-            Assert.Contains(IrishStatutoryRuleSources.FrcFrs102.SourceId, StringListProperty(range, "SourceIds"));
             Assert.Contains("ixbrl-taxonomy-selection", StringListProperty(range, "ReleaseGateCodes"));
             Assert.Contains("source-law-change-review", StringListProperty(range, "ReleaseGateCodes"));
         });
+        Assert.All(
+            ranges.Where(range => StringProperty(range, "AccountingStandard") == "FRS 102"),
+            range =>
+            {
+                Assert.True(BooleanProperty(range, "AutomatedPlatformSelectionSupported"));
+                Assert.Contains(IrishStatutoryRuleSources.FrcFrs102.SourceId, StringListProperty(range, "SourceIds"));
+                Assert.DoesNotContain("manual-professional-handoff", StringListProperty(range, "ReleaseGateCodes"));
+            });
+        Assert.All(
+            ranges.Where(range => StringProperty(range, "AccountingStandard") is "FRS 101" or "EU IFRS"),
+            range =>
+            {
+                Assert.False(BooleanProperty(range, "AutomatedPlatformSelectionSupported"));
+                Assert.Contains("manual-professional-handoff", StringListProperty(range, "ReleaseGateCodes"));
+            });
     }
 
     [Fact]

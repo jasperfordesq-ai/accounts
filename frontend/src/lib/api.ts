@@ -1948,6 +1948,7 @@ export interface RevenueTaxonomyRangeEvidence {
   label: string;
   schemaRef: string;
   acceptedByRevenue: boolean;
+  automatedPlatformSelectionSupported: boolean;
   effectiveForPeriodsStartingOnOrAfter: string;
   effectiveForPeriodsStartingBefore: string;
   sourceIds: string[];
@@ -2047,6 +2048,7 @@ const revenueTaxonomyRangeEvidenceSchema = z.object({
   label: z.string().min(1),
   schemaRef: z.string().url(),
   acceptedByRevenue: z.boolean(),
+  automatedPlatformSelectionSupported: z.boolean(),
   effectiveForPeriodsStartingOnOrAfter: z.string().min(1),
   effectiveForPeriodsStartingBefore: z.string(),
   sourceIds: z.array(z.string().min(1)),

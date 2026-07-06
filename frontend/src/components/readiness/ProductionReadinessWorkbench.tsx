@@ -326,7 +326,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
               range.schemaRef,
               range.sourceIds.join(" "),
               range.releaseGateCodes.join(" "),
-              range.acceptedByRevenue ? "accepted" : "manual review",
+              range.automatedPlatformSelectionSupported ? "automated" : "manual handoff",
             ],
             searchText: [
               range.taxonomyKey,
@@ -336,6 +336,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
               range.schemaRef,
               range.effectiveForPeriodsStartingOnOrAfter,
               range.effectiveForPeriodsStartingBefore,
+              range.automatedPlatformSelectionSupported ? "automated platform selection" : "manual professional handoff",
               ...range.sourceIds,
               ...range.releaseGateCodes,
             ].join(" "),
@@ -357,8 +358,8 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
               </code>,
               <CodeStack key="sources" items={range.sourceIds} />,
               <CodeStack key="gates" items={range.releaseGateCodes} />,
-              <StatusBadge key="status" tone={range.acceptedByRevenue ? "good" : "bad"}>
-                {range.acceptedByRevenue ? "Revenue accepted" : "Manual review"}
+              <StatusBadge key="status" tone={range.automatedPlatformSelectionSupported ? "good" : "warn"}>
+                {range.automatedPlatformSelectionSupported ? "Automated path" : "Manual handoff"}
               </StatusBadge>,
             ],
           }))}

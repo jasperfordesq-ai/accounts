@@ -125,6 +125,7 @@ public sealed record RevenueTaxonomyRangeEvidence(
     string Label,
     string SchemaRef,
     bool AcceptedByRevenue,
+    bool AutomatedPlatformSelectionSupported,
     string EffectiveForPeriodsStartingOnOrAfter,
     string EffectiveForPeriodsStartingBefore,
     IReadOnlyList<string> SourceIds,
@@ -757,28 +758,44 @@ public class ProductionReadinessReportService(AccountsDbContext db)
 
     private static IReadOnlyList<RevenueTaxonomyRangeEvidence> BuildRevenueTaxonomyRanges()
     {
-        var ranges = RevenueIxbrlTaxonomySelector.AcceptedFrs102Ranges()
+        var ranges = RevenueIxbrlTaxonomySelector.AcceptedTaxonomyRanges()
             .OrderByDescending(range => range.EffectiveForPeriodsStartingOnOrAfter)
+            .ThenBy(range => range.AccountingStandard, StringComparer.Ordinal)
             .ToArray();
 
         return ranges
-            .Select((range, index) => new RevenueTaxonomyRangeEvidence(
-                range.TaxonomyKey,
-                range.AccountingStandard,
-                range.TaxonomyDate,
-                range.Label,
-                range.SchemaRef,
-                AcceptedByRevenue: true,
-                range.EffectiveForPeriodsStartingOnOrAfter.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-                index == 0
-                    ? ""
-                    : ranges[index - 1].EffectiveForPeriodsStartingOnOrAfter.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-                range.Sources.Select(source => source.SourceId).Order(StringComparer.Ordinal).ToArray(),
-                [
+            .Select(range =>
+            {
+                var nextEffectiveStart = ranges
+                    .Where(candidate =>
+                        candidate.AccountingStandard == range.AccountingStandard
+                        && candidate.EffectiveForPeriodsStartingOnOrAfter > range.EffectiveForPeriodsStartingOnOrAfter)
+                    .OrderBy(candidate => candidate.EffectiveForPeriodsStartingOnOrAfter)
+                    .FirstOrDefault();
+                var gates = new List<string>
+                {
                     "external-ros-validation",
                     "ixbrl-taxonomy-selection",
                     "source-law-change-review"
-                ]))
+                };
+                if (!range.AutomatedPlatformSelectionSupported)
+                    gates.Add("manual-professional-handoff");
+
+                return new RevenueTaxonomyRangeEvidence(
+                    range.TaxonomyKey,
+                    range.AccountingStandard,
+                    range.TaxonomyDate,
+                    range.Label,
+                    range.SchemaRef,
+                    AcceptedByRevenue: true,
+                    range.AutomatedPlatformSelectionSupported,
+                    range.EffectiveForPeriodsStartingOnOrAfter.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                    nextEffectiveStart is null
+                        ? ""
+                        : nextEffectiveStart.EffectiveForPeriodsStartingOnOrAfter.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                    range.Sources.Select(source => source.SourceId).Order(StringComparer.Ordinal).ToArray(),
+                    gates.ToArray());
+            })
             .ToArray();
     }
 

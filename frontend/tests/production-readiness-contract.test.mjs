@@ -91,6 +91,10 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.equal(parsed.revenueTaxonomyRanges[0].effectiveForPeriodsStartingOnOrAfter, "2024-01-01");
   assert.equal(parsed.revenueTaxonomyRanges[0].effectiveForPeriodsStartingBefore, "");
   assert.ok(parsed.revenueTaxonomyRanges[0].releaseGateCodes.includes("source-law-change-review"));
+  assert.ok(parsed.revenueTaxonomyRanges[0].automatedPlatformSelectionSupported);
+  assert.equal(parsed.revenueTaxonomyRanges.filter((range) => range.accountingStandard === "FRS 101").length, 1);
+  assert.equal(parsed.revenueTaxonomyRanges.filter((range) => range.accountingStandard === "EU IFRS").length, 1);
+  assert.ok(parsed.revenueTaxonomyRanges.find((range) => range.accountingStandard === "EU IFRS")?.releaseGateCodes.includes("manual-professional-handoff"));
   assert.equal(parsed.statutoryRulesCoverage[0].code, "size-classification-thresholds");
   assert.equal(parsed.statutoryRulesCoverage[0].automatedVerifierNames[0], "AccountsWorkflowTests.SizeClassification_FirstYearMicro_AllowsMicroAndAuditExemption");
   assert.equal(parsed.statutoryRulesCoverage[0].edgeCases[0], "two-of-three threshold rule");
@@ -779,6 +783,7 @@ function sampleReport() {
         label: "Irish Extension 2025 FRS 102 taxonomy accepted by Revenue",
         schemaRef: "https://xbrl.frc.org.uk/ireland/FRS-102/2025-01-01/ie-FRS-102-2025-01-01.xsd",
         acceptedByRevenue: true,
+        automatedPlatformSelectionSupported: true,
         effectiveForPeriodsStartingOnOrAfter: "2024-01-01",
         effectiveForPeriodsStartingBefore: "",
         sourceIds: ["frc-frs-102"],
@@ -791,6 +796,7 @@ function sampleReport() {
         label: "Irish Extension 2023 FRS 102 taxonomy accepted by Revenue",
         schemaRef: "https://xbrl.frc.org.uk/ireland/FRS-102/2023-01-01/ie-FRS-102-2023-01-01.xsd",
         acceptedByRevenue: true,
+        automatedPlatformSelectionSupported: true,
         effectiveForPeriodsStartingOnOrAfter: "2023-01-01",
         effectiveForPeriodsStartingBefore: "2024-01-01",
         sourceIds: ["frc-frs-102"],
@@ -803,10 +809,37 @@ function sampleReport() {
         label: "Irish Extension 2022 FRS 102 taxonomy accepted by Revenue",
         schemaRef: "https://xbrl.frc.org.uk/ireland/FRS-102/2022-01-01/ie-FRS-102-2022-01-01.xsd",
         acceptedByRevenue: true,
+        automatedPlatformSelectionSupported: true,
         effectiveForPeriodsStartingOnOrAfter: "2019-01-01",
         effectiveForPeriodsStartingBefore: "2023-01-01",
         sourceIds: ["frc-frs-102"],
         releaseGateCodes: ["external-ros-validation", "ixbrl-taxonomy-selection", "source-law-change-review"],
+      },
+      {
+        taxonomyKey: "irish-extension-2025-frs-101",
+        accountingStandard: "FRS 101",
+        taxonomyDate: "2025-01-01",
+        label: "Irish Extension 2025 FRS 101 taxonomy accepted by Revenue",
+        schemaRef: "https://xbrl.frc.org.uk/ireland/FRS-101/2025-01-01/ie-FRS-101-2025-01-01.xsd",
+        acceptedByRevenue: true,
+        automatedPlatformSelectionSupported: false,
+        effectiveForPeriodsStartingOnOrAfter: "2024-01-01",
+        effectiveForPeriodsStartingBefore: "",
+        sourceIds: ["frc-frs-102"],
+        releaseGateCodes: ["external-ros-validation", "ixbrl-taxonomy-selection", "source-law-change-review", "manual-professional-handoff"],
+      },
+      {
+        taxonomyKey: "irish-extension-2025-ifrs",
+        accountingStandard: "EU IFRS",
+        taxonomyDate: "2025-01-01",
+        label: "EU IFRS Irish Extension 2025 taxonomy accepted by Revenue",
+        schemaRef: "https://xbrl.frc.org.uk/ireland/IFRS/2025-01-01/ie-IFRS-2025-01-01.xsd",
+        acceptedByRevenue: true,
+        automatedPlatformSelectionSupported: false,
+        effectiveForPeriodsStartingOnOrAfter: "2024-01-01",
+        effectiveForPeriodsStartingBefore: "",
+        sourceIds: ["frc-frs-102"],
+        releaseGateCodes: ["external-ros-validation", "ixbrl-taxonomy-selection", "source-law-change-review", "manual-professional-handoff"],
       },
     ],
     assurancePacket: {
