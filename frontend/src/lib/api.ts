@@ -1905,6 +1905,19 @@ export interface AccountantJourneyAcceptanceChecklistItem {
   status: string;
 }
 
+export interface AccountantWorkflowEvidencePackItem {
+  routeCode: string;
+  routeLabel: string;
+  workflowStages: string[];
+  seededScenarioCodes: string[];
+  visualArtifactNames: string[];
+  evidenceArtifact: string;
+  decisionQuestion: string;
+  requiredEvidence: string[];
+  signOffGate: string;
+  failurePolicy: string;
+}
+
 export interface VisualQaViewport {
   name: string;
   width: number;
@@ -2014,6 +2027,7 @@ export interface ProductionReadinessReport {
   accountantAcceptanceSummary: AccountantAcceptanceSummary;
   accountantWorkflowWalkthroughProtocol: AccountantWorkflowWalkthroughProtocol;
   accountantJourneyAcceptanceChecklist: AccountantJourneyAcceptanceChecklistItem[];
+  accountantWorkflowEvidencePack: AccountantWorkflowEvidencePackItem[];
   areas: ProductionReadinessArea[];
   goldenFilingCorpus: GoldenFilingCorpusScenario[];
   goldenEvidenceLedger: GoldenEvidenceLedgerEntry[];
@@ -2440,6 +2454,19 @@ const accountantJourneyAcceptanceChecklistItemSchema = z.object({
   status: z.string().min(1),
 });
 
+const accountantWorkflowEvidencePackItemSchema = z.object({
+  routeCode: z.string().min(1),
+  routeLabel: z.string().min(1),
+  workflowStages: z.array(z.string().min(1)),
+  seededScenarioCodes: z.array(z.string().min(1)),
+  visualArtifactNames: z.array(z.string().min(1)),
+  evidenceArtifact: z.string().min(1),
+  decisionQuestion: z.string().min(1),
+  requiredEvidence: z.array(z.string().min(1)),
+  signOffGate: z.string().min(1),
+  failurePolicy: z.string().min(1),
+});
+
 const visualQaViewportSchema = z.object({
   name: z.string().min(1),
   width: z.number(),
@@ -2519,6 +2546,7 @@ export const productionReadinessReportSchema = z.object({
   accountantAcceptanceSummary: accountantAcceptanceSummarySchema,
   accountantWorkflowWalkthroughProtocol: accountantWorkflowWalkthroughProtocolSchema,
   accountantJourneyAcceptanceChecklist: z.array(accountantJourneyAcceptanceChecklistItemSchema),
+  accountantWorkflowEvidencePack: z.array(accountantWorkflowEvidencePackItemSchema),
   areas: z.array(productionReadinessAreaSchema),
   goldenFilingCorpus: z.array(goldenFilingCorpusScenarioSchema),
   goldenEvidenceLedger: z.array(goldenEvidenceLedgerEntrySchema),
@@ -2729,6 +2757,7 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
 
   assertAccountantWorkflowWalkthroughProtocol(report);
   assertAccountantJourneyAcceptanceChecklist(report);
+  assertAccountantWorkflowEvidencePack(report);
 
   const snapshotSourceIds = new Set(report.sourceLawSnapshot.sources.map((source) => source.sourceId));
   const traceabilitySourceIds = new Set(report.sourceLawTraceability.map((entry) => entry.sourceId));
@@ -3585,6 +3614,84 @@ function assertAccountantJourneyAcceptanceChecklist(report: ProductionReadinessR
     if (!item.acceptanceCriteria.some((criterion) => criterion.includes("outputs, gates, wording and evidence"))) {
       throw new Error(
         `Invalid production readiness report contract: accountantJourneyAcceptanceChecklist.${itemIndex}.acceptanceCriteria - outputs, gates, wording and evidence is required`,
+      );
+    }
+  });
+}
+
+function assertAccountantWorkflowEvidencePack(report: ProductionReadinessReport) {
+  const pack = report.accountantWorkflowEvidencePack;
+  const checklist = report.accountantJourneyAcceptanceChecklist;
+  const checklistByRoute = new Map(checklist.map((item) => [item.routeCode, item]));
+  const releaseChecklistCodes = new Set(report.releaseReviewChecklist.map((item) => item.code));
+  const packRouteCodes = pack.map((item) => item.routeCode).sort((left, right) => left.localeCompare(right));
+  const checklistRouteCodes = checklist.map((item) => item.routeCode).sort((left, right) => left.localeCompare(right));
+
+  if (!report.assurancePacket.evidenceItems.includes("accountant-workflow-evidence-pack")) {
+    throw new Error(
+      "Invalid production readiness report contract: assurancePacket.evidenceItems - accountant-workflow-evidence-pack is required",
+    );
+  }
+
+  assertStringArrayEqual(
+    "accountantWorkflowEvidencePack.routeCodes",
+    checklistRouteCodes,
+    packRouteCodes,
+  );
+
+  pack.forEach((item, itemIndex) => {
+    const checklistItem = checklistByRoute.get(item.routeCode);
+    if (!checklistItem) {
+      throw new Error(
+        `Invalid production readiness report contract: accountantWorkflowEvidencePack.${itemIndex}.routeCode - must reference accountant journey acceptance checklist`,
+      );
+    }
+
+    if (item.routeLabel !== checklistItem.routeLabel) {
+      throw new Error(
+        `Invalid production readiness report contract: accountantWorkflowEvidencePack.${itemIndex}.routeLabel - must mirror accountant journey acceptance checklist for ${item.routeCode}`,
+      );
+    }
+
+    assertStringArrayEqual(
+      `accountantWorkflowEvidencePack.${itemIndex}.workflowStages`,
+      checklistItem.workflowStages,
+      item.workflowStages,
+    );
+    assertStringArrayEqual(
+      `accountantWorkflowEvidencePack.${itemIndex}.seededScenarioCodes`,
+      [...checklistItem.seededScenarioCodes].sort((left, right) => left.localeCompare(right)),
+      [...item.seededScenarioCodes].sort((left, right) => left.localeCompare(right)),
+    );
+    assertStringArrayEqual(
+      `accountantWorkflowEvidencePack.${itemIndex}.visualArtifactNames`,
+      [...checklistItem.visualArtifactNames].sort((left, right) => left.localeCompare(right)),
+      [...item.visualArtifactNames].sort((left, right) => left.localeCompare(right)),
+    );
+
+    if (!releaseChecklistCodes.has(item.signOffGate) || item.signOffGate !== checklistItem.signOffGate) {
+      throw new Error(
+        `Invalid production readiness report contract: accountantWorkflowEvidencePack.${itemIndex}.signOffGate - must mirror a release checklist-backed accountant journey sign-off gate`,
+      );
+    }
+
+    for (const evidence of ["named qualified-accountant route acceptance", "visual smoke screenshots reviewed", "golden corpus evidence accepted"]) {
+      if (!item.requiredEvidence.includes(evidence)) {
+        throw new Error(
+          `Invalid production readiness report contract: accountantWorkflowEvidencePack.${itemIndex}.requiredEvidence - ${evidence} is required`,
+        );
+      }
+    }
+
+    if (!item.decisionQuestion.includes("outputs, gates, wording and evidence")) {
+      throw new Error(
+        `Invalid production readiness report contract: accountantWorkflowEvidencePack.${itemIndex}.decisionQuestion - outputs, gates, wording and evidence is required`,
+      );
+    }
+
+    if (!item.failurePolicy.includes("Block release")) {
+      throw new Error(
+        `Invalid production readiness report contract: accountantWorkflowEvidencePack.${itemIndex}.failurePolicy - must block release until accountant route acceptance evidence is complete`,
       );
     }
   });

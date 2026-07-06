@@ -608,6 +608,55 @@ public class ProductionReadinessReportTests
     }
 
     [Fact]
+    public async Task ProductionReadinessReport_ExposesAccountantWorkflowEvidencePackForRouteAcceptance()
+    {
+        await using var db = CreateDbContext();
+        var report = await new ProductionReadinessReportService(db).GetReportAsync();
+        var packProperty = report.GetType().GetProperty("AccountantWorkflowEvidencePack");
+
+        Assert.NotNull(packProperty);
+        var pack = Assert.IsAssignableFrom<System.Collections.IEnumerable>(packProperty!.GetValue(report))
+            .Cast<object>()
+            .ToArray();
+
+        Assert.Contains(report.AssurancePacket.EvidenceItems, item => item == "accountant-workflow-evidence-pack");
+        Assert.Equal(
+            report.AccountantJourneyAcceptanceChecklist.Select(item => item.RouteCode).Order(StringComparer.Ordinal),
+            pack.Select(item => StringProperty(item, "RouteCode")).Order(StringComparer.Ordinal));
+
+        var scenarioCodes = report.GoldenFilingCorpus.Select(scenario => scenario.Code).Order(StringComparer.Ordinal).ToArray();
+        foreach (var item in pack)
+        {
+            var routeCode = StringProperty(item, "RouteCode");
+            var checklistItem = Assert.Single(report.AccountantJourneyAcceptanceChecklist, route => route.RouteCode == routeCode);
+
+            Assert.Equal(checklistItem.RouteLabel, StringProperty(item, "RouteLabel"));
+            Assert.Equal(checklistItem.WorkflowStages, StringListProperty(item, "WorkflowStages"));
+            Assert.Equal(scenarioCodes, StringListProperty(item, "SeededScenarioCodes").Order(StringComparer.Ordinal));
+            Assert.Equal(checklistItem.VisualArtifactNames.Order(StringComparer.Ordinal), StringListProperty(item, "VisualArtifactNames").Order(StringComparer.Ordinal));
+            Assert.Equal("golden-corpus-accountant-acceptance", StringProperty(item, "SignOffGate"));
+            Assert.Contains("Block release", StringProperty(item, "FailurePolicy"), StringComparison.OrdinalIgnoreCase);
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(item, "EvidenceArtifact")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(item, "DecisionQuestion")));
+            Assert.Contains("outputs, gates, wording and evidence", StringProperty(item, "DecisionQuestion"), StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("named qualified-accountant route acceptance", StringListProperty(item, "RequiredEvidence"));
+            Assert.Contains("visual smoke screenshots reviewed", StringListProperty(item, "RequiredEvidence"));
+            Assert.Contains("golden corpus evidence accepted", StringListProperty(item, "RequiredEvidence"));
+        }
+
+        Assert.Contains(pack, item =>
+            StringProperty(item, "RouteCode") == "dashboard"
+            && StringProperty(item, "EvidenceArtifact") == "dashboard-accountant-route-acceptance-note"
+            && StringListProperty(item, "WorkflowStages").Contains("Filing"));
+        Assert.Contains(pack, item =>
+            StringProperty(item, "RouteCode") == "filing-review"
+            && StringProperty(item, "DecisionQuestion").Contains("external ROS/iXBRL validation", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(pack, item =>
+            StringProperty(item, "RouteCode") == "production-readiness"
+            && StringProperty(item, "DecisionQuestion").Contains("release blockers", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task ProductionReadinessReport_ExposesCompletionTracksForBackendUiAndFrontendCode()
     {
         await using var db = CreateDbContext();

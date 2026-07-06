@@ -152,6 +152,11 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
     parsed.accountantJourneyAcceptanceChecklist.find((item) => item.routeCode === "financial-statements")?.acceptanceCriteria[0] ?? "",
     /statement preview, tax computation, source trail and directors' report/i,
   );
+  assert.equal(parsed.accountantWorkflowEvidencePack[0].routeCode, "dashboard");
+  assert.equal(parsed.accountantWorkflowEvidencePack[0].evidenceArtifact, "dashboard-accountant-route-acceptance-note");
+  assert.deepEqual(parsed.accountantWorkflowEvidencePack[0].visualArtifactNames, parsed.accountantJourneyAcceptanceChecklist[0].visualArtifactNames);
+  assert.match(parsed.accountantWorkflowEvidencePack.find((item) => item.routeCode === "filing-review")?.decisionQuestion ?? "", /external ROS\/iXBRL validation/);
+  assert.match(parsed.accountantWorkflowEvidencePack.find((item) => item.routeCode === "production-readiness")?.decisionQuestion ?? "", /release blockers/);
   assert.equal(parsed.assurancePacket.packetVersion, "production-assurance-packet-v1");
   assert.equal(parsed.assurancePacket.sourceLawSnapshotHash, "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
   assert.equal(parsed.assurancePacket.goldenCorpusCovered, 5);
@@ -906,7 +911,7 @@ function sampleReport() {
       visualQaExpectedScreenshots: expectedVisualSmokeScreenshotCount(),
       requiredOperationalGates: 1,
       openCriticalActions: 3,
-      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "source-law-review-ledger", "revenue-taxonomy-range-evidence", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "production-audit-evidence-pack", "operations-evidence-pack", "visual-smoke-screenshots", "release-blocker-register", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "accountant-journey-acceptance-checklist", "production-completion-map"],
+      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "source-law-review-ledger", "revenue-taxonomy-range-evidence", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "production-audit-evidence-pack", "operations-evidence-pack", "visual-smoke-screenshots", "release-blocker-register", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "accountant-journey-acceptance-checklist", "accountant-workflow-evidence-pack", "production-completion-map"],
       releaseBlockers: [
         "Qualified accountant sign-off required",
         "Source-law change review required",
@@ -1101,6 +1106,7 @@ function sampleReport() {
         "A named qualified accountant accepts the Production readiness route outputs, gates, wording and evidence for every seeded golden scenario.",
       ]),
     ],
+    accountantWorkflowEvidencePack: accountantWorkflowEvidencePack(),
     areas: [
       {
         code: "backend-accounting-engine",
@@ -2354,6 +2360,53 @@ function journeyAcceptance(routeCode, routeLabel, routeKey, workflowStages, acce
     signOffGate: "golden-corpus-accountant-acceptance",
     status: "required-review",
   };
+}
+
+function accountantWorkflowEvidencePack() {
+  return [
+    accountantRouteEvidence("dashboard", "Dashboard", ["Setup", "Import", "Classify", "Year-End", "Statements", "Notes", "Review", "Filing"]),
+    accountantRouteEvidence("company-detail", "Company detail", ["Setup"]),
+    accountantRouteEvidence("period-workspace", "Period workspace", ["Setup", "Import", "Classify", "Year-End", "Statements", "Notes", "Review", "Filing"]),
+    accountantRouteEvidence("financial-statements", "Financial statements", ["Statements"]),
+    accountantRouteEvidence(
+      "filing-review",
+      "Filing review",
+      ["Review", "Filing"],
+      "Does the filing review route let a qualified accountant accept readiness, source links, generated outputs, signatory gates, external ROS/iXBRL validation, filing state, outputs, gates, wording and evidence?",
+    ),
+    accountantRouteEvidence(
+      "production-readiness",
+      "Production readiness",
+      ["Review", "Filing"],
+      "Does the production readiness route let a qualified accountant accept backend checks, filing rules coverage, unsupported paths, security posture, release blockers, accountant review state, outputs, gates, wording and evidence?",
+    ),
+  ];
+}
+
+function accountantRouteEvidence(routeCode, routeLabel, workflowStages, decisionQuestion) {
+  return {
+    routeCode,
+    routeLabel,
+    workflowStages,
+    seededScenarioCodes: ["clg-charity", "dac-small", "medium-audit-required", "micro-ltd", "small-abridged-ltd"],
+    visualArtifactNames: visualSmokeArtifactsForRoute(routeCode),
+    evidenceArtifact: `${routeCode}-accountant-route-acceptance-note`,
+    decisionQuestion: decisionQuestion ?? `Does the ${routeLabel} route let a qualified accountant accept the workflow state, blockers, next action, outputs, gates, wording and evidence for every seeded golden scenario?`,
+    requiredEvidence: [
+      "named qualified-accountant route acceptance",
+      "visual smoke screenshots reviewed",
+      "golden corpus evidence accepted",
+    ],
+    signOffGate: "golden-corpus-accountant-acceptance",
+    failurePolicy: "Block release until a named qualified accountant accepts this route's outputs, gates, wording and evidence against the seeded golden corpus and reviewed visual artifacts.",
+  };
+}
+
+function visualSmokeArtifactsForRoute(routeCode) {
+  return expectedVisualSmokeArtifacts()
+    .filter((artifact) => artifact.routeName === routeCode)
+    .map((artifact) => artifact.fileName)
+    .sort((left, right) => left.localeCompare(right));
 }
 
 function source(sourceId, title) {

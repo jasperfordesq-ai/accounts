@@ -351,6 +351,18 @@ public sealed record AccountantJourneyAcceptanceChecklistItem(
     string SignOffGate,
     string Status);
 
+public sealed record AccountantWorkflowEvidencePackItem(
+    string RouteCode,
+    string RouteLabel,
+    IReadOnlyList<string> WorkflowStages,
+    IReadOnlyList<string> SeededScenarioCodes,
+    IReadOnlyList<string> VisualArtifactNames,
+    string EvidenceArtifact,
+    string DecisionQuestion,
+    IReadOnlyList<string> RequiredEvidence,
+    string SignOffGate,
+    string FailurePolicy);
+
 public sealed record VisualQaViewport(
     string Name,
     int Width,
@@ -439,6 +451,7 @@ public sealed record ProductionReadinessReport(
     AccountantAcceptanceSummary AccountantAcceptanceSummary,
     AccountantWorkflowWalkthroughProtocol AccountantWorkflowWalkthroughProtocol,
     IReadOnlyList<AccountantJourneyAcceptanceChecklistItem> AccountantJourneyAcceptanceChecklist,
+    IReadOnlyList<AccountantWorkflowEvidencePackItem> AccountantWorkflowEvidencePack,
     IReadOnlyList<ProductionReadinessArea> Areas,
     IReadOnlyList<GoldenFilingCorpusScenario> GoldenFilingCorpus,
     IReadOnlyList<GoldenEvidenceLedgerEntry> GoldenEvidenceLedger,
@@ -494,6 +507,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
         var accountantWorkflowWalkthroughProtocol = BuildAccountantWorkflowWalkthroughProtocol(goldenCorpus);
         var visualQaCoverage = BuildVisualQaCoverage();
         var accountantJourneyAcceptanceChecklist = BuildAccountantJourneyAcceptanceChecklist(goldenCorpus, visualQaCoverage);
+        var accountantWorkflowEvidencePack = BuildAccountantWorkflowEvidencePack(accountantJourneyAcceptanceChecklist);
         var sourceLawTraceability = BuildSourceLawTraceability(
             sourceSnapshot,
             goldenCorpus,
@@ -527,6 +541,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             accountantAcceptanceSummary,
             accountantWorkflowWalkthroughProtocol,
             accountantJourneyAcceptanceChecklist,
+            accountantWorkflowEvidencePack,
             areas,
             goldenCorpus,
             goldenEvidenceLedger,
@@ -606,6 +621,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "accountant-acceptance-summary",
             "accountant-workflow-walkthrough-protocol",
             "accountant-journey-acceptance-checklist",
+            "accountant-workflow-evidence-pack",
             "production-completion-map"
         };
         var releaseBlockers = assuranceActions
@@ -3151,6 +3167,37 @@ public class ProductionReadinessReportService(AccountsDbContext db)
         }
 
         return criteria;
+    }
+
+    private static IReadOnlyList<AccountantWorkflowEvidencePackItem> BuildAccountantWorkflowEvidencePack(
+        IReadOnlyList<AccountantJourneyAcceptanceChecklistItem> checklist) =>
+        checklist
+            .Select(item => new AccountantWorkflowEvidencePackItem(
+                item.RouteCode,
+                item.RouteLabel,
+                item.WorkflowStages,
+                item.SeededScenarioCodes,
+                item.VisualArtifactNames,
+                $"{item.RouteCode}-accountant-route-acceptance-note",
+                BuildAccountantWorkflowDecisionQuestion(item),
+                item.RequiredEvidence,
+                item.SignOffGate,
+                "Block release until a named qualified accountant accepts this route's outputs, gates, wording and evidence against the seeded golden corpus and reviewed visual artifacts."))
+            .ToArray();
+
+    private static string BuildAccountantWorkflowDecisionQuestion(AccountantJourneyAcceptanceChecklistItem item)
+    {
+        if (item.RouteCode == "filing-review")
+        {
+            return "Does the filing review route let a qualified accountant accept readiness, source links, generated outputs, signatory gates, external ROS/iXBRL validation, filing state, outputs, gates, wording and evidence?";
+        }
+
+        if (item.RouteCode == "production-readiness")
+        {
+            return "Does the production readiness route let a qualified accountant accept backend checks, filing rules coverage, unsupported paths, security posture, release blockers, accountant review state, outputs, gates, wording and evidence?";
+        }
+
+        return $"Does the {item.RouteLabel} route let a qualified accountant accept the workflow state, blockers, next action, outputs, gates, wording and evidence for every seeded golden scenario?";
     }
 
     private static int JourneyRouteOrder(string routeCode) => routeCode switch

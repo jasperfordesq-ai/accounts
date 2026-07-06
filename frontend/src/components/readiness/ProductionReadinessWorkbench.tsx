@@ -42,6 +42,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
   const accountantAcceptanceSummary = report.accountantAcceptanceSummary;
   const accountantWorkflowWalkthroughProtocol = report.accountantWorkflowWalkthroughProtocol;
   const accountantJourneyAcceptanceChecklist = report.accountantJourneyAcceptanceChecklist ?? [];
+  const accountantWorkflowEvidencePack = report.accountantWorkflowEvidencePack ?? [];
   const hardenedAreas = report.areas.filter((area) => area.status === "hardened").length;
   const coveredScenarios = report.goldenFilingCorpus.filter((scenario) => scenario.coverageStatus === "covered").length;
   const enforcedGates = report.operationalGates.filter((gate) => gate.status === "enforced").length;
@@ -741,6 +742,58 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
               <StatusBadge key="status" tone={item.status === "accepted" ? "good" : "warn"}>
                 {formatStatus(item.status)}
               </StatusBadge>,
+            ],
+          }))}
+        />
+      </ReviewPanel>
+
+      <ReviewPanel
+        title="Accountant workflow evidence pack"
+        description="Release-facing route acceptance evidence that turns each accountant journey step into a named review artifact and decision question."
+        actions={<StatusBadge tone="warn">{accountantWorkflowEvidencePack.length} route artifacts</StatusBadge>}
+      >
+        <DataGrid
+          caption="Accountant workflow evidence pack"
+          filterPlaceholder="Filter accountant workflow evidence pack"
+          emptyState="No matching accountant workflow evidence pack entries"
+          columns={["Route", "Workflow", "Evidence artifact", "Decision question", "Visual evidence", "Required evidence", "Failure policy"]}
+          rows={accountantWorkflowEvidencePack.map((item) => ({
+            id: item.routeCode,
+            tone: "warn",
+            searchText: [
+              item.routeCode,
+              item.routeLabel,
+              item.evidenceArtifact,
+              item.decisionQuestion,
+              item.signOffGate,
+              item.failurePolicy,
+              ...item.workflowStages,
+              ...item.seededScenarioCodes,
+              ...item.visualArtifactNames,
+              ...item.requiredEvidence,
+            ].join(" "),
+            cells: [
+              <div key="route" className="min-w-44 whitespace-normal">
+                <p className="font-medium">{item.routeLabel}</p>
+                <code className="mt-1 block break-all text-[11px] text-[var(--muted-foreground)]">{item.routeCode}</code>
+                <p className="mt-1 text-xs text-[var(--muted-foreground)]">Gate: {item.signOffGate}</p>
+              </div>,
+              <div key="workflow" className="flex min-w-44 flex-wrap gap-1.5">
+                {item.workflowStages.map((stage) => (
+                  <StatusBadge key={stage} tone="default">{stage}</StatusBadge>
+                ))}
+              </div>,
+              <code key="evidence-artifact" className="block min-w-56 break-all text-xs text-[var(--foreground)]">
+                {item.evidenceArtifact}
+              </code>,
+              <p key="decision-question" className="min-w-72 text-xs leading-5 text-[var(--foreground)]">
+                {item.decisionQuestion}
+              </p>,
+              <CodeStack key="visual-artifacts" items={item.visualArtifactNames} />,
+              <CompactList key="required-evidence" items={item.requiredEvidence} />,
+              <p key="failure-policy" className="min-w-72 text-xs leading-5 text-[var(--muted-foreground)]">
+                {item.failurePolicy}
+              </p>,
             ],
           }))}
         />

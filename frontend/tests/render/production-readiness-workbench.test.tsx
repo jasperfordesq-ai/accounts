@@ -55,6 +55,12 @@ describe("ProductionReadinessWorkbench", () => {
     expectText("PLC and public-company workflows");
     expectText("Operations and security");
     expectText("Named qualified-accountant review");
+    expect(screen.getByRole("heading", { name: "Accountant workflow evidence pack" })).toBeInTheDocument();
+    expect(screen.getByRole("searchbox", { name: "Filter Accountant workflow evidence pack" })).toBeInTheDocument();
+    expectText("dashboard-accountant-route-acceptance-note");
+    expectText("filing-review-accountant-route-acceptance-note");
+    expectText(/external ROS\/iXBRL validation/);
+    expectText(/release blockers/);
     expect(screen.getByRole("heading", { name: "Source-backed statutory rules" })).toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: "Revenue accepted iXBRL taxonomies" }))
       .toEqual(expect.arrayContaining([expect.objectContaining({ href: "https://www.revenue.ie/" })]));
@@ -392,7 +398,7 @@ function sampleReport(): ProductionReadinessReport {
       visualQaExpectedScreenshots: 28,
       requiredOperationalGates: 1,
       openCriticalActions: 1,
-      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "source-law-review-ledger", "revenue-taxonomy-range-evidence", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "production-audit-evidence-pack", "operations-evidence-pack", "visual-smoke-screenshots", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "accountant-journey-acceptance-checklist", "production-completion-map"],
+      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "source-law-review-ledger", "revenue-taxonomy-range-evidence", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "production-audit-evidence-pack", "operations-evidence-pack", "visual-smoke-screenshots", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "accountant-journey-acceptance-checklist", "accountant-workflow-evidence-pack", "production-completion-map"],
       releaseBlockers: ["Qualified accountant sign-off required"],
     },
     accountantAcceptanceCriteria: [
@@ -508,6 +514,7 @@ function sampleReport(): ProductionReadinessReport {
         "A named qualified accountant accepts the Production readiness route outputs, gates, wording and evidence for every seeded golden scenario.",
       ]),
     ],
+    accountantWorkflowEvidencePack: accountantWorkflowEvidencePack(),
     areas: [
       {
         code: "backend-accounting-engine",
@@ -1613,6 +1620,55 @@ function journeyAcceptance(
     ],
     signOffGate: "golden-corpus-accountant-acceptance",
     status: "required-review",
+  };
+}
+
+function accountantWorkflowEvidencePack(): ProductionReadinessReport["accountantWorkflowEvidencePack"] {
+  return [
+    accountantRouteEvidence("dashboard", "Dashboard", accountantWorkflowStages()),
+    accountantRouteEvidence("company-detail", "Company detail", ["Setup"]),
+    accountantRouteEvidence("period-workspace", "Period workspace", accountantWorkflowStages()),
+    accountantRouteEvidence("financial-statements", "Financial statements", ["Statements"]),
+    accountantRouteEvidence(
+      "filing-review",
+      "Filing review",
+      ["Review", "Filing"],
+      "Does the filing review route let a qualified accountant accept readiness, source links, generated outputs, signatory gates, external ROS/iXBRL validation, filing state, outputs, gates, wording and evidence?",
+    ),
+    accountantRouteEvidence(
+      "production-readiness",
+      "Production readiness",
+      ["Review", "Filing"],
+      "Does the production readiness route let a qualified accountant accept backend checks, filing rules coverage, unsupported paths, security posture, release blockers, accountant review state, outputs, gates, wording and evidence?",
+    ),
+  ];
+}
+
+function accountantRouteEvidence(
+  routeCode: string,
+  routeLabel: string,
+  workflowStages: string[],
+  decisionQuestion?: string,
+): ProductionReadinessReport["accountantWorkflowEvidencePack"][number] {
+  return {
+    routeCode,
+    routeLabel,
+    workflowStages,
+    seededScenarioCodes: goldenScenarioCodes(),
+    visualArtifactNames: ["light-desktop", "light-mobile", "dark-desktop", "dark-mobile"].map(
+      (suffix) => `${routeCode}-${suffix}.png`,
+    ),
+    evidenceArtifact: `${routeCode}-accountant-route-acceptance-note`,
+    decisionQuestion:
+      decisionQuestion ??
+      `Does the ${routeLabel} route let a qualified accountant accept the workflow state, blockers, next action, outputs, gates, wording and evidence for every seeded golden scenario?`,
+    requiredEvidence: [
+      "named qualified-accountant route acceptance",
+      "visual smoke screenshots reviewed",
+      "golden corpus evidence accepted",
+    ],
+    signOffGate: "golden-corpus-accountant-acceptance",
+    failurePolicy: "Block release until a named qualified accountant accepts this route's outputs, gates, wording and evidence against the seeded golden corpus and reviewed visual artifacts.",
   };
 }
 
