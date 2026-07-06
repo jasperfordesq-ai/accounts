@@ -21,11 +21,8 @@ import {
   RefreshCw,
   AlertTriangle,
   BarChart3,
-  ArrowRight,
   Scale,
   ClipboardList,
-  Eye,
-  Heart,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -92,8 +89,8 @@ import { PeriodWorkbenchOverview } from "@/components/period/PeriodWorkbenchOver
 import { PeriodCategoriseWorkspace } from "@/components/period/PeriodCategoriseWorkspace";
 import { PeriodFilingWorkspace } from "@/components/period/PeriodFilingWorkspace";
 import { PeriodImportWorkspace } from "@/components/period/PeriodImportWorkspace";
+import { PeriodStatementsWorkspace } from "@/components/period/PeriodStatementsWorkspace";
 import { PeriodYearEndWorkspace } from "@/components/period/PeriodYearEndWorkspace";
-import { StatementsReadinessPanel } from "@/components/period/StatementsReadinessPanel";
 import { useAuth } from "@/components/AuthProvider";
 import { formatPeriodRange } from "@/lib/format";
 
@@ -899,63 +896,13 @@ export default function PeriodWorkspacePage({
 
         {/* Statements Tab */}
         <TabPanel id="statements">
-          <div className="space-y-6">
-            <StatementsReadinessPanel readiness={readiness} />
-
-            <Card className="shadow-sm border border-blue-200 dark:border-blue-800 bg-blue-50/30 dark:bg-blue-900/10">
-              <Card.Content className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Eye className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                    <div>
-                      <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">View Financial Statements</h3>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Preview trial balance, P&amp;L, balance sheet, and tax computation.</p>
-                    </div>
-                  </div>
-                  <Link href={`/companies/${companyId}/periods/${periodId}/statements`}>
-                    <Button variant="outline" size="sm">View Statements<ArrowRight className="w-4 h-4 ml-1.5" /></Button>
-                  </Link>
-                </div>
-              </Card.Content>
-            </Card>
-
-            <Card className="shadow-sm border border-purple-200 dark:border-purple-800 bg-purple-50/30 dark:bg-purple-900/10">
-              <Card.Content className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <ClipboardList className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-                    <div>
-                      <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Manage Notes</h3>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Generate, edit, and manage notes to the financial statements.</p>
-                    </div>
-                  </div>
-                  <Link href={`/companies/${companyId}/periods/${periodId}/notes`}>
-                    <Button variant="outline" size="sm">Manage Notes<ArrowRight className="w-4 h-4 ml-1.5" /></Button>
-                  </Link>
-                </div>
-              </Card.Content>
-            </Card>
-
-            {/* Charity SoFA */}
-            {company?.isCharitableOrganisation && (
-              <Card className="shadow-sm border border-green-200 dark:border-green-800 bg-green-50/30 dark:bg-green-900/10">
-                <Card.Content className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <Heart className="w-5 h-5 text-green-600 dark:text-green-400" />
-                      <div>
-                        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Charity Reporting (SoFA)</h3>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Statement of Financial Activities, fund accounting, and Trustees&apos; Annual Report.</p>
-                      </div>
-                    </div>
-                    <Link href={`/companies/${companyId}/periods/${periodId}/charity`}>
-                      <Button variant="outline" size="sm">Open Charity Reporting<ArrowRight className="w-4 h-4 ml-1.5" /></Button>
-                    </Link>
-                  </div>
-                </Card.Content>
-              </Card>
-            )}
-          </div>
+          <PeriodStatementsWorkspace
+            readiness={readiness}
+            statementsHref={`/companies/${companyId}/periods/${periodId}/statements`}
+            notesHref={`/companies/${companyId}/periods/${periodId}/notes`}
+            charityHref={`/companies/${companyId}/periods/${periodId}/charity`}
+            isCharity={Boolean(company?.isCharitableOrganisation)}
+          />
         </TabPanel>
 
         {/* Filing Tab */}

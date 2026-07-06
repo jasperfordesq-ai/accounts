@@ -226,3 +226,33 @@ test("period adjustments workspace composes generation, summary, filters and rev
     assert.match(source, new RegExp(marker), `PeriodAdjustmentsWorkspace should render ${marker}`);
   }
 });
+
+test("period statements route delegates readiness and downstream statement navigation", () => {
+  const periodRoute = new URL("companies/[companyId]/periods/[periodId]/page.tsx", appDir);
+  const source = readFileSync(periodRoute, "utf8");
+
+  assert.match(source, /PeriodStatementsWorkspace/, "period route should import the focused statements workspace");
+  assert.match(source, /<PeriodStatementsWorkspace[\s\S]*readiness=\{readiness\}/, "period route should render PeriodStatementsWorkspace with readiness data");
+  assert.match(source, /<PeriodStatementsWorkspace[\s\S]*isCharity=\{Boolean\(company\?\.isCharitableOrganisation\)\}/, "period route should pass charity reporting eligibility into PeriodStatementsWorkspace");
+  assert.match(source, /<PeriodStatementsWorkspace[\s\S]*statementsHref=/, "period route should pass statements navigation into PeriodStatementsWorkspace");
+  assert.doesNotMatch(source, /<StatementsReadinessPanel readiness=\{readiness\} \/>/, "period route should not own statements readiness markup directly");
+  assert.doesNotMatch(source, /View Financial Statements/, "period route should not own statements navigation markup");
+  assert.doesNotMatch(source, /Charity Reporting \(SoFA\)/, "period route should not own charity reporting navigation markup");
+});
+
+test("period statements workspace composes readiness, notes and charity navigation", () => {
+  const componentFile = new URL("../src/components/period/PeriodStatementsWorkspace.tsx", import.meta.url);
+
+  assert.ok(existsSync(componentFile), "PeriodStatementsWorkspace should exist as the focused statements workflow component");
+
+  const source = readFileSync(componentFile, "utf8");
+  for (const marker of [
+    "StatementsReadinessPanel",
+    "View Financial Statements",
+    "Manage Notes",
+    "Charity Reporting \\(SoFA\\)",
+    "Open Charity Reporting",
+  ]) {
+    assert.match(source, new RegExp(marker), `PeriodStatementsWorkspace should render ${marker}`);
+  }
+});

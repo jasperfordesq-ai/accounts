@@ -76,6 +76,7 @@ describe("ProductionReadinessWorkbench", () => {
     expectText(/PeriodCategoriseWorkspace extraction composes metrics, transaction rules, bulk actions, filters and categorisation table/);
     expectText(/PeriodYearEndWorkspace extraction composes questionnaire, completeness, summary metrics and empty-state panels/);
     expectText(/PeriodAdjustmentsWorkspace extraction composes generation, summary, filters and approval review cards/);
+    expectText(/PeriodStatementsWorkspace extraction composes readiness, statements, notes and charity reporting navigation/);
     expect(screen.getByRole("heading", { name: "Release review checklist" })).toBeInTheDocument();
     expectText("Named accountant final sign-off");
     expectText("named-accountant-approval-record");
@@ -683,6 +684,7 @@ function sampleReport(): ProductionReadinessReport {
           "PeriodCategoriseWorkspace extraction composes metrics, transaction rules, bulk actions, filters and categorisation table behind one focused transaction review component.",
           "PeriodYearEndWorkspace extraction composes questionnaire, completeness, summary metrics and empty-state panels behind one focused year-end workflow component.",
           "PeriodAdjustmentsWorkspace extraction composes generation, summary, filters and approval review cards behind one focused adjustments workflow component.",
+          "PeriodStatementsWorkspace extraction composes readiness, statements, notes and charity reporting navigation behind one focused statements workflow component.",
           "Render tests cover accountant dashboards, review panels and workflow routes.",
         ],
         nextActions: [
