@@ -228,6 +228,24 @@ test("year-end questionnaire route delegates header and progress shell to a focu
   assert.match(componentSource, /aria-valuenow/, "header shell should expose accessible progress semantics");
 });
 
+test("year-end questionnaire route delegates debtor and creditor money-list sections", () => {
+  const routeFile = new URL("companies/[companyId]/periods/[periodId]/year-end/page.tsx", appDir);
+  const componentFile = new URL("../src/components/period/YearEndMoneyListSection.tsx", import.meta.url);
+
+  assert.ok(existsSync(componentFile), "YearEndMoneyListSection should exist for debtor and creditor working-paper sections");
+
+  const routeSource = readFileSync(routeFile, "utf8");
+  const componentSource = readFileSync(componentFile, "utf8");
+
+  assert.match(routeSource, /YearEndMoneyListSection/, "year-end questionnaire route should render the focused debtor/creditor money-list shell");
+  assert.doesNotMatch(routeSource, /aria-label="Debtor name"/, "year-end questionnaire route should not own debtor entry fields");
+  assert.doesNotMatch(routeSource, /aria-label="Creditor name"/, "year-end questionnaire route should not own creditor entry fields");
+  assert.doesNotMatch(routeSource, /Delete debtor/, "year-end questionnaire route should not own debtor row delete copy");
+  assert.doesNotMatch(routeSource, /Delete creditor/, "year-end questionnaire route should not own creditor row delete copy");
+  assert.match(componentSource, /mode: "debtors" \| "creditors"/, "money-list shell should explicitly model debtor and creditor variants");
+  assert.match(componentSource, /Due < 1 year/, "money-list shell should preserve creditor maturity cues");
+});
+
 test("period adjustments route delegates generation, filters and approval composition", () => {
   const periodRoute = new URL("companies/[companyId]/periods/[periodId]/page.tsx", appDir);
   const source = readFileSync(periodRoute, "utf8");

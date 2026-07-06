@@ -27,6 +27,7 @@ import { LoansManager } from "@/components/LoansManager";
 import { DirectorLoansManager, type DirectorOption } from "@/components/DirectorLoansManager";
 import { useAuth } from "@/components/AuthProvider";
 import { YearEndQuestionnaireHeader } from "@/components/period/YearEndQuestionnaireHeader";
+import { YearEndMoneyListSection } from "@/components/period/YearEndMoneyListSection";
 import { YearEndQuestionnaireSection as Section } from "@/components/period/YearEndQuestionnaireSection";
 import { useUnsavedChanges } from "@/lib/useUnsavedChanges";
 import { PeriodWorkspaceSkeleton } from "@/components/Skeleton";
@@ -624,89 +625,17 @@ export default function YearEndQuestionnairePage({
           reviewSaving={savingReviewKey === "debtors"}
           onConfirmReview={() => handleConfirmReview("debtors", debtors.length === 0 ? "Confirmed no year-end debtors, prepayments, or other receivables to disclose." : undefined)}
         >
-          {/* Existing items */}
-          {debtors.length > 0 && (
-            <div className="space-y-2 mb-4">
-              {debtors.map((d) => (
-                <div
-                  key={d.id}
-                  className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-neutral-700 px-4 py-3 dark:bg-neutral-800/50"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{d.name}</p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <Chip variant="soft" size="sm" color="default">{d.type}</Chip>
-                      {d.notes && <span className="text-xs text-gray-400 dark:text-gray-500">{d.notes}</span>}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                      {formatCurrency(d.amount)}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => d.id && handleDeleteDebtor(d.id)}
-                      className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400"
-                      aria-label={`Delete debtor ${d.name}`}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Add form */}
-          <div className="grid grid-cols-12 gap-3 items-end">
-            <div className="col-span-4">
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Name</label>
-              <input
-                type="text"
-                className={inputClass}
-                placeholder="Who owes you?"
-                value={newDebtor.name}
-                onChange={(e) => setNewDebtor({ ...newDebtor, name: e.target.value })}
-                aria-label="Debtor name"
-              />
-            </div>
-            <div className="col-span-3">
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Amount</label>
-              <input
-                type="number"
-                className={inputClass}
-                placeholder="0.00"
-                value={newDebtor.amount || ""}
-                onChange={(e) => setNewDebtor({ ...newDebtor, amount: Number(e.target.value) })}
-                aria-label="Debtor amount"
-              />
-            </div>
-            <div className="col-span-3">
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Type</label>
-              <select
-                className={selectClass}
-                value={newDebtor.type}
-                onChange={(e) => setNewDebtor({ ...newDebtor, type: e.target.value })}
-                title="Debtor type"
-                aria-label="Debtor type"
-              >
-                <option value="Trade">Trade</option>
-                <option value="Other">Other</option>
-                <option value="Prepayment">Prepayment</option>
-              </select>
-            </div>
-            <div className="col-span-2">
-              <Button
-                variant="primary"
-                size="sm"
-                onPress={handleAddDebtor}
-                isDisabled={savingSection === "debtors"}
-                className="w-full"
-              >
-                {savingSection === "debtors" ? <Spinner size="sm" /> : <><Plus className="w-4 h-4 mr-1" /> Add</>}
-              </Button>
-            </div>
-          </div>
+          <YearEndMoneyListSection
+            mode="debtors"
+            items={debtors}
+            draft={newDebtor}
+            typeOptions={["Trade", "Other", "Prepayment"]}
+            namePlaceholder="Who owes you?"
+            saving={savingSection === "debtors"}
+            onDraftChange={setNewDebtor}
+            onAdd={handleAddDebtor}
+            onDelete={handleDeleteDebtor}
+          />
         </Section>
 
         {/* 2. Creditors & Accruals */}
@@ -719,103 +648,17 @@ export default function YearEndQuestionnairePage({
           reviewSaving={savingReviewKey === "creditors"}
           onConfirmReview={() => handleConfirmReview("creditors", creditors.length === 0 ? "Confirmed no year-end creditors, accruals, or other payables to disclose." : undefined)}
         >
-          {creditors.length > 0 && (
-            <div className="space-y-2 mb-4">
-              {creditors.map((c) => (
-                <div
-                  key={c.id}
-                  className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-neutral-700 px-4 py-3 dark:bg-neutral-800/50"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{c.name}</p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <Chip variant="soft" size="sm" color="default">{c.type}</Chip>
-                      <Chip variant="soft" size="sm" color={c.dueWithinYear ? "warning" : "default"}>
-                        {c.dueWithinYear ? "Due < 1 year" : "Due > 1 year"}
-                      </Chip>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                      {formatCurrency(c.amount)}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => c.id && handleDeleteCreditor(c.id)}
-                      className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400"
-                      aria-label={`Delete creditor ${c.name}`}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="grid grid-cols-12 gap-3 items-end">
-            <div className="col-span-3">
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Name</label>
-              <input
-                type="text"
-                className={inputClass}
-                placeholder="Who do you owe?"
-                value={newCreditor.name}
-                onChange={(e) => setNewCreditor({ ...newCreditor, name: e.target.value })}
-                aria-label="Creditor name"
-              />
-            </div>
-            <div className="col-span-2">
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Amount</label>
-              <input
-                type="number"
-                className={inputClass}
-                placeholder="0.00"
-                value={newCreditor.amount || ""}
-                onChange={(e) => setNewCreditor({ ...newCreditor, amount: Number(e.target.value) })}
-                aria-label="Creditor amount"
-              />
-            </div>
-            <div className="col-span-2">
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Type</label>
-              <select
-                className={selectClass}
-                value={newCreditor.type}
-                onChange={(e) => setNewCreditor({ ...newCreditor, type: e.target.value })}
-                title="Creditor type"
-                aria-label="Creditor type"
-              >
-                <option value="Trade">Trade</option>
-                <option value="Other">Other</option>
-                <option value="Accrual">Accrual</option>
-                <option value="Tax">Tax</option>
-              </select>
-            </div>
-            <div className="col-span-3">
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Due within year?</label>
-              <select
-                className={selectClass}
-                value={newCreditor.dueWithinYear ? "yes" : "no"}
-                onChange={(e) => setNewCreditor({ ...newCreditor, dueWithinYear: e.target.value === "yes" })}
-                title="Due within one year"
-                aria-label="Due within one year"
-              >
-                <option value="yes">Yes</option>
-                <option value="no">No</option>
-              </select>
-            </div>
-            <div className="col-span-2">
-              <Button
-                variant="primary"
-                size="sm"
-                onPress={handleAddCreditor}
-                isDisabled={savingSection === "creditors"}
-                className="w-full"
-              >
-                {savingSection === "creditors" ? <Spinner size="sm" /> : <><Plus className="w-4 h-4 mr-1" /> Add</>}
-              </Button>
-            </div>
-          </div>
+          <YearEndMoneyListSection
+            mode="creditors"
+            items={creditors}
+            draft={newCreditor}
+            typeOptions={["Trade", "Other", "Accrual", "Tax"]}
+            namePlaceholder="Who do you owe?"
+            saving={savingSection === "creditors"}
+            onDraftChange={setNewCreditor}
+            onAdd={handleAddCreditor}
+            onDelete={handleDeleteCreditor}
+          />
         </Section>
 
         {/* 3. Fixed Assets */}
