@@ -60,6 +60,23 @@ describe("AccountantDashboardQueue", () => {
     expect(within(triage).getByText("Unassigned reviewer")).toBeInTheDocument();
     expect(within(triage).getByText("What must I do next")).toBeInTheDocument();
     expect(within(triage).getByRole("link", { name: "Review handoff" })).toHaveAttribute("href", "/companies/8/periods/4?tab=filing");
+    const reviewerActionQueue = screen.getByRole("region", { name: "Reviewer action queue" });
+    expect(within(reviewerActionQueue).getByText("Reviewer action queue")).toBeInTheDocument();
+    expect(within(reviewerActionQueue).getByText("3 priority items")).toBeInTheDocument();
+    expect(within(reviewerActionQueue).getByText("2 missing reviewer")).toBeInTheDocument();
+    expect(within(reviewerActionQueue).getByText("First three items needing practice attention.")).toBeInTheDocument();
+    expect(within(reviewerActionQueue).getByText("Atlantic Public Limited Company")).toBeInTheDocument();
+    expect(within(reviewerActionQueue).getAllByText("Unassigned reviewer")).toHaveLength(2);
+    expect(within(reviewerActionQueue).getByText("Manual handoff")).toBeInTheDocument();
+    expect(within(reviewerActionQueue).getByText("Revenue due 20 Jun 2026")).toBeInTheDocument();
+    expect(within(reviewerActionQueue).getByText("Review handoff")).toBeInTheDocument();
+    expect(within(reviewerActionQueue).getByText("New Client Limited")).toBeInTheDocument();
+    expect(within(reviewerActionQueue).getAllByText("Assign before approval")).toHaveLength(2);
+    expect(within(reviewerActionQueue).getByText("Create period")).toBeInTheDocument();
+    expect(within(reviewerActionQueue).getByText("Connacht Visual Limited")).toBeInTheDocument();
+    expect(within(reviewerActionQueue).getByText("Niamh Reviewer")).toBeInTheDocument();
+    expect(within(reviewerActionQueue).getByText("CRO due 10 Jul 2026")).toBeInTheDocument();
+    expect(within(reviewerActionQueue).getByText("Open filing")).toBeInTheDocument();
     expect(screen.getByRole("searchbox", { name: "Filter Accountant work queue" })).toBeInTheDocument();
     expect(screen.getByText("3 of 3 rows")).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Deadline" })).toHaveAttribute("aria-sort", "ascending");
@@ -85,29 +102,30 @@ describe("AccountantDashboardQueue", () => {
     expect(reviewerCells[2]).toHaveTextContent("Niamh Reviewer");
     expect(actionCells[2]).toHaveTextContent("Open filing");
 
-    expect(screen.getByText("Connacht Visual Limited")).toBeInTheDocument();
-    expect(screen.getByText("CRO due 10 Jul 2026")).toBeInTheDocument();
+    expect(screen.getAllByText("Connacht Visual Limited").length).toBeGreaterThan(1);
+    expect(screen.getAllByText("CRO due 10 Jul 2026").length).toBeGreaterThan(1);
     expect(screen.getByText("Due soon")).toBeInTheDocument();
-    expect(screen.getByText("Niamh Reviewer")).toBeInTheDocument();
-    expect(screen.getByText("niamh.reviewer@example.ie")).toBeInTheDocument();
+    expect(screen.getAllByText("Niamh Reviewer").length).toBeGreaterThan(1);
+    expect(screen.getAllByText("niamh.reviewer@example.ie").length).toBeGreaterThan(1);
     expect(screen.getAllByText("Unassigned")).toHaveLength(2);
-    expect(screen.getByRole("link", { name: "Open filing" })).toHaveAttribute("href", "/companies/7/periods/3?tab=filing");
+    expect(screen.getAllByRole("link", { name: "Open filing" }).at(-1)).toHaveAttribute("href", "/companies/7/periods/3?tab=filing");
 
     expect(screen.getAllByText("Atlantic Public Limited Company").length).toBeGreaterThan(1);
-    expect(screen.getByText("Manual handoff")).toBeInTheDocument();
-    expect(screen.getByText("PLC/public-company workflow requires manual review")).toBeInTheDocument();
-    expect(screen.getAllByRole("link", { name: "Review handoff" })).toHaveLength(2);
-    expect(screen.getAllByRole("link", { name: "Review handoff" })[1]).toHaveAttribute("href", "/companies/8/periods/4?tab=filing");
+    expect(screen.getAllByText("Manual handoff").length).toBeGreaterThan(1);
+    expect(screen.getAllByText("PLC/public-company workflow requires manual review").length).toBeGreaterThan(1);
+    expect(screen.getAllByRole("link", { name: "Review handoff" })).toHaveLength(3);
+    expect(screen.getAllByRole("link", { name: "Review handoff" }).at(-1)).toHaveAttribute("href", "/companies/8/periods/4?tab=filing");
 
-    expect(screen.getByText("New Client Limited")).toBeInTheDocument();
-    expect(screen.getByText("No period")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Create period" })).toHaveAttribute("href", "/companies/9");
+    expect(screen.getAllByText("New Client Limited").length).toBeGreaterThan(1);
+    expect(screen.getAllByText("No period").length).toBeGreaterThan(1);
+    expect(screen.getAllByRole("link", { name: "Create period" }).at(-1)).toHaveAttribute("href", "/companies/9");
 
     expect(screen.getAllByRole("row")[1]).toHaveAttribute("data-tone", "bad");
     await user.type(screen.getByRole("searchbox", { name: "Filter Accountant work queue" }), "niamh");
     expect(screen.getByText("1 of 3 rows")).toBeInTheDocument();
-    expect(screen.getByText("Connacht Visual Limited")).toBeInTheDocument();
-    expect(within(screen.getByRole("table", { name: "Accountant work queue" })).queryByText("Atlantic Public Limited Company")).not.toBeInTheDocument();
+    const filteredTable = screen.getByRole("table", { name: "Accountant work queue" });
+    expect(within(filteredTable).getByText("Connacht Visual Limited")).toBeInTheDocument();
+    expect(within(filteredTable).queryByText("Atlantic Public Limited Company")).not.toBeInTheDocument();
   });
 });
 

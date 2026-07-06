@@ -84,6 +84,7 @@ export function AccountantDashboardQueue({
           />
           <ReleaseBlockerSummary blockers={productionReleaseBlockers} />
           <QueueTriage row={rows[0]} />
+          <ReviewerActionQueue rows={rows} missingReviewerCount={unassignedReviewerCount} />
           <DataGrid
             caption="Accountant work queue"
             filterPlaceholder="Filter companies, blockers, reviewers or actions"
@@ -142,6 +143,80 @@ export function AccountantDashboardQueue({
         </div>
       )}
     </ReviewPanel>
+  );
+}
+
+function ReviewerActionQueue({
+  rows,
+  missingReviewerCount,
+}: {
+  rows: QueueRow[];
+  missingReviewerCount: number;
+}) {
+  const priorityRows = rows.slice(0, 3);
+
+  return (
+    <section
+      aria-label="Reviewer action queue"
+      className="rounded-md border border-[var(--border)] bg-[var(--surface)]"
+    >
+      <div className="flex flex-col gap-2 border-b border-[var(--border)] px-3 py-3 md:flex-row md:items-center md:justify-between">
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-[var(--foreground)]">Reviewer action queue</h3>
+          <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">
+            First three items needing practice attention.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusBadge tone={priorityRows.length > 0 ? "info" : "good"}>
+            {formatQueueCount(priorityRows.length, "priority item", "priority items")}
+          </StatusBadge>
+          <StatusBadge tone={missingReviewerCount > 0 ? "warn" : "good"}>
+            {formatQueueCount(missingReviewerCount, "missing reviewer", "missing reviewer")}
+          </StatusBadge>
+        </div>
+      </div>
+      <div className="divide-y divide-[var(--border)]">
+        {priorityRows.map((row) => {
+          const reviewerName = row.company.assignedReviewerName?.trim();
+          const reviewerLabel = reviewerName || "Unassigned reviewer";
+          const reviewerDetail = reviewerName ? row.company.assignedReviewerEmail?.trim() : "Assign before approval";
+
+          return (
+            <div
+              key={row.company.id}
+              className="grid gap-3 px-3 py-3 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_auto] lg:items-center"
+            >
+              <div className="min-w-0">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <p className="truncate text-sm font-semibold text-[var(--foreground)]">{row.company.legalName}</p>
+                  <StatusBadge tone={row.blockerTone}>{row.blockerLabel}</StatusBadge>
+                </div>
+                <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">{row.blockerDetail}</p>
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase text-[var(--muted-foreground)]">Deadline</p>
+                <p className="mt-1 text-sm font-medium text-[var(--foreground)]">{row.deadlineLabel}</p>
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase text-[var(--muted-foreground)]">Reviewer</p>
+                <p className="mt-1 text-sm font-medium text-[var(--foreground)]">{reviewerLabel}</p>
+                {reviewerDetail && (
+                  <p className="mt-1 truncate text-xs leading-5 text-[var(--muted-foreground)]">{reviewerDetail}</p>
+                )}
+              </div>
+              <Link
+                href={row.nextActionHref}
+                className="inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] px-3 text-xs font-semibold text-[var(--foreground)] hover:border-[var(--ring)]"
+              >
+                {row.nextActionLabel}
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
