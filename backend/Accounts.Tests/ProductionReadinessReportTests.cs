@@ -1188,6 +1188,80 @@ public class ProductionReadinessReportTests
     }
 
     [Fact]
+    public async Task GoldenCorpusScenarios_ExposeLegalBasisSnapshotsForAccountantReview()
+    {
+        await using var db = CreateDbContext();
+        var report = await new ProductionReadinessReportService(db).GetReportAsync();
+
+        foreach (var scenario in report.GoldenFilingCorpus)
+        {
+            var legalBasisProperty = scenario.GetType().GetProperty("LegalBasisSnapshot");
+            Assert.NotNull(legalBasisProperty);
+            var snapshot = legalBasisProperty!.GetValue(scenario)!;
+
+            Assert.Equal(scenario.Code, StringProperty(snapshot, "ScenarioCode"));
+            Assert.Equal(scenario.Fixture.CompanyType, StringProperty(snapshot, "CompanyType"));
+            Assert.Equal(scenario.Fixture.ExpectedSizeClass, StringProperty(snapshot, "SizeClass"));
+            Assert.Equal(scenario.Fixture.ExpectedRegime, StringProperty(snapshot, "ElectedRegime"));
+            Assert.Equal(scenario.Fixture.AuditExempt, BooleanProperty(snapshot, "AuditExempt"));
+            Assert.Equal(scenario.Fixture.ManualProfessionalReviewRequired, BooleanProperty(snapshot, "ManualProfessionalReviewRequired"));
+            Assert.NotEmpty(StringListProperty(snapshot, "RequiredOutputs"));
+            Assert.NotEmpty(StringListProperty(snapshot, "ProfessionalGates"));
+            Assert.NotEmpty(StringListProperty(snapshot, "SourceIds"));
+            Assert.Equal(
+                scenario.EvidencePack.OutputArtifacts.Order(StringComparer.Ordinal),
+                StringListProperty(snapshot, "RequiredOutputs").Order(StringComparer.Ordinal));
+            Assert.Equal(
+                scenario.EvidencePack.DecisionGates.Order(StringComparer.Ordinal),
+                StringListProperty(snapshot, "ProfessionalGates").Order(StringComparer.Ordinal));
+            Assert.Equal(
+                scenario.EvidencePack.SourceReferences.Select(source => source.SourceId).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal),
+                StringListProperty(snapshot, "SourceIds").Order(StringComparer.Ordinal));
+        }
+
+        AssertGoldenLegalBasis(
+            report,
+            "micro-ltd",
+            expectedBasis: "FRS 105 micro-entities regime with CRO financial-statement and Revenue iXBRL filing evidence.",
+            expectedSourceIds:
+            [
+                IrishStatutoryRuleSources.CroFinancialStatementsRequirements.SourceId,
+                IrishStatutoryRuleSources.FrcFrs105.SourceId,
+                IrishStatutoryRuleSources.RevenueAcceptedTaxonomies.SourceId
+            ]);
+        AssertGoldenLegalBasis(
+            report,
+            "small-abridged-ltd",
+            expectedBasis: "FRS 102 small-company abridgement with Section 352 CRO filing evidence and Revenue iXBRL evidence.",
+            expectedSourceIds:
+            [
+                IrishStatutoryRuleSources.CroFinancialStatementsRequirements.SourceId,
+                IrishStatutoryRuleSources.FrcFrs102.SourceId,
+                IrishStatutoryRuleSources.RevenueAcceptedTaxonomies.SourceId
+            ]);
+        AssertGoldenLegalBasis(
+            report,
+            "clg-charity",
+            expectedBasis: "CLG charity reporting path with CRO guarantee-company, Charities Regulator annual-report and FRS 102 evidence.",
+            expectedSourceIds:
+            [
+                IrishStatutoryRuleSources.CroGuaranteeCompany.SourceId,
+                IrishStatutoryRuleSources.CharitiesRegulatorAnnualReport.SourceId,
+                IrishStatutoryRuleSources.FrcFrs102.SourceId
+            ]);
+        AssertGoldenLegalBasis(
+            report,
+            "medium-audit-required",
+            expectedBasis: "Medium-company audit-required path blocked to manual handoff until auditor report and professional review evidence are present.",
+            expectedSourceIds:
+            [
+                IrishStatutoryRuleSources.CroMediumCompany.SourceId,
+                IrishStatutoryRuleSources.CroAuditorsReport.SourceId,
+                IrishStatutoryRuleSources.FrcFrs102.SourceId
+            ]);
+    }
+
+    [Fact]
     public async Task ProductionReadinessReport_ExposesAccountantAcceptanceCriteriaForEveryGoldenScenario()
     {
         await using var db = CreateDbContext();
@@ -1927,6 +2001,23 @@ public class ProductionReadinessReportTests
         Assert.Equal(expectedTax, DecimalProperty(expectedOutputs, "ExpectedCorporationTax"));
         Assert.Equal(readinessState, StringProperty(expectedOutputs, "FilingReadinessState"));
         Assert.Equal(signOffState, StringProperty(expectedOutputs, "SignOffPacketState"));
+    }
+
+    private static void AssertGoldenLegalBasis(
+        ProductionReadinessReport report,
+        string scenarioCode,
+        string expectedBasis,
+        IReadOnlyList<string> expectedSourceIds)
+    {
+        var scenario = Assert.Single(report.GoldenFilingCorpus, s => s.Code == scenarioCode);
+        var legalBasisProperty = scenario.GetType().GetProperty("LegalBasisSnapshot");
+        Assert.NotNull(legalBasisProperty);
+        var snapshot = legalBasisProperty!.GetValue(scenario)!;
+
+        Assert.Equal(expectedBasis, StringProperty(snapshot, "LegalBasis"));
+        Assert.Contains(StringListProperty(snapshot, "SourceIds"), sourceId => expectedSourceIds.Contains(sourceId));
+        Assert.All(expectedSourceIds, sourceId =>
+            Assert.Contains(sourceId, StringListProperty(snapshot, "SourceIds")));
     }
 
     private static void AssertCompletionTrack(

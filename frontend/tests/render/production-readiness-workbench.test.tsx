@@ -573,6 +573,18 @@ function sampleReport(): ProductionReadinessReport {
             },
           ],
         },
+        legalBasisSnapshot: {
+          scenarioCode: "micro-ltd",
+          companyType: "Private",
+          sizeClass: "Micro",
+          electedRegime: "Micro",
+          auditExempt: true,
+          manualProfessionalReviewRequired: false,
+          legalBasis: "FRS 105 micro-entities regime with CRO financial-statement and Revenue iXBRL filing evidence.",
+          requiredOutputs: ["accounts PDF text", "CRO filing pack", "iXBRL XML", "accountant sign-off packet"],
+          professionalGates: ["named qualified-accountant review", "director and secretary certification", "accountant sign-off packet state"],
+          sourceIds: ["frc-frs-105"],
+        },
       },
       goldenScenario({
         code: "small-abridged-ltd",
@@ -1299,6 +1311,13 @@ function goldenScenario({
   sourceUrl: string;
   manualProfessionalReviewRequired?: boolean;
 }): ProductionReadinessReport["goldenFilingCorpus"][number] {
+  const outputArtifacts = expectedOutcome === "manual-handoff"
+    ? ["full accounts PDF text", "auditor handoff record"]
+    : ["accounts PDF text", "iXBRL XML"];
+  const decisionGates = manualProfessionalReviewRequired
+    ? ["signed auditor report", "manual handoff acceptance"]
+    : ["named qualified-accountant review"];
+
   return {
     code,
     label,
@@ -1328,8 +1347,8 @@ function goldenScenario({
     ],
     assertions: ["PDF text", "iXBRL parse", proofArea],
     evidencePack: {
-      outputArtifacts: expectedOutcome === "manual-handoff" ? ["full accounts PDF text", "auditor handoff record"] : ["accounts PDF text", "iXBRL XML"],
-      decisionGates: manualProfessionalReviewRequired ? ["signed auditor report", "manual handoff acceptance"] : ["named qualified-accountant review"],
+      outputArtifacts,
+      decisionGates,
       expectedValueChecks: [proofArea, "well-formed iXBRL"],
       expectedOutputs: {
         pdfTextMarkers: [legalName],
@@ -1358,6 +1377,18 @@ function goldenScenario({
           url: sourceUrl,
         },
       ],
+    },
+    legalBasisSnapshot: {
+      scenarioCode: code,
+      companyType,
+      sizeClass: expectedSizeClass ?? expectedRegime,
+      electedRegime: expectedRegime,
+      auditExempt: !manualProfessionalReviewRequired,
+      manualProfessionalReviewRequired,
+      legalBasis: `${label} source-backed statutory filing basis.`,
+      requiredOutputs: outputArtifacts,
+      professionalGates: decisionGates,
+      sourceIds: [sourceId],
     },
   };
 }

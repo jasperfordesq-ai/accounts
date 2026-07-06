@@ -53,6 +53,18 @@ public sealed record GoldenFilingCorpusVerifier(
     string Environment,
     string EvidenceLevel);
 
+public sealed record GoldenFilingCorpusLegalBasisSnapshot(
+    string ScenarioCode,
+    string CompanyType,
+    string SizeClass,
+    string ElectedRegime,
+    bool AuditExempt,
+    bool ManualProfessionalReviewRequired,
+    string LegalBasis,
+    IReadOnlyList<string> RequiredOutputs,
+    IReadOnlyList<string> ProfessionalGates,
+    IReadOnlyList<string> SourceIds);
+
 public sealed record GoldenFilingCorpusScenario(
     string Code,
     string Label,
@@ -63,7 +75,8 @@ public sealed record GoldenFilingCorpusScenario(
     IReadOnlyList<string> EvidenceTestNames,
     IReadOnlyList<GoldenFilingCorpusVerifier> EvidenceVerifiers,
     IReadOnlyList<string> Assertions,
-    GoldenFilingCorpusEvidencePack EvidencePack);
+    GoldenFilingCorpusEvidencePack EvidencePack,
+    GoldenFilingCorpusLegalBasisSnapshot LegalBasisSnapshot);
 
 public sealed record GoldenEvidenceLedgerEntry(
     string ScenarioCode,
@@ -1006,6 +1019,36 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     IrishStatutoryRuleSources.FrcFrs105,
                     IrishStatutoryRuleSources.RevenueIxbrlOverview,
                     IrishStatutoryRuleSources.RevenueAcceptedTaxonomies
+                ]),
+            LegalBasis(
+                "micro-ltd",
+                "Private",
+                "Micro",
+                "Micro",
+                auditExempt: true,
+                manualProfessionalReviewRequired: false,
+                "FRS 105 micro-entities regime with CRO financial-statement and Revenue iXBRL filing evidence.",
+                [
+                    "accounts PDF text",
+                    "CRO filing pack",
+                    "CRO signature page",
+                    "iXBRL XML",
+                    "tax computation",
+                    "notes disclosure set",
+                    "filing readiness profile",
+                    "accountant sign-off packet"
+                ],
+                [
+                    "named qualified-accountant review",
+                    "director and secretary certification",
+                    "external ROS/iXBRL validation",
+                    "accountant sign-off packet state"
+                ],
+                [
+                    IrishStatutoryRuleSources.CroFinancialStatementsRequirements.SourceId,
+                    IrishStatutoryRuleSources.FrcFrs105.SourceId,
+                    IrishStatutoryRuleSources.RevenueIxbrlOverview.SourceId,
+                    IrishStatutoryRuleSources.RevenueAcceptedTaxonomies.SourceId
                 ])),
         new(
             "small-abridged-ltd",
@@ -1101,6 +1144,37 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     IrishStatutoryRuleSources.FrcFrs102,
                     IrishStatutoryRuleSources.RevenueIxbrlContents,
                     IrishStatutoryRuleSources.RevenueAcceptedTaxonomies
+                ]),
+            LegalBasis(
+                "small-abridged-ltd",
+                "Private",
+                "Small",
+                "SmallAbridged",
+                auditExempt: true,
+                manualProfessionalReviewRequired: false,
+                "FRS 102 small-company abridgement with Section 352 CRO filing evidence and Revenue iXBRL evidence.",
+                [
+                    "full accounts PDF text",
+                    "abridged CRO filing pack",
+                    "CRO signature page",
+                    "iXBRL XML",
+                    "tax computation",
+                    "notes disclosure set",
+                    "filing readiness profile",
+                    "accountant sign-off packet"
+                ],
+                [
+                    "abridgement eligibility",
+                    "director and secretary certification",
+                    "named qualified-accountant review",
+                    "external ROS/iXBRL validation",
+                    "accountant sign-off packet state"
+                ],
+                [
+                    IrishStatutoryRuleSources.CroFinancialStatementsRequirements.SourceId,
+                    IrishStatutoryRuleSources.FrcFrs102.SourceId,
+                    IrishStatutoryRuleSources.RevenueIxbrlContents.SourceId,
+                    IrishStatutoryRuleSources.RevenueAcceptedTaxonomies.SourceId
                 ])),
         new(
             "dac-small",
@@ -1187,6 +1261,37 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     IrishStatutoryRuleSources.FrcFrs102,
                     IrishStatutoryRuleSources.RevenueIxbrlOverview,
                     IrishStatutoryRuleSources.RevenueAcceptedTaxonomies
+                ]),
+            LegalBasis(
+                "dac-small",
+                "DesignatedActivityCompany",
+                "Small",
+                "Small",
+                auditExempt: true,
+                manualProfessionalReviewRequired: false,
+                "FRS 102 small-company DAC path with directors' report, CRO certification and Revenue iXBRL evidence.",
+                [
+                    "DAC accounts PDF text",
+                    "directors' report evidence",
+                    "CRO signature page",
+                    "iXBRL XML",
+                    "tax computation",
+                    "notes disclosure set",
+                    "filing readiness profile",
+                    "accountant sign-off packet"
+                ],
+                [
+                    "DAC company type",
+                    "director and secretary certification",
+                    "named qualified-accountant review",
+                    "external ROS/iXBRL validation",
+                    "accountant sign-off packet state"
+                ],
+                [
+                    IrishStatutoryRuleSources.CroFinancialStatementsRequirements.SourceId,
+                    IrishStatutoryRuleSources.FrcFrs102.SourceId,
+                    IrishStatutoryRuleSources.RevenueIxbrlOverview.SourceId,
+                    IrishStatutoryRuleSources.RevenueAcceptedTaxonomies.SourceId
                 ])),
         new(
             "clg-charity",
@@ -1273,6 +1378,36 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     IrishStatutoryRuleSources.CharitiesRegulatorAnnualReport,
                     IrishStatutoryRuleSources.FrcFrs102,
                     IrishStatutoryRuleSources.RevenueIxbrlOverview
+                ]),
+            LegalBasis(
+                "clg-charity",
+                "CompanyLimitedByGuarantee",
+                "Small",
+                "Small",
+                auditExempt: true,
+                manualProfessionalReviewRequired: false,
+                "CLG charity reporting path with CRO guarantee-company, Charities Regulator annual-report and FRS 102 evidence.",
+                [
+                    "CLG accounts PDF text",
+                    "charity readiness profile",
+                    "SoFA evidence",
+                    "trustees annual report evidence",
+                    "iXBRL XML",
+                    "tax computation",
+                    "notes disclosure set",
+                    "accountant sign-off packet"
+                ],
+                [
+                    "charity number",
+                    "charity annual return review",
+                    "named qualified-accountant review",
+                    "accountant sign-off packet state"
+                ],
+                [
+                    IrishStatutoryRuleSources.CroGuaranteeCompany.SourceId,
+                    IrishStatutoryRuleSources.CharitiesRegulatorAnnualReport.SourceId,
+                    IrishStatutoryRuleSources.FrcFrs102.SourceId,
+                    IrishStatutoryRuleSources.RevenueIxbrlOverview.SourceId
                 ])),
         new(
             "medium-audit-required",
@@ -1365,8 +1500,61 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     IrishStatutoryRuleSources.CroAuditorsReport,
                     IrishStatutoryRuleSources.FrcFrs102,
                     IrishStatutoryRuleSources.RevenueIxbrlOverview
+                ]),
+            LegalBasis(
+                "medium-audit-required",
+                "Private",
+                "Medium",
+                "Medium",
+                auditExempt: false,
+                manualProfessionalReviewRequired: true,
+                "Medium-company audit-required path blocked to manual handoff until auditor report and professional review evidence are present.",
+                [
+                    "full accounts PDF text",
+                    "auditor report evidence",
+                    "cash flow statement",
+                    "statement of changes in equity",
+                    "iXBRL XML",
+                    "filing readiness profile",
+                    "tax computation",
+                    "accountant sign-off packet"
+                ],
+                [
+                    "auditor handoff",
+                    "manual professional review",
+                    "normal CRO approval blocked until auditor evidence",
+                    "accountant sign-off packet state"
+                ],
+                [
+                    IrishStatutoryRuleSources.CroMediumCompany.SourceId,
+                    IrishStatutoryRuleSources.CroAuditorsReport.SourceId,
+                    IrishStatutoryRuleSources.FrcFrs102.SourceId,
+                    IrishStatutoryRuleSources.RevenueIxbrlOverview.SourceId
                 ]))
     ];
+
+    private static GoldenFilingCorpusLegalBasisSnapshot LegalBasis(
+        string scenarioCode,
+        string companyType,
+        string sizeClass,
+        string electedRegime,
+        bool auditExempt,
+        bool manualProfessionalReviewRequired,
+        string legalBasis,
+        IReadOnlyList<string> requiredOutputs,
+        IReadOnlyList<string> professionalGates,
+        IReadOnlyList<string> sourceIds) =>
+        new(
+            scenarioCode,
+            companyType,
+            sizeClass,
+            electedRegime,
+            auditExempt,
+            manualProfessionalReviewRequired,
+            legalBasis,
+            requiredOutputs,
+            professionalGates,
+            sourceIds.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray());
 
     private static IReadOnlyList<StatutoryRuleMatrixEntry> BuildStatutoryRuleMatrix() =>
     [

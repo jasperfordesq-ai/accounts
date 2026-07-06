@@ -291,6 +291,18 @@ function sampleReport(): ProductionReadinessReport {
             },
           ],
         },
+        legalBasisSnapshot: {
+          scenarioCode: "micro-ltd",
+          companyType: "Private",
+          sizeClass: "Micro",
+          electedRegime: "Micro",
+          auditExempt: true,
+          manualProfessionalReviewRequired: false,
+          legalBasis: "FRS 105 micro-entities regime with CRO financial-statement and Revenue iXBRL filing evidence.",
+          requiredOutputs: ["accounts PDF text", "iXBRL XML"],
+          professionalGates: ["named qualified-accountant review"],
+          sourceIds: ["frc-frs-105"],
+        },
       },
       goldenScenario({
         code: "small-abridged-ltd",
@@ -381,6 +393,18 @@ function sampleReport(): ProductionReadinessReport {
               url: "https://www.charitiesregulator.ie/",
             },
           ],
+        },
+        legalBasisSnapshot: {
+          scenarioCode: "clg-charity",
+          companyType: "CompanyLimitedByGuarantee",
+          sizeClass: "Small",
+          electedRegime: "Small",
+          auditExempt: true,
+          manualProfessionalReviewRequired: false,
+          legalBasis: "CLG charity reporting path with CRO guarantee-company, Charities Regulator annual-report and FRS 102 evidence.",
+          requiredOutputs: ["CLG accounts PDF text", "charity readiness profile"],
+          professionalGates: ["charity number", "charity annual return review"],
+          sourceIds: ["charities-regulator-annual-report"],
         },
       },
       goldenScenario({
@@ -779,6 +803,13 @@ function goldenScenario({
   sourceUrl: string;
   manualProfessionalReviewRequired?: boolean;
 }): ProductionReadinessReport["goldenFilingCorpus"][number] {
+  const outputArtifacts = expectedOutcome === "manual-handoff"
+    ? ["full accounts PDF text", "auditor handoff record"]
+    : ["accounts PDF text", "iXBRL XML"];
+  const decisionGates = manualProfessionalReviewRequired
+    ? ["signed auditor report", "manual handoff acceptance"]
+    : ["named qualified-accountant review"];
+
   return {
     code,
     label,
@@ -808,8 +839,8 @@ function goldenScenario({
     ],
     assertions: ["PDF text", "iXBRL parse", proofArea],
     evidencePack: {
-      outputArtifacts: expectedOutcome === "manual-handoff" ? ["full accounts PDF text", "auditor handoff record"] : ["accounts PDF text", "iXBRL XML"],
-      decisionGates: manualProfessionalReviewRequired ? ["signed auditor report", "manual handoff acceptance"] : ["named qualified-accountant review"],
+      outputArtifacts,
+      decisionGates,
       expectedValueChecks: [proofArea, "well-formed iXBRL"],
       expectedOutputs: {
         pdfTextMarkers: [legalName],
@@ -838,6 +869,18 @@ function goldenScenario({
           url: sourceUrl,
         },
       ],
+    },
+    legalBasisSnapshot: {
+      scenarioCode: code,
+      companyType,
+      sizeClass: expectedSizeClass ?? expectedRegime,
+      electedRegime: expectedRegime,
+      auditExempt: !manualProfessionalReviewRequired,
+      manualProfessionalReviewRequired,
+      legalBasis: `${label} source-backed statutory filing basis.`,
+      requiredOutputs: outputArtifacts,
+      professionalGates: decisionGates,
+      sourceIds: [sourceId],
     },
   };
 }

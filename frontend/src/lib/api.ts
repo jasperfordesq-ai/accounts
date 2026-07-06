@@ -1631,6 +1631,19 @@ export interface GoldenFilingCorpusVerifier {
   evidenceLevel: string;
 }
 
+export interface GoldenFilingCorpusLegalBasisSnapshot {
+  scenarioCode: string;
+  companyType: string;
+  sizeClass: string;
+  electedRegime: string;
+  auditExempt: boolean;
+  manualProfessionalReviewRequired: boolean;
+  legalBasis: string;
+  requiredOutputs: string[];
+  professionalGates: string[];
+  sourceIds: string[];
+}
+
 export interface GoldenFilingCorpusScenario {
   code: string;
   label: string;
@@ -1642,6 +1655,7 @@ export interface GoldenFilingCorpusScenario {
   evidenceVerifiers: GoldenFilingCorpusVerifier[];
   assertions: string[];
   evidencePack: GoldenFilingCorpusEvidencePack;
+  legalBasisSnapshot: GoldenFilingCorpusLegalBasisSnapshot;
 }
 
 export interface GoldenEvidenceLedgerEntry {
@@ -2123,6 +2137,19 @@ const goldenFilingCorpusVerifierSchema = z.object({
   evidenceLevel: z.string().min(1),
 });
 
+const goldenFilingCorpusLegalBasisSnapshotSchema = z.object({
+  scenarioCode: z.string().min(1),
+  companyType: z.string().min(1),
+  sizeClass: z.string().min(1),
+  electedRegime: z.string().min(1),
+  auditExempt: z.boolean(),
+  manualProfessionalReviewRequired: z.boolean(),
+  legalBasis: z.string().min(1),
+  requiredOutputs: z.array(z.string().min(1)),
+  professionalGates: z.array(z.string().min(1)),
+  sourceIds: z.array(z.string().min(1)),
+});
+
 const goldenFilingCorpusScenarioSchema = z.object({
   code: z.string().min(1),
   label: z.string().min(1),
@@ -2134,6 +2161,7 @@ const goldenFilingCorpusScenarioSchema = z.object({
   evidenceVerifiers: z.array(goldenFilingCorpusVerifierSchema),
   assertions: z.array(z.string().min(1)),
   evidencePack: goldenFilingCorpusEvidencePackSchema,
+  legalBasisSnapshot: goldenFilingCorpusLegalBasisSnapshotSchema,
 });
 
 const goldenEvidenceLedgerEntrySchema = z.object({
@@ -2752,6 +2780,69 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
   report.goldenFilingCorpus.forEach((scenario, scenarioIndex) => {
     const evidenceTests = new Set(scenario.evidenceTestNames);
     const verifierNames = new Set(scenario.evidenceVerifiers.map((verifier) => verifier.name));
+    const legalBasis = scenario.legalBasisSnapshot;
+
+    if (legalBasis.scenarioCode !== scenario.code) {
+      throw new Error(
+        `Invalid production readiness report contract: goldenFilingCorpus.${scenarioIndex}.legalBasisSnapshot.scenarioCode - must match scenario code`,
+      );
+    }
+
+    if (legalBasis.companyType !== scenario.fixture.companyType) {
+      throw new Error(
+        `Invalid production readiness report contract: goldenFilingCorpus.${scenarioIndex}.legalBasisSnapshot.companyType - must match fixture company type`,
+      );
+    }
+
+    if (legalBasis.sizeClass !== scenario.fixture.expectedSizeClass) {
+      throw new Error(
+        `Invalid production readiness report contract: goldenFilingCorpus.${scenarioIndex}.legalBasisSnapshot.sizeClass - must match fixture size class`,
+      );
+    }
+
+    if (legalBasis.electedRegime !== scenario.fixture.expectedRegime) {
+      throw new Error(
+        `Invalid production readiness report contract: goldenFilingCorpus.${scenarioIndex}.legalBasisSnapshot.electedRegime - must match fixture regime`,
+      );
+    }
+
+    if (legalBasis.auditExempt !== scenario.fixture.auditExempt) {
+      throw new Error(
+        `Invalid production readiness report contract: goldenFilingCorpus.${scenarioIndex}.legalBasisSnapshot.auditExempt - must match fixture audit exemption`,
+      );
+    }
+
+    if (legalBasis.manualProfessionalReviewRequired !== scenario.fixture.manualProfessionalReviewRequired) {
+      throw new Error(
+        `Invalid production readiness report contract: goldenFilingCorpus.${scenarioIndex}.legalBasisSnapshot.manualProfessionalReviewRequired - must match fixture manual review gate`,
+      );
+    }
+
+    const requiredOutputs = new Set(legalBasis.requiredOutputs);
+    const missingOutputs = scenario.evidencePack.outputArtifacts.filter((artifact) => !requiredOutputs.has(artifact));
+    if (missingOutputs.length > 0) {
+      throw new Error(
+        `Invalid production readiness report contract: goldenFilingCorpus.${scenarioIndex}.legalBasisSnapshot.requiredOutputs - missing evidence-pack outputs: ${missingOutputs.join(", ")}`,
+      );
+    }
+
+    const professionalGates = new Set(legalBasis.professionalGates);
+    const missingGates = scenario.evidencePack.decisionGates.filter((gate) => !professionalGates.has(gate));
+    if (missingGates.length > 0) {
+      throw new Error(
+        `Invalid production readiness report contract: goldenFilingCorpus.${scenarioIndex}.legalBasisSnapshot.professionalGates - missing evidence-pack gates: ${missingGates.join(", ")}`,
+      );
+    }
+
+    const legalSourceIds = new Set(legalBasis.sourceIds);
+    const missingSourceIds = scenario.evidencePack.sourceReferences
+      .map((sourceReference) => sourceReference.sourceId)
+      .filter((sourceId) => !legalSourceIds.has(sourceId));
+    if (missingSourceIds.length > 0) {
+      throw new Error(
+        `Invalid production readiness report contract: goldenFilingCorpus.${scenarioIndex}.legalBasisSnapshot.sourceIds - missing evidence-pack source IDs: ${missingSourceIds.join(", ")}`,
+      );
+    }
 
     scenario.evidenceTestNames.forEach((testName) => {
       if (!verifierNames.has(testName)) {

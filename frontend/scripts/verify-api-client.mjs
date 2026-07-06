@@ -104,7 +104,7 @@ const share = {
 };
 
 function productionReadinessReportFixture() {
-  return {
+  return withGoldenLegalBasisSnapshots({
     generatedAt: "2026-07-04T12:00:00Z",
     overallStatus: "review-required",
     companiesInDatabase: 1,
@@ -1306,6 +1306,89 @@ function productionReadinessReportFixture() {
         layoutChecks,
       })),
     },
+  });
+}
+
+function withGoldenLegalBasisSnapshots(report) {
+  return {
+    ...report,
+    goldenFilingCorpus: report.goldenFilingCorpus.map((scenario) => ({
+      ...scenario,
+      legalBasisSnapshot: goldenLegalBasisSnapshot(scenario),
+    })),
+  };
+}
+
+function goldenLegalBasisSnapshot(scenario) {
+  const basisByCode = {
+    "micro-ltd": {
+      legalBasis: "FRS 105 micro-entities regime with CRO financial-statement and Revenue iXBRL filing evidence.",
+      sourceIds: [
+        "cro-financial-statements-requirements",
+        "frc-frs-105",
+        "revenue-ixbrl-overview",
+        "revenue-accepted-taxonomies",
+      ],
+    },
+    "small-abridged-ltd": {
+      legalBasis: "FRS 102 small-company abridgement with Section 352 CRO filing evidence and Revenue iXBRL evidence.",
+      sourceIds: [
+        "cro-financial-statements-requirements",
+        "frc-frs-102",
+        "revenue-ixbrl-contents",
+        "revenue-accepted-taxonomies",
+      ],
+    },
+    "dac-small": {
+      legalBasis: "FRS 102 small-company DAC path with directors' report, CRO certification and Revenue iXBRL evidence.",
+      sourceIds: [
+        "cro-financial-statements-requirements",
+        "frc-frs-102",
+        "revenue-ixbrl-overview",
+        "revenue-accepted-taxonomies",
+      ],
+    },
+    "clg-charity": {
+      legalBasis: "CLG charity reporting path with CRO guarantee-company, Charities Regulator annual-report and FRS 102 evidence.",
+      sourceIds: [
+        "cro-guarantee-company",
+        "charities-regulator-annual-report",
+        "frc-frs-102",
+        "revenue-ixbrl-overview",
+      ],
+    },
+    "medium-audit-required": {
+      legalBasis: "Medium-company audit-required path blocked to manual handoff until auditor report and professional review evidence are present.",
+      sourceIds: [
+        "cro-medium-company",
+        "cro-auditors-report",
+        "frc-frs-102",
+        "revenue-ixbrl-overview",
+      ],
+    },
+  };
+  const basis = basisByCode[scenario.code] ?? {
+    legalBasis: `${scenario.label} source-backed statutory filing basis.`,
+    sourceIds: scenario.evidencePack.sourceReferences.map((sourceReference) => sourceReference.sourceId),
+  };
+  const sourceIds = Array.from(
+    new Set([
+      ...basis.sourceIds,
+      ...scenario.evidencePack.sourceReferences.map((sourceReference) => sourceReference.sourceId),
+    ]),
+  ).sort();
+
+  return {
+    scenarioCode: scenario.code,
+    companyType: scenario.fixture.companyType,
+    sizeClass: scenario.fixture.expectedSizeClass,
+    electedRegime: scenario.fixture.expectedRegime,
+    auditExempt: scenario.fixture.auditExempt,
+    manualProfessionalReviewRequired: scenario.fixture.manualProfessionalReviewRequired,
+    legalBasis: basis.legalBasis,
+    requiredOutputs: scenario.evidencePack.outputArtifacts,
+    professionalGates: scenario.evidencePack.decisionGates,
+    sourceIds,
   };
 }
 

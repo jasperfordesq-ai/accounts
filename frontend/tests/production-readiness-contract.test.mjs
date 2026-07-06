@@ -34,6 +34,12 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.equal(parsed.goldenFilingCorpus[0].evidencePack.expectedProofPoints[0].area, "pdf-text");
   assert.equal(parsed.goldenFilingCorpus[0].evidencePack.expectedProofPoints[0].required, true);
   assert.equal(parsed.goldenFilingCorpus[0].evidencePack.sourceReferences[0].sourceId, "frc-frs-105");
+  assert.equal(parsed.goldenFilingCorpus[0].legalBasisSnapshot.scenarioCode, "micro-ltd");
+  assert.equal(parsed.goldenFilingCorpus[0].legalBasisSnapshot.companyType, "Private");
+  assert.equal(parsed.goldenFilingCorpus[0].legalBasisSnapshot.electedRegime, "Micro");
+  assert.equal(parsed.goldenFilingCorpus[0].legalBasisSnapshot.auditExempt, true);
+  assert.match(parsed.goldenFilingCorpus[0].legalBasisSnapshot.legalBasis, /FRS 105 micro-entities/);
+  assert.ok(parsed.goldenFilingCorpus[0].legalBasisSnapshot.sourceIds.includes("revenue-accepted-taxonomies"));
   assert.equal(parsed.goldenEvidenceLedger[0].scenarioCode, "micro-ltd");
   assert.equal(parsed.goldenEvidenceLedger[0].fixtureLegalName, "Example Micro Limited");
   assert.equal(parsed.goldenEvidenceLedger[0].expectedCorporationTax, 62.5);
@@ -258,6 +264,16 @@ test("parseProductionReadinessReport rejects missing golden corpus evidence pack
   assert.throws(
     () => parseProductionReadinessReport(payload),
     /Invalid production readiness report contract: goldenFilingCorpus\.0\.evidencePack/,
+  );
+});
+
+test("parseProductionReadinessReport rejects golden legal basis source drift", () => {
+  const payload = sampleReport();
+  payload.goldenFilingCorpus[0].legalBasisSnapshot.sourceIds = [];
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: goldenFilingCorpus\.0\.legalBasisSnapshot\.sourceIds - missing evidence-pack source IDs: frc-frs-105/,
   );
 });
 
@@ -683,7 +699,7 @@ test("parseProductionReadinessReport rejects release verification manifest that 
 });
 
 function sampleReport() {
-  return {
+  return withGoldenLegalBasisSnapshots({
     generatedAt: "2026-07-04T12:00:00Z",
     overallStatus: "review-required",
     companiesInDatabase: 1,
@@ -2119,6 +2135,89 @@ function sampleReport() {
         layoutChecks,
       })),
     },
+  });
+}
+
+function withGoldenLegalBasisSnapshots(report) {
+  return {
+    ...report,
+    goldenFilingCorpus: report.goldenFilingCorpus.map((scenario) => ({
+      ...scenario,
+      legalBasisSnapshot: goldenLegalBasisSnapshot(scenario),
+    })),
+  };
+}
+
+function goldenLegalBasisSnapshot(scenario) {
+  const basisByCode = {
+    "micro-ltd": {
+      legalBasis: "FRS 105 micro-entities regime with CRO financial-statement and Revenue iXBRL filing evidence.",
+      sourceIds: [
+        "cro-financial-statements-requirements",
+        "frc-frs-105",
+        "revenue-ixbrl-overview",
+        "revenue-accepted-taxonomies",
+      ],
+    },
+    "small-abridged-ltd": {
+      legalBasis: "FRS 102 small-company abridgement with Section 352 CRO filing evidence and Revenue iXBRL evidence.",
+      sourceIds: [
+        "cro-financial-statements-requirements",
+        "frc-frs-102",
+        "revenue-ixbrl-contents",
+        "revenue-accepted-taxonomies",
+      ],
+    },
+    "dac-small": {
+      legalBasis: "FRS 102 small-company DAC path with directors' report, CRO certification and Revenue iXBRL evidence.",
+      sourceIds: [
+        "cro-financial-statements-requirements",
+        "frc-frs-102",
+        "revenue-ixbrl-overview",
+        "revenue-accepted-taxonomies",
+      ],
+    },
+    "clg-charity": {
+      legalBasis: "CLG charity reporting path with CRO guarantee-company, Charities Regulator annual-report and FRS 102 evidence.",
+      sourceIds: [
+        "cro-guarantee-company",
+        "charities-regulator-annual-report",
+        "frc-frs-102",
+        "revenue-ixbrl-overview",
+      ],
+    },
+    "medium-audit-required": {
+      legalBasis: "Medium-company audit-required path blocked to manual handoff until auditor report and professional review evidence are present.",
+      sourceIds: [
+        "cro-medium-company",
+        "cro-auditors-report",
+        "frc-frs-102",
+        "revenue-ixbrl-overview",
+      ],
+    },
+  };
+  const basis = basisByCode[scenario.code] ?? {
+    legalBasis: `${scenario.label} source-backed statutory filing basis.`,
+    sourceIds: scenario.evidencePack.sourceReferences.map((sourceReference) => sourceReference.sourceId),
+  };
+  const sourceIds = Array.from(
+    new Set([
+      ...basis.sourceIds,
+      ...scenario.evidencePack.sourceReferences.map((sourceReference) => sourceReference.sourceId),
+    ]),
+  ).sort();
+
+  return {
+    scenarioCode: scenario.code,
+    companyType: scenario.fixture.companyType,
+    sizeClass: scenario.fixture.expectedSizeClass,
+    electedRegime: scenario.fixture.expectedRegime,
+    auditExempt: scenario.fixture.auditExempt,
+    manualProfessionalReviewRequired: scenario.fixture.manualProfessionalReviewRequired,
+    legalBasis: basis.legalBasis,
+    requiredOutputs: scenario.evidencePack.outputArtifacts,
+    professionalGates: scenario.evidencePack.decisionGates,
+    sourceIds,
   };
 }
 
