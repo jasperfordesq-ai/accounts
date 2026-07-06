@@ -8,6 +8,9 @@ describe("CompanyWorkspaceOverview", () => {
     render(<CompanyWorkspaceOverview company={sampleCompany()} />);
 
     expect(screen.getByText("Company command centre")).toBeInTheDocument();
+    const commandCentre = screen.getByRole("heading", { name: "Company command centre" }).closest("section");
+    expect(commandCentre).not.toBeNull();
+    expect(commandCentre!.querySelector("[data-workbench-decision-summary='true']")).toBeInTheDocument();
     expect(screen.getByText("What is wrong?")).toBeInTheDocument();
     expect(screen.getAllByText("Manual professional review required")).toHaveLength(2);
     expect(screen.getAllByText("Regulated or Fifth Schedule excluded entity requires manual review.")).toHaveLength(2);

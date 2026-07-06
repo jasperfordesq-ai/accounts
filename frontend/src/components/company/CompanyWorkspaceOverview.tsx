@@ -1,8 +1,6 @@
-import { ArrowRight } from "lucide-react";
-import Link from "next/link";
 import type { AccountingPeriod, Company } from "@/lib/api";
 import { formatPeriodRange } from "@/lib/format";
-import { IssueDigest, MetricStrip, ReviewPanel, StatusBadge } from "@/components/workbench";
+import { IssueDigest, MetricStrip, ReviewPanel, StatusBadge, WorkflowDecisionSummary } from "@/components/workbench";
 import { AccountantWorkflowRail } from "@/components/workbench/AccountantWorkflowRail";
 
 export function CompanyWorkspaceOverview({ company }: { company: Company }) {
@@ -25,42 +23,29 @@ export function CompanyWorkspaceOverview({ company }: { company: Company }) {
         description="Company-level support path, setup readiness and next accountant action before entering a period workspace."
         actions={<StatusBadge tone={supportTone}>{manualReason ? "Manual professional review required" : "Core workflow"}</StatusBadge>}
       >
-        <div className="grid overflow-hidden rounded-md border border-[var(--border)] bg-[var(--surface)] md:grid-cols-3 md:divide-x md:divide-y-0 divide-y divide-[var(--border)]">
-          <div className="min-w-0 p-4">
-            <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">What is wrong?</p>
-            <p className="mt-2 text-sm font-semibold text-[var(--foreground)]">
-              {manualReason ? "Manual professional review required" : missingItems.length > 0 ? `${missingItems.length} setup gaps` : "No company-level blockers"}
-            </p>
-            <p className={`mt-3 text-sm leading-6 ${manualReason ? "text-red-800 dark:text-red-100" : missingItems.length > 0 ? "text-amber-800 dark:text-amber-100" : "text-emerald-800 dark:text-emerald-100"}`}>
-              {manualReason ?? missingItems[0] ?? "Company setup is ready for period-level review."}
-            </p>
-          </div>
-
-          <div className="min-w-0 p-4">
-            <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">What is ready?</p>
-            <p className="mt-2 text-sm font-semibold text-[var(--foreground)]">
-              {readyItems.length} setup {readyItems.length === 1 ? "area" : "areas"} ready
-            </p>
-            <p className="mt-3 text-sm leading-6 text-[var(--muted-foreground)]">
-              {readyItems.length > 0 ? readyItems.join(", ") : "No setup areas are complete yet"}
-            </p>
-          </div>
-
-          <div className="min-w-0 p-4">
-            <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">What must I do next?</p>
-            <p className="mt-2 text-sm font-semibold text-[var(--foreground)]">{nextAction.label}</p>
-            <p className="mt-3 text-sm leading-6 text-[var(--muted-foreground)]">{nextAction.detail}</p>
-            {nextAction.href && (
-              <Link
-                href={nextAction.href}
-                className="mt-4 inline-flex min-h-8 items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] px-3 text-xs font-semibold text-[var(--foreground)] hover:border-[var(--ring)]"
-              >
-                {nextAction.label}
-                <ArrowRight className="h-3.5 w-3.5" />
-              </Link>
-            )}
-          </div>
-        </div>
+        <WorkflowDecisionSummary
+          items={[
+            {
+              title: "What is wrong?",
+              tone: supportTone,
+              summary: manualReason ? "Manual professional review required" : missingItems.length > 0 ? `${missingItems.length} setup gaps` : "No company-level blockers",
+              detail: manualReason ?? missingItems[0] ?? "Company setup is ready for period-level review.",
+            },
+            {
+              title: "What is ready?",
+              tone: readyItems.length > 0 ? "good" : "warn",
+              summary: `${readyItems.length} setup ${readyItems.length === 1 ? "area" : "areas"} ready`,
+              detail: readyItems.length > 0 ? readyItems.join(", ") : "No setup areas are complete yet",
+            },
+            {
+              title: "What must I do next?",
+              tone: nextAction.code === "open-latest-period" ? "info" : "warn",
+              summary: nextAction.label,
+              detail: nextAction.detail,
+              action: nextAction.href ? { href: nextAction.href, label: nextAction.label } : undefined,
+            },
+          ]}
+        />
       </ReviewPanel>
 
       <MetricStrip
