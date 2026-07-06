@@ -10,13 +10,17 @@ describe("ProductionReadinessPanel", () => {
     expect(screen.getByText("Production Readiness")).toBeInTheDocument();
     expect(screen.getAllByText("Review required")).toHaveLength(2);
     expect(screen.getAllByText("Micro LTD")).toHaveLength(2);
+    expect(screen.getByText("5/5")).toBeInTheDocument();
+    expect(screen.getAllByText("Small abridged LTD")).toHaveLength(2);
+    expect(screen.getAllByText("DAC small")).toHaveLength(2);
     expect(screen.getAllByText("CLG charity")).toHaveLength(2);
+    expect(screen.getAllByText("Medium audit-required")).toHaveLength(2);
     expect(screen.getAllByText("Example Micro Limited")).toHaveLength(2);
-    expect(screen.getByText("2025-01-01 to 2025-12-31")).toBeInTheDocument();
+    expect(screen.getAllByText("2025-01-01 to 2025-12-31").length).toBeGreaterThanOrEqual(4);
     expect(screen.getByText("AccountsWorkflowTests.GoldenPath_MicroAuditExemptCompany_OnboardToBalancedStatementsPdfAndIxbrl")).toBeInTheDocument();
     expect(screen.getByText("Golden evidence ledger")).toBeInTheDocument();
     expect(screen.getByText("Expected CT: €718.75")).toBeInTheDocument();
-    expect(screen.getByText("Readiness: ready-for-external-filing")).toBeInTheDocument();
+    expect(screen.getAllByText("Readiness: ready-for-external-filing").length).toBeGreaterThanOrEqual(3);
     expect(screen.getByText("Completion tracks")).toBeInTheDocument();
     expect(screen.getByText("Backend code")).toBeInTheDocument();
     expect(screen.getByText("Frontend UI/UX")).toBeInTheDocument();
@@ -125,8 +129,8 @@ function sampleReport(): ProductionReadinessReport {
       packetVersion: "production-assurance-packet-v1",
       status: "review-required",
       sourceLawSnapshotHash: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      goldenCorpusCovered: 2,
-      goldenCorpusTotal: 2,
+      goldenCorpusCovered: 5,
+      goldenCorpusTotal: 5,
       statutoryRuleMatrixPaths: 1,
       statutoryRuleCoverageFamilies: 1,
       visualQaExpectedScreenshots: 28,
@@ -179,7 +183,7 @@ function sampleReport(): ProductionReadinessReport {
       status: "required-review",
       signOffGate: "accountant-final-signoff",
       failurePolicy: "Block release if a named qualified accountant has not walked the seeded golden corpus through the live accountant workflow and accepted the outputs, gates, wording and evidence.",
-      seededScenarioCodes: ["micro-ltd", "clg-charity"],
+      seededScenarioCodes: goldenScenarioCodes(),
       routeSequence: [
         "Dashboard: identify the client, deadline pressure, blockers, reviewer owner and next action.",
         "Company detail: confirm statutory profile, company type, officers, charity flags and period setup.",
@@ -288,6 +292,38 @@ function sampleReport(): ProductionReadinessReport {
           ],
         },
       },
+      goldenScenario({
+        code: "small-abridged-ltd",
+        label: "Small abridged LTD",
+        legalName: "Example Small Abridged Limited",
+        companyType: "Private",
+        expectedRegime: "Small abridged",
+        expectedOutcome: "generated-pack-with-abridged-cro-filing",
+        verifier: "FilingGoldenCorpusScenarioTests.GoldenCorpus_SmallAbridgedLtd_ProducesFullAccountsAbridgedCroPackAndSection352Evidence",
+        corporationTax: 1875,
+        readinessState: "ready-for-external-filing",
+        signOffPacketState: "review-required",
+        proofArea: "abridgement",
+        sourceId: "cro-financial-statements-requirements",
+        sourceTitle: "CRO financial statements requirements",
+        sourceUrl: "https://cro.ie/",
+      }),
+      goldenScenario({
+        code: "dac-small",
+        label: "DAC small",
+        legalName: "Example DAC Trading Designated Activity Company",
+        companyType: "DesignatedActivityCompany",
+        expectedRegime: "Small",
+        expectedOutcome: "generated-pack",
+        verifier: "FilingGoldenCorpusScenarioTests.GoldenCorpus_DacSmall_ProducesFullAccountsIxbrlAndDirectorCertificationGates",
+        corporationTax: 2437.5,
+        readinessState: "ready-for-external-filing",
+        signOffPacketState: "review-required",
+        proofArea: "director-certification",
+        sourceId: "cro-financial-statements-requirements",
+        sourceTitle: "CRO financial statements requirements",
+        sourceUrl: "https://cro.ie/",
+      }),
       {
         code: "clg-charity",
         label: "CLG charity",
@@ -347,6 +383,24 @@ function sampleReport(): ProductionReadinessReport {
           ],
         },
       },
+      goldenScenario({
+        code: "medium-audit-required",
+        label: "Medium audit-required",
+        legalName: "Example Medium Holdings Limited",
+        companyType: "Private",
+        expectedSizeClass: "Medium",
+        expectedRegime: "Full",
+        expectedOutcome: "manual-handoff",
+        verifier: "FilingGoldenCorpusScenarioTests.GoldenCorpus_MediumAuditRequired_BlocksFinalOutputsAndRequiresManualHandoffUntilAuditorEvidence",
+        corporationTax: 15625,
+        readinessState: "manual-handoff",
+        signOffPacketState: "manual-handoff",
+        proofArea: "auditor-handoff",
+        sourceId: "cro-financial-statements-requirements",
+        sourceTitle: "CRO financial statements requirements",
+        sourceUrl: "https://cro.ie/",
+        manualProfessionalReviewRequired: true,
+      }),
     ],
     goldenEvidenceLedger: [
       {
@@ -369,6 +423,38 @@ function sampleReport(): ProductionReadinessReport {
         filingReadinessState: "100% filing readiness",
         signOffPacketState: "review-required",
       },
+      goldenLedgerEntry({
+        scenarioCode: "small-abridged-ltd",
+        label: "Small abridged LTD",
+        legalName: "Example Small Abridged Limited",
+        companyType: "Private",
+        expectedOutcome: "generated-pack-with-abridged-cro-filing",
+        acceptanceStatus: "qualified-accountant-review-required",
+        verifier: "FilingGoldenCorpusScenarioTests.GoldenCorpus_SmallAbridgedLtd_ProducesFullAccountsAbridgedCroPackAndSection352Evidence",
+        artifacts: ["full accounts PDF text", "abridged CRO accounts pack", "iXBRL XML"],
+        checks: ["Section 352 abridgement evidence", "audit exemption gate"],
+        proofArea: "abridgement",
+        sourceId: "cro-financial-statements-requirements",
+        corporationTax: 1875,
+        readinessState: "ready-for-external-filing",
+        signOffPacketState: "review-required",
+      }),
+      goldenLedgerEntry({
+        scenarioCode: "dac-small",
+        label: "DAC small",
+        legalName: "Example DAC Trading Designated Activity Company",
+        companyType: "DesignatedActivityCompany",
+        expectedOutcome: "generated-pack",
+        acceptanceStatus: "qualified-accountant-review-required",
+        verifier: "FilingGoldenCorpusScenarioTests.GoldenCorpus_DacSmall_ProducesFullAccountsIxbrlAndDirectorCertificationGates",
+        artifacts: ["accounts PDF text", "iXBRL XML", "director certification gate"],
+        checks: ["director certification", "well-formed iXBRL"],
+        proofArea: "director-certification",
+        sourceId: "cro-financial-statements-requirements",
+        corporationTax: 2437.5,
+        readinessState: "ready-for-external-filing",
+        signOffPacketState: "review-required",
+      }),
       {
         scenarioCode: "clg-charity",
         label: "CLG charity",
@@ -389,6 +475,22 @@ function sampleReport(): ProductionReadinessReport {
         filingReadinessState: "ready-for-external-filing",
         signOffPacketState: "ready-for-external-filing",
       },
+      goldenLedgerEntry({
+        scenarioCode: "medium-audit-required",
+        label: "Medium audit-required",
+        legalName: "Example Medium Holdings Limited",
+        companyType: "Private",
+        expectedOutcome: "manual-handoff",
+        acceptanceStatus: "manual-handoff-required",
+        verifier: "FilingGoldenCorpusScenarioTests.GoldenCorpus_MediumAuditRequired_BlocksFinalOutputsAndRequiresManualHandoffUntilAuditorEvidence",
+        artifacts: ["full accounts PDF text", "iXBRL XML", "auditor handoff record"],
+        checks: ["audit report blocker", "manual handoff state"],
+        proofArea: "auditor-handoff",
+        sourceId: "cro-financial-statements-requirements",
+        corporationTax: 15625,
+        readinessState: "manual-handoff",
+        signOffPacketState: "manual-handoff",
+      }),
     ],
     statutoryRuleMatrix: [
       {
@@ -632,6 +734,163 @@ function sampleReport(): ProductionReadinessReport {
   };
 }
 
+function goldenScenarioCodes() {
+  return ["clg-charity", "dac-small", "medium-audit-required", "micro-ltd", "small-abridged-ltd"];
+}
+
+function goldenScenario({
+  code,
+  label,
+  legalName,
+  companyType,
+  expectedSizeClass = "Small",
+  expectedRegime,
+  expectedOutcome,
+  verifier,
+  corporationTax,
+  readinessState,
+  signOffPacketState,
+  proofArea,
+  sourceId,
+  sourceTitle,
+  sourceUrl,
+  manualProfessionalReviewRequired = false,
+}: {
+  code: string;
+  label: string;
+  legalName: string;
+  companyType: string;
+  expectedSizeClass?: string;
+  expectedRegime: string;
+  expectedOutcome: string;
+  verifier: string;
+  corporationTax: number;
+  readinessState: string;
+  signOffPacketState: string;
+  proofArea: string;
+  sourceId: string;
+  sourceTitle: string;
+  sourceUrl: string;
+  manualProfessionalReviewRequired?: boolean;
+}): ProductionReadinessReport["goldenFilingCorpus"][number] {
+  return {
+    code,
+    label,
+    companyScope: companyType === "DesignatedActivityCompany" ? "Designated activity company" : "Private company limited by shares",
+    expectedOutcome,
+    coverageStatus: "covered",
+    fixture: {
+      legalName,
+      companyType,
+      periodStart: "2025-01-01",
+      periodEnd: "2025-12-31",
+      expectedSizeClass,
+      expectedRegime,
+      auditExempt: !manualProfessionalReviewRequired,
+      manualProfessionalReviewRequired,
+    },
+    evidenceTestNames: [verifier],
+    evidenceVerifiers: [
+      {
+        name: verifier,
+        command: `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter FullyQualifiedName~${verifier}`,
+        ciScope: "default-ci",
+        runsInDefaultCi: true,
+        environment: "EF Core InMemory golden fixture; CI also runs the broader backend suite on Linux",
+        evidenceLevel: "end-to-end golden filing scenario",
+      },
+    ],
+    assertions: ["PDF text", "iXBRL parse", proofArea],
+    evidencePack: {
+      outputArtifacts: expectedOutcome === "manual-handoff" ? ["full accounts PDF text", "auditor handoff record"] : ["accounts PDF text", "iXBRL XML"],
+      decisionGates: manualProfessionalReviewRequired ? ["signed auditor report", "manual handoff acceptance"] : ["named qualified-accountant review"],
+      expectedValueChecks: [proofArea, "well-formed iXBRL"],
+      expectedOutputs: {
+        pdfTextMarkers: [legalName],
+        ixbrlRequiredTags: ["core:EntityCurrentLegalOrRegisteredName"],
+        filingReadinessState: readinessState,
+        expectedCorporationTax: corporationTax,
+        requiredNotes: ["Accounting Policies"],
+        filingGateStates: manualProfessionalReviewRequired
+          ? ["signed auditor report required", "manual handoff acceptance required"]
+          : ["director and secretary certification required", "qualified-accountant review required"],
+        signOffPacketState,
+      },
+      expectedProofPoints: [
+        {
+          area: proofArea,
+          expectedEvidence: `${label} golden scenario proves ${proofArea} evidence.`,
+          automatedVerifier: verifier,
+          required: true,
+        },
+      ],
+      sourceReferences: [
+        {
+          sourceId,
+          title: sourceTitle,
+          effectiveDate: "2026-07-03",
+          url: sourceUrl,
+        },
+      ],
+    },
+  };
+}
+
+function goldenLedgerEntry({
+  scenarioCode,
+  label,
+  legalName,
+  companyType,
+  expectedOutcome,
+  acceptanceStatus,
+  verifier,
+  artifacts,
+  checks,
+  proofArea,
+  sourceId,
+  corporationTax,
+  readinessState,
+  signOffPacketState,
+}: {
+  scenarioCode: string;
+  label: string;
+  legalName: string;
+  companyType: string;
+  expectedOutcome: string;
+  acceptanceStatus: string;
+  verifier: string;
+  artifacts: string[];
+  checks: string[];
+  proofArea: string;
+  sourceId: string;
+  corporationTax: number;
+  readinessState: string;
+  signOffPacketState: string;
+}): ProductionReadinessReport["goldenEvidenceLedger"][number] {
+  return {
+    scenarioCode,
+    label,
+    fixtureLegalName: legalName,
+    companyType,
+    expectedOutcome,
+    coverageStatus: "covered",
+    acceptanceStatus,
+    requiredSignOffGate: expectedOutcome === "manual-handoff"
+      ? "Qualified accountant must record manual handoff acceptance before relying on outputs."
+      : "Named qualified accountant must approve the generated pack before real filing use.",
+    blocksRelease: true,
+    automatedVerifierNames: [verifier],
+    outputArtifacts: artifacts,
+    decisionGates: expectedOutcome === "manual-handoff" ? ["signed auditor report", "manual handoff acceptance"] : ["named qualified-accountant review"],
+    expectedValueChecks: checks,
+    proofPointAreas: [proofArea],
+    sourceIds: [sourceId],
+    expectedCorporationTax: corporationTax,
+    filingReadinessState: readinessState,
+    signOffPacketState,
+  };
+}
+
 function journeyAcceptance(
   routeCode: string,
   routeLabel: string,
@@ -644,7 +903,7 @@ function journeyAcceptance(
     routeLabel,
     routeKey,
     workflowStages,
-    seededScenarioCodes: ["micro-ltd", "clg-charity"],
+    seededScenarioCodes: goldenScenarioCodes(),
     visualArtifactNames: ["light-desktop", "light-mobile", "dark-desktop", "dark-mobile"].map(
       (suffix) => `${routeCode}-${suffix}.png`,
     ),
