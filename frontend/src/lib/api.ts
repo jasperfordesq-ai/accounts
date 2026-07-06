@@ -1772,6 +1772,20 @@ export interface AuditEvidenceTimelineEntry {
   blockingGateCodes: string[];
 }
 
+export interface ProductionAuditEvidencePackItem {
+  code: string;
+  label: string;
+  evidenceQuestion: string;
+  requiredArtifact: string;
+  retainedIn: string;
+  requiredActor: string;
+  capturedWhen: string;
+  verification: string;
+  failurePolicy: string;
+  auditEventCodes: string[];
+  blockingGateCodes: string[];
+}
+
 export interface ProductionMonitoringControl {
   code: string;
   label: string;
@@ -1999,6 +2013,7 @@ export interface ProductionReadinessReport {
   releaseBlockerRegister: ProductionReleaseBlocker[];
   auditabilityControls: ProductionAuditabilityControl[];
   auditEvidenceTimeline: AuditEvidenceTimelineEntry[];
+  auditEvidencePack: ProductionAuditEvidencePackItem[];
   monitoringControls: ProductionMonitoringControl[];
   dependencyPolicyControls: DependencyPolicyControl[];
   deploymentSafetyControls: DeploymentSafetyControl[];
@@ -2278,6 +2293,20 @@ const auditEvidenceTimelineEntrySchema = z.object({
   blockingGateCodes: z.array(z.string().min(1)),
 });
 
+const productionAuditEvidencePackItemSchema = z.object({
+  code: z.string().min(1),
+  label: z.string().min(1),
+  evidenceQuestion: z.string().min(1),
+  requiredArtifact: z.string().min(1),
+  retainedIn: z.string().min(1),
+  requiredActor: z.string().min(1),
+  capturedWhen: z.string().min(1),
+  verification: z.string().min(1),
+  failurePolicy: z.string().min(1),
+  auditEventCodes: z.array(z.string().min(1)),
+  blockingGateCodes: z.array(z.string().min(1)),
+});
+
 const productionMonitoringControlSchema = z.object({
   code: z.string().min(1),
   label: z.string().min(1),
@@ -2475,6 +2504,7 @@ export const productionReadinessReportSchema = z.object({
   releaseBlockerRegister: z.array(productionReleaseBlockerSchema),
   auditabilityControls: z.array(productionAuditabilityControlSchema),
   auditEvidenceTimeline: z.array(auditEvidenceTimelineEntrySchema),
+  auditEvidencePack: z.array(productionAuditEvidencePackItemSchema),
   monitoringControls: z.array(productionMonitoringControlSchema),
   dependencyPolicyControls: z.array(dependencyPolicyControlSchema),
   deploymentSafetyControls: z.array(deploymentSafetyControlSchema),
@@ -2740,6 +2770,12 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
     );
   }
 
+  if (!report.assurancePacket.evidenceItems.includes("production-audit-evidence-pack")) {
+    throw new Error(
+      "Invalid production readiness report contract: assurancePacket.evidenceItems - production-audit-evidence-pack is required",
+    );
+  }
+
   if (!report.assurancePacket.evidenceItems.includes("production-completion-map")) {
     throw new Error(
       "Invalid production readiness report contract: assurancePacket.evidenceItems - production-completion-map is required",
@@ -2768,6 +2804,20 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
     if (entry.blockingGateCodes.length === 0) {
       throw new Error(
         `Invalid production readiness report contract: auditEvidenceTimeline.${entryIndex}.blockingGateCodes - at least one blocking gate code is required`,
+      );
+    }
+  });
+
+  report.auditEvidencePack.forEach((item, itemIndex) => {
+    if (item.auditEventCodes.length === 0) {
+      throw new Error(
+        `Invalid production readiness report contract: auditEvidencePack.${itemIndex}.auditEventCodes - at least one audit event code is required`,
+      );
+    }
+
+    if (item.blockingGateCodes.length === 0) {
+      throw new Error(
+        `Invalid production readiness report contract: auditEvidencePack.${itemIndex}.blockingGateCodes - at least one blocking gate code is required`,
       );
     }
   });

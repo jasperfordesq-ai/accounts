@@ -202,6 +202,11 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.equal(parsed.auditEvidenceTimeline[0].code, "data-change-capture");
   assert.equal(parsed.auditEvidenceTimeline[0].capturedWhen, "At every authenticated write before regenerated outputs can be reviewed.");
   assert.equal(parsed.auditEvidenceTimeline[1].blockingGateCodes[0], "generated-output-review");
+  assert.equal(parsed.auditEvidencePack[0].code, "who-changed-what");
+  assert.equal(parsed.auditEvidencePack[0].requiredArtifact, "tamper-evident-audit-log-entry");
+  assert.equal(parsed.auditEvidencePack[0].retainedIn, "audit_logs");
+  assert.equal(parsed.auditEvidencePack[0].failurePolicy, "Block release when a supported write path can alter filing evidence without an audit row linked into the integrity chain.");
+  assert.equal(parsed.auditEvidencePack[1].requiredArtifact, "named-accountant-approval-record");
   assert.equal(parsed.visualQaCoverage.expectedScreenshotCount, expectedVisualSmokeScreenshotCount());
   assert.equal(parsed.visualQaCoverage.manifestFileName, "visual-smoke-manifest.json");
   assert.equal(parsed.visualQaCoverage.artifacts.length, expectedVisualSmokeArtifacts().length);
@@ -897,7 +902,7 @@ function sampleReport() {
       visualQaExpectedScreenshots: expectedVisualSmokeScreenshotCount(),
       requiredOperationalGates: 1,
       openCriticalActions: 3,
-      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "source-law-review-ledger", "revenue-taxonomy-range-evidence", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-blocker-register", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "accountant-journey-acceptance-checklist", "production-completion-map"],
+      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "source-law-review-ledger", "revenue-taxonomy-range-evidence", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "production-audit-evidence-pack", "visual-smoke-screenshots", "release-blocker-register", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "accountant-journey-acceptance-checklist", "production-completion-map"],
       releaseBlockers: [
         "Qualified accountant sign-off required",
         "Source-law change review required",
@@ -2048,6 +2053,34 @@ function sampleReport() {
         verification: "Generated output audit event must exist before accountant approval can rely on the pack.",
         auditEventCodes: ["CroDocumentGenerated"],
         blockingGateCodes: ["generated-output-review"],
+      },
+    ],
+    auditEvidencePack: [
+      {
+        code: "who-changed-what",
+        label: "Who changed what",
+        evidenceQuestion: "Which authenticated user changed statutory, accounting or filing evidence, and what old/new values were captured?",
+        requiredArtifact: "tamper-evident-audit-log-entry",
+        retainedIn: "audit_logs",
+        requiredActor: "Authenticated firm user",
+        capturedWhen: "At the same transaction boundary as each supported write.",
+        verification: "Audit entry must include entity, action, request correlation, redacted before/after snapshots, integrity hash and previous hash.",
+        failurePolicy: "Block release when a supported write path can alter filing evidence without an audit row linked into the integrity chain.",
+        auditEventCodes: ["AdjustmentUpdated"],
+        blockingGateCodes: ["working-paper-review"],
+      },
+      {
+        code: "who-approved-what",
+        label: "Who approved what",
+        evidenceQuestion: "Which named reviewer or qualified accountant approved the pack, and which period/output state was approved?",
+        requiredArtifact: "named-accountant-approval-record",
+        retainedIn: "filing_workflow_status_history",
+        requiredActor: "Named qualified accountant",
+        capturedWhen: "After required evidence is present and before any filing status can be marked approved or submitted.",
+        verification: "Approval transition must carry reviewer identity, timestamp, period id, open blocker summary and the allowed next action set.",
+        failurePolicy: "Block release when approval can be recorded without a named qualified-accountant identity and linked readiness evidence.",
+        auditEventCodes: ["CroFilingStatusChanged"],
+        blockingGateCodes: ["qualified-accountant-review"],
       },
     ],
     monitoringControls: [

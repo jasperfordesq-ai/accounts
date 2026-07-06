@@ -229,6 +229,19 @@ public sealed record AuditEvidenceTimelineEntry(
     IReadOnlyList<string> AuditEventCodes,
     IReadOnlyList<string> BlockingGateCodes);
 
+public sealed record ProductionAuditEvidencePackItem(
+    string Code,
+    string Label,
+    string EvidenceQuestion,
+    string RequiredArtifact,
+    string RetainedIn,
+    string RequiredActor,
+    string CapturedWhen,
+    string Verification,
+    string FailurePolicy,
+    IReadOnlyList<string> AuditEventCodes,
+    IReadOnlyList<string> BlockingGateCodes);
+
 public sealed record ProductionMonitoringControl(
     string Code,
     string Label,
@@ -426,6 +439,7 @@ public sealed record ProductionReadinessReport(
     IReadOnlyList<ProductionReleaseBlocker> ReleaseBlockerRegister,
     IReadOnlyList<ProductionAuditabilityControl> AuditabilityControls,
     IReadOnlyList<AuditEvidenceTimelineEntry> AuditEvidenceTimeline,
+    IReadOnlyList<ProductionAuditEvidencePackItem> AuditEvidencePack,
     IReadOnlyList<ProductionMonitoringControl> MonitoringControls,
     IReadOnlyList<DependencyPolicyControl> DependencyPolicyControls,
     IReadOnlyList<DeploymentSafetyControl> DeploymentSafetyControls,
@@ -450,6 +464,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
         var completionTracks = BuildCompletionTracks();
         var auditabilityControls = BuildAuditabilityControls();
         var auditEvidenceTimeline = BuildAuditEvidenceTimeline();
+        var auditEvidencePack = BuildAuditEvidencePack();
         var monitoringControls = BuildMonitoringControls();
         var dependencyPolicyControls = BuildDependencyPolicyControls();
         var deploymentSafetyControls = BuildDeploymentSafetyControls();
@@ -510,6 +525,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             releaseBlockerRegister,
             auditabilityControls,
             auditEvidenceTimeline,
+            auditEvidencePack,
             monitoringControls,
             dependencyPolicyControls,
             deploymentSafetyControls,
@@ -562,6 +578,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "statutory-rules-matrix",
             "statutory-rules-coverage",
             "audit-evidence-timeline",
+            "production-audit-evidence-pack",
             "visual-smoke-screenshots",
             "production-operational-gates",
             "dependency-policy-controls",
@@ -2590,6 +2607,112 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             [
                 "external-ros-validation",
                 "no-direct-cro-ros-submission"
+            ])
+    ];
+
+    private static IReadOnlyList<ProductionAuditEvidencePackItem> BuildAuditEvidencePack() =>
+    [
+        new(
+            "who-changed-what",
+            "Who changed what",
+            "Which authenticated user changed statutory, accounting or filing evidence, and what old/new values were captured?",
+            "tamper-evident-audit-log-entry",
+            "audit_logs",
+            "Authenticated firm user",
+            "At the same transaction boundary as each supported write.",
+            "Audit entry must include entity, action, request correlation, redacted before/after snapshots, integrity hash and previous hash.",
+            "Block release when a supported write path can alter filing evidence without an audit row linked into the integrity chain.",
+            [
+                AuditEventCodes.SizeClassificationDataSaved,
+                AuditEventCodes.FilingRegimeDetermined,
+                AuditEventCodes.AdjustmentUpdated,
+                AuditEventCodes.NoteDisclosureUpdated,
+                AuditEventCodes.YearEndReviewConfirmationUpdated
+            ],
+            [
+                "working-paper-review",
+                "qualified-accountant-review"
+            ]),
+        new(
+            "who-approved-what",
+            "Who approved what",
+            "Which named reviewer or qualified accountant approved the pack, and which period/output state was approved?",
+            "named-accountant-approval-record",
+            "filing_workflow_status_history",
+            "Named qualified accountant",
+            "After required evidence is present and before any filing status can be marked approved or submitted.",
+            "Approval transition must carry reviewer identity, timestamp, period id, open blocker summary and the allowed next action set.",
+            "Block release when approval can be recorded without a named qualified-accountant identity and linked readiness evidence.",
+            [
+                AuditEventCodes.AdjustmentApproved,
+                AuditEventCodes.CroFilingStatusChanged,
+                AuditEventCodes.CroPaymentConfirmed,
+                AuditEventCodes.CharityFilingStatusChanged
+            ],
+            [
+                "qualified-accountant-review",
+                "director-secretary-certification"
+            ]),
+        new(
+            "evidence-present-at-approval",
+            "Evidence present at approval",
+            "What evidence was present, blocked, warned or manually handed off when the accountant approval decision was made?",
+            "readiness-profile-decision-snapshot",
+            "filing-readiness-profile-snapshot",
+            "Named qualified accountant",
+            "At professional review, immediately before final approval or manual handoff recording.",
+            "Snapshot must include required evidence, blocking issues, warning issues, legal source references, generated output flags and allowed next actions.",
+            "Block release when accountant approval can proceed without a retained readiness-profile snapshot for the approved period.",
+            [
+                AuditEventCodes.YearEndReviewConfirmationUpdated,
+                AuditEventCodes.OpeningBalanceUpserted,
+                AuditEventCodes.ShareCapitalUpdated,
+                AuditEventCodes.TaxBalanceUpserted,
+                AuditEventCodes.CharityInfoUpdated
+            ],
+            [
+                "generated-output-review",
+                "qualified-accountant-review",
+                "manual-professional-handoff"
+            ]),
+        new(
+            "generated-output-fingerprint",
+            "Generated output fingerprint",
+            "Which PDF, iXBRL, notes, CRO or charity output was generated, and how can the exact generated artifact be recognised later?",
+            "generated-output-fingerprint",
+            "generated_filing_output_manifest",
+            "System generation service",
+            "Immediately after server-side output generation and before the output is exposed for review.",
+            "Manifest must retain output type, period id, generator version, source-law snapshot hash, generated timestamp and artifact fingerprint.",
+            "Block release when generated filing artifacts are reviewable without a retained manifest or audit event.",
+            [
+                AuditEventCodes.CroDocumentGenerated,
+                AuditEventCodes.IxbrlInternalCheckCompleted,
+                AuditEventCodes.NotesGenerated,
+                AuditEventCodes.CharityReportGenerated
+            ],
+            [
+                "generated-output-review",
+                "external-ros-validation"
+            ]),
+        new(
+            "integrity-chain-checkpoint",
+            "Integrity chain checkpoint",
+            "Can the release reviewer prove audit entries have not been removed or rewritten since the evidence was captured?",
+            "signed-audit-integrity-checkpoint",
+            "audit_integrity_checkpoints",
+            "Platform owner",
+            "At release review and after the seeded accountant walkthrough evidence has been generated.",
+            "Checkpoint must cover latest audit id, previous hash, current hash, checked-entry count, signing key id and signature verification result.",
+            "Block release when audit hash verification or signed checkpoint creation cannot be demonstrated for the production candidate.",
+            [
+                AuditEventCodes.CroFilingStatusChanged,
+                AuditEventCodes.CroDocumentGenerated,
+                AuditEventCodes.IxbrlInternalCheckCompleted
+            ],
+            [
+                "audit-integrity-checkpoint",
+                "release-review-checklist"
             ])
     ];
 

@@ -144,6 +144,13 @@ describe("ProductionReadinessWorkbench", () => {
     expectText("At every authenticated write before regenerated outputs can be reviewed.");
     expectText("Generated output audit event must exist before accountant approval can rely on the pack.");
     expect(screen.getAllByText("generated-output-review").length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { name: "Production audit evidence pack" })).toBeInTheDocument();
+    expect(screen.getByRole("searchbox", { name: "Filter Production audit evidence pack" })).toBeInTheDocument();
+    expectText("tamper-evident-audit-log-entry");
+    expectText("readiness-profile-decision-snapshot");
+    expectText("signed-audit-integrity-checkpoint");
+    expectText("filing-readiness-profile-snapshot");
+    expectText("Block release when accountant approval can proceed without a retained readiness-profile snapshot for the approved period.");
     expect(screen.getByRole("heading", { name: "Production monitoring" })).toBeInTheDocument();
     expectText("Production error tracking");
     expectText("Structured JSON logs");
@@ -377,7 +384,7 @@ function sampleReport(): ProductionReadinessReport {
       visualQaExpectedScreenshots: 28,
       requiredOperationalGates: 1,
       openCriticalActions: 1,
-      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "source-law-review-ledger", "revenue-taxonomy-range-evidence", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "accountant-journey-acceptance-checklist", "production-completion-map"],
+      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "source-law-review-ledger", "revenue-taxonomy-range-evidence", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "production-audit-evidence-pack", "visual-smoke-screenshots", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "accountant-journey-acceptance-checklist", "production-completion-map"],
       releaseBlockers: ["Qualified accountant sign-off required"],
     },
     accountantAcceptanceCriteria: [
@@ -1083,6 +1090,47 @@ function sampleReport(): ProductionReadinessReport {
         verification: "Generated output audit event must exist before accountant approval can rely on the pack.",
         auditEventCodes: ["CroDocumentGenerated"],
         blockingGateCodes: ["generated-output-review"],
+      },
+    ],
+    auditEvidencePack: [
+      {
+        code: "who-changed-what",
+        label: "Who changed what",
+        evidenceQuestion: "Which authenticated user changed statutory, accounting or filing evidence, and what old/new values were captured?",
+        requiredArtifact: "tamper-evident-audit-log-entry",
+        retainedIn: "audit_logs",
+        requiredActor: "Authenticated firm user",
+        capturedWhen: "At the same transaction boundary as each supported write.",
+        verification: "Audit entry must include entity, action, request correlation, redacted before/after snapshots, integrity hash and previous hash.",
+        failurePolicy: "Block release when a supported write path can alter filing evidence without an audit row linked into the integrity chain.",
+        auditEventCodes: ["AdjustmentUpdated"],
+        blockingGateCodes: ["working-paper-review"],
+      },
+      {
+        code: "evidence-present-at-approval",
+        label: "Evidence present at approval",
+        evidenceQuestion: "What evidence was present, blocked, warned or manually handed off when the accountant approval decision was made?",
+        requiredArtifact: "readiness-profile-decision-snapshot",
+        retainedIn: "filing-readiness-profile-snapshot",
+        requiredActor: "Named qualified accountant",
+        capturedWhen: "At professional review, immediately before final approval or manual handoff recording.",
+        verification: "Snapshot must include required evidence, blocking issues, warning issues, legal source references, generated output flags and allowed next actions.",
+        failurePolicy: "Block release when accountant approval can proceed without a retained readiness-profile snapshot for the approved period.",
+        auditEventCodes: ["YearEndReviewConfirmationUpdated"],
+        blockingGateCodes: ["generated-output-review", "qualified-accountant-review"],
+      },
+      {
+        code: "integrity-chain-checkpoint",
+        label: "Integrity chain checkpoint",
+        evidenceQuestion: "Can the release reviewer prove audit entries have not been removed or rewritten since the evidence was captured?",
+        requiredArtifact: "signed-audit-integrity-checkpoint",
+        retainedIn: "audit_integrity_checkpoints",
+        requiredActor: "Platform owner",
+        capturedWhen: "At release review and after the seeded accountant walkthrough evidence has been generated.",
+        verification: "Checkpoint must cover latest audit id, previous hash, current hash, checked-entry count, signing key id and signature verification result.",
+        failurePolicy: "Block release when audit hash verification or signed checkpoint creation cannot be demonstrated for the production candidate.",
+        auditEventCodes: ["CroDocumentGenerated"],
+        blockingGateCodes: ["audit-integrity-checkpoint"],
       },
     ],
     monitoringControls: [

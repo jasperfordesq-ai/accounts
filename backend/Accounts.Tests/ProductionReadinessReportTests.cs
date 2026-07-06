@@ -391,6 +391,61 @@ public class ProductionReadinessReportTests
     }
 
     [Fact]
+    public async Task ProductionReadinessReport_ExposesProductionAuditEvidencePackForReleaseReview()
+    {
+        await using var db = CreateDbContext();
+        var report = await new ProductionReadinessReportService(db).GetReportAsync();
+        var packProperty = report.GetType().GetProperty("AuditEvidencePack");
+
+        Assert.NotNull(packProperty);
+        var pack = Assert.IsAssignableFrom<System.Collections.IEnumerable>(packProperty!.GetValue(report))
+            .Cast<object>()
+            .ToArray();
+
+        Assert.Contains(report.AssurancePacket.EvidenceItems, item => item == "production-audit-evidence-pack");
+        Assert.Contains(pack, item =>
+            StringProperty(item, "Code") == "who-changed-what"
+            && StringProperty(item, "RequiredArtifact") == "tamper-evident-audit-log-entry"
+            && StringProperty(item, "RetainedIn") == "audit_logs"
+            && StringProperty(item, "FailurePolicy").Contains("Block release", StringComparison.OrdinalIgnoreCase)
+            && StringListProperty(item, "AuditEventCodes").Contains(AuditEventCodes.AdjustmentUpdated)
+            && StringListProperty(item, "BlockingGateCodes").Contains("working-paper-review"));
+        Assert.Contains(pack, item =>
+            StringProperty(item, "Code") == "who-approved-what"
+            && StringProperty(item, "RequiredActor").Contains("qualified accountant", StringComparison.OrdinalIgnoreCase)
+            && StringProperty(item, "RequiredArtifact") == "named-accountant-approval-record"
+            && StringListProperty(item, "BlockingGateCodes").Contains("qualified-accountant-review"));
+        Assert.Contains(pack, item =>
+            StringProperty(item, "Code") == "evidence-present-at-approval"
+            && StringProperty(item, "EvidenceQuestion").Contains("What evidence was present", StringComparison.OrdinalIgnoreCase)
+            && StringProperty(item, "RetainedIn") == "filing-readiness-profile-snapshot"
+            && StringListProperty(item, "BlockingGateCodes").Contains("generated-output-review"));
+        Assert.Contains(pack, item =>
+            StringProperty(item, "Code") == "generated-output-fingerprint"
+            && StringProperty(item, "RequiredArtifact") == "generated-output-fingerprint"
+            && StringListProperty(item, "AuditEventCodes").Contains(AuditEventCodes.CroDocumentGenerated));
+        Assert.Contains(pack, item =>
+            StringProperty(item, "Code") == "integrity-chain-checkpoint"
+            && StringProperty(item, "RequiredArtifact") == "signed-audit-integrity-checkpoint"
+            && StringProperty(item, "Verification").Contains("previous hash", StringComparison.OrdinalIgnoreCase));
+
+        Assert.All(pack, item =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(item, "Code")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(item, "Label")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(item, "EvidenceQuestion")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(item, "RequiredArtifact")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(item, "RetainedIn")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(item, "RequiredActor")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(item, "CapturedWhen")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(item, "Verification")));
+            Assert.False(string.IsNullOrWhiteSpace(StringProperty(item, "FailurePolicy")));
+            Assert.NotEmpty(StringListProperty(item, "AuditEventCodes"));
+            Assert.NotEmpty(StringListProperty(item, "BlockingGateCodes"));
+        });
+    }
+
+    [Fact]
     public async Task ProductionReadinessReport_ExposesAccountantAcceptanceSummaryForReleaseDecision()
     {
         await using var db = CreateDbContext();

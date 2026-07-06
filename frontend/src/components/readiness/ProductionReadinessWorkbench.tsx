@@ -25,6 +25,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
   const statutoryRulesCoverage = report.statutoryRulesCoverage ?? [];
   const auditabilityControls = report.auditabilityControls ?? [];
   const auditEvidenceTimeline = report.auditEvidenceTimeline ?? [];
+  const auditEvidencePack = report.auditEvidencePack ?? [];
   const monitoringControls = report.monitoringControls ?? [];
   const dependencyPolicyControls = report.dependencyPolicyControls ?? [];
   const deploymentSafetyControls = report.deploymentSafetyControls ?? [];
@@ -858,6 +859,53 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
               <span key="verification" className="whitespace-normal text-[var(--muted-foreground)]">{entry.verification}</span>,
               <CodeStack key="events" items={entry.auditEventCodes} />,
               <CodeStack key="gates" items={entry.blockingGateCodes} />,
+            ],
+          }))}
+        />
+      </ReviewPanel>
+
+      <ReviewPanel
+        title="Production audit evidence pack"
+        description="Release-facing audit artifacts proving who changed what, who approved what, what evidence existed, what was generated, and whether the integrity chain was checked."
+        actions={<StatusBadge tone={auditEvidencePack.length > 0 ? "good" : "warn"}>{auditEvidencePack.length} artifacts</StatusBadge>}
+      >
+        <DataGrid
+          caption="Production audit evidence pack"
+          filterPlaceholder="Filter production audit evidence pack"
+          emptyState="No audit evidence pack artifacts"
+          columns={["Evidence", "Artifact", "Retention", "Actor", "Captured when", "Verification", "Failure policy", "Gates"]}
+          rows={auditEvidencePack.map((item) => ({
+            id: item.code,
+            tone: item.failurePolicy.toLowerCase().includes("block release") ? "warn" : "info",
+            searchText: [
+              item.code,
+              item.label,
+              item.evidenceQuestion,
+              item.requiredArtifact,
+              item.retainedIn,
+              item.requiredActor,
+              item.capturedWhen,
+              item.verification,
+              item.failurePolicy,
+              ...item.auditEventCodes,
+              ...item.blockingGateCodes,
+            ].join(" "),
+            cells: [
+              <div key="evidence" className="min-w-52 whitespace-normal">
+                <p className="font-medium">{item.label}</p>
+                <code className="mt-1 block break-all text-[11px] text-[var(--muted-foreground)]">{item.code}</code>
+                <p className="mt-2 text-xs leading-5 text-[var(--muted-foreground)]">{item.evidenceQuestion}</p>
+              </div>,
+              <span key="artifact" className="whitespace-normal font-medium text-[var(--foreground)]">{item.requiredArtifact}</span>,
+              <span key="retention" className="whitespace-normal text-[var(--muted-foreground)]">{item.retainedIn}</span>,
+              <span key="actor" className="whitespace-normal text-[var(--muted-foreground)]">{item.requiredActor}</span>,
+              <span key="when" className="whitespace-normal text-[var(--muted-foreground)]">{item.capturedWhen}</span>,
+              <span key="verification" className="whitespace-normal text-[var(--muted-foreground)]">{item.verification}</span>,
+              <span key="failure" className="whitespace-normal text-[var(--muted-foreground)]">{item.failurePolicy}</span>,
+              <div key="gates" className="space-y-2">
+                <CodeStack items={item.blockingGateCodes} />
+                <CodeStack items={item.auditEventCodes} />
+              </div>,
             ],
           }))}
         />
