@@ -298,6 +298,24 @@ test("year-end questionnaire route delegates payroll working-paper section", () 
   assert.match(componentSource, /staff costs/i, "payroll shell should stay explicit about payroll and staff costs");
 });
 
+test("year-end questionnaire route delegates tax balance working-paper section", () => {
+  const routeFile = new URL("companies/[companyId]/periods/[periodId]/year-end/page.tsx", appDir);
+  const componentFile = new URL("../src/components/period/YearEndTaxBalancesSection.tsx", import.meta.url);
+
+  assert.ok(existsSync(componentFile), "YearEndTaxBalancesSection should exist for tax liability, paid and balance capture");
+
+  const routeSource = readFileSync(routeFile, "utf8");
+  const componentSource = readFileSync(componentFile, "utf8");
+
+  assert.match(routeSource, /YearEndTaxBalancesSection/, "year-end questionnaire route should render the focused tax balance shell");
+  assert.doesNotMatch(routeSource, /aria-label="\$\{label\} liability"/, "year-end questionnaire route should not own tax liability fields");
+  assert.doesNotMatch(routeSource, /aria-label="\$\{label\} paid"/, "year-end questionnaire route should not own tax paid fields");
+  assert.doesNotMatch(routeSource, /aria-label="\$\{label\} balance"/, "year-end questionnaire route should not own tax balance fields");
+  assert.match(componentSource, /Corporation Tax/, "tax balance shell should preserve corporation tax capture");
+  assert.match(componentSource, /PAYE \/ PRSI/, "tax balance shell should preserve PAYE/PRSI capture");
+  assert.match(componentSource, /tax creditor\/debtor balances/i, "tax balance shell should stay explicit about tax creditor/debtor evidence");
+});
+
 test("period adjustments route delegates generation, filters and approval composition", () => {
   const periodRoute = new URL("companies/[companyId]/periods/[periodId]/page.tsx", appDir);
   const source = readFileSync(periodRoute, "utf8");

@@ -32,6 +32,7 @@ import { YearEndInventorySection } from "@/components/period/YearEndInventorySec
 import { YearEndMoneyListSection } from "@/components/period/YearEndMoneyListSection";
 import { YearEndPayrollSection } from "@/components/period/YearEndPayrollSection";
 import { YearEndQuestionnaireSection as Section } from "@/components/period/YearEndQuestionnaireSection";
+import { YearEndTaxBalancesSection } from "@/components/period/YearEndTaxBalancesSection";
 import { useUnsavedChanges } from "@/lib/useUnsavedChanges";
 import { PeriodWorkspaceSkeleton } from "@/components/Skeleton";
 import {
@@ -745,78 +746,14 @@ export default function YearEndQuestionnairePage({
           reviewSaving={savingReviewKey === "tax"}
           onConfirmReview={() => handleConfirmReview("tax", taxBalances.length === 0 ? "Confirmed no tax creditor/debtor balances requiring recognition at year-end." : undefined)}
         >
-          <div className="space-y-6">
-            {[
-              { key: "CorporationTax", label: "Corporation Tax" },
-              { key: "VAT", label: "VAT" },
-              { key: "PAYE_PRSI", label: "PAYE / PRSI" },
-            ].map(({ key, label }) => (
-              <div key={key}>
-                <h4 className="text-sm font-medium text-gray-800 dark:text-gray-200 mb-3">{label}</h4>
-                <div className="grid grid-cols-12 gap-3 items-end">
-                  <div className="col-span-3">
-                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Liability</label>
-                    <input
-                      type="number"
-                      className={inputClass}
-                      placeholder="0.00"
-                      value={taxForms[key]?.liability || ""}
-                      onChange={(e) =>
-                        setTaxForms((prev) => ({
-                          ...prev,
-                          [key]: { ...prev[key], liability: Number(e.target.value) },
-                        }))
-                      }
-                      aria-label={`${label} liability`}
-                    />
-                  </div>
-                  <div className="col-span-3">
-                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Paid</label>
-                    <input
-                      type="number"
-                      className={inputClass}
-                      placeholder="0.00"
-                      value={taxForms[key]?.paid || ""}
-                      onChange={(e) =>
-                        setTaxForms((prev) => ({
-                          ...prev,
-                          [key]: { ...prev[key], paid: Number(e.target.value) },
-                        }))
-                      }
-                      aria-label={`${label} paid`}
-                    />
-                  </div>
-                  <div className="col-span-3">
-                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Balance</label>
-                    <input
-                      type="number"
-                      className={inputClass}
-                      placeholder="0.00"
-                      value={taxForms[key]?.balance || ""}
-                      onChange={(e) =>
-                        setTaxForms((prev) => ({
-                          ...prev,
-                          [key]: { ...prev[key], balance: Number(e.target.value) },
-                        }))
-                      }
-                      aria-label={`${label} balance`}
-                    />
-                  </div>
-                  <div className="col-span-3">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onPress={() => handleSaveTax(key)}
-                      isDisabled={savingSection === "tax-" + key}
-                      className="w-full"
-                    >
-                      {savingSection === "tax-" + key ? <Spinner size="sm" /> : "Save"}
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+          <YearEndTaxBalancesSection
+            forms={taxForms}
+            savingKey={savingSection}
+            onFormChange={(taxType, balance) =>
+              setTaxForms((prev) => ({ ...prev, [taxType]: balance }))
+            }
+            onSave={handleSaveTax}
+          />
         </Section>
 
         {/* 8. Dividends */}
