@@ -44,7 +44,10 @@ export function PeriodWorkbenchOverview({
 }: PeriodWorkbenchOverviewProps) {
   const uncategorisedCount = Math.max(transactionTotal - categorisedCount, 0);
   const readyToFile = filingStatus?.readyToFile ?? false;
-  const setupComplete = Boolean(company?.legalName && company.companyType && (company.officers?.length ?? 0) > 0);
+  const activeOfficers = company?.officers?.filter((officer) => !officer.resignedDate) ?? [];
+  const hasDirector = activeOfficers.some((officer) => officerRole(officer.role).includes("director"));
+  const hasSecretary = activeOfficers.some((officer) => officerRole(officer.role).includes("secretary"));
+  const setupComplete = Boolean(company?.legalName && company.companyType && hasDirector && hasSecretary);
   const yearEndComplete = Boolean(yearEnd && yearEnd.completeness.incomplete.length === 0);
   const yearEndScore = yearEnd?.completeness.score ?? 0;
   const notesEvidence = filingReadinessProfile?.requiredEvidence.filter((item) => {
@@ -71,7 +74,7 @@ export function PeriodWorkbenchOverview({
     {
       id: "setup",
       label: "Setup",
-      detail: setupComplete ? "Company profile and officers recorded" : "Company profile needs officer evidence",
+      detail: setupComplete ? "Company profile and officers recorded" : "Director and secretary evidence required",
       state: setupComplete ? "done" : "active",
       href: `/companies/${companyId}`,
     },
@@ -335,4 +338,8 @@ function activeStageForNextAction(nextAction: WorkflowItem | null): AccountantWo
     default:
       return "Review";
   }
+}
+
+function officerRole(role: string) {
+  return role.toLowerCase().replace(/[\s_-]/g, "");
 }

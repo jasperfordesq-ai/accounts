@@ -78,6 +78,34 @@ describe("PeriodWorkbenchOverview", () => {
     expect(screen.getByText("Named qualified-accountant approval required")).toBeInTheDocument();
     expect(screen.getByText("Revenue deadline has passed and late filing exposure must be reviewed")).toBeInTheDocument();
   }, 20_000);
+
+  it("keeps setup active until director and secretary evidence is recorded", () => {
+    render(
+      <PeriodWorkbenchOverview
+        companyId="7"
+        periodId="3"
+        company={sampleCompanyWithoutSecretary()}
+        period={samplePeriod()}
+        yearEnd={sampleYearEnd()}
+        readiness={sampleReadiness()}
+        filingStatus={sampleFilingStatus()}
+        filingReadinessProfile={sampleFilingReadinessProfile()}
+        transactionTotal={10}
+        categorisedCount={6}
+      />,
+    );
+
+    const commandCentre = screen.getByRole("heading", { name: "Period command centre" }).closest("section");
+    expect(commandCentre).not.toBeNull();
+    const command = within(commandCentre!);
+    expect(command.getByText("2 stages ready")).toBeInTheDocument();
+    expect(command.getByText("Import, Classify")).toBeInTheDocument();
+
+    const workflow = screen.getByRole("navigation", { name: "Accountant Workflow" });
+    const setupStep = within(workflow).getByRole("link", { name: /Setup/ });
+    expect(setupStep).toHaveTextContent("Director and secretary evidence required");
+    expect(setupStep).toHaveAttribute("aria-current", "step");
+  }, 20_000);
 });
 
 function sampleCompany(): Company {
@@ -105,8 +133,18 @@ function sampleCompany(): Company {
     isInsuranceUndertaking: false,
     isPensionFund: false,
     isCharitableOrganisation: false,
-    officers: [{ id: 1, companyId: 7, name: "Director One", role: "Director" }],
+    officers: [
+      { id: 1, companyId: 7, name: "Director One", role: "Director" },
+      { id: 2, companyId: 7, name: "Secretary One", role: "CompanySecretary" },
+    ],
     periods: [],
+  };
+}
+
+function sampleCompanyWithoutSecretary(): Company {
+  return {
+    ...sampleCompany(),
+    officers: [{ id: 1, companyId: 7, name: "Director One", role: "Director" }],
   };
 }
 
