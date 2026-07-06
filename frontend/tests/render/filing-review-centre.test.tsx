@@ -58,6 +58,16 @@ describe("FilingReviewCentre", () => {
     expect(within(approvalDocket).getByText("1 blocker / 1 warning")).toBeInTheDocument();
     expect(within(approvalDocket).getByText("Next workflow action")).toBeInTheDocument();
     expect(within(approvalDocket).getByText("Approve CRO pack")).toBeInTheDocument();
+
+    const sourceReviewBoard = screen.getByRole("region", { name: "Legal source review board" });
+    const sourceBoard = within(sourceReviewBoard);
+    expect(sourceBoard.getByText("Legal source review board")).toBeInTheDocument();
+    expect(sourceBoard.getByText("CRO financial statements requirements")).toBeInTheDocument();
+    expect(sourceBoard.getByText("Used by: Required evidence, Blocking issues, Warning issues, Sign-off packet, Revenue taxonomy, Filing profile")).toBeInTheDocument();
+    expect(sourceBoard.getByRole("link", { name: /CRO financial statements requirements/ })).toHaveAttribute(
+      "href",
+      "https://cro.ie/annual-return/financial-statements-requirements/",
+    );
   });
 
   it("surfaces source-backed evidence and blocks approval for manual handoff paths", () => {
@@ -94,11 +104,11 @@ describe("FilingReviewCentre", () => {
     expect(screen.getAllByText("Manual professional handoff").length).toBeGreaterThan(0);
     expect(screen.getByText("Audit report")).toBeInTheDocument();
     expect(screen.getAllByText("Signed auditor report must be reviewed manually before final filing.").length).toBeGreaterThan(0);
-    expect(screen.getByRole("link", { name: /CRO financial statements requirements/ })).toHaveAttribute(
+    expect(screen.getAllByRole("link", { name: /CRO financial statements requirements/ })[0]).toHaveAttribute(
       "href",
       "https://cro.ie/annual-return/financial-statements-requirements/",
     );
-    expect(screen.getByText("Effective 03 Jul 2026")).toBeInTheDocument();
+    expect(screen.getAllByText("Effective 03 Jul 2026").length).toBeGreaterThan(0);
     expect(screen.getByText("Approval is disabled while manual professional handoff is required.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Approve for Filing/i })).toBeDisabled();
   });
@@ -435,11 +445,11 @@ describe("FilingReviewCentre", () => {
     expect(screen.getByText("Charity reporting evidence")).toBeInTheDocument();
     expect(screen.getByText("Auditor handoff")).toBeInTheDocument();
     expect(screen.getByText("Signed auditor report evidence is required before final output generation.")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Charities Regulator annual report guidance/ })).toHaveAttribute(
+    expect(screen.getAllByRole("link", { name: /Charities Regulator annual report guidance/ })[0]).toHaveAttribute(
       "href",
       "https://www.charitiesregulator.ie/en/information-for-charities/annual-report-how-to-submit",
     );
-    expect(screen.getByRole("link", { name: /CRO auditor's report requirements/ })).toHaveAttribute(
+    expect(screen.getAllByRole("link", { name: /CRO auditor's report requirements/ })[0]).toHaveAttribute(
       "href",
       "https://cro.ie/annual-return/financial-statements-requirements/auditors-report/",
     );

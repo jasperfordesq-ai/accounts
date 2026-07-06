@@ -5,6 +5,7 @@ import type {
   FilingReadinessSignOffPacket,
   FilingReadinessSignOffStep,
   FilingWorkflowStatus,
+  LegalSourceReference,
 } from "@/lib/api";
 import {
   EvidenceChecklist,
@@ -94,6 +95,8 @@ export function FilingReviewCentre({
                 filingReadinessProfile={filingReadinessProfile}
                 croSubmissionReference={croSubmissionReference}
               />
+
+              <LegalSourceReviewBoard filingReadinessProfile={filingReadinessProfile} />
 
               <SignOffPacketPanel packet={filingReadinessProfile.signOffPacket} />
 
@@ -220,6 +223,78 @@ export function FilingReviewCentre({
       )}
     </ReviewPanel>
   );
+}
+
+function LegalSourceReviewBoard({
+  filingReadinessProfile,
+}: {
+  filingReadinessProfile: FilingReadinessProfile;
+}) {
+  const sourceEntries = buildLegalSourceReviewEntries(filingReadinessProfile);
+
+  return (
+    <section
+      aria-label="Legal source review board"
+      className="rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-4"
+    >
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Legal source review board</p>
+          <p className="mt-1 max-w-3xl text-sm leading-6 text-[var(--muted-foreground)]">
+            Source-law traceability grouped by the filing evidence, blockers, sign-off packet and taxonomy decisions that use each source.
+          </p>
+        </div>
+        <StatusBadge tone="info">{sourceEntries.length} sources</StatusBadge>
+      </div>
+
+      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+        {sourceEntries.map((entry) => (
+          <article key={entry.source.sourceId} className="min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
+            <LegalSourceList sources={[entry.source]} />
+            <p className="mt-3 text-xs font-medium leading-5 text-[var(--muted-foreground)]">
+              Used by: {entry.usedBy.join(", ")}
+            </p>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function buildLegalSourceReviewEntries(filingReadinessProfile: FilingReadinessProfile) {
+  const sources = new Map<string, { source: LegalSourceReference; usedBy: string[] }>();
+
+  const addSource = (source: LegalSourceReference, usedBy: string) => {
+    const existing = sources.get(source.sourceId);
+    if (existing) {
+      if (!existing.usedBy.includes(usedBy)) existing.usedBy.push(usedBy);
+      return;
+    }
+
+    sources.set(source.sourceId, { source, usedBy: [usedBy] });
+  };
+
+  filingReadinessProfile.requiredEvidence.forEach((item) => {
+    item.sources.forEach((source) => addSource(source, "Required evidence"));
+  });
+  filingReadinessProfile.blockingIssues.forEach((issue) => {
+    issue.sources.forEach((source) => addSource(source, "Blocking issues"));
+  });
+  filingReadinessProfile.warningIssues.forEach((issue) => {
+    issue.sources.forEach((source) => addSource(source, "Warning issues"));
+  });
+  filingReadinessProfile.signOffPacket.steps.forEach((step) => {
+    step.sources.forEach((source) => addSource(source, "Sign-off packet"));
+  });
+  filingReadinessProfile.revenueTaxonomy.sources.forEach((source) => {
+    addSource(source, "Revenue taxonomy");
+  });
+  filingReadinessProfile.sourceReferences.forEach((source) => {
+    addSource(source, "Filing profile");
+  });
+
+  return Array.from(sources.values()).sort((left, right) =>
+    left.source.title.localeCompare(right.source.title, "en-IE", { sensitivity: "base" }));
 }
 
 function ProductionDecisionLedger({
