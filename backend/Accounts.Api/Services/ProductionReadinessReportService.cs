@@ -2638,6 +2638,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 "Dashboard: identify the client, deadline pressure, blockers, reviewer owner and next action.",
                 "Company detail: confirm statutory profile, company type, officers, charity flags and period setup.",
                 "Period workspace: review import, classification, year-end evidence, statements, notes and workflow rail state.",
+                "Financial statements: inspect statement preview, tax computation, source trail and directors' report evidence.",
                 "Filing review: inspect readiness profile, legal source links, generated outputs, signatory gates and accountant sign-off packet.",
                 "Production readiness: confirm golden corpus, statutory rules coverage, visual QA, release blockers and operational controls."
             ],
@@ -2663,7 +2664,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
     {
         var scenarioCodes = goldenCorpus.Select(scenario => scenario.Code).Order(StringComparer.Ordinal).ToArray();
         var routeCodes = new HashSet<string>(
-            ["dashboard", "company-detail", "period-workspace", "filing-review", "production-readiness"],
+            ["dashboard", "company-detail", "period-workspace", "financial-statements", "filing-review", "production-readiness"],
             StringComparer.Ordinal);
         var visualArtifactNamesByRoute = visualQaCoverage.Artifacts
             .GroupBy(artifact => artifact.RouteCode, StringComparer.Ordinal)
@@ -2705,6 +2706,10 @@ public class ProductionReadinessReportService(AccountsDbContext db)
         {
             criteria[0] = "Filing review route exposes readiness, source links, generated outputs, signatory gates, accountant sign-off packet, external ROS/iXBRL validation and filing state.";
         }
+        else if (route.Code == "financial-statements")
+        {
+            criteria[0] = "Financial statements route exposes statement preview, tax computation, source trail and directors' report evidence before filing review.";
+        }
         else if (route.Code == "production-readiness")
         {
             criteria[0] = "Production readiness route exposes backend checks, filing rules coverage, unsupported paths, security posture, release blockers and accountant review state.";
@@ -2718,8 +2723,9 @@ public class ProductionReadinessReportService(AccountsDbContext db)
         "dashboard" => 0,
         "company-detail" => 1,
         "period-workspace" => 2,
-        "filing-review" => 3,
-        "production-readiness" => 4,
+        "financial-statements" => 3,
+        "filing-review" => 4,
+        "production-readiness" => 5,
         _ => 99
     };
 

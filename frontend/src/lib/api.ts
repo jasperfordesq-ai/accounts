@@ -3261,7 +3261,14 @@ function assertAccountantWorkflowWalkthroughProtocol(report: ProductionReadiness
 }
 
 function assertAccountantJourneyAcceptanceChecklist(report: ProductionReadinessReport) {
-  const requiredRouteCodes = ["dashboard", "company-detail", "period-workspace", "filing-review", "production-readiness"];
+  const requiredRouteCodes = [
+    "dashboard",
+    "company-detail",
+    "period-workspace",
+    "financial-statements",
+    "filing-review",
+    "production-readiness",
+  ];
   const checklist = report.accountantJourneyAcceptanceChecklist;
   const releaseChecklistCodes = new Set(report.releaseReviewChecklist.map((item) => item.code));
   const routeByCode = new Map(report.visualQaCoverage.routes.map((route) => [route.code, route]));

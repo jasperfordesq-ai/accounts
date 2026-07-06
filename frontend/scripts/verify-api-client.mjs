@@ -446,6 +446,7 @@ function productionReadinessReportFixture() {
         "Dashboard: identify the client, deadline pressure, blockers, reviewer owner and next action.",
         "Company detail: confirm statutory profile, company type, officers, charity flags and period setup.",
         "Period workspace: review import, classification, year-end evidence, statements, notes and workflow rail state.",
+        "Financial statements: inspect statement preview, tax computation, source trail and directors' report evidence.",
         "Filing review: inspect readiness profile, legal source links, generated outputs, signatory gates and accountant sign-off packet.",
         "Production readiness: confirm golden corpus, statutory rules coverage, visual QA, release blockers and operational controls.",
       ],
@@ -468,6 +469,10 @@ function productionReadinessReportFixture() {
       journeyAcceptance("dashboard", "Dashboard", "dashboard", ACCOUNTANT_WORKFLOW_STAGES),
       journeyAcceptance("company-detail", "Company detail", "company", ["Setup"]),
       journeyAcceptance("period-workspace", "Period workspace", "period", ACCOUNTANT_WORKFLOW_STAGES),
+      journeyAcceptance("financial-statements", "Financial statements", "financialStatements", ["Statements"], [
+        "Financial statements route exposes statement preview, tax computation, source trail and directors' report evidence before filing review.",
+        "A named qualified accountant accepts the Financial statements route outputs, gates, wording and evidence for every seeded golden scenario.",
+      ]),
       journeyAcceptance("filing-review", "Filing review", "filing", ["Review", "Filing"], [
         "Filing review route exposes readiness, source links, generated outputs, signatory gates, accountant sign-off packet, external ROS/iXBRL validation and filing state.",
         "A named qualified accountant accepts the Filing review route outputs, gates, wording and evidence for every seeded golden scenario.",

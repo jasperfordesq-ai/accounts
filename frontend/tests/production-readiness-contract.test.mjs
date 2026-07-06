@@ -130,15 +130,19 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.match(parsed.accountantWorkflowWalkthroughProtocol.routeSequence[0], /Dashboard/);
   assert.match(parsed.accountantWorkflowWalkthroughProtocol.acceptanceCriteria.at(-1), /outputs, gates, wording and evidence/);
   assert.ok(parsed.accountantWorkflowWalkthroughProtocol.requiredEvidence.includes("seeded golden corpus walkthrough note"));
-  assert.equal(parsed.accountantJourneyAcceptanceChecklist.length, 5);
+  assert.equal(parsed.accountantJourneyAcceptanceChecklist.length, 6);
   assert.deepEqual(
     parsed.accountantJourneyAcceptanceChecklist.map((item) => item.routeCode).sort(),
-    ["company-detail", "dashboard", "filing-review", "period-workspace", "production-readiness"],
+    ["company-detail", "dashboard", "filing-review", "financial-statements", "period-workspace", "production-readiness"],
   );
   assert.equal(parsed.accountantJourneyAcceptanceChecklist[0].signOffGate, "golden-corpus-accountant-acceptance");
   assert.deepEqual(parsed.accountantJourneyAcceptanceChecklist[0].seededScenarioCodes, ["clg-charity", "dac-small", "medium-audit-required", "micro-ltd", "small-abridged-ltd"]);
   assert.equal(parsed.accountantJourneyAcceptanceChecklist[0].visualArtifactNames.length, 4);
   assert.match(parsed.accountantJourneyAcceptanceChecklist[2].acceptanceCriteria[0], /Period workspace/);
+  assert.match(
+    parsed.accountantJourneyAcceptanceChecklist.find((item) => item.routeCode === "financial-statements")?.acceptanceCriteria[0] ?? "",
+    /statement preview, tax computation, source trail and directors' report/i,
+  );
   assert.equal(parsed.assurancePacket.packetVersion, "production-assurance-packet-v1");
   assert.equal(parsed.assurancePacket.sourceLawSnapshotHash, "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
   assert.equal(parsed.assurancePacket.goldenCorpusCovered, 5);
@@ -1013,6 +1017,7 @@ function sampleReport() {
         "Dashboard: identify the client, deadline pressure, blockers, reviewer owner and next action.",
         "Company detail: confirm statutory profile, company type, officers, charity flags and period setup.",
         "Period workspace: review import, classification, year-end evidence, statements, notes and workflow rail state.",
+        "Financial statements: inspect statement preview, tax computation, source trail and directors' report evidence.",
         "Filing review: inspect readiness profile, legal source links, generated outputs, signatory gates and accountant sign-off packet.",
         "Production readiness: confirm golden corpus, statutory rules coverage, visual QA, release blockers and operational controls.",
       ],
@@ -1035,6 +1040,10 @@ function sampleReport() {
       journeyAcceptance("dashboard", "Dashboard", "dashboard", ["Setup", "Import", "Classify", "Year-End", "Statements", "Notes", "Review", "Filing"]),
       journeyAcceptance("company-detail", "Company detail", "company", ["Setup"]),
       journeyAcceptance("period-workspace", "Period workspace", "period", ["Setup", "Import", "Classify", "Year-End", "Statements", "Notes", "Review", "Filing"]),
+      journeyAcceptance("financial-statements", "Financial statements", "financialStatements", ["Statements"], [
+        "Financial statements route exposes statement preview, tax computation, source trail and directors' report evidence before filing review.",
+        "A named qualified accountant accepts the Financial statements route outputs, gates, wording and evidence for every seeded golden scenario.",
+      ]),
       journeyAcceptance("filing-review", "Filing review", "filing", ["Review", "Filing"], [
         "Filing review route exposes readiness, source links, generated outputs, signatory gates, accountant sign-off packet, external ROS/iXBRL validation and filing state.",
         "A named qualified accountant accepts the Filing review route outputs, gates, wording and evidence for every seeded golden scenario.",

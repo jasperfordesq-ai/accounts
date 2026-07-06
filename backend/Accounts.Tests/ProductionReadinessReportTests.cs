@@ -500,7 +500,7 @@ public class ProductionReadinessReportTests
 
         Assert.Contains(report.AssurancePacket.EvidenceItems, item => item == "accountant-journey-acceptance-checklist");
         Assert.Equal(
-            new[] { "company-detail", "dashboard", "filing-review", "period-workspace", "production-readiness" },
+            new[] { "company-detail", "dashboard", "filing-review", "financial-statements", "period-workspace", "production-readiness" },
             checklist.Select(item => StringProperty(item, "RouteCode")).Order(StringComparer.Ordinal));
 
         var scenarioCodes = report.GoldenFilingCorpus.Select(scenario => scenario.Code).Order(StringComparer.Ordinal).ToArray();
@@ -540,6 +540,11 @@ public class ProductionReadinessReportTests
         Assert.Contains(StringListProperty(filingReview, "WorkflowStages"), stage => stage == "Filing");
         Assert.Contains(StringListProperty(filingReview, "AcceptanceCriteria"), criterion =>
             criterion.Contains("external ROS/iXBRL validation", StringComparison.OrdinalIgnoreCase));
+
+        var financialStatements = Assert.Single(checklist, item => StringProperty(item, "RouteCode") == "financial-statements");
+        Assert.Equal(["Statements"], StringListProperty(financialStatements, "WorkflowStages"));
+        Assert.Contains(StringListProperty(financialStatements, "AcceptanceCriteria"), criterion =>
+            criterion.Contains("statement preview, tax computation, source trail and directors' report", StringComparison.OrdinalIgnoreCase));
 
         var productionReadiness = Assert.Single(checklist, item => StringProperty(item, "RouteCode") == "production-readiness");
         Assert.Contains(StringListProperty(productionReadiness, "AcceptanceCriteria"), criterion =>
