@@ -1941,6 +1941,19 @@ export interface ProductionAssurancePacket {
   releaseBlockers: string[];
 }
 
+export interface RevenueTaxonomyRangeEvidence {
+  taxonomyKey: string;
+  accountingStandard: string;
+  taxonomyDate: string;
+  label: string;
+  schemaRef: string;
+  acceptedByRevenue: boolean;
+  effectiveForPeriodsStartingOnOrAfter: string;
+  effectiveForPeriodsStartingBefore: string;
+  sourceIds: string[];
+  releaseGateCodes: string[];
+}
+
 export interface ProductionReadinessReport {
   generatedAt: string;
   overallStatus: string;
@@ -1950,6 +1963,7 @@ export interface ProductionReadinessReport {
   sourceLawTraceability: SourceLawTraceabilityEntry[];
   sourceLawMaintenanceProtocol: SourceLawMaintenanceProtocol;
   sourceLawReviewLedger: SourceLawReviewLedgerEntry[];
+  revenueTaxonomyRanges: RevenueTaxonomyRangeEvidence[];
   assurancePacket: ProductionAssurancePacket;
   accountantAcceptanceCriteria: AccountantAcceptanceCriterion[];
   accountantAcceptanceSummary: AccountantAcceptanceSummary;
@@ -2024,6 +2038,19 @@ const sourceLawReviewLedgerEntrySchema = z.object({
   blocksRelease: z.boolean(),
   reviewChecks: z.array(z.string().min(1)),
   requiredEvidence: z.array(z.string().min(1)),
+});
+
+const revenueTaxonomyRangeEvidenceSchema = z.object({
+  taxonomyKey: z.string().min(1),
+  accountingStandard: z.string().min(1),
+  taxonomyDate: z.string().min(1),
+  label: z.string().min(1),
+  schemaRef: z.string().url(),
+  acceptedByRevenue: z.boolean(),
+  effectiveForPeriodsStartingOnOrAfter: z.string().min(1),
+  effectiveForPeriodsStartingBefore: z.string(),
+  sourceIds: z.array(z.string().min(1)),
+  releaseGateCodes: z.array(z.string().min(1)),
 });
 
 const productionAssurancePacketSchema = z.object({
@@ -2394,6 +2421,7 @@ export const productionReadinessReportSchema = z.object({
   sourceLawTraceability: z.array(sourceLawTraceabilityEntrySchema),
   sourceLawMaintenanceProtocol: sourceLawMaintenanceProtocolSchema,
   sourceLawReviewLedger: z.array(sourceLawReviewLedgerEntrySchema),
+  revenueTaxonomyRanges: z.array(revenueTaxonomyRangeEvidenceSchema),
   assurancePacket: productionAssurancePacketSchema,
   accountantAcceptanceCriteria: z.array(accountantAcceptanceCriterionSchema),
   accountantAcceptanceSummary: accountantAcceptanceSummarySchema,
@@ -2644,6 +2672,7 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
   });
 
   assertSourceLawReviewLedger(report, snapshotSourceIds);
+  assertRevenueTaxonomyRanges(report);
 
   if (!report.assurancePacket.evidenceItems.includes("source-law-traceability-index")) {
     throw new Error(
@@ -3142,6 +3171,32 @@ function assertSourceLawReviewLedger(report: ProductionReadinessReport, snapshot
           `Invalid production readiness report contract: sourceLawReviewLedger.${entryIndex}.requiredEvidence - ${evidence} is required`,
         );
       }
+    }
+  });
+}
+
+function assertRevenueTaxonomyRanges(report: ProductionReadinessReport) {
+  if (report.revenueTaxonomyRanges.length === 0) {
+    throw new Error("Invalid production readiness report contract: revenueTaxonomyRanges - at least one accepted taxonomy range is required");
+  }
+
+  if (!report.assurancePacket.evidenceItems.includes("revenue-taxonomy-range-evidence")) {
+    throw new Error(
+      "Invalid production readiness report contract: assurancePacket.evidenceItems - revenue-taxonomy-range-evidence is required",
+    );
+  }
+
+  report.revenueTaxonomyRanges.forEach((range, index) => {
+    if (!range.releaseGateCodes.includes("ixbrl-taxonomy-selection")) {
+      throw new Error(
+        `Invalid production readiness report contract: revenueTaxonomyRanges.${index}.releaseGateCodes - ixbrl-taxonomy-selection is required`,
+      );
+    }
+
+    if (!range.releaseGateCodes.includes("source-law-change-review")) {
+      throw new Error(
+        `Invalid production readiness report contract: revenueTaxonomyRanges.${index}.releaseGateCodes - source-law-change-review is required`,
+      );
     }
   });
 }

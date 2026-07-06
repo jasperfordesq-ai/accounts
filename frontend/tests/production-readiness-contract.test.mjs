@@ -87,6 +87,10 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.ok(parsed.sourceLawReviewLedger[0].blocksRelease);
   assert.match(parsed.sourceLawReviewLedger[0].reviewChecks[0], /reachable/);
   assert.ok(parsed.sourceLawReviewLedger[0].requiredEvidence.includes("qualified-accountant-source-law-signoff"));
+  assert.equal(parsed.revenueTaxonomyRanges[0].taxonomyKey, "irish-extension-2025-frs-102");
+  assert.equal(parsed.revenueTaxonomyRanges[0].effectiveForPeriodsStartingOnOrAfter, "2024-01-01");
+  assert.equal(parsed.revenueTaxonomyRanges[0].effectiveForPeriodsStartingBefore, "");
+  assert.ok(parsed.revenueTaxonomyRanges[0].releaseGateCodes.includes("source-law-change-review"));
   assert.equal(parsed.statutoryRulesCoverage[0].code, "size-classification-thresholds");
   assert.equal(parsed.statutoryRulesCoverage[0].automatedVerifierNames[0], "AccountsWorkflowTests.SizeClassification_FirstYearMicro_AllowsMicroAndAuditExemption");
   assert.equal(parsed.statutoryRulesCoverage[0].edgeCases[0], "two-of-three threshold rule");
@@ -135,6 +139,7 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.equal(parsed.assurancePacket.sourceLawSnapshotHash, "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
   assert.equal(parsed.assurancePacket.goldenCorpusCovered, 5);
   assert.ok(parsed.assurancePacket.evidenceItems.includes("source-law-traceability-index"));
+  assert.ok(parsed.assurancePacket.evidenceItems.includes("revenue-taxonomy-range-evidence"));
   assert.ok(parsed.assurancePacket.evidenceItems.includes("release-review-checklist"));
   assert.ok(parsed.assurancePacket.evidenceItems.includes("golden-evidence-ledger"));
   assert.ok(parsed.assurancePacket.evidenceItems.includes("golden-verifier-manifest"));
@@ -766,6 +771,44 @@ function sampleReport() {
       sourceLawReviewEntry("cro-medium-company", "CRO medium company financial statements requirements"),
       sourceLawReviewEntry("cro-auditors-report", "CRO auditors report requirements"),
     ],
+    revenueTaxonomyRanges: [
+      {
+        taxonomyKey: "irish-extension-2025-frs-102",
+        accountingStandard: "FRS 102",
+        taxonomyDate: "2025-01-01",
+        label: "Irish Extension 2025 FRS 102 taxonomy accepted by Revenue",
+        schemaRef: "https://xbrl.frc.org.uk/ireland/FRS-102/2025-01-01/ie-FRS-102-2025-01-01.xsd",
+        acceptedByRevenue: true,
+        effectiveForPeriodsStartingOnOrAfter: "2024-01-01",
+        effectiveForPeriodsStartingBefore: "",
+        sourceIds: ["frc-frs-102"],
+        releaseGateCodes: ["external-ros-validation", "ixbrl-taxonomy-selection", "source-law-change-review"],
+      },
+      {
+        taxonomyKey: "irish-extension-2023-frs-102",
+        accountingStandard: "FRS 102",
+        taxonomyDate: "2023-01-01",
+        label: "Irish Extension 2023 FRS 102 taxonomy accepted by Revenue",
+        schemaRef: "https://xbrl.frc.org.uk/ireland/FRS-102/2023-01-01/ie-FRS-102-2023-01-01.xsd",
+        acceptedByRevenue: true,
+        effectiveForPeriodsStartingOnOrAfter: "2023-01-01",
+        effectiveForPeriodsStartingBefore: "2024-01-01",
+        sourceIds: ["frc-frs-102"],
+        releaseGateCodes: ["external-ros-validation", "ixbrl-taxonomy-selection", "source-law-change-review"],
+      },
+      {
+        taxonomyKey: "irish-extension-2022-frs-102",
+        accountingStandard: "FRS 102",
+        taxonomyDate: "2022-01-01",
+        label: "Irish Extension 2022 FRS 102 taxonomy accepted by Revenue",
+        schemaRef: "https://xbrl.frc.org.uk/ireland/FRS-102/2022-01-01/ie-FRS-102-2022-01-01.xsd",
+        acceptedByRevenue: true,
+        effectiveForPeriodsStartingOnOrAfter: "2019-01-01",
+        effectiveForPeriodsStartingBefore: "2023-01-01",
+        sourceIds: ["frc-frs-102"],
+        releaseGateCodes: ["external-ros-validation", "ixbrl-taxonomy-selection", "source-law-change-review"],
+      },
+    ],
     assurancePacket: {
       packetId: "assurance-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       packetVersion: "production-assurance-packet-v1",
@@ -778,7 +821,7 @@ function sampleReport() {
       visualQaExpectedScreenshots: expectedVisualSmokeScreenshotCount(),
       requiredOperationalGates: 1,
       openCriticalActions: 3,
-      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "source-law-review-ledger", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-blocker-register", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "accountant-journey-acceptance-checklist", "production-completion-map"],
+      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "source-law-review-ledger", "revenue-taxonomy-range-evidence", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-blocker-register", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "accountant-journey-acceptance-checklist", "production-completion-map"],
       releaseBlockers: [
         "Qualified accountant sign-off required",
         "Source-law change review required",

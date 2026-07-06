@@ -249,6 +249,55 @@ public class ProductionReadinessReportTests
     }
 
     [Fact]
+    public async Task ProductionReadinessReport_ExposesRevenueAcceptedTaxonomyRangesForSourceLawEvidence()
+    {
+        await using var db = CreateDbContext();
+        var report = await new ProductionReadinessReportService(db).GetReportAsync();
+        var rangesProperty = report.GetType().GetProperty("RevenueTaxonomyRanges");
+
+        Assert.NotNull(rangesProperty);
+        var ranges = Assert.IsAssignableFrom<System.Collections.IEnumerable>(rangesProperty!.GetValue(report))
+            .Cast<object>()
+            .ToArray();
+
+        Assert.Equal(3, ranges.Length);
+        Assert.Contains(report.AssurancePacket.EvidenceItems, item => item == "revenue-taxonomy-range-evidence");
+        AssertRevenueTaxonomyRange(
+            ranges,
+            "irish-extension-2025-frs-102",
+            "FRS 102",
+            "2025-01-01",
+            "2024-01-01",
+            "",
+            "/FRS-102/2025-01-01/");
+        AssertRevenueTaxonomyRange(
+            ranges,
+            "irish-extension-2023-frs-102",
+            "FRS 102",
+            "2023-01-01",
+            "2023-01-01",
+            "2024-01-01",
+            "/FRS-102/2023-01-01/");
+        AssertRevenueTaxonomyRange(
+            ranges,
+            "irish-extension-2022-frs-102",
+            "FRS 102",
+            "2022-01-01",
+            "2019-01-01",
+            "2023-01-01",
+            "/FRS-102/2022-01-01/");
+
+        Assert.All(ranges, range =>
+        {
+            Assert.True(BooleanProperty(range, "AcceptedByRevenue"));
+            Assert.Contains(IrishStatutoryRuleSources.RevenueAcceptedTaxonomies.SourceId, StringListProperty(range, "SourceIds"));
+            Assert.Contains(IrishStatutoryRuleSources.FrcFrs102.SourceId, StringListProperty(range, "SourceIds"));
+            Assert.Contains("ixbrl-taxonomy-selection", StringListProperty(range, "ReleaseGateCodes"));
+            Assert.Contains("source-law-change-review", StringListProperty(range, "ReleaseGateCodes"));
+        });
+    }
+
+    [Fact]
     public async Task ProductionReadinessReport_ExposesAuditEvidenceTimelineForWhoWhatWhenReview()
     {
         await using var db = CreateDbContext();
@@ -1815,6 +1864,23 @@ public class ProductionReadinessReportTests
             actual.Count,
             actual.Distinct(StringComparer.OrdinalIgnoreCase).Count());
         Assert.NotEmpty(actual);
+    }
+
+    private static void AssertRevenueTaxonomyRange(
+        IReadOnlyList<object> ranges,
+        string taxonomyKey,
+        string accountingStandard,
+        string taxonomyDate,
+        string effectiveFrom,
+        string effectiveBefore,
+        string schemaRefFragment)
+    {
+        var range = Assert.Single(ranges, item => StringProperty(item, "TaxonomyKey") == taxonomyKey);
+        Assert.Equal(accountingStandard, StringProperty(range, "AccountingStandard"));
+        Assert.Equal(taxonomyDate, StringProperty(range, "TaxonomyDate"));
+        Assert.Equal(effectiveFrom, StringProperty(range, "EffectiveForPeriodsStartingOnOrAfter"));
+        Assert.Equal(effectiveBefore, StringProperty(range, "EffectiveForPeriodsStartingBefore"));
+        Assert.Contains(schemaRefFragment, StringProperty(range, "SchemaRef"), StringComparison.Ordinal);
     }
 
     private static string StringProperty(object value, string propertyName)

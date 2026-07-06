@@ -105,6 +105,20 @@ function sampleReport(): ProductionReadinessReport {
         ],
       },
     ],
+    revenueTaxonomyRanges: [
+      {
+        taxonomyKey: "irish-extension-2025-frs-102",
+        accountingStandard: "FRS 102",
+        taxonomyDate: "2025-01-01",
+        label: "Irish Extension 2025 FRS 102 taxonomy accepted by Revenue",
+        schemaRef: "https://xbrl.frc.org.uk/ireland/FRS-102/2025-01-01/ie-FRS-102-2025-01-01.xsd",
+        acceptedByRevenue: true,
+        effectiveForPeriodsStartingOnOrAfter: "2024-01-01",
+        effectiveForPeriodsStartingBefore: "",
+        sourceIds: ["revenue-accepted-taxonomies"],
+        releaseGateCodes: ["external-ros-validation", "ixbrl-taxonomy-selection", "source-law-change-review"],
+      },
+    ],
     assurancePacket: {
       packetId: "assurance-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       packetVersion: "production-assurance-packet-v1",
@@ -117,7 +131,7 @@ function sampleReport(): ProductionReadinessReport {
       visualQaExpectedScreenshots: 24,
       requiredOperationalGates: 1,
       openCriticalActions: 1,
-      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "source-law-review-ledger", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "accountant-journey-acceptance-checklist", "production-completion-map"],
+      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "source-law-review-ledger", "revenue-taxonomy-range-evidence", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "visual-smoke-screenshots", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "accountant-journey-acceptance-checklist", "production-completion-map"],
       releaseBlockers: ["Qualified accountant sign-off required"],
     },
     accountantAcceptanceCriteria: [

@@ -33,6 +33,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
   const releaseVerificationManifest = report.releaseVerificationManifest ?? [];
   const sourceLawTraceability = report.sourceLawTraceability ?? [];
   const sourceLawReviewLedger = report.sourceLawReviewLedger ?? [];
+  const revenueTaxonomyRanges = report.revenueTaxonomyRanges ?? [];
   const sourceLawMaintenanceProtocol = report.sourceLawMaintenanceProtocol;
   const visualQaCoverage = report.visualQaCoverage;
   const assurancePacket = report.assurancePacket;
@@ -301,6 +302,64 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
               </div>,
               <CompactList key="review-checks" items={entry.reviewChecks} />,
               <CompactList key="required-evidence" items={entry.requiredEvidence} />,
+            ],
+          }))}
+        />
+      </ReviewPanel>
+
+      <ReviewPanel
+        title="Revenue taxonomy ranges"
+        description="Accepted iXBRL taxonomy windows used by the filing engine, source-backed for release review and external ROS validation evidence."
+        actions={<StatusBadge tone="info">{revenueTaxonomyRanges.length} accepted ranges</StatusBadge>}
+      >
+        <DataGrid
+          caption="Revenue taxonomy ranges"
+          filterPlaceholder="Filter Revenue taxonomy ranges"
+          emptyState="No Revenue taxonomy ranges"
+          columns={["Taxonomy", "Period window", "Schema", "Sources", "Release gates", "Status"]}
+          rows={revenueTaxonomyRanges.map((range) => ({
+            id: range.taxonomyKey,
+            tone: range.acceptedByRevenue ? "good" : "bad",
+            sortValues: [
+              range.label,
+              range.effectiveForPeriodsStartingOnOrAfter,
+              range.schemaRef,
+              range.sourceIds.join(" "),
+              range.releaseGateCodes.join(" "),
+              range.acceptedByRevenue ? "accepted" : "manual review",
+            ],
+            searchText: [
+              range.taxonomyKey,
+              range.accountingStandard,
+              range.taxonomyDate,
+              range.label,
+              range.schemaRef,
+              range.effectiveForPeriodsStartingOnOrAfter,
+              range.effectiveForPeriodsStartingBefore,
+              ...range.sourceIds,
+              ...range.releaseGateCodes,
+            ].join(" "),
+            cells: [
+              <div key="taxonomy" className="min-w-56 whitespace-normal">
+                <p className="text-sm font-semibold text-[var(--foreground)]">{range.label}</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <StatusBadge tone="info">{range.accountingStandard}</StatusBadge>
+                  <code className="rounded border border-[var(--border)] bg-[var(--surface-subtle)] px-2 py-1 text-[11px] text-[var(--muted-foreground)]">
+                    {range.taxonomyDate}
+                  </code>
+                </div>
+              </div>,
+              <span key="window" className="text-[var(--muted-foreground)]">
+                {formatTaxonomyPeriodWindow(range.effectiveForPeriodsStartingOnOrAfter, range.effectiveForPeriodsStartingBefore)}
+              </span>,
+              <code key="schema" className="block max-w-md break-all rounded border border-[var(--border)] bg-[var(--surface-subtle)] px-2 py-1 text-[11px] text-[var(--muted-foreground)]">
+                {range.schemaRef}
+              </code>,
+              <CodeStack key="sources" items={range.sourceIds} />,
+              <CodeStack key="gates" items={range.releaseGateCodes} />,
+              <StatusBadge key="status" tone={range.acceptedByRevenue ? "good" : "bad"}>
+                {range.acceptedByRevenue ? "Revenue accepted" : "Manual review"}
+              </StatusBadge>,
             ],
           }))}
         />
@@ -1787,6 +1846,12 @@ function formatCurrency(value: number) {
 
 function formatPacketStatus(value: string) {
   return value === "ready" ? "Packet ready" : `Packet ${formatStatus(value).toLowerCase()}`;
+}
+
+function formatTaxonomyPeriodWindow(effectiveFrom: string, effectiveBefore: string) {
+  return effectiveBefore.trim()
+    ? `${effectiveFrom} to ${effectiveBefore}`
+    : `${effectiveFrom} onward`;
 }
 
 function formatDate(value: string) {

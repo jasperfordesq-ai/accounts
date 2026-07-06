@@ -118,6 +118,18 @@ public sealed record SourceLawMaintenanceProtocol(
     IReadOnlyList<string> AcceptanceCriteria,
     IReadOnlyList<string> RequiredEvidence);
 
+public sealed record RevenueTaxonomyRangeEvidence(
+    string TaxonomyKey,
+    string AccountingStandard,
+    string TaxonomyDate,
+    string Label,
+    string SchemaRef,
+    bool AcceptedByRevenue,
+    string EffectiveForPeriodsStartingOnOrAfter,
+    string EffectiveForPeriodsStartingBefore,
+    IReadOnlyList<string> SourceIds,
+    IReadOnlyList<string> ReleaseGateCodes);
+
 public sealed record StatutoryRuleMatrixEntry(
     string Code,
     string CompanyScope,
@@ -379,6 +391,7 @@ public sealed record ProductionReadinessReport(
     IReadOnlyList<SourceLawTraceabilityEntry> SourceLawTraceability,
     SourceLawMaintenanceProtocol SourceLawMaintenanceProtocol,
     IReadOnlyList<SourceLawReviewLedgerEntry> SourceLawReviewLedger,
+    IReadOnlyList<RevenueTaxonomyRangeEvidence> RevenueTaxonomyRanges,
     ProductionAssurancePacket AssurancePacket,
     IReadOnlyList<AccountantAcceptanceCriterion> AccountantAcceptanceCriteria,
     AccountantAcceptanceSummary AccountantAcceptanceSummary,
@@ -443,6 +456,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             accountantAcceptanceCriteria);
         var sourceLawMaintenanceProtocol = BuildSourceLawMaintenanceProtocol(sourceSnapshot);
         var sourceLawReviewLedger = BuildSourceLawReviewLedger(sourceSnapshot, releaseReviewChecklist);
+        var revenueTaxonomyRanges = BuildRevenueTaxonomyRanges();
         var assurancePacket = BuildAssurancePacket(
             sourceSnapshot,
             goldenCorpus,
@@ -461,6 +475,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             sourceLawTraceability,
             sourceLawMaintenanceProtocol,
             sourceLawReviewLedger,
+            revenueTaxonomyRanges,
             assurancePacket,
             accountantAcceptanceCriteria,
             accountantAcceptanceSummary,
@@ -523,6 +538,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "source-law-traceability-index",
             "source-law-maintenance-protocol",
             "source-law-review-ledger",
+            "revenue-taxonomy-range-evidence",
             "golden-filing-corpus",
             "golden-evidence-ledger",
             "golden-verifier-manifest",
@@ -737,6 +753,33 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 "revenue-filing-readiness"
             ]
         };
+    }
+
+    private static IReadOnlyList<RevenueTaxonomyRangeEvidence> BuildRevenueTaxonomyRanges()
+    {
+        var ranges = RevenueIxbrlTaxonomySelector.AcceptedFrs102Ranges()
+            .OrderByDescending(range => range.EffectiveForPeriodsStartingOnOrAfter)
+            .ToArray();
+
+        return ranges
+            .Select((range, index) => new RevenueTaxonomyRangeEvidence(
+                range.TaxonomyKey,
+                range.AccountingStandard,
+                range.TaxonomyDate,
+                range.Label,
+                range.SchemaRef,
+                AcceptedByRevenue: true,
+                range.EffectiveForPeriodsStartingOnOrAfter.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                index == 0
+                    ? ""
+                    : ranges[index - 1].EffectiveForPeriodsStartingOnOrAfter.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                range.Sources.Select(source => source.SourceId).Order(StringComparer.Ordinal).ToArray(),
+                [
+                    "external-ros-validation",
+                    "ixbrl-taxonomy-selection",
+                    "source-law-change-review"
+                ]))
+            .ToArray();
     }
 
     private static SourceLawMaintenanceProtocol BuildSourceLawMaintenanceProtocol(SourceLawSnapshot sourceSnapshot)
