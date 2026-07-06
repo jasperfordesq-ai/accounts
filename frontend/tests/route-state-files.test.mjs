@@ -334,6 +334,24 @@ test("year-end questionnaire route delegates dividends working-paper section", (
   assert.match(componentSource, /Paid:/, "dividends shell should preserve payment date row copy");
 });
 
+test("year-end questionnaire route delegates director-loan compliance summary", () => {
+  const routeFile = new URL("companies/[companyId]/periods/[periodId]/year-end/page.tsx", appDir);
+  const componentFile = new URL("../src/components/period/YearEndDirectorLoanComplianceSummary.tsx", import.meta.url);
+
+  assert.ok(existsSync(componentFile), "YearEndDirectorLoanComplianceSummary should exist for s.236/SAP review cues");
+
+  const routeSource = readFileSync(routeFile, "utf8");
+  const componentSource = readFileSync(componentFile, "utf8");
+
+  assert.match(routeSource, /YearEndDirectorLoanComplianceSummary/, "year-end questionnaire route should render the focused director-loan compliance summary");
+  assert.doesNotMatch(routeSource, /s\.236 \/ overdrawn-DLA compliance summary/, "year-end questionnaire route should not own director-loan compliance summary markup");
+  assert.doesNotMatch(routeSource, /Shareholder Approval Process \(SAP\) required/, "year-end questionnaire route should not own SAP warning copy");
+  assert.doesNotMatch(routeSource, /10% Threshold/, "year-end questionnaire route should not own director-loan threshold tile copy");
+  assert.match(componentSource, /s\.236 \/ overdrawn-DLA compliance summary/, "director-loan summary should preserve review context");
+  assert.match(componentSource, /Shareholder Approval Process \(SAP\) required/, "director-loan summary should preserve SAP warning copy");
+  assert.match(componentSource, /Exceeds Threshold/, "director-loan summary should preserve threshold status copy");
+});
+
 test("period adjustments route delegates generation, filters and approval composition", () => {
   const periodRoute = new URL("companies/[companyId]/periods/[periodId]/page.tsx", appDir);
   const source = readFileSync(periodRoute, "utf8");

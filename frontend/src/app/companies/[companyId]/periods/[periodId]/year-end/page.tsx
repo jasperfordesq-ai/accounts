@@ -26,6 +26,7 @@ import { toast } from "sonner";
 import { LoansManager } from "@/components/LoansManager";
 import { DirectorLoansManager, type DirectorOption } from "@/components/DirectorLoansManager";
 import { useAuth } from "@/components/AuthProvider";
+import { YearEndDirectorLoanComplianceSummary } from "@/components/period/YearEndDirectorLoanComplianceSummary";
 import { YearEndDividendsSection } from "@/components/period/YearEndDividendsSection";
 import { YearEndQuestionnaireHeader } from "@/components/period/YearEndQuestionnaireHeader";
 import { YearEndFixedAssetsSection } from "@/components/period/YearEndFixedAssetsSection";
@@ -788,47 +789,7 @@ export default function YearEndQuestionnairePage({
           onConfirmReview={() => handleConfirmReview("director-loans", directorLoanCount === 0 ? "Confirmed there are no loans between the directors and the company in the period." : undefined)}
         >
           <div className="space-y-4">
-            {/* s.236 / overdrawn-DLA compliance summary, recomputed as rows are entered */}
-            {directorLoanCompliance && directorLoanCompliance.loans.length > 0 && (
-              <div className="space-y-4">
-                {directorLoanCompliance.warning && (
-                  <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 p-3">
-                    <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
-                      {directorLoanCompliance.warning}
-                    </p>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div className="rounded-lg border border-gray-200 dark:border-neutral-700 p-3 dark:bg-neutral-800/50">
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Total Loans</p>
-                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(directorLoanCompliance.totalDirectorLoans)}</p>
-                  </div>
-                  <div className="rounded-lg border border-gray-200 dark:border-neutral-700 p-3 dark:bg-neutral-800/50">
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Net Assets</p>
-                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(directorLoanCompliance.netAssets)}</p>
-                  </div>
-                  <div className="rounded-lg border border-gray-200 dark:border-neutral-700 p-3 dark:bg-neutral-800/50">
-                    <p className="text-xs text-gray-500 dark:text-gray-400">10% Threshold</p>
-                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(directorLoanCompliance.thresholdAmount)}</p>
-                  </div>
-                  <div className="rounded-lg border border-gray-200 dark:border-neutral-700 p-3 dark:bg-neutral-800/50">
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Status</p>
-                    <Chip variant="soft" size="sm" color={directorLoanCompliance.exceedsThreshold ? "danger" : "success"}>
-                      {directorLoanCompliance.exceedsThreshold ? "Exceeds Threshold" : "Within Limits"}
-                    </Chip>
-                  </div>
-                </div>
-
-                {directorLoanCompliance.sapRequired && (
-                  <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 p-3">
-                    <p className="text-sm font-medium text-red-800 dark:text-red-300">
-                      Shareholder Approval Process (SAP) required under s.239 Companies Act 2014
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
+            <YearEndDirectorLoanComplianceSummary compliance={directorLoanCompliance} />
 
             <DirectorLoansManager
               companyId={cId}
