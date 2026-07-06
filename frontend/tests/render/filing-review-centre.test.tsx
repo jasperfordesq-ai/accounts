@@ -103,6 +103,53 @@ describe("FilingReviewCentre", () => {
     expect(screen.getByRole("button", { name: /Approve for Filing/i })).toBeDisabled();
   });
 
+  it("shows a visible manual-review taxonomy state when Revenue has not accepted the selected taxonomy", () => {
+    render(
+      <FilingReviewCentre
+        filingStatus={sampleWorkflowStatus({ readyToFile: false })}
+        filingReadinessProfile={sampleReadinessProfile({
+          supportedPath: false,
+          manualProfessionalReviewRequired: true,
+          revenueTaxonomy: {
+            taxonomyKey: "manual-revenue-taxonomy-review-required",
+            taxonomyDate: "",
+            label: "Manual Revenue taxonomy review required for FRS 102 periods before 2019-01-01",
+            schemaRef: "",
+            acceptedByRevenue: false,
+            effectiveForPeriodsStartingOnOrAfter: "2019-01-01",
+            sources: [
+              sourceReference({
+                sourceId: "revenue-accepted-taxonomies",
+                title: "Revenue accepted iXBRL taxonomies",
+                effectiveDate: "2025-11-06",
+                url: "https://www.revenue.ie/en/companies-and-charities/corporation-tax-for-companies/submitting-financial-statements/accepted-taxonomies.aspx",
+              }),
+            ],
+          },
+          blockingIssues: [
+            readinessIssue(
+              "taxonomy-not-revenue-accepted",
+              "No Revenue-accepted iXBRL taxonomy is pinned for period start 2018-01-01.",
+            ),
+          ],
+        })}
+        croSubmissionReference=""
+        validatingIxbrl={false}
+        onCroSubmissionReferenceChange={vi.fn()}
+        onRunIxbrlChecks={vi.fn()}
+        onApproveForFiling={vi.fn()}
+        onMarkCroSubmitted={vi.fn()}
+        onConfirmCroPayment={vi.fn()}
+        onMarkCroAccepted={vi.fn()}
+        onRecordCroSendBack={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Taxonomy")).toBeInTheDocument();
+    expect(screen.getByText("Manual taxonomy review")).toBeInTheDocument();
+    expect(screen.getAllByText("No Revenue-accepted iXBRL taxonomy is pinned for period start 2018-01-01.").length).toBeGreaterThan(0);
+  });
+
   it("orders filing evidence by risk before completed evidence", () => {
     render(
       <FilingReviewCentre
@@ -442,6 +489,7 @@ function sampleReadinessProfile({
   warningIssues = [],
   signOffSteps = [],
   extraEvidence = [],
+  revenueTaxonomy,
 }: {
   supportedPath: boolean;
   manualProfessionalReviewRequired: boolean;
@@ -450,6 +498,7 @@ function sampleReadinessProfile({
   warningIssues?: FilingReadinessProfile["warningIssues"];
   signOffSteps?: FilingReadinessProfile["signOffPacket"]["steps"];
   extraEvidence?: FilingReadinessProfile["requiredEvidence"];
+  revenueTaxonomy?: FilingReadinessProfile["revenueTaxonomy"];
 }): FilingReadinessProfile {
   return {
     companyId: 7,
@@ -464,7 +513,7 @@ function sampleReadinessProfile({
     accountantReviewState: "Qualified accountant review required",
     directCroSubmissionSupported: false,
     directRosSubmissionSupported: false,
-    revenueTaxonomy: {
+    revenueTaxonomy: revenueTaxonomy ?? {
       taxonomyKey: "ie-2025-frs-102",
       taxonomyDate: "2025",
       label: "Irish Extension 2025 FRS 102",

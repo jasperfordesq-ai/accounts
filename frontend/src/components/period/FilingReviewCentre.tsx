@@ -74,7 +74,11 @@ export function FilingReviewCentre({
             <StatusTile label="CRO workflow" value={filingStatus.cro.status} tone={filingStatusTone(filingStatus.cro.status)} />
             <StatusTile label="Revenue workflow" value={filingStatus.revenue.status} tone={filingStatusTone(filingStatus.revenue.status)} />
             <StatusTile label="Accountant review" value={filingReadinessProfile?.accountantReviewState ?? "Required"} />
-            <StatusTile label="Taxonomy" value={filingReadinessProfile?.revenueTaxonomy.taxonomyDate ?? "Pending"} />
+            <StatusTile
+              label="Taxonomy"
+              value={taxonomyTileValue(filingReadinessProfile)}
+              tone={taxonomyTileTone(filingReadinessProfile)}
+            />
           </div>
 
           {filingReadinessProfile && (
@@ -588,6 +592,24 @@ function formatIrishDateTime(value: string) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
+}
+
+function taxonomyTileValue(filingReadinessProfile: FilingReadinessProfile | null) {
+  if (!filingReadinessProfile)
+    return "Pending";
+
+  const taxonomy = filingReadinessProfile.revenueTaxonomy;
+  if (!taxonomy.acceptedByRevenue)
+    return "Manual taxonomy review";
+
+  return taxonomy.taxonomyDate.trim() || taxonomy.label || "Pending";
+}
+
+function taxonomyTileTone(filingReadinessProfile: FilingReadinessProfile | null): "default" | "good" | "warn" | "bad" {
+  if (!filingReadinessProfile)
+    return "warn";
+
+  return filingReadinessProfile.revenueTaxonomy.acceptedByRevenue ? "good" : "bad";
 }
 
 function StatusTile({
