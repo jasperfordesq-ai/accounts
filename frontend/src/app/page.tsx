@@ -3,16 +3,11 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
-  Card,
   Button,
 } from "@heroui/react";
 import {
-  Building2,
-  Calendar,
   Plus,
   AlertCircle,
-  CheckCircle2,
-  Clock,
 } from "lucide-react";
 import {
   getCompanies,
@@ -27,6 +22,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { ProductionReadinessPanel } from "@/components/ProductionReadinessPanel";
 import { AccountantDashboardQueue } from "@/components/dashboard/AccountantDashboardQueue";
 import { DashboardCompanyDirectory } from "@/components/dashboard/DashboardCompanyDirectory";
+import { DashboardPracticeSummary } from "@/components/dashboard/DashboardPracticeSummary";
 
 export default function Dashboard() {
   const { isOwner } = useAuth();
@@ -84,15 +80,6 @@ export default function Dashboard() {
 
   if (loading) return <DashboardSkeleton />;
 
-  // Compute quick stats from companies
-  const totalCompanies = companies.length;
-  const totalPeriods = companies.reduce(
-    (sum, c) => sum + (c.periodCount || 0),
-    0
-  );
-  const tradingCompanies = companies.filter((c) => c.isTrading).length;
-  const dormantCompanies = companies.filter((c) => c.isDormant).length;
-
   return (
     <div className="animate-fade-in">
       <div className="flex items-center justify-between mb-8">
@@ -134,79 +121,8 @@ export default function Dashboard() {
         />
       </div>
 
-      {/* Quick Stats Bar */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
-          <Card.Content className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="bg-emerald-50 dark:bg-emerald-900/30 p-2 rounded-lg">
-                <Building2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                  {totalCompanies}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Companies
-                </p>
-              </div>
-            </div>
-          </Card.Content>
-        </Card>
-
-        <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
-          <Card.Content className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="bg-blue-50 dark:bg-blue-900/30 p-2 rounded-lg">
-                <Calendar className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                  {totalPeriods}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Periods
-                </p>
-              </div>
-            </div>
-          </Card.Content>
-        </Card>
-
-        <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
-          <Card.Content className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="bg-purple-50 dark:bg-purple-900/30 p-2 rounded-lg">
-                <CheckCircle2 className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                  {tradingCompanies}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Trading
-                </p>
-              </div>
-            </div>
-          </Card.Content>
-        </Card>
-
-        <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
-          <Card.Content className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="bg-amber-50 dark:bg-amber-900/30 p-2 rounded-lg">
-                <Clock className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                  {dormantCompanies}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Dormant
-                </p>
-              </div>
-            </div>
-          </Card.Content>
-        </Card>
+      <div className="mb-8">
+        <DashboardPracticeSummary companies={companies} deadlines={deadlines} />
       </div>
 
       <DashboardCompanyDirectory companies={companies} deadlines={deadlines} isOwner={isOwner} />
