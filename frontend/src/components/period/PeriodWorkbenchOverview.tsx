@@ -157,6 +157,7 @@ export function PeriodWorkbenchOverview({
   ];
   const workflowById = new Map(workflowItems.map((item) => [item.id, item]));
   const readyStages = workflowItems.filter((item) => item.state === "done");
+  const unresolvedWorkflowItems = workflowItems.filter((item) => item.state !== "done");
   const nextAction = workflowItems.find((item) => item.state === "active")
     ?? workflowItems.find((item) => item.state === "blocked")
     ?? workflowItems.find((item) => item.state === "todo")
@@ -259,6 +260,8 @@ export function PeriodWorkbenchOverview({
         </div>
       </ReviewPanel>
 
+      <WorkflowActionQueue items={unresolvedWorkflowItems} uncategorisedCount={uncategorisedCount} />
+
       <MetricStrip
         metrics={[
           {
@@ -328,6 +331,68 @@ export function PeriodWorkbenchOverview({
   );
 }
 
+function WorkflowActionQueue({
+  items,
+  uncategorisedCount,
+}: {
+  items: WorkflowItem[];
+  uncategorisedCount: number;
+}) {
+  const visibleItems = items.slice(0, 3);
+
+  return (
+    <section
+      aria-label="Period workflow action queue"
+      className="rounded-md border border-[var(--border)] bg-[var(--surface)]"
+    >
+      <div className="flex flex-col gap-2 border-b border-[var(--border)] px-3 py-3 md:flex-row md:items-center md:justify-between">
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-[var(--foreground)]">Period workflow action queue</h3>
+          <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">
+            First unresolved steps for this period.
+          </p>
+        </div>
+        <StatusBadge tone={items.length > 0 ? "warn" : "good"}>
+          {formatWorkflowActionCount(items.length)}
+        </StatusBadge>
+      </div>
+      <div className="divide-y divide-[var(--border)]">
+        {visibleItems.map((item) => (
+          <div
+            key={item.id}
+            className="grid gap-3 px-3 py-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)_auto] lg:items-center"
+          >
+            <div className="min-w-0">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <p className="truncate text-sm font-semibold text-[var(--foreground)]">{item.label}</p>
+                <StatusBadge tone={workflowItemTone(item.state)}>{workflowStateLabel(item.state)}</StatusBadge>
+              </div>
+              <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">
+                {workflowQueueDetail(item, uncategorisedCount)}
+              </p>
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase text-[var(--muted-foreground)]">Review cue</p>
+              <p className="mt-1 text-sm font-medium leading-5 text-[var(--foreground)]">
+                {workflowReviewCue(item)}
+              </p>
+            </div>
+            {item.href && (
+              <Link
+                href={item.href}
+                className="inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] px-3 text-xs font-semibold text-[var(--foreground)] hover:border-[var(--ring)]"
+              >
+                Open {item.label}
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function GateSnapshotItem({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
@@ -335,6 +400,39 @@ function GateSnapshotItem({ label, value }: { label: string; value: string }) {
       <p className="mt-1 break-words text-sm font-semibold leading-5 text-[var(--foreground)]">{value}</p>
     </div>
   );
+}
+
+function formatWorkflowActionCount(count: number) {
+  return `${count} ${count === 1 ? "open action" : "open actions"}`;
+}
+
+function workflowItemTone(state: WorkflowItem["state"]) {
+  if (state === "blocked") return "bad";
+  if (state === "active") return "info";
+  if (state === "todo") return "warn";
+  return "good";
+}
+
+function workflowStateLabel(state: WorkflowItem["state"]) {
+  if (state === "active") return "Active";
+  if (state === "blocked") return "Blocked";
+  if (state === "todo") return "Pending";
+  return "Complete";
+}
+
+function workflowReviewCue(item: WorkflowItem) {
+  if (item.state === "blocked") return "Resolve blockers before approval.";
+  if (item.state === "active") return "This is the next workbench step.";
+  if (item.state === "todo") return "Waiting for earlier evidence.";
+  return "Evidence complete.";
+}
+
+function workflowQueueDetail(item: WorkflowItem, uncategorisedCount: number) {
+  if (item.id === "categorise" && uncategorisedCount > 0) {
+    return `${uncategorisedCount} uncategorised ${uncategorisedCount === 1 ? "transaction" : "transactions"}`;
+  }
+
+  return item.detail;
 }
 
 function pickWorkflowRailFields(item?: WorkflowItem, stateOverride?: WorkflowItem["state"]) {

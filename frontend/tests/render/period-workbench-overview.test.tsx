@@ -52,6 +52,29 @@ describe("PeriodWorkbenchOverview", () => {
       "href",
       "/companies/7/periods/3?tab=filing",
     );
+    const workflowActionQueue = screen.getByRole("region", { name: "Period workflow action queue" });
+    expect(within(workflowActionQueue).getByText("Period workflow action queue")).toBeInTheDocument();
+    expect(within(workflowActionQueue).getByText("First unresolved steps for this period.")).toBeInTheDocument();
+    expect(within(workflowActionQueue).getByText("6 open actions")).toBeInTheDocument();
+    expect(within(workflowActionQueue).getByText("Categorise")).toBeInTheDocument();
+    expect(within(workflowActionQueue).getAllByText("Active")).toHaveLength(2);
+    expect(within(workflowActionQueue).getByText("4 uncategorised transactions")).toBeInTheDocument();
+    expect(within(workflowActionQueue).getByRole("link", { name: "Open Categorise" })).toHaveAttribute(
+      "href",
+      "/companies/7/periods/3?tab=categorise",
+    );
+    expect(within(workflowActionQueue).getByText("Year-End")).toBeInTheDocument();
+    expect(within(workflowActionQueue).getByText("75% evidence complete")).toBeInTheDocument();
+    expect(within(workflowActionQueue).getByRole("link", { name: "Open Year-End" })).toHaveAttribute(
+      "href",
+      "/companies/7/periods/3/year-end",
+    );
+    expect(within(workflowActionQueue).getByText("Statements")).toBeInTheDocument();
+    expect(within(workflowActionQueue).getByText("Needs review")).toBeInTheDocument();
+    expect(within(workflowActionQueue).getByRole("link", { name: "Open Statements" })).toHaveAttribute(
+      "href",
+      "/companies/7/periods/3/statements",
+    );
     const workflow = screen.getByRole("navigation", { name: "Accountant Workflow" });
     expect(workflow).toBeInTheDocument();
     const workflowNav = within(workflow);
@@ -67,7 +90,7 @@ describe("PeriodWorkbenchOverview", () => {
     expect(workflowNav.getByRole("link", { name: /Filing/ })).toHaveAttribute("href", "/companies/7/periods/3?tab=filing");
     expect(workflow).not.toHaveTextContent("Categorise");
     expect(screen.getByText("Start with company setup, then move period work through evidence, statements, review and filing.")).toBeInTheDocument();
-    expect(screen.getByText("4 uncategorised transactions")).toBeInTheDocument();
+    expect(screen.getAllByText("4 uncategorised transactions").length).toBeGreaterThan(1);
     expect(screen.getByText("Filing readiness")).toBeInTheDocument();
     expect(screen.getByText("79%")).toBeInTheDocument();
     const sourceBreakdown = screen.getByRole("region", { name: "Issue source breakdown" });
