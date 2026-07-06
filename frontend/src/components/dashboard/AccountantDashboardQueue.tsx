@@ -41,6 +41,7 @@ export function AccountantDashboardQueue({
     .sort(compareQueueRows);
   const urgentCount = rows.filter((row) => row.deadlineTone === "bad" || row.blockerTone === "bad").length;
   const dueSoonCount = rows.filter((row) => row.deadlineState === "Due soon").length;
+  const overdueCount = rows.filter((row) => row.deadlineState === "Overdue").length;
   const manualHandoffCount = rows.filter((row) => row.blockerLabel === "Manual handoff").length;
   const unassignedReviewerCount = rows.filter((row) => !row.company.assignedReviewerName?.trim()).length;
 
@@ -90,6 +91,13 @@ export function AccountantDashboardQueue({
             columns={["Company", "Deadline", "Blockers", "Assigned reviewer", "Next action"]}
             sortableColumns={[true, true, true, true, false]}
             defaultSort={{ columnIndex: 1, direction: "asc" }}
+            totals={[
+              "Queue totals",
+              `${dueSoonCount} due soon / ${overdueCount} overdue`,
+              `${urgentCount} urgent / ${manualHandoffCount} manual handoff`,
+              `${unassignedReviewerCount} unassigned reviewers`,
+              `${rows.length} active clients`,
+            ]}
             rows={rows.map((row) => ({
               id: row.company.id,
               tone: queueRowTone(row),
