@@ -73,6 +73,7 @@ describe("ProductionReadinessWorkbench", () => {
     expectText(/FilingReviewCentre permission gate blocks approval\/submission actions behind canReview/);
     expectText(/PeriodFilingWorkspace extraction composes review, deadline, warning, output and audit panels/);
     expectText(/PeriodImportWorkspace extraction composes classification, bank account, opening-balance, CSV upload and import-status panels/);
+    expectText(/PeriodCategoriseWorkspace extraction composes metrics, transaction rules, bulk actions, filters and categorisation table/);
     expect(screen.getByRole("heading", { name: "Release review checklist" })).toBeInTheDocument();
     expectText("Named accountant final sign-off");
     expectText("named-accountant-approval-record");
@@ -677,6 +678,7 @@ function sampleReport(): ProductionReadinessReport {
           "FilingReviewCentre permission gate blocks approval/submission actions behind canReview and renders PermissionDeniedPanel for ineligible roles.",
           "PeriodFilingWorkspace extraction composes review, deadline, warning, output and audit panels behind one focused filing workflow component.",
           "PeriodImportWorkspace extraction composes classification, bank account, opening-balance, CSV upload and import-status panels behind one focused import workflow component.",
+          "PeriodCategoriseWorkspace extraction composes metrics, transaction rules, bulk actions, filters and categorisation table behind one focused transaction review component.",
           "Render tests cover accountant dashboards, review panels and workflow routes.",
         ],
         nextActions: [

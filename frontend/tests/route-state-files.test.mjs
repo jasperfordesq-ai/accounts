@@ -131,3 +131,33 @@ test("period import workspace composes the accountant import panels", () => {
     assert.match(source, new RegExp(marker.replace(/[&]/g, "\\&")), `PeriodImportWorkspace should render ${marker}`);
   }
 });
+
+test("period categorise route delegates transaction review composition", () => {
+  const periodRoute = new URL("companies/[companyId]/periods/[periodId]/page.tsx", appDir);
+  const source = readFileSync(periodRoute, "utf8");
+
+  assert.match(source, /PeriodCategoriseWorkspace/, "period route should import the focused categorisation workspace");
+  assert.match(source, /<PeriodCategoriseWorkspace[\s\S]*transactions=\{transactions\}/, "period route should render PeriodCategoriseWorkspace with transaction data");
+  assert.match(source, /<PeriodCategoriseWorkspace[\s\S]*onCategoriseTransaction=\{handleCategoriseTransaction\}/, "period route should pass categorisation orchestration into PeriodCategoriseWorkspace");
+  assert.doesNotMatch(source, /<Card\.Title[^>]*>Categorisation Overview<\/Card\.Title>/, "period route should not own categorisation overview markup");
+  assert.doesNotMatch(source, /Transaction Rules/, "period route should not own transaction-rules markup");
+  assert.doesNotMatch(source, /Bulk categorisation/, "period route should not own bulk-categorisation markup");
+});
+
+test("period categorise workspace composes transaction review panels", () => {
+  const componentFile = new URL("../src/components/period/PeriodCategoriseWorkspace.tsx", import.meta.url);
+
+  assert.ok(existsSync(componentFile), "PeriodCategoriseWorkspace should exist as the focused transaction review component");
+
+  const source = readFileSync(componentFile, "utf8");
+  for (const marker of [
+    "Categorisation Overview",
+    "Transaction Rules",
+    "Bulk categorisation",
+    "Categorisation Progress",
+    "Import transactions to begin categorisation",
+    "Showing",
+  ]) {
+    assert.match(source, new RegExp(marker), `PeriodCategoriseWorkspace should render ${marker}`);
+  }
+});
