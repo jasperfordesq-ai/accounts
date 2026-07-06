@@ -33,6 +33,7 @@ import { YearEndFixedAssetsSection } from "@/components/period/YearEndFixedAsset
 import { YearEndInventorySection } from "@/components/period/YearEndInventorySection";
 import { YearEndMoneyListSection } from "@/components/period/YearEndMoneyListSection";
 import { YearEndPayrollSection } from "@/components/period/YearEndPayrollSection";
+import { YearEndPostBalanceSheetEventsSection } from "@/components/period/YearEndPostBalanceSheetEventsSection";
 import { YearEndQuestionnaireSection as Section } from "@/components/period/YearEndQuestionnaireSection";
 import { YearEndTaxBalancesSection } from "@/components/period/YearEndTaxBalancesSection";
 import { useUnsavedChanges } from "@/lib/useUnsavedChanges";
@@ -812,97 +813,24 @@ export default function YearEndQuestionnairePage({
           reviewSaving={savingReviewKey === "post-balance-sheet-events"}
           onConfirmReview={() => handleConfirmReview("post-balance-sheet-events", postBsEvents.length === 0 ? "Confirmed no adjusting or material non-adjusting post balance sheet events identified." : undefined)}
         >
-          {postBsEvents.length > 0 && (
-            <div className="space-y-2 mb-4">
-              {postBsEvents.map((evt) => (
-                <div
-                  key={evt.id}
-                  className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-neutral-700 px-4 py-3 dark:bg-neutral-800/50"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{evt.description}</p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-xs text-gray-400 dark:text-gray-500">
-                        {new Date(evt.eventDate).toLocaleDateString("en-IE")}
-                      </span>
-                      <Chip variant="soft" size="sm" color={evt.isAdjusting ? "warning" : "default"}>
-                        {evt.isAdjusting ? "Adjusting" : "Non-adjusting"}
-                      </Chip>
-                      {evt.financialImpact != null && evt.financialImpact !== 0 && (
-                        <span className="text-xs text-gray-500 dark:text-gray-400">
-                          Impact: {formatCurrency(evt.financialImpact)}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => evt.id && handleDeletePbse(evt.id)}
-                    className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400"
-                    aria-label={`Delete event ${evt.description}`}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="grid grid-cols-12 gap-3 items-end">
-            <div className="col-span-4">
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Description</label>
-              <input
-                type="text"
-                className={inputClass}
-                placeholder="e.g. Major contract signed"
-                value={newPbseDesc}
-                onChange={(e) => setNewPbseDesc(e.target.value)}
-                aria-label="Event description"
-              />
-            </div>
-            <div className="col-span-2">
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Date</label>
-              <input
-                type="date"
-                className={inputClass}
-                value={newPbseDate}
-                onChange={(e) => setNewPbseDate(e.target.value)}
-                aria-label="Event date"
-              />
-            </div>
-            <div className="col-span-2">
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Financial Impact</label>
-              <input
-                type="number"
-                className={inputClass}
-                placeholder="0.00"
-                value={newPbseImpact || ""}
-                onChange={(e) => setNewPbseImpact(Number(e.target.value))}
-                aria-label="Financial impact"
-              />
-            </div>
-            <div className="col-span-2 flex items-center gap-2 pb-2">
-              <input
-                type="checkbox"
-                id="pbse-adjusting"
-                checked={newPbseAdjusting}
-                onChange={(e) => setNewPbseAdjusting(e.target.checked)}
-                className="rounded border-gray-300 dark:border-neutral-600 text-emerald-600 focus:ring-emerald-500"
-              />
-              <label htmlFor="pbse-adjusting" className="text-xs font-medium text-gray-600 dark:text-gray-400">Adjusting</label>
-            </div>
-            <div className="col-span-2">
-              <Button
-                variant="primary"
-                size="sm"
-                onPress={handleAddPbse}
-                isDisabled={savingSection === "pbse"}
-                className="w-full"
-              >
-                {savingSection === "pbse" ? <Spinner size="sm" /> : <><Plus className="w-4 h-4 mr-1" /> Add</>}
-              </Button>
-            </div>
-          </div>
+          <YearEndPostBalanceSheetEventsSection
+            events={postBsEvents}
+            draft={{
+              description: newPbseDesc,
+              eventDate: newPbseDate,
+              isAdjusting: newPbseAdjusting,
+              financialImpact: newPbseImpact,
+            }}
+            saving={savingSection === "pbse"}
+            onDraftChange={(draft) => {
+              setNewPbseDesc(draft.description);
+              setNewPbseDate(draft.eventDate);
+              setNewPbseAdjusting(draft.isAdjusting);
+              setNewPbseImpact(draft.financialImpact ?? 0);
+            }}
+            onAdd={handleAddPbse}
+            onDelete={handleDeletePbse}
+          />
         </Section>
 
         {/* 11. Related Party Transactions */}

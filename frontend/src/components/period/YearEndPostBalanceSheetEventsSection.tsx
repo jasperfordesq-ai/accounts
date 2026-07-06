@@ -1,0 +1,133 @@
+"use client";
+
+import { Button, Chip, Spinner } from "@heroui/react";
+import { Plus, Trash2 } from "lucide-react";
+
+import type { PostBalanceSheetEvent } from "@/lib/api";
+
+interface YearEndPostBalanceSheetEventsSectionProps {
+  events: PostBalanceSheetEvent[];
+  draft: PostBalanceSheetEvent;
+  saving: boolean;
+  onDraftChange: (draft: PostBalanceSheetEvent) => void;
+  onAdd: () => void;
+  onDelete: (id: number) => void;
+}
+
+const inputClass =
+  "w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors";
+
+export function YearEndPostBalanceSheetEventsSection({
+  events,
+  draft,
+  saving,
+  onDraftChange,
+  onAdd,
+  onDelete,
+}: YearEndPostBalanceSheetEventsSectionProps) {
+  return (
+    <>
+      {events.length > 0 && (
+        <div className="space-y-2 mb-4">
+          {events.map((event) => (
+            <div
+              key={event.id}
+              className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-neutral-700 px-4 py-3 dark:bg-neutral-800/50"
+            >
+              <div>
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{event.description}</p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="text-xs text-gray-400 dark:text-gray-500">
+                    {new Date(event.eventDate).toLocaleDateString("en-IE")}
+                  </span>
+                  <Chip variant="soft" size="sm" color={event.isAdjusting ? "warning" : "default"}>
+                    {event.isAdjusting ? "Adjusting" : "Non-adjusting"}
+                  </Chip>
+                  {event.financialImpact != null && event.financialImpact !== 0 && (
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      Impact: {formatCurrency(event.financialImpact)}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => event.id && onDelete(event.id)}
+                className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400"
+                aria-label={`Delete event ${event.description}`}
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="grid grid-cols-12 gap-3 items-end">
+        <div className="col-span-4">
+          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Description</label>
+          <input
+            type="text"
+            className={inputClass}
+            placeholder="e.g. Major contract signed"
+            value={draft.description}
+            onChange={(event) => onDraftChange({ ...draft, description: event.target.value })}
+            aria-label="Event description"
+          />
+        </div>
+        <div className="col-span-2">
+          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Date</label>
+          <input
+            type="date"
+            className={inputClass}
+            value={draft.eventDate}
+            onChange={(event) => onDraftChange({ ...draft, eventDate: event.target.value })}
+            aria-label="Event date"
+          />
+        </div>
+        <div className="col-span-2">
+          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Financial Impact</label>
+          <input
+            type="number"
+            className={inputClass}
+            placeholder="0.00"
+            value={draft.financialImpact || ""}
+            onChange={(event) => onDraftChange({ ...draft, financialImpact: Number(event.target.value) })}
+            aria-label="Financial impact"
+          />
+        </div>
+        <div className="col-span-2 flex items-center gap-2 pb-2">
+          <input
+            type="checkbox"
+            id="pbse-adjusting"
+            checked={draft.isAdjusting}
+            onChange={(event) => onDraftChange({ ...draft, isAdjusting: event.target.checked })}
+            className="rounded border-gray-300 dark:border-neutral-600 text-emerald-600 focus:ring-emerald-500"
+          />
+          <label htmlFor="pbse-adjusting" className="text-xs font-medium text-gray-600 dark:text-gray-400">
+            Adjusting
+          </label>
+        </div>
+        <div className="col-span-2">
+          <Button
+            variant="primary"
+            size="sm"
+            onPress={onAdd}
+            isDisabled={saving}
+            className="w-full"
+            aria-label="Add post-balance sheet event"
+          >
+            {saving ? <Spinner size="sm" /> : <><Plus className="w-4 h-4 mr-1" /> Add</>}
+          </Button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function formatCurrency(amount: number): string {
+  return new Intl.NumberFormat("en-IE", {
+    style: "currency",
+    currency: "EUR",
+  }).format(amount);
+}

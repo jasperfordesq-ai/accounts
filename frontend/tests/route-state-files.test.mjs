@@ -352,6 +352,24 @@ test("year-end questionnaire route delegates director-loan compliance summary", 
   assert.match(componentSource, /Exceeds Threshold/, "director-loan summary should preserve threshold status copy");
 });
 
+test("year-end questionnaire route delegates post-balance-sheet-events working-paper section", () => {
+  const routeFile = new URL("companies/[companyId]/periods/[periodId]/year-end/page.tsx", appDir);
+  const componentFile = new URL("../src/components/period/YearEndPostBalanceSheetEventsSection.tsx", import.meta.url);
+
+  assert.ok(existsSync(componentFile), "YearEndPostBalanceSheetEventsSection should exist for post-year-end event review");
+
+  const routeSource = readFileSync(routeFile, "utf8");
+  const componentSource = readFileSync(componentFile, "utf8");
+
+  assert.match(routeSource, /YearEndPostBalanceSheetEventsSection/, "year-end questionnaire route should render the focused post-balance-sheet-events shell");
+  assert.doesNotMatch(routeSource, /aria-label="Event description"/, "year-end questionnaire route should not own event description fields");
+  assert.doesNotMatch(routeSource, /aria-label="Event date"/, "year-end questionnaire route should not own event date fields");
+  assert.doesNotMatch(routeSource, /Delete event/, "year-end questionnaire route should not own post-balance-sheet event delete copy");
+  assert.match(componentSource, /Adjusting/, "post-balance-sheet-events shell should preserve adjusting treatment copy");
+  assert.match(componentSource, /Non-adjusting/, "post-balance-sheet-events shell should preserve non-adjusting treatment copy");
+  assert.match(componentSource, /Impact:/, "post-balance-sheet-events shell should preserve financial impact cue");
+});
+
 test("period adjustments route delegates generation, filters and approval composition", () => {
   const periodRoute = new URL("companies/[companyId]/periods/[periodId]/page.tsx", appDir);
   const source = readFileSync(periodRoute, "utf8");
