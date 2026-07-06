@@ -5,22 +5,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@heroui/react";
 import {
-  Building2, Trash2
+  Building2
 } from "lucide-react";
 import { toast } from "sonner";
-import { Pencil } from "lucide-react";
 import { getCompany, updateCompany, deleteCompany, createPeriod, deleteOfficer, updateOfficer, createOfficer, getCharityInfo, saveCharityInfo, type Company, type Officer, type CharityInfo } from "@/lib/api";
-import { Breadcrumbs } from "@/components/Breadcrumbs";
-import { ShareCapitalCard } from "@/components/ShareCapitalCard";
 import { useAuth } from "@/components/AuthProvider";
-import { ConfirmModal } from "@/components/ConfirmModal";
 import { CompanyDetailSkeleton } from "@/components/Skeleton";
-import { CompanyPeriodsWorkbench } from "@/components/company/CompanyPeriodsWorkbench";
-import { CompanyStatutoryProfile } from "@/components/company/CompanyStatutoryProfile";
-import { CompanyOfficersPanel } from "@/components/company/CompanyOfficersPanel";
-import { CompanyCharityInfoPanel } from "@/components/company/CompanyCharityInfoPanel";
-import { CompanyIdentityEditPanel, type CompanyEditFormValues } from "@/components/company/CompanyIdentityEditPanel";
-import { CompanyWorkspaceOverview } from "@/components/company/CompanyWorkspaceOverview";
+import { type CompanyEditFormValues } from "@/components/company/CompanyIdentityEditPanel";
+import { CompanyDetailWorkbench } from "@/components/company/CompanyDetailWorkbench";
 
 export default function CompanyDetailPage({ params }: { params: Promise<{ companyId: string }> }) {
   const { companyId: id } = use(params);
@@ -257,140 +249,62 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ compan
   }
 
   return (
-    <div className="animate-fade-in">
-      <Breadcrumbs items={[{ label: company.legalName }]} />
-
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-8">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="shrink-0 bg-emerald-50 dark:bg-emerald-900/30 p-3 rounded-xl">
-            <Building2 className="w-7 h-7 text-emerald-600 dark:text-emerald-400" />
-          </div>
-          <div className="min-w-0">
-            <h1 className="break-words text-2xl font-bold text-gray-900 dark:text-gray-100">
-              {company.legalName}
-            </h1>
-            {company.tradingName && (
-              <p className="break-words text-gray-500 dark:text-gray-400">t/a {company.tradingName}</p>
-            )}
-          </div>
-        </div>
-        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
-          <Button
-            variant="outline"
-            size="sm"
-            onPress={startEditing}
-            aria-label="Edit company"
-          >
-            <Pencil className="w-3.5 h-3.5" />
-            Edit
-          </Button>
-          <Button
-            variant="danger"
-            size="sm"
-            onPress={() => setShowDeleteModal(true)}
-            aria-label="Delete company"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            Delete
-          </Button>
-        </div>
-      </div>
-
-      {/* Edit Company Form */}
-      {editing && (
-        <div className="mb-6 animate-slide-down">
-          <CompanyIdentityEditPanel
-            form={editForm}
-            saving={savingCompany}
-            onFormChange={setEditForm}
-            onSave={handleSaveCompany}
-            onCancel={() => setEditing(false)}
-          />
-        </div>
-      )}
-
-      <CompanyWorkspaceOverview company={company} />
-
-      <div className="mb-8">
-        <CompanyStatutoryProfile company={company} />
-      </div>
-
-      <div className="mb-8">
-        <CompanyOfficersPanel
-          officers={company.officers}
-          showAddOfficer={showAddOfficer}
-          newOfficerName={newOfficerName}
-          newOfficerRole={newOfficerRole}
-          editingOfficerId={editingOfficerId}
-          editOfficerName={editOfficerName}
-          editOfficerRole={editOfficerRole}
-          savingOfficer={savingOfficer}
-          canWrite={canWriteWorkingPapers}
-          onShowAddOfficer={() => setShowAddOfficer(true)}
-          onNewOfficerNameChange={setNewOfficerName}
-          onNewOfficerRoleChange={setNewOfficerRole}
-          onCancelAddOfficer={() => {
-            setShowAddOfficer(false);
-            setNewOfficerName("");
-            setNewOfficerRole("Director");
-          }}
-          onAddOfficer={handleAddOfficer}
-          onStartEditOfficer={handleStartEditOfficer}
-          onEditOfficerNameChange={setEditOfficerName}
-          onEditOfficerRoleChange={setEditOfficerRole}
-          onSaveOfficer={handleSaveOfficer}
-          onCancelEditOfficer={() => setEditingOfficerId(null)}
-          onDeleteOfficer={handleDeleteOfficer}
-        />
-      </div>
-
-      {/* Charity reporting */}
-      {company.isCharitableOrganisation && (
-        <div className="mb-8">
-          <CompanyCharityInfoPanel
-            charityInfo={charityInfo}
-            charityForm={charityForm}
-            editing={editingCharity}
-            saving={savingCharity}
-            canWrite={canWriteWorkingPapers}
-            onStartEdit={startEditingCharity}
-            onCancelEdit={() => setEditingCharity(false)}
-            onSave={handleSaveCharity}
-            onFormChange={setCharityForm}
-          />
-        </div>
-      )}
-
-      {/* Share Capital (company-scoped equity) */}
-      <ShareCapitalCard companyId={company.id} canWrite={canWriteWorkingPapers} />
-
-      <CompanyPeriodsWorkbench
-        company={company}
-        showNewPeriod={showNewPeriod}
-        periodStart={periodStart}
-        periodEnd={periodEnd}
-        isFirstYear={isFirstYear}
-        creatingPeriod={creatingPeriod}
-        canWrite={canWriteWorkingPapers}
-        onShowNewPeriod={() => setShowNewPeriod(true)}
-        onCancelNewPeriod={() => setShowNewPeriod(false)}
-        onPeriodStartChange={setPeriodStart}
-        onPeriodEndChange={setPeriodEnd}
-        onFirstYearChange={setIsFirstYear}
-        onCreatePeriod={handleCreatePeriod}
-      />
-
-      {/* Delete Confirmation Modal */}
-      <ConfirmModal
-        open={showDeleteModal}
-        title="Delete Company"
-        description={`This will permanently delete "${company.legalName}" and all its accounting periods, transactions, and financial data. This action cannot be undone.`}
-        confirmLabel="Delete Company"
-        variant="danger"
-        loading={deleting}
-        onConfirm={handleDelete}
-        onCancel={() => setShowDeleteModal(false)}
-      />
-    </div>
+    <CompanyDetailWorkbench
+      company={company}
+      canWriteWorkingPapers={canWriteWorkingPapers}
+      editing={editing}
+      editForm={editForm}
+      savingCompany={savingCompany}
+      showNewPeriod={showNewPeriod}
+      periodStart={periodStart}
+      periodEnd={periodEnd}
+      isFirstYear={isFirstYear}
+      creatingPeriod={creatingPeriod}
+      editingOfficerId={editingOfficerId}
+      editOfficerName={editOfficerName}
+      editOfficerRole={editOfficerRole}
+      savingOfficer={savingOfficer}
+      showAddOfficer={showAddOfficer}
+      newOfficerName={newOfficerName}
+      newOfficerRole={newOfficerRole}
+      charityInfo={charityInfo}
+      charityForm={charityForm}
+      editingCharity={editingCharity}
+      savingCharity={savingCharity}
+      showDeleteModal={showDeleteModal}
+      deleting={deleting}
+      onStartEditCompany={startEditing}
+      onEditFormChange={setEditForm}
+      onSaveCompany={handleSaveCompany}
+      onCancelEditCompany={() => setEditing(false)}
+      onDeleteCompanyRequest={() => setShowDeleteModal(true)}
+      onConfirmDeleteCompany={handleDelete}
+      onCancelDeleteCompany={() => setShowDeleteModal(false)}
+      onShowNewPeriod={() => setShowNewPeriod(true)}
+      onCancelNewPeriod={() => setShowNewPeriod(false)}
+      onPeriodStartChange={setPeriodStart}
+      onPeriodEndChange={setPeriodEnd}
+      onFirstYearChange={setIsFirstYear}
+      onCreatePeriod={handleCreatePeriod}
+      onShowAddOfficer={() => setShowAddOfficer(true)}
+      onNewOfficerNameChange={setNewOfficerName}
+      onNewOfficerRoleChange={setNewOfficerRole}
+      onCancelAddOfficer={() => {
+        setShowAddOfficer(false);
+        setNewOfficerName("");
+        setNewOfficerRole("Director");
+      }}
+      onAddOfficer={handleAddOfficer}
+      onStartEditOfficer={handleStartEditOfficer}
+      onEditOfficerNameChange={setEditOfficerName}
+      onEditOfficerRoleChange={setEditOfficerRole}
+      onSaveOfficer={handleSaveOfficer}
+      onCancelEditOfficer={() => setEditingOfficerId(null)}
+      onDeleteOfficer={handleDeleteOfficer}
+      onStartEditCharity={startEditingCharity}
+      onCancelEditCharity={() => setEditingCharity(false)}
+      onSaveCharity={handleSaveCharity}
+      onCharityFormChange={setCharityForm}
+    />
   );
 }
