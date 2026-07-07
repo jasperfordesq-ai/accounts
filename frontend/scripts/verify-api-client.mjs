@@ -104,7 +104,7 @@ const share = {
 };
 
 function productionReadinessReportFixture() {
-  return withGoldenLegalBasisSnapshots({
+  return withGoldenVerifierManifest(withGoldenLegalBasisSnapshots({
     generatedAt: "2026-07-04T12:00:00Z",
     overallStatus: "review-required",
     companiesInDatabase: 1,
@@ -1337,7 +1337,30 @@ function productionReadinessReportFixture() {
         layoutChecks,
       })),
     },
-  });
+  }));
+}
+
+function withGoldenVerifierManifest(report) {
+  return {
+    ...report,
+    goldenVerifierManifest: report.goldenFilingCorpus.flatMap((scenario) =>
+      scenario.evidenceVerifiers.map((verifier) => ({
+        scenarioCode: scenario.code,
+        scenarioLabel: scenario.label,
+        expectedOutcome: scenario.expectedOutcome,
+        coverageStatus: scenario.coverageStatus,
+        verifierName: verifier.name,
+        command: verifier.command,
+        ciScope: verifier.ciScope,
+        runsInDefaultCi: verifier.runsInDefaultCi,
+        evidenceLevel: verifier.evidenceLevel,
+        blocksRelease: true,
+        outputArtifacts: scenario.evidencePack.outputArtifacts,
+        decisionGates: scenario.evidencePack.decisionGates,
+        proofPointAreas: scenario.evidencePack.expectedProofPoints.map((proofPoint) => proofPoint.area),
+      })),
+    ),
+  };
 }
 
 function withGoldenLegalBasisSnapshots(report) {
