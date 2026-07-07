@@ -2,6 +2,9 @@
 
 Multi-company web application that replaces the traditional year-end accountant workflow for Irish private companies. Takes imported bank transactions + year-end business facts and produces statutory financial statements, CRO filing outputs, and Revenue CT1/iXBRL support.
 
+> Active production-readiness handoff for Claude/agent sessions:
+> **[AGENTS.md - Active Goal Handoff](AGENTS.md#active-goal-handoff)**.
+
 ## Repository
 
 - GitHub: https://github.com/jasperfordesq-ai/accounts
