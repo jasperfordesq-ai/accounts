@@ -156,6 +156,10 @@ npm run build:clean
 
 Do not commit a custom `distDir` to work around local filesystem locks; the production image and `npm run start` expect the standalone server under `.next/standalone`.
 
+## CI Billing/Spending-Limit Outage
+
+If GitHub Actions reports that jobs were not started because recent account payments failed or the spending limit must be increased, follow `Docs/operations/ci-billing-blocker.md`. This is an external account blocker, not release evidence. Keep releases blocked until CI runs again, and retain full local fallback output only as interim engineering signal.
+
 ## Release Checklist
 
 1. Take a pre-release backup and verify the sha256 file.
