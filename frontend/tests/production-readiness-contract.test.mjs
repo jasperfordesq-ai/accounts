@@ -189,7 +189,7 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.ok(parsed.assurancePacket.evidenceItems.includes("golden-verifier-manifest"));
   assert.ok(parsed.assurancePacket.evidenceItems.includes("release-blocker-register"));
   assert.equal(parsed.assurancePacket.releaseBlockers[0], "Qualified accountant sign-off required");
-  assert.equal(parsed.productionScorecard.currentScore, 522);
+  assert.equal(parsed.productionScorecard.currentScore, 533);
   assert.equal(parsed.productionScorecard.targetScore, 700);
   assert.deepEqual(parsed.productionScorecard.categories.map((category) => category.code), [
     "architecture-documentation",
@@ -777,7 +777,7 @@ test("parseProductionReadinessReport rejects scorecard totals that do not match 
 
   assert.throws(
     () => parseProductionReadinessReport(payload),
-    /Invalid production readiness report contract: productionScorecard\.currentScore - expected 522, received 491/,
+    /Invalid production readiness report contract: productionScorecard\.currentScore - expected 533, received 491/,
   );
 });
 
@@ -835,7 +835,7 @@ test("parseProductionReadinessReport rejects release verification manifest that 
 
 function productionScorecard() {
   return {
-    currentScore: 522,
+    currentScore: 533,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete source-law review, named visual QA, monitoring-provider confirmation and qualified-accountant acceptance evidence.",
@@ -843,13 +843,14 @@ function productionScorecard() {
       {
         code: "architecture-documentation",
         label: "Architecture and documentation",
-        currentScore: 97,
+        currentScore: 98,
         targetScore: 100,
         status: "release-evidence-required",
         currentEvidence: [
           "CLAUDE.md is canonical.",
           "AGENTS.md carries the active handoff.",
           "source-law-review-template.md is checked in and release-verifier covered.",
+          "verify-release-artifact-pack.ps1 is documented for exact release evidence packs.",
         ],
         remainingGaps: ["Complete checked-in release evidence templates with named reviewers, including source-law-review-template.md."],
         completionTrackCodes: ["backend-code", "frontend-ui-ux", "frontend-code"],
@@ -896,14 +897,15 @@ function productionScorecard() {
       {
         code: "security-auth-tenant-platform-guardrails",
         label: "Security/auth/tenant/platform guardrails",
-        currentScore: 105,
+        currentScore: 115,
         targetScore: 150,
         status: "operator-confirmation-required",
         currentEvidence: [
           "Session, CSRF, tenant and production safety evidence exists.",
           "No-direct CRO/ROS submission verifier evidence is generated.",
+          "Release artifact pack verifier validates operational reports together.",
         ],
-        remainingGaps: ["Confirm the controlled monitoring smoke event inside the configured provider and retain no-direct submission evidence."],
+        remainingGaps: ["Confirm the controlled monitoring smoke event inside the configured provider and retain release-artifact-pack-report.json."],
         completionTrackCodes: ["backend-code"],
         releaseBlockerCodes: ["backend-code:source-law-change-review", "backend-code:external-ros-validation"],
       },

@@ -187,6 +187,21 @@ verifier and retain its JSON report with the release evidence pack:
 .\scripts\verify-release-evidence.ps1 -EvidenceDirectory .\Docs\release-evidence -ReportPath D:\accounts-smoke\release-evidence-report.json
 ```
 
+After collecting the release candidate artifact reports into one evidence directory,
+run the artifact-pack verifier and retain its JSON report:
+
+```powershell
+.\scripts\verify-release-artifact-pack.ps1 -EvidenceDirectory D:\accounts-smoke -ReportPath D:\accounts-smoke\release-artifact-pack-report.json
+```
+
+The artifact pack must include `dependency-audit-report.json`,
+`production-safety-report.json`, `monitoring-error-routing-report.json`,
+`structured-log-report.json`, `restore-drill-report.json`,
+`no-direct-filing-submission-report.json`, `visual-smoke-evidence-report.json`, and
+`release-evidence-report.json`. The verifier fails if any required report is missing,
+does not have `status: passed`, or if cross-report checks such as the monitoring smoke
+correlation id do not match.
+
 Before completing the visual QA sign-off, verify the CI visual smoke manifest and
 retain the generated evidence report with the screenshot artifact:
 
@@ -269,3 +284,4 @@ The HTTPS smoke path also verifies that the login response sets the `accounts_se
 12. Complete `Docs/release-evidence/monitoring-provider-confirmation-template.md` using the CI monitoring and structured-log artifacts plus the real provider event.
 13. Complete `Docs/release-evidence/qualified-accountant-acceptance-template.md` with a named qualified accountant before real filing preparation is used.
 14. Run `scripts\verify-release-evidence.ps1` and retain `release-evidence-report.json`; real filing use stays blocked if any required checkbox, signature, artifact reference, table row, accepted decision, canonical golden corpus scenario row, source-law source row, external ROS/iXBRL validation row, route row, visual smoke evidence report reference, or required coverage entry is missing.
+15. Run `scripts\verify-release-artifact-pack.ps1` and retain `release-artifact-pack-report.json`; real filing use stays blocked if the exact release artifact pack is missing dependency, production safety, monitoring, structured log, backup/restore, no-direct-submission, visual smoke, or completed release-evidence reports.

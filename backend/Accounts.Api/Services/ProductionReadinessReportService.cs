@@ -786,7 +786,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             Category(
                 "architecture-documentation",
                 "Architecture and documentation",
-                97,
+                98,
                 100,
                 "release-evidence-required",
                 [
@@ -794,6 +794,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "AGENTS.md carries the active production-readiness handoff.",
                     "Production runbook links release evidence templates for source-law review, visual QA, monitoring provider confirmation and qualified-accountant acceptance.",
                     "scripts/verify-release-evidence.ps1 validates completed release evidence templates before real filing use, including source-law source coverage.",
+                    "scripts/verify-release-artifact-pack.ps1 validates the collected release artifact reports as one exact evidence pack.",
                     "CI artifacts now prove production safety, dependency audit, monitoring smoke, structured logs, visual smoke and backup restore drill."
                 ],
                 [
@@ -855,18 +856,19 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             Category(
                 "security-auth-tenant-platform-guardrails",
                 "Security/auth/tenant/platform guardrails",
-                105,
+                115,
                 150,
                 "operator-confirmation-required",
                 [
                     "Authenticated sessions, CSRF, secure cookie checks and post-logout 401 are covered by production smoke.",
                     "Request-scoped EF query filters backstop tenant isolation across company-owned and period-owned child tables.",
                     "Production compose gates enforce immutable images, migrate-only job ordering, demo seed blocking and structured monitoring evidence.",
-                    "scripts/verify-no-direct-filing-submission.ps1 proves final CRO/ROS operations remain recorded workflow states with no outbound submission client wired."
+                    "scripts/verify-no-direct-filing-submission.ps1 proves final CRO/ROS operations remain recorded workflow states with no outbound submission client wired.",
+                    "scripts/verify-release-artifact-pack.ps1 validates dependency, production safety, monitoring, structured log, backup/restore, no-direct-submission, visual smoke and release-evidence reports together."
                 ],
                 [
                     "Confirm the controlled monitoring smoke event inside the configured provider and retain operator evidence.",
-                    "Retain no-direct-filing-submission-report.json with the exact release evidence pack.",
+                    "Run and retain release-artifact-pack-report.json for the exact release candidate.",
                     "Retain production backup/restore drill and dependency evidence for the exact release commit."
                 ],
                 ["backend-code"],

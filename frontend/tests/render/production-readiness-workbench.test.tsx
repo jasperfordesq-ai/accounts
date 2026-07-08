@@ -20,15 +20,15 @@ describe("ProductionReadinessWorkbench", () => {
     expectText("3 companies");
     expectText("4 periods");
     expect(screen.getByRole("heading", { name: "Production scorecard" })).toBeInTheDocument();
-    expectText("522/700");
+    expectText("533/700");
     expectText("Architecture and documentation");
     expectText("Backend statutory/accounting engine");
     expectText("Frontend accountant workbench");
     expectText("Security/auth/tenant/platform guardrails");
-    expectText("97 / 100");
+    expectText("98 / 100");
     expectText("185 / 250");
     expectText("135 / 200");
-    expectText("105 / 150");
+    expectText("115 / 150");
     expectText(/Next score gate/);
     expect(screen.getByRole("searchbox", { name: "Filter Next assurance actions" })).toBeInTheDocument();
     expect(screen.getByRole("searchbox", { name: "Filter Statutory rules matrix" })).toBeInTheDocument();
@@ -282,7 +282,7 @@ describe("ProductionReadinessWorkbench", () => {
 
 function productionScorecard(): ProductionReadinessReport["productionScorecard"] {
   return {
-    currentScore: 522,
+    currentScore: 533,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete source-law review, named visual QA, monitoring-provider confirmation and qualified-accountant acceptance evidence.",
@@ -290,12 +290,13 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
       {
         code: "architecture-documentation",
         label: "Architecture and documentation",
-        currentScore: 97,
+        currentScore: 98,
         targetScore: 100,
         status: "release-evidence-required",
         currentEvidence: [
           "Canonical architecture guide and active handoff are present.",
           "source-law-review-template.md is checked in and release-verifier covered.",
+          "verify-release-artifact-pack.ps1 is documented for exact release evidence packs.",
         ],
         remainingGaps: ["Complete release evidence templates with named reviewers, including source-law-review-template.md."],
         completionTrackCodes: ["backend-code", "frontend-ui-ux", "frontend-code"],
@@ -334,14 +335,15 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
       {
         code: "security-auth-tenant-platform-guardrails",
         label: "Security/auth/tenant/platform guardrails",
-        currentScore: 105,
+        currentScore: 115,
         targetScore: 150,
         status: "operator-confirmation-required",
         currentEvidence: [
           "Auth, tenant and platform release gates are represented in readiness evidence.",
           "No-direct CRO/ROS submission verifier evidence is generated.",
+          "Release artifact pack verifier validates operational reports together.",
         ],
-        remainingGaps: ["Confirm the controlled monitoring smoke event inside the configured provider and retain no-direct submission evidence."],
+        remainingGaps: ["Confirm the controlled monitoring smoke event inside the configured provider and retain release-artifact-pack-report.json."],
         completionTrackCodes: ["backend-code"],
         releaseBlockerCodes: ["backend-code:qualified-accountant-signoff"],
       },

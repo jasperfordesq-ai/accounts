@@ -18417,6 +18417,49 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public void ReleaseArtifactPackVerifier_RequiresExactOperationalEvidenceReports()
+    {
+        var root = RepositoryRoot();
+        var runbook = File.ReadAllText(Path.Combine(root, "Docs", "operations", "production-runbook.md"));
+        var reportService = File.ReadAllText(Path.Combine(root, "backend", "Accounts.Api", "Services", "ProductionReadinessReportService.cs"));
+        var scriptPath = Path.Combine(root, "scripts", "verify-release-artifact-pack.ps1");
+
+        Assert.True(File.Exists(scriptPath), "Release artifact pack verifier should make retained operational evidence machine-checkable.");
+        var script = File.ReadAllText(scriptPath);
+
+        Assert.Contains("verify-release-artifact-pack.ps1", runbook);
+        Assert.Contains("release-artifact-pack-report.json", runbook);
+        Assert.Contains("verify-release-artifact-pack.ps1", reportService);
+        Assert.Contains("release-artifact-pack-report.json", reportService);
+
+        foreach (var evidenceFile in new[]
+        {
+            "dependency-audit-report.json",
+            "production-safety-report.json",
+            "monitoring-error-routing-report.json",
+            "structured-log-report.json",
+            "restore-drill-report.json",
+            "no-direct-filing-submission-report.json",
+            "visual-smoke-evidence-report.json",
+            "release-evidence-report.json"
+        })
+        {
+            Assert.Contains(evidenceFile, script);
+            Assert.Contains(evidenceFile, runbook);
+        }
+
+        Assert.Contains("matchedMonitoringSmokeLine", script);
+        Assert.Contains("monitoringCorrelationId", script);
+        Assert.Contains("backupSha256", script);
+        Assert.Contains("allowedRecordedWorkflowRoutes", script);
+        Assert.Contains("productionSmokeUsesBuildFlag", script);
+        Assert.Contains("requiredCoverage", script);
+        Assert.Contains("sourceLawSourceIds", script);
+        Assert.Contains("Release artifact pack verification failed", script);
+        Assert.Contains("ConvertTo-Json -Depth 6", script);
+    }
+
+    [Fact]
     public void StructuredLogVerifier_ParsesJsonLogsAndMatchesMonitoringSmokeEvidence()
     {
         var root = RepositoryRoot();
