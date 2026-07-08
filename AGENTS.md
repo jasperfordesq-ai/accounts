@@ -59,6 +59,7 @@ Committed and pushed work on `main` includes:
 - `0fd3ff1 Require visual smoke PNG dimension evidence`
 - `86efd7e Require visual dimensions in evidence packs`
 - `660b9ea Harden release evidence formats`
+- `4d558bb Verify release evidence candidate identity`
 
 Backend/accounting-engine progress:
 
@@ -429,6 +430,9 @@ CI status:
 - GitHub Actions run `28957939046` for commit
   `660b9ea Harden release evidence formats` completed successfully on July 8,
   2026.
+- GitHub Actions run `28959364532` for commit
+  `4d558bb Verify release evidence candidate identity` completed successfully on
+  July 8, 2026.
 - Green jobs: Workflow Hygiene, Production Compose Config, Frontend, Backend,
   Production Stack Smoke, and CI Machine Evidence Pack.
 - The scorecard exposed by the candidate is now 607/700, with frontend accountant
