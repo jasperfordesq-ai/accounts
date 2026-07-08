@@ -178,6 +178,7 @@ The remaining manual release evidence should be recorded with the checked-in tem
 - `Docs/release-evidence/source-law-review-template.md`
 - `Docs/release-evidence/external-ros-ixbrl-validation-template.md`
 - `Docs/release-evidence/qualified-accountant-acceptance-template.md`
+- `Docs/release-evidence/manual-handoff-acceptance-template.md`
 - `Docs/release-evidence/monitoring-provider-confirmation-template.md`
 
 After the templates are completed for a release candidate, run the release evidence
@@ -283,5 +284,6 @@ The HTTPS smoke path also verifies that the login response sets the `accounts_se
 11. Complete `Docs/release-evidence/external-ros-ixbrl-validation-template.md` using external ROS/iXBRL validation references for the exact generated artifact hashes.
 12. Complete `Docs/release-evidence/monitoring-provider-confirmation-template.md` using the CI monitoring and structured-log artifacts plus the real provider event.
 13. Complete `Docs/release-evidence/qualified-accountant-acceptance-template.md` with a named qualified accountant before real filing preparation is used.
-14. Run `scripts\verify-release-evidence.ps1` and retain `release-evidence-report.json`; real filing use stays blocked if any required checkbox, signature, artifact reference, table row, accepted decision, canonical golden corpus scenario row, source-law source row, external ROS/iXBRL validation row, route row, visual smoke evidence report reference, or required coverage entry is missing.
-15. Run `scripts\verify-release-artifact-pack.ps1` and retain `release-artifact-pack-report.json`; real filing use stays blocked if the exact release artifact pack is missing dependency, production safety, monitoring, structured log, backup/restore, no-direct-submission, visual smoke, or completed release-evidence reports.
+14. Complete `Docs/release-evidence/manual-handoff-acceptance-template.md` for `medium-audit-required` and every unsupported path code before any audit-required or unsupported output is relied on.
+15. Run `scripts\verify-release-evidence.ps1` and retain `release-evidence-report.json`; real filing use stays blocked if any required checkbox, signature, artifact reference, table row, accepted decision, canonical golden corpus scenario row, source-law source row, external ROS/iXBRL validation row, manual handoff scenario/path row, route row, visual smoke evidence report reference, or required coverage entry is missing.
+16. Run `scripts\verify-release-artifact-pack.ps1` and retain `release-artifact-pack-report.json`; real filing use stays blocked if the exact release artifact pack is missing dependency, production safety, monitoring, structured log, backup/restore, no-direct-submission, visual smoke, or completed release-evidence reports.

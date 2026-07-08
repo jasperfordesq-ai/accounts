@@ -786,7 +786,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             Category(
                 "architecture-documentation",
                 "Architecture and documentation",
-                98,
+                99,
                 100,
                 "release-evidence-required",
                 [
@@ -807,7 +807,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             Category(
                 "backend-statutory-accounting-engine",
                 "Backend statutory/accounting engine",
-                185,
+                190,
                 250,
                 "qualified-accountant-review-required",
                 [
@@ -816,13 +816,14 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "Filing readiness profiles, generated PDF/iXBRL evidence and audit snapshots are backed by automated tests.",
                     "Qualified-accountant acceptance evidence now uses canonical golden corpus scenario codes and the release verifier reports required scenario, route and artifact coverage.",
                     "External ROS/iXBRL validation evidence now has a checked-in template and release verifier coverage for each canonical golden corpus scenario.",
-                    "Source-law review evidence now has a checked-in template and release verifier coverage for every monitored CRO, Revenue, FRC and Charities Regulator source."
+                    "Source-law review evidence now has a checked-in template and release verifier coverage for every monitored CRO, Revenue, FRC and Charities Regulator source.",
+                    "Manual handoff acceptance now has a checked-in template and release verifier coverage for the audit-required golden scenario and unsupported path codes."
                 ],
                 [
                     "Complete and retain verified source-law review evidence for every monitored source before relying on generated packs.",
                     "Run and retain verified qualified-accountant acceptance across every canonical golden corpus scenario.",
                     "Complete and retain verified external ROS/iXBRL validation evidence for generated packs.",
-                    "Record manual handoff acceptance for audit-required paths before relying on outputs."
+                    "Complete and retain verified manual handoff acceptance for audit-required and unsupported paths before relying on outputs."
                 ],
                 ["backend-code"],
                 [
@@ -879,7 +880,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             categories.Sum(category => category.CurrentScore),
             categories.Sum(category => category.TargetScore),
             "review-required",
-            "Complete source-law review, named visual QA, monitoring-provider confirmation and qualified-accountant acceptance evidence.",
+            "Complete source-law review, named visual QA, monitoring-provider confirmation, manual handoff and qualified-accountant acceptance evidence.",
             categories);
     }
 

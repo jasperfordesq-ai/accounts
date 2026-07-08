@@ -152,6 +152,20 @@ $requiredRouteCodes = @(
     "workbench-preview"
 )
 
+$requiredManualHandoffScenarioCodes = @(
+    "medium-audit-required"
+)
+
+$requiredManualHandoffPathCodes = @(
+    "plc-public-company",
+    "unlimited-company",
+    "excluded-regulated-entity",
+    "group-consolidation",
+    "audit-required-without-auditor-report",
+    "complex-corporation-tax",
+    "direct-cro-ros-submission"
+)
+
 $requiredReleaseArtifactNames = @(
     "dependency-audit-release",
     "production-safety-config",
@@ -227,6 +241,46 @@ function Test-AccountantEvidence {
             Add-Failure $Failures "$context contains stale non-canonical scenario code '$staleScenarioCode'."
         }
     }
+}
+
+function Test-ManualHandoffEvidence {
+    param(
+        [string]$Content,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    $context = "Manual handoff acceptance evidence"
+    foreach ($text in @(
+        "Manual Handoff Acceptance",
+        "medium-audit-required",
+        "Signed auditor report evidence",
+        "Manual handoff note",
+        "Filing readiness profile snapshot",
+        "Unsupported automated filing paths remain blocked",
+        "Accepted as manual handoff evidence for this release candidate.",
+        "Reviewer signature"
+    )) {
+        Assert-ContainsText $Content $text $context $Failures
+    }
+
+    foreach ($field in @(
+        "Commit SHA",
+        "GitHub Actions run URL",
+        "Production readiness report timestamp",
+        "Reviewer name",
+        "Reviewer role",
+        "Firm / reviewer capacity",
+        "Review date/time UTC",
+        "Reviewer signature"
+    )) {
+        Assert-FilledField $Content $field $context $Failures
+    }
+
+    Assert-NoUncheckedBoxes $Content $context $Failures
+    Assert-CheckedDecision $Content "Accepted as manual handoff evidence for this release candidate." $context $Failures
+    Assert-UncheckedDecision $Content "Rejected; manual handoff issues below must be remediated and re-reviewed." $context $Failures
+    Assert-CompletedTableRows $Content $requiredManualHandoffScenarioCodes $context $Failures
+    Assert-CompletedTableRows $Content $requiredManualHandoffPathCodes $context $Failures
 }
 
 function Test-ExternalRosIxbrlEvidence {
@@ -350,12 +404,14 @@ $visualPath = Join-Path $resolvedDirectory "visual-qa-signoff-template.md"
 $sourceLawPath = Join-Path $resolvedDirectory "source-law-review-template.md"
 $externalRosIxbrlPath = Join-Path $resolvedDirectory "external-ros-ixbrl-validation-template.md"
 $accountantPath = Join-Path $resolvedDirectory "qualified-accountant-acceptance-template.md"
+$manualHandoffPath = Join-Path $resolvedDirectory "manual-handoff-acceptance-template.md"
 $monitoringPath = Join-Path $resolvedDirectory "monitoring-provider-confirmation-template.md"
 
 $visual = Read-EvidenceFile $visualPath $failures
 $sourceLaw = Read-EvidenceFile $sourceLawPath $failures
 $externalRosIxbrl = Read-EvidenceFile $externalRosIxbrlPath $failures
 $accountant = Read-EvidenceFile $accountantPath $failures
+$manualHandoff = Read-EvidenceFile $manualHandoffPath $failures
 $monitoring = Read-EvidenceFile $monitoringPath $failures
 
 if ($visual.Trim().Length -gt 0) {
@@ -368,6 +424,10 @@ if ($sourceLaw.Trim().Length -gt 0) {
 
 if ($accountant.Trim().Length -gt 0) {
     Test-AccountantEvidence $accountant $failures
+}
+
+if ($manualHandoff.Trim().Length -gt 0) {
+    Test-ManualHandoffEvidence $manualHandoff $failures
 }
 
 if ($externalRosIxbrl.Trim().Length -gt 0) {
@@ -387,6 +447,7 @@ $report = [ordered]@{
         sourceLawReview = $sourceLawPath
         externalRosIxbrlValidation = $externalRosIxbrlPath
         qualifiedAccountantAcceptance = $accountantPath
+        manualHandoffAcceptance = $manualHandoffPath
         monitoringProviderConfirmation = $monitoringPath
     }
     requiredCoverage = [ordered]@{
@@ -394,6 +455,8 @@ $report = [ordered]@{
         externalRosIxbrlScenarioCodes = $canonicalGoldenCorpusScenarioCodes
         sourceLawSourceIds = $requiredSourceLawSourceIds
         routeCodes = $requiredRouteCodes
+        manualHandoffScenarioCodes = $requiredManualHandoffScenarioCodes
+        manualHandoffPathCodes = $requiredManualHandoffPathCodes
         releaseArtifactNames = $requiredReleaseArtifactNames
     }
     failureCount = $failures.Count

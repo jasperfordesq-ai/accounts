@@ -18267,9 +18267,10 @@ public class AccountsWorkflowTests
         var sourceLawPath = Path.Combine(templateDir, "source-law-review-template.md");
         var externalRosIxbrlPath = Path.Combine(templateDir, "external-ros-ixbrl-validation-template.md");
         var accountantPath = Path.Combine(templateDir, "qualified-accountant-acceptance-template.md");
+        var manualHandoffPath = Path.Combine(templateDir, "manual-handoff-acceptance-template.md");
         var monitoringPath = Path.Combine(templateDir, "monitoring-provider-confirmation-template.md");
 
-        foreach (var path in new[] { visualPath, sourceLawPath, externalRosIxbrlPath, accountantPath, monitoringPath })
+        foreach (var path in new[] { visualPath, sourceLawPath, externalRosIxbrlPath, accountantPath, manualHandoffPath, monitoringPath })
         {
             Assert.True(File.Exists(path), $"Missing release evidence template: {path}");
             Assert.Contains(Path.GetFileName(path), runbook);
@@ -18322,6 +18323,17 @@ public class AccountsWorkflowTests
         Assert.Contains("Direct ROS submission remains unsupported", accountant);
         Assert.Contains("Qualified accountant signature", accountant);
 
+        var manualHandoff = File.ReadAllText(manualHandoffPath);
+        Assert.Contains("Manual Handoff Acceptance", manualHandoff);
+        Assert.Contains("medium-audit-required", manualHandoff);
+        Assert.Contains("Signed auditor report evidence", manualHandoff);
+        Assert.Contains("Manual handoff note", manualHandoff);
+        Assert.Contains("Filing readiness profile snapshot", manualHandoff);
+        Assert.Contains("plc-public-company", manualHandoff);
+        Assert.Contains("audit-required-without-auditor-report", manualHandoff);
+        Assert.Contains("direct-cro-ros-submission", manualHandoff);
+        Assert.Contains("Reviewer signature", manualHandoff);
+
         var monitoring = File.ReadAllText(monitoringPath);
         Assert.Contains("monitoring-error-routing-smoke", monitoring);
         Assert.Contains("structured-json-log-sample", monitoring);
@@ -18373,6 +18385,12 @@ public class AccountsWorkflowTests
         Assert.Contains("structured-log-report.json", script);
         Assert.Contains("Direct CRO submission remains unsupported", script);
         Assert.Contains("Direct ROS submission remains unsupported", script);
+        Assert.Contains("Test-ManualHandoffEvidence", script);
+        Assert.Contains("manualHandoffAcceptance", script);
+        Assert.Contains("manualHandoffScenarioCodes", script);
+        Assert.Contains("manualHandoffPathCodes", script);
+        Assert.Contains("Accepted as manual handoff evidence for this release candidate.", script);
+        Assert.Contains("audit-required-without-auditor-report", script);
         Assert.Contains("No PII or client filing data", script);
         Assert.Contains("Accepted for this release candidate.", script);
         Assert.Contains("Accepted for real filing preparation subject to external CRO/ROS processes.", script);
@@ -18455,6 +18473,8 @@ public class AccountsWorkflowTests
         Assert.Contains("productionSmokeUsesBuildFlag", script);
         Assert.Contains("requiredCoverage", script);
         Assert.Contains("sourceLawSourceIds", script);
+        Assert.Contains("manualHandoffScenarioCodes", script);
+        Assert.Contains("manualHandoffPathCodes", script);
         Assert.Contains("Release artifact pack verification failed", script);
         Assert.Contains("ConvertTo-Json -Depth 6", script);
     }

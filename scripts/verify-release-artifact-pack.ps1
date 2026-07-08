@@ -191,7 +191,7 @@ if (-not ($releaseEvidence.PSObject.Properties.Name -contains "__missing")) {
     if ([int]$releaseEvidence.failureCount -ne 0) {
         Add-Failure $failures "release-evidence-report.json failureCount must be zero."
     }
-    foreach ($coverageProperty in @("sourceLawSourceIds", "goldenCorpusScenarioCodes", "externalRosIxbrlScenarioCodes", "routeCodes", "releaseArtifactNames")) {
+    foreach ($coverageProperty in @("sourceLawSourceIds", "goldenCorpusScenarioCodes", "externalRosIxbrlScenarioCodes", "routeCodes", "manualHandoffScenarioCodes", "manualHandoffPathCodes", "releaseArtifactNames")) {
         if ($null -eq $releaseEvidence.requiredCoverage.$coverageProperty -or @($releaseEvidence.requiredCoverage.$coverageProperty).Count -eq 0) {
             Add-Failure $failures "release-evidence-report.json requiredCoverage.$coverageProperty must be present."
         }

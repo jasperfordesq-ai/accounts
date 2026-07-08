@@ -214,7 +214,8 @@ Recent successful local verification includes:
   readiness report all point to `dependency-audit-release`
 - Backend focused release evidence template tests:
   `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~ReleaseEvidenceTemplates_CoverHumanVisualAccountantAndProviderSignoffs|FullyQualifiedName~ProductionSmokeRunbook_ExercisesFrontendProxySessionAndOptionalDownloads"`
-  - 2 passed, proving the manual visual QA, qualified-accountant acceptance, and
+  - 2 passed, proving the manual visual QA, source-law review, external ROS/iXBRL
+  validation, qualified-accountant acceptance, manual handoff acceptance, and
   monitoring-provider confirmation templates exist and are linked from the production
   runbook
 - Backend focused production scorecard test:
@@ -227,8 +228,8 @@ Recent successful local verification includes:
   - 3 passed, proving the release evidence verifier, templates, runbook linkage, and
   production scorecard evidence are wired together, including canonical
   qualified-accountant golden corpus scenario codes, external ROS/iXBRL validation
-  template coverage, source-law source coverage, visual smoke evidence report
-  references, and the 533/700 scorecard total
+  template coverage, source-law source coverage, manual handoff coverage, visual
+  smoke evidence report references, and the 539/700 scorecard total
 - Backend focused release artifact pack verifier and scorecard tests:
   `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~ReleaseArtifactPackVerifier_RequiresExactOperationalEvidenceReports|FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers"`
   - passed, proving `scripts/verify-release-artifact-pack.ps1`, runbook linkage,
@@ -387,20 +388,23 @@ Highest-priority next steps:
 4. Complete and retain external ROS/iXBRL validation references for the exact generated
    artifact hashes; the template and verifier now exist, but real external validation
    evidence is still missing.
-5. Record qualified-accountant acceptance evidence for outputs, gates, wording,
+5. Complete and retain manual handoff acceptance evidence for the `medium-audit-required`
+   scenario and unsupported path codes before relying on audit-required or unsupported
+   outputs.
+6. Record qualified-accountant acceptance evidence for outputs, gates, wording,
    legal/source evidence, visual workflow, and manual handoff behavior.
-6. Promote CI monitoring smoke into release-grade evidence by confirming the controlled
+7. Promote CI monitoring smoke into release-grade evidence by confirming the controlled
    event inside the configured provider and retaining a named operator record before
    real filing use.
-7. Run `scripts\verify-no-direct-filing-submission.ps1` and retain
+8. Run `scripts\verify-no-direct-filing-submission.ps1` and retain
    `no-direct-filing-submission-report.json` with the exact release candidate.
-8. Run `scripts\verify-release-evidence.ps1` against completed release evidence and
+9. Run `scripts\verify-release-evidence.ps1` against completed release evidence and
    retain `release-evidence-report.json`; blank templates are intentionally failing
    evidence until real named reviewers complete them.
-9. Continue UI polish route by route, especially any surfaces that still feel too
+10. Continue UI polish route by route, especially any surfaces that still feel too
    card-heavy, too sparse, inconsistent in dark mode, or not dense enough for daily
    accountant use.
-10. Keep extracting route-heavy frontend code into focused workflow components only when
+11. Keep extracting route-heavy frontend code into focused workflow components only when
    it reduces real complexity or improves testable reuse.
 
 ## Estimated Completion
@@ -410,18 +414,17 @@ As of July 8, 2026:
 - Code implementation is roughly 70-75% complete.
 - Production assurance is roughly 60-65% complete.
 - Overall goal is roughly 63-67% complete, with about one third left.
-- The production scorecard is now 533/700: architecture/documentation 98/100,
-  backend statutory/accounting engine 185/250, frontend accountant workbench 135/200,
+- The production scorecard is now 539/700: architecture/documentation 99/100,
+  backend statutory/accounting engine 190/250, frontend accountant workbench 135/200,
   and security/auth/tenant/platform guardrails 115/150.
-- Architecture/documentation is now scored 98/100 in the production scorecard because
-  source-law review, release evidence templates, runbook links, and verifier coverage
-  are in place, including an exact release artifact-pack verifier; the remaining
-  architecture gap is completed named human release evidence.
+- Architecture/documentation is now scored 99/100 in the production scorecard because
+  source-law review, release evidence templates, manual handoff evidence, runbook
+  links, and verifier coverage are in place, including an exact release artifact-pack
+  verifier; the remaining architecture gap is completed named human release evidence.
 
 The remaining third is not just coding. It is proof: human visual QA review,
-source-law review sign-off, real-provider monitoring confirmation, accountant
-walkthrough, and named professional
-sign-off.
+source-law review sign-off, real-provider monitoring confirmation, manual handoff
+acceptance, accountant walkthrough, and named professional sign-off.
 
 ## Claude Continuation Instruction
 
