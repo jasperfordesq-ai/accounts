@@ -46,6 +46,7 @@ Committed and pushed work on `main` includes:
 - `1e9ad58 Align company command centre summary`
 - `edb59c1 Add golden verifier manifest evidence`
 - `9768a1c Add production readiness evidence gates`
+- `baade7e Add release evidence signoff templates`
 
 Backend/accounting-engine progress:
 
@@ -265,8 +266,8 @@ Recent successful local verification includes:
 
 CI status:
 
-- GitHub Actions run `28932690354` for commit
-  `9768a1c Add production readiness evidence gates` completed successfully on
+- GitHub Actions run `28933406513` for commit
+  `baade7e Add release evidence signoff templates` completed successfully on
   July 8, 2026.
 - Green jobs: Workflow Hygiene, Production Compose Config, Frontend, Backend, and
   Production Stack Smoke.

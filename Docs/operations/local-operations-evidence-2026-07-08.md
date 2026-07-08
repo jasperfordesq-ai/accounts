@@ -60,7 +60,7 @@ logged according to `production-runbook.md`.
 
 ## Remaining Production Evidence
 
-- GitHub Actions run `28932690354` for `9768a1c` is green and retained CI evidence
+- GitHub Actions run `28933406513` for `baade7e` is green and retained CI evidence
   artifacts for the release candidate.
 - A production-like HTTPS smoke run must be retained from any later release commit or
   named operator-controlled environment if more code changes land.
