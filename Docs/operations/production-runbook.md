@@ -162,6 +162,12 @@ Retain the CI `dependency-audit-release` artifact as the dependency evidence pac
 .\scripts\write-dependency-evidence.ps1 -NpmAuditJsonPath D:\accounts-smoke\npm-audit.json -EvidencePath D:\accounts-smoke\dependency-audit-report.json
 ```
 
+The remaining manual release evidence should be recorded with the checked-in templates:
+
+- `Docs/release-evidence/visual-qa-signoff-template.md`
+- `Docs/release-evidence/qualified-accountant-acceptance-template.md`
+- `Docs/release-evidence/monitoring-provider-confirmation-template.md`
+
 For local Windows or Codex workspaces where Next.js cannot spawn child-process workers or cannot clean a stale `.next` directory, use a clean checkout or temporary copy outside the repository and keep the standard `.next` output directory. The app exposes an opt-in worker-thread fallback for this verification path only:
 
 ```powershell
@@ -228,3 +234,7 @@ To include sample statutory output checks from a non-production tenant in the sa
 The smoke script checks `/health/ready`, validates browser security headers including the nonce-based Content Security Policy, signs in through the frontend proxy, verifies `/api/auth/me`, lists companies, optionally emits the controlled monitoring event, performs a CSRF-protected logout, confirms logout clears the authenticated session by requiring GET `/api/auth/me` must return `401 Unauthorized` after logout, and optionally downloads a sample accounts PDF and iXBRL XHTML package. In HTTPS production runs, it rejects `script-src` policies that still allow `unsafe-inline`; `-AllowInsecureHttp` exists only for local dry runs.
 
 The HTTPS smoke path also verifies that the login response sets the `accounts_session` and `accounts_csrf` cookies with the `Secure` attribute, so production cookies stay aligned with the ingress contract.
+
+8. Complete `Docs/release-evidence/visual-qa-signoff-template.md` using the CI `visual-smoke-screenshots` artifact.
+9. Complete `Docs/release-evidence/monitoring-provider-confirmation-template.md` using the CI monitoring and structured-log artifacts plus the real provider event.
+10. Complete `Docs/release-evidence/qualified-accountant-acceptance-template.md` with a named qualified accountant before real filing preparation is used.

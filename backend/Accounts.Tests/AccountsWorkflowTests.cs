@@ -18258,6 +18258,53 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public void ReleaseEvidenceTemplates_CoverHumanVisualAccountantAndProviderSignoffs()
+    {
+        var root = RepositoryRoot();
+        var runbook = File.ReadAllText(Path.Combine(root, "Docs", "operations", "production-runbook.md"));
+        var templateDir = Path.Combine(root, "Docs", "release-evidence");
+        var visualPath = Path.Combine(templateDir, "visual-qa-signoff-template.md");
+        var accountantPath = Path.Combine(templateDir, "qualified-accountant-acceptance-template.md");
+        var monitoringPath = Path.Combine(templateDir, "monitoring-provider-confirmation-template.md");
+
+        foreach (var path in new[] { visualPath, accountantPath, monitoringPath })
+        {
+            Assert.True(File.Exists(path), $"Missing release evidence template: {path}");
+            Assert.Contains(Path.GetFileName(path), runbook);
+        }
+
+        var visual = File.ReadAllText(visualPath);
+        Assert.Contains("visual-smoke-screenshots", visual);
+        Assert.Contains("visual-smoke-manifest.json", visual);
+        Assert.Contains("dashboard", visual);
+        Assert.Contains("production-readiness", visual);
+        Assert.Contains("workbench-preview", visual);
+        Assert.Contains("Reviewer signature", visual);
+
+        var accountant = File.ReadAllText(accountantPath);
+        Assert.Contains("dependency-audit-release", accountant);
+        Assert.Contains("production-safety-config", accountant);
+        Assert.Contains("postgres-backup-restore-drill", accountant);
+        Assert.Contains("micro-ltd-standard", accountant);
+        Assert.Contains("small-ltd-abridged", accountant);
+        Assert.Contains("dac-small", accountant);
+        Assert.Contains("clg-charity", accountant);
+        Assert.Contains("medium-audit-required", accountant);
+        Assert.Contains("Direct CRO submission remains unsupported", accountant);
+        Assert.Contains("Direct ROS submission remains unsupported", accountant);
+        Assert.Contains("Qualified accountant signature", accountant);
+
+        var monitoring = File.ReadAllText(monitoringPath);
+        Assert.Contains("monitoring-error-routing-smoke", monitoring);
+        Assert.Contains("structured-json-log-sample", monitoring);
+        Assert.Contains("monitoring-error-routing-report.json", monitoring);
+        Assert.Contains("structured-log-report.json", monitoring);
+        Assert.Contains("/api/system/monitoring/error-smoke", monitoring);
+        Assert.Contains("No PII or client filing data", monitoring);
+        Assert.Contains("Operator signature", monitoring);
+    }
+
+    [Fact]
     public void StructuredLogVerifier_ParsesJsonLogsAndMatchesMonitoringSmokeEvidence()
     {
         var root = RepositoryRoot();

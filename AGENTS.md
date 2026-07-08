@@ -45,6 +45,7 @@ Committed and pushed work on `main` includes:
 - `42bed69 Extract workflow decision summary primitive`
 - `1e9ad58 Align company command centre summary`
 - `edb59c1 Add golden verifier manifest evidence`
+- `9768a1c Add production readiness evidence gates`
 
 Backend/accounting-engine progress:
 
@@ -100,6 +101,10 @@ Backend/accounting-engine progress:
 - Unexpected exceptions caught by `ExceptionMiddleware` are now explicitly passed to
   `IErrorReporter`/`SentryErrorReporter` with HTTP method, request path, and
   correlation id tags before the client receives a safe JSON error response.
+- Release evidence templates now exist for the remaining named human gates:
+  visual QA sign-off, qualified-accountant acceptance, and monitoring-provider
+  confirmation. The production runbook links those templates so release evidence is
+  captured consistently rather than as ad hoc notes.
 
 Frontend UI/UX progress:
 
@@ -172,6 +177,11 @@ Recent successful local verification includes:
   `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~DependencyEvidenceWriter_RecordsAuditPolicyAndLockfileHashes|FullyQualifiedName~ContinuousIntegrationWorkflow_RunsBackendFrontendAndProductionConfigGates|FullyQualifiedName~ProductionReadinessReportTests"`
   - 44 passed, proving the dependency evidence writer, CI artifact wiring, and
   readiness report all point to `dependency-audit-release`
+- Backend focused release evidence template tests:
+  `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~ReleaseEvidenceTemplates_CoverHumanVisualAccountantAndProviderSignoffs|FullyQualifiedName~ProductionSmokeRunbook_ExercisesFrontendProxySessionAndOptionalDownloads"`
+  - 2 passed, proving the manual visual QA, qualified-accountant acceptance, and
+  monitoring-provider confirmation templates exist and are linked from the production
+  runbook
 - Backend focused opening take-on tests:
   `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~OpeningTrialBalanceTakeOn|FullyQualifiedName~FinalOutputs_BlockWhenOpeningTrialBalanceTakeOnDoesNotBalance|FullyQualifiedName~TrialBalance_IncludesReviewedOpeningBalancesAndBankOpeningSide"`
 - Backend focused test:
@@ -255,45 +265,50 @@ Recent successful local verification includes:
 
 CI status:
 
-- GitHub Actions is now starting jobs again. The latest observed `main` run before this
-  handoff update passed Workflow Hygiene, Backend, and Production Compose Config, then
-  failed in the Frontend job during `test:readiness` because the API-client production
-  readiness fixture did not include `goldenVerifierManifest`.
-- The local fix in this working tree derives `goldenVerifierManifest` from the mocked
-  golden filing corpus in `frontend/scripts/verify-api-client.mjs`; after the current
-  production-evidence changes, the broad local gate is green: backend full suite,
-  frontend lint, type-check, moderate audit, full test aggregate, production build,
-  API-client verifier, and CI action policy verifier all pass locally.
-- The next GitHub Actions run is the source of truth for restoring the production stack
-  smoke job, because that job was skipped after the frontend failure.
+- GitHub Actions run `28932690354` for commit
+  `9768a1c Add production readiness evidence gates` completed successfully on
+  July 8, 2026.
+- Green jobs: Workflow Hygiene, Production Compose Config, Frontend, Backend, and
+  Production Stack Smoke.
+- CI artifacts were downloaded and spot-checked:
+  - `dependency-audit-release`: `dependency-audit-report.json` passed with 0 npm
+    vulnerabilities, frontend lockfile/package hashes, and NuGet audit policy.
+  - `production-safety-config`: `production-safety-report.json` passed with
+    `--migrate-only`, API dependence on successful migration completion, disabled
+    normal-startup migration/seeding, and bootstrap-owner password exposure limited
+    to the migration job.
+  - `monitoring-error-routing-smoke`: `monitoring-error-routing-report.json`
+    passed with provider, event id, and correlation id from the controlled smoke
+    event.
+  - `structured-json-log-sample`: `structured-log-report.json` passed and matched
+    the monitoring-smoke correlation id in JSON console output.
+  - `postgres-backup-restore-drill`: `restore-drill-report.json` passed with dump
+    sha256 and table-count comparisons.
+  - `visual-smoke-screenshots`: screenshot artifact and manifest were retained for
+    human review.
 
 ## What Is Left To Do
 
 Highest-priority next steps:
 
-1. Restore a green GitHub Actions run on `main`; the immediate observed blocker was
-   frontend production-readiness contract drift, not billing.
-2. Rerun the full local production gate before release if more code changes land; the
+1. Rerun the full local production gate before release if more code changes land; the
    current local gate is green on July 8, 2026.
-3. Perform and record human visual review of the generated light/dark desktop/mobile
+2. Perform and record human visual review of the generated light/dark desktop/mobile
    visual smoke artifact set; the screenshot manifest now verifies locally, but
    named visual QA sign-off is still required.
-4. Complete and retain the actual named accountant walkthrough across the golden corpus:
+3. Complete and retain the actual named accountant walkthrough across the golden corpus:
    micro LTD, small abridged LTD, DAC small, CLG charity, and medium/audit-required
    manual handoff. The code now emits and verifies the scenario-by-route walkthrough
    evidence matrix, but the human walkthrough note is still missing.
-5. Record qualified-accountant acceptance evidence for outputs, gates, wording,
+4. Record qualified-accountant acceptance evidence for outputs, gates, wording,
    legal/source evidence, visual workflow, and manual handoff behavior.
-6. Promote local operations evidence into release-grade evidence:
-   real Sentry/provider event confirmation. CI is now configured to retain
-   backup/restore drill evidence, monitoring error-routing smoke evidence, a structured
-   JSON log sample, production safety config evidence, and dependency audit evidence,
-   but the next GitHub Actions run must prove those artifacts on the release commit
-   before real filing use.
-7. Continue UI polish route by route, especially any surfaces that still feel too
+5. Promote CI monitoring smoke into release-grade evidence by confirming the controlled
+   event inside the configured provider and retaining a named operator record before
+   real filing use.
+6. Continue UI polish route by route, especially any surfaces that still feel too
    card-heavy, too sparse, inconsistent in dark mode, or not dense enough for daily
    accountant use.
-8. Keep extracting route-heavy frontend code into focused workflow components only when
+7. Keep extracting route-heavy frontend code into focused workflow components only when
    it reduces real complexity or improves testable reuse.
 
 ## Estimated Completion
@@ -304,8 +319,9 @@ As of July 8, 2026:
 - Production assurance is roughly 60-65% complete.
 - Overall goal is roughly 63-67% complete, with about one third left.
 
-The remaining third is not just coding. It is proof: full CI, human visual QA
-review, operations drills, accountant walkthrough, and named professional sign-off.
+The remaining third is not just coding. It is proof: human visual QA review,
+real-provider monitoring confirmation, accountant walkthrough, and named professional
+sign-off.
 
 ## Claude Continuation Instruction
 

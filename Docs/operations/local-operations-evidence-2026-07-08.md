@@ -29,6 +29,7 @@ local stack can execute the required checks end to end.
 | Backend structured-log verifier regression | `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~StructuredLogVerifier_ParsesJsonLogsAndMatchesMonitoringSmokeEvidence\|FullyQualifiedName~ContinuousIntegrationWorkflow_RunsBackendFrontendAndProductionConfigGates\|FullyQualifiedName~ProductionSmokeRunbook_ExercisesFrontendProxySessionAndOptionalDownloads\|FullyQualifiedName~ProductionReadinessReportTests"` from `backend` | Passed: 45 tests covering the structured-log verifier contract, CI/runbook artifact wiring, and production readiness report |
 | Backend production safety config regression | `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~ProductionComposeVerifier_EmitsMigrationAndSeedSafetyEvidence\|FullyQualifiedName~ProductionCompose_UsesImmutableImageReferencesInsteadOfBuildContexts\|FullyQualifiedName~ContinuousIntegrationWorkflow_RunsBackendFrontendAndProductionConfigGates\|FullyQualifiedName~ProductionReadinessReportTests"` from `backend` | Passed: 45 tests covering production safety evidence, CI artifact wiring, immutable image contracts, and readiness report mapping |
 | Backend dependency evidence regression | `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~DependencyEvidenceWriter_RecordsAuditPolicyAndLockfileHashes\|FullyQualifiedName~ContinuousIntegrationWorkflow_RunsBackendFrontendAndProductionConfigGates\|FullyQualifiedName~ProductionReadinessReportTests"` from `backend` | Passed: 44 tests covering dependency evidence writer, CI artifact wiring, and readiness report mapping |
+| Backend release evidence template regression | `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~ReleaseEvidenceTemplates_CoverHumanVisualAccountantAndProviderSignoffs\|FullyQualifiedName~ProductionSmokeRunbook_ExercisesFrontendProxySessionAndOptionalDownloads"` from `backend` | Passed: 2 tests proving the manual visual QA, qualified-accountant acceptance, and monitoring-provider confirmation templates exist and are linked from the production runbook |
 | Production smoke script parser | PowerShell parser check for `scripts\smoke-production.ps1` | Passed after adding `-CheckMonitoringErrorRouting` and `monitoring-error-routing-report.json` output |
 | Structured log verifier parser and sample execution | PowerShell parser check plus synthetic sample log run for `scripts\verify-structured-logs.ps1` | Passed: generated `structured-log-report.json` with timestamp, level, category, `monitoringCorrelationId`, and `matchedMonitoringSmokeLine: true` |
 | Production safety config verifier parser and sample execution | PowerShell parser check plus `powershell -ExecutionPolicy Bypass -File scripts\verify-production-compose-images.ps1 -EvidencePath <temp>\production-safety-report.json` | Passed: generated `production-safety-report.json` with CI image refs, `--migrate-only`, API migration dependency, disabled startup migration, disabled demo seed, absent override flags, and bootstrap-owner password limited to migration |
@@ -59,15 +60,17 @@ logged according to `production-runbook.md`.
 
 ## Remaining Production Evidence
 
-- GitHub Actions must run green on the branch that contains the current fixes.
-- A production-like HTTPS smoke run must be retained from CI or a named
-  operator-controlled environment.
+- GitHub Actions run `28932690354` for `9768a1c` is green and retained CI evidence
+  artifacts for the release candidate.
+- A production-like HTTPS smoke run must be retained from any later release commit or
+  named operator-controlled environment if more code changes land.
 - A named production backup/restore drill record must be retained after the
   next material schema change or before real filing use.
 - Monitoring/Sentry routing and production migration/seed safety are now locally
   covered by code and regression tests, dependency audit evidence is generated from
   the actual npm audit JSON, and CI is configured to retain
   `monitoring-error-routing-report.json`, a structured JSON log sample,
-  `production-safety-report.json`, and `dependency-audit-report.json`; a real event
-  must still be confirmed inside the configured production provider before real
-  filing use.
+  `production-safety-report.json`, and `dependency-audit-report.json`; the checked-in
+  release evidence templates now cover the remaining human visual QA, qualified
+  accountant acceptance, and real monitoring-provider confirmation before real filing
+  use.
