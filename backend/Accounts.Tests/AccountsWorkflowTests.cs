@@ -18264,10 +18264,11 @@ public class AccountsWorkflowTests
         var runbook = File.ReadAllText(Path.Combine(root, "Docs", "operations", "production-runbook.md"));
         var templateDir = Path.Combine(root, "Docs", "release-evidence");
         var visualPath = Path.Combine(templateDir, "visual-qa-signoff-template.md");
+        var externalRosIxbrlPath = Path.Combine(templateDir, "external-ros-ixbrl-validation-template.md");
         var accountantPath = Path.Combine(templateDir, "qualified-accountant-acceptance-template.md");
         var monitoringPath = Path.Combine(templateDir, "monitoring-provider-confirmation-template.md");
 
-        foreach (var path in new[] { visualPath, accountantPath, monitoringPath })
+        foreach (var path in new[] { visualPath, externalRosIxbrlPath, accountantPath, monitoringPath })
         {
             Assert.True(File.Exists(path), $"Missing release evidence template: {path}");
             Assert.Contains(Path.GetFileName(path), runbook);
@@ -18280,6 +18281,17 @@ public class AccountsWorkflowTests
         Assert.Contains("production-readiness", visual);
         Assert.Contains("workbench-preview", visual);
         Assert.Contains("Reviewer signature", visual);
+
+        var externalRosIxbrl = File.ReadAllText(externalRosIxbrlPath);
+        Assert.Contains("External ROS/iXBRL validation", externalRosIxbrl);
+        Assert.Contains("Internal XML checks are not Revenue acceptance evidence", externalRosIxbrl);
+        Assert.Contains("Generated iXBRL SHA-256", externalRosIxbrl);
+        Assert.Contains("micro-ltd", externalRosIxbrl);
+        Assert.Contains("small-abridged-ltd", externalRosIxbrl);
+        Assert.Contains("dac-small", externalRosIxbrl);
+        Assert.Contains("clg-charity", externalRosIxbrl);
+        Assert.Contains("medium-audit-required", externalRosIxbrl);
+        Assert.Contains("Reviewer signature", externalRosIxbrl);
 
         var accountant = File.ReadAllText(accountantPath);
         Assert.Contains("dependency-audit-release", accountant);
@@ -18326,6 +18338,12 @@ public class AccountsWorkflowTests
         Assert.Contains("Assert-CompletedTableRows", script);
         Assert.Contains("canonicalGoldenCorpusScenarioCodes", script);
         Assert.Contains("requiredCoverage", script);
+        Assert.Contains("Test-ExternalRosIxbrlEvidence", script);
+        Assert.Contains("externalRosIxbrlValidation", script);
+        Assert.Contains("externalRosIxbrlScenarioCodes", script);
+        Assert.Contains("Generated iXBRL SHA-256", script);
+        Assert.Contains("Internal XML checks are not Revenue acceptance evidence", script);
+        Assert.Contains("Accepted as external ROS/iXBRL validation evidence for this release candidate.", script);
         Assert.Contains("micro-ltd", script);
         Assert.Contains("small-abridged-ltd", script);
         Assert.Contains("stale non-canonical scenario code", script);

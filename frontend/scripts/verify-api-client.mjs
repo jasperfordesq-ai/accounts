@@ -105,7 +105,7 @@ const share = {
 
 function productionScorecardFixture() {
   return {
-    currentScore: 499,
+    currentScore: 504,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete named visual QA, monitoring-provider confirmation and qualified-accountant acceptance evidence.",
@@ -124,14 +124,15 @@ function productionScorecardFixture() {
       {
         code: "backend-statutory-accounting-engine",
         label: "Backend statutory/accounting engine",
-        currentScore: 175,
+        currentScore: 180,
         targetScore: 250,
         status: "qualified-accountant-review-required",
         currentEvidence: [
           "Golden filing corpus and source-law evidence are exposed.",
           "Qualified-accountant acceptance evidence uses canonical golden corpus scenario codes.",
+          "External ROS/iXBRL validation evidence has template and verifier coverage.",
         ],
-        remainingGaps: ["Run and retain verified qualified-accountant acceptance across the canonical golden corpus."],
+        remainingGaps: ["Run and retain verified qualified-accountant acceptance and external ROS/iXBRL validation evidence across the canonical golden corpus."],
         completionTrackCodes: ["backend-code"],
         releaseBlockerCodes: ["backend-code:qualified-accountant-signoff", "backend-code:source-law-change-review"],
       },

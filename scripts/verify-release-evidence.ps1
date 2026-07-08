@@ -214,6 +214,50 @@ function Test-AccountantEvidence {
     }
 }
 
+function Test-ExternalRosIxbrlEvidence {
+    param(
+        [string]$Content,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    $context = "External ROS/iXBRL validation evidence"
+    foreach ($text in @(
+        "External ROS/iXBRL validation",
+        "Internal XML checks are not Revenue acceptance evidence",
+        "Generated iXBRL SHA-256",
+        "Taxonomy package",
+        "Accepted as external ROS/iXBRL validation evidence for this release candidate.",
+        "Reviewer signature"
+    )) {
+        Assert-ContainsText $Content $text $context $Failures
+    }
+
+    foreach ($field in @(
+        "Commit SHA",
+        "GitHub Actions run URL",
+        "Production readiness report timestamp",
+        "Reviewer name",
+        "Reviewer role",
+        "Review date/time UTC",
+        "External validation provider",
+        "Validation environment",
+        "Validation run/reference id",
+        "Validation report file or URL",
+        "Generated iXBRL artifact name",
+        "Generated iXBRL SHA-256",
+        "Taxonomy package",
+        "Company/period reference",
+        "Reviewer signature"
+    )) {
+        Assert-FilledField $Content $field $context $Failures
+    }
+
+    Assert-NoUncheckedBoxes $Content $context $Failures
+    Assert-CheckedDecision $Content "Accepted as external ROS/iXBRL validation evidence for this release candidate." $context $Failures
+    Assert-UncheckedDecision $Content "Rejected; validation issues below must be remediated and re-reviewed." $context $Failures
+    Assert-CompletedTableRows $Content $canonicalGoldenCorpusScenarioCodes $context $Failures
+}
+
 function Test-MonitoringEvidence {
     param(
         [string]$Content,
@@ -244,10 +288,12 @@ $failures = [System.Collections.Generic.List[string]]::new()
 $resolvedDirectory = Resolve-Path -LiteralPath $EvidenceDirectory -ErrorAction Stop
 
 $visualPath = Join-Path $resolvedDirectory "visual-qa-signoff-template.md"
+$externalRosIxbrlPath = Join-Path $resolvedDirectory "external-ros-ixbrl-validation-template.md"
 $accountantPath = Join-Path $resolvedDirectory "qualified-accountant-acceptance-template.md"
 $monitoringPath = Join-Path $resolvedDirectory "monitoring-provider-confirmation-template.md"
 
 $visual = Read-EvidenceFile $visualPath $failures
+$externalRosIxbrl = Read-EvidenceFile $externalRosIxbrlPath $failures
 $accountant = Read-EvidenceFile $accountantPath $failures
 $monitoring = Read-EvidenceFile $monitoringPath $failures
 
@@ -257,6 +303,10 @@ if ($visual.Trim().Length -gt 0) {
 
 if ($accountant.Trim().Length -gt 0) {
     Test-AccountantEvidence $accountant $failures
+}
+
+if ($externalRosIxbrl.Trim().Length -gt 0) {
+    Test-ExternalRosIxbrlEvidence $externalRosIxbrl $failures
 }
 
 if ($monitoring.Trim().Length -gt 0) {
@@ -269,11 +319,13 @@ $report = [ordered]@{
     evidenceDirectory = $resolvedDirectory.Path
     files = [ordered]@{
         visualQa = $visualPath
+        externalRosIxbrlValidation = $externalRosIxbrlPath
         qualifiedAccountantAcceptance = $accountantPath
         monitoringProviderConfirmation = $monitoringPath
     }
     requiredCoverage = [ordered]@{
         goldenCorpusScenarioCodes = $canonicalGoldenCorpusScenarioCodes
+        externalRosIxbrlScenarioCodes = $canonicalGoldenCorpusScenarioCodes
         routeCodes = $requiredRouteCodes
         releaseArtifactNames = $requiredReleaseArtifactNames
     }

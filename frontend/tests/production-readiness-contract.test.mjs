@@ -189,7 +189,7 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.ok(parsed.assurancePacket.evidenceItems.includes("golden-verifier-manifest"));
   assert.ok(parsed.assurancePacket.evidenceItems.includes("release-blocker-register"));
   assert.equal(parsed.assurancePacket.releaseBlockers[0], "Qualified accountant sign-off required");
-  assert.equal(parsed.productionScorecard.currentScore, 499);
+  assert.equal(parsed.productionScorecard.currentScore, 504);
   assert.equal(parsed.productionScorecard.targetScore, 700);
   assert.deepEqual(parsed.productionScorecard.categories.map((category) => category.code), [
     "architecture-documentation",
@@ -197,7 +197,7 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
     "frontend-accountant-workbench",
     "security-auth-tenant-platform-guardrails",
   ]);
-  assert.equal(parsed.productionScorecard.categories[1].currentScore, 175);
+  assert.equal(parsed.productionScorecard.categories[1].currentScore, 180);
   assert.equal(parsed.productionScorecard.categories[1].targetScore, 250);
   assert.ok(parsed.productionScorecard.categories[2].remainingGaps[0].includes("visual QA"));
   assert.ok(parsed.productionScorecard.categories[3].completionTrackCodes.includes("backend-code"));
@@ -765,7 +765,7 @@ test("parseProductionReadinessReport rejects scorecard totals that do not match 
 
   assert.throws(
     () => parseProductionReadinessReport(payload),
-    /Invalid production readiness report contract: productionScorecard\.currentScore - expected 499, received 491/,
+    /Invalid production readiness report contract: productionScorecard\.currentScore - expected 504, received 491/,
   );
 });
 
@@ -823,7 +823,7 @@ test("parseProductionReadinessReport rejects release verification manifest that 
 
 function productionScorecard() {
   return {
-    currentScore: 499,
+    currentScore: 504,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete named visual QA, monitoring-provider confirmation and qualified-accountant acceptance evidence.",
@@ -842,14 +842,15 @@ function productionScorecard() {
       {
         code: "backend-statutory-accounting-engine",
         label: "Backend statutory/accounting engine",
-        currentScore: 175,
+        currentScore: 180,
         targetScore: 250,
         status: "qualified-accountant-review-required",
         currentEvidence: [
           "Golden filing corpus covers the production scenarios.",
           "Qualified-accountant acceptance evidence uses canonical golden corpus scenario codes.",
+          "External ROS/iXBRL validation evidence has template and verifier coverage.",
         ],
-        remainingGaps: ["Run and retain verified qualified-accountant acceptance across every canonical golden corpus scenario."],
+        remainingGaps: ["Run and retain verified qualified-accountant acceptance and external ROS/iXBRL validation evidence across every canonical golden corpus scenario."],
         completionTrackCodes: ["backend-code"],
         releaseBlockerCodes: [
           "backend-code:qualified-accountant-signoff",

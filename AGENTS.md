@@ -50,6 +50,7 @@ Committed and pushed work on `main` includes:
 - `dfa9c28 Record latest release evidence CI status`
 - `52b1a5c Add production readiness scorecard`
 - `201975c Add release evidence verifier`
+- `8e34953 Canonicalize release acceptance coverage`
 
 Backend/accounting-engine progress:
 
@@ -122,6 +123,9 @@ Backend/accounting-engine progress:
   golden corpus scenario codes (`micro-ltd`, `small-abridged-ltd`, `dac-small`,
   `clg-charity`, and `medium-audit-required`) and the verifier report emits
   required scenario, route, and release-artifact coverage.
+- External ROS/iXBRL validation now has a checked-in release evidence template and
+  verifier coverage for every canonical golden corpus scenario, so internal XML
+  checks cannot be mistaken for Revenue acceptance evidence.
 
 Frontend UI/UX progress:
 
@@ -208,7 +212,8 @@ Recent successful local verification includes:
   `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~ReleaseEvidenceVerifier_BlocksIncompleteHumanSignoffEvidence|FullyQualifiedName~ReleaseEvidenceTemplates_CoverHumanVisualAccountantAndProviderSignoffs|FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers"`
   - 3 passed, proving the release evidence verifier, templates, runbook linkage, and
   production scorecard evidence are wired together, including canonical
-  qualified-accountant golden corpus scenario codes and the 499/700 scorecard total
+  qualified-accountant golden corpus scenario codes, external ROS/iXBRL validation
+  template coverage, and the 504/700 scorecard total
 - Backend focused opening take-on tests:
   `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~OpeningTrialBalanceTakeOn|FullyQualifiedName~FinalOutputs_BlockWhenOpeningTrialBalanceTakeOnDoesNotBalance|FullyQualifiedName~TrialBalance_IncludesReviewedOpeningBalancesAndBankOpeningSide"`
 - Backend focused test:
@@ -244,7 +249,8 @@ Recent successful local verification includes:
   execution for `scripts\verify-release-evidence.ps1` - passed. Blank templates fail
   with a failed JSON report; temporary filled templates pass with
   `release-evidence-report.json`. The report now carries required golden corpus
-  scenario, route, and release-artifact coverage.
+  scenario, external ROS/iXBRL validation scenario, route, and release-artifact
+  coverage.
 - Frontend unit tests:
   `npm run test:unit` - 103 passed
 - Frontend type-check:
@@ -335,18 +341,21 @@ Highest-priority next steps:
    manual handoff. The code now emits and verifies the scenario-by-route walkthrough
    evidence matrix and canonical acceptance template rows, but the human walkthrough
    note is still missing.
-4. Record qualified-accountant acceptance evidence for outputs, gates, wording,
+4. Complete and retain external ROS/iXBRL validation references for the exact generated
+   artifact hashes; the template and verifier now exist, but real external validation
+   evidence is still missing.
+5. Record qualified-accountant acceptance evidence for outputs, gates, wording,
    legal/source evidence, visual workflow, and manual handoff behavior.
-5. Promote CI monitoring smoke into release-grade evidence by confirming the controlled
+6. Promote CI monitoring smoke into release-grade evidence by confirming the controlled
    event inside the configured provider and retaining a named operator record before
    real filing use.
-6. Run `scripts\verify-release-evidence.ps1` against completed release evidence and
+7. Run `scripts\verify-release-evidence.ps1` against completed release evidence and
    retain `release-evidence-report.json`; blank templates are intentionally failing
    evidence until real named reviewers complete them.
-7. Continue UI polish route by route, especially any surfaces that still feel too
+8. Continue UI polish route by route, especially any surfaces that still feel too
    card-heavy, too sparse, inconsistent in dark mode, or not dense enough for daily
    accountant use.
-8. Keep extracting route-heavy frontend code into focused workflow components only when
+9. Keep extracting route-heavy frontend code into focused workflow components only when
    it reduces real complexity or improves testable reuse.
 
 ## Estimated Completion
@@ -356,8 +365,8 @@ As of July 8, 2026:
 - Code implementation is roughly 70-75% complete.
 - Production assurance is roughly 60-65% complete.
 - Overall goal is roughly 63-67% complete, with about one third left.
-- The production scorecard is now 499/700: architecture/documentation 94/100,
-  backend statutory/accounting engine 175/250, frontend accountant workbench 130/200,
+- The production scorecard is now 504/700: architecture/documentation 94/100,
+  backend statutory/accounting engine 180/250, frontend accountant workbench 130/200,
   and security/auth/tenant/platform guardrails 100/150.
 - Architecture/documentation is now scored 94/100 in the production scorecard because
   release evidence templates are linked from the runbook and machine-checkable; the

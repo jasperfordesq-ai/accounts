@@ -20,13 +20,13 @@ describe("ProductionReadinessWorkbench", () => {
     expectText("3 companies");
     expectText("4 periods");
     expect(screen.getByRole("heading", { name: "Production scorecard" })).toBeInTheDocument();
-    expectText("499/700");
+    expectText("504/700");
     expectText("Architecture and documentation");
     expectText("Backend statutory/accounting engine");
     expectText("Frontend accountant workbench");
     expectText("Security/auth/tenant/platform guardrails");
     expectText("94 / 100");
-    expectText("175 / 250");
+    expectText("180 / 250");
     expectText("130 / 200");
     expectText("100 / 150");
     expectText(/Next score gate/);
@@ -281,7 +281,7 @@ describe("ProductionReadinessWorkbench", () => {
 
 function productionScorecard(): ProductionReadinessReport["productionScorecard"] {
   return {
-    currentScore: 499,
+    currentScore: 504,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete named visual QA, monitoring-provider confirmation and qualified-accountant acceptance evidence.",
@@ -300,14 +300,15 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
       {
         code: "backend-statutory-accounting-engine",
         label: "Backend statutory/accounting engine",
-        currentScore: 175,
+        currentScore: 180,
         targetScore: 250,
         status: "qualified-accountant-review-required",
         currentEvidence: [
           "Golden filing corpus covers the production scenarios.",
           "Qualified-accountant acceptance evidence uses canonical golden corpus scenario codes.",
+          "External ROS/iXBRL validation evidence has template and verifier coverage.",
         ],
-        remainingGaps: ["Run and retain verified qualified-accountant acceptance across every canonical golden corpus scenario."],
+        remainingGaps: ["Run and retain verified qualified-accountant acceptance and external ROS/iXBRL validation evidence across every canonical golden corpus scenario."],
         completionTrackCodes: ["backend-code"],
         releaseBlockerCodes: ["backend-code:qualified-accountant-signoff"],
       },
