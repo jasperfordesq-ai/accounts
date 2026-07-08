@@ -18305,6 +18305,15 @@ public class AccountsWorkflowTests
         Assert.Contains("workbench-preview", visual);
         Assert.Contains("Required formats", visual);
         Assert.Contains("Reviewer signature", visual);
+        Assert.Contains("screenshot nonblank pixel diversity evidence", visual);
+        Assert.Contains("Minimum PNG IDAT byte size", visual);
+        Assert.Contains("Minimum screenshot pixel sample count", visual);
+        Assert.Contains("Minimum sampled distinct color count", visual);
+        Assert.Contains("Minimum screenshot luminance range", visual);
+        Assert.Contains("pngIdatByteSize", visual);
+        Assert.Contains("pixelSampleCount", visual);
+        Assert.Contains("sampledDistinctColorCount", visual);
+        Assert.Contains("luminanceRange", visual);
 
         var sourceLaw = File.ReadAllText(sourceLawPath);
         Assert.Contains("source-law-snapshot-fingerprint", sourceLaw);
@@ -18390,10 +18399,12 @@ public class AccountsWorkflowTests
         Assert.Contains("Assert-CheckedDecision", script);
         Assert.Contains("Assert-UncheckedDecision", script);
         Assert.Contains("Assert-FilledField", script);
+        Assert.Contains("[`t ]*$escaped[`t ]*:", script);
         Assert.Contains("Assert-ReleaseIdentityFields", script);
         Assert.Contains("Assert-UtcTimestampField", script);
         Assert.Contains("Assert-Sha256Field", script);
         Assert.Contains("Assert-PositiveIntegerField", script);
+        Assert.Contains("Assert-MinimumIntegerField", script);
         Assert.Contains("Assert-CompletedTableColumnMatches", script);
         Assert.Contains("Assert-ConsistentReleaseIdentity", script);
         Assert.Contains("Get-ReleaseEvidenceIdentity", script);
@@ -18425,6 +18436,18 @@ public class AccountsWorkflowTests
         Assert.Contains("visual-smoke-screenshots", script);
         Assert.Contains("visual-smoke-evidence-report.json", script);
         Assert.Contains("accountant-workbench-evidence-report.json", script);
+        Assert.Contains("screenshot nonblank pixel diversity evidence", script);
+        Assert.Contains("Minimum PNG IDAT byte size", script);
+        Assert.Contains("Minimum screenshot pixel sample count", script);
+        Assert.Contains("Minimum sampled distinct color count", script);
+        Assert.Contains("Minimum screenshot luminance range", script);
+        Assert.Contains("\"Minimum sampled distinct color count\" 4", script);
+        Assert.Contains("\"Minimum screenshot luminance range\" 10", script);
+        Assert.Contains("integer greater than or equal to $MinimumValue", script);
+        Assert.Contains("pngIdatByteSize", script);
+        Assert.Contains("pixelSampleCount", script);
+        Assert.Contains("sampledDistinctColorCount", script);
+        Assert.Contains("luminanceRange", script);
         Assert.Contains("monitoring-error-routing-report.json", script);
         Assert.Contains("structured-log-report.json", script);
         Assert.Contains("Matched monitoring smoke line", script);

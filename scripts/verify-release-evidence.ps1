@@ -68,7 +68,7 @@ function Get-FieldValue {
     )
 
     $escaped = [regex]::Escape($FieldName)
-    $pattern = "(?im)^\s*-?\s*$escaped\s*:\s*(\S.*?)\s*$"
+    $pattern = "(?im)^[`t ]*-?[`t ]*$escaped[`t ]*:[`t ]*(.*?)[`t ]*$"
     $match = [regex]::Match($Content, $pattern)
 
     if (-not $match.Success) {
@@ -169,6 +169,26 @@ function Assert-PositiveIntegerField {
     $number = 0
     if (-not [int]::TryParse($value, [ref]$number) -or $number -le 0) {
         Add-Failure $Failures "$Context field '$FieldName' must be a positive integer."
+    }
+}
+
+function Assert-MinimumIntegerField {
+    param(
+        [string]$Content,
+        [string]$FieldName,
+        [int]$MinimumValue,
+        [string]$Context,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    $value = Get-FieldValue $Content $FieldName
+    if ($null -eq $value -or $value.Length -eq 0) {
+        return
+    }
+
+    $number = 0
+    if (-not [int]::TryParse($value, [ref]$number) -or $number -lt $MinimumValue) {
+        Add-Failure $Failures "$Context field '$FieldName' must be an integer greater than or equal to $MinimumValue."
     }
 }
 
@@ -350,12 +370,13 @@ function Assert-ConsistentReleaseIdentity {
         [System.Collections.Generic.List[string]]$Failures
     )
 
-    if (@($Identities).Count -le 1) {
+    $identityList = @($Identities | Where-Object { $null -ne $_ })
+    if ($identityList.Length -le 1) {
         return
     }
 
-    $first = @($Identities)[0]
-    foreach ($identity in @($Identities)) {
+    $first = $identityList[0]
+    foreach ($identity in $identityList) {
         if (-not [string]::Equals([string]$identity.commitSha, [string]$first.commitSha, [StringComparison]::OrdinalIgnoreCase)) {
             Add-Failure $Failures "Release evidence identity mismatch: $($identity.evidenceName) Commit SHA must match $($first.evidenceName)."
         }
@@ -431,16 +452,45 @@ function Test-VisualEvidence {
     )
 
     $context = "Visual QA evidence"
-    foreach ($text in @("visual-smoke-screenshots", "visual-smoke-manifest.json", "visual-smoke-evidence-report.json", "accountant-workbench-evidence-report.json", "Reviewer signature")) {
+    foreach ($text in @(
+        "visual-smoke-screenshots",
+        "visual-smoke-manifest.json",
+        "visual-smoke-evidence-report.json",
+        "accountant-workbench-evidence-report.json",
+        "screenshot nonblank pixel diversity evidence",
+        "pngIdatByteSize",
+        "pixelSampleCount",
+        "sampledDistinctColorCount",
+        "luminanceRange",
+        "Reviewer signature"
+    )) {
         Assert-ContainsText $Content $text $context $Failures
     }
 
-    foreach ($field in @("Commit SHA", "GitHub Actions run URL", "Visual smoke manifest file", "Visual smoke evidence report file", "Accountant workbench evidence report file", "Reviewer name", "Reviewer role", "Review date/time UTC", "Reviewer signature")) {
+    foreach ($field in @(
+        "Commit SHA",
+        "GitHub Actions run URL",
+        "Visual smoke manifest file",
+        "Visual smoke evidence report file",
+        "Accountant workbench evidence report file",
+        "Minimum PNG IDAT byte size",
+        "Minimum screenshot pixel sample count",
+        "Minimum sampled distinct color count",
+        "Minimum screenshot luminance range",
+        "Reviewer name",
+        "Reviewer role",
+        "Review date/time UTC",
+        "Reviewer signature"
+    )) {
         Assert-FilledField $Content $field $context $Failures
     }
 
     Assert-ReleaseIdentityFields $Content $context $Failures
     Assert-UtcTimestampField $Content "Review date/time UTC" $context $Failures
+    Assert-PositiveIntegerField $Content "Minimum PNG IDAT byte size" $context $Failures
+    Assert-PositiveIntegerField $Content "Minimum screenshot pixel sample count" $context $Failures
+    Assert-MinimumIntegerField $Content "Minimum sampled distinct color count" 4 $context $Failures
+    Assert-MinimumIntegerField $Content "Minimum screenshot luminance range" 10 $context $Failures
     Assert-NoUncheckedBoxes $Content $context $Failures
     Assert-CheckedDecision $Content "Accepted for this release candidate." $context $Failures
     Assert-UncheckedDecision $Content "Rejected; defects listed below must be fixed and re-reviewed." $context $Failures
@@ -711,18 +761,20 @@ $releaseEvidenceIdentities = @(
     Get-ReleaseEvidenceIdentity $manualHandoff "manualHandoffAcceptance"
     Get-ReleaseEvidenceIdentity $monitoring "monitoringProviderConfirmation"
 ) | Where-Object { $null -ne $_ }
+$releaseEvidenceIdentities = @($releaseEvidenceIdentities)
 Assert-ConsistentReleaseIdentity $releaseEvidenceIdentities $failures
 
 $releaseCandidateCommitSha = ""
 $releaseCandidateRunUrl = ""
-if (@($releaseEvidenceIdentities).Count -gt 0) {
-    $releaseCandidateCommitSha = [string]@($releaseEvidenceIdentities)[0].commitSha
-    $releaseCandidateRunUrl = [string]@($releaseEvidenceIdentities)[0].githubActionsRunUrl
+if ($releaseEvidenceIdentities.Length -gt 0) {
+    $releaseCandidateCommitSha = [string]$releaseEvidenceIdentities[0].commitSha
+    $releaseCandidateRunUrl = [string]$releaseEvidenceIdentities[0].githubActionsRunUrl
 }
 
 $releaseIdentityConsistent = $true
-if (@($releaseEvidenceIdentities | Select-Object -ExpandProperty commitSha -Unique).Count -gt 1 -or
-    @($releaseEvidenceIdentities | Select-Object -ExpandProperty githubActionsRunUrl -Unique).Count -gt 1) {
+$uniqueCommitShas = @($releaseEvidenceIdentities | Select-Object -ExpandProperty commitSha -Unique)
+$uniqueRunUrls = @($releaseEvidenceIdentities | Select-Object -ExpandProperty githubActionsRunUrl -Unique)
+if ($uniqueCommitShas.Length -gt 1 -or $uniqueRunUrls.Length -gt 1) {
     $releaseIdentityConsistent = $false
 }
 
@@ -734,7 +786,7 @@ $report = [ordered]@{
         commitSha = $releaseCandidateCommitSha
         githubActionsRunUrl = $releaseCandidateRunUrl
         identityConsistent = $releaseIdentityConsistent
-        evidenceIdentityCount = @($releaseEvidenceIdentities).Count
+        evidenceIdentityCount = $releaseEvidenceIdentities.Length
     }
     evidenceIdentities = @($releaseEvidenceIdentities)
     evidenceFiles = $evidenceFiles

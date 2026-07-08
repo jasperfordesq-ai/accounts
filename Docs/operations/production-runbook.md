@@ -246,7 +246,11 @@ node scripts\verify-accountant-workbench-evidence.mjs --visual-report=D:\account
 The visual smoke evidence report must retain screenshot hashes, byte sizes, planned
 PNG dimensions, IDAT byte counts, sampled pixel counts, distinct color buckets, and
 luminance range. A PNG that is structurally valid but visually blank is not sufficient
-evidence for visual QA sign-off.
+evidence for visual QA sign-off. Copy the minimum PNG IDAT byte size, screenshot
+pixel sample count, sampled distinct color count, and luminance range from the
+retained report into `Docs/release-evidence/visual-qa-signoff-template.md`; the
+release evidence verifier rejects visual QA sign-off if the distinct color count is
+below `4` or the luminance range is below `10`.
 
 The accountant workbench evidence report must retain the seven planned route keys,
 expected route text, blocking status and required qualified-accountant route
@@ -322,10 +326,10 @@ The HTTPS smoke path also verifies that the login response sets the `accounts_se
 8. Run `scripts\verify-no-direct-filing-submission.ps1` and retain `no-direct-filing-submission-report.json`.
 9. Run `scripts\verify-production-readiness-report.ps1 -ReportPath D:\accounts-smoke\production-readiness-report.json -EvidencePath D:\accounts-smoke\production-readiness-verification-report.json` and retain `production-readiness-verification-report.json`.
 10. Complete `Docs/release-evidence/source-law-review-template.md` against the production readiness source-law snapshot, source-law review ledger, and current CRO, Revenue, FRC, and Charities Regulator pages.
-11. Complete `Docs/release-evidence/visual-qa-signoff-template.md` using the CI `visual-smoke-screenshots` artifact, `visual-smoke-manifest.json`, and `visual-smoke-evidence-report.json`.
+11. Complete `Docs/release-evidence/visual-qa-signoff-template.md` using the CI `visual-smoke-screenshots` artifact, `visual-smoke-manifest.json`, `visual-smoke-evidence-report.json`, and the retained nonblank pixel metric minima.
 12. Complete `Docs/release-evidence/external-ros-ixbrl-validation-template.md` using external ROS/iXBRL validation references for the exact generated artifact hashes.
 13. Complete `Docs/release-evidence/monitoring-provider-confirmation-template.md` using the CI monitoring and structured-log artifacts plus the real provider event.
 14. Complete `Docs/release-evidence/qualified-accountant-acceptance-template.md` with a named qualified accountant before real filing preparation is used.
 15. Complete `Docs/release-evidence/manual-handoff-acceptance-template.md` for `medium-audit-required` and every unsupported path code before any audit-required or unsupported output is relied on.
-16. Run `scripts\verify-release-evidence.ps1` and retain `release-evidence-report.json`; real filing use stays blocked if any required checkbox, signature, artifact reference, release identity, UTC timestamp, SHA-256 digest, table row, accepted decision, canonical golden corpus scenario row, source-law source row, external ROS/iXBRL validation row, manual handoff scenario/path row, route row, visual smoke evidence report reference, monitoring log confirmation field, required coverage entry, or same-candidate identity across all six human evidence templates is missing or malformed.
+16. Run `scripts\verify-release-evidence.ps1` and retain `release-evidence-report.json`; real filing use stays blocked if any required checkbox, signature, artifact reference, release identity, UTC timestamp, SHA-256 digest, table row, accepted decision, canonical golden corpus scenario row, source-law source row, external ROS/iXBRL validation row, manual handoff scenario/path row, route row, visual smoke evidence report reference, visual nonblank metric field, monitoring log confirmation field, required coverage entry, or same-candidate identity across all six human evidence templates is missing or malformed.
 17. Run `scripts\verify-release-artifact-pack.ps1` with the release commit SHA and GitHub Actions run URL, then retain `release-artifact-pack-report.json`; real filing use stays blocked if the exact release artifact pack is missing dependency, production safety, monitoring, structured log, backup/restore, no-direct-submission, production-readiness report and verification, visual smoke, accountant-workbench evidence, completed release-evidence reports, the six completed release-evidence Markdown templates with matching SHA-256/byte-size inventory, or a release-evidence candidate identity matching the pack `CommitSha` and `GitHubActionsRunUrl`.
