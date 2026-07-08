@@ -10,6 +10,7 @@ artifact before real CRO or Revenue filing use.
 - Artifact name: `visual-smoke-screenshots`
 - Visual smoke manifest file:
 - Visual smoke evidence report file:
+- Accountant workbench evidence report file:
 - Reviewer name:
 - Reviewer role:
 - Review date/time UTC:
@@ -18,6 +19,7 @@ artifact before real CRO or Revenue filing use.
 
 - [ ] Artifact contains `visual-smoke-manifest.json`.
 - [ ] Artifact contains `visual-smoke-evidence-report.json` from `node scripts/verify-visual-smoke-artifacts.mjs`.
+- [ ] Artifact contains `accountant-workbench-evidence-report.json` from `node scripts/verify-accountant-workbench-evidence.mjs`.
 - [ ] Manifest route count matches the production readiness report.
 - [ ] Every route has light and dark screenshots.
 - [ ] Every route has desktop and mobile screenshots.

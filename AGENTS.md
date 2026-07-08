@@ -138,6 +138,10 @@ Backend/accounting-engine progress:
   `visual-smoke-evidence-report.json`, proving the visual smoke artifact has the full
   route/theme/viewport matrix plus matching screenshot byte sizes and SHA-256 hashes
   before a named human reviewer signs off.
+- `node scripts/verify-accountant-workbench-evidence.mjs` now emits
+  `accountant-workbench-evidence-report.json`, proving each accountant workbench route
+  has workflow-stage, route-key, review-check, theme, viewport and screenshot coverage
+  before named visual QA sign-off.
 
 Frontend UI/UX progress:
 
@@ -229,7 +233,8 @@ Recent successful local verification includes:
   production scorecard evidence are wired together, including canonical
   qualified-accountant golden corpus scenario codes, external ROS/iXBRL validation
   template coverage, source-law source coverage, manual handoff coverage, visual
-  smoke evidence report references, and the 539/700 scorecard total
+  smoke and accountant workbench evidence report references, and the 549/700
+  scorecard total
 - Backend focused release artifact pack verifier and scorecard tests:
   `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~ReleaseArtifactPackVerifier_RequiresExactOperationalEvidenceReports|FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers"`
   - passed, proving `scripts/verify-release-artifact-pack.ps1`, runbook linkage,
@@ -300,9 +305,10 @@ Recent successful local verification includes:
   - `node scripts/verify-api-client.mjs` - passed
   - `npm.cmd run test:render -- production-readiness-workbench` - 1 passed
 - Frontend visual smoke evidence report checks:
-  `node --test tests/visual-smoke-plan.test.mjs tests/visual-smoke-artifacts.test.mjs tests/production-readiness-contract.test.mjs`
-  - 50 passed, proving the 28-screenshot matrix, verifier report generation,
-  duplicate coverage rejection, parser invariants, and scorecard contract
+  `node --test tests/accountant-workbench-evidence.test.mjs tests/visual-smoke-plan.test.mjs tests/visual-smoke-artifacts.test.mjs tests/production-readiness-contract.test.mjs`
+  - passed, proving the 28-screenshot matrix, verifier report generation,
+  accountant workbench evidence report generation, duplicate coverage rejection,
+  parser invariants, and scorecard contract
 - Frontend scorecard render and type checks for the visual evidence report slice:
   - `node scripts/verify-api-client.mjs` - passed
   - `npm.cmd run test:render -- production-readiness-workbench` - 1 passed
@@ -414,8 +420,8 @@ As of July 8, 2026:
 - Code implementation is roughly 70-75% complete.
 - Production assurance is roughly 60-65% complete.
 - Overall goal is roughly 63-67% complete, with about one third left.
-- The production scorecard is now 539/700: architecture/documentation 99/100,
-  backend statutory/accounting engine 190/250, frontend accountant workbench 135/200,
+- The production scorecard is now 549/700: architecture/documentation 99/100,
+  backend statutory/accounting engine 190/250, frontend accountant workbench 145/200,
   and security/auth/tenant/platform guardrails 115/150.
 - Architecture/documentation is now scored 99/100 in the production scorecard because
   source-law review, release evidence templates, manual handoff evidence, runbook

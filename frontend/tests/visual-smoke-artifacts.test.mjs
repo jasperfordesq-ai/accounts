@@ -146,6 +146,24 @@ describe("visual smoke artifact evidence", () => {
     }
   });
 
+  it("rejects manifests that omit accountant workbench evidence from the review protocol", async () => {
+    const { verifyVisualSmokeManifest, withScreenshotEvidence } = await import("../scripts/visual-smoke-artifacts.mjs");
+    const dir = await mkTempDir();
+    const manifestPath = path.join(dir, "visual-smoke-manifest.json");
+
+    const screenshots = await completeScreenshots(dir, withScreenshotEvidence);
+    await writeManifest(manifestPath, screenshots, undefined, ["visual-smoke-evidence-report.json", "screenshot SHA-256 checksums"]);
+
+    try {
+      await assert.rejects(
+        () => verifyVisualSmokeManifest(manifestPath),
+        /visual smoke manifest review protocol must require accountant-workbench-evidence-report\.json/,
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("rejects duplicate route theme viewport coverage", async () => {
     const { verifyVisualSmokeManifest, withScreenshotEvidence } = await import("../scripts/visual-smoke-artifacts.mjs");
     const dir = await mkTempDir();
@@ -194,7 +212,7 @@ async function completeScreenshots(dir, withScreenshotEvidence) {
   return screenshots;
 }
 
-async function writeManifest(manifestPath, screenshots, routeAudits) {
+async function writeManifest(manifestPath, screenshots, routeAudits, requiredEvidence = ["visual-smoke-evidence-report.json", "accountant-workbench-evidence-report.json", "screenshot SHA-256 checksums"]) {
   const {
     expectedVisualSmokeRouteAudits,
     visualSmokeLayoutChecks,
@@ -209,7 +227,7 @@ async function writeManifest(manifestPath, screenshots, routeAudits) {
       expectedScreenshotCount: screenshots.length,
       layoutChecks: visualSmokeLayoutChecks,
       reviewChecks: visualSmokeReviewChecks,
-      reviewProtocol: { requiredEvidence: ["visual-smoke-evidence-report.json", "screenshot SHA-256 checksums"] },
+      reviewProtocol: { requiredEvidence },
       routeAudits: routeAudits ?? expectedVisualSmokeRouteAudits(),
       screenshots,
     }, null, 2)}\n`,

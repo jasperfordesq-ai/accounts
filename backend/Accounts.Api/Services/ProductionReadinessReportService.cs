@@ -695,6 +695,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "audit-evidence-timeline",
             "production-audit-evidence-pack",
             "visual-smoke-screenshots",
+            "accountant-workbench-evidence-report",
             "production-operational-gates",
             "dependency-policy-controls",
             "deployment-safety-controls",
@@ -834,14 +835,15 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             Category(
                 "frontend-accountant-workbench",
                 "Frontend accountant workbench",
-                135,
+                145,
                 200,
                 "visual-acceptance-required",
                 [
                     "Production readiness, dashboard, company, period, filing review, financial statements and workbench preview routes are in the visual smoke plan.",
                     "Shared workbench primitives and route-level render tests cover the main accountant journey.",
                     "Dense tables, workflow rails, blocker summaries and permission-denied states are surfaced in the workbench.",
-                    "node scripts/verify-visual-smoke-artifacts.mjs now writes visual-smoke-evidence-report.json covering screenshot hashes, byte sizes and route/theme/viewport completeness before human review."
+                    "node scripts/verify-visual-smoke-artifacts.mjs now writes visual-smoke-evidence-report.json covering screenshot hashes, byte sizes and route/theme/viewport completeness before human review.",
+                    "node scripts/verify-accountant-workbench-evidence.mjs now writes accountant-workbench-evidence-report.json proving route, workflow-stage, theme, viewport, layout-check and review-check coverage."
                 ],
                 [
                     "Complete named visual QA review against the light/dark desktop/mobile screenshot manifest and visual-smoke-evidence-report.json.",
@@ -2636,7 +2638,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "visual-smoke-light-dark",
             "Light/dark desktop/mobile visual smoke",
             "Engineering",
-            "node scripts/visual-smoke.mjs; node scripts/verify-visual-smoke-artifacts.mjs --report-path=artifacts/visual-smoke/visual-smoke-evidence-report.json",
+            "node scripts/visual-smoke.mjs; node scripts/verify-visual-smoke-artifacts.mjs --report-path=artifacts/visual-smoke/visual-smoke-evidence-report.json; node scripts/verify-accountant-workbench-evidence.mjs --visual-report=artifacts/visual-smoke/visual-smoke-evidence-report.json --report-path=artifacts/visual-smoke/accountant-workbench-evidence-report.json",
             "default-ci",
             RunsInDefaultCi: true,
             BlocksRelease: true,
@@ -3619,6 +3621,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             [
                 "visual-smoke-manifest.json",
                 "visual-smoke-evidence-report.json",
+                "accountant-workbench-evidence-report.json",
                 "28 visual smoke screenshots",
                 "screenshot SHA-256 checksums",
                 "route audit summary",

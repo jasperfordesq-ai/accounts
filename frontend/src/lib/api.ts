@@ -3763,6 +3763,12 @@ function assertAccountantWorkflowWalkthroughProtocol(report: ProductionReadiness
     );
   }
 
+  if (!report.assurancePacket.evidenceItems.includes("accountant-workbench-evidence-report")) {
+    throw new Error(
+      "Invalid production readiness report contract: assurancePacket.evidenceItems - accountant-workbench-evidence-report is required",
+    );
+  }
+
   for (const evidence of ["seeded golden corpus walkthrough note", "named qualified-accountant approval", "visual QA screenshot review"]) {
     if (!protocol.requiredEvidence.includes(evidence)) {
       throw new Error(
@@ -4224,6 +4230,12 @@ function assertVisualQaArtifacts(report: ProductionReadinessReport) {
   if (!reviewProtocol.requiredEvidence.includes("visual-smoke-evidence-report.json")) {
     throw new Error(
       "Invalid production readiness report contract: visualQaCoverage.reviewProtocol.requiredEvidence - must include visual-smoke-evidence-report.json",
+    );
+  }
+
+  if (!reviewProtocol.requiredEvidence.includes("accountant-workbench-evidence-report.json")) {
+    throw new Error(
+      "Invalid production readiness report contract: visualQaCoverage.reviewProtocol.requiredEvidence - must include accountant-workbench-evidence-report.json",
     );
   }
 

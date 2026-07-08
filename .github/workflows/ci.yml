@@ -453,6 +453,8 @@ jobs:
           export PASSWORD="$(tr -d '\r\n' < "$BOOTSTRAP_OWNER_PASSWORD_FILE")"
 
           npm run test:visual -- --output-dir=../.tmp/visual-smoke
+          npm run test:visual:verify -- --manifest=../.tmp/visual-smoke/visual-smoke-manifest.json --report-path=../.tmp/visual-smoke/visual-smoke-evidence-report.json
+          npm run test:visual:workbench -- --visual-report=../.tmp/visual-smoke/visual-smoke-evidence-report.json --report-path=../.tmp/visual-smoke/accountant-workbench-evidence-report.json
 
       - name: Upload visual smoke screenshots
         if: always()

@@ -101,6 +101,7 @@ $structuredLog = Read-JsonEvidence $resolvedDirectory.Path "structured-log-repor
 $restore = Read-JsonEvidence $resolvedDirectory.Path "restore-drill-report.json" $failures
 $noDirectSubmission = Read-JsonEvidence $resolvedDirectory.Path "no-direct-filing-submission-report.json" $failures
 $visualSmoke = Read-JsonEvidence $resolvedDirectory.Path "visual-smoke-evidence-report.json" $failures
+$accountantWorkbench = Read-JsonEvidence $resolvedDirectory.Path "accountant-workbench-evidence-report.json" $failures
 $releaseEvidence = Read-JsonEvidence $resolvedDirectory.Path "release-evidence-report.json" $failures
 
 $allEvidence = [ordered]@{
@@ -111,6 +112,7 @@ $allEvidence = [ordered]@{
     "restore-drill-report.json" = $restore
     "no-direct-filing-submission-report.json" = $noDirectSubmission
     "visual-smoke-evidence-report.json" = $visualSmoke
+    "accountant-workbench-evidence-report.json" = $accountantWorkbench
     "release-evidence-report.json" = $releaseEvidence
 }
 
@@ -184,6 +186,23 @@ if (-not ($visualSmoke.PSObject.Properties.Name -contains "__missing")) {
     }
     if ([int]$visualSmoke.routeCount -ne 7) {
         Add-Failure $failures "visual-smoke-evidence-report.json routeCount must be 7."
+    }
+}
+
+if (-not ($accountantWorkbench.PSObject.Properties.Name -contains "__missing")) {
+    if ([int]$accountantWorkbench.routeCount -ne 7) {
+        Add-Failure $failures "accountant-workbench-evidence-report.json routeCount must be 7."
+    }
+    if ([int]$accountantWorkbench.screenshotCount -ne 28 -or [int]$accountantWorkbench.expectedScreenshotCount -ne 28) {
+        Add-Failure $failures "accountant-workbench-evidence-report.json must cover 28 expected screenshots."
+    }
+    foreach ($coverageProperty in @("routeCodes", "routeKeys", "workflowStages", "themes", "viewports", "reviewChecks", "layoutChecks", "evidenceFiles")) {
+        if ($null -eq $accountantWorkbench.requiredCoverage.$coverageProperty -or @($accountantWorkbench.requiredCoverage.$coverageProperty).Count -eq 0) {
+            Add-Failure $failures "accountant-workbench-evidence-report.json requiredCoverage.$coverageProperty must be present."
+        }
+    }
+    foreach ($requiredEvidenceFile in @("visual-smoke-manifest.json", "visual-smoke-evidence-report.json", "accountant-workbench-evidence-report.json")) {
+        Assert-ArrayContains @($accountantWorkbench.requiredCoverage.evidenceFiles) $requiredEvidenceFile "accountant-workbench-evidence-report.json requiredCoverage.evidenceFiles" $failures
     }
 }
 

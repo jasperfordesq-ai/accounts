@@ -98,6 +98,7 @@ public class ProductionReadinessReportTests
         Assert.Contains("source-law-snapshot-fingerprint", report.AssurancePacket.EvidenceItems);
         Assert.Contains("golden-filing-corpus", report.AssurancePacket.EvidenceItems);
         Assert.Contains("visual-smoke-screenshots", report.AssurancePacket.EvidenceItems);
+        Assert.Contains("accountant-workbench-evidence-report", report.AssurancePacket.EvidenceItems);
         Assert.Contains(report.AssurancePacket.ReleaseBlockers, blocker =>
             blocker.Contains("qualified accountant", StringComparison.OrdinalIgnoreCase));
         Assert.Equal(
@@ -857,7 +858,7 @@ public class ProductionReadinessReportTests
         var report = await new ProductionReadinessReportService(db).GetReportAsync();
 
         Assert.NotNull(report.ProductionScorecard);
-        Assert.Equal(539, report.ProductionScorecard.CurrentScore);
+        Assert.Equal(549, report.ProductionScorecard.CurrentScore);
         Assert.Equal(700, report.ProductionScorecard.TargetScore);
         Assert.Equal("review-required", report.ProductionScorecard.Status);
         Assert.Contains("source-law", report.ProductionScorecard.NextGate, StringComparison.OrdinalIgnoreCase);
@@ -879,7 +880,7 @@ public class ProductionReadinessReportTests
         var scores = categories.ToDictionary(category => category.Code);
         Assert.Equal((99, 100), (scores["architecture-documentation"].CurrentScore, scores["architecture-documentation"].TargetScore));
         Assert.Equal((190, 250), (scores["backend-statutory-accounting-engine"].CurrentScore, scores["backend-statutory-accounting-engine"].TargetScore));
-        Assert.Equal((135, 200), (scores["frontend-accountant-workbench"].CurrentScore, scores["frontend-accountant-workbench"].TargetScore));
+        Assert.Equal((145, 200), (scores["frontend-accountant-workbench"].CurrentScore, scores["frontend-accountant-workbench"].TargetScore));
         Assert.Equal((115, 150), (scores["security-auth-tenant-platform-guardrails"].CurrentScore, scores["security-auth-tenant-platform-guardrails"].TargetScore));
         Assert.Contains(scores["architecture-documentation"].CurrentEvidence, evidence =>
             evidence.Contains("verify-release-evidence.ps1", StringComparison.OrdinalIgnoreCase));
@@ -915,6 +916,8 @@ public class ProductionReadinessReportTests
             gap.Contains("visual QA", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["frontend-accountant-workbench"].CurrentEvidence, evidence =>
             evidence.Contains("visual-smoke-evidence-report.json", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(scores["frontend-accountant-workbench"].CurrentEvidence, evidence =>
+            evidence.Contains("accountant-workbench-evidence-report.json", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["backend-statutory-accounting-engine"].RemainingGaps, gap =>
             gap.Contains("qualified-accountant", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["backend-statutory-accounting-engine"].CurrentEvidence, evidence =>
@@ -1080,7 +1083,9 @@ public class ProductionReadinessReportTests
             StringProperty(item, "Code") == "visual-smoke-light-dark"
             && StringProperty(item, "Command").Contains("visual-smoke", StringComparison.OrdinalIgnoreCase)
             && StringProperty(item, "Command").Contains("verify-visual-smoke-artifacts", StringComparison.OrdinalIgnoreCase)
+            && StringProperty(item, "Command").Contains("verify-accountant-workbench-evidence", StringComparison.OrdinalIgnoreCase)
             && StringProperty(item, "Command").Contains("visual-smoke-evidence-report.json", StringComparison.OrdinalIgnoreCase)
+            && StringProperty(item, "Command").Contains("accountant-workbench-evidence-report.json", StringComparison.OrdinalIgnoreCase)
             && StringProperty(item, "EvidenceArtifact") == "artifacts/visual-smoke"
             && BooleanProperty(item, "BlocksRelease"));
         Assert.Contains(manifest, item =>
@@ -2207,6 +2212,7 @@ public class ProductionReadinessReportTests
             [
                 "visual-smoke-manifest.json",
                 "visual-smoke-evidence-report.json",
+                "accountant-workbench-evidence-report.json",
                 "28 visual smoke screenshots",
                 "screenshot SHA-256 checksums",
                 "route audit summary",

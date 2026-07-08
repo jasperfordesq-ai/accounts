@@ -51,6 +51,10 @@ export async function verifyVisualSmokeManifest(manifestPath, options = {}) {
     failures.push(`visual smoke manifest review protocol must require ${VISUAL_SMOKE_EVIDENCE_REPORT_FILE}`);
   }
 
+  if (!manifest.reviewProtocol?.requiredEvidence?.includes("accountant-workbench-evidence-report.json")) {
+    failures.push("visual smoke manifest review protocol must require accountant-workbench-evidence-report.json");
+  }
+
   let totalBytes = 0;
   const screenshotSummaries = [];
   const duplicateKeys = new Set();

@@ -198,8 +198,9 @@ run the artifact-pack verifier and retain its JSON report:
 The artifact pack must include `dependency-audit-report.json`,
 `production-safety-report.json`, `monitoring-error-routing-report.json`,
 `structured-log-report.json`, `restore-drill-report.json`,
-`no-direct-filing-submission-report.json`, `visual-smoke-evidence-report.json`, and
-`release-evidence-report.json`. The verifier fails if any required report is missing,
+`no-direct-filing-submission-report.json`, `visual-smoke-evidence-report.json`,
+`accountant-workbench-evidence-report.json`, and `release-evidence-report.json`.
+The verifier fails if any required report is missing,
 does not have `status: passed`, or if cross-report checks such as the monitoring smoke
 correlation id do not match.
 
@@ -209,6 +210,7 @@ retain the generated evidence report with the screenshot artifact:
 ```powershell
 cd frontend
 node scripts\verify-visual-smoke-artifacts.mjs --manifest=D:\accounts-smoke\visual-smoke\visual-smoke-manifest.json --report-path=D:\accounts-smoke\visual-smoke\visual-smoke-evidence-report.json
+node scripts\verify-accountant-workbench-evidence.mjs --visual-report=D:\accounts-smoke\visual-smoke\visual-smoke-evidence-report.json --report-path=D:\accounts-smoke\visual-smoke\accountant-workbench-evidence-report.json
 ```
 
 For local Windows or Codex workspaces where Next.js cannot spawn child-process workers or cannot clean a stale `.next` directory, use a clean checkout or temporary copy outside the repository and keep the standard `.next` output directory. The app exposes an opt-in worker-thread fallback for this verification path only:
@@ -286,4 +288,4 @@ The HTTPS smoke path also verifies that the login response sets the `accounts_se
 13. Complete `Docs/release-evidence/qualified-accountant-acceptance-template.md` with a named qualified accountant before real filing preparation is used.
 14. Complete `Docs/release-evidence/manual-handoff-acceptance-template.md` for `medium-audit-required` and every unsupported path code before any audit-required or unsupported output is relied on.
 15. Run `scripts\verify-release-evidence.ps1` and retain `release-evidence-report.json`; real filing use stays blocked if any required checkbox, signature, artifact reference, table row, accepted decision, canonical golden corpus scenario row, source-law source row, external ROS/iXBRL validation row, manual handoff scenario/path row, route row, visual smoke evidence report reference, or required coverage entry is missing.
-16. Run `scripts\verify-release-artifact-pack.ps1` and retain `release-artifact-pack-report.json`; real filing use stays blocked if the exact release artifact pack is missing dependency, production safety, monitoring, structured log, backup/restore, no-direct-submission, visual smoke, or completed release-evidence reports.
+16. Run `scripts\verify-release-artifact-pack.ps1` and retain `release-artifact-pack-report.json`; real filing use stays blocked if the exact release artifact pack is missing dependency, production safety, monitoring, structured log, backup/restore, no-direct-submission, visual smoke, accountant-workbench evidence, or completed release-evidence reports.

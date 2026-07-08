@@ -18280,6 +18280,7 @@ public class AccountsWorkflowTests
         Assert.Contains("visual-smoke-screenshots", visual);
         Assert.Contains("visual-smoke-manifest.json", visual);
         Assert.Contains("visual-smoke-evidence-report.json", visual);
+        Assert.Contains("accountant-workbench-evidence-report.json", visual);
         Assert.Contains("dashboard", visual);
         Assert.Contains("production-readiness", visual);
         Assert.Contains("workbench-preview", visual);
@@ -18381,6 +18382,7 @@ public class AccountsWorkflowTests
         Assert.Contains("stale non-canonical scenario code", script);
         Assert.Contains("visual-smoke-screenshots", script);
         Assert.Contains("visual-smoke-evidence-report.json", script);
+        Assert.Contains("accountant-workbench-evidence-report.json", script);
         Assert.Contains("monitoring-error-routing-report.json", script);
         Assert.Contains("structured-log-report.json", script);
         Assert.Contains("Direct CRO submission remains unsupported", script);
@@ -18441,14 +18443,24 @@ public class AccountsWorkflowTests
         var runbook = File.ReadAllText(Path.Combine(root, "Docs", "operations", "production-runbook.md"));
         var reportService = File.ReadAllText(Path.Combine(root, "backend", "Accounts.Api", "Services", "ProductionReadinessReportService.cs"));
         var scriptPath = Path.Combine(root, "scripts", "verify-release-artifact-pack.ps1");
+        var workflow = File.ReadAllText(Path.Combine(root, ".github", "workflows", "ci.yml"));
+        var packageJson = File.ReadAllText(Path.Combine(root, "frontend", "package.json"));
+        var workbenchVerifierPath = Path.Combine(root, "frontend", "scripts", "verify-accountant-workbench-evidence.mjs");
 
         Assert.True(File.Exists(scriptPath), "Release artifact pack verifier should make retained operational evidence machine-checkable.");
+        Assert.True(File.Exists(workbenchVerifierPath), "Accountant workbench evidence verifier should produce visual-route release evidence.");
         var script = File.ReadAllText(scriptPath);
+        var workbenchVerifier = File.ReadAllText(workbenchVerifierPath);
 
         Assert.Contains("verify-release-artifact-pack.ps1", runbook);
         Assert.Contains("release-artifact-pack-report.json", runbook);
         Assert.Contains("verify-release-artifact-pack.ps1", reportService);
         Assert.Contains("release-artifact-pack-report.json", reportService);
+        Assert.Contains("verify-accountant-workbench-evidence.mjs", runbook);
+        Assert.Contains("accountant-workbench-evidence-report.json", runbook);
+        Assert.Contains("test:visual:workbench", packageJson);
+        Assert.Contains("test:visual:workbench", workflow);
+        Assert.Contains("accountant-workbench-evidence-report.json", workflow);
 
         foreach (var evidenceFile in new[]
         {
@@ -18459,6 +18471,7 @@ public class AccountsWorkflowTests
             "restore-drill-report.json",
             "no-direct-filing-submission-report.json",
             "visual-smoke-evidence-report.json",
+            "accountant-workbench-evidence-report.json",
             "release-evidence-report.json"
         })
         {
@@ -18475,6 +18488,11 @@ public class AccountsWorkflowTests
         Assert.Contains("sourceLawSourceIds", script);
         Assert.Contains("manualHandoffScenarioCodes", script);
         Assert.Contains("manualHandoffPathCodes", script);
+        Assert.Contains("accountant-workbench-evidence-report.json routeCount must be 7", script);
+        Assert.Contains("workflowStages", script);
+        Assert.Contains("routeReadiness", workbenchVerifier);
+        Assert.Contains("visualSmokeReviewChecks", workbenchVerifier);
+        Assert.Contains("ACCOUNTANT_WORKFLOW_STAGES", workbenchVerifier);
         Assert.Contains("Release artifact pack verification failed", script);
         Assert.Contains("ConvertTo-Json -Depth 6", script);
     }

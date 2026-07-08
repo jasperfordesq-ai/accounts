@@ -57,6 +57,7 @@ describe("visual smoke plan", () => {
       requiredEvidence: [
         "visual-smoke-manifest.json",
         "visual-smoke-evidence-report.json",
+        "accountant-workbench-evidence-report.json",
         "28 visual smoke screenshots",
         "screenshot SHA-256 checksums",
         "route audit summary",
@@ -184,5 +185,6 @@ describe("visual smoke plan", () => {
       "existing dashboard period links must be resolved before fallback smoke company creation",
     );
     assert.equal(packageJson.scripts["test:visual:verify"], "node scripts/verify-visual-smoke-artifacts.mjs");
+    assert.equal(packageJson.scripts["test:visual:workbench"], "node scripts/verify-accountant-workbench-evidence.mjs");
   });
 });
