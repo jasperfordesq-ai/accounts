@@ -63,6 +63,7 @@ Committed and pushed work on `main` includes:
 - `a92ecd2 Retain release evidence templates in artifact packs`
 - `26b9f75 Record release template retention handoff`
 - `3e53b47 Require visual smoke nonblank pixel evidence`
+- `a7cc5cc Require visual QA metric signoff evidence`
 
 Backend/accounting-engine progress:
 
@@ -134,6 +135,15 @@ Backend/accounting-engine progress:
 - `scripts/verify-release-evidence.ps1` now rejects completed human evidence when
   release candidate identity, UTC timestamps, SHA-256 digests, external iXBRL
   artifact hashes, or monitoring log confirmation fields are malformed.
+- `Docs/release-evidence/visual-qa-signoff-template.md` and
+  `scripts/verify-release-evidence.ps1` now require named visual QA reviewers to
+  record minimum PNG IDAT byte size, sampled pixel count, sampled distinct color
+  count, and luminance range from `visual-smoke-evidence-report.json`; the verifier
+  rejects visual QA evidence if the color count is below 4 or luminance range is
+  below 10.
+- `scripts/verify-release-evidence.ps1` now parses release evidence fields using
+  same-line horizontal whitespace only, so blank fields cannot accidentally consume
+  the next line as their value under strict mode.
 - `scripts/verify-release-evidence.ps1` now emits a single release candidate identity
   across all six human evidence templates, and `scripts/verify-release-artifact-pack.ps1`
   rejects a release pack if `release-evidence-report.json` does not match the pack
@@ -414,6 +424,26 @@ Recent successful local verification includes:
 - PowerShell parser checks for `scripts\verify-release-artifact-pack.ps1` and
   `scripts\verify-ci-machine-evidence-pack.ps1` after adding visual nonblank evidence
   requirements - passed
+- Release evidence verifier visual metric sign-off checks:
+  - PowerShell parser check for `scripts\verify-release-evidence.ps1` - passed
+  - Temporary completed copies of all six release-evidence templates passed
+    `scripts\verify-release-evidence.ps1` after adding the visual metric fields
+  - A copied visual QA template with `Minimum screenshot luminance range: 9` failed
+    as expected
+  - Draft checked-in templates still fail as expected and emit a failed
+    `release-evidence-report.json`
+- Backend focused release evidence/scorecard tests after adding visual metric
+  sign-off evidence:
+  `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~ReleaseEvidenceTemplates_CoverHumanVisualAccountantAndProviderSignoffs|FullyQualifiedName~ReleaseEvidenceVerifier_BlocksIncompleteHumanSignoffEvidence|FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers"`
+  - 3 passed, proving the visual QA template, release evidence verifier, strict
+  field parsing, and 610/700 production scorecard are wired together
+- Frontend scorecard contract checks after adding visual metric sign-off evidence:
+  - `node --test --experimental-strip-types tests/production-readiness-contract.test.mjs`
+    - 49 passed
+  - `node scripts/verify-api-client.mjs` - passed
+  - `npm.cmd run test:render -- production-readiness-workbench production-readiness-panel`
+    - 2 passed
+  - `npx.cmd tsc --noEmit --incremental false` - passed
 - Backend focused scorecard/visual QA tests after adding PNG dimension evidence:
   `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers|FullyQualifiedName~ProductionReadinessReport_DeclaresVisualQaCoverageForAccountantWorkbenchRoutes"`
   - 2 passed, proving the readiness report exposes the 608/700 scorecard and visual
@@ -475,8 +505,8 @@ CI status:
   July 8, 2026.
 - Green jobs: Workflow Hygiene, Production Compose Config, Frontend, Backend,
   Production Stack Smoke, and CI Machine Evidence Pack.
-- The scorecard exposed by the candidate is now 609/700, with frontend accountant
-  workbench at 161/200 and security/auth/tenant/platform guardrails at 149/150.
+- The scorecard exposed by the candidate is now 610/700, with frontend accountant
+  workbench at 162/200 and security/auth/tenant/platform guardrails at 149/150.
   The typed frontend parser and production-readiness verifier both require CI
   machine evidence, production smoke, readiness verification, visual smoke, release
   artifact pack, no-direct filing control, and named manual review manifest rows;
@@ -551,8 +581,8 @@ As of July 8, 2026:
 - Code implementation is roughly 70-75% complete.
 - Production assurance is roughly 60-65% complete.
 - Overall goal is roughly 63-67% complete, with about one third left.
-- The production scorecard is now 609/700: architecture/documentation 99/100,
-  backend statutory/accounting engine 200/250, frontend accountant workbench 161/200,
+- The production scorecard is now 610/700: architecture/documentation 99/100,
+  backend statutory/accounting engine 200/250, frontend accountant workbench 162/200,
   and security/auth/tenant/platform guardrails 149/150.
 - Architecture/documentation is now scored 99/100 in the production scorecard because
   source-law review, release evidence templates, manual handoff evidence, runbook
