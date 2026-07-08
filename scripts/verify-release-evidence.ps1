@@ -134,6 +134,33 @@ function Assert-CompletedTableRows {
     }
 }
 
+$canonicalGoldenCorpusScenarioCodes = @(
+    "micro-ltd",
+    "small-abridged-ltd",
+    "dac-small",
+    "clg-charity",
+    "medium-audit-required"
+)
+
+$requiredRouteCodes = @(
+    "dashboard",
+    "company-detail",
+    "period-workspace",
+    "filing-review",
+    "financial-statements",
+    "production-readiness",
+    "workbench-preview"
+)
+
+$requiredReleaseArtifactNames = @(
+    "dependency-audit-release",
+    "production-safety-config",
+    "monitoring-error-routing-smoke",
+    "structured-json-log-sample",
+    "postgres-backup-restore-drill",
+    "visual-smoke-screenshots"
+)
+
 function Test-VisualEvidence {
     param(
         [string]$Content,
@@ -152,15 +179,7 @@ function Test-VisualEvidence {
     Assert-NoUncheckedBoxes $Content $context $Failures
     Assert-CheckedDecision $Content "Accepted for this release candidate." $context $Failures
     Assert-UncheckedDecision $Content "Rejected; defects listed below must be fixed and re-reviewed." $context $Failures
-    Assert-CompletedTableRows $Content @(
-        "dashboard",
-        "company-detail",
-        "period-workspace",
-        "filing-review",
-        "financial-statements",
-        "production-readiness",
-        "workbench-preview"
-    ) $context $Failures
+    Assert-CompletedTableRows $Content $requiredRouteCodes $context $Failures
 }
 
 function Test-AccountantEvidence {
@@ -170,13 +189,7 @@ function Test-AccountantEvidence {
     )
 
     $context = "Qualified-accountant acceptance evidence"
-    foreach ($text in @(
-        "dependency-audit-release",
-        "production-safety-config",
-        "monitoring-error-routing-smoke",
-        "structured-json-log-sample",
-        "postgres-backup-restore-drill",
-        "visual-smoke-screenshots",
+    foreach ($text in $requiredReleaseArtifactNames + @(
         "Direct CRO submission remains unsupported",
         "Direct ROS submission remains unsupported",
         "Qualified accountant signature"
@@ -191,20 +204,14 @@ function Test-AccountantEvidence {
     Assert-NoUncheckedBoxes $Content $context $Failures
     Assert-CheckedDecision $Content "Accepted for real filing preparation subject to external CRO/ROS processes." $context $Failures
     Assert-UncheckedDecision $Content "Rejected; issues below must be remediated and re-reviewed." $context $Failures
-    Assert-CompletedTableRows $Content @(
-        "micro-ltd-standard",
-        "small-ltd-abridged",
-        "dac-small",
-        "clg-charity",
-        "medium-audit-required",
-        "dashboard",
-        "company-detail",
-        "period-workspace",
-        "filing-review",
-        "financial-statements",
-        "production-readiness",
-        "workbench-preview"
-    ) $context $Failures
+    Assert-CompletedTableRows $Content $canonicalGoldenCorpusScenarioCodes $context $Failures
+    Assert-CompletedTableRows $Content $requiredRouteCodes $context $Failures
+
+    foreach ($staleScenarioCode in @("micro-ltd-standard", "small-ltd-abridged")) {
+        if ($Content.IndexOf($staleScenarioCode, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+            Add-Failure $Failures "$context contains stale non-canonical scenario code '$staleScenarioCode'."
+        }
+    }
 }
 
 function Test-MonitoringEvidence {
@@ -264,6 +271,11 @@ $report = [ordered]@{
         visualQa = $visualPath
         qualifiedAccountantAcceptance = $accountantPath
         monitoringProviderConfirmation = $monitoringPath
+    }
+    requiredCoverage = [ordered]@{
+        goldenCorpusScenarioCodes = $canonicalGoldenCorpusScenarioCodes
+        routeCodes = $requiredRouteCodes
+        releaseArtifactNames = $requiredReleaseArtifactNames
     }
     failureCount = $failures.Count
     failures = $failures.ToArray()

@@ -20,13 +20,13 @@ describe("ProductionReadinessWorkbench", () => {
     expectText("3 companies");
     expectText("4 periods");
     expect(screen.getByRole("heading", { name: "Production scorecard" })).toBeInTheDocument();
-    expectText("494/700");
+    expectText("499/700");
     expectText("Architecture and documentation");
     expectText("Backend statutory/accounting engine");
     expectText("Frontend accountant workbench");
     expectText("Security/auth/tenant/platform guardrails");
     expectText("94 / 100");
-    expectText("170 / 250");
+    expectText("175 / 250");
     expectText("130 / 200");
     expectText("100 / 150");
     expectText(/Next score gate/);
@@ -281,7 +281,7 @@ describe("ProductionReadinessWorkbench", () => {
 
 function productionScorecard(): ProductionReadinessReport["productionScorecard"] {
   return {
-    currentScore: 494,
+    currentScore: 499,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete named visual QA, monitoring-provider confirmation and qualified-accountant acceptance evidence.",
@@ -300,11 +300,14 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
       {
         code: "backend-statutory-accounting-engine",
         label: "Backend statutory/accounting engine",
-        currentScore: 170,
+        currentScore: 175,
         targetScore: 250,
         status: "qualified-accountant-review-required",
-        currentEvidence: ["Golden filing corpus covers the production scenarios."],
-        remainingGaps: ["Run and retain qualified-accountant acceptance across every golden corpus scenario."],
+        currentEvidence: [
+          "Golden filing corpus covers the production scenarios.",
+          "Qualified-accountant acceptance evidence uses canonical golden corpus scenario codes.",
+        ],
+        remainingGaps: ["Run and retain verified qualified-accountant acceptance across every canonical golden corpus scenario."],
         completionTrackCodes: ["backend-code"],
         releaseBlockerCodes: ["backend-code:qualified-accountant-signoff"],
       },

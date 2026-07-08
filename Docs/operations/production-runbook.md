@@ -245,4 +245,4 @@ The HTTPS smoke path also verifies that the login response sets the `accounts_se
 8. Complete `Docs/release-evidence/visual-qa-signoff-template.md` using the CI `visual-smoke-screenshots` artifact.
 9. Complete `Docs/release-evidence/monitoring-provider-confirmation-template.md` using the CI monitoring and structured-log artifacts plus the real provider event.
 10. Complete `Docs/release-evidence/qualified-accountant-acceptance-template.md` with a named qualified accountant before real filing preparation is used.
-11. Run `scripts\verify-release-evidence.ps1` and retain `release-evidence-report.json`; real filing use stays blocked if any required checkbox, signature, artifact reference, table row, or accepted decision is missing.
+11. Run `scripts\verify-release-evidence.ps1` and retain `release-evidence-report.json`; real filing use stays blocked if any required checkbox, signature, artifact reference, table row, accepted decision, canonical golden corpus scenario row, route row, or required coverage entry is missing.

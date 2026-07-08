@@ -806,16 +806,17 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             Category(
                 "backend-statutory-accounting-engine",
                 "Backend statutory/accounting engine",
-                170,
+                175,
                 250,
                 "qualified-accountant-review-required",
                 [
                     "Golden filing corpus covers micro LTD, small abridged LTD, DAC small, CLG charity and medium audit-required manual handoff.",
                     "Source-law snapshot, traceability, review ledger and Revenue taxonomy ranges are exposed in the readiness report.",
-                    "Filing readiness profiles, generated PDF/iXBRL evidence and audit snapshots are backed by automated tests."
+                    "Filing readiness profiles, generated PDF/iXBRL evidence and audit snapshots are backed by automated tests.",
+                    "Qualified-accountant acceptance evidence now uses canonical golden corpus scenario codes and the release verifier reports required scenario, route and artifact coverage."
                 ],
                 [
-                    "Run and retain qualified-accountant acceptance across every golden corpus scenario.",
+                    "Run and retain verified qualified-accountant acceptance across every canonical golden corpus scenario.",
                     "Attach external ROS/iXBRL validation evidence for generated packs.",
                     "Record manual handoff acceptance for audit-required paths before relying on outputs."
                 ],

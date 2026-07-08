@@ -32,8 +32,8 @@ wording, workbench journey, and manual handoff behavior are accepted.
 
 | Scenario | Outputs | Gates | Source-law evidence | Wording | Workbench journey | Decision |
 | --- | --- | --- | --- | --- | --- | --- |
-| micro-ltd-standard |  |  |  |  |  |  |
-| small-ltd-abridged |  |  |  |  |  |  |
+| micro-ltd |  |  |  |  |  |  |
+| small-abridged-ltd |  |  |  |  |  |  |
 | dac-small |  |  |  |  |  |  |
 | clg-charity |  |  |  |  |  |  |
 | medium-audit-required |  |  |  |  |  |  |

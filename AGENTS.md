@@ -49,6 +49,7 @@ Committed and pushed work on `main` includes:
 - `baade7e Add release evidence signoff templates`
 - `dfa9c28 Record latest release evidence CI status`
 - `52b1a5c Add production readiness scorecard`
+- `201975c Add release evidence verifier`
 
 Backend/accounting-engine progress:
 
@@ -117,6 +118,10 @@ Backend/accounting-engine progress:
   machine-checkable. It fails blank or incomplete visual QA, qualified-accountant, and
   monitoring-provider confirmation templates; it writes `release-evidence-report.json`
   for both failed and passed checks.
+- The qualified-accountant acceptance template and verifier now use the canonical
+  golden corpus scenario codes (`micro-ltd`, `small-abridged-ltd`, `dac-small`,
+  `clg-charity`, and `medium-audit-required`) and the verifier report emits
+  required scenario, route, and release-artifact coverage.
 
 Frontend UI/UX progress:
 
@@ -202,7 +207,8 @@ Recent successful local verification includes:
 - Backend focused release evidence verifier tests:
   `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~ReleaseEvidenceVerifier_BlocksIncompleteHumanSignoffEvidence|FullyQualifiedName~ReleaseEvidenceTemplates_CoverHumanVisualAccountantAndProviderSignoffs|FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers"`
   - 3 passed, proving the release evidence verifier, templates, runbook linkage, and
-  production scorecard evidence are wired together
+  production scorecard evidence are wired together, including canonical
+  qualified-accountant golden corpus scenario codes and the 499/700 scorecard total
 - Backend focused opening take-on tests:
   `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~OpeningTrialBalanceTakeOn|FullyQualifiedName~FinalOutputs_BlockWhenOpeningTrialBalanceTakeOnDoesNotBalance|FullyQualifiedName~TrialBalance_IncludesReviewedOpeningBalancesAndBankOpeningSide"`
 - Backend focused test:
@@ -237,7 +243,8 @@ Recent successful local verification includes:
 - PowerShell parser, expected draft failure, and synthetic completed-template success
   execution for `scripts\verify-release-evidence.ps1` - passed. Blank templates fail
   with a failed JSON report; temporary filled templates pass with
-  `release-evidence-report.json`.
+  `release-evidence-report.json`. The report now carries required golden corpus
+  scenario, route, and release-artifact coverage.
 - Frontend unit tests:
   `npm run test:unit` - 103 passed
 - Frontend type-check:
@@ -292,8 +299,8 @@ Recent successful local verification includes:
 
 CI status:
 
-- GitHub Actions run `28934890154` for commit
-  `52b1a5c Add production readiness scorecard` completed successfully on
+- GitHub Actions run `28935735490` for commit
+  `201975c Add release evidence verifier` completed successfully on
   July 8, 2026.
 - Green jobs: Workflow Hygiene, Production Compose Config, Frontend, Backend, and
   Production Stack Smoke.
@@ -326,7 +333,8 @@ Highest-priority next steps:
 3. Complete and retain the actual named accountant walkthrough across the golden corpus:
    micro LTD, small abridged LTD, DAC small, CLG charity, and medium/audit-required
    manual handoff. The code now emits and verifies the scenario-by-route walkthrough
-   evidence matrix, but the human walkthrough note is still missing.
+   evidence matrix and canonical acceptance template rows, but the human walkthrough
+   note is still missing.
 4. Record qualified-accountant acceptance evidence for outputs, gates, wording,
    legal/source evidence, visual workflow, and manual handoff behavior.
 5. Promote CI monitoring smoke into release-grade evidence by confirming the controlled
@@ -348,6 +356,9 @@ As of July 8, 2026:
 - Code implementation is roughly 70-75% complete.
 - Production assurance is roughly 60-65% complete.
 - Overall goal is roughly 63-67% complete, with about one third left.
+- The production scorecard is now 499/700: architecture/documentation 94/100,
+  backend statutory/accounting engine 175/250, frontend accountant workbench 130/200,
+  and security/auth/tenant/platform guardrails 100/150.
 - Architecture/documentation is now scored 94/100 in the production scorecard because
   release evidence templates are linked from the runbook and machine-checkable; the
   remaining architecture gap is filled, verified release evidence.

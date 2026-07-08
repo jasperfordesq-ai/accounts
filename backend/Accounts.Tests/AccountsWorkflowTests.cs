@@ -18285,8 +18285,10 @@ public class AccountsWorkflowTests
         Assert.Contains("dependency-audit-release", accountant);
         Assert.Contains("production-safety-config", accountant);
         Assert.Contains("postgres-backup-restore-drill", accountant);
-        Assert.Contains("micro-ltd-standard", accountant);
-        Assert.Contains("small-ltd-abridged", accountant);
+        Assert.Contains("micro-ltd", accountant);
+        Assert.Contains("small-abridged-ltd", accountant);
+        Assert.DoesNotContain("micro-ltd-standard", accountant);
+        Assert.DoesNotContain("small-ltd-abridged", accountant);
         Assert.Contains("dac-small", accountant);
         Assert.Contains("clg-charity", accountant);
         Assert.Contains("medium-audit-required", accountant);
@@ -18322,6 +18324,11 @@ public class AccountsWorkflowTests
         Assert.Contains("Assert-UncheckedDecision", script);
         Assert.Contains("Assert-FilledField", script);
         Assert.Contains("Assert-CompletedTableRows", script);
+        Assert.Contains("canonicalGoldenCorpusScenarioCodes", script);
+        Assert.Contains("requiredCoverage", script);
+        Assert.Contains("micro-ltd", script);
+        Assert.Contains("small-abridged-ltd", script);
+        Assert.Contains("stale non-canonical scenario code", script);
         Assert.Contains("visual-smoke-screenshots", script);
         Assert.Contains("monitoring-error-routing-report.json", script);
         Assert.Contains("structured-log-report.json", script);
