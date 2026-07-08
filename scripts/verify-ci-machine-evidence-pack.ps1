@@ -146,6 +146,11 @@ function Assert-VisualSmokeDimensionEvidence {
         [pscustomobject]@{ name = "desktop"; width = 1440; height = 1000 },
         [pscustomobject]@{ name = "mobile"; width = 390; height = 844 }
     )
+    $expectedLayoutChecks = @(
+        "browser-console-errors",
+        "page-horizontal-overflow",
+        "visible-text-overlap"
+    )
     $viewportDimensions = Get-JsonProperty $VisualSmoke @("viewportDimensions")
     if ($null -eq $viewportDimensions -or @($viewportDimensions).Count -eq 0) {
         Add-Failure $Failures "visual-smoke-evidence-report.json viewportDimensions must be present."
@@ -188,6 +193,7 @@ function Assert-VisualSmokeDimensionEvidence {
         $sampledDistinctColorCount = Get-JsonProperty $screenshot @("sampledDistinctColorCount")
         $luminanceRange = Get-JsonProperty $screenshot @("luminanceRange")
         $pngIdatByteSize = Get-JsonProperty $screenshot @("pngIdatByteSize")
+        $layoutCheckResults = @(Get-JsonProperty $screenshot @("layoutCheckResults"))
 
         if ($null -eq $imageWidth -or [int]$imageWidth -ne [int]$expected.width) {
             Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.imageWidth must match planned viewport width."
@@ -212,6 +218,16 @@ function Assert-VisualSmokeDimensionEvidence {
         }
         if ($null -eq $luminanceRange -or [int]$luminanceRange -lt 10) {
             Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.luminanceRange must be at least 10."
+        }
+        foreach ($layoutCheck in $expectedLayoutChecks) {
+            $layoutResult = $layoutCheckResults |
+                Where-Object { [string](Get-JsonProperty $_ @("check")) -eq $layoutCheck } |
+                Select-Object -First 1
+            if ($null -eq $layoutResult) {
+                Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.layoutCheckResults must include $layoutCheck."
+            } elseif ([string](Get-JsonProperty $layoutResult @("status")) -ne "passed") {
+                Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.layoutCheckResults.$layoutCheck status must be passed."
+            }
         }
 
         $index += 1

@@ -88,6 +88,17 @@ export async function verifyAccountantWorkbenchEvidence(options = {}) {
       if (screenshot.routeKey !== route.routeKey) {
         failures.push(`route ${route.name} screenshot ${screenshot.fileName ?? "(unnamed)"} routeKey must be ${route.routeKey}, found ${screenshot.routeKey}.`);
       }
+
+      for (const layoutCheck of visualSmokeLayoutChecks) {
+        const layoutResult = Array.isArray(screenshot.layoutCheckResults)
+          ? screenshot.layoutCheckResults.find((result) => result?.check === layoutCheck)
+          : undefined;
+        if (!layoutResult) {
+          failures.push(`route ${route.name} screenshot ${screenshot.fileName ?? "(unnamed)"} is missing passed layout check result ${layoutCheck}.`);
+        } else if (layoutResult.status !== "passed") {
+          failures.push(`route ${route.name} screenshot ${screenshot.fileName ?? "(unnamed)"} layout check ${layoutCheck} must have status passed.`);
+        }
+      }
     }
 
     if (!route.workflowStages?.length) {
@@ -106,6 +117,10 @@ export async function verifyAccountantWorkbenchEvidence(options = {}) {
       expectedText: route.expectedText,
       screenshotCount: screenshots.length,
       themeViewportCoverage: [...screenshotKeys].sort(),
+      layoutCheckResultCount: screenshots.reduce(
+        (total, screenshot) => total + (Array.isArray(screenshot.layoutCheckResults) ? screenshot.layoutCheckResults.length : 0),
+        0,
+      ),
       requiredReviewChecks: coverage?.requiredReviewChecks ?? [],
       reviewStatus: coverage?.reviewStatus ?? "missing",
     };
@@ -158,7 +173,9 @@ export async function verifyAccountantWorkbenchEvidence(options = {}) {
         "route expected accountant decision text",
         "visual smoke routeKey matches planned routeKey",
         "visual smoke screenshots carry stable routeKey",
+        "visual smoke screenshots carry passed layout check results",
       ],
+      layoutCheckEvidence: visualSmokeLayoutChecks.map((check) => `${check}:passed`),
       routeAcceptanceEvidence: routeAcceptance.flatMap((route) => route.requiredAcceptanceEvidence),
       routeAcceptanceSignOffGate: ROUTE_ACCEPTANCE_SIGN_OFF_GATE,
       evidenceFiles: [

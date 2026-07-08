@@ -18689,6 +18689,18 @@ public class AccountsWorkflowTests
         Assert.Contains("screenshots.sampledDistinctColorCount must be at least 4", machineEvidencePack);
         Assert.Contains("screenshots.luminanceRange must be at least 10", script);
         Assert.Contains("screenshots.luminanceRange must be at least 10", machineEvidencePack);
+        Assert.Contains("expectedLayoutChecks", script);
+        Assert.Contains("expectedLayoutChecks", machineEvidencePack);
+        Assert.Contains("\"browser-console-errors\"", script);
+        Assert.Contains("\"browser-console-errors\"", machineEvidencePack);
+        Assert.Contains("\"page-horizontal-overflow\"", script);
+        Assert.Contains("\"page-horizontal-overflow\"", machineEvidencePack);
+        Assert.Contains("\"visible-text-overlap\"", script);
+        Assert.Contains("\"visible-text-overlap\"", machineEvidencePack);
+        Assert.Contains("screenshots.layoutCheckResults must include $layoutCheck", script);
+        Assert.Contains("screenshots.layoutCheckResults must include $layoutCheck", machineEvidencePack);
+        Assert.Contains("screenshots.layoutCheckResults.$layoutCheck status must be passed", script);
+        Assert.Contains("screenshots.layoutCheckResults.$layoutCheck status must be passed", machineEvidencePack);
         Assert.Contains("Get-FileHash", script);
         Assert.Contains("releaseCandidate", script);
         Assert.Contains("releaseCandidate.identityConsistent must be true", script);

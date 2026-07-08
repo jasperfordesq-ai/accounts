@@ -6,6 +6,7 @@ import { findOverlappingTextBlocks, formatLayoutIssues } from "./visual-smoke-la
 import {
   expectedVisualSmokeManifest,
   expectedVisualSmokeRouteAudits,
+  passedVisualSmokeLayoutResults,
   visualSmokeLayoutChecks,
   visualSmokeRoutes,
   visualSmokeThemes,
@@ -511,6 +512,8 @@ async function captureRoute({ page, routeName, href, expectedText, outputPath, o
     if (routeErrors.length > 0) {
       throw new Error(`${routeName} emitted browser errors:\n${routeErrors.join("\n")}`);
     }
+
+    return passedVisualSmokeLayoutResults();
   } finally {
     page.off("console", onConsole);
     page.off("pageerror", onPageError);
@@ -548,7 +551,7 @@ async function run() {
         for (const spec of routeSpecs) {
           const fileName = `${safeName(spec.name)}-${theme}-${viewport.name}.png`;
           const outputPath = path.join(outputDir, fileName);
-          await captureRoute({
+          const layoutCheckResults = await captureRoute({
             page,
             routeName: `${spec.name}/${theme}/${viewport.name}`,
             href: toAbsoluteUrl(baseUrl, spec.href),
@@ -567,6 +570,7 @@ async function run() {
             openFilingTab: spec.openFilingTab,
             reviewStatus: "required-review",
             layoutChecks: visualSmokeLayoutChecks,
+            layoutCheckResults,
           }));
         }
 

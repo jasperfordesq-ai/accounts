@@ -5,6 +5,7 @@ import path from "node:path";
 import { describe, it } from "node:test";
 import {
   ACCOUNTANT_WORKFLOW_STAGES,
+  visualSmokeLayoutChecks,
   visualSmokeReviewChecks,
   visualSmokeRoutes,
   visualSmokeThemes,
@@ -34,13 +35,19 @@ describe("accountant workbench evidence report", () => {
       assert.deepEqual(result.requiredCoverage.workflowStages, ACCOUNTANT_WORKFLOW_STAGES);
       assert.deepEqual(result.requiredCoverage.routeCodes, visualSmokeRoutes.map((route) => route.name));
       assert.deepEqual(result.requiredCoverage.reviewChecks, visualSmokeReviewChecks);
+      assert.deepEqual(result.requiredCoverage.layoutCheckEvidence, visualSmokeLayoutChecks.map((check) => `${check}:passed`));
       assert.equal(result.routeAcceptanceCount, visualSmokeRoutes.length);
       assert.ok(result.requiredCoverage.expectedTextChecks.includes("route expected accountant decision text"));
+      assert.ok(result.requiredCoverage.expectedTextChecks.includes("visual smoke screenshots carry passed layout check results"));
       assert.ok(result.requiredCoverage.routeAcceptanceEvidence.includes("filing-review-qualified-accountant-route-acceptance"));
       assert.equal(result.requiredCoverage.routeAcceptanceSignOffGate, "qualified-accountant-route-acceptance");
       assert.ok(result.requiredCoverage.evidenceFiles.includes("visual-smoke-evidence-report.json"));
       assert.ok(result.requiredCoverage.evidenceFiles.includes("accountant-workbench-evidence-report.json"));
       assert.equal(result.routeReadiness.find((route) => route.routeName === "filing-review")?.screenshotCount, 4);
+      assert.equal(
+        result.routeReadiness.find((route) => route.routeName === "filing-review")?.layoutCheckResultCount,
+        visualSmokeThemes.length * visualSmokeViewports.length * visualSmokeLayoutChecks.length,
+      );
       const writtenReport = JSON.parse(await readFile(reportPath, "utf8"));
       assert.deepEqual(writtenReport.requiredCoverage.themes, ["light", "dark"]);
       assert.deepEqual(
@@ -128,6 +135,27 @@ describe("accountant workbench evidence report", () => {
       await rm(dir, { recursive: true, force: true });
     }
   });
+
+  it("rejects visual evidence that omits per-screenshot layout check pass results", async () => {
+    const { verifyAccountantWorkbenchEvidence } = await import("../scripts/verify-accountant-workbench-evidence.mjs");
+    const dir = await mkTempDir();
+    const visualReportPath = path.join(dir, "visual-smoke-evidence-report.json");
+    const report = visualSmokeReport();
+    report.screenshots[0].layoutCheckResults = report.screenshots[0].layoutCheckResults.filter(
+      (result) => result.check !== "page-horizontal-overflow",
+    );
+
+    await writeFile(visualReportPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+
+    try {
+      await assert.rejects(
+        () => verifyAccountantWorkbenchEvidence({ visualReportPath }),
+        /route dashboard screenshot dashboard-light-desktop\.png is missing passed layout check result page-horizontal-overflow/,
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 function visualSmokeReport() {
@@ -155,6 +183,11 @@ function visualSmokeReport() {
           byteSize: 128,
           sha256: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
           reviewStatus: "required-review",
+          layoutCheckResults: visualSmokeLayoutChecks.map((check) => ({
+            check,
+            status: "passed",
+            evidence: `${check} passed`,
+          })),
         })),
       ),
     ),

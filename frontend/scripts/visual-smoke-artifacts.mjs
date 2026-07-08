@@ -144,6 +144,7 @@ export async function verifyVisualSmokeManifest(manifestPath, options = {}) {
       luminanceRange: evidence.luminanceRange,
       sha256: evidence.sha256,
       reviewStatus: screenshot.reviewStatus,
+      layoutCheckResults: Array.isArray(screenshot.layoutCheckResults) ? screenshot.layoutCheckResults : [],
     });
   }
 
@@ -173,6 +174,15 @@ export async function verifyVisualSmokeManifest(manifestPath, options = {}) {
     for (const layoutCheck of visualSmokeLayoutChecks) {
       if (!actual.layoutChecks?.includes(layoutCheck)) {
         failures.push(`visual smoke screenshot ${actual.fileName} is missing layout check ${layoutCheck}`);
+      }
+
+      const layoutResult = Array.isArray(actual.layoutCheckResults)
+        ? actual.layoutCheckResults.find((result) => result?.check === layoutCheck)
+        : undefined;
+      if (!layoutResult) {
+        failures.push(`visual smoke screenshot ${actual.fileName} is missing passed layout check result ${layoutCheck}`);
+      } else if (layoutResult.status !== "passed") {
+        failures.push(`visual smoke screenshot ${actual.fileName} layout check ${layoutCheck} must have status passed.`);
       }
     }
   }
@@ -225,6 +235,11 @@ export async function verifyVisualSmokeManifest(manifestPath, options = {}) {
     viewports: visualSmokeViewports.map((viewport) => viewport.name),
     viewportDimensions: visualSmokeViewports,
     totalBytes,
+    layoutChecksPassed: true,
+    layoutCheckResultCount: screenshotSummaries.reduce(
+      (total, screenshot) => total + screenshot.layoutCheckResults.length,
+      0,
+    ),
     routeCoverage: expectedVisualSmokeRouteAudits().map((audit) => ({
       routeName: audit.routeName,
       routeKey: audit.routeKey,

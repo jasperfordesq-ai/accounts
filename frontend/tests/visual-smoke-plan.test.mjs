@@ -14,6 +14,7 @@ import {
   expectedVisualSmokeArtifacts,
   expectedVisualSmokeRouteAudits,
   expectedVisualSmokeManifest,
+  passedVisualSmokeLayoutResults,
 } from "../scripts/visual-smoke-plan.mjs";
 
 describe("visual smoke plan", () => {
@@ -86,6 +87,7 @@ describe("visual smoke plan", () => {
       openFilingTab: false,
       reviewStatus: "required-review",
       layoutChecks: visualSmokeLayoutChecks,
+      layoutCheckResults: passedVisualSmokeLayoutResults(),
     });
     assert.equal(
       expectedVisualSmokeArtifacts().at(-1)?.artifactPath,

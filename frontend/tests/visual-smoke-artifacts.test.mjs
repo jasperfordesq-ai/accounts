@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
 import { deflateSync } from "node:zlib";
-import { visualSmokeViewports } from "../scripts/visual-smoke-plan.mjs";
+import { visualSmokeLayoutChecks, visualSmokeViewports } from "../scripts/visual-smoke-plan.mjs";
 
 describe("visual smoke artifact evidence", () => {
   it("records byte size and sha256 for captured screenshots", async () => {
@@ -171,13 +171,44 @@ describe("visual smoke artifact evidence", () => {
       assert.deepEqual(result.viewports, ["desktop", "mobile"]);
       assert.deepEqual(result.viewportDimensions, visualSmokeViewports);
       assert.equal(result.totalBytes, screenshots.reduce((sum, screenshot) => sum + screenshot.byteSize, 0));
+      assert.equal(result.layoutChecksPassed, true);
+      assert.equal(result.layoutCheckResultCount, screenshots.length * visualSmokeLayoutChecks.length);
       assert.equal(result.routeCoverage.find((route) => route.routeName === "dashboard")?.screenshotCount, 4);
       assert.equal(result.screenshots.length, 28);
       assert.equal(result.screenshots[0].imageWidth, 1440);
       assert.ok(result.screenshots[0].imageHeight >= 1000);
       assert.ok(result.screenshots[0].sampledDistinctColorCount >= 4);
       assert.ok(result.screenshots[0].luminanceRange >= 10);
+      assert.deepEqual(
+        result.screenshots[0].layoutCheckResults.map((item) => `${item.check}:${item.status}`),
+        visualSmokeLayoutChecks.map((check) => `${check}:passed`),
+      );
       assert.equal(JSON.parse(await readFile(reportPath, "utf8")).status, "passed");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects manifest screenshots without passed layout check results", async () => {
+    const { verifyVisualSmokeManifest, withScreenshotEvidence } = await import("../scripts/visual-smoke-artifacts.mjs");
+    const dir = await mkTempDir();
+    const manifestPath = path.join(dir, "visual-smoke-manifest.json");
+
+    const screenshots = await completeScreenshots(dir, withScreenshotEvidence);
+    await writeManifest(manifestPath, screenshots.map((screenshot, index) => (
+      index === 0
+        ? {
+            ...screenshot,
+            layoutCheckResults: screenshot.layoutCheckResults.filter((result) => result.check !== "visible-text-overlap"),
+          }
+        : screenshot
+    )));
+
+    try {
+      await assert.rejects(
+        () => verifyVisualSmokeManifest(manifestPath),
+        /visual smoke screenshot dashboard-light-desktop\.png is missing passed layout check result visible-text-overlap/,
+      );
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
