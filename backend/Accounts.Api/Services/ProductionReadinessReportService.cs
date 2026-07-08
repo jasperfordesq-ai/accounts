@@ -865,7 +865,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             Category(
                 "security-auth-tenant-platform-guardrails",
                 "Security/auth/tenant/platform guardrails",
-                130,
+                135,
                 150,
                 "operator-confirmation-required",
                 [
@@ -875,7 +875,8 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "CI runs scripts/verify-no-direct-filing-submission.ps1 and retains no-direct-filing-submission-report.json, proving final CRO/ROS operations remain recorded workflow states with no outbound submission client wired.",
                     "scripts/verify-release-artifact-pack.ps1 validates dependency, production safety, monitoring, structured log, backup/restore, no-direct-submission, production-readiness verification, visual smoke and release-evidence reports together.",
                     "release-artifact-pack-report.json now records release candidate identity plus per-report SHA-256 and byte-size evidence.",
-                    "CI runs scripts/verify-ci-machine-evidence-pack.ps1 and retains ci-machine-evidence-pack-report.json with exact commit/run identity plus SHA-256 inventory for dependency, safety, monitoring, structured log, backup/restore, no-direct, readiness and visual/workbench evidence."
+                    "CI runs scripts/verify-ci-machine-evidence-pack.ps1 and retains ci-machine-evidence-pack-report.json with exact commit/run identity plus SHA-256 inventory for dependency, safety, monitoring, structured log, backup/restore, no-direct, readiness and visual/workbench evidence.",
+                    "scripts/verify-production-readiness-report.ps1 now requires default-CI and manual release manifest rows, including the no-direct CRO/ROS control, CI machine evidence pack and release artifact pack, before accepting a captured readiness report."
                 ],
                 [
                     "Confirm the controlled monitoring smoke event inside the configured provider and retain operator evidence.",

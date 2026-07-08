@@ -191,7 +191,7 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.ok(parsed.assurancePacket.evidenceItems.includes("production-readiness-report"));
   assert.ok(parsed.assurancePacket.evidenceItems.includes("production-readiness-verification-report"));
   assert.equal(parsed.assurancePacket.releaseBlockers[0], "Qualified accountant sign-off required");
-  assert.equal(parsed.productionScorecard.currentScore, 584);
+  assert.equal(parsed.productionScorecard.currentScore, 589);
   assert.equal(parsed.productionScorecard.targetScore, 700);
   assert.deepEqual(parsed.productionScorecard.categories.map((category) => category.code), [
     "architecture-documentation",
@@ -807,7 +807,7 @@ test("parseProductionReadinessReport rejects scorecard totals that do not match 
 
   assert.throws(
     () => parseProductionReadinessReport(payload),
-    /Invalid production readiness report contract: productionScorecard\.currentScore - expected 584, received 491/,
+    /Invalid production readiness report contract: productionScorecard\.currentScore - expected 589, received 491/,
   );
 });
 
@@ -863,6 +863,18 @@ test("parseProductionReadinessReport rejects release verification manifests with
   );
 });
 
+test("parseProductionReadinessReport rejects release verification manifests without no-direct filing control coverage", () => {
+  const payload = sampleReport();
+  payload.releaseVerificationManifest = payload.releaseVerificationManifest.filter(
+    (item) => item.code !== "no-direct-cro-ros-submission-control",
+  );
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: releaseVerificationManifest - missing manual release verification commands: no-direct-cro-ros-submission-control/,
+  );
+});
+
 test("parseProductionReadinessReport rejects malformed CI machine evidence manifest rows", () => {
   const payload = sampleReport();
   const ciMachineEvidencePack = payload.releaseVerificationManifest.find(
@@ -892,7 +904,7 @@ test("parseProductionReadinessReport rejects release verification manifest that 
 
 function productionScorecard() {
   return {
-    currentScore: 584,
+    currentScore: 589,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete source-law review, named visual QA, monitoring-provider confirmation, manual handoff and qualified-accountant acceptance evidence.",
@@ -958,7 +970,7 @@ function productionScorecard() {
       {
         code: "security-auth-tenant-platform-guardrails",
         label: "Security/auth/tenant/platform guardrails",
-        currentScore: 130,
+        currentScore: 135,
         targetScore: 150,
         status: "operator-confirmation-required",
         currentEvidence: [
@@ -967,6 +979,7 @@ function productionScorecard() {
           "Release artifact pack verifier validates operational reports together.",
           "release-artifact-pack-report.json records release candidate identity plus per-report SHA-256 and byte-size evidence.",
           "ci-machine-evidence-pack-report.json records exact commit/run identity plus machine-evidence SHA-256 inventory.",
+          "verify-production-readiness-report.ps1 now requires default-CI and manual release manifest rows, including the no-direct CRO/ROS control, CI machine evidence pack and release artifact pack.",
         ],
         remainingGaps: ["Confirm the controlled monitoring smoke event inside the configured provider and retain the full release-artifact-pack-report.json after release-evidence-report.json is completed with named human sign-offs."],
         completionTrackCodes: ["backend-code"],

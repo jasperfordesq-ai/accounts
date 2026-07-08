@@ -4628,6 +4628,7 @@ function assertReleaseVerificationManifest(report: ProductionReadinessReport) {
     "qualified-accountant-final-signoff",
     "source-law-change-review",
     "external-ros-validation-evidence",
+    "no-direct-cro-ros-submission-control",
     "manual-accountant-acceptance",
   ];
   const manifestCodes = new Set<string>();

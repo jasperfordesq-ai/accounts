@@ -106,12 +106,36 @@ $requiredSourceIds = @(
 $requiredManifestCodes = @(
     "backend-golden-corpus",
     "frontend-workbench-contract",
+    "frontend-production-build",
     "visual-smoke-light-dark",
     "production-readiness-report-verification",
     "ci-machine-evidence-pack",
     "release-artifact-pack",
     "production-stack-smoke",
-    "backup-restore-drill"
+    "backup-restore-drill",
+    "qualified-accountant-final-signoff",
+    "source-law-change-review",
+    "external-ros-validation-evidence",
+    "no-direct-cro-ros-submission-control",
+    "manual-accountant-acceptance"
+)
+$requiredDefaultCiManifestCodes = @(
+    "backend-golden-corpus",
+    "frontend-workbench-contract",
+    "frontend-production-build",
+    "visual-smoke-light-dark",
+    "production-readiness-report-verification",
+    "production-stack-smoke",
+    "backup-restore-drill",
+    "ci-machine-evidence-pack"
+)
+$requiredManualManifestCodes = @(
+    "release-artifact-pack",
+    "qualified-accountant-final-signoff",
+    "source-law-change-review",
+    "external-ros-validation-evidence",
+    "no-direct-cro-ros-submission-control",
+    "manual-accountant-acceptance"
 )
 $requiredAssuranceEvidence = @(
     "production-scorecard",
@@ -228,11 +252,42 @@ if ($null -ne $report) {
     foreach ($manifestCode in $requiredManifestCodes) {
         Assert-ObjectArrayHasCode $manifest $manifestCode "releaseVerificationManifest" $failures
     }
+    foreach ($manifestCode in $requiredDefaultCiManifestCodes) {
+        $row = @($manifest | Where-Object { [string](Get-JsonProperty $_ "code") -eq $manifestCode } | Select-Object -First 1)
+        if ($row.Count -gt 0) {
+            if ([string](Get-JsonProperty $row[0] "ciScope") -ne "default-ci") {
+                Add-Failure $failures "releaseVerificationManifest '$manifestCode' ciScope must be default-ci."
+            }
+            if ((Get-JsonProperty $row[0] "runsInDefaultCi") -ne $true) {
+                Add-Failure $failures "releaseVerificationManifest '$manifestCode' runsInDefaultCi must be true."
+            }
+        }
+    }
+    foreach ($manifestCode in $requiredManualManifestCodes) {
+        $row = @($manifest | Where-Object { [string](Get-JsonProperty $_ "code") -eq $manifestCode } | Select-Object -First 1)
+        if ($row.Count -gt 0) {
+            if ([string](Get-JsonProperty $row[0] "ciScope") -ne "manual-release") {
+                Add-Failure $failures "releaseVerificationManifest '$manifestCode' ciScope must be manual-release."
+            }
+            if ((Get-JsonProperty $row[0] "runsInDefaultCi") -ne $false) {
+                Add-Failure $failures "releaseVerificationManifest '$manifestCode' runsInDefaultCi must be false."
+            }
+        }
+    }
     if (-not ($manifest | Where-Object { [string](Get-JsonProperty $_ "command") -like "*verify-production-readiness-report.ps1*" })) {
         Add-Failure $failures "releaseVerificationManifest must include verify-production-readiness-report.ps1."
     }
     if (-not ($manifest | Where-Object { [string](Get-JsonProperty $_ "command") -like "*verify-release-artifact-pack.ps1*" })) {
         Add-Failure $failures "releaseVerificationManifest must include verify-release-artifact-pack.ps1."
+    }
+    $ciMachineEvidencePack = @($manifest | Where-Object { [string](Get-JsonProperty $_ "code") -eq "ci-machine-evidence-pack" } | Select-Object -First 1)
+    if ($ciMachineEvidencePack.Count -gt 0) {
+        if ([string](Get-JsonProperty $ciMachineEvidencePack[0] "evidenceArtifact") -ne "ci-machine-evidence-pack") {
+            Add-Failure $failures "releaseVerificationManifest 'ci-machine-evidence-pack' evidenceArtifact must be ci-machine-evidence-pack."
+        }
+        if ([string](Get-JsonProperty $ciMachineEvidencePack[0] "command") -notlike "*verify-ci-machine-evidence-pack.ps1*") {
+            Add-Failure $failures "releaseVerificationManifest 'ci-machine-evidence-pack' must include verify-ci-machine-evidence-pack.ps1."
+        }
     }
 
     $visualQa = Get-JsonProperty $report "visualQaCoverage"

@@ -18551,7 +18551,18 @@ public class AccountsWorkflowTests
         Assert.Contains("production-readiness-verification-report.json failureCount must be zero", script);
         Assert.Contains("releaseVerificationManifestCodes", script);
         Assert.Contains("ci-machine-evidence-pack", readinessVerifier);
+        Assert.Contains("frontend-production-build", readinessVerifier);
+        Assert.Contains("qualified-accountant-final-signoff", readinessVerifier);
+        Assert.Contains("source-law-change-review", readinessVerifier);
+        Assert.Contains("external-ros-validation-evidence", readinessVerifier);
+        Assert.Contains("no-direct-cro-ros-submission-control", readinessVerifier);
+        Assert.Contains("manual-accountant-acceptance", readinessVerifier);
+        Assert.Contains("requiredDefaultCiManifestCodes", readinessVerifier);
+        Assert.Contains("requiredManualManifestCodes", readinessVerifier);
+        Assert.Contains("runsInDefaultCi must be true", readinessVerifier);
+        Assert.Contains("runsInDefaultCi must be false", readinessVerifier);
         Assert.Contains("verify-production-readiness-report.ps1", readinessVerifier);
+        Assert.Contains("verify-ci-machine-evidence-pack.ps1", readinessVerifier);
         Assert.Contains("requiredCoverage", readinessVerifier);
         Assert.Contains("productionScorecard.currentScore must equal the sum of category current scores", readinessVerifier);
         Assert.Contains("sourceLawSnapshot.sourceCount must match sources length", readinessVerifier);

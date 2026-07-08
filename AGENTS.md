@@ -261,7 +261,7 @@ Recent successful local verification includes:
   production scorecard evidence are wired together, including canonical
   qualified-accountant golden corpus scenario codes, external ROS/iXBRL validation
   template coverage, source-law source coverage, manual handoff coverage, visual
-  smoke and accountant workbench evidence report references, and the 584/700
+  smoke and accountant workbench evidence report references, and the 589/700
   scorecard total
 - Backend focused release artifact pack verifier and scorecard tests:
   `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~ReleaseArtifactPackVerifier_RequiresExactOperationalEvidenceReports|FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers"`
@@ -389,10 +389,11 @@ CI status:
   July 8, 2026.
 - Green jobs: Workflow Hygiene, Production Compose Config, Frontend, Backend,
   Production Stack Smoke, and CI Machine Evidence Pack.
-- The scorecard exposed by the candidate is now 584/700, with frontend accountant
-  workbench at 155/200 after the typed frontend parser began requiring CI machine
-  evidence, production smoke, readiness verification, visual smoke, release artifact
-  pack, and named manual review manifest rows before rendering readiness data.
+- The scorecard exposed by the candidate is now 589/700, with frontend accountant
+  workbench at 155/200 and security/auth/tenant/platform guardrails at 135/150.
+  The typed frontend parser and production-readiness verifier both require CI
+  machine evidence, production smoke, readiness verification, visual smoke, release
+  artifact pack, no-direct filing control, and named manual review manifest rows.
 - Latest retained CI evidence artifacts include:
   - `dependency-audit-release`: `dependency-audit-report.json` passed with 0 npm
     vulnerabilities, frontend lockfile/package hashes, and NuGet audit policy.
@@ -459,9 +460,9 @@ As of July 8, 2026:
 - Code implementation is roughly 70-75% complete.
 - Production assurance is roughly 60-65% complete.
 - Overall goal is roughly 63-67% complete, with about one third left.
-- The production scorecard is now 584/700: architecture/documentation 99/100,
+- The production scorecard is now 589/700: architecture/documentation 99/100,
   backend statutory/accounting engine 200/250, frontend accountant workbench 155/200,
-  and security/auth/tenant/platform guardrails 130/150.
+  and security/auth/tenant/platform guardrails 135/150.
 - Architecture/documentation is now scored 99/100 in the production scorecard because
   source-law review, release evidence templates, manual handoff evidence, runbook
   links, and verifier coverage are in place, including an exact release artifact-pack
