@@ -18395,6 +18395,10 @@ public class AccountsWorkflowTests
         Assert.Contains("Assert-Sha256Field", script);
         Assert.Contains("Assert-PositiveIntegerField", script);
         Assert.Contains("Assert-CompletedTableColumnMatches", script);
+        Assert.Contains("Assert-ConsistentReleaseIdentity", script);
+        Assert.Contains("Get-ReleaseEvidenceIdentity", script);
+        Assert.Contains("evidenceIdentityCount", script);
+        Assert.Contains("Release evidence identity mismatch", script);
         Assert.Contains("GitHub Actions run URL", script);
         Assert.Contains("40-character hexadecimal Git commit SHA", script);
         Assert.Contains("64-character hexadecimal SHA-256 digest", script);
@@ -18434,7 +18438,7 @@ public class AccountsWorkflowTests
         Assert.Contains("Accepted for this release candidate.", script);
         Assert.Contains("Accepted for real filing preparation subject to external CRO/ROS processes.", script);
         Assert.Contains("Release evidence verification failed", script);
-        Assert.Contains("ConvertTo-Json -Depth 5", script);
+        Assert.Contains("ConvertTo-Json -Depth 6", script);
     }
 
     [Fact]
@@ -18624,6 +18628,10 @@ public class AccountsWorkflowTests
         Assert.Contains("screenshots.minimumViewportHeight must match planned viewport height", machineEvidencePack);
         Assert.Contains("Get-FileHash", script);
         Assert.Contains("releaseCandidate", script);
+        Assert.Contains("releaseCandidate.identityConsistent must be true", script);
+        Assert.Contains("releaseCandidate.evidenceIdentityCount must be 6", script);
+        Assert.Contains("releaseCandidate.commitSha must match CommitSha", script);
+        Assert.Contains("releaseCandidate.githubActionsRunUrl must match GitHubActionsRunUrl", script);
         Assert.Contains("evidenceFiles", script);
         Assert.Contains("identityProvided", script);
         Assert.Contains("GitHubActionsRunUrl must be a GitHub Actions run URL", script);

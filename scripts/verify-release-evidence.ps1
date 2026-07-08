@@ -285,6 +285,47 @@ function Assert-ReleaseIdentityFields {
     Assert-GitHubActionsRunUrlField $Content $Context $Failures
 }
 
+function Get-ReleaseEvidenceIdentity {
+    param(
+        [string]$Content,
+        [string]$EvidenceName
+    )
+
+    $commitSha = Get-FieldValue $Content "Commit SHA"
+    $runUrl = Get-FieldValue $Content "GitHub Actions run URL"
+    if ([string]::IsNullOrWhiteSpace($commitSha) -or [string]::IsNullOrWhiteSpace($runUrl)) {
+        return $null
+    }
+
+    return [pscustomobject]@{
+        evidenceName = $EvidenceName
+        commitSha = $commitSha
+        githubActionsRunUrl = $runUrl
+    }
+}
+
+function Assert-ConsistentReleaseIdentity {
+    param(
+        [object[]]$Identities,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    if (@($Identities).Count -le 1) {
+        return
+    }
+
+    $first = @($Identities)[0]
+    foreach ($identity in @($Identities)) {
+        if (-not [string]::Equals([string]$identity.commitSha, [string]$first.commitSha, [StringComparison]::OrdinalIgnoreCase)) {
+            Add-Failure $Failures "Release evidence identity mismatch: $($identity.evidenceName) Commit SHA must match $($first.evidenceName)."
+        }
+
+        if (-not [string]::Equals([string]$identity.githubActionsRunUrl, [string]$first.githubActionsRunUrl, [StringComparison]::OrdinalIgnoreCase)) {
+            Add-Failure $Failures "Release evidence identity mismatch: $($identity.evidenceName) GitHub Actions run URL must match $($first.evidenceName)."
+        }
+    }
+}
+
 $canonicalGoldenCorpusScenarioCodes = @(
     "micro-ltd",
     "small-abridged-ltd",
@@ -613,10 +654,40 @@ if ($monitoring.Trim().Length -gt 0) {
     Test-MonitoringEvidence $monitoring $failures
 }
 
+$releaseEvidenceIdentities = @(
+    Get-ReleaseEvidenceIdentity $visual "visualQa"
+    Get-ReleaseEvidenceIdentity $sourceLaw "sourceLawReview"
+    Get-ReleaseEvidenceIdentity $externalRosIxbrl "externalRosIxbrlValidation"
+    Get-ReleaseEvidenceIdentity $accountant "qualifiedAccountantAcceptance"
+    Get-ReleaseEvidenceIdentity $manualHandoff "manualHandoffAcceptance"
+    Get-ReleaseEvidenceIdentity $monitoring "monitoringProviderConfirmation"
+) | Where-Object { $null -ne $_ }
+Assert-ConsistentReleaseIdentity $releaseEvidenceIdentities $failures
+
+$releaseCandidateCommitSha = ""
+$releaseCandidateRunUrl = ""
+if (@($releaseEvidenceIdentities).Count -gt 0) {
+    $releaseCandidateCommitSha = [string]@($releaseEvidenceIdentities)[0].commitSha
+    $releaseCandidateRunUrl = [string]@($releaseEvidenceIdentities)[0].githubActionsRunUrl
+}
+
+$releaseIdentityConsistent = $true
+if (@($releaseEvidenceIdentities | Select-Object -ExpandProperty commitSha -Unique).Count -gt 1 -or
+    @($releaseEvidenceIdentities | Select-Object -ExpandProperty githubActionsRunUrl -Unique).Count -gt 1) {
+    $releaseIdentityConsistent = $false
+}
+
 $report = [ordered]@{
     status = if ($failures.Count -eq 0) { "passed" } else { "failed" }
     checkedAtUtc = (Get-Date).ToUniversalTime().ToString("o")
     evidenceDirectory = $resolvedDirectory.Path
+    releaseCandidate = [ordered]@{
+        commitSha = $releaseCandidateCommitSha
+        githubActionsRunUrl = $releaseCandidateRunUrl
+        identityConsistent = $releaseIdentityConsistent
+        evidenceIdentityCount = @($releaseEvidenceIdentities).Count
+    }
+    evidenceIdentities = @($releaseEvidenceIdentities)
     files = [ordered]@{
         visualQa = $visualPath
         sourceLawReview = $sourceLawPath
@@ -644,7 +715,7 @@ if ($ReportPath.Trim().Length -gt 0) {
         New-Item -ItemType Directory -Path $reportDirectory | Out-Null
     }
 
-    $report | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ReportPath -Encoding UTF8
+    $report | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $ReportPath -Encoding UTF8
 }
 
 if ($failures.Count -gt 0) {

@@ -423,6 +423,24 @@ if (-not ($releaseEvidence.PSObject.Properties.Name -contains "__missing")) {
     if ([int]$releaseEvidence.failureCount -ne 0) {
         Add-Failure $failures "release-evidence-report.json failureCount must be zero."
     }
+    if ((Get-JsonProperty $releaseEvidence @("releaseCandidate", "identityConsistent")) -ne $true) {
+        Add-Failure $failures "release-evidence-report.json releaseCandidate.identityConsistent must be true."
+    }
+    if ([int](Get-JsonProperty $releaseEvidence @("releaseCandidate", "evidenceIdentityCount")) -ne 6) {
+        Add-Failure $failures "release-evidence-report.json releaseCandidate.evidenceIdentityCount must be 6."
+    }
+    if ($releaseCommitSha.Length -gt 0) {
+        $releaseEvidenceCommitSha = [string](Get-JsonProperty $releaseEvidence @("releaseCandidate", "commitSha"))
+        if (-not [string]::Equals($releaseEvidenceCommitSha, $releaseCommitSha, [StringComparison]::OrdinalIgnoreCase)) {
+            Add-Failure $failures "release-evidence-report.json releaseCandidate.commitSha must match CommitSha."
+        }
+    }
+    if ($releaseRunUrl.Length -gt 0) {
+        $releaseEvidenceRunUrl = [string](Get-JsonProperty $releaseEvidence @("releaseCandidate", "githubActionsRunUrl"))
+        if (-not [string]::Equals($releaseEvidenceRunUrl, $releaseRunUrl, [StringComparison]::OrdinalIgnoreCase)) {
+            Add-Failure $failures "release-evidence-report.json releaseCandidate.githubActionsRunUrl must match GitHubActionsRunUrl."
+        }
+    }
     foreach ($coverageProperty in @("sourceLawSourceIds", "goldenCorpusScenarioCodes", "externalRosIxbrlScenarioCodes", "routeCodes", "manualHandoffScenarioCodes", "manualHandoffPathCodes", "releaseArtifactNames")) {
         if ($null -eq $releaseEvidence.requiredCoverage.$coverageProperty -or @($releaseEvidence.requiredCoverage.$coverageProperty).Count -eq 0) {
             Add-Failure $failures "release-evidence-report.json requiredCoverage.$coverageProperty must be present."
