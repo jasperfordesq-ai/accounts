@@ -48,6 +48,7 @@ Committed and pushed work on `main` includes:
 - `9768a1c Add production readiness evidence gates`
 - `baade7e Add release evidence signoff templates`
 - `dfa9c28 Record latest release evidence CI status`
+- `52b1a5c Add production readiness scorecard`
 
 Backend/accounting-engine progress:
 
@@ -112,6 +113,10 @@ Backend/accounting-engine progress:
   engine, frontend accountant workbench, and security/auth/tenant/platform guardrails.
   Each category carries current/target points, current evidence, remaining gaps,
   completion-track links, and live release-blocker links.
+- `scripts/verify-release-evidence.ps1` now makes the remaining manual evidence gates
+  machine-checkable. It fails blank or incomplete visual QA, qualified-accountant, and
+  monitoring-provider confirmation templates; it writes `release-evidence-report.json`
+  for both failed and passed checks.
 
 Frontend UI/UX progress:
 
@@ -194,6 +199,10 @@ Recent successful local verification includes:
   - 1 passed, proving the readiness report exposes the four active goal categories,
   current/target scores, current evidence, remaining gaps, completion-track links, and
   live release-blocker links
+- Backend focused release evidence verifier tests:
+  `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~ReleaseEvidenceVerifier_BlocksIncompleteHumanSignoffEvidence|FullyQualifiedName~ReleaseEvidenceTemplates_CoverHumanVisualAccountantAndProviderSignoffs|FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers"`
+  - 3 passed, proving the release evidence verifier, templates, runbook linkage, and
+  production scorecard evidence are wired together
 - Backend focused opening take-on tests:
   `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~OpeningTrialBalanceTakeOn|FullyQualifiedName~FinalOutputs_BlockWhenOpeningTrialBalanceTakeOnDoesNotBalance|FullyQualifiedName~TrialBalance_IncludesReviewedOpeningBalancesAndBankOpeningSide"`
 - Backend focused test:
@@ -225,6 +234,10 @@ Recent successful local verification includes:
   `scripts\verify-structured-logs.ps1` - passed; the sample produced
   `structured-log-report.json` with timestamp, level, category, correlation id, and
   `matchedMonitoringSmokeLine: true`
+- PowerShell parser, expected draft failure, and synthetic completed-template success
+  execution for `scripts\verify-release-evidence.ps1` - passed. Blank templates fail
+  with a failed JSON report; temporary filled templates pass with
+  `release-evidence-report.json`.
 - Frontend unit tests:
   `npm run test:unit` - 103 passed
 - Frontend type-check:
@@ -279,8 +292,8 @@ Recent successful local verification includes:
 
 CI status:
 
-- GitHub Actions run `28933863283` for commit
-  `dfa9c28 Record latest release evidence CI status` completed successfully on
+- GitHub Actions run `28934890154` for commit
+  `52b1a5c Add production readiness scorecard` completed successfully on
   July 8, 2026.
 - Green jobs: Workflow Hygiene, Production Compose Config, Frontend, Backend, and
   Production Stack Smoke.
@@ -319,10 +332,13 @@ Highest-priority next steps:
 5. Promote CI monitoring smoke into release-grade evidence by confirming the controlled
    event inside the configured provider and retaining a named operator record before
    real filing use.
-6. Continue UI polish route by route, especially any surfaces that still feel too
+6. Run `scripts\verify-release-evidence.ps1` against completed release evidence and
+   retain `release-evidence-report.json`; blank templates are intentionally failing
+   evidence until real named reviewers complete them.
+7. Continue UI polish route by route, especially any surfaces that still feel too
    card-heavy, too sparse, inconsistent in dark mode, or not dense enough for daily
    accountant use.
-7. Keep extracting route-heavy frontend code into focused workflow components only when
+8. Keep extracting route-heavy frontend code into focused workflow components only when
    it reduces real complexity or improves testable reuse.
 
 ## Estimated Completion
@@ -332,6 +348,9 @@ As of July 8, 2026:
 - Code implementation is roughly 70-75% complete.
 - Production assurance is roughly 60-65% complete.
 - Overall goal is roughly 63-67% complete, with about one third left.
+- Architecture/documentation is now scored 94/100 in the production scorecard because
+  release evidence templates are linked from the runbook and machine-checkable; the
+  remaining architecture gap is filled, verified release evidence.
 
 The remaining third is not just coding. It is proof: human visual QA review,
 real-provider monitoring confirmation, accountant walkthrough, and named professional

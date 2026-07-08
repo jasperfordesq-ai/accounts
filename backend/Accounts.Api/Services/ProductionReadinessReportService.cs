@@ -786,18 +786,19 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             Category(
                 "architecture-documentation",
                 "Architecture and documentation",
-                90,
+                94,
                 100,
                 "release-evidence-required",
                 [
                     "CLAUDE.md is the canonical architecture/development guide.",
                     "AGENTS.md carries the active production-readiness handoff.",
                     "Production runbook links release evidence templates for visual QA, monitoring provider confirmation and qualified-accountant acceptance.",
+                    "scripts/verify-release-evidence.ps1 validates completed release evidence templates before real filing use.",
                     "CI artifacts now prove production safety, dependency audit, monitoring smoke, structured logs, visual smoke and backup restore drill."
                 ],
                 [
                     "Keep AGENTS.md aligned with the latest green CI run after every release-evidence commit.",
-                    "Complete the checked-in release evidence templates with named human reviewers.",
+                    "Complete the checked-in release evidence templates with named human reviewers and retain release-evidence-report.json.",
                     "Retain source-law review notes against the pinned source snapshot."
                 ],
                 ["backend-code", "frontend-ui-ux", "frontend-code"],

@@ -18305,6 +18305,36 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public void ReleaseEvidenceVerifier_BlocksIncompleteHumanSignoffEvidence()
+    {
+        var root = RepositoryRoot();
+        var runbook = File.ReadAllText(Path.Combine(root, "Docs", "operations", "production-runbook.md"));
+        var scriptPath = Path.Combine(root, "scripts", "verify-release-evidence.ps1");
+
+        Assert.True(File.Exists(scriptPath), "Release evidence verifier should make completed human sign-off templates machine-checkable.");
+        var script = File.ReadAllText(scriptPath);
+
+        Assert.Contains("verify-release-evidence.ps1", runbook);
+        Assert.Contains("release-evidence-report.json", runbook);
+        Assert.Contains("real filing use stays blocked", runbook, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Assert-NoUncheckedBoxes", script);
+        Assert.Contains("Assert-CheckedDecision", script);
+        Assert.Contains("Assert-UncheckedDecision", script);
+        Assert.Contains("Assert-FilledField", script);
+        Assert.Contains("Assert-CompletedTableRows", script);
+        Assert.Contains("visual-smoke-screenshots", script);
+        Assert.Contains("monitoring-error-routing-report.json", script);
+        Assert.Contains("structured-log-report.json", script);
+        Assert.Contains("Direct CRO submission remains unsupported", script);
+        Assert.Contains("Direct ROS submission remains unsupported", script);
+        Assert.Contains("No PII or client filing data", script);
+        Assert.Contains("Accepted for this release candidate.", script);
+        Assert.Contains("Accepted for real filing preparation subject to external CRO/ROS processes.", script);
+        Assert.Contains("Release evidence verification failed", script);
+        Assert.Contains("ConvertTo-Json -Depth 5", script);
+    }
+
+    [Fact]
     public void StructuredLogVerifier_ParsesJsonLogsAndMatchesMonitoringSmokeEvidence()
     {
         var root = RepositoryRoot();

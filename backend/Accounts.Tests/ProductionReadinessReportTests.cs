@@ -857,7 +857,7 @@ public class ProductionReadinessReportTests
         var report = await new ProductionReadinessReportService(db).GetReportAsync();
 
         Assert.NotNull(report.ProductionScorecard);
-        Assert.Equal(490, report.ProductionScorecard.CurrentScore);
+        Assert.Equal(494, report.ProductionScorecard.CurrentScore);
         Assert.Equal(700, report.ProductionScorecard.TargetScore);
         Assert.Equal("review-required", report.ProductionScorecard.Status);
         Assert.Contains("visual QA", report.ProductionScorecard.NextGate, StringComparison.OrdinalIgnoreCase);
@@ -876,10 +876,14 @@ public class ProductionReadinessReportTests
             categories.Select(category => category.Code));
 
         var scores = categories.ToDictionary(category => category.Code);
-        Assert.Equal((90, 100), (scores["architecture-documentation"].CurrentScore, scores["architecture-documentation"].TargetScore));
+        Assert.Equal((94, 100), (scores["architecture-documentation"].CurrentScore, scores["architecture-documentation"].TargetScore));
         Assert.Equal((170, 250), (scores["backend-statutory-accounting-engine"].CurrentScore, scores["backend-statutory-accounting-engine"].TargetScore));
         Assert.Equal((130, 200), (scores["frontend-accountant-workbench"].CurrentScore, scores["frontend-accountant-workbench"].TargetScore));
         Assert.Equal((100, 150), (scores["security-auth-tenant-platform-guardrails"].CurrentScore, scores["security-auth-tenant-platform-guardrails"].TargetScore));
+        Assert.Contains(scores["architecture-documentation"].CurrentEvidence, evidence =>
+            evidence.Contains("verify-release-evidence.ps1", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(scores["architecture-documentation"].RemainingGaps, gap =>
+            gap.Contains("release-evidence-report.json", StringComparison.OrdinalIgnoreCase));
 
         var trackCodes = report.CompletionTracks.Select(track => track.Code).ToHashSet(StringComparer.Ordinal);
         var blockerCodes = report.ReleaseBlockerRegister.Select(blocker => blocker.Code).ToHashSet(StringComparer.Ordinal);

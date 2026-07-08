@@ -189,7 +189,7 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.ok(parsed.assurancePacket.evidenceItems.includes("golden-verifier-manifest"));
   assert.ok(parsed.assurancePacket.evidenceItems.includes("release-blocker-register"));
   assert.equal(parsed.assurancePacket.releaseBlockers[0], "Qualified accountant sign-off required");
-  assert.equal(parsed.productionScorecard.currentScore, 490);
+  assert.equal(parsed.productionScorecard.currentScore, 494);
   assert.equal(parsed.productionScorecard.targetScore, 700);
   assert.deepEqual(parsed.productionScorecard.categories.map((category) => category.code), [
     "architecture-documentation",
@@ -765,7 +765,7 @@ test("parseProductionReadinessReport rejects scorecard totals that do not match 
 
   assert.throws(
     () => parseProductionReadinessReport(payload),
-    /Invalid production readiness report contract: productionScorecard\.currentScore - expected 490, received 491/,
+    /Invalid production readiness report contract: productionScorecard\.currentScore - expected 494, received 491/,
   );
 });
 
@@ -823,7 +823,7 @@ test("parseProductionReadinessReport rejects release verification manifest that 
 
 function productionScorecard() {
   return {
-    currentScore: 490,
+    currentScore: 494,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete named visual QA, monitoring-provider confirmation and qualified-accountant acceptance evidence.",
@@ -831,7 +831,7 @@ function productionScorecard() {
       {
         code: "architecture-documentation",
         label: "Architecture and documentation",
-        currentScore: 90,
+        currentScore: 94,
         targetScore: 100,
         status: "release-evidence-required",
         currentEvidence: ["CLAUDE.md is canonical.", "AGENTS.md carries the active handoff."],

@@ -20,12 +20,12 @@ describe("ProductionReadinessWorkbench", () => {
     expectText("3 companies");
     expectText("4 periods");
     expect(screen.getByRole("heading", { name: "Production scorecard" })).toBeInTheDocument();
-    expectText("490/700");
+    expectText("494/700");
     expectText("Architecture and documentation");
     expectText("Backend statutory/accounting engine");
     expectText("Frontend accountant workbench");
     expectText("Security/auth/tenant/platform guardrails");
-    expectText("90 / 100");
+    expectText("94 / 100");
     expectText("170 / 250");
     expectText("130 / 200");
     expectText("100 / 150");
@@ -281,7 +281,7 @@ describe("ProductionReadinessWorkbench", () => {
 
 function productionScorecard(): ProductionReadinessReport["productionScorecard"] {
   return {
-    currentScore: 490,
+    currentScore: 494,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete named visual QA, monitoring-provider confirmation and qualified-accountant acceptance evidence.",
@@ -289,7 +289,7 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
       {
         code: "architecture-documentation",
         label: "Architecture and documentation",
-        currentScore: 90,
+        currentScore: 94,
         targetScore: 100,
         status: "release-evidence-required",
         currentEvidence: ["Canonical architecture guide and active handoff are present."],
