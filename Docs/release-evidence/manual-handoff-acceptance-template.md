@@ -14,6 +14,10 @@ mandatory before anyone relies on generated outputs for a manual handoff case.
 - Firm / reviewer capacity:
 - Review date/time UTC:
 
+Required formats: use the full 40-character commit SHA, the exact
+`https://github.com/.../actions/runs/...` run URL, and UTC timestamps ending in
+`Z` or `+00:00`.
+
 ## Required Evidence Pack
 
 - [ ] `medium-audit-required` golden corpus evidence reviewed.

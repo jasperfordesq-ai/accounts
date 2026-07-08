@@ -25,6 +25,10 @@ Internal XML checks are not Revenue acceptance evidence.
 - Taxonomy package:
 - Company/period reference:
 
+Required formats: use the full 40-character commit SHA, the exact
+`https://github.com/.../actions/runs/...` run URL, UTC timestamps ending in `Z`
+or `+00:00`, and 64-character SHA-256 digests for every generated iXBRL hash.
+
 ## Required Evidence Pack
 
 - [ ] Generated iXBRL XHTML package for each accepted scenario.

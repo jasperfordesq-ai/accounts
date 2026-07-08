@@ -18303,6 +18303,7 @@ public class AccountsWorkflowTests
         Assert.Contains("dashboard", visual);
         Assert.Contains("production-readiness", visual);
         Assert.Contains("workbench-preview", visual);
+        Assert.Contains("Required formats", visual);
         Assert.Contains("Reviewer signature", visual);
 
         var sourceLaw = File.ReadAllText(sourceLawPath);
@@ -18316,6 +18317,7 @@ public class AccountsWorkflowTests
         Assert.Contains("frc-frs-105", sourceLaw);
         Assert.Contains("charities-regulator-annual-report", sourceLaw);
         Assert.Contains("Qualified accountant source-law sign-off", sourceLaw);
+        Assert.Contains("64-character SHA-256 digest", sourceLaw);
 
         var externalRosIxbrl = File.ReadAllText(externalRosIxbrlPath);
         Assert.Contains("External ROS/iXBRL validation", externalRosIxbrl);
@@ -18326,6 +18328,7 @@ public class AccountsWorkflowTests
         Assert.Contains("dac-small", externalRosIxbrl);
         Assert.Contains("clg-charity", externalRosIxbrl);
         Assert.Contains("medium-audit-required", externalRosIxbrl);
+        Assert.Contains("64-character SHA-256 digests", externalRosIxbrl);
         Assert.Contains("Reviewer signature", externalRosIxbrl);
 
         var accountant = File.ReadAllText(accountantPath);
@@ -18344,6 +18347,7 @@ public class AccountsWorkflowTests
         Assert.Contains("Direct CRO submission remains unsupported", accountant);
         Assert.Contains("Direct ROS submission remains unsupported", accountant);
         Assert.Contains("Qualified accountant signature", accountant);
+        Assert.Contains("40-character commit SHA", accountant);
 
         var manualHandoff = File.ReadAllText(manualHandoffPath);
         Assert.Contains("Manual Handoff Acceptance", manualHandoff);
@@ -18355,6 +18359,7 @@ public class AccountsWorkflowTests
         Assert.Contains("audit-required-without-auditor-report", manualHandoff);
         Assert.Contains("direct-cro-ros-submission", manualHandoff);
         Assert.Contains("Reviewer signature", manualHandoff);
+        Assert.Contains("40-character commit SHA", manualHandoff);
 
         var monitoring = File.ReadAllText(monitoringPath);
         Assert.Contains("monitoring-error-routing-smoke", monitoring);
@@ -18363,6 +18368,7 @@ public class AccountsWorkflowTests
         Assert.Contains("structured-log-report.json", monitoring);
         Assert.Contains("/api/system/monitoring/error-smoke", monitoring);
         Assert.Contains("No PII or client filing data", monitoring);
+        Assert.Contains("positive integer JSON log line count", monitoring);
         Assert.Contains("Operator signature", monitoring);
     }
 
@@ -18384,6 +18390,14 @@ public class AccountsWorkflowTests
         Assert.Contains("Assert-CheckedDecision", script);
         Assert.Contains("Assert-UncheckedDecision", script);
         Assert.Contains("Assert-FilledField", script);
+        Assert.Contains("Assert-ReleaseIdentityFields", script);
+        Assert.Contains("Assert-UtcTimestampField", script);
+        Assert.Contains("Assert-Sha256Field", script);
+        Assert.Contains("Assert-PositiveIntegerField", script);
+        Assert.Contains("Assert-CompletedTableColumnMatches", script);
+        Assert.Contains("GitHub Actions run URL", script);
+        Assert.Contains("40-character hexadecimal Git commit SHA", script);
+        Assert.Contains("64-character hexadecimal SHA-256 digest", script);
         Assert.Contains("Assert-CompletedTableRows", script);
         Assert.Contains("canonicalGoldenCorpusScenarioCodes", script);
         Assert.Contains("requiredCoverage", script);
@@ -18406,6 +18420,8 @@ public class AccountsWorkflowTests
         Assert.Contains("accountant-workbench-evidence-report.json", script);
         Assert.Contains("monitoring-error-routing-report.json", script);
         Assert.Contains("structured-log-report.json", script);
+        Assert.Contains("Matched monitoring smoke line", script);
+        Assert.Contains("JSON log line count", script);
         Assert.Contains("Direct CRO submission remains unsupported", script);
         Assert.Contains("Direct ROS submission remains unsupported", script);
         Assert.Contains("Test-ManualHandoffEvidence", script);

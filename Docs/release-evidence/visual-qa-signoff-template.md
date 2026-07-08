@@ -15,6 +15,10 @@ artifact before real CRO or Revenue filing use.
 - Reviewer role:
 - Review date/time UTC:
 
+Required formats: use the full 40-character commit SHA, the exact
+`https://github.com/.../actions/runs/...` run URL, and UTC timestamps ending in
+`Z` or `+00:00`.
+
 ## Required Artifact Checks
 
 - [ ] Artifact contains `visual-smoke-manifest.json`.

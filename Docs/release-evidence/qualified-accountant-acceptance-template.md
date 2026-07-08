@@ -14,6 +14,10 @@ real CRO or Revenue filing use.
 - Firm / reviewer capacity:
 - Review date/time UTC:
 
+Required formats: use the full 40-character commit SHA, the exact
+`https://github.com/.../actions/runs/...` run URL, and UTC timestamps ending in
+`Z` or `+00:00`.
+
 ## Required Evidence Pack
 
 - [ ] `dependency-audit-release`

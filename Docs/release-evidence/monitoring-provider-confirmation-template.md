@@ -13,6 +13,11 @@ error-tracking provider before real filing use.
 - Operator role:
 - Confirmation date/time UTC:
 
+Required formats: use the full 40-character commit SHA, the exact
+`https://github.com/.../actions/runs/...` run URL, UTC timestamps ending in `Z`
+or `+00:00`, a positive integer JSON log line count, and `yes` for the matched
+monitoring smoke line.
+
 ## CI Evidence Values
 
 From `monitoring-error-routing-report.json`:

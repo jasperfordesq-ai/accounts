@@ -126,6 +126,9 @@ Backend/accounting-engine progress:
   machine-checkable. It fails blank or incomplete source-law review, visual QA,
   qualified-accountant, and monitoring-provider confirmation templates; it writes
   `release-evidence-report.json` for both failed and passed checks.
+- `scripts/verify-release-evidence.ps1` now rejects completed human evidence when
+  release candidate identity, UTC timestamps, SHA-256 digests, external iXBRL
+  artifact hashes, or monitoring log confirmation fields are malformed.
 - Source-law review now has a checked-in release evidence template covering all 12
   monitored CRO, Revenue, FRC, and Charities Regulator source IDs. The release
   verifier reports those IDs under `sourceLawSourceIds`.
@@ -267,7 +270,7 @@ Recent successful local verification includes:
   production scorecard evidence are wired together, including canonical
   qualified-accountant golden corpus scenario codes, external ROS/iXBRL validation
   template coverage, source-law source coverage, manual handoff coverage, visual
-  smoke and accountant workbench evidence report references, and the 604/700
+  smoke and accountant workbench evidence report references, and the 606/700
   scorecard total
 - Backend focused release artifact pack verifier and scorecard tests:
   `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~ReleaseArtifactPackVerifier_RequiresExactOperationalEvidenceReports|FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers"`
@@ -322,6 +325,11 @@ Recent successful local verification includes:
   `release-evidence-report.json`. The report now carries required golden corpus
   scenario, external ROS/iXBRL validation scenario, source-law source, route, and
   release-artifact coverage.
+- Release evidence format hardening checks for `scripts\verify-release-evidence.ps1` -
+  passed. Temporary completed templates with a 40-character commit SHA, GitHub
+  Actions run URL, UTC timestamps, SHA-256 source/iXBRL hashes, monitoring log
+  count and matched-smoke confirmation passed; a copied template with malformed
+  external iXBRL SHA-256 values failed as expected.
 - PowerShell parser and synthetic completed-pack execution for
   `scripts\verify-release-artifact-pack.ps1` - passed. Temporary artifact reports pass
   with `release-artifact-pack-report.json`, including release candidate identity,
@@ -357,7 +365,7 @@ Recent successful local verification includes:
   viewport widths and missing screenshot PNG dimension evidence
 - Backend focused scorecard/visual QA tests after adding PNG dimension evidence:
   `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers|FullyQualifiedName~ProductionReadinessReport_DeclaresVisualQaCoverageForAccountantWorkbenchRoutes"`
-  - 2 passed, proving the readiness report exposes the 604/700 scorecard and visual
+  - 2 passed, proving the readiness report exposes the 606/700 scorecard and visual
   review protocol requires screenshot PNG dimensions
 - Frontend scorecard render and type checks for the visual evidence report slice:
   - `node scripts/verify-api-client.mjs` - passed
@@ -410,8 +418,8 @@ CI status:
   July 8, 2026.
 - Green jobs: Workflow Hygiene, Production Compose Config, Frontend, Backend,
   Production Stack Smoke, and CI Machine Evidence Pack.
-- The scorecard exposed by the candidate is now 604/700, with frontend accountant
-  workbench at 160/200 and security/auth/tenant/platform guardrails at 145/150.
+- The scorecard exposed by the candidate is now 606/700, with frontend accountant
+  workbench at 160/200 and security/auth/tenant/platform guardrails at 147/150.
   The typed frontend parser and production-readiness verifier both require CI
   machine evidence, production smoke, readiness verification, visual smoke, release
   artifact pack, no-direct filing control, and named manual review manifest rows;
@@ -484,9 +492,9 @@ As of July 8, 2026:
 - Code implementation is roughly 70-75% complete.
 - Production assurance is roughly 60-65% complete.
 - Overall goal is roughly 63-67% complete, with about one third left.
-- The production scorecard is now 604/700: architecture/documentation 99/100,
+- The production scorecard is now 606/700: architecture/documentation 99/100,
   backend statutory/accounting engine 200/250, frontend accountant workbench 160/200,
-  and security/auth/tenant/platform guardrails 145/150.
+  and security/auth/tenant/platform guardrails 147/150.
 - Architecture/documentation is now scored 99/100 in the production scorecard because
   source-law review, release evidence templates, manual handoff evidence, runbook
   links, and verifier coverage are in place, including an exact release artifact-pack

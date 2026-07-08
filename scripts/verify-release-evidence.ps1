@@ -50,18 +50,125 @@ function Assert-FilledField {
         [System.Collections.Generic.List[string]]$Failures
     )
 
-    $escaped = [regex]::Escape($FieldName)
-    $pattern = "(?im)^\s*-?\s*$escaped\s*:\s*(\S.+?)\s*$"
-    $match = [regex]::Match($Content, $pattern)
-
-    if (-not $match.Success) {
+    $value = Get-FieldValue $Content $FieldName
+    if ($null -eq $value) {
         Add-Failure $Failures "$Context field '$FieldName' must be filled."
         return
     }
 
-    $value = $match.Groups[1].Value.Trim()
     if ($value.Length -eq 0 -or $value -match "^(tbd|todo|n/a|none|pending)$") {
         Add-Failure $Failures "$Context field '$FieldName' contains a placeholder value."
+    }
+}
+
+function Get-FieldValue {
+    param(
+        [string]$Content,
+        [string]$FieldName
+    )
+
+    $escaped = [regex]::Escape($FieldName)
+    $pattern = "(?im)^\s*-?\s*$escaped\s*:\s*(\S.*?)\s*$"
+    $match = [regex]::Match($Content, $pattern)
+
+    if (-not $match.Success) {
+        return $null
+    }
+
+    return $match.Groups[1].Value.Trim()
+}
+
+function Assert-FieldMatchesPattern {
+    param(
+        [string]$Content,
+        [string]$FieldName,
+        [string]$Pattern,
+        [string]$Description,
+        [string]$Context,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    $value = Get-FieldValue $Content $FieldName
+    if ($null -eq $value -or $value.Length -eq 0) {
+        return
+    }
+
+    if ($value -notmatch $Pattern) {
+        Add-Failure $Failures "$Context field '$FieldName' must be $Description."
+    }
+}
+
+function Assert-CommitShaField {
+    param(
+        [string]$Content,
+        [string]$Context,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    Assert-FieldMatchesPattern $Content "Commit SHA" "^[0-9a-fA-F]{40}$" "a 40-character hexadecimal Git commit SHA" $Context $Failures
+}
+
+function Assert-GitHubActionsRunUrlField {
+    param(
+        [string]$Content,
+        [string]$Context,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    Assert-FieldMatchesPattern $Content "GitHub Actions run URL" "^https://github\.com/[^/\s]+/[^/\s]+/actions/runs/[0-9]+(?:[/?#].*)?$" "a GitHub Actions run URL" $Context $Failures
+}
+
+function Assert-UtcTimestampField {
+    param(
+        [string]$Content,
+        [string]$FieldName,
+        [string]$Context,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    $value = Get-FieldValue $Content $FieldName
+    if ($null -eq $value -or $value.Length -eq 0) {
+        return
+    }
+
+    if ($value -notmatch "(?:Z|\+00:00)$") {
+        Add-Failure $Failures "$Context field '$FieldName' must be an explicit UTC timestamp ending in Z or +00:00."
+        return
+    }
+
+    $parsed = [DateTimeOffset]::MinValue
+    if (-not [DateTimeOffset]::TryParse($value, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::AssumeUniversal, [ref]$parsed)) {
+        Add-Failure $Failures "$Context field '$FieldName' must be a valid UTC timestamp."
+    }
+}
+
+function Assert-Sha256Field {
+    param(
+        [string]$Content,
+        [string]$FieldName,
+        [string]$Context,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    Assert-FieldMatchesPattern $Content $FieldName "^[0-9a-fA-F]{64}$" "a 64-character hexadecimal SHA-256 digest" $Context $Failures
+}
+
+function Assert-PositiveIntegerField {
+    param(
+        [string]$Content,
+        [string]$FieldName,
+        [string]$Context,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    $value = Get-FieldValue $Content $FieldName
+    if ($null -eq $value -or $value.Length -eq 0) {
+        return
+    }
+
+    $number = 0
+    if (-not [int]::TryParse($value, [ref]$number) -or $number -le 0) {
+        Add-Failure $Failures "$Context field '$FieldName' must be a positive integer."
     }
 }
 
@@ -132,6 +239,50 @@ function Assert-CompletedTableRows {
             Add-Failure $Failures "$Context table row '$label' has empty cells."
         }
     }
+}
+
+function Assert-CompletedTableColumnMatches {
+    param(
+        [string]$Content,
+        [string[]]$RowLabels,
+        [int]$ColumnIndex,
+        [string]$ColumnLabel,
+        [string]$Pattern,
+        [string]$Description,
+        [string]$Context,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    $lines = $Content -split "\r?\n"
+    foreach ($label in $RowLabels) {
+        $escaped = [regex]::Escape($label)
+        $row = $lines | Where-Object { $_ -match "^\|\s*$escaped\s*\|" } | Select-Object -First 1
+        if (-not $row) {
+            continue
+        }
+
+        $cells = @($row.Trim() -split "\|").Where({ $_.Trim().Length -gt 0 })
+        if ($cells.Count -le $ColumnIndex) {
+            Add-Failure $Failures "$Context table row '$label' is missing column '$ColumnLabel'."
+            continue
+        }
+
+        $value = $cells[$ColumnIndex].Trim()
+        if ($value -notmatch $Pattern) {
+            Add-Failure $Failures "$Context table row '$label' column '$ColumnLabel' must be $Description."
+        }
+    }
+}
+
+function Assert-ReleaseIdentityFields {
+    param(
+        [string]$Content,
+        [string]$Context,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    Assert-CommitShaField $Content $Context $Failures
+    Assert-GitHubActionsRunUrlField $Content $Context $Failures
 }
 
 $canonicalGoldenCorpusScenarioCodes = @(
@@ -207,6 +358,8 @@ function Test-VisualEvidence {
         Assert-FilledField $Content $field $context $Failures
     }
 
+    Assert-ReleaseIdentityFields $Content $context $Failures
+    Assert-UtcTimestampField $Content "Review date/time UTC" $context $Failures
     Assert-NoUncheckedBoxes $Content $context $Failures
     Assert-CheckedDecision $Content "Accepted for this release candidate." $context $Failures
     Assert-UncheckedDecision $Content "Rejected; defects listed below must be fixed and re-reviewed." $context $Failures
@@ -232,6 +385,9 @@ function Test-AccountantEvidence {
         Assert-FilledField $Content $field $context $Failures
     }
 
+    Assert-ReleaseIdentityFields $Content $context $Failures
+    Assert-UtcTimestampField $Content "Production readiness report timestamp" $context $Failures
+    Assert-UtcTimestampField $Content "Review date/time UTC" $context $Failures
     Assert-NoUncheckedBoxes $Content $context $Failures
     Assert-CheckedDecision $Content "Accepted for real filing preparation subject to external CRO/ROS processes." $context $Failures
     Assert-UncheckedDecision $Content "Rejected; issues below must be remediated and re-reviewed." $context $Failures
@@ -278,6 +434,9 @@ function Test-ManualHandoffEvidence {
         Assert-FilledField $Content $field $context $Failures
     }
 
+    Assert-ReleaseIdentityFields $Content $context $Failures
+    Assert-UtcTimestampField $Content "Production readiness report timestamp" $context $Failures
+    Assert-UtcTimestampField $Content "Review date/time UTC" $context $Failures
     Assert-NoUncheckedBoxes $Content $context $Failures
     Assert-CheckedDecision $Content "Accepted as manual handoff evidence for this release candidate." $context $Failures
     Assert-UncheckedDecision $Content "Rejected; manual handoff issues below must be remediated and re-reviewed." $context $Failures
@@ -323,10 +482,15 @@ function Test-ExternalRosIxbrlEvidence {
         Assert-FilledField $Content $field $context $Failures
     }
 
+    Assert-ReleaseIdentityFields $Content $context $Failures
+    Assert-UtcTimestampField $Content "Production readiness report timestamp" $context $Failures
+    Assert-UtcTimestampField $Content "Review date/time UTC" $context $Failures
+    Assert-Sha256Field $Content "Generated iXBRL SHA-256" $context $Failures
     Assert-NoUncheckedBoxes $Content $context $Failures
     Assert-CheckedDecision $Content "Accepted as external ROS/iXBRL validation evidence for this release candidate." $context $Failures
     Assert-UncheckedDecision $Content "Rejected; validation issues below must be remediated and re-reviewed." $context $Failures
     Assert-CompletedTableRows $Content $canonicalGoldenCorpusScenarioCodes $context $Failures
+    Assert-CompletedTableColumnMatches $Content $canonicalGoldenCorpusScenarioCodes 2 "Artifact hash" "^[0-9a-fA-F]{64}$" "a 64-character hexadecimal SHA-256 digest" $context $Failures
 }
 
 function Test-MonitoringEvidence {
@@ -348,10 +512,15 @@ function Test-MonitoringEvidence {
         Assert-ContainsText $Content $text $context $Failures
     }
 
-    foreach ($field in @("Commit SHA", "GitHub Actions run URL", "Operator name", "Operator role", "Confirmation date/time UTC", "Provider", "Event id", "Correlation id", "Base URL", "Checked at UTC", "Structured log file", "JSON log line count", "Provider event URL or reference", "Operator signature")) {
+    foreach ($field in @("Commit SHA", "GitHub Actions run URL", "Operator name", "Operator role", "Confirmation date/time UTC", "Provider", "Event id", "Correlation id", "Base URL", "Checked at UTC", "Structured log file", "JSON log line count", "Matched monitoring smoke line", "Provider event URL or reference", "Operator signature")) {
         Assert-FilledField $Content $field $context $Failures
     }
 
+    Assert-ReleaseIdentityFields $Content $context $Failures
+    Assert-UtcTimestampField $Content "Confirmation date/time UTC" $context $Failures
+    Assert-UtcTimestampField $Content "Checked at UTC" $context $Failures
+    Assert-PositiveIntegerField $Content "JSON log line count" $context $Failures
+    Assert-FieldMatchesPattern $Content "Matched monitoring smoke line" "^yes$" "yes" $context $Failures
     Assert-NoUncheckedBoxes $Content $context $Failures
 }
 
@@ -393,6 +562,10 @@ function Test-SourceLawEvidence {
         Assert-FilledField $Content $field $context $Failures
     }
 
+    Assert-ReleaseIdentityFields $Content $context $Failures
+    Assert-UtcTimestampField $Content "Production readiness report timestamp" $context $Failures
+    Assert-UtcTimestampField $Content "Review date/time UTC" $context $Failures
+    Assert-Sha256Field $Content "Source-law snapshot content hash" $context $Failures
     Assert-NoUncheckedBoxes $Content $context $Failures
     Assert-CheckedDecision $Content "Accepted as source-law review evidence for this release candidate." $context $Failures
     Assert-UncheckedDecision $Content "Rejected; source-law issues below must be remediated and re-reviewed." $context $Failures
@@ -409,12 +582,12 @@ $accountantPath = Join-Path $resolvedDirectory "qualified-accountant-acceptance-
 $manualHandoffPath = Join-Path $resolvedDirectory "manual-handoff-acceptance-template.md"
 $monitoringPath = Join-Path $resolvedDirectory "monitoring-provider-confirmation-template.md"
 
-$visual = Read-EvidenceFile $visualPath $failures
-$sourceLaw = Read-EvidenceFile $sourceLawPath $failures
-$externalRosIxbrl = Read-EvidenceFile $externalRosIxbrlPath $failures
-$accountant = Read-EvidenceFile $accountantPath $failures
-$manualHandoff = Read-EvidenceFile $manualHandoffPath $failures
-$monitoring = Read-EvidenceFile $monitoringPath $failures
+$visual = [string](Read-EvidenceFile $visualPath $failures)
+$sourceLaw = [string](Read-EvidenceFile $sourceLawPath $failures)
+$externalRosIxbrl = [string](Read-EvidenceFile $externalRosIxbrlPath $failures)
+$accountant = [string](Read-EvidenceFile $accountantPath $failures)
+$manualHandoff = [string](Read-EvidenceFile $manualHandoffPath $failures)
+$monitoring = [string](Read-EvidenceFile $monitoringPath $failures)
 
 if ($visual.Trim().Length -gt 0) {
     Test-VisualEvidence $visual $failures

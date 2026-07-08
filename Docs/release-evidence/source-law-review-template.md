@@ -17,6 +17,11 @@ checking the current CRO, Revenue, FRC, and Charities Regulator guidance pages.
 - Qualified accountant name:
 - Qualification / professional body:
 
+Required formats: use the full 40-character commit SHA, the exact
+`https://github.com/.../actions/runs/...` run URL, UTC timestamps ending in `Z`
+or `+00:00`, and a 64-character SHA-256 digest for the source-law snapshot
+content hash.
+
 ## Required Evidence Pack
 
 - [ ] `source-law-snapshot-fingerprint`
