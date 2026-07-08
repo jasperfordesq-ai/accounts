@@ -76,6 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const isLoginPage = pathname === "/login";
   const isPasswordChangePage = pathname === "/change-password";
+  const isPublicPage = isLoginPage || pathname === "/about";
 
   const refresh = useCallback(async (signal?: AbortSignal) => {
     const transitionId = ++authTransitionRef.current;
@@ -116,19 +117,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null);
       setLogoutError(null);
       setLoading(false);
-      if (!isLoginPage) {
+      if (!isPublicPage) {
         router.replace(loginRouteForReturnTo(returnTo));
       }
     }
 
     window.addEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
     return () => window.removeEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
-  }, [isLoginPage, router]);
+  }, [isPublicPage, router]);
 
   useEffect(() => {
     if (loading) return;
 
-    if (!user && !isLoginPage) {
+    if (!user && !isPublicPage) {
       router.replace(loginRouteForReturnTo(currentPathWithSearch()));
       return;
     }
@@ -151,7 +152,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         typeof window === "undefined" ? undefined : new URLSearchParams(window.location.search)
       ));
     }
-  }, [isLoginPage, isPasswordChangePage, loading, router, user]);
+  }, [isLoginPage, isPasswordChangePage, isPublicPage, loading, router, user]);
 
   const login = useCallback(async (email: string, password: string) => {
     const transitionId = ++authTransitionRef.current;
@@ -239,7 +240,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [changePassword, loading, login, logout, logoutError, refresh, user],
   );
 
-  if (!isLoginPage && loading) {
+  if (!isPublicPage && loading) {
     return (
       <AuthContext.Provider value={value}>
         <FullPageSpinner />
@@ -247,7 +248,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
   }
 
-  if (!isLoginPage && !loading && !user) {
+  if (!isPublicPage && !loading && !user) {
     return (
       <AuthContext.Provider value={value}>
         <FullPageSpinner />

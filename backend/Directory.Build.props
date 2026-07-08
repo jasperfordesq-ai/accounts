@@ -1,6 +1,10 @@
 <Project>
   <PropertyGroup>
     <ArtifactsPath>$(MSBuildThisFileDirectory)../.dotnet-artifacts</ArtifactsPath>
+    <Authors>Jasper Ford</Authors>
+    <Copyright>Copyright (c) 2026 Jasper Ford</Copyright>
+    <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/jasperfordesq-ai/accounts</RepositoryUrl>
 
     <!-- Fail the build (and CI's restore step) on any vulnerable NuGet package, direct or
          transitive. The backend parses untrusted CSV and handles auth/crypto, so a known-vulnerable

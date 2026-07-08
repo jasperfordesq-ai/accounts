@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import Script from "next/script";
 import { Providers } from "./providers";
 import { AppNavbar } from "@/components/AppNavbar";
+import { AppFooter } from "@/components/AppFooter";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -36,6 +37,7 @@ export default async function RootLayout({
             {children}
           </main>
         </Providers>
+        <AppFooter />
       </body>
     </html>
   );

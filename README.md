@@ -1,5 +1,7 @@
 # Irish Statutory Accounts Production Platform
 
+[![License: AGPL v3](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
+
 A multi-company web application that replaces the traditional year-end accountant workflow for
 Irish private companies. It takes imported bank transactions and year-end business facts and
 produces statutory financial statements, CRO filing outputs, and Revenue CT1 / iXBRL support.
@@ -57,6 +59,75 @@ are documented in **[CLAUDE.md](CLAUDE.md)** under *Authentication, Authorizatio
 | [CLAUDE.md](CLAUDE.md) | Architecture, entities, services, endpoints, security model, deployment |
 | [LOCAL_SETUP.md](LOCAL_SETUP.md) | Running the stack locally + seeded admin |
 | [REQUIREMENTS.md](REQUIREMENTS.md) | Product requirements |
+| [LICENSE](LICENSE) | GNU Affero General Public License version 3 text |
+| [NOTICE](NOTICE) | Jasper Ford attribution, Section 7 additional terms, and source-code notice |
+| [CONTRIBUTORS.md](CONTRIBUTORS.md) | Creator and contributor attribution |
+| [CONTRIBUTOR_TERMS.md](CONTRIBUTOR_TERMS.md) | Contributor licence grant and project stewardship terms |
+| [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) | Major third-party component notices |
+
+## Credits and Origins
+
+### Creator
+
+- **Jasper Ford** - Creator, main contributor, and primary author
+
+### Contributors
+
+- **Jasper Ford** - Creator, main contributor, and primary author
+
+### Third-party open-source components
+
+Irish Accounts builds on open-source projects including ASP.NET Core, Entity
+Framework Core, PostgreSQL tooling, QuestPDF, CsvHelper, Next.js, React,
+HeroUI, Tailwind CSS, and related build/test tooling. Each retains its own
+licence and copyright; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## License
+
+This software is licensed under the **GNU Affero General Public License version
+3** (AGPL-3.0-or-later).
+
+The AGPL requires that if you run a modified version of this software on a
+server and let others interact with it, you must make your source code
+available to those users.
+
+See the [LICENSE](LICENSE) file for the full license text.
+See the [NOTICE](NOTICE) file for attribution requirements.
+See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for bundled third-party
+components and their licences.
+
+## UI Attribution Requirement
+
+Under AGPL Section 7(b), all public deployments of this software **must**
+display visible attribution and a link to the source code repository.
+
+### Required Attribution
+
+**Footer (all pages):**
+> "Built on Irish Accounts by Jasper Ford"
+
+This text must be a clickable hyperlink to:
+<https://github.com/jasperfordesq-ai/accounts>
+
+**About page:**
+> "Powered by Irish Accounts
+> Created by Jasper Ford
+> Licensed under AGPL v3-or-later"
+
+With a link to: <https://github.com/jasperfordesq-ai/accounts>
+
+### Compliance
+
+- The [NOTICE](NOTICE) file contains the authoritative wording for all
+  attribution requirements
+- Removing or obscuring required attribution is a licence violation
+- This requirement applies to all deployments, including modified versions and
+  SaaS offerings
+
+## Source Code
+
+The complete source code for this project is available at:
+<https://github.com/jasperfordesq-ai/accounts>
 
 ## Legal framework
 
