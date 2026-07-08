@@ -384,11 +384,15 @@ Recent successful local verification includes:
 
 CI status:
 
-- GitHub Actions run `28948689483` for commit
-  `ac4ee17 Retain CI machine evidence pack` completed successfully on
+- GitHub Actions run `28950478650` for commit
+  `65aaec8 Require frontend release manifest evidence` completed successfully on
   July 8, 2026.
 - Green jobs: Workflow Hygiene, Production Compose Config, Frontend, Backend,
   Production Stack Smoke, and CI Machine Evidence Pack.
+- The scorecard exposed by the candidate is now 584/700, with frontend accountant
+  workbench at 155/200 after the typed frontend parser began requiring CI machine
+  evidence, production smoke, readiness verification, visual smoke, release artifact
+  pack, and named manual review manifest rows before rendering readiness data.
 - Latest retained CI evidence artifacts include:
   - `dependency-audit-release`: `dependency-audit-report.json` passed with 0 npm
     vulnerabilities, frontend lockfile/package hashes, and NuGet audit policy.
