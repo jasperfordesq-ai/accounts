@@ -332,9 +332,35 @@ Invoke-RestMethod `
     -WebSession $session `
     -TimeoutSec $TimeoutSeconds | Out-Null
 
-if ($CheckMonitoringErrorRouting) {
-    New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
+New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
 
+Write-Host "Capturing production readiness report..."
+$productionReadinessReport = Invoke-RestMethod `
+    -Uri "$base/api/system/production-readiness" `
+    -Method Get `
+    -WebSession $session `
+    -TimeoutSec $TimeoutSeconds
+
+if ([string]::IsNullOrWhiteSpace([string]$productionReadinessReport.overallStatus)) {
+    throw "Production readiness report did not include overallStatus."
+}
+if ($null -eq $productionReadinessReport.productionScorecard -or
+    [int]$productionReadinessReport.productionScorecard.currentScore -le 0 -or
+    [int]$productionReadinessReport.productionScorecard.targetScore -le 0) {
+    throw "Production readiness report did not include a valid productionScorecard."
+}
+if ($null -eq $productionReadinessReport.releaseBlockerRegister -or
+    @($productionReadinessReport.releaseBlockerRegister).Count -eq 0) {
+    throw "Production readiness report did not include releaseBlockerRegister entries."
+}
+
+$productionReadinessReportPath = Join-Path $OutputDirectory "production-readiness-report.json"
+$productionReadinessReport |
+    ConvertTo-Json -Depth 30 |
+    Set-Content -LiteralPath $productionReadinessReportPath -Encoding UTF8
+Write-Host "Production readiness report written: $productionReadinessReportPath"
+
+if ($CheckMonitoringErrorRouting) {
     Write-Host "Checking controlled monitoring error routing..."
     $monitoringResponse = Invoke-RestMethod `
         -Uri "$base/api/system/monitoring/error-smoke" `

@@ -168,6 +168,12 @@ legacy generated marker is blocked with `410 Gone`, and no outbound CRO/ROS subm
 CI runs the same verifier in the production stack smoke job and uploads the
 `no-direct-filing-submission-control` artifact for each candidate.
 
+The smoke script also captures the live production readiness report from the
+authenticated production stack and retains it as `production-readiness-report.json`.
+CI uploads this as the `production-readiness-report` artifact so the release pack
+contains the exact scorecard, source-law snapshot, golden corpus, release blockers,
+verification manifest and visual QA contract observed in the candidate stack.
+
 Retain the CI `dependency-audit-release` artifact as the dependency evidence packet. It contains `npm-audit.json` and `dependency-audit-report.json`; the latter records package-lock and package.json hashes, npm audit counts, the backend NuGet audit policy (`NU1901`-`NU1904` as errors), and workflow action-hygiene wiring:
 
 ```powershell
@@ -200,7 +206,8 @@ run the artifact-pack verifier and retain its JSON report:
 The artifact pack must include `dependency-audit-report.json`,
 `production-safety-report.json`, `monitoring-error-routing-report.json`,
 `structured-log-report.json`, `restore-drill-report.json`,
-`no-direct-filing-submission-report.json`, `visual-smoke-evidence-report.json`,
+`no-direct-filing-submission-report.json`, `production-readiness-report.json`,
+`visual-smoke-evidence-report.json`,
 `accountant-workbench-evidence-report.json`, and `release-evidence-report.json`.
 The verifier fails if any required report is missing,
 does not have `status: passed`, if supplied release candidate identity is incomplete
@@ -292,4 +299,4 @@ The HTTPS smoke path also verifies that the login response sets the `accounts_se
 13. Complete `Docs/release-evidence/qualified-accountant-acceptance-template.md` with a named qualified accountant before real filing preparation is used.
 14. Complete `Docs/release-evidence/manual-handoff-acceptance-template.md` for `medium-audit-required` and every unsupported path code before any audit-required or unsupported output is relied on.
 15. Run `scripts\verify-release-evidence.ps1` and retain `release-evidence-report.json`; real filing use stays blocked if any required checkbox, signature, artifact reference, table row, accepted decision, canonical golden corpus scenario row, source-law source row, external ROS/iXBRL validation row, manual handoff scenario/path row, route row, visual smoke evidence report reference, or required coverage entry is missing.
-16. Run `scripts\verify-release-artifact-pack.ps1` with the release commit SHA and GitHub Actions run URL, then retain `release-artifact-pack-report.json`; real filing use stays blocked if the exact release artifact pack is missing dependency, production safety, monitoring, structured log, backup/restore, no-direct-submission, visual smoke, accountant-workbench evidence, completed release-evidence reports, or SHA-256/byte-size inventory.
+16. Run `scripts\verify-release-artifact-pack.ps1` with the release commit SHA and GitHub Actions run URL, then retain `release-artifact-pack-report.json`; real filing use stays blocked if the exact release artifact pack is missing dependency, production safety, monitoring, structured log, backup/restore, no-direct-submission, production-readiness, visual smoke, accountant-workbench evidence, completed release-evidence reports, or SHA-256/byte-size inventory.

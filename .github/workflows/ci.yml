@@ -436,6 +436,14 @@ jobs:
           path: ${{ runner.temp }}/accounts-smoke/no-direct-filing-submission-report.json
           if-no-files-found: error
 
+      - name: Upload production readiness report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: production-readiness-report
+          path: ${{ runner.temp }}/accounts-smoke/production-readiness-report.json
+          if-no-files-found: error
+
       - name: Capture structured API log sample
         shell: pwsh
         run: |

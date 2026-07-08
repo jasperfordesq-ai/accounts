@@ -105,7 +105,7 @@ const share = {
 
 function productionScorecardFixture() {
   return {
-    currentScore: 559,
+    currentScore: 564,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete source-law review, named visual QA, monitoring-provider confirmation, manual handoff and qualified-accountant acceptance evidence.",
@@ -128,7 +128,7 @@ function productionScorecardFixture() {
       {
         code: "backend-statutory-accounting-engine",
         label: "Backend statutory/accounting engine",
-        currentScore: 190,
+        currentScore: 195,
         targetScore: 250,
         status: "qualified-accountant-review-required",
         currentEvidence: [
@@ -137,6 +137,7 @@ function productionScorecardFixture() {
           "External ROS/iXBRL validation evidence has template and verifier coverage.",
           "Source-law review evidence has template and verifier coverage for every monitored source.",
           "Manual handoff acceptance evidence has template and verifier coverage.",
+          "CI retains production-readiness-report.json from the live smoke stack with source-law, golden corpus, scorecard and release blocker evidence.",
         ],
         remainingGaps: ["Run and retain verified source-law, qualified-accountant acceptance, external ROS/iXBRL validation, and manual handoff evidence across the canonical corpus."],
         completionTrackCodes: ["backend-code"],

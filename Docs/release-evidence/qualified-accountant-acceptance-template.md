@@ -21,8 +21,8 @@ real CRO or Revenue filing use.
 - [ ] `monitoring-error-routing-smoke`
 - [ ] `structured-json-log-sample`
 - [ ] `postgres-backup-restore-drill`
+- [ ] `production-readiness-report`
 - [ ] `visual-smoke-screenshots`
-- [ ] Production readiness report export or screenshot
 - [ ] Generated PDF/iXBRL/tax support outputs for each accepted scenario
 
 ## Golden Corpus Walkthrough

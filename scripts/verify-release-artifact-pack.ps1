@@ -125,6 +125,7 @@ $monitoring = Read-JsonEvidence $resolvedDirectory.Path "monitoring-error-routin
 $structuredLog = Read-JsonEvidence $resolvedDirectory.Path "structured-log-report.json" $failures
 $restore = Read-JsonEvidence $resolvedDirectory.Path "restore-drill-report.json" $failures
 $noDirectSubmission = Read-JsonEvidence $resolvedDirectory.Path "no-direct-filing-submission-report.json" $failures
+$productionReadiness = Read-JsonEvidence $resolvedDirectory.Path "production-readiness-report.json" $failures
 $visualSmoke = Read-JsonEvidence $resolvedDirectory.Path "visual-smoke-evidence-report.json" $failures
 $accountantWorkbench = Read-JsonEvidence $resolvedDirectory.Path "accountant-workbench-evidence-report.json" $failures
 $releaseEvidence = Read-JsonEvidence $resolvedDirectory.Path "release-evidence-report.json" $failures
@@ -136,12 +137,17 @@ $allEvidence = [ordered]@{
     "structured-log-report.json" = $structuredLog
     "restore-drill-report.json" = $restore
     "no-direct-filing-submission-report.json" = $noDirectSubmission
+    "production-readiness-report.json" = $productionReadiness
     "visual-smoke-evidence-report.json" = $visualSmoke
     "accountant-workbench-evidence-report.json" = $accountantWorkbench
     "release-evidence-report.json" = $releaseEvidence
 }
 
 foreach ($entry in $allEvidence.GetEnumerator()) {
+    if ($entry.Key -eq "production-readiness-report.json") {
+        continue
+    }
+
     Assert-StatusPassed $entry.Value $entry.Key $failures
 }
 
@@ -202,6 +208,36 @@ if (-not ($noDirectSubmission.PSObject.Properties.Name -contains "__missing")) {
     }
     foreach ($route in @('"/cro-status"', '"/cro-payment"', '"/validate-ixbrl"')) {
         Assert-ArrayContains @($noDirectSubmission.allowedRecordedWorkflowRoutes) $route "no-direct-filing-submission-report.json allowedRecordedWorkflowRoutes" $failures
+    }
+}
+
+if (-not ($productionReadiness.PSObject.Properties.Name -contains "__missing")) {
+    if ([string]$productionReadiness.overallStatus -ne "review-required") {
+        Add-Failure $failures "production-readiness-report.json overallStatus must be review-required."
+    }
+    Assert-NonEmptyString $productionReadiness.generatedAt "production-readiness-report.json generatedAt" $failures
+    if ($null -eq $productionReadiness.productionScorecard) {
+        Add-Failure $failures "production-readiness-report.json productionScorecard must be present."
+    } else {
+        if ([int]$productionReadiness.productionScorecard.currentScore -le 0) {
+            Add-Failure $failures "production-readiness-report.json productionScorecard.currentScore must be greater than zero."
+        }
+        if ([int]$productionReadiness.productionScorecard.targetScore -ne 700) {
+            Add-Failure $failures "production-readiness-report.json productionScorecard.targetScore must be 700."
+        }
+        foreach ($categoryCode in @("architecture-documentation", "backend-statutory-accounting-engine", "frontend-accountant-workbench", "security-auth-tenant-platform-guardrails")) {
+            if (-not (@($productionReadiness.productionScorecard.categories) | Where-Object { [string]$_.code -eq $categoryCode })) {
+                Add-Failure $failures "production-readiness-report.json productionScorecard.categories must include $categoryCode."
+            }
+        }
+    }
+    foreach ($requiredEvidence in @("production-scorecard", "release-verification-manifest", "release-blocker-register")) {
+        Assert-ArrayContains @($productionReadiness.assurancePacket.evidenceItems) $requiredEvidence "production-readiness-report.json assurancePacket.evidenceItems" $failures
+    }
+    foreach ($requiredCollection in @("sourceLawSnapshot", "goldenFilingCorpus", "releaseBlockerRegister", "releaseVerificationManifest", "visualQaCoverage")) {
+        if ($null -eq $productionReadiness.$requiredCollection) {
+            Add-Failure $failures "production-readiness-report.json $requiredCollection must be present."
+        }
     }
 }
 

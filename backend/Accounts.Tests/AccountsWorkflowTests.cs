@@ -18195,6 +18195,9 @@ public class AccountsWorkflowTests
         Assert.Contains("/api/system/monitoring/error-smoke", smokeScript);
         Assert.Contains("monitoring-error-routing-report.json", smokeScript);
         Assert.Contains("Monitoring error-routing evidence written", smokeScript);
+        Assert.Contains("/api/system/production-readiness", smokeScript);
+        Assert.Contains("production-readiness-report.json", smokeScript);
+        Assert.Contains("Production readiness report written", smokeScript);
         Assert.Contains("verify-structured-logs.ps1", runbook);
         Assert.Contains("structured-log-report.json", runbook);
         Assert.Contains("structured-json-log-sample", runbook);
@@ -18313,6 +18316,7 @@ public class AccountsWorkflowTests
         Assert.Contains("dependency-audit-release", accountant);
         Assert.Contains("production-safety-config", accountant);
         Assert.Contains("postgres-backup-restore-drill", accountant);
+        Assert.Contains("production-readiness-report", accountant);
         Assert.Contains("micro-ltd", accountant);
         Assert.Contains("small-abridged-ltd", accountant);
         Assert.DoesNotContain("micro-ltd-standard", accountant);
@@ -18465,6 +18469,8 @@ public class AccountsWorkflowTests
         Assert.Contains("-GitHubActionsRunUrl <ci-run-url>", runbook);
         Assert.Contains("verify-accountant-workbench-evidence.mjs", runbook);
         Assert.Contains("accountant-workbench-evidence-report.json", runbook);
+        Assert.Contains("production-readiness-report", workflow);
+        Assert.Contains("production-readiness-report.json", workflow);
         Assert.Contains("test:visual:workbench", packageJson);
         Assert.Contains("test:visual:workbench", workflow);
         Assert.Contains("accountant-workbench-evidence-report.json", workflow);
@@ -18477,6 +18483,7 @@ public class AccountsWorkflowTests
             "structured-log-report.json",
             "restore-drill-report.json",
             "no-direct-filing-submission-report.json",
+            "production-readiness-report.json",
             "visual-smoke-evidence-report.json",
             "accountant-workbench-evidence-report.json",
             "release-evidence-report.json"
@@ -18490,6 +18497,10 @@ public class AccountsWorkflowTests
         Assert.Contains("monitoringCorrelationId", script);
         Assert.Contains("backupSha256", script);
         Assert.Contains("allowedRecordedWorkflowRoutes", script);
+        Assert.Contains("productionScorecard.targetScore must be 700", script);
+        Assert.Contains("releaseBlockerRegister", script);
+        Assert.Contains("sourceLawSnapshot", script);
+        Assert.Contains("goldenFilingCorpus", script);
         Assert.Contains("productionSmokeUsesBuildFlag", script);
         Assert.Contains("requiredCoverage", script);
         Assert.Contains("sourceLawSourceIds", script);

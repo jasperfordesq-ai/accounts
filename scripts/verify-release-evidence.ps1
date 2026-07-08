@@ -172,6 +172,7 @@ $requiredReleaseArtifactNames = @(
     "monitoring-error-routing-smoke",
     "structured-json-log-sample",
     "postgres-backup-restore-drill",
+    "production-readiness-report",
     "visual-smoke-screenshots"
 )
 

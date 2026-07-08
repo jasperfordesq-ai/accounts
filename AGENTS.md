@@ -52,6 +52,8 @@ Committed and pushed work on `main` includes:
 - `201975c Add release evidence verifier`
 - `8e34953 Canonicalize release acceptance coverage`
 - `f142912 Add external validation release evidence`
+- `ba6b52d Add release artifact pack checksums`
+- `1565113 Retain no-direct filing evidence in CI`
 
 Backend/accounting-engine progress:
 
@@ -149,6 +151,11 @@ Backend/accounting-engine progress:
   structured log, backup/restore, no-direct-submission, visual smoke,
   accountant-workbench, and release-evidence reports can be tied to the exact
   release candidate.
+- `scripts/smoke-production.ps1` now captures `production-readiness-report.json`
+  from the live authenticated smoke stack, and CI uploads it as the
+  `production-readiness-report` artifact so the exact candidate scorecard,
+  source-law snapshot, golden corpus, release blockers and visual QA contract are
+  retained with release evidence.
 
 Frontend UI/UX progress:
 
@@ -240,7 +247,7 @@ Recent successful local verification includes:
   production scorecard evidence are wired together, including canonical
   qualified-accountant golden corpus scenario codes, external ROS/iXBRL validation
   template coverage, source-law source coverage, manual handoff coverage, visual
-  smoke and accountant workbench evidence report references, and the 559/700
+  smoke and accountant workbench evidence report references, and the 564/700
   scorecard total
 - Backend focused release artifact pack verifier and scorecard tests:
   `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~ReleaseArtifactPackVerifier_RequiresExactOperationalEvidenceReports|FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers"`
@@ -363,8 +370,8 @@ Recent successful local verification includes:
 
 CI status:
 
-- GitHub Actions run `28942188247` for commit
-  `5011b1b Add accountant workbench evidence verifier` completed successfully on
+- GitHub Actions run `28943546525` for commit
+  `1565113 Retain no-direct filing evidence in CI` completed successfully on
   July 8, 2026.
 - Green jobs: Workflow Hygiene, Production Compose Config, Frontend, Backend, and
   Production Stack Smoke.
@@ -428,8 +435,8 @@ As of July 8, 2026:
 - Code implementation is roughly 70-75% complete.
 - Production assurance is roughly 60-65% complete.
 - Overall goal is roughly 63-67% complete, with about one third left.
-- The production scorecard is now 559/700: architecture/documentation 99/100,
-  backend statutory/accounting engine 190/250, frontend accountant workbench 145/200,
+- The production scorecard is now 564/700: architecture/documentation 99/100,
+  backend statutory/accounting engine 195/250, frontend accountant workbench 145/200,
   and security/auth/tenant/platform guardrails 125/150.
 - Architecture/documentation is now scored 99/100 in the production scorecard because
   source-law review, release evidence templates, manual handoff evidence, runbook
