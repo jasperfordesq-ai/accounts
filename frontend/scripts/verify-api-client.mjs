@@ -105,7 +105,7 @@ const share = {
 
 function productionScorecardFixture() {
   return {
-    currentScore: 509,
+    currentScore: 514,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete named visual QA, monitoring-provider confirmation and qualified-accountant acceptance evidence.",
@@ -139,11 +139,14 @@ function productionScorecardFixture() {
       {
         code: "frontend-accountant-workbench",
         label: "Frontend accountant workbench",
-        currentScore: 130,
+        currentScore: 135,
         targetScore: 200,
         status: "visual-acceptance-required",
-        currentEvidence: ["Visual smoke routes and workbench primitives are typed."],
-        remainingGaps: ["Complete named visual QA review against the screenshot manifest."],
+        currentEvidence: [
+          "Visual smoke routes and workbench primitives are typed.",
+          "visual-smoke-evidence-report.json proves screenshot hash, byte-size and route/theme/viewport coverage.",
+        ],
+        remainingGaps: ["Complete named visual QA review against the screenshot manifest and visual-smoke-evidence-report.json."],
         completionTrackCodes: ["frontend-ui-ux", "frontend-code"],
         releaseBlockerCodes: ["frontend-ui-ux:light-dark-visual-regression"],
       },
@@ -1072,7 +1075,7 @@ function productionReadinessReportFixture() {
         evidenceStage: "visual-qa-evidence",
         status: "in-progress",
         detail: "Screenshot review covers accountant routes in light and dark mode.",
-        evidenceRequired: "Named visual QA reviewer sign-off against the screenshot manifest.",
+        evidenceRequired: "Named visual QA reviewer sign-off against the screenshot manifest and visual-smoke-evidence-report.json.",
       },
     ],
     releaseBlockerRegister: [
@@ -1116,7 +1119,7 @@ function productionReadinessReportFixture() {
         severity: "high",
         riskRank: 30,
         blockingIssue: "Light/dark visual regression required",
-        requiredEvidence: "Named visual QA reviewer sign-off against the screenshot manifest.",
+        requiredEvidence: "Named visual QA reviewer sign-off against the screenshot manifest and visual-smoke-evidence-report.json.",
         nextAction: "Review each screenshot route-by-route.",
         sourceActionCode: "light-dark-visual-regression",
         releaseChecklistCode: "visual-qa-screenshot-review",
@@ -1219,7 +1222,7 @@ function productionReadinessReportFixture() {
         assuranceActionCode: "light-dark-visual-regression",
         operationalGateCode: "",
         auditEventCodes: [],
-        detail: "Named visual QA reviewer sign-off must be recorded against the screenshot manifest.",
+        detail: "Named visual QA reviewer sign-off must be recorded against the screenshot manifest and visual-smoke-evidence-report.json.",
       },
     ],
     releaseVerificationManifest: [
@@ -1239,7 +1242,7 @@ function productionReadinessReportFixture() {
         code: "visual-smoke-light-dark",
         label: "Light/dark desktop/mobile visual smoke",
         ownerRole: "Engineering",
-        command: "node scripts/visual-smoke.mjs; node scripts/verify-visual-smoke-artifacts.mjs",
+        command: "node scripts/visual-smoke.mjs; node scripts/verify-visual-smoke-artifacts.mjs --report-path=artifacts/visual-smoke/visual-smoke-evidence-report.json",
         ciScope: "default-ci",
         runsInDefaultCi: true,
         blocksRelease: true,

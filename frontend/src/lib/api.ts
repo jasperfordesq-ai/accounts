@@ -4221,6 +4221,12 @@ function assertVisualQaArtifacts(report: ProductionReadinessReport) {
     );
   }
 
+  if (!reviewProtocol.requiredEvidence.includes("visual-smoke-evidence-report.json")) {
+    throw new Error(
+      "Invalid production readiness report contract: visualQaCoverage.reviewProtocol.requiredEvidence - must include visual-smoke-evidence-report.json",
+    );
+  }
+
   report.visualQaCoverage.artifacts.forEach((artifact, artifactIndex) => {
     const route = routeByCode.get(artifact.routeCode);
     if (!route) {

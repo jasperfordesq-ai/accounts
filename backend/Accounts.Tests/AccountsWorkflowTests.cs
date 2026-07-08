@@ -18277,6 +18277,7 @@ public class AccountsWorkflowTests
         var visual = File.ReadAllText(visualPath);
         Assert.Contains("visual-smoke-screenshots", visual);
         Assert.Contains("visual-smoke-manifest.json", visual);
+        Assert.Contains("visual-smoke-evidence-report.json", visual);
         Assert.Contains("dashboard", visual);
         Assert.Contains("production-readiness", visual);
         Assert.Contains("workbench-preview", visual);
@@ -18330,6 +18331,7 @@ public class AccountsWorkflowTests
 
         Assert.Contains("verify-release-evidence.ps1", runbook);
         Assert.Contains("release-evidence-report.json", runbook);
+        Assert.Contains("visual-smoke-evidence-report.json", runbook);
         Assert.Contains("real filing use stays blocked", runbook, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Assert-NoUncheckedBoxes", script);
         Assert.Contains("Assert-CheckedDecision", script);
@@ -18348,6 +18350,7 @@ public class AccountsWorkflowTests
         Assert.Contains("small-abridged-ltd", script);
         Assert.Contains("stale non-canonical scenario code", script);
         Assert.Contains("visual-smoke-screenshots", script);
+        Assert.Contains("visual-smoke-evidence-report.json", script);
         Assert.Contains("monitoring-error-routing-report.json", script);
         Assert.Contains("structured-log-report.json", script);
         Assert.Contains("Direct CRO submission remains unsupported", script);

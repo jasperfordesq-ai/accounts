@@ -20,14 +20,14 @@ describe("ProductionReadinessWorkbench", () => {
     expectText("3 companies");
     expectText("4 periods");
     expect(screen.getByRole("heading", { name: "Production scorecard" })).toBeInTheDocument();
-    expectText("509/700");
+    expectText("514/700");
     expectText("Architecture and documentation");
     expectText("Backend statutory/accounting engine");
     expectText("Frontend accountant workbench");
     expectText("Security/auth/tenant/platform guardrails");
     expectText("94 / 100");
     expectText("180 / 250");
-    expectText("130 / 200");
+    expectText("135 / 200");
     expectText("105 / 150");
     expectText(/Next score gate/);
     expect(screen.getByRole("searchbox", { name: "Filter Next assurance actions" })).toBeInTheDocument();
@@ -138,6 +138,7 @@ describe("ProductionReadinessWorkbench", () => {
     expect(screen.getByRole("heading", { name: "Visual QA coverage" })).toBeInTheDocument();
     expectText("28 screenshots");
     expect(screen.getAllByText("visual-smoke-manifest.json").length).toBeGreaterThan(1);
+    expect(screen.getAllByText("visual-smoke-evidence-report.json").length).toBeGreaterThan(1);
     expectText("Visual review protocol");
     expectText("Design reviewer");
     expect(screen.getAllByText("visual-qa-screenshot-review").length).toBeGreaterThan(0);
@@ -281,7 +282,7 @@ describe("ProductionReadinessWorkbench", () => {
 
 function productionScorecard(): ProductionReadinessReport["productionScorecard"] {
   return {
-    currentScore: 509,
+    currentScore: 514,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete named visual QA, monitoring-provider confirmation and qualified-accountant acceptance evidence.",
@@ -315,11 +316,14 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
       {
         code: "frontend-accountant-workbench",
         label: "Frontend accountant workbench",
-        currentScore: 130,
+        currentScore: 135,
         targetScore: 200,
         status: "visual-acceptance-required",
-        currentEvidence: ["Visual smoke plan covers the accountant journey."],
-        remainingGaps: ["Complete named visual QA review against the screenshot manifest."],
+        currentEvidence: [
+          "Visual smoke plan covers the accountant journey.",
+          "visual-smoke-evidence-report.json proves screenshot hash, byte-size and route/theme/viewport coverage.",
+        ],
+        remainingGaps: ["Complete named visual QA review against the screenshot manifest and visual-smoke-evidence-report.json."],
         completionTrackCodes: ["frontend-ui-ux", "frontend-code"],
         releaseBlockerCodes: ["frontend-ui-ux:light-dark-visual-regression"],
       },
@@ -1904,6 +1908,7 @@ function visualQaReviewProtocol(): ProductionReadinessReport["visualQaCoverage"]
     ],
     requiredEvidence: [
       "visual-smoke-manifest.json",
+      "visual-smoke-evidence-report.json",
       "28 visual smoke screenshots",
       "screenshot SHA-256 checksums",
       "route audit summary",

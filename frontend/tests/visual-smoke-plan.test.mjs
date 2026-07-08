@@ -56,6 +56,7 @@ describe("visual smoke plan", () => {
       ],
       requiredEvidence: [
         "visual-smoke-manifest.json",
+        "visual-smoke-evidence-report.json",
         "28 visual smoke screenshots",
         "screenshot SHA-256 checksums",
         "route audit summary",

@@ -857,7 +857,7 @@ public class ProductionReadinessReportTests
         var report = await new ProductionReadinessReportService(db).GetReportAsync();
 
         Assert.NotNull(report.ProductionScorecard);
-        Assert.Equal(509, report.ProductionScorecard.CurrentScore);
+        Assert.Equal(514, report.ProductionScorecard.CurrentScore);
         Assert.Equal(700, report.ProductionScorecard.TargetScore);
         Assert.Equal("review-required", report.ProductionScorecard.Status);
         Assert.Contains("visual QA", report.ProductionScorecard.NextGate, StringComparison.OrdinalIgnoreCase);
@@ -878,7 +878,7 @@ public class ProductionReadinessReportTests
         var scores = categories.ToDictionary(category => category.Code);
         Assert.Equal((94, 100), (scores["architecture-documentation"].CurrentScore, scores["architecture-documentation"].TargetScore));
         Assert.Equal((180, 250), (scores["backend-statutory-accounting-engine"].CurrentScore, scores["backend-statutory-accounting-engine"].TargetScore));
-        Assert.Equal((130, 200), (scores["frontend-accountant-workbench"].CurrentScore, scores["frontend-accountant-workbench"].TargetScore));
+        Assert.Equal((135, 200), (scores["frontend-accountant-workbench"].CurrentScore, scores["frontend-accountant-workbench"].TargetScore));
         Assert.Equal((105, 150), (scores["security-auth-tenant-platform-guardrails"].CurrentScore, scores["security-auth-tenant-platform-guardrails"].TargetScore));
         Assert.Contains(scores["architecture-documentation"].CurrentEvidence, evidence =>
             evidence.Contains("verify-release-evidence.ps1", StringComparison.OrdinalIgnoreCase));
@@ -904,6 +904,8 @@ public class ProductionReadinessReportTests
             gap.Contains("no-direct-filing-submission-report.json", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["frontend-accountant-workbench"].RemainingGaps, gap =>
             gap.Contains("visual QA", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(scores["frontend-accountant-workbench"].CurrentEvidence, evidence =>
+            evidence.Contains("visual-smoke-evidence-report.json", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["backend-statutory-accounting-engine"].RemainingGaps, gap =>
             gap.Contains("qualified-accountant", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["backend-statutory-accounting-engine"].CurrentEvidence, evidence =>
@@ -1063,6 +1065,7 @@ public class ProductionReadinessReportTests
             StringProperty(item, "Code") == "visual-smoke-light-dark"
             && StringProperty(item, "Command").Contains("visual-smoke", StringComparison.OrdinalIgnoreCase)
             && StringProperty(item, "Command").Contains("verify-visual-smoke-artifacts", StringComparison.OrdinalIgnoreCase)
+            && StringProperty(item, "Command").Contains("visual-smoke-evidence-report.json", StringComparison.OrdinalIgnoreCase)
             && StringProperty(item, "EvidenceArtifact") == "artifacts/visual-smoke"
             && BooleanProperty(item, "BlocksRelease"));
         Assert.Contains(manifest, item =>
@@ -2188,6 +2191,7 @@ public class ProductionReadinessReportTests
             StringListProperty(reviewProtocol, "RequiredEvidence"),
             [
                 "visual-smoke-manifest.json",
+                "visual-smoke-evidence-report.json",
                 "28 visual smoke screenshots",
                 "screenshot SHA-256 checksums",
                 "route audit summary",

@@ -168,11 +168,11 @@ function Test-VisualEvidence {
     )
 
     $context = "Visual QA evidence"
-    foreach ($text in @("visual-smoke-screenshots", "visual-smoke-manifest.json", "Reviewer signature")) {
+    foreach ($text in @("visual-smoke-screenshots", "visual-smoke-manifest.json", "visual-smoke-evidence-report.json", "Reviewer signature")) {
         Assert-ContainsText $Content $text $context $Failures
     }
 
-    foreach ($field in @("Commit SHA", "GitHub Actions run URL", "Visual smoke manifest file", "Reviewer name", "Reviewer role", "Review date/time UTC", "Reviewer signature")) {
+    foreach ($field in @("Commit SHA", "GitHub Actions run URL", "Visual smoke manifest file", "Visual smoke evidence report file", "Reviewer name", "Reviewer role", "Review date/time UTC", "Reviewer signature")) {
         Assert-FilledField $Content $field $context $Failures
     }
 

@@ -189,7 +189,7 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.ok(parsed.assurancePacket.evidenceItems.includes("golden-verifier-manifest"));
   assert.ok(parsed.assurancePacket.evidenceItems.includes("release-blocker-register"));
   assert.equal(parsed.assurancePacket.releaseBlockers[0], "Qualified accountant sign-off required");
-  assert.equal(parsed.productionScorecard.currentScore, 509);
+  assert.equal(parsed.productionScorecard.currentScore, 514);
   assert.equal(parsed.productionScorecard.targetScore, 700);
   assert.deepEqual(parsed.productionScorecard.categories.map((category) => category.code), [
     "architecture-documentation",
@@ -261,6 +261,7 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.match(parsed.visualQaCoverage.reviewProtocol.acceptanceCriteria[0], /light desktop/);
   assert.deepEqual(parsed.visualQaCoverage.reviewProtocol.requiredEvidence, [
     "visual-smoke-manifest.json",
+    "visual-smoke-evidence-report.json",
     "28 visual smoke screenshots",
     "screenshot SHA-256 checksums",
     "route audit summary",
@@ -450,6 +451,17 @@ test("parseProductionReadinessReport rejects visual review protocols without che
   assert.throws(
     () => parseProductionReadinessReport(payload),
     /Invalid production readiness report contract: visualQaCoverage\.reviewProtocol\.requiredEvidence - must include screenshot SHA-256 checksums/,
+  );
+});
+
+test("parseProductionReadinessReport rejects visual review protocols without verifier report evidence", () => {
+  const payload = sampleReport();
+  payload.visualQaCoverage.reviewProtocol.requiredEvidence =
+    payload.visualQaCoverage.reviewProtocol.requiredEvidence.filter((item) => item !== "visual-smoke-evidence-report.json");
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: visualQaCoverage\.reviewProtocol\.requiredEvidence - must include visual-smoke-evidence-report\.json/,
   );
 });
 
@@ -765,7 +777,7 @@ test("parseProductionReadinessReport rejects scorecard totals that do not match 
 
   assert.throws(
     () => parseProductionReadinessReport(payload),
-    /Invalid production readiness report contract: productionScorecard\.currentScore - expected 509, received 491/,
+    /Invalid production readiness report contract: productionScorecard\.currentScore - expected 514, received 491/,
   );
 });
 
@@ -823,7 +835,7 @@ test("parseProductionReadinessReport rejects release verification manifest that 
 
 function productionScorecard() {
   return {
-    currentScore: 509,
+    currentScore: 514,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete named visual QA, monitoring-provider confirmation and qualified-accountant acceptance evidence.",
@@ -861,11 +873,14 @@ function productionScorecard() {
       {
         code: "frontend-accountant-workbench",
         label: "Frontend accountant workbench",
-        currentScore: 130,
+        currentScore: 135,
         targetScore: 200,
         status: "visual-acceptance-required",
-        currentEvidence: ["Visual smoke plan covers the accountant journey."],
-        remainingGaps: ["Complete named visual QA review against the light/dark desktop/mobile screenshot manifest."],
+        currentEvidence: [
+          "Visual smoke plan covers the accountant journey.",
+          "visual-smoke-evidence-report.json proves screenshot hash, byte-size and route/theme/viewport coverage.",
+        ],
+        remainingGaps: ["Complete named visual QA review against the light/dark desktop/mobile screenshot manifest and visual-smoke-evidence-report.json."],
         completionTrackCodes: ["frontend-ui-ux", "frontend-code"],
         releaseBlockerCodes: [
           "frontend-ui-ux:light-dark-visual-regression",
@@ -2156,7 +2171,7 @@ function sampleReport() {
         code: "visual-smoke-light-dark",
         label: "Light/dark desktop/mobile visual smoke",
         ownerRole: "Engineering",
-        command: "node scripts/visual-smoke.mjs; node scripts/verify-visual-smoke-artifacts.mjs",
+        command: "node scripts/visual-smoke.mjs; node scripts/verify-visual-smoke-artifacts.mjs --report-path=artifacts/visual-smoke/visual-smoke-evidence-report.json",
         ciScope: "default-ci",
         runsInDefaultCi: true,
         blocksRelease: true,

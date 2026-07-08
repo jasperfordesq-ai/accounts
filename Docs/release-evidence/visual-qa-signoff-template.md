@@ -9,6 +9,7 @@ artifact before real CRO or Revenue filing use.
 - GitHub Actions run URL:
 - Artifact name: `visual-smoke-screenshots`
 - Visual smoke manifest file:
+- Visual smoke evidence report file:
 - Reviewer name:
 - Reviewer role:
 - Review date/time UTC:
@@ -16,10 +17,12 @@ artifact before real CRO or Revenue filing use.
 ## Required Artifact Checks
 
 - [ ] Artifact contains `visual-smoke-manifest.json`.
+- [ ] Artifact contains `visual-smoke-evidence-report.json` from `node scripts/verify-visual-smoke-artifacts.mjs`.
 - [ ] Manifest route count matches the production readiness report.
 - [ ] Every route has light and dark screenshots.
 - [ ] Every route has desktop and mobile screenshots.
 - [ ] Screenshot hashes and byte sizes match the manifest.
+- [ ] Evidence report status is `passed` and covers all route/theme/viewport combinations.
 - [ ] No screenshot is blank, truncated, or obviously stale.
 
 ## Human Visual Review Scope

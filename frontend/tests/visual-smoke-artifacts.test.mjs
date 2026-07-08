@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
@@ -70,22 +70,32 @@ describe("visual smoke artifact evidence", () => {
   it("verifies manifest screenshots against recorded hash and byte size", async () => {
     const { verifyVisualSmokeManifest, withScreenshotEvidence } = await import("../scripts/visual-smoke-artifacts.mjs");
     const dir = await mkTempDir();
-    const screenshotPath = path.join(dir, "dashboard-light-desktop.png");
     const manifestPath = path.join(dir, "visual-smoke-manifest.json");
+    const reportPath = path.join(dir, "visual-smoke-evidence-report.json");
 
-    await writeFile(screenshotPath, "visual evidence bytes", "utf8");
-    const screenshot = await withScreenshotEvidence(baseScreenshot(screenshotPath));
-    await writeManifest(manifestPath, [screenshot], { routeName: "dashboard", screenshotCount: 1 });
+    const screenshots = await completeScreenshots(dir, withScreenshotEvidence);
+    await writeManifest(manifestPath, screenshots);
 
     try {
-      const result = await verifyVisualSmokeManifest(manifestPath);
-
-      assert.deepEqual(result, {
-        ok: true,
-        manifestPath,
-        screenshotCount: 1,
-        totalBytes: screenshot.byteSize,
+      const result = await verifyVisualSmokeManifest(manifestPath, {
+        checkedAtUtc: "2026-07-08T00:00:00.000Z",
+        reportPath,
       });
+
+      assert.equal(result.ok, true);
+      assert.equal(result.status, "passed");
+      assert.equal(result.manifestPath, manifestPath);
+      assert.equal(result.reportPath, reportPath);
+      assert.equal(result.evidenceReportFileName, "visual-smoke-evidence-report.json");
+      assert.equal(result.routeCount, 7);
+      assert.equal(result.screenshotCount, 28);
+      assert.equal(result.expectedScreenshotCount, 28);
+      assert.deepEqual(result.themes, ["light", "dark"]);
+      assert.deepEqual(result.viewports, ["desktop", "mobile"]);
+      assert.equal(result.totalBytes, screenshots.reduce((sum, screenshot) => sum + screenshot.byteSize, 0));
+      assert.equal(result.routeCoverage.find((route) => route.routeName === "dashboard")?.screenshotCount, 4);
+      assert.equal(result.screenshots.length, 28);
+      assert.equal(JSON.parse(await readFile(reportPath, "utf8")).status, "passed");
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -94,15 +104,14 @@ describe("visual smoke artifact evidence", () => {
   it("rejects manifest screenshots whose recorded hash no longer matches the file", async () => {
     const { verifyVisualSmokeManifest, withScreenshotEvidence } = await import("../scripts/visual-smoke-artifacts.mjs");
     const dir = await mkTempDir();
-    const screenshotPath = path.join(dir, "dashboard-light-desktop.png");
     const manifestPath = path.join(dir, "visual-smoke-manifest.json");
 
-    await writeFile(screenshotPath, "visual evidence bytes", "utf8");
-    const screenshot = await withScreenshotEvidence(baseScreenshot(screenshotPath));
-    await writeManifest(manifestPath, [{ ...screenshot, sha256: "sha256:0000000000000000000000000000000000000000000000000000000000000000" }], {
-      routeName: "dashboard",
-      screenshotCount: 1,
-    });
+    const screenshots = await completeScreenshots(dir, withScreenshotEvidence);
+    await writeManifest(manifestPath, screenshots.map((screenshot, index) => (
+      index === 0
+        ? { ...screenshot, sha256: "sha256:0000000000000000000000000000000000000000000000000000000000000000" }
+        : screenshot
+    )));
 
     try {
       await assert.rejects(
@@ -117,17 +126,39 @@ describe("visual smoke artifact evidence", () => {
   it("rejects manifest route audits that disagree with captured screenshots", async () => {
     const { verifyVisualSmokeManifest, withScreenshotEvidence } = await import("../scripts/visual-smoke-artifacts.mjs");
     const dir = await mkTempDir();
-    const screenshotPath = path.join(dir, "dashboard-light-desktop.png");
     const manifestPath = path.join(dir, "visual-smoke-manifest.json");
 
-    await writeFile(screenshotPath, "visual evidence bytes", "utf8");
-    const screenshot = await withScreenshotEvidence(baseScreenshot(screenshotPath));
-    await writeManifest(manifestPath, [screenshot], { routeName: "dashboard", screenshotCount: 4 });
+    const screenshots = await completeScreenshots(dir, withScreenshotEvidence);
+    const { expectedVisualSmokeRouteAudits } = await import("../scripts/visual-smoke-plan.mjs");
+    await writeManifest(
+      manifestPath,
+      screenshots,
+      expectedVisualSmokeRouteAudits().map((audit) => audit.routeName === "dashboard" ? { ...audit, screenshotCount: 99 } : audit),
+    );
 
     try {
       await assert.rejects(
         () => verifyVisualSmokeManifest(manifestPath),
-        /visual smoke route audit mismatch: dashboard expected 4 screenshots, found 1/,
+        /visual smoke route audit mismatch: dashboard expected 99 screenshots, found 4/,
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects duplicate route theme viewport coverage", async () => {
+    const { verifyVisualSmokeManifest, withScreenshotEvidence } = await import("../scripts/visual-smoke-artifacts.mjs");
+    const dir = await mkTempDir();
+    const manifestPath = path.join(dir, "visual-smoke-manifest.json");
+
+    const screenshots = await completeScreenshots(dir, withScreenshotEvidence);
+    const duplicate = { ...screenshots[1], routeName: screenshots[0].routeName, theme: screenshots[0].theme, viewportName: screenshots[0].viewportName };
+    await writeManifest(manifestPath, [screenshots[0], duplicate, ...screenshots.slice(2)]);
+
+    try {
+      await assert.rejects(
+        () => verifyVisualSmokeManifest(manifestPath),
+        /visual smoke manifest contains duplicate screenshot coverage: dashboard\/light\/desktop/,
       );
     } finally {
       await rm(dir, { recursive: true, force: true });
@@ -150,27 +181,36 @@ function baseScreenshot(screenshotPath) {
   };
 }
 
-async function writeManifest(manifestPath, screenshots, routeAudit) {
+async function completeScreenshots(dir, withScreenshotEvidence) {
+  const { expectedVisualSmokeArtifacts } = await import("../scripts/visual-smoke-plan.mjs");
+  const screenshots = [];
+
+  for (const artifact of expectedVisualSmokeArtifacts(dir)) {
+    const screenshotPath = path.join(dir, artifact.fileName);
+    await writeFile(screenshotPath, `visual evidence bytes ${artifact.fileName}`, "utf8");
+    screenshots.push(await withScreenshotEvidence({ ...artifact, artifactPath: screenshotPath }));
+  }
+
+  return screenshots;
+}
+
+async function writeManifest(manifestPath, screenshots, routeAudits) {
+  const {
+    expectedVisualSmokeRouteAudits,
+    visualSmokeLayoutChecks,
+    visualSmokeReviewChecks,
+  } = await import("../scripts/visual-smoke-plan.mjs");
+
   await writeFile(
     manifestPath,
     `${JSON.stringify({
       artifactName: "visual-smoke-screenshots",
       manifestFileName: "visual-smoke-manifest.json",
       expectedScreenshotCount: screenshots.length,
-      layoutChecks: ["browser-console-errors"],
-      reviewChecks: ["accountant-workflow-hierarchy"],
-      reviewProtocol: { requiredEvidence: ["screenshot SHA-256 checksums"] },
-      routeAudits: [
-        {
-          routeName: routeAudit.routeName,
-          routeKey: routeAudit.routeName,
-          label: "Dashboard",
-          workflowStages: ["Setup"],
-          screenshotCount: routeAudit.screenshotCount,
-          reviewStatus: "required-review",
-          reviewChecks: ["accountant-workflow-hierarchy"],
-        },
-      ],
+      layoutChecks: visualSmokeLayoutChecks,
+      reviewChecks: visualSmokeReviewChecks,
+      reviewProtocol: { requiredEvidence: ["visual-smoke-evidence-report.json", "screenshot SHA-256 checksums"] },
+      routeAudits: routeAudits ?? expectedVisualSmokeRouteAudits(),
       screenshots,
     }, null, 2)}\n`,
     "utf8",

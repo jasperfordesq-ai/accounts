@@ -131,6 +131,10 @@ Backend/accounting-engine progress:
   `no-direct-filing-submission-report.json`, proving release candidates still have no
   outbound CRO/ROS submission client or submit route and only record external filing
   workflow states.
+- `node scripts/verify-visual-smoke-artifacts.mjs` now emits
+  `visual-smoke-evidence-report.json`, proving the visual smoke artifact has the full
+  route/theme/viewport matrix plus matching screenshot byte sizes and SHA-256 hashes
+  before a named human reviewer signs off.
 
 Frontend UI/UX progress:
 
@@ -165,6 +169,8 @@ Frontend code/design-system progress:
   traceability, accountant acceptance criteria, scenario-route accountant walkthrough
   matrix rows, visual QA coverage, release blockers, release verification manifest,
   audit evidence, and operations evidence.
+- The frontend parser now rejects visual QA protocols that omit
+  `visual-smoke-evidence-report.json` from required evidence.
 - A workbench preview route exists and is included in visual QA planning.
 
 ## Verification Already Run
@@ -218,12 +224,13 @@ Recent successful local verification includes:
   - 3 passed, proving the release evidence verifier, templates, runbook linkage, and
   production scorecard evidence are wired together, including canonical
   qualified-accountant golden corpus scenario codes, external ROS/iXBRL validation
-  template coverage, and the 504/700 scorecard total
+  template coverage, visual smoke evidence report references, and the 514/700
+  scorecard total
 - Backend focused no-direct submission verifier and scorecard tests:
   `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~NoDirectFilingSubmissionVerifier_ProvesRecordedWorkflowStateOnlyControl|FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers"`
   - 2 passed, proving the no-direct CRO/ROS submission verifier, runbook linkage,
-  recorded-workflow-state evidence, forbidden outbound client patterns, and 509/700
-  scorecard total are wired together
+  recorded-workflow-state evidence, forbidden outbound client patterns, and scorecard
+  evidence are wired together
 - Backend focused opening take-on tests:
   `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~OpeningTrialBalanceTakeOn|FullyQualifiedName~FinalOutputs_BlockWhenOpeningTrialBalanceTakeOnDoesNotBalance|FullyQualifiedName~TrialBalance_IncludesReviewedOpeningBalancesAndBankOpeningSide"`
 - Backend focused test:
@@ -278,6 +285,15 @@ Recent successful local verification includes:
     - 41 passed, including production scorecard schema and invariant checks
   - `node scripts/verify-api-client.mjs` - passed
   - `npm.cmd run test:render -- production-readiness-workbench` - 1 passed
+- Frontend visual smoke evidence report checks:
+  `node --test tests/visual-smoke-plan.test.mjs tests/visual-smoke-artifacts.test.mjs tests/production-readiness-contract.test.mjs`
+  - 50 passed, proving the 28-screenshot matrix, verifier report generation,
+  duplicate coverage rejection, parser invariants, and scorecard contract
+- Frontend scorecard render and type checks for the visual evidence report slice:
+  - `node scripts/verify-api-client.mjs` - passed
+  - `npm.cmd run test:render -- production-readiness-workbench` - 1 passed
+  - `npm.cmd run test:render -- production-readiness-panel` - 1 passed
+  - `npx.cmd tsc --noEmit --incremental false` - passed
 - Frontend type-check after adding the production scorecard API/UI contract:
   `npx.cmd tsc --noEmit --incremental false` - passed
 - Frontend lint:
@@ -381,8 +397,8 @@ As of July 8, 2026:
 - Code implementation is roughly 70-75% complete.
 - Production assurance is roughly 60-65% complete.
 - Overall goal is roughly 63-67% complete, with about one third left.
-- The production scorecard is now 509/700: architecture/documentation 94/100,
-  backend statutory/accounting engine 180/250, frontend accountant workbench 130/200,
+- The production scorecard is now 514/700: architecture/documentation 94/100,
+  backend statutory/accounting engine 180/250, frontend accountant workbench 135/200,
   and security/auth/tenant/platform guardrails 105/150.
 - Architecture/documentation is now scored 94/100 in the production scorecard because
   release evidence templates are linked from the runbook and machine-checkable; the
