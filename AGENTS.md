@@ -61,6 +61,8 @@ Committed and pushed work on `main` includes:
 - `660b9ea Harden release evidence formats`
 - `4d558bb Verify release evidence candidate identity`
 - `a92ecd2 Retain release evidence templates in artifact packs`
+- `26b9f75 Record release template retention handoff`
+- `3e53b47 Require visual smoke nonblank pixel evidence`
 
 Backend/accounting-engine progress:
 
@@ -157,8 +159,9 @@ Backend/accounting-engine progress:
   uploads the `no-direct-filing-submission-control` artifact for each candidate.
 - `node scripts/verify-visual-smoke-artifacts.mjs` now emits
   `visual-smoke-evidence-report.json`, proving the visual smoke artifact has the full
-  route/theme/viewport matrix plus matching screenshot byte sizes, SHA-256 hashes and
-  PNG dimensions before a named human reviewer signs off.
+  route/theme/viewport matrix plus matching screenshot byte sizes, SHA-256 hashes,
+  PNG dimensions, PNG image-data bytes, sampled pixel counts, distinct color buckets,
+  and luminance range before a named human reviewer signs off.
 - `node scripts/verify-accountant-workbench-evidence.mjs` now emits
   `accountant-workbench-evidence-report.json`, proving each accountant workbench route
   has workflow-stage, route-key, review-check, theme, viewport, screenshot and
@@ -172,7 +175,8 @@ Backend/accounting-engine progress:
 - The release artifact pack verifier and CI machine evidence pack verifier now reject
   visual evidence packs unless `visual-smoke-evidence-report.json` carries the planned
   desktop/mobile PNG viewport dimensions and every screenshot summary records matching
-  width and minimum height evidence.
+  width, minimum height, retained PNG image data, sampled pixel count, distinct color
+  diversity, and luminance-range evidence.
 - `scripts/smoke-production.ps1` now captures `production-readiness-report.json`
   from the live authenticated smoke stack, and CI uploads it as the
   `production-readiness-report` artifact so the exact candidate scorecard,
@@ -223,6 +227,9 @@ Frontend code/design-system progress:
   audit evidence, and operations evidence.
 - The frontend parser now rejects visual QA protocols that omit
   `visual-smoke-evidence-report.json` from required evidence.
+- The frontend parser now rejects visual QA protocols that omit screenshot nonblank
+  pixel diversity evidence, so a release report cannot treat a structurally valid but
+  blank PNG as sufficient visual QA proof.
 - The frontend parser now requires the release verification manifest to include the
   CI machine evidence pack, production smoke, readiness verification, visual smoke,
   release artifact pack, and named manual review rows before rendering readiness data.
@@ -289,6 +296,12 @@ Recent successful local verification includes:
   `scripts/verify-ci-machine-evidence-pack.ps1`, runbook linkage, exact operational
   report names, PNG dimension evidence checks, and the security/platform scorecard
   evidence are wired together
+- Backend focused release artifact pack verifier and scorecard tests after adding
+  nonblank visual evidence:
+  `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~ReleaseArtifactPackVerifier_RequiresExactOperationalEvidenceReports|FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers"`
+  - 2 passed, proving the release artifact pack verifier, CI machine evidence pack
+  verifier, runbook linkage, nonblank visual-smoke evidence failure strings, and
+  609/700 production scorecard are wired together
 - Synthetic release artifact and CI machine evidence pack dimension checks:
   temporary evidence reports passed both `scripts\verify-release-artifact-pack.ps1`
   and `scripts\verify-ci-machine-evidence-pack.ps1`; removing
@@ -384,6 +397,23 @@ Recent successful local verification includes:
   `node --test tests/visual-smoke-artifacts.test.mjs tests/visual-smoke-plan.test.mjs tests/production-readiness-contract.test.mjs`
   - 58 passed, proving the visual smoke verifier rejects non-PNG screenshots, wrong
   viewport widths and missing screenshot PNG dimension evidence
+- Frontend focused visual evidence hardening checks after adding nonblank PNG pixel
+  evidence:
+  `node --test tests/visual-smoke-artifacts.test.mjs tests/visual-smoke-plan.test.mjs`
+  - 11 passed, proving the visual smoke verifier inflates PNG image data, samples
+  pixels after PNG row filters, emits IDAT/sample/color/luminance evidence, and
+  rejects structurally valid but visually blank screenshots
+- Frontend production-readiness contract and render checks after adding nonblank PNG
+  pixel evidence:
+  - `node --test --experimental-strip-types tests/production-readiness-contract.test.mjs`
+    - 49 passed
+  - `node scripts/verify-api-client.mjs` - passed
+  - `npm.cmd run test:render -- production-readiness-workbench production-readiness-panel`
+    - 2 passed
+  - `npx.cmd tsc --noEmit --incremental false` - passed
+- PowerShell parser checks for `scripts\verify-release-artifact-pack.ps1` and
+  `scripts\verify-ci-machine-evidence-pack.ps1` after adding visual nonblank evidence
+  requirements - passed
 - Backend focused scorecard/visual QA tests after adding PNG dimension evidence:
   `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers|FullyQualifiedName~ProductionReadinessReport_DeclaresVisualQaCoverageForAccountantWorkbenchRoutes"`
   - 2 passed, proving the readiness report exposes the 608/700 scorecard and visual
@@ -445,8 +475,8 @@ CI status:
   July 8, 2026.
 - Green jobs: Workflow Hygiene, Production Compose Config, Frontend, Backend,
   Production Stack Smoke, and CI Machine Evidence Pack.
-- The scorecard exposed by the candidate is now 608/700, with frontend accountant
-  workbench at 160/200 and security/auth/tenant/platform guardrails at 149/150.
+- The scorecard exposed by the candidate is now 609/700, with frontend accountant
+  workbench at 161/200 and security/auth/tenant/platform guardrails at 149/150.
   The typed frontend parser and production-readiness verifier both require CI
   machine evidence, production smoke, readiness verification, visual smoke, release
   artifact pack, no-direct filing control, and named manual review manifest rows;
@@ -472,8 +502,8 @@ CI status:
     `production-readiness-verification-report.json` were retained from the live
     production smoke stack.
   - `visual-smoke-screenshots`: screenshot artifact, manifest, visual smoke evidence,
-    PNG dimension evidence, and accountant workbench route acceptance evidence were
-    retained for human review.
+    PNG dimension evidence, nonblank pixel diversity evidence, and accountant
+    workbench route acceptance evidence were retained for human review.
   - `ci-machine-evidence-pack`: `ci-machine-evidence-pack-report.json` passed with
     exact commit/run identity and SHA-256 inventory for the machine-generated
     evidence artifacts; human release evidence is still required separately.
@@ -521,8 +551,8 @@ As of July 8, 2026:
 - Code implementation is roughly 70-75% complete.
 - Production assurance is roughly 60-65% complete.
 - Overall goal is roughly 63-67% complete, with about one third left.
-- The production scorecard is now 608/700: architecture/documentation 99/100,
-  backend statutory/accounting engine 200/250, frontend accountant workbench 160/200,
+- The production scorecard is now 609/700: architecture/documentation 99/100,
+  backend statutory/accounting engine 200/250, frontend accountant workbench 161/200,
   and security/auth/tenant/platform guardrails 149/150.
 - Architecture/documentation is now scored 99/100 in the production scorecard because
   source-law review, release evidence templates, manual handoff evidence, runbook

@@ -219,7 +219,9 @@ does not have `status: passed`, if supplied release candidate identity is incomp
 or malformed, if the completed release-evidence templates are absent from the
 artifact pack or do not match the SHA-256/byte-size manifest in
 `release-evidence-report.json`, if accountant workbench route acceptance rows are
-missing, or if cross-report checks such as the monitoring smoke correlation id do not match. The
+missing, if visual smoke screenshot summaries omit retained PNG image data,
+sample counts, distinct color diversity, or luminance range evidence, or if
+cross-report checks such as the monitoring smoke correlation id do not match. The
 generated `release-artifact-pack-report.json` records the release commit, GitHub
 Actions run URL, and a SHA-256/byte-size manifest for each required report and
 retained human release-evidence template.
@@ -240,6 +242,11 @@ cd frontend
 node scripts\verify-visual-smoke-artifacts.mjs --manifest=D:\accounts-smoke\visual-smoke\visual-smoke-manifest.json --report-path=D:\accounts-smoke\visual-smoke\visual-smoke-evidence-report.json
 node scripts\verify-accountant-workbench-evidence.mjs --visual-report=D:\accounts-smoke\visual-smoke\visual-smoke-evidence-report.json --report-path=D:\accounts-smoke\visual-smoke\accountant-workbench-evidence-report.json
 ```
+
+The visual smoke evidence report must retain screenshot hashes, byte sizes, planned
+PNG dimensions, IDAT byte counts, sampled pixel counts, distinct color buckets, and
+luminance range. A PNG that is structurally valid but visually blank is not sufficient
+evidence for visual QA sign-off.
 
 The accountant workbench evidence report must retain the seven planned route keys,
 expected route text, blocking status and required qualified-accountant route
