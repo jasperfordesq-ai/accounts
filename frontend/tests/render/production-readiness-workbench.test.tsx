@@ -20,13 +20,13 @@ describe("ProductionReadinessWorkbench", () => {
     expectText("3 companies");
     expectText("4 periods");
     expect(screen.getByRole("heading", { name: "Production scorecard" })).toBeInTheDocument();
-    expectText("514/700");
+    expectText("522/700");
     expectText("Architecture and documentation");
     expectText("Backend statutory/accounting engine");
     expectText("Frontend accountant workbench");
     expectText("Security/auth/tenant/platform guardrails");
-    expectText("94 / 100");
-    expectText("180 / 250");
+    expectText("97 / 100");
+    expectText("185 / 250");
     expectText("135 / 200");
     expectText("105 / 150");
     expectText(/Next score gate/);
@@ -282,34 +282,38 @@ describe("ProductionReadinessWorkbench", () => {
 
 function productionScorecard(): ProductionReadinessReport["productionScorecard"] {
   return {
-    currentScore: 514,
+    currentScore: 522,
     targetScore: 700,
     status: "review-required",
-    nextGate: "Complete named visual QA, monitoring-provider confirmation and qualified-accountant acceptance evidence.",
+    nextGate: "Complete source-law review, named visual QA, monitoring-provider confirmation and qualified-accountant acceptance evidence.",
     categories: [
       {
         code: "architecture-documentation",
         label: "Architecture and documentation",
-        currentScore: 94,
+        currentScore: 97,
         targetScore: 100,
         status: "release-evidence-required",
-        currentEvidence: ["Canonical architecture guide and active handoff are present."],
-        remainingGaps: ["Complete release evidence templates with named reviewers."],
+        currentEvidence: [
+          "Canonical architecture guide and active handoff are present.",
+          "source-law-review-template.md is checked in and release-verifier covered.",
+        ],
+        remainingGaps: ["Complete release evidence templates with named reviewers, including source-law-review-template.md."],
         completionTrackCodes: ["backend-code", "frontend-ui-ux", "frontend-code"],
         releaseBlockerCodes: ["backend-code:qualified-accountant-signoff", "frontend-ui-ux:light-dark-visual-regression"],
       },
       {
         code: "backend-statutory-accounting-engine",
         label: "Backend statutory/accounting engine",
-        currentScore: 180,
+        currentScore: 185,
         targetScore: 250,
         status: "qualified-accountant-review-required",
         currentEvidence: [
           "Golden filing corpus covers the production scenarios.",
           "Qualified-accountant acceptance evidence uses canonical golden corpus scenario codes.",
           "External ROS/iXBRL validation evidence has template and verifier coverage.",
+          "Source-law review evidence has template and verifier coverage for every monitored source.",
         ],
-        remainingGaps: ["Run and retain verified qualified-accountant acceptance and external ROS/iXBRL validation evidence across every canonical golden corpus scenario."],
+        remainingGaps: ["Run and retain verified source-law, qualified-accountant acceptance, and external ROS/iXBRL validation evidence across every canonical golden corpus scenario."],
         completionTrackCodes: ["backend-code"],
         releaseBlockerCodes: ["backend-code:qualified-accountant-signoff"],
       },

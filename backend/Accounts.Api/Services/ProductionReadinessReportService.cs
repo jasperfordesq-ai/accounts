@@ -786,27 +786,27 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             Category(
                 "architecture-documentation",
                 "Architecture and documentation",
-                94,
+                97,
                 100,
                 "release-evidence-required",
                 [
                     "CLAUDE.md is the canonical architecture/development guide.",
                     "AGENTS.md carries the active production-readiness handoff.",
-                    "Production runbook links release evidence templates for visual QA, monitoring provider confirmation and qualified-accountant acceptance.",
-                    "scripts/verify-release-evidence.ps1 validates completed release evidence templates before real filing use.",
+                    "Production runbook links release evidence templates for source-law review, visual QA, monitoring provider confirmation and qualified-accountant acceptance.",
+                    "scripts/verify-release-evidence.ps1 validates completed release evidence templates before real filing use, including source-law source coverage.",
                     "CI artifacts now prove production safety, dependency audit, monitoring smoke, structured logs, visual smoke and backup restore drill."
                 ],
                 [
                     "Keep AGENTS.md aligned with the latest green CI run after every release-evidence commit.",
                     "Complete the checked-in release evidence templates with named human reviewers and retain release-evidence-report.json.",
-                    "Retain source-law review notes against the pinned source snapshot."
+                    "Complete source-law-review-template.md with a named reviewer and qualified-accountant source-law sign-off."
                 ],
                 ["backend-code", "frontend-ui-ux", "frontend-code"],
                 ["backend-code:source-law-change-review", "frontend-ui-ux:light-dark-visual-regression"]),
             Category(
                 "backend-statutory-accounting-engine",
                 "Backend statutory/accounting engine",
-                180,
+                185,
                 250,
                 "qualified-accountant-review-required",
                 [
@@ -814,9 +814,11 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "Source-law snapshot, traceability, review ledger and Revenue taxonomy ranges are exposed in the readiness report.",
                     "Filing readiness profiles, generated PDF/iXBRL evidence and audit snapshots are backed by automated tests.",
                     "Qualified-accountant acceptance evidence now uses canonical golden corpus scenario codes and the release verifier reports required scenario, route and artifact coverage.",
-                    "External ROS/iXBRL validation evidence now has a checked-in template and release verifier coverage for each canonical golden corpus scenario."
+                    "External ROS/iXBRL validation evidence now has a checked-in template and release verifier coverage for each canonical golden corpus scenario.",
+                    "Source-law review evidence now has a checked-in template and release verifier coverage for every monitored CRO, Revenue, FRC and Charities Regulator source."
                 ],
                 [
+                    "Complete and retain verified source-law review evidence for every monitored source before relying on generated packs.",
                     "Run and retain verified qualified-accountant acceptance across every canonical golden corpus scenario.",
                     "Complete and retain verified external ROS/iXBRL validation evidence for generated packs.",
                     "Record manual handoff acceptance for audit-required paths before relying on outputs."
@@ -875,7 +877,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             categories.Sum(category => category.CurrentScore),
             categories.Sum(category => category.TargetScore),
             "review-required",
-            "Complete named visual QA, monitoring-provider confirmation and qualified-accountant acceptance evidence.",
+            "Complete source-law review, named visual QA, monitoring-provider confirmation and qualified-accountant acceptance evidence.",
             categories);
     }
 

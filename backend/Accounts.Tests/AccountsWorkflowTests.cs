@@ -18264,11 +18264,12 @@ public class AccountsWorkflowTests
         var runbook = File.ReadAllText(Path.Combine(root, "Docs", "operations", "production-runbook.md"));
         var templateDir = Path.Combine(root, "Docs", "release-evidence");
         var visualPath = Path.Combine(templateDir, "visual-qa-signoff-template.md");
+        var sourceLawPath = Path.Combine(templateDir, "source-law-review-template.md");
         var externalRosIxbrlPath = Path.Combine(templateDir, "external-ros-ixbrl-validation-template.md");
         var accountantPath = Path.Combine(templateDir, "qualified-accountant-acceptance-template.md");
         var monitoringPath = Path.Combine(templateDir, "monitoring-provider-confirmation-template.md");
 
-        foreach (var path in new[] { visualPath, externalRosIxbrlPath, accountantPath, monitoringPath })
+        foreach (var path in new[] { visualPath, sourceLawPath, externalRosIxbrlPath, accountantPath, monitoringPath })
         {
             Assert.True(File.Exists(path), $"Missing release evidence template: {path}");
             Assert.Contains(Path.GetFileName(path), runbook);
@@ -18282,6 +18283,18 @@ public class AccountsWorkflowTests
         Assert.Contains("production-readiness", visual);
         Assert.Contains("workbench-preview", visual);
         Assert.Contains("Reviewer signature", visual);
+
+        var sourceLaw = File.ReadAllText(sourceLawPath);
+        Assert.Contains("source-law-snapshot-fingerprint", sourceLaw);
+        Assert.Contains("source-law-review-ledger", sourceLaw);
+        Assert.Contains("source-law-change-review-note", sourceLaw);
+        Assert.Contains("qualified-accountant-source-law-signoff", sourceLaw);
+        Assert.Contains("cro-financial-statements-requirements", sourceLaw);
+        Assert.Contains("revenue-accepted-taxonomies", sourceLaw);
+        Assert.Contains("frc-frs-102", sourceLaw);
+        Assert.Contains("frc-frs-105", sourceLaw);
+        Assert.Contains("charities-regulator-annual-report", sourceLaw);
+        Assert.Contains("Qualified accountant source-law sign-off", sourceLaw);
 
         var externalRosIxbrl = File.ReadAllText(externalRosIxbrlPath);
         Assert.Contains("External ROS/iXBRL validation", externalRosIxbrl);
@@ -18340,6 +18353,11 @@ public class AccountsWorkflowTests
         Assert.Contains("Assert-CompletedTableRows", script);
         Assert.Contains("canonicalGoldenCorpusScenarioCodes", script);
         Assert.Contains("requiredCoverage", script);
+        Assert.Contains("Test-SourceLawEvidence", script);
+        Assert.Contains("sourceLawReview", script);
+        Assert.Contains("sourceLawSourceIds", script);
+        Assert.Contains("requiredSourceLawSourceIds", script);
+        Assert.Contains("qualified-accountant-source-law-signoff", script);
         Assert.Contains("Test-ExternalRosIxbrlEvidence", script);
         Assert.Contains("externalRosIxbrlValidation", script);
         Assert.Contains("externalRosIxbrlScenarioCodes", script);

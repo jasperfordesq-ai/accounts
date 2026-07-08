@@ -117,9 +117,12 @@ Backend/accounting-engine progress:
   Each category carries current/target points, current evidence, remaining gaps,
   completion-track links, and live release-blocker links.
 - `scripts/verify-release-evidence.ps1` now makes the remaining manual evidence gates
-  machine-checkable. It fails blank or incomplete visual QA, qualified-accountant, and
-  monitoring-provider confirmation templates; it writes `release-evidence-report.json`
-  for both failed and passed checks.
+  machine-checkable. It fails blank or incomplete source-law review, visual QA,
+  qualified-accountant, and monitoring-provider confirmation templates; it writes
+  `release-evidence-report.json` for both failed and passed checks.
+- Source-law review now has a checked-in release evidence template covering all 12
+  monitored CRO, Revenue, FRC, and Charities Regulator source IDs. The release
+  verifier reports those IDs under `sourceLawSourceIds`.
 - The qualified-accountant acceptance template and verifier now use the canonical
   golden corpus scenario codes (`micro-ltd`, `small-abridged-ltd`, `dac-small`,
   `clg-charity`, and `medium-audit-required`) and the verifier report emits
@@ -224,8 +227,8 @@ Recent successful local verification includes:
   - 3 passed, proving the release evidence verifier, templates, runbook linkage, and
   production scorecard evidence are wired together, including canonical
   qualified-accountant golden corpus scenario codes, external ROS/iXBRL validation
-  template coverage, visual smoke evidence report references, and the 514/700
-  scorecard total
+  template coverage, source-law source coverage, visual smoke evidence report
+  references, and the 522/700 scorecard total
 - Backend focused no-direct submission verifier and scorecard tests:
   `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~NoDirectFilingSubmissionVerifier_ProvesRecordedWorkflowStateOnlyControl|FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers"`
   - 2 passed, proving the no-direct CRO/ROS submission verifier, runbook linkage,
@@ -266,8 +269,8 @@ Recent successful local verification includes:
   execution for `scripts\verify-release-evidence.ps1` - passed. Blank templates fail
   with a failed JSON report; temporary filled templates pass with
   `release-evidence-report.json`. The report now carries required golden corpus
-  scenario, external ROS/iXBRL validation scenario, route, and release-artifact
-  coverage.
+  scenario, external ROS/iXBRL validation scenario, source-law source, route, and
+  release-artifact coverage.
 - PowerShell parser and execution for `scripts\verify-no-direct-filing-submission.ps1`
   - passed; the generated `no-direct-filing-submission-report.json` records allowed
   filing workflow routes, forbidden outbound submission patterns, forbidden submit
@@ -397,15 +400,17 @@ As of July 8, 2026:
 - Code implementation is roughly 70-75% complete.
 - Production assurance is roughly 60-65% complete.
 - Overall goal is roughly 63-67% complete, with about one third left.
-- The production scorecard is now 514/700: architecture/documentation 94/100,
-  backend statutory/accounting engine 180/250, frontend accountant workbench 135/200,
+- The production scorecard is now 522/700: architecture/documentation 97/100,
+  backend statutory/accounting engine 185/250, frontend accountant workbench 135/200,
   and security/auth/tenant/platform guardrails 105/150.
-- Architecture/documentation is now scored 94/100 in the production scorecard because
-  release evidence templates are linked from the runbook and machine-checkable; the
-  remaining architecture gap is filled, verified release evidence.
+- Architecture/documentation is now scored 97/100 in the production scorecard because
+  source-law review, release evidence templates, runbook links, and verifier coverage
+  are in place; the remaining architecture gap is completed named human release
+  evidence.
 
 The remaining third is not just coding. It is proof: human visual QA review,
-real-provider monitoring confirmation, accountant walkthrough, and named professional
+source-law review sign-off, real-provider monitoring confirmation, accountant
+walkthrough, and named professional
 sign-off.
 
 ## Claude Continuation Instruction

@@ -161,6 +161,21 @@ $requiredReleaseArtifactNames = @(
     "visual-smoke-screenshots"
 )
 
+$requiredSourceLawSourceIds = @(
+    "cro-financial-statements-requirements",
+    "cro-guarantee-company",
+    "cro-unlimited-company",
+    "cro-group-company",
+    "cro-medium-company",
+    "cro-auditors-report",
+    "revenue-ixbrl-overview",
+    "revenue-ixbrl-contents",
+    "revenue-accepted-taxonomies",
+    "frc-frs-102",
+    "frc-frs-105",
+    "charities-regulator-annual-report"
+)
+
 function Test-VisualEvidence {
     param(
         [string]$Content,
@@ -284,21 +299,71 @@ function Test-MonitoringEvidence {
     Assert-NoUncheckedBoxes $Content $context $Failures
 }
 
+function Test-SourceLawEvidence {
+    param(
+        [string]$Content,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    $context = "Source-law review evidence"
+    foreach ($text in @(
+        "source-law-snapshot-fingerprint",
+        "source-law-traceability-index",
+        "source-law-maintenance-protocol",
+        "source-law-review-ledger",
+        "source-law-change-review-note",
+        "qualified-accountant-source-law-signoff",
+        "Accepted as source-law review evidence for this release candidate.",
+        "Reviewer signature",
+        "Qualified accountant source-law sign-off"
+    )) {
+        Assert-ContainsText $Content $text $context $Failures
+    }
+
+    foreach ($field in @(
+        "Commit SHA",
+        "GitHub Actions run URL",
+        "Production readiness report timestamp",
+        "Source-law snapshot fingerprint",
+        "Source-law snapshot content hash",
+        "Reviewer name",
+        "Reviewer role",
+        "Review date/time UTC",
+        "Qualified accountant name",
+        "Qualification / professional body",
+        "Reviewer signature",
+        "Qualified accountant source-law sign-off"
+    )) {
+        Assert-FilledField $Content $field $context $Failures
+    }
+
+    Assert-NoUncheckedBoxes $Content $context $Failures
+    Assert-CheckedDecision $Content "Accepted as source-law review evidence for this release candidate." $context $Failures
+    Assert-UncheckedDecision $Content "Rejected; source-law issues below must be remediated and re-reviewed." $context $Failures
+    Assert-CompletedTableRows $Content $requiredSourceLawSourceIds $context $Failures
+}
+
 $failures = [System.Collections.Generic.List[string]]::new()
 $resolvedDirectory = Resolve-Path -LiteralPath $EvidenceDirectory -ErrorAction Stop
 
 $visualPath = Join-Path $resolvedDirectory "visual-qa-signoff-template.md"
+$sourceLawPath = Join-Path $resolvedDirectory "source-law-review-template.md"
 $externalRosIxbrlPath = Join-Path $resolvedDirectory "external-ros-ixbrl-validation-template.md"
 $accountantPath = Join-Path $resolvedDirectory "qualified-accountant-acceptance-template.md"
 $monitoringPath = Join-Path $resolvedDirectory "monitoring-provider-confirmation-template.md"
 
 $visual = Read-EvidenceFile $visualPath $failures
+$sourceLaw = Read-EvidenceFile $sourceLawPath $failures
 $externalRosIxbrl = Read-EvidenceFile $externalRosIxbrlPath $failures
 $accountant = Read-EvidenceFile $accountantPath $failures
 $monitoring = Read-EvidenceFile $monitoringPath $failures
 
 if ($visual.Trim().Length -gt 0) {
     Test-VisualEvidence $visual $failures
+}
+
+if ($sourceLaw.Trim().Length -gt 0) {
+    Test-SourceLawEvidence $sourceLaw $failures
 }
 
 if ($accountant.Trim().Length -gt 0) {
@@ -319,6 +384,7 @@ $report = [ordered]@{
     evidenceDirectory = $resolvedDirectory.Path
     files = [ordered]@{
         visualQa = $visualPath
+        sourceLawReview = $sourceLawPath
         externalRosIxbrlValidation = $externalRosIxbrlPath
         qualifiedAccountantAcceptance = $accountantPath
         monitoringProviderConfirmation = $monitoringPath
@@ -326,6 +392,7 @@ $report = [ordered]@{
     requiredCoverage = [ordered]@{
         goldenCorpusScenarioCodes = $canonicalGoldenCorpusScenarioCodes
         externalRosIxbrlScenarioCodes = $canonicalGoldenCorpusScenarioCodes
+        sourceLawSourceIds = $requiredSourceLawSourceIds
         routeCodes = $requiredRouteCodes
         releaseArtifactNames = $requiredReleaseArtifactNames
     }

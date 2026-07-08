@@ -175,6 +175,7 @@ Retain the CI `dependency-audit-release` artifact as the dependency evidence pac
 The remaining manual release evidence should be recorded with the checked-in templates:
 
 - `Docs/release-evidence/visual-qa-signoff-template.md`
+- `Docs/release-evidence/source-law-review-template.md`
 - `Docs/release-evidence/external-ros-ixbrl-validation-template.md`
 - `Docs/release-evidence/qualified-accountant-acceptance-template.md`
 - `Docs/release-evidence/monitoring-provider-confirmation-template.md`
@@ -262,8 +263,9 @@ The smoke script checks `/health/ready`, validates browser security headers incl
 The HTTPS smoke path also verifies that the login response sets the `accounts_session` and `accounts_csrf` cookies with the `Secure` attribute, so production cookies stay aligned with the ingress contract.
 
 8. Run `scripts\verify-no-direct-filing-submission.ps1` and retain `no-direct-filing-submission-report.json`.
-9. Complete `Docs/release-evidence/visual-qa-signoff-template.md` using the CI `visual-smoke-screenshots` artifact, `visual-smoke-manifest.json`, and `visual-smoke-evidence-report.json`.
-10. Complete `Docs/release-evidence/external-ros-ixbrl-validation-template.md` using external ROS/iXBRL validation references for the exact generated artifact hashes.
-11. Complete `Docs/release-evidence/monitoring-provider-confirmation-template.md` using the CI monitoring and structured-log artifacts plus the real provider event.
-12. Complete `Docs/release-evidence/qualified-accountant-acceptance-template.md` with a named qualified accountant before real filing preparation is used.
-13. Run `scripts\verify-release-evidence.ps1` and retain `release-evidence-report.json`; real filing use stays blocked if any required checkbox, signature, artifact reference, table row, accepted decision, canonical golden corpus scenario row, external ROS/iXBRL validation row, route row, visual smoke evidence report reference, or required coverage entry is missing.
+9. Complete `Docs/release-evidence/source-law-review-template.md` against the production readiness source-law snapshot, source-law review ledger, and current CRO, Revenue, FRC, and Charities Regulator pages.
+10. Complete `Docs/release-evidence/visual-qa-signoff-template.md` using the CI `visual-smoke-screenshots` artifact, `visual-smoke-manifest.json`, and `visual-smoke-evidence-report.json`.
+11. Complete `Docs/release-evidence/external-ros-ixbrl-validation-template.md` using external ROS/iXBRL validation references for the exact generated artifact hashes.
+12. Complete `Docs/release-evidence/monitoring-provider-confirmation-template.md` using the CI monitoring and structured-log artifacts plus the real provider event.
+13. Complete `Docs/release-evidence/qualified-accountant-acceptance-template.md` with a named qualified accountant before real filing preparation is used.
+14. Run `scripts\verify-release-evidence.ps1` and retain `release-evidence-report.json`; real filing use stays blocked if any required checkbox, signature, artifact reference, table row, accepted decision, canonical golden corpus scenario row, source-law source row, external ROS/iXBRL validation row, route row, visual smoke evidence report reference, or required coverage entry is missing.
