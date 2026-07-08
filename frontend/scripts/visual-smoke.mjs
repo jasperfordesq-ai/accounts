@@ -560,10 +560,10 @@ async function checkThemeContrast(page, routeName) {
 
       for (const current of chain.reverse()) {
         const style = window.getComputedStyle(current);
-        const color = parseCssColor(style.backgroundColor);
-        if ((!color || color.a === 0) && style.backgroundImage && style.backgroundImage !== "none") {
+        if (style.backgroundImage && style.backgroundImage !== "none") {
           return null;
         }
+        const color = parseCssColor(style.backgroundColor);
         if (color && color.a > 0) {
           background = composite(color, background);
         }
