@@ -56,6 +56,7 @@ Committed and pushed work on `main` includes:
 - `1565113 Retain no-direct filing evidence in CI`
 - `18f25d0 Retain production readiness report evidence`
 - `00bd8d1 Verify production readiness report evidence`
+- `0fd3ff1 Require visual smoke PNG dimension evidence`
 
 Backend/accounting-engine progress:
 
@@ -393,8 +394,8 @@ Recent successful local verification includes:
 
 CI status:
 
-- GitHub Actions run `28953519649` for commit
-  `c5920cd Require full readiness manifest in artifact packs` completed successfully on
+- GitHub Actions run `28954916879` for commit
+  `0fd3ff1 Require visual smoke PNG dimension evidence` completed successfully on
   July 8, 2026.
 - Green jobs: Workflow Hygiene, Production Compose Config, Frontend, Backend,
   Production Stack Smoke, and CI Machine Evidence Pack.
