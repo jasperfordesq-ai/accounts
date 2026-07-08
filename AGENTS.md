@@ -133,7 +133,8 @@ Backend/accounting-engine progress:
 - `scripts/verify-no-direct-filing-submission.ps1` now emits
   `no-direct-filing-submission-report.json`, proving release candidates still have no
   outbound CRO/ROS submission client or submit route and only record external filing
-  workflow states.
+  workflow states. CI now runs this verifier in the production stack smoke job and
+  uploads the `no-direct-filing-submission-control` artifact for each candidate.
 - `node scripts/verify-visual-smoke-artifacts.mjs` now emits
   `visual-smoke-evidence-report.json`, proving the visual smoke artifact has the full
   route/theme/viewport matrix plus matching screenshot byte sizes and SHA-256 hashes
@@ -239,7 +240,7 @@ Recent successful local verification includes:
   production scorecard evidence are wired together, including canonical
   qualified-accountant golden corpus scenario codes, external ROS/iXBRL validation
   template coverage, source-law source coverage, manual handoff coverage, visual
-  smoke and accountant workbench evidence report references, and the 554/700
+  smoke and accountant workbench evidence report references, and the 559/700
   scorecard total
 - Backend focused release artifact pack verifier and scorecard tests:
   `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~ReleaseArtifactPackVerifier_RequiresExactOperationalEvidenceReports|FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers"`
@@ -427,9 +428,9 @@ As of July 8, 2026:
 - Code implementation is roughly 70-75% complete.
 - Production assurance is roughly 60-65% complete.
 - Overall goal is roughly 63-67% complete, with about one third left.
-- The production scorecard is now 554/700: architecture/documentation 99/100,
+- The production scorecard is now 559/700: architecture/documentation 99/100,
   backend statutory/accounting engine 190/250, frontend accountant workbench 145/200,
-  and security/auth/tenant/platform guardrails 120/150.
+  and security/auth/tenant/platform guardrails 125/150.
 - Architecture/documentation is now scored 99/100 in the production scorecard because
   source-law review, release evidence templates, manual handoff evidence, runbook
   links, and verifier coverage are in place, including an exact release artifact-pack

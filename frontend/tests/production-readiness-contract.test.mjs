@@ -189,7 +189,7 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.ok(parsed.assurancePacket.evidenceItems.includes("golden-verifier-manifest"));
   assert.ok(parsed.assurancePacket.evidenceItems.includes("release-blocker-register"));
   assert.equal(parsed.assurancePacket.releaseBlockers[0], "Qualified accountant sign-off required");
-  assert.equal(parsed.productionScorecard.currentScore, 554);
+  assert.equal(parsed.productionScorecard.currentScore, 559);
   assert.equal(parsed.productionScorecard.targetScore, 700);
   assert.deepEqual(parsed.productionScorecard.categories.map((category) => category.code), [
     "architecture-documentation",
@@ -802,7 +802,7 @@ test("parseProductionReadinessReport rejects scorecard totals that do not match 
 
   assert.throws(
     () => parseProductionReadinessReport(payload),
-    /Invalid production readiness report contract: productionScorecard\.currentScore - expected 554, received 491/,
+    /Invalid production readiness report contract: productionScorecard\.currentScore - expected 559, received 491/,
   );
 });
 
@@ -860,7 +860,7 @@ test("parseProductionReadinessReport rejects release verification manifest that 
 
 function productionScorecard() {
   return {
-    currentScore: 554,
+    currentScore: 559,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete source-law review, named visual QA, monitoring-provider confirmation, manual handoff and qualified-accountant acceptance evidence.",
@@ -924,12 +924,12 @@ function productionScorecard() {
       {
         code: "security-auth-tenant-platform-guardrails",
         label: "Security/auth/tenant/platform guardrails",
-        currentScore: 120,
+        currentScore: 125,
         targetScore: 150,
         status: "operator-confirmation-required",
         currentEvidence: [
           "Session, CSRF, tenant and production safety evidence exists.",
-          "No-direct CRO/ROS submission verifier evidence is generated.",
+          "CI retains no-direct-filing-submission-report.json for the no-direct CRO/ROS submission verifier.",
           "Release artifact pack verifier validates operational reports together.",
           "release-artifact-pack-report.json records release candidate identity plus per-report SHA-256 and byte-size evidence.",
         ],

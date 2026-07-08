@@ -105,7 +105,7 @@ const share = {
 
 function productionScorecardFixture() {
   return {
-    currentScore: 554,
+    currentScore: 559,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete source-law review, named visual QA, monitoring-provider confirmation, manual handoff and qualified-accountant acceptance evidence.",
@@ -160,12 +160,12 @@ function productionScorecardFixture() {
       {
         code: "security-auth-tenant-platform-guardrails",
         label: "Security/auth/tenant/platform guardrails",
-        currentScore: 120,
+        currentScore: 125,
         targetScore: 150,
         status: "operator-confirmation-required",
         currentEvidence: [
           "Auth, tenant and platform release gates are represented in readiness evidence.",
-          "No-direct CRO/ROS submission verifier evidence is generated.",
+          "CI retains no-direct-filing-submission-report.json for the no-direct CRO/ROS submission verifier.",
           "Release artifact pack verifier validates operational reports together.",
           "release-artifact-pack-report.json records release candidate identity plus per-report SHA-256 and byte-size evidence.",
         ],

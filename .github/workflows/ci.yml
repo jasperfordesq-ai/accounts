@@ -414,6 +414,12 @@ jobs:
             -OutputDirectory (Join-Path $env:RUNNER_TEMP "accounts-smoke") `
             -CheckMonitoringErrorRouting
 
+      - name: Verify no-direct filing submission control
+        shell: pwsh
+        run: |
+          ./scripts/verify-no-direct-filing-submission.ps1 `
+            -EvidencePath (Join-Path $env:RUNNER_TEMP "accounts-smoke/no-direct-filing-submission-report.json")
+
       - name: Upload monitoring error routing evidence
         if: always()
         uses: actions/upload-artifact@v7
@@ -421,6 +427,14 @@ jobs:
           name: monitoring-error-routing-smoke
           path: ${{ runner.temp }}/accounts-smoke/monitoring-error-routing-report.json
           if-no-files-found: ignore
+
+      - name: Upload no-direct filing submission evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: no-direct-filing-submission-control
+          path: ${{ runner.temp }}/accounts-smoke/no-direct-filing-submission-report.json
+          if-no-files-found: error
 
       - name: Capture structured API log sample
         shell: pwsh

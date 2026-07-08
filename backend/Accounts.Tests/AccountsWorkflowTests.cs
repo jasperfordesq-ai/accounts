@@ -18407,12 +18407,17 @@ public class AccountsWorkflowTests
         var runbook = File.ReadAllText(Path.Combine(root, "Docs", "operations", "production-runbook.md"));
         var reportService = File.ReadAllText(Path.Combine(root, "backend", "Accounts.Api", "Services", "ProductionReadinessReportService.cs"));
         var scriptPath = Path.Combine(root, "scripts", "verify-no-direct-filing-submission.ps1");
+        var workflow = File.ReadAllText(Path.Combine(root, ".github", "workflows", "ci.yml"));
 
         Assert.True(File.Exists(scriptPath), "No-direct filing submission verifier should produce release evidence.");
         var script = File.ReadAllText(scriptPath);
 
         Assert.Contains("verify-no-direct-filing-submission.ps1", runbook);
         Assert.Contains("no-direct-filing-submission-report.json", runbook);
+        Assert.Contains("verify-no-direct-filing-submission.ps1", workflow);
+        Assert.Contains("no-direct-filing-submission-control", workflow);
+        Assert.Contains("no-direct-filing-submission-report.json", workflow);
+        Assert.Contains("if-no-files-found: error", workflow);
         Assert.Contains("no outbound CRO/ROS submission client", runbook);
         Assert.Contains("No direct CRO/ROS submission automation", reportService);
         Assert.Contains("verify-no-direct-filing-submission.ps1", reportService);

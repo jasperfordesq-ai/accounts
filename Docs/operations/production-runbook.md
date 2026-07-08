@@ -165,6 +165,8 @@ Retain the no-direct filing submission control report for each release candidate
 The report proves final CRO and ROS operations remain recorded workflow states only:
 the API exposes status, payment, download and internal iXBRL validation endpoints, the
 legacy generated marker is blocked with `410 Gone`, and no outbound CRO/ROS submission client or submit route is wired into the release.
+CI runs the same verifier in the production stack smoke job and uploads the
+`no-direct-filing-submission-control` artifact for each candidate.
 
 Retain the CI `dependency-audit-release` artifact as the dependency evidence packet. It contains `npm-audit.json` and `dependency-audit-report.json`; the latter records package-lock and package.json hashes, npm audit counts, the backend NuGet audit policy (`NU1901`-`NU1904` as errors), and workflow action-hygiene wiring:
 

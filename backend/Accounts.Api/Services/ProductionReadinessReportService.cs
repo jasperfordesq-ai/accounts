@@ -859,14 +859,14 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             Category(
                 "security-auth-tenant-platform-guardrails",
                 "Security/auth/tenant/platform guardrails",
-                120,
+                125,
                 150,
                 "operator-confirmation-required",
                 [
                     "Authenticated sessions, CSRF, secure cookie checks and post-logout 401 are covered by production smoke.",
                     "Request-scoped EF query filters backstop tenant isolation across company-owned and period-owned child tables.",
                     "Production compose gates enforce immutable images, migrate-only job ordering, demo seed blocking and structured monitoring evidence.",
-                    "scripts/verify-no-direct-filing-submission.ps1 proves final CRO/ROS operations remain recorded workflow states with no outbound submission client wired.",
+                    "CI runs scripts/verify-no-direct-filing-submission.ps1 and retains no-direct-filing-submission-report.json, proving final CRO/ROS operations remain recorded workflow states with no outbound submission client wired.",
                     "scripts/verify-release-artifact-pack.ps1 validates dependency, production safety, monitoring, structured log, backup/restore, no-direct-submission, visual smoke and release-evidence reports together.",
                     "release-artifact-pack-report.json now records release candidate identity plus per-report SHA-256 and byte-size evidence."
                 ],

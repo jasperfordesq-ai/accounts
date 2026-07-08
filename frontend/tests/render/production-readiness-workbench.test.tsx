@@ -20,7 +20,7 @@ describe("ProductionReadinessWorkbench", () => {
     expectText("3 companies");
     expectText("4 periods");
     expect(screen.getByRole("heading", { name: "Production scorecard" })).toBeInTheDocument();
-    expectText("554/700");
+    expectText("559/700");
     expectText("Architecture and documentation");
     expectText("Backend statutory/accounting engine");
     expectText("Frontend accountant workbench");
@@ -28,7 +28,7 @@ describe("ProductionReadinessWorkbench", () => {
     expectText("99 / 100");
     expectText("190 / 250");
     expectText("145 / 200");
-    expectText("120 / 150");
+    expectText("125 / 150");
     expectText(/Next score gate/);
     expect(screen.getByRole("searchbox", { name: "Filter Next assurance actions" })).toBeInTheDocument();
     expect(screen.getByRole("searchbox", { name: "Filter Statutory rules matrix" })).toBeInTheDocument();
@@ -282,7 +282,7 @@ describe("ProductionReadinessWorkbench", () => {
 
 function productionScorecard(): ProductionReadinessReport["productionScorecard"] {
   return {
-    currentScore: 554,
+    currentScore: 559,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete source-law review, named visual QA, monitoring-provider confirmation, manual handoff and qualified-accountant acceptance evidence.",
@@ -337,12 +337,12 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
       {
         code: "security-auth-tenant-platform-guardrails",
         label: "Security/auth/tenant/platform guardrails",
-        currentScore: 120,
+        currentScore: 125,
         targetScore: 150,
         status: "operator-confirmation-required",
         currentEvidence: [
           "Auth, tenant and platform release gates are represented in readiness evidence.",
-          "No-direct CRO/ROS submission verifier evidence is generated.",
+          "CI retains no-direct-filing-submission-report.json for the no-direct CRO/ROS submission verifier.",
           "Release artifact pack verifier validates operational reports together.",
           "release-artifact-pack-report.json records release candidate identity plus per-report SHA-256 and byte-size evidence.",
         ],
