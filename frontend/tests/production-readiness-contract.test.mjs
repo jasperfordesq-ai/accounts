@@ -189,7 +189,7 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.ok(parsed.assurancePacket.evidenceItems.includes("golden-verifier-manifest"));
   assert.ok(parsed.assurancePacket.evidenceItems.includes("release-blocker-register"));
   assert.equal(parsed.assurancePacket.releaseBlockers[0], "Qualified accountant sign-off required");
-  assert.equal(parsed.productionScorecard.currentScore, 504);
+  assert.equal(parsed.productionScorecard.currentScore, 509);
   assert.equal(parsed.productionScorecard.targetScore, 700);
   assert.deepEqual(parsed.productionScorecard.categories.map((category) => category.code), [
     "architecture-documentation",
@@ -765,7 +765,7 @@ test("parseProductionReadinessReport rejects scorecard totals that do not match 
 
   assert.throws(
     () => parseProductionReadinessReport(payload),
-    /Invalid production readiness report contract: productionScorecard\.currentScore - expected 504, received 491/,
+    /Invalid production readiness report contract: productionScorecard\.currentScore - expected 509, received 491/,
   );
 });
 
@@ -823,7 +823,7 @@ test("parseProductionReadinessReport rejects release verification manifest that 
 
 function productionScorecard() {
   return {
-    currentScore: 504,
+    currentScore: 509,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete named visual QA, monitoring-provider confirmation and qualified-accountant acceptance evidence.",
@@ -876,11 +876,14 @@ function productionScorecard() {
       {
         code: "security-auth-tenant-platform-guardrails",
         label: "Security/auth/tenant/platform guardrails",
-        currentScore: 100,
+        currentScore: 105,
         targetScore: 150,
         status: "operator-confirmation-required",
-        currentEvidence: ["Session, CSRF, tenant and production safety evidence exists."],
-        remainingGaps: ["Confirm the controlled monitoring smoke event inside the configured provider."],
+        currentEvidence: [
+          "Session, CSRF, tenant and production safety evidence exists.",
+          "No-direct CRO/ROS submission verifier evidence is generated.",
+        ],
+        remainingGaps: ["Confirm the controlled monitoring smoke event inside the configured provider and retain no-direct submission evidence."],
         completionTrackCodes: ["backend-code"],
         releaseBlockerCodes: ["backend-code:source-law-change-review", "backend-code:external-ros-validation"],
       },

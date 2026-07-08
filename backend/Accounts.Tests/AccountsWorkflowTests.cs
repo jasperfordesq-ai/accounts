@@ -18360,6 +18360,42 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public void NoDirectFilingSubmissionVerifier_ProvesRecordedWorkflowStateOnlyControl()
+    {
+        var root = RepositoryRoot();
+        var runbook = File.ReadAllText(Path.Combine(root, "Docs", "operations", "production-runbook.md"));
+        var reportService = File.ReadAllText(Path.Combine(root, "backend", "Accounts.Api", "Services", "ProductionReadinessReportService.cs"));
+        var scriptPath = Path.Combine(root, "scripts", "verify-no-direct-filing-submission.ps1");
+
+        Assert.True(File.Exists(scriptPath), "No-direct filing submission verifier should produce release evidence.");
+        var script = File.ReadAllText(scriptPath);
+
+        Assert.Contains("verify-no-direct-filing-submission.ps1", runbook);
+        Assert.Contains("no-direct-filing-submission-report.json", runbook);
+        Assert.Contains("no outbound CRO/ROS submission client", runbook);
+        Assert.Contains("No direct CRO/ROS submission automation", reportService);
+        Assert.Contains("verify-no-direct-filing-submission.ps1", reportService);
+        Assert.Contains("recorded workflow states", reportService);
+
+        Assert.Contains("FilingWorkflowEndpoints.cs", script);
+        Assert.Contains("RevenueEndpoints.cs", script);
+        Assert.Contains("FilingReviewCentre.tsx", script);
+        Assert.Contains("StatusCodes.Status410Gone", script);
+        Assert.Contains("allowedRecordedWorkflowRoutes", script);
+        Assert.Contains("\"/cro-status\"", script);
+        Assert.Contains("\"/cro-payment\"", script);
+        Assert.Contains("\"/validate-ixbrl\"", script);
+        Assert.Contains("CRO and ROS final submission remain external actions recorded in workflow state.", script);
+        Assert.Contains("forbiddenOutboundPatterns", script);
+        Assert.Contains("IHttpClientFactory", script);
+        Assert.Contains(".PostAsync", script);
+        Assert.Contains("SubmissionClient", script);
+        Assert.Contains("forbiddenRoutePatterns", script);
+        Assert.Contains("No-direct filing submission verification failed", script);
+        Assert.Contains("ConvertTo-Json -Depth 6", script);
+    }
+
+    [Fact]
     public void StructuredLogVerifier_ParsesJsonLogsAndMatchesMonitoringSmokeEvidence()
     {
         var root = RepositoryRoot();

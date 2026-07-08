@@ -852,17 +852,18 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             Category(
                 "security-auth-tenant-platform-guardrails",
                 "Security/auth/tenant/platform guardrails",
-                100,
+                105,
                 150,
                 "operator-confirmation-required",
                 [
                     "Authenticated sessions, CSRF, secure cookie checks and post-logout 401 are covered by production smoke.",
                     "Request-scoped EF query filters backstop tenant isolation across company-owned and period-owned child tables.",
-                    "Production compose gates enforce immutable images, migrate-only job ordering, demo seed blocking and structured monitoring evidence."
+                    "Production compose gates enforce immutable images, migrate-only job ordering, demo seed blocking and structured monitoring evidence.",
+                    "scripts/verify-no-direct-filing-submission.ps1 proves final CRO/ROS operations remain recorded workflow states with no outbound submission client wired."
                 ],
                 [
                     "Confirm the controlled monitoring smoke event inside the configured provider and retain operator evidence.",
-                    "Keep tenant-isolation metadata coverage running when new owned tables are added.",
+                    "Retain no-direct-filing-submission-report.json with the exact release evidence pack.",
                     "Retain production backup/restore drill and dependency evidence for the exact release commit."
                 ],
                 ["backend-code"],

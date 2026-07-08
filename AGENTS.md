@@ -51,6 +51,7 @@ Committed and pushed work on `main` includes:
 - `52b1a5c Add production readiness scorecard`
 - `201975c Add release evidence verifier`
 - `8e34953 Canonicalize release acceptance coverage`
+- `f142912 Add external validation release evidence`
 
 Backend/accounting-engine progress:
 
@@ -126,6 +127,10 @@ Backend/accounting-engine progress:
 - External ROS/iXBRL validation now has a checked-in release evidence template and
   verifier coverage for every canonical golden corpus scenario, so internal XML
   checks cannot be mistaken for Revenue acceptance evidence.
+- `scripts/verify-no-direct-filing-submission.ps1` now emits
+  `no-direct-filing-submission-report.json`, proving release candidates still have no
+  outbound CRO/ROS submission client or submit route and only record external filing
+  workflow states.
 
 Frontend UI/UX progress:
 
@@ -214,6 +219,11 @@ Recent successful local verification includes:
   production scorecard evidence are wired together, including canonical
   qualified-accountant golden corpus scenario codes, external ROS/iXBRL validation
   template coverage, and the 504/700 scorecard total
+- Backend focused no-direct submission verifier and scorecard tests:
+  `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~NoDirectFilingSubmissionVerifier_ProvesRecordedWorkflowStateOnlyControl|FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers"`
+  - 2 passed, proving the no-direct CRO/ROS submission verifier, runbook linkage,
+  recorded-workflow-state evidence, forbidden outbound client patterns, and 509/700
+  scorecard total are wired together
 - Backend focused opening take-on tests:
   `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~OpeningTrialBalanceTakeOn|FullyQualifiedName~FinalOutputs_BlockWhenOpeningTrialBalanceTakeOnDoesNotBalance|FullyQualifiedName~TrialBalance_IncludesReviewedOpeningBalancesAndBankOpeningSide"`
 - Backend focused test:
@@ -251,6 +261,10 @@ Recent successful local verification includes:
   `release-evidence-report.json`. The report now carries required golden corpus
   scenario, external ROS/iXBRL validation scenario, route, and release-artifact
   coverage.
+- PowerShell parser and execution for `scripts\verify-no-direct-filing-submission.ps1`
+  - passed; the generated `no-direct-filing-submission-report.json` records allowed
+  filing workflow routes, forbidden outbound submission patterns, forbidden submit
+  route patterns, and zero failures.
 - Frontend unit tests:
   `npm run test:unit` - 103 passed
 - Frontend type-check:
@@ -349,13 +363,15 @@ Highest-priority next steps:
 6. Promote CI monitoring smoke into release-grade evidence by confirming the controlled
    event inside the configured provider and retaining a named operator record before
    real filing use.
-7. Run `scripts\verify-release-evidence.ps1` against completed release evidence and
+7. Run `scripts\verify-no-direct-filing-submission.ps1` and retain
+   `no-direct-filing-submission-report.json` with the exact release candidate.
+8. Run `scripts\verify-release-evidence.ps1` against completed release evidence and
    retain `release-evidence-report.json`; blank templates are intentionally failing
    evidence until real named reviewers complete them.
-8. Continue UI polish route by route, especially any surfaces that still feel too
+9. Continue UI polish route by route, especially any surfaces that still feel too
    card-heavy, too sparse, inconsistent in dark mode, or not dense enough for daily
    accountant use.
-9. Keep extracting route-heavy frontend code into focused workflow components only when
+10. Keep extracting route-heavy frontend code into focused workflow components only when
    it reduces real complexity or improves testable reuse.
 
 ## Estimated Completion
@@ -365,9 +381,9 @@ As of July 8, 2026:
 - Code implementation is roughly 70-75% complete.
 - Production assurance is roughly 60-65% complete.
 - Overall goal is roughly 63-67% complete, with about one third left.
-- The production scorecard is now 504/700: architecture/documentation 94/100,
+- The production scorecard is now 509/700: architecture/documentation 94/100,
   backend statutory/accounting engine 180/250, frontend accountant workbench 130/200,
-  and security/auth/tenant/platform guardrails 100/150.
+  and security/auth/tenant/platform guardrails 105/150.
 - Architecture/documentation is now scored 94/100 in the production scorecard because
   release evidence templates are linked from the runbook and machine-checkable; the
   remaining architecture gap is filled, verified release evidence.

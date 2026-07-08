@@ -156,6 +156,16 @@ Retain the CI `production-safety-config` artifact for each release candidate. It
 
 The report proves the production compose profile uses CI-promoted images, the migration job runs exactly `--migrate-only`, the API waits for that job to complete, normal API startup has `DatabaseStartup__AutoMigrateOnStartup=false`, demo seeding is disabled for both migration and API services, demo-seed override flags are absent, and the bootstrap owner initial password is available only to the migration job.
 
+Retain the no-direct filing submission control report for each release candidate:
+
+```powershell
+.\scripts\verify-no-direct-filing-submission.ps1 -EvidencePath D:\accounts-smoke\no-direct-filing-submission-report.json
+```
+
+The report proves final CRO and ROS operations remain recorded workflow states only:
+the API exposes status, payment, download and internal iXBRL validation endpoints, the
+legacy generated marker is blocked with `410 Gone`, and no outbound CRO/ROS submission client or submit route is wired into the release.
+
 Retain the CI `dependency-audit-release` artifact as the dependency evidence packet. It contains `npm-audit.json` and `dependency-audit-report.json`; the latter records package-lock and package.json hashes, npm audit counts, the backend NuGet audit policy (`NU1901`-`NU1904` as errors), and workflow action-hygiene wiring:
 
 ```powershell
@@ -243,8 +253,9 @@ The smoke script checks `/health/ready`, validates browser security headers incl
 
 The HTTPS smoke path also verifies that the login response sets the `accounts_session` and `accounts_csrf` cookies with the `Secure` attribute, so production cookies stay aligned with the ingress contract.
 
-8. Complete `Docs/release-evidence/visual-qa-signoff-template.md` using the CI `visual-smoke-screenshots` artifact.
-9. Complete `Docs/release-evidence/external-ros-ixbrl-validation-template.md` using external ROS/iXBRL validation references for the exact generated artifact hashes.
-10. Complete `Docs/release-evidence/monitoring-provider-confirmation-template.md` using the CI monitoring and structured-log artifacts plus the real provider event.
-11. Complete `Docs/release-evidence/qualified-accountant-acceptance-template.md` with a named qualified accountant before real filing preparation is used.
-12. Run `scripts\verify-release-evidence.ps1` and retain `release-evidence-report.json`; real filing use stays blocked if any required checkbox, signature, artifact reference, table row, accepted decision, canonical golden corpus scenario row, external ROS/iXBRL validation row, route row, or required coverage entry is missing.
+8. Run `scripts\verify-no-direct-filing-submission.ps1` and retain `no-direct-filing-submission-report.json`.
+9. Complete `Docs/release-evidence/visual-qa-signoff-template.md` using the CI `visual-smoke-screenshots` artifact.
+10. Complete `Docs/release-evidence/external-ros-ixbrl-validation-template.md` using external ROS/iXBRL validation references for the exact generated artifact hashes.
+11. Complete `Docs/release-evidence/monitoring-provider-confirmation-template.md` using the CI monitoring and structured-log artifacts plus the real provider event.
+12. Complete `Docs/release-evidence/qualified-accountant-acceptance-template.md` with a named qualified accountant before real filing preparation is used.
+13. Run `scripts\verify-release-evidence.ps1` and retain `release-evidence-report.json`; real filing use stays blocked if any required checkbox, signature, artifact reference, table row, accepted decision, canonical golden corpus scenario row, external ROS/iXBRL validation row, route row, or required coverage entry is missing.

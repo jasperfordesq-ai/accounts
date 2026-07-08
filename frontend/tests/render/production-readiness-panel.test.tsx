@@ -40,7 +40,7 @@ describe("ProductionReadinessPanel", () => {
 
 function productionScorecard(): ProductionReadinessReport["productionScorecard"] {
   return {
-    currentScore: 504,
+    currentScore: 509,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete named visual QA, monitoring-provider confirmation and qualified-accountant acceptance evidence.",
@@ -85,11 +85,14 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
       {
         code: "security-auth-tenant-platform-guardrails",
         label: "Security/auth/tenant/platform guardrails",
-        currentScore: 100,
+        currentScore: 105,
         targetScore: 150,
         status: "operator-confirmation-required",
-        currentEvidence: ["Auth, tenant and platform release gates are represented in readiness evidence."],
-        remainingGaps: ["Confirm the controlled monitoring smoke event inside the configured provider."],
+        currentEvidence: [
+          "Auth, tenant and platform release gates are represented in readiness evidence.",
+          "No-direct CRO/ROS submission verifier evidence is generated.",
+        ],
+        remainingGaps: ["Confirm the controlled monitoring smoke event inside the configured provider and retain no-direct submission evidence."],
         completionTrackCodes: ["backend-code"],
         releaseBlockerCodes: ["backend-code:qualified-accountant-signoff"],
       },

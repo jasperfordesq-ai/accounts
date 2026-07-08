@@ -20,7 +20,7 @@ describe("ProductionReadinessWorkbench", () => {
     expectText("3 companies");
     expectText("4 periods");
     expect(screen.getByRole("heading", { name: "Production scorecard" })).toBeInTheDocument();
-    expectText("504/700");
+    expectText("509/700");
     expectText("Architecture and documentation");
     expectText("Backend statutory/accounting engine");
     expectText("Frontend accountant workbench");
@@ -28,7 +28,7 @@ describe("ProductionReadinessWorkbench", () => {
     expectText("94 / 100");
     expectText("180 / 250");
     expectText("130 / 200");
-    expectText("100 / 150");
+    expectText("105 / 150");
     expectText(/Next score gate/);
     expect(screen.getByRole("searchbox", { name: "Filter Next assurance actions" })).toBeInTheDocument();
     expect(screen.getByRole("searchbox", { name: "Filter Statutory rules matrix" })).toBeInTheDocument();
@@ -281,7 +281,7 @@ describe("ProductionReadinessWorkbench", () => {
 
 function productionScorecard(): ProductionReadinessReport["productionScorecard"] {
   return {
-    currentScore: 504,
+    currentScore: 509,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete named visual QA, monitoring-provider confirmation and qualified-accountant acceptance evidence.",
@@ -326,11 +326,14 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
       {
         code: "security-auth-tenant-platform-guardrails",
         label: "Security/auth/tenant/platform guardrails",
-        currentScore: 100,
+        currentScore: 105,
         targetScore: 150,
         status: "operator-confirmation-required",
-        currentEvidence: ["Auth, tenant and platform release gates are represented in readiness evidence."],
-        remainingGaps: ["Confirm the controlled monitoring smoke event inside the configured provider."],
+        currentEvidence: [
+          "Auth, tenant and platform release gates are represented in readiness evidence.",
+          "No-direct CRO/ROS submission verifier evidence is generated.",
+        ],
+        remainingGaps: ["Confirm the controlled monitoring smoke event inside the configured provider and retain no-direct submission evidence."],
         completionTrackCodes: ["backend-code"],
         releaseBlockerCodes: ["backend-code:qualified-accountant-signoff"],
       },
