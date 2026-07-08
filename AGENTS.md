@@ -384,8 +384,8 @@ Recent successful local verification includes:
 
 CI status:
 
-- GitHub Actions run `28952116890` for commit
-  `5f20e25 Harden readiness manifest verification` completed successfully on
+- GitHub Actions run `28953519649` for commit
+  `c5920cd Require full readiness manifest in artifact packs` completed successfully on
   July 8, 2026.
 - Green jobs: Workflow Hygiene, Production Compose Config, Frontend, Backend,
   Production Stack Smoke, and CI Machine Evidence Pack.
