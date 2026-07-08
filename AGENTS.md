@@ -648,6 +648,9 @@ CI status:
 - GitHub Actions run `28959364532` for commit
   `4d558bb Verify release evidence candidate identity` completed successfully on
   July 8, 2026.
+- GitHub Actions run `28979968332` for commit
+  `f66e479 Record visual layout evidence handoff` completed successfully on July 8,
+  2026.
 - Green jobs: Workflow Hygiene, Production Compose Config, Frontend, Backend,
   Production Stack Smoke, and CI Machine Evidence Pack.
 - The scorecard exposed by the candidate is now 617/700, with backend statutory/accounting
