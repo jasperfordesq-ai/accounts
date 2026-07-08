@@ -103,6 +103,61 @@ const share = {
   isFullyPaid: true,
 };
 
+function productionScorecardFixture() {
+  return {
+    currentScore: 490,
+    targetScore: 700,
+    status: "review-required",
+    nextGate: "Complete named visual QA, monitoring-provider confirmation and qualified-accountant acceptance evidence.",
+    categories: [
+      {
+        code: "architecture-documentation",
+        label: "Architecture and documentation",
+        currentScore: 90,
+        targetScore: 100,
+        status: "release-evidence-required",
+        currentEvidence: ["Canonical architecture guide and active handoff are present."],
+        remainingGaps: ["Complete release evidence templates with named reviewers."],
+        completionTrackCodes: ["backend-code", "frontend-ui-ux", "frontend-code"],
+        releaseBlockerCodes: ["backend-code:source-law-change-review", "frontend-ui-ux:light-dark-visual-regression"],
+      },
+      {
+        code: "backend-statutory-accounting-engine",
+        label: "Backend statutory/accounting engine",
+        currentScore: 170,
+        targetScore: 250,
+        status: "qualified-accountant-review-required",
+        currentEvidence: ["Golden filing corpus and source-law evidence are exposed."],
+        remainingGaps: ["Run and retain qualified-accountant acceptance across the golden corpus."],
+        completionTrackCodes: ["backend-code"],
+        releaseBlockerCodes: ["backend-code:qualified-accountant-signoff", "backend-code:source-law-change-review"],
+      },
+      {
+        code: "frontend-accountant-workbench",
+        label: "Frontend accountant workbench",
+        currentScore: 130,
+        targetScore: 200,
+        status: "visual-acceptance-required",
+        currentEvidence: ["Visual smoke routes and workbench primitives are typed."],
+        remainingGaps: ["Complete named visual QA review against the screenshot manifest."],
+        completionTrackCodes: ["frontend-ui-ux", "frontend-code"],
+        releaseBlockerCodes: ["frontend-ui-ux:light-dark-visual-regression"],
+      },
+      {
+        code: "security-auth-tenant-platform-guardrails",
+        label: "Security/auth/tenant/platform guardrails",
+        currentScore: 100,
+        targetScore: 150,
+        status: "operator-confirmation-required",
+        currentEvidence: ["Auth, tenant and platform release gates are represented in readiness evidence."],
+        remainingGaps: ["Confirm the controlled monitoring smoke event inside the configured provider."],
+        completionTrackCodes: ["backend-code"],
+        releaseBlockerCodes: ["backend-code:source-law-change-review"],
+      },
+    ],
+  };
+}
+
 function productionReadinessReportFixture() {
   return withGoldenLegalBasisSnapshots({
     generatedAt: "2026-07-04T12:00:00Z",
@@ -289,13 +344,14 @@ function productionReadinessReportFixture() {
       visualQaExpectedScreenshots: expectedVisualSmokeScreenshotCount(),
       requiredOperationalGates: 1,
       openCriticalActions: 1,
-      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "source-law-review-ledger", "revenue-taxonomy-range-evidence", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "production-audit-evidence-pack", "operations-evidence-pack", "visual-smoke-screenshots", "release-blocker-register", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "accountant-journey-acceptance-checklist", "accountant-workflow-evidence-pack", "accountant-walkthrough-evidence-matrix", "workbench-visual-acceptance-register", "production-completion-map"],
+      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "source-law-review-ledger", "revenue-taxonomy-range-evidence", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "production-audit-evidence-pack", "operations-evidence-pack", "visual-smoke-screenshots", "release-blocker-register", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "accountant-journey-acceptance-checklist", "accountant-workflow-evidence-pack", "accountant-walkthrough-evidence-matrix", "workbench-visual-acceptance-register", "production-completion-map", "production-scorecard"],
       releaseBlockers: [
         "Qualified accountant sign-off required",
         "Source-law change review required",
         "Light/dark visual regression required",
       ],
     },
+    productionScorecard: productionScorecardFixture(),
     accountantAcceptanceCriteria: [
       {
         scenarioCode: "micro-ltd",

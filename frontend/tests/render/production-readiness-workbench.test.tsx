@@ -19,6 +19,17 @@ describe("ProductionReadinessWorkbench", () => {
     expect(screen.getAllByText("Review required").length).toBeGreaterThan(1);
     expectText("3 companies");
     expectText("4 periods");
+    expect(screen.getByRole("heading", { name: "Production scorecard" })).toBeInTheDocument();
+    expectText("490/700");
+    expectText("Architecture and documentation");
+    expectText("Backend statutory/accounting engine");
+    expectText("Frontend accountant workbench");
+    expectText("Security/auth/tenant/platform guardrails");
+    expectText("90 / 100");
+    expectText("170 / 250");
+    expectText("130 / 200");
+    expectText("100 / 150");
+    expectText(/Next score gate/);
     expect(screen.getByRole("searchbox", { name: "Filter Next assurance actions" })).toBeInTheDocument();
     expect(screen.getByRole("searchbox", { name: "Filter Statutory rules matrix" })).toBeInTheDocument();
     expect(screen.getByRole("searchbox", { name: "Filter Golden filing corpus" })).toBeInTheDocument();
@@ -268,6 +279,61 @@ describe("ProductionReadinessWorkbench", () => {
   }, 90000);
 });
 
+function productionScorecard(): ProductionReadinessReport["productionScorecard"] {
+  return {
+    currentScore: 490,
+    targetScore: 700,
+    status: "review-required",
+    nextGate: "Complete named visual QA, monitoring-provider confirmation and qualified-accountant acceptance evidence.",
+    categories: [
+      {
+        code: "architecture-documentation",
+        label: "Architecture and documentation",
+        currentScore: 90,
+        targetScore: 100,
+        status: "release-evidence-required",
+        currentEvidence: ["Canonical architecture guide and active handoff are present."],
+        remainingGaps: ["Complete release evidence templates with named reviewers."],
+        completionTrackCodes: ["backend-code", "frontend-ui-ux", "frontend-code"],
+        releaseBlockerCodes: ["backend-code:qualified-accountant-signoff", "frontend-ui-ux:light-dark-visual-regression"],
+      },
+      {
+        code: "backend-statutory-accounting-engine",
+        label: "Backend statutory/accounting engine",
+        currentScore: 170,
+        targetScore: 250,
+        status: "qualified-accountant-review-required",
+        currentEvidence: ["Golden filing corpus covers the production scenarios."],
+        remainingGaps: ["Run and retain qualified-accountant acceptance across every golden corpus scenario."],
+        completionTrackCodes: ["backend-code"],
+        releaseBlockerCodes: ["backend-code:qualified-accountant-signoff"],
+      },
+      {
+        code: "frontend-accountant-workbench",
+        label: "Frontend accountant workbench",
+        currentScore: 130,
+        targetScore: 200,
+        status: "visual-acceptance-required",
+        currentEvidence: ["Visual smoke plan covers the accountant journey."],
+        remainingGaps: ["Complete named visual QA review against the screenshot manifest."],
+        completionTrackCodes: ["frontend-ui-ux", "frontend-code"],
+        releaseBlockerCodes: ["frontend-ui-ux:light-dark-visual-regression"],
+      },
+      {
+        code: "security-auth-tenant-platform-guardrails",
+        label: "Security/auth/tenant/platform guardrails",
+        currentScore: 100,
+        targetScore: 150,
+        status: "operator-confirmation-required",
+        currentEvidence: ["Auth, tenant and platform release gates are represented in readiness evidence."],
+        remainingGaps: ["Confirm the controlled monitoring smoke event inside the configured provider."],
+        completionTrackCodes: ["backend-code"],
+        releaseBlockerCodes: ["backend-code:qualified-accountant-signoff"],
+      },
+    ],
+  };
+}
+
 function sampleReport(): ProductionReadinessReport {
   return {
     generatedAt: "2026-07-03T12:00:00Z",
@@ -408,9 +474,10 @@ function sampleReport(): ProductionReadinessReport {
       visualQaExpectedScreenshots: 28,
       requiredOperationalGates: 1,
       openCriticalActions: 1,
-      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "source-law-review-ledger", "revenue-taxonomy-range-evidence", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "production-audit-evidence-pack", "operations-evidence-pack", "visual-smoke-screenshots", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "accountant-journey-acceptance-checklist", "accountant-workflow-evidence-pack", "accountant-walkthrough-evidence-matrix", "workbench-visual-acceptance-register", "production-completion-map"],
+      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "source-law-review-ledger", "revenue-taxonomy-range-evidence", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "production-audit-evidence-pack", "operations-evidence-pack", "visual-smoke-screenshots", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "accountant-journey-acceptance-checklist", "accountant-workflow-evidence-pack", "accountant-walkthrough-evidence-matrix", "workbench-visual-acceptance-register", "production-completion-map", "production-scorecard"],
       releaseBlockers: ["Qualified accountant sign-off required"],
     },
+    productionScorecard: productionScorecard(),
     accountantAcceptanceCriteria: [
       {
         scenarioCode: "micro-ltd",

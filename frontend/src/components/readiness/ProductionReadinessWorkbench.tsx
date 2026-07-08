@@ -39,6 +39,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
   const sourceLawMaintenanceProtocol = report.sourceLawMaintenanceProtocol;
   const visualQaCoverage = report.visualQaCoverage;
   const assurancePacket = report.assurancePacket;
+  const productionScorecard = report.productionScorecard;
   const accountantAcceptanceSummary = report.accountantAcceptanceSummary;
   const accountantWorkflowWalkthroughProtocol = report.accountantWorkflowWalkthroughProtocol;
   const accountantJourneyAcceptanceChecklist = report.accountantJourneyAcceptanceChecklist ?? [];
@@ -78,6 +79,51 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
           { label: "Assurance actions", value: `${completedAssuranceActions}/${assuranceActions.length}`, tone: completedAssuranceActions === assuranceActions.length ? "good" : "warn" },
         ]}
       />
+
+      <ReviewPanel
+        title="Production scorecard"
+        description="The four scoring categories currently being driven to full release readiness."
+        actions={
+          <StatusBadge tone={productionScorecard.currentScore === productionScorecard.targetScore ? "good" : "warn"}>
+            {productionScorecard.currentScore}/{productionScorecard.targetScore}
+          </StatusBadge>
+        }
+      >
+        <div className="grid min-w-0 grid-cols-1 gap-3 xl:grid-cols-4">
+          {productionScorecard.categories.map((category) => (
+            <div key={category.code} className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="break-words text-sm font-semibold text-[var(--foreground)]">{category.label}</p>
+                  <p className="mt-1 text-xs text-[var(--muted-foreground)]">{category.currentScore} / {category.targetScore}</p>
+                </div>
+                <StatusBadge tone={scorecardTone(category.currentScore, category.targetScore)}>
+                  {formatStatus(category.status)}
+                </StatusBadge>
+              </div>
+              <div className="mt-3 h-2 overflow-hidden rounded-full bg-[var(--surface-subtle)]">
+                <div
+                  className="h-full rounded-full bg-[var(--accent)]"
+                  style={{ width: `${Math.min(100, Math.round((category.currentScore / category.targetScore) * 100))}%` }}
+                />
+              </div>
+              <div className="mt-3 space-y-3 text-xs leading-5">
+                <div>
+                  <p className="font-semibold uppercase text-[var(--muted-foreground)]">Evidence</p>
+                  <CompactList items={category.currentEvidence.slice(0, 3)} />
+                </div>
+                <div>
+                  <p className="font-semibold uppercase text-[var(--muted-foreground)]">Next gap</p>
+                  <p className="text-[var(--foreground)]">{category.remainingGaps[0]}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <p className="mt-3 rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-3 text-xs leading-5 text-[var(--muted-foreground)]">
+          Next score gate: <span className="font-medium text-[var(--foreground)]">{productionScorecard.nextGate}</span>
+        </p>
+      </ReviewPanel>
 
       <ReviewPanel
         title="Release decision summary"
@@ -2154,6 +2200,14 @@ function riskTone(riskRank: number): "good" | "warn" | "bad" | "info" | "default
   if (riskRank <= 20) return "warn";
   if (riskRank <= 40) return "info";
   return "default";
+}
+
+function scorecardTone(currentScore: number, targetScore: number): "good" | "warn" | "bad" | "info" | "default" {
+  const ratio = targetScore > 0 ? currentScore / targetScore : 0;
+  if (ratio >= 1) return "good";
+  if (ratio >= 0.85) return "info";
+  if (ratio >= 0.65) return "warn";
+  return "bad";
 }
 
 function supportTone(supportLevel: string): "good" | "warn" | "bad" | "info" | "default" {

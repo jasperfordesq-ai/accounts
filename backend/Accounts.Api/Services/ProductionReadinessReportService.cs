@@ -485,6 +485,24 @@ public sealed record ProductionAssurancePacket(
     IReadOnlyList<string> EvidenceItems,
     IReadOnlyList<string> ReleaseBlockers);
 
+public sealed record ProductionScorecardCategory(
+    string Code,
+    string Label,
+    int CurrentScore,
+    int TargetScore,
+    string Status,
+    IReadOnlyList<string> CurrentEvidence,
+    IReadOnlyList<string> RemainingGaps,
+    IReadOnlyList<string> CompletionTrackCodes,
+    IReadOnlyList<string> ReleaseBlockerCodes);
+
+public sealed record ProductionScorecard(
+    int CurrentScore,
+    int TargetScore,
+    string Status,
+    string NextGate,
+    IReadOnlyList<ProductionScorecardCategory> Categories);
+
 public sealed record ProductionReadinessReport(
     DateTime GeneratedAt,
     string OverallStatus,
@@ -496,6 +514,7 @@ public sealed record ProductionReadinessReport(
     IReadOnlyList<SourceLawReviewLedgerEntry> SourceLawReviewLedger,
     IReadOnlyList<RevenueTaxonomyRangeEvidence> RevenueTaxonomyRanges,
     ProductionAssurancePacket AssurancePacket,
+    ProductionScorecard ProductionScorecard,
     IReadOnlyList<AccountantAcceptanceCriterion> AccountantAcceptanceCriteria,
     AccountantAcceptanceSummary AccountantAcceptanceSummary,
     AccountantWorkflowWalkthroughProtocol AccountantWorkflowWalkthroughProtocol,
@@ -584,6 +603,9 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             operationalGates,
             assuranceActions,
             visualQaCoverage);
+        var productionScorecard = BuildProductionScorecard(
+            completionTracks,
+            releaseBlockerRegister);
 
         return new ProductionReadinessReport(
             DateTime.UtcNow,
@@ -596,6 +618,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             sourceLawReviewLedger,
             revenueTaxonomyRanges,
             assurancePacket,
+            productionScorecard,
             accountantAcceptanceCriteria,
             accountantAcceptanceSummary,
             accountantWorkflowWalkthroughProtocol,
@@ -686,7 +709,8 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "accountant-workflow-evidence-pack",
             "accountant-walkthrough-evidence-matrix",
             "workbench-visual-acceptance-register",
-            "production-completion-map"
+            "production-completion-map",
+            "production-scorecard"
         };
         var releaseBlockers = assuranceActions
             .Where(action => action.Status != "complete")
@@ -713,6 +737,141 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             releaseBlockers);
 
         return packetWithoutId with { PacketId = ComputeAssurancePacketId(packetWithoutId) };
+    }
+
+    private static ProductionScorecard BuildProductionScorecard(
+        IReadOnlyList<ProductionReadinessCompletionTrack> completionTracks,
+        IReadOnlyList<ProductionReleaseBlocker> releaseBlockers)
+    {
+        var trackCodes = completionTracks.Select(track => track.Code).ToHashSet(StringComparer.Ordinal);
+        var blockerCodes = releaseBlockers.Select(blocker => blocker.Code).ToHashSet(StringComparer.Ordinal);
+
+        ProductionScorecardCategory Category(
+            string code,
+            string label,
+            int currentScore,
+            int targetScore,
+            string status,
+            IReadOnlyList<string> currentEvidence,
+            IReadOnlyList<string> remainingGaps,
+            IReadOnlyList<string> completionTrackCodes,
+            IReadOnlyList<string> releaseBlockerCodes)
+        {
+            foreach (var trackCode in completionTrackCodes)
+            {
+                if (!trackCodes.Contains(trackCode))
+                    throw new InvalidOperationException($"Production scorecard category {code} references unknown completion track {trackCode}.");
+            }
+
+            foreach (var blockerCode in releaseBlockerCodes)
+            {
+                if (!blockerCodes.Contains(blockerCode))
+                    throw new InvalidOperationException($"Production scorecard category {code} references unknown release blocker {blockerCode}.");
+            }
+
+            return new ProductionScorecardCategory(
+                code,
+                label,
+                currentScore,
+                targetScore,
+                status,
+                currentEvidence,
+                remainingGaps,
+                completionTrackCodes,
+                releaseBlockerCodes);
+        }
+
+        var categories = new[]
+        {
+            Category(
+                "architecture-documentation",
+                "Architecture and documentation",
+                90,
+                100,
+                "release-evidence-required",
+                [
+                    "CLAUDE.md is the canonical architecture/development guide.",
+                    "AGENTS.md carries the active production-readiness handoff.",
+                    "Production runbook links release evidence templates for visual QA, monitoring provider confirmation and qualified-accountant acceptance.",
+                    "CI artifacts now prove production safety, dependency audit, monitoring smoke, structured logs, visual smoke and backup restore drill."
+                ],
+                [
+                    "Keep AGENTS.md aligned with the latest green CI run after every release-evidence commit.",
+                    "Complete the checked-in release evidence templates with named human reviewers.",
+                    "Retain source-law review notes against the pinned source snapshot."
+                ],
+                ["backend-code", "frontend-ui-ux", "frontend-code"],
+                ["backend-code:source-law-change-review", "frontend-ui-ux:light-dark-visual-regression"]),
+            Category(
+                "backend-statutory-accounting-engine",
+                "Backend statutory/accounting engine",
+                170,
+                250,
+                "qualified-accountant-review-required",
+                [
+                    "Golden filing corpus covers micro LTD, small abridged LTD, DAC small, CLG charity and medium audit-required manual handoff.",
+                    "Source-law snapshot, traceability, review ledger and Revenue taxonomy ranges are exposed in the readiness report.",
+                    "Filing readiness profiles, generated PDF/iXBRL evidence and audit snapshots are backed by automated tests."
+                ],
+                [
+                    "Run and retain qualified-accountant acceptance across every golden corpus scenario.",
+                    "Attach external ROS/iXBRL validation evidence for generated packs.",
+                    "Record manual handoff acceptance for audit-required paths before relying on outputs."
+                ],
+                ["backend-code"],
+                [
+                    "backend-code:qualified-accountant-signoff",
+                    "backend-code:external-ros-validation",
+                    "backend-code:accountant-acceptance-walkthrough"
+                ]),
+            Category(
+                "frontend-accountant-workbench",
+                "Frontend accountant workbench",
+                130,
+                200,
+                "visual-acceptance-required",
+                [
+                    "Production readiness, dashboard, company, period, filing review, financial statements and workbench preview routes are in the visual smoke plan.",
+                    "Shared workbench primitives and route-level render tests cover the main accountant journey.",
+                    "Dense tables, workflow rails, blocker summaries and permission-denied states are surfaced in the workbench."
+                ],
+                [
+                    "Complete named visual QA review against the light/dark desktop/mobile screenshot manifest.",
+                    "Continue route-by-route polish for density, dark mode, mobile flow and table scanability.",
+                    "Record qualified-accountant route acceptance for outputs, gates, wording and evidence."
+                ],
+                ["frontend-ui-ux", "frontend-code"],
+                [
+                    "frontend-ui-ux:light-dark-visual-regression",
+                    "frontend-ui-ux:accountant-acceptance-walkthrough",
+                    "frontend-code:light-dark-visual-regression"
+                ]),
+            Category(
+                "security-auth-tenant-platform-guardrails",
+                "Security/auth/tenant/platform guardrails",
+                100,
+                150,
+                "operator-confirmation-required",
+                [
+                    "Authenticated sessions, CSRF, secure cookie checks and post-logout 401 are covered by production smoke.",
+                    "Request-scoped EF query filters backstop tenant isolation across company-owned and period-owned child tables.",
+                    "Production compose gates enforce immutable images, migrate-only job ordering, demo seed blocking and structured monitoring evidence."
+                ],
+                [
+                    "Confirm the controlled monitoring smoke event inside the configured provider and retain operator evidence.",
+                    "Keep tenant-isolation metadata coverage running when new owned tables are added.",
+                    "Retain production backup/restore drill and dependency evidence for the exact release commit."
+                ],
+                ["backend-code"],
+                ["backend-code:production-monitoring"])
+        };
+
+        return new ProductionScorecard(
+            categories.Sum(category => category.CurrentScore),
+            categories.Sum(category => category.TargetScore),
+            "review-required",
+            "Complete named visual QA, monitoring-provider confirmation and qualified-accountant acceptance evidence.",
+            categories);
     }
 
     private static IReadOnlyList<SourceLawTraceabilityEntry> BuildSourceLawTraceability(

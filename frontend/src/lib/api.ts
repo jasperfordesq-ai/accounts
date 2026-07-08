@@ -2050,6 +2050,26 @@ export interface ProductionAssurancePacket {
   releaseBlockers: string[];
 }
 
+export interface ProductionScorecardCategory {
+  code: string;
+  label: string;
+  currentScore: number;
+  targetScore: number;
+  status: string;
+  currentEvidence: string[];
+  remainingGaps: string[];
+  completionTrackCodes: string[];
+  releaseBlockerCodes: string[];
+}
+
+export interface ProductionScorecard {
+  currentScore: number;
+  targetScore: number;
+  status: string;
+  nextGate: string;
+  categories: ProductionScorecardCategory[];
+}
+
 export interface RevenueTaxonomyRangeEvidence {
   taxonomyKey: string;
   accountingStandard: string;
@@ -2075,6 +2095,7 @@ export interface ProductionReadinessReport {
   sourceLawReviewLedger: SourceLawReviewLedgerEntry[];
   revenueTaxonomyRanges: RevenueTaxonomyRangeEvidence[];
   assurancePacket: ProductionAssurancePacket;
+  productionScorecard: ProductionScorecard;
   accountantAcceptanceCriteria: AccountantAcceptanceCriterion[];
   accountantAcceptanceSummary: AccountantAcceptanceSummary;
   accountantWorkflowWalkthroughProtocol: AccountantWorkflowWalkthroughProtocol;
@@ -2184,6 +2205,26 @@ const productionAssurancePacketSchema = z.object({
   openCriticalActions: z.number().int().nonnegative(),
   evidenceItems: z.array(z.string().min(1)),
   releaseBlockers: z.array(z.string().min(1)),
+});
+
+const productionScorecardCategorySchema = z.object({
+  code: z.string().min(1),
+  label: z.string().min(1),
+  currentScore: z.number().int().nonnegative(),
+  targetScore: z.number().int().positive(),
+  status: z.string().min(1),
+  currentEvidence: z.array(z.string().min(1)),
+  remainingGaps: z.array(z.string().min(1)),
+  completionTrackCodes: z.array(z.string().min(1)),
+  releaseBlockerCodes: z.array(z.string().min(1)),
+});
+
+const productionScorecardSchema = z.object({
+  currentScore: z.number().int().nonnegative(),
+  targetScore: z.number().int().positive(),
+  status: z.string().min(1),
+  nextGate: z.string().min(1),
+  categories: z.array(productionScorecardCategorySchema),
 });
 
 const productionReadinessAreaSchema = z.object({
@@ -2649,6 +2690,7 @@ export const productionReadinessReportSchema = z.object({
   sourceLawReviewLedger: z.array(sourceLawReviewLedgerEntrySchema),
   revenueTaxonomyRanges: z.array(revenueTaxonomyRangeEvidenceSchema),
   assurancePacket: productionAssurancePacketSchema,
+  productionScorecard: productionScorecardSchema,
   accountantAcceptanceCriteria: z.array(accountantAcceptanceCriterionSchema),
   accountantAcceptanceSummary: accountantAcceptanceSummarySchema,
   accountantWorkflowWalkthroughProtocol: accountantWorkflowWalkthroughProtocolSchema,
@@ -3028,6 +3070,7 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
   assertCompletionTracks(report);
   assertReleaseReviewChecklist(report);
   assertReleaseBlockerRegister(report);
+  assertProductionScorecard(report);
   assertReleaseVerificationManifest(report);
 
   report.goldenFilingCorpus.forEach((scenario, scenarioIndex) => {
@@ -4429,6 +4472,80 @@ function assertReleaseBlockerRegister(report: ProductionReadinessReport) {
       `Invalid production readiness report contract: releaseBlockerRegister - must cover every assurance packet release blocker; missing ${missingPacketBlockers.join(", ") || "none"}, unexpected ${unexpectedRegisterBlockers.join(", ") || "none"}`,
     );
   }
+}
+
+function assertProductionScorecard(report: ProductionReadinessReport) {
+  const requiredCodes = [
+    "architecture-documentation",
+    "backend-statutory-accounting-engine",
+    "frontend-accountant-workbench",
+    "security-auth-tenant-platform-guardrails",
+  ];
+  const actualCodes = report.productionScorecard.categories.map((category) => category.code);
+  const missingCodes = requiredCodes.filter((code) => !actualCodes.includes(code));
+  const duplicateCodes = actualCodes.filter((code, index) => actualCodes.indexOf(code) !== index);
+  const completionTrackCodes = new Set(report.completionTracks.map((track) => track.code));
+  const releaseBlockerCodes = new Set(report.releaseBlockerRegister.map((blocker) => blocker.code));
+
+  if (!report.assurancePacket.evidenceItems.includes("production-scorecard")) {
+    throw new Error(
+      "Invalid production readiness report contract: assurancePacket.evidenceItems - production-scorecard is required",
+    );
+  }
+
+  if (missingCodes.length > 0) {
+    throw new Error(
+      `Invalid production readiness report contract: productionScorecard.categories - missing required categories: ${missingCodes.join(", ")}`,
+    );
+  }
+
+  if (duplicateCodes.length > 0) {
+    throw new Error(
+      `Invalid production readiness report contract: productionScorecard.categories - duplicate category codes: ${[...new Set(duplicateCodes)].join(", ")}`,
+    );
+  }
+
+  const currentTotal = report.productionScorecard.categories.reduce((total, category) => total + category.currentScore, 0);
+  const targetTotal = report.productionScorecard.categories.reduce((total, category) => total + category.targetScore, 0);
+
+  assertExpectedNumber("productionScorecard.currentScore", currentTotal, report.productionScorecard.currentScore);
+  assertExpectedNumber("productionScorecard.targetScore", targetTotal, report.productionScorecard.targetScore);
+
+  report.productionScorecard.categories.forEach((category, categoryIndex) => {
+    if (category.currentScore > category.targetScore) {
+      throw new Error(
+        `Invalid production readiness report contract: productionScorecard.categories.${categoryIndex}.currentScore - cannot exceed target score`,
+      );
+    }
+
+    if (category.currentEvidence.length === 0) {
+      throw new Error(
+        `Invalid production readiness report contract: productionScorecard.categories.${categoryIndex}.currentEvidence - at least one evidence item is required`,
+      );
+    }
+
+    if (category.remainingGaps.length === 0) {
+      throw new Error(
+        `Invalid production readiness report contract: productionScorecard.categories.${categoryIndex}.remainingGaps - at least one remaining gap is required until the score reaches target`,
+      );
+    }
+
+    category.completionTrackCodes.forEach((trackCode) => {
+      if (!completionTrackCodes.has(trackCode)) {
+        throw new Error(
+          `Invalid production readiness report contract: productionScorecard.categories.${categoryIndex}.completionTrackCodes - unknown completion track ${trackCode}`,
+        );
+      }
+    });
+
+    category.releaseBlockerCodes.forEach((blockerCode) => {
+      if (!releaseBlockerCodes.has(blockerCode)) {
+        throw new Error(
+          `Invalid production readiness report contract: productionScorecard.categories.${categoryIndex}.releaseBlockerCodes - unknown release blocker ${blockerCode}`,
+        );
+      }
+    });
+  });
 }
 
 function assertReleaseReviewChecklist(report: ProductionReadinessReport) {

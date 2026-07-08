@@ -851,6 +851,56 @@ public class ProductionReadinessReportTests
     }
 
     [Fact]
+    public async Task ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers()
+    {
+        await using var db = CreateDbContext();
+        var report = await new ProductionReadinessReportService(db).GetReportAsync();
+
+        Assert.NotNull(report.ProductionScorecard);
+        Assert.Equal(490, report.ProductionScorecard.CurrentScore);
+        Assert.Equal(700, report.ProductionScorecard.TargetScore);
+        Assert.Equal("review-required", report.ProductionScorecard.Status);
+        Assert.Contains("visual QA", report.ProductionScorecard.NextGate, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("qualified-accountant", report.ProductionScorecard.NextGate, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("production-scorecard", report.AssurancePacket.EvidenceItems);
+
+        var categories = report.ProductionScorecard.Categories;
+        Assert.Equal(
+            new[]
+            {
+                "architecture-documentation",
+                "backend-statutory-accounting-engine",
+                "frontend-accountant-workbench",
+                "security-auth-tenant-platform-guardrails"
+            },
+            categories.Select(category => category.Code));
+
+        var scores = categories.ToDictionary(category => category.Code);
+        Assert.Equal((90, 100), (scores["architecture-documentation"].CurrentScore, scores["architecture-documentation"].TargetScore));
+        Assert.Equal((170, 250), (scores["backend-statutory-accounting-engine"].CurrentScore, scores["backend-statutory-accounting-engine"].TargetScore));
+        Assert.Equal((130, 200), (scores["frontend-accountant-workbench"].CurrentScore, scores["frontend-accountant-workbench"].TargetScore));
+        Assert.Equal((100, 150), (scores["security-auth-tenant-platform-guardrails"].CurrentScore, scores["security-auth-tenant-platform-guardrails"].TargetScore));
+
+        var trackCodes = report.CompletionTracks.Select(track => track.Code).ToHashSet(StringComparer.Ordinal);
+        var blockerCodes = report.ReleaseBlockerRegister.Select(blocker => blocker.Code).ToHashSet(StringComparer.Ordinal);
+
+        Assert.All(categories, category =>
+        {
+            Assert.InRange(category.CurrentScore, 0, category.TargetScore);
+            Assert.NotEmpty(category.CurrentEvidence);
+            Assert.NotEmpty(category.RemainingGaps);
+            Assert.All(category.CompletionTrackCodes, trackCode => Assert.Contains(trackCode, trackCodes));
+            Assert.All(category.ReleaseBlockerCodes, blockerCode => Assert.Contains(blockerCode, blockerCodes));
+        });
+
+        Assert.Contains("backend-code:production-monitoring", scores["security-auth-tenant-platform-guardrails"].ReleaseBlockerCodes);
+        Assert.Contains(scores["frontend-accountant-workbench"].RemainingGaps, gap =>
+            gap.Contains("visual QA", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(scores["backend-statutory-accounting-engine"].RemainingGaps, gap =>
+            gap.Contains("qualified-accountant", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task GoldenCorpusCoverage_IsBackedByConcreteAutomatedEvidenceTests()
     {
         await using var db = CreateDbContext();

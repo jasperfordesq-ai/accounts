@@ -47,6 +47,7 @@ Committed and pushed work on `main` includes:
 - `edb59c1 Add golden verifier manifest evidence`
 - `9768a1c Add production readiness evidence gates`
 - `baade7e Add release evidence signoff templates`
+- `dfa9c28 Record latest release evidence CI status`
 
 Backend/accounting-engine progress:
 
@@ -106,6 +107,11 @@ Backend/accounting-engine progress:
   visual QA sign-off, qualified-accountant acceptance, and monitoring-provider
   confirmation. The production runbook links those templates so release evidence is
   captured consistently rather than as ad hoc notes.
+- The production readiness report now exposes a first-class production scorecard for
+  the active goal categories: architecture/documentation, backend statutory/accounting
+  engine, frontend accountant workbench, and security/auth/tenant/platform guardrails.
+  Each category carries current/target points, current evidence, remaining gaps,
+  completion-track links, and live release-blocker links.
 
 Frontend UI/UX progress:
 
@@ -183,6 +189,11 @@ Recent successful local verification includes:
   - 2 passed, proving the manual visual QA, qualified-accountant acceptance, and
   monitoring-provider confirmation templates exist and are linked from the production
   runbook
+- Backend focused production scorecard test:
+  `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers`
+  - 1 passed, proving the readiness report exposes the four active goal categories,
+  current/target scores, current evidence, remaining gaps, completion-track links, and
+  live release-blocker links
 - Backend focused opening take-on tests:
   `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~OpeningTrialBalanceTakeOn|FullyQualifiedName~FinalOutputs_BlockWhenOpeningTrialBalanceTakeOnDoesNotBalance|FullyQualifiedName~TrialBalance_IncludesReviewedOpeningBalancesAndBankOpeningSide"`
 - Backend focused test:
@@ -224,9 +235,11 @@ Recent successful local verification includes:
 - Frontend production-readiness contract and render checks after changing the
   dependency artifact:
   - `node --test --experimental-strip-types tests/production-readiness-contract.test.mjs`
-    - 38 passed
+    - 41 passed, including production scorecard schema and invariant checks
   - `node scripts/verify-api-client.mjs` - passed
   - `npm.cmd run test:render -- production-readiness-workbench` - 1 passed
+- Frontend type-check after adding the production scorecard API/UI contract:
+  `npx.cmd tsc --noEmit --incremental false` - passed
 - Frontend lint:
   `npm.cmd run lint` - passed
 - Frontend production build:
@@ -266,8 +279,8 @@ Recent successful local verification includes:
 
 CI status:
 
-- GitHub Actions run `28933406513` for commit
-  `baade7e Add release evidence signoff templates` completed successfully on
+- GitHub Actions run `28933863283` for commit
+  `dfa9c28 Record latest release evidence CI status` completed successfully on
   July 8, 2026.
 - Green jobs: Workflow Hygiene, Production Compose Config, Frontend, Backend, and
   Production Stack Smoke.

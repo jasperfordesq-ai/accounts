@@ -189,6 +189,18 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.ok(parsed.assurancePacket.evidenceItems.includes("golden-verifier-manifest"));
   assert.ok(parsed.assurancePacket.evidenceItems.includes("release-blocker-register"));
   assert.equal(parsed.assurancePacket.releaseBlockers[0], "Qualified accountant sign-off required");
+  assert.equal(parsed.productionScorecard.currentScore, 490);
+  assert.equal(parsed.productionScorecard.targetScore, 700);
+  assert.deepEqual(parsed.productionScorecard.categories.map((category) => category.code), [
+    "architecture-documentation",
+    "backend-statutory-accounting-engine",
+    "frontend-accountant-workbench",
+    "security-auth-tenant-platform-guardrails",
+  ]);
+  assert.equal(parsed.productionScorecard.categories[1].currentScore, 170);
+  assert.equal(parsed.productionScorecard.categories[1].targetScore, 250);
+  assert.ok(parsed.productionScorecard.categories[2].remainingGaps[0].includes("visual QA"));
+  assert.ok(parsed.productionScorecard.categories[3].completionTrackCodes.includes("backend-code"));
   assert.equal(parsed.assuranceActions[0].riskRank, 0);
   assert.equal(parsed.assuranceActions[0].evidenceStage, "accountant-review-gate");
   assert.equal(parsed.completionTracks.length, 3);
@@ -737,6 +749,36 @@ test("parseProductionReadinessReport rejects release blockers that drift from tr
   );
 });
 
+test("parseProductionReadinessReport rejects a missing production scorecard", () => {
+  const payload = sampleReport();
+  delete payload.productionScorecard;
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: productionScorecard - Invalid input: expected object, received undefined/,
+  );
+});
+
+test("parseProductionReadinessReport rejects scorecard totals that do not match categories", () => {
+  const payload = sampleReport();
+  payload.productionScorecard.currentScore = 491;
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: productionScorecard\.currentScore - expected 490, received 491/,
+  );
+});
+
+test("parseProductionReadinessReport rejects scorecard categories with unknown release blockers", () => {
+  const payload = sampleReport();
+  payload.productionScorecard.categories[0].releaseBlockerCodes.push("unknown-track:unknown-action");
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: productionScorecard\.categories\.0\.releaseBlockerCodes - unknown release blocker unknown-track:unknown-action/,
+  );
+});
+
 test("parseProductionReadinessReport rejects release checklist items for unknown assurance actions", () => {
   const payload = sampleReport();
   payload.releaseReviewChecklist[0].assuranceActionCode = "missing-assurance-action";
@@ -778,6 +820,69 @@ test("parseProductionReadinessReport rejects release verification manifest that 
     /Invalid production readiness report contract: releaseVerificationManifest - missing verification coverage for blocking checklist evidence: named-accountant-approval-record/,
   );
 });
+
+function productionScorecard() {
+  return {
+    currentScore: 490,
+    targetScore: 700,
+    status: "review-required",
+    nextGate: "Complete named visual QA, monitoring-provider confirmation and qualified-accountant acceptance evidence.",
+    categories: [
+      {
+        code: "architecture-documentation",
+        label: "Architecture and documentation",
+        currentScore: 90,
+        targetScore: 100,
+        status: "release-evidence-required",
+        currentEvidence: ["CLAUDE.md is canonical.", "AGENTS.md carries the active handoff."],
+        remainingGaps: ["Complete checked-in release evidence templates with named reviewers."],
+        completionTrackCodes: ["backend-code", "frontend-ui-ux", "frontend-code"],
+        releaseBlockerCodes: ["backend-code:source-law-change-review", "frontend-ui-ux:light-dark-visual-regression"],
+      },
+      {
+        code: "backend-statutory-accounting-engine",
+        label: "Backend statutory/accounting engine",
+        currentScore: 170,
+        targetScore: 250,
+        status: "qualified-accountant-review-required",
+        currentEvidence: ["Golden filing corpus covers the production scenarios."],
+        remainingGaps: ["Run and retain qualified-accountant acceptance across every golden corpus scenario."],
+        completionTrackCodes: ["backend-code"],
+        releaseBlockerCodes: [
+          "backend-code:qualified-accountant-signoff",
+          "backend-code:external-ros-validation",
+          "backend-code:accountant-acceptance-walkthrough",
+        ],
+      },
+      {
+        code: "frontend-accountant-workbench",
+        label: "Frontend accountant workbench",
+        currentScore: 130,
+        targetScore: 200,
+        status: "visual-acceptance-required",
+        currentEvidence: ["Visual smoke plan covers the accountant journey."],
+        remainingGaps: ["Complete named visual QA review against the light/dark desktop/mobile screenshot manifest."],
+        completionTrackCodes: ["frontend-ui-ux", "frontend-code"],
+        releaseBlockerCodes: [
+          "frontend-ui-ux:light-dark-visual-regression",
+          "frontend-ui-ux:accountant-acceptance-walkthrough",
+          "frontend-code:light-dark-visual-regression",
+        ],
+      },
+      {
+        code: "security-auth-tenant-platform-guardrails",
+        label: "Security/auth/tenant/platform guardrails",
+        currentScore: 100,
+        targetScore: 150,
+        status: "operator-confirmation-required",
+        currentEvidence: ["Session, CSRF, tenant and production safety evidence exists."],
+        remainingGaps: ["Confirm the controlled monitoring smoke event inside the configured provider."],
+        completionTrackCodes: ["backend-code"],
+        releaseBlockerCodes: ["backend-code:source-law-change-review", "backend-code:external-ros-validation"],
+      },
+    ],
+  };
+}
 
 function sampleReport() {
   return withGoldenLegalBasisSnapshots({
@@ -978,7 +1083,7 @@ function sampleReport() {
       visualQaExpectedScreenshots: expectedVisualSmokeScreenshotCount(),
       requiredOperationalGates: 1,
       openCriticalActions: 3,
-      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "source-law-review-ledger", "revenue-taxonomy-range-evidence", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "production-audit-evidence-pack", "operations-evidence-pack", "visual-smoke-screenshots", "release-blocker-register", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "accountant-journey-acceptance-checklist", "accountant-workflow-evidence-pack", "accountant-walkthrough-evidence-matrix", "workbench-visual-acceptance-register", "production-completion-map"],
+      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "source-law-review-ledger", "revenue-taxonomy-range-evidence", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "production-audit-evidence-pack", "operations-evidence-pack", "visual-smoke-screenshots", "release-blocker-register", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "accountant-journey-acceptance-checklist", "accountant-workflow-evidence-pack", "accountant-walkthrough-evidence-matrix", "workbench-visual-acceptance-register", "production-completion-map", "production-scorecard"],
       releaseBlockers: [
         "Qualified accountant sign-off required",
         "Source-law change review required",
@@ -987,6 +1092,7 @@ function sampleReport() {
         "Light/dark visual regression required",
       ],
     },
+    productionScorecard: productionScorecard(),
     accountantAcceptanceCriteria: [
       {
         scenarioCode: "micro-ltd",
