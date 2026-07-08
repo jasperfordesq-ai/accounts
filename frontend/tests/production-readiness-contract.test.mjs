@@ -191,7 +191,7 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.ok(parsed.assurancePacket.evidenceItems.includes("production-readiness-report"));
   assert.ok(parsed.assurancePacket.evidenceItems.includes("production-readiness-verification-report"));
   assert.equal(parsed.assurancePacket.releaseBlockers[0], "Qualified accountant sign-off required");
-  assert.equal(parsed.productionScorecard.currentScore, 579);
+  assert.equal(parsed.productionScorecard.currentScore, 584);
   assert.equal(parsed.productionScorecard.targetScore, 700);
   assert.deepEqual(parsed.productionScorecard.categories.map((category) => category.code), [
     "architecture-documentation",
@@ -227,9 +227,12 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.equal(parsed.releaseVerificationManifest[0].code, "backend-golden-corpus");
   assert.equal(parsed.releaseVerificationManifest[0].command, "dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art");
   assert.equal(parsed.releaseVerificationManifest[0].releaseChecklistEvidenceArtifact, "named-accountant-approval-record");
-  assert.equal(parsed.releaseVerificationManifest[1].ciScope, "environment-gated");
-  assert.equal(parsed.releaseVerificationManifest[1].runsInDefaultCi, false);
-  assert.match(parsed.releaseVerificationManifest[1].manualFallback, /ACCOUNTS_POSTGRES_TEST_CONNECTION/);
+  const frontendContractVerification = parsed.releaseVerificationManifest.find(
+    (item) => item.code === "frontend-workbench-contract",
+  );
+  assert.equal(frontendContractVerification?.ciScope, "default-ci");
+  assert.equal(frontendContractVerification?.runsInDefaultCi, true);
+  assert.match(frontendContractVerification?.manualFallback ?? "", /unit, render, readiness, proxy, auth and API-client verifier output/);
   const visualSmokeVerification = parsed.releaseVerificationManifest.find((item) => item.code === "visual-smoke-light-dark");
   assert.match(visualSmokeVerification?.command ?? "", /verify-visual-smoke-artifacts/);
   assert.match(visualSmokeVerification?.command ?? "", /verify-accountant-workbench-evidence/);
@@ -804,7 +807,7 @@ test("parseProductionReadinessReport rejects scorecard totals that do not match 
 
   assert.throws(
     () => parseProductionReadinessReport(payload),
-    /Invalid production readiness report contract: productionScorecard\.currentScore - expected 579, received 491/,
+    /Invalid production readiness report contract: productionScorecard\.currentScore - expected 584, received 491/,
   );
 });
 
@@ -848,10 +851,37 @@ test("parseProductionReadinessReport rejects missing release verification manife
   );
 });
 
-test("parseProductionReadinessReport rejects release verification manifest that misses blocking checklist evidence", () => {
+test("parseProductionReadinessReport rejects release verification manifests without CI machine evidence coverage", () => {
   const payload = sampleReport();
   payload.releaseVerificationManifest = payload.releaseVerificationManifest.filter(
-    (item) => item.releaseChecklistEvidenceArtifact !== "named-accountant-approval-record",
+    (item) => item.code !== "ci-machine-evidence-pack",
+  );
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: releaseVerificationManifest - missing default CI verification commands: ci-machine-evidence-pack/,
+  );
+});
+
+test("parseProductionReadinessReport rejects malformed CI machine evidence manifest rows", () => {
+  const payload = sampleReport();
+  const ciMachineEvidencePack = payload.releaseVerificationManifest.find(
+    (item) => item.code === "ci-machine-evidence-pack",
+  );
+  ciMachineEvidencePack.evidenceArtifact = "wrong-artifact";
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: releaseVerificationManifest\.ci-machine-evidence-pack - default CI verifier and artifact are required/,
+  );
+});
+
+test("parseProductionReadinessReport rejects release verification manifest that misses blocking checklist evidence", () => {
+  const payload = sampleReport();
+  payload.releaseVerificationManifest = payload.releaseVerificationManifest.map((item) =>
+    item.releaseChecklistEvidenceArtifact === "named-accountant-approval-record"
+      ? { ...item, releaseChecklistEvidenceArtifact: "source-law-change-review-note" }
+      : item,
   );
 
   assert.throws(
@@ -862,7 +892,7 @@ test("parseProductionReadinessReport rejects release verification manifest that 
 
 function productionScorecard() {
   return {
-    currentScore: 579,
+    currentScore: 584,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete source-law review, named visual QA, monitoring-provider confirmation, manual handoff and qualified-accountant acceptance evidence.",
@@ -908,13 +938,14 @@ function productionScorecard() {
       {
         code: "frontend-accountant-workbench",
         label: "Frontend accountant workbench",
-        currentScore: 150,
+        currentScore: 155,
         targetScore: 200,
         status: "visual-acceptance-required",
         currentEvidence: [
           "Visual smoke plan covers the accountant journey.",
           "visual-smoke-evidence-report.json proves screenshot hash, byte-size and route/theme/viewport coverage.",
           "accountant-workbench-evidence-report.json proves route workflow-stage, review-check and qualified-accountant route acceptance coverage.",
+          "Frontend parser invariants now require the CI machine evidence pack, production smoke, readiness verification, visual smoke and manual release-verification rows before rendering readiness data.",
         ],
         remainingGaps: ["Complete named visual QA review against the light/dark desktop/mobile screenshot manifest and visual-smoke-evidence-report.json."],
         completionTrackCodes: ["frontend-ui-ux", "frontend-code"],
@@ -1830,6 +1861,13 @@ function sampleReport() {
         status: "enforced",
         detail: "Final filing operations remain recorded workflow states only.",
       },
+      {
+        code: "production-ci-gates",
+        label: "Production CI evidence gates",
+        required: true,
+        status: "required",
+        detail: "Production smoke, backup restore and visual evidence must be retained for the exact release candidate.",
+      },
     ],
     assuranceActions: [
       {
@@ -1886,6 +1924,17 @@ function sampleReport() {
         status: "required",
         detail: "A qualified accountant must accept outputs, gates and wording.",
         evidenceRequired: "Signed acceptance note for the golden corpus.",
+      },
+      {
+        code: "production-monitoring",
+        label: "Production monitoring and backup evidence",
+        owner: "Operations",
+        priority: "high",
+        riskRank: 20,
+        evidenceStage: "production-operations-evidence",
+        status: "required",
+        detail: "Production smoke, monitoring routing and backup restore evidence must be retained for the exact release candidate.",
+        evidenceRequired: "CI production stack smoke and backup restore evidence.",
       },
       {
         code: "light-dark-visual-regression",
@@ -1976,8 +2025,8 @@ function sampleReport() {
         nextAction: "Review each screenshot route-by-route in light and dark mode.",
         sourceActionCode: "light-dark-visual-regression",
         releaseChecklistCode: "visual-qa-screenshot-review",
-        operationalGateCode: "",
-        evidenceArtifact: "visual-smoke-screenshots",
+        operationalGateCode: "production-ci-gates",
+        evidenceArtifact: "light-dark-desktop-mobile-screenshot-review",
         blocksRelease: true,
       },
       {
@@ -2008,8 +2057,8 @@ function sampleReport() {
         nextAction: "Expand visual regression assertions from screenshot capture into reviewable sign-off.",
         sourceActionCode: "light-dark-visual-regression",
         releaseChecklistCode: "visual-qa-screenshot-review",
-        operationalGateCode: "",
-        evidenceArtifact: "visual-smoke-screenshots",
+        operationalGateCode: "production-ci-gates",
+        evidenceArtifact: "light-dark-desktop-mobile-screenshot-review",
         blocksRelease: true,
       },
     ],
@@ -2113,7 +2162,7 @@ function sampleReport() {
         assuranceActionCode: "qualified-accountant-signoff",
         operationalGateCode: "qualified-accountant-review",
         auditEventCodes: ["CroFilingStatusChanged"],
-        detail: "Named professional approval must be recorded against the period.",
+        detail: "Named professional approval must be recorded against the period before any real filing pack is treated as final.",
       },
       {
         code: "source-law-change-review",
@@ -2125,7 +2174,7 @@ function sampleReport() {
         evidenceArtifact: "source-law-change-review-note",
         assuranceActionCode: "source-law-change-review",
         operationalGateCode: "qualified-accountant-review",
-        auditEventCodes: ["CroFilingStatusChanged"],
+        auditEventCodes: ["CroFilingStatusChanged", "IxbrlInternalCheckCompleted"],
         detail: "Pinned CRO, Revenue, FRC and charity guidance must be reviewed for effective-date or wording changes before release.",
       },
       {
@@ -2139,7 +2188,7 @@ function sampleReport() {
         assuranceActionCode: "external-ros-validation",
         operationalGateCode: "external-ros-validation",
         auditEventCodes: ["IxbrlInternalCheckCompleted"],
-        detail: "External ROS validation evidence must be retained before real Revenue filing use.",
+        detail: "Internal XML checks are not enough for Revenue acceptance; the reviewer must retain external validation evidence.",
       },
       {
         code: "no-direct-cro-ros-submission",
@@ -2165,20 +2214,33 @@ function sampleReport() {
         assuranceActionCode: "accountant-acceptance-walkthrough",
         operationalGateCode: "qualified-accountant-review",
         auditEventCodes: ["CroDocumentGenerated", "IxbrlInternalCheckCompleted", "NotesGenerated"],
-        detail: "A qualified accountant must walk the golden scenarios and accept outputs, gates and wording.",
+        detail: "A qualified accountant must walk the golden scenarios through the live workflow and accept outputs, gates and wording.",
+      },
+      {
+        code: "production-smoke-and-backup",
+        label: "Production smoke and backup evidence",
+        ownerRole: "Operations",
+        required: true,
+        status: "required",
+        blocksRelease: true,
+        evidenceArtifact: "ci-production-stack-smoke-and-backup-restore",
+        assuranceActionCode: "production-monitoring",
+        operationalGateCode: "production-ci-gates",
+        auditEventCodes: [],
+        detail: "Release evidence must include successful production stack smoke, visual smoke, monitoring configuration and backup restore drill.",
       },
       {
         code: "visual-qa-screenshot-review",
-        label: "Visual QA screenshot review",
+        label: "Light/dark visual QA screenshot review",
         ownerRole: "Engineering",
         required: true,
         status: "in-progress",
         blocksRelease: true,
-        evidenceArtifact: "visual-smoke-screenshots",
+        evidenceArtifact: "light-dark-desktop-mobile-screenshot-review",
         assuranceActionCode: "light-dark-visual-regression",
-        operationalGateCode: "",
+        operationalGateCode: "production-ci-gates",
         auditEventCodes: [],
-        detail: "Visual smoke screenshots must be reviewed in light and dark mode before release.",
+        detail: "Desktop and mobile screenshots in light and dark mode must be reviewed for the accountant workflow before release.",
       },
     ],
     releaseVerificationManifest: [
@@ -2195,16 +2257,28 @@ function sampleReport() {
         manualFallback: "Run the same command locally from backend/ when GitHub Actions is unavailable.",
       },
       {
-        code: "postgres-gated-audit-tests",
-        label: "PostgreSQL-gated audit durability tests",
+        code: "frontend-workbench-contract",
+        label: "Frontend workbench contract, render and API checks",
         ownerRole: "Engineering",
-        command: "dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter FullyQualifiedName~PostgresIntegration",
-        ciScope: "environment-gated",
-        runsInDefaultCi: false,
+        command: "npm test",
+        ciScope: "default-ci",
+        runsInDefaultCi: true,
         blocksRelease: true,
-        evidenceArtifact: "postgres-integration-test-results",
-        releaseChecklistEvidenceArtifact: "named-accountant-approval-record",
-        manualFallback: "Set ACCOUNTS_POSTGRES_TEST_CONNECTION to a disposable PostgreSQL database before relying on audit durability evidence.",
+        evidenceArtifact: "frontend-test-results",
+        releaseChecklistEvidenceArtifact: "light-dark-desktop-mobile-screenshot-review",
+        manualFallback: "Run from frontend/ and retain the unit, render, readiness, proxy, auth and API-client verifier output.",
+      },
+      {
+        code: "frontend-production-build",
+        label: "Frontend lint, type-check and production build",
+        ownerRole: "Engineering",
+        command: "npm run lint; npx tsc --noEmit --incremental false; npm run build",
+        ciScope: "default-ci",
+        runsInDefaultCi: true,
+        blocksRelease: true,
+        evidenceArtifact: "frontend-build-results",
+        releaseChecklistEvidenceArtifact: "light-dark-desktop-mobile-screenshot-review",
+        manualFallback: "Run from frontend/ and retain lint, TypeScript and Next production build output when CI is unavailable.",
       },
       {
         code: "visual-smoke-light-dark",
@@ -2215,7 +2289,7 @@ function sampleReport() {
         runsInDefaultCi: true,
         blocksRelease: true,
         evidenceArtifact: "artifacts/visual-smoke",
-        releaseChecklistEvidenceArtifact: "visual-smoke-screenshots",
+        releaseChecklistEvidenceArtifact: "light-dark-desktop-mobile-screenshot-review",
         manualFallback: "Run visual smoke locally, then retain the manifest verification output and review the generated artifacts manually.",
       },
       {
@@ -2229,6 +2303,18 @@ function sampleReport() {
         evidenceArtifact: "source-law-change-review-note",
         releaseChecklistEvidenceArtifact: "source-law-change-review-note",
         manualFallback: "Retain a dated source-law review note before relying on the generated packs for real filing use.",
+      },
+      {
+        code: "qualified-accountant-final-signoff",
+        label: "Named accountant final sign-off evidence",
+        ownerRole: "Qualified accountant",
+        command: "manual review: record named qualified-accountant approval against the final generated filing pack",
+        ciScope: "manual-release",
+        runsInDefaultCi: false,
+        blocksRelease: true,
+        evidenceArtifact: "named-accountant-approval-record",
+        releaseChecklistEvidenceArtifact: "named-accountant-approval-record",
+        manualFallback: "A named qualified accountant must approve the exact generated filing pack before real filing use.",
       },
       {
         code: "external-ros-validation-evidence",
@@ -2265,6 +2351,66 @@ function sampleReport() {
         evidenceArtifact: "signed-golden-corpus-acceptance-note",
         releaseChecklistEvidenceArtifact: "signed-golden-corpus-acceptance-note",
         manualFallback: "A named qualified accountant must accept the generated outputs, gates, wording and source-law evidence.",
+      },
+      {
+        code: "production-readiness-report-verification",
+        label: "Production readiness report verification",
+        ownerRole: "Engineering",
+        command: "pwsh ./scripts/verify-production-readiness-report.ps1 -ReportPath production-readiness-report.json -EvidencePath production-readiness-verification-report.json",
+        ciScope: "default-ci",
+        runsInDefaultCi: true,
+        blocksRelease: true,
+        evidenceArtifact: "production-readiness-report",
+        releaseChecklistEvidenceArtifact: "ci-production-stack-smoke-and-backup-restore",
+        manualFallback: "Run after capturing the live production-readiness response and retain production-readiness-verification-report.json.",
+      },
+      {
+        code: "production-stack-smoke",
+        label: "Production compose smoke",
+        ownerRole: "Operations",
+        command: "pwsh ./scripts/smoke-production.ps1 -CheckMonitoringErrorRouting; pwsh ./scripts/verify-production-readiness-report.ps1; pwsh ./scripts/verify-structured-logs.ps1",
+        ciScope: "default-ci",
+        runsInDefaultCi: true,
+        blocksRelease: true,
+        evidenceArtifact: "ci-production-stack-smoke-and-backup-restore",
+        releaseChecklistEvidenceArtifact: "ci-production-stack-smoke-and-backup-restore",
+        manualFallback: "Run the production smoke script against the production compose profile and retain monitoring, structured log and filing-workflow output.",
+      },
+      {
+        code: "backup-restore-drill",
+        label: "PostgreSQL backup and restore drill",
+        ownerRole: "Operations",
+        command: "pwsh ./scripts/verify-postgres-backup.ps1",
+        ciScope: "default-ci",
+        runsInDefaultCi: true,
+        blocksRelease: true,
+        evidenceArtifact: "ci-production-stack-smoke-and-backup-restore",
+        releaseChecklistEvidenceArtifact: "ci-production-stack-smoke-and-backup-restore",
+        manualFallback: "Run the backup verification script after creating a fresh production-shape dump and retain the checksum and restore verification output.",
+      },
+      {
+        code: "ci-machine-evidence-pack",
+        label: "CI machine evidence pack",
+        ownerRole: "Engineering",
+        command: "pwsh ./scripts/verify-ci-machine-evidence-pack.ps1 -EvidenceDirectory <downloaded-ci-artifacts> -ReportPath ci-machine-evidence-pack-report.json -CommitSha <release-commit-sha> -GitHubActionsRunUrl <ci-run-url>",
+        ciScope: "default-ci",
+        runsInDefaultCi: true,
+        blocksRelease: true,
+        evidenceArtifact: "ci-machine-evidence-pack",
+        releaseChecklistEvidenceArtifact: "ci-production-stack-smoke-and-backup-restore",
+        manualFallback: "Run after downloading CI machine artifacts for the exact candidate.",
+      },
+      {
+        code: "release-artifact-pack",
+        label: "Release artifact pack verification",
+        ownerRole: "Engineering",
+        command: "pwsh ./scripts/verify-release-artifact-pack.ps1 -EvidenceDirectory <release-artifacts> -ReportPath release-artifact-pack-report.json -CommitSha <release-commit-sha> -GitHubActionsRunUrl <ci-run-url>",
+        ciScope: "manual-release",
+        runsInDefaultCi: false,
+        blocksRelease: true,
+        evidenceArtifact: "release-artifact-pack-report",
+        releaseChecklistEvidenceArtifact: "named-accountant-approval-record",
+        manualFallback: "Run against the collected machine and human release evidence reports for the exact release candidate.",
       },
     ],
     auditabilityControls: [
