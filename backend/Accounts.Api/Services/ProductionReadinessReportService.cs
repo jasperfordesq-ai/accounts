@@ -697,6 +697,8 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "visual-smoke-screenshots",
             "accountant-workbench-evidence-report",
             "production-operational-gates",
+            "production-readiness-report",
+            "production-readiness-verification-report",
             "dependency-policy-controls",
             "deployment-safety-controls",
             "operations-evidence-pack",
@@ -808,7 +810,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             Category(
                 "backend-statutory-accounting-engine",
                 "Backend statutory/accounting engine",
-                195,
+                200,
                 250,
                 "qualified-accountant-review-required",
                 [
@@ -819,7 +821,8 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "External ROS/iXBRL validation evidence now has a checked-in template and release verifier coverage for each canonical golden corpus scenario.",
                     "Source-law review evidence now has a checked-in template and release verifier coverage for every monitored CRO, Revenue, FRC and Charities Regulator source.",
                     "Manual handoff acceptance now has a checked-in template and release verifier coverage for the audit-required golden scenario and unsupported path codes.",
-                    "CI now retains production-readiness-report.json from the live smoke stack, proving the exact source-law snapshot, golden corpus, scorecard and release blockers exposed by the candidate."
+                    "CI now retains production-readiness-report.json from the live smoke stack, proving the exact source-law snapshot, golden corpus, scorecard and release blockers exposed by the candidate.",
+                    "scripts/verify-production-readiness-report.ps1 emits production-readiness-verification-report.json and proves the captured live report has complete source-law, golden-corpus, scorecard, blocker, visual-QA and release-manifest coverage."
                 ],
                 [
                     "Complete and retain verified source-law review evidence for every monitored source before relying on generated packs.",
@@ -868,7 +871,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "Request-scoped EF query filters backstop tenant isolation across company-owned and period-owned child tables.",
                     "Production compose gates enforce immutable images, migrate-only job ordering, demo seed blocking and structured monitoring evidence.",
                     "CI runs scripts/verify-no-direct-filing-submission.ps1 and retains no-direct-filing-submission-report.json, proving final CRO/ROS operations remain recorded workflow states with no outbound submission client wired.",
-                    "scripts/verify-release-artifact-pack.ps1 validates dependency, production safety, monitoring, structured log, backup/restore, no-direct-submission, visual smoke and release-evidence reports together.",
+                    "scripts/verify-release-artifact-pack.ps1 validates dependency, production safety, monitoring, structured log, backup/restore, no-direct-submission, production-readiness verification, visual smoke and release-evidence reports together.",
                     "release-artifact-pack-report.json now records release candidate identity plus per-report SHA-256 and byte-size evidence."
                 ],
                 [
@@ -2692,16 +2695,27 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "no-direct-cro-ros-submission-control",
             "Confirm final filing operations remain recorded workflow states only: generated, reviewed, approved, marked submitted, payment confirmed, accepted, rejected or corrected."),
         new(
+            "production-readiness-report-verification",
+            "Production readiness report verification",
+            "Engineering",
+            "pwsh ./scripts/verify-production-readiness-report.ps1 -ReportPath production-readiness-report.json -EvidencePath production-readiness-verification-report.json",
+            "default-ci",
+            RunsInDefaultCi: true,
+            BlocksRelease: true,
+            "production-readiness-report",
+            "ci-production-stack-smoke-and-backup-restore",
+            "Run after capturing the live /api/system/production-readiness response and retain production-readiness-verification-report.json with the release evidence pack."),
+        new(
             "production-stack-smoke",
             "Production compose smoke",
             "Operations",
-            "pwsh ./scripts/smoke-production.ps1 -CheckMonitoringErrorRouting; pwsh ./scripts/verify-structured-logs.ps1",
+            "pwsh ./scripts/smoke-production.ps1 -CheckMonitoringErrorRouting; pwsh ./scripts/verify-production-readiness-report.ps1; pwsh ./scripts/verify-structured-logs.ps1",
             "default-ci",
             RunsInDefaultCi: true,
             BlocksRelease: true,
             "ci-production-stack-smoke-and-backup-restore",
             "ci-production-stack-smoke-and-backup-restore",
-            "Run the production smoke script against the production compose profile and retain health, login, monitoring-error-routing-report.json, structured-log-report.json and filing-workflow output."),
+            "Run the production smoke script against the production compose profile and retain health, login, monitoring-error-routing-report.json, production-readiness-verification-report.json, structured-log-report.json and filing-workflow output."),
         new(
             "backup-restore-drill",
             "PostgreSQL backup and restore drill",
@@ -2713,6 +2727,17 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "ci-production-stack-smoke-and-backup-restore",
             "ci-production-stack-smoke-and-backup-restore",
             "Run the backup verification script after creating a fresh production-shape dump and retain the checksum and restore verification output."),
+        new(
+            "release-artifact-pack",
+            "Release artifact pack verification",
+            "Engineering",
+            "pwsh ./scripts/verify-release-artifact-pack.ps1 -EvidenceDirectory <release-artifacts> -ReportPath release-artifact-pack-report.json -CommitSha <release-commit-sha> -GitHubActionsRunUrl <ci-run-url>",
+            "manual-release",
+            RunsInDefaultCi: false,
+            BlocksRelease: true,
+            "release-artifact-pack-report",
+            "named-accountant-approval-record",
+            "Run against the collected dependency, production safety, monitoring, log, restore, no-direct, production-readiness, visual, workbench and human release-evidence reports for the exact release candidate."),
         new(
             "postgres-gated-audit-tests",
             "PostgreSQL-gated audit durability tests",

@@ -22,6 +22,7 @@ real CRO or Revenue filing use.
 - [ ] `structured-json-log-sample`
 - [ ] `postgres-backup-restore-drill`
 - [ ] `production-readiness-report`
+- [ ] `production-readiness-verification-report.json`
 - [ ] `visual-smoke-screenshots`
 - [ ] Generated PDF/iXBRL/tax support outputs for each accepted scenario
 

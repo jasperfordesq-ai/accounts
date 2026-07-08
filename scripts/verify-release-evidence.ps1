@@ -173,6 +173,7 @@ $requiredReleaseArtifactNames = @(
     "structured-json-log-sample",
     "postgres-backup-restore-drill",
     "production-readiness-report",
+    "production-readiness-verification-report.json",
     "visual-smoke-screenshots"
 )
 

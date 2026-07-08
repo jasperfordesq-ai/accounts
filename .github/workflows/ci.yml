@@ -420,6 +420,13 @@ jobs:
           ./scripts/verify-no-direct-filing-submission.ps1 `
             -EvidencePath (Join-Path $env:RUNNER_TEMP "accounts-smoke/no-direct-filing-submission-report.json")
 
+      - name: Verify production readiness report
+        shell: pwsh
+        run: |
+          ./scripts/verify-production-readiness-report.ps1 `
+            -ReportPath (Join-Path $env:RUNNER_TEMP "accounts-smoke/production-readiness-report.json") `
+            -EvidencePath (Join-Path $env:RUNNER_TEMP "accounts-smoke/production-readiness-verification-report.json")
+
       - name: Upload monitoring error routing evidence
         if: always()
         uses: actions/upload-artifact@v7
@@ -441,7 +448,9 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: production-readiness-report
-          path: ${{ runner.temp }}/accounts-smoke/production-readiness-report.json
+          path: |
+            ${{ runner.temp }}/accounts-smoke/production-readiness-report.json
+            ${{ runner.temp }}/accounts-smoke/production-readiness-verification-report.json
           if-no-files-found: error
 
       - name: Capture structured API log sample

@@ -18198,6 +18198,8 @@ public class AccountsWorkflowTests
         Assert.Contains("/api/system/production-readiness", smokeScript);
         Assert.Contains("production-readiness-report.json", smokeScript);
         Assert.Contains("Production readiness report written", smokeScript);
+        Assert.Contains("verify-production-readiness-report.ps1", runbook);
+        Assert.Contains("production-readiness-verification-report.json", runbook);
         Assert.Contains("verify-structured-logs.ps1", runbook);
         Assert.Contains("structured-log-report.json", runbook);
         Assert.Contains("structured-json-log-sample", runbook);
@@ -18317,6 +18319,7 @@ public class AccountsWorkflowTests
         Assert.Contains("production-safety-config", accountant);
         Assert.Contains("postgres-backup-restore-drill", accountant);
         Assert.Contains("production-readiness-report", accountant);
+        Assert.Contains("production-readiness-verification-report.json", accountant);
         Assert.Contains("micro-ltd", accountant);
         Assert.Contains("small-abridged-ltd", accountant);
         Assert.DoesNotContain("micro-ltd-standard", accountant);
@@ -18452,13 +18455,16 @@ public class AccountsWorkflowTests
         var runbook = File.ReadAllText(Path.Combine(root, "Docs", "operations", "production-runbook.md"));
         var reportService = File.ReadAllText(Path.Combine(root, "backend", "Accounts.Api", "Services", "ProductionReadinessReportService.cs"));
         var scriptPath = Path.Combine(root, "scripts", "verify-release-artifact-pack.ps1");
+        var readinessVerifierPath = Path.Combine(root, "scripts", "verify-production-readiness-report.ps1");
         var workflow = File.ReadAllText(Path.Combine(root, ".github", "workflows", "ci.yml"));
         var packageJson = File.ReadAllText(Path.Combine(root, "frontend", "package.json"));
         var workbenchVerifierPath = Path.Combine(root, "frontend", "scripts", "verify-accountant-workbench-evidence.mjs");
 
         Assert.True(File.Exists(scriptPath), "Release artifact pack verifier should make retained operational evidence machine-checkable.");
+        Assert.True(File.Exists(readinessVerifierPath), "Production readiness verifier should make the captured live readiness report machine-checkable.");
         Assert.True(File.Exists(workbenchVerifierPath), "Accountant workbench evidence verifier should produce visual-route release evidence.");
         var script = File.ReadAllText(scriptPath);
+        var readinessVerifier = File.ReadAllText(readinessVerifierPath);
         var workbenchVerifier = File.ReadAllText(workbenchVerifierPath);
 
         Assert.Contains("verify-release-artifact-pack.ps1", runbook);
@@ -18471,6 +18477,8 @@ public class AccountsWorkflowTests
         Assert.Contains("accountant-workbench-evidence-report.json", runbook);
         Assert.Contains("production-readiness-report", workflow);
         Assert.Contains("production-readiness-report.json", workflow);
+        Assert.Contains("verify-production-readiness-report.ps1", workflow);
+        Assert.Contains("production-readiness-verification-report.json", workflow);
         Assert.Contains("test:visual:workbench", packageJson);
         Assert.Contains("test:visual:workbench", workflow);
         Assert.Contains("accountant-workbench-evidence-report.json", workflow);
@@ -18484,6 +18492,7 @@ public class AccountsWorkflowTests
             "restore-drill-report.json",
             "no-direct-filing-submission-report.json",
             "production-readiness-report.json",
+            "production-readiness-verification-report.json",
             "visual-smoke-evidence-report.json",
             "accountant-workbench-evidence-report.json",
             "release-evidence-report.json"
@@ -18501,6 +18510,14 @@ public class AccountsWorkflowTests
         Assert.Contains("releaseBlockerRegister", script);
         Assert.Contains("sourceLawSnapshot", script);
         Assert.Contains("goldenFilingCorpus", script);
+        Assert.Contains("production-readiness-verification-report.json failureCount must be zero", script);
+        Assert.Contains("releaseVerificationManifestCodes", script);
+        Assert.Contains("verify-production-readiness-report.ps1", readinessVerifier);
+        Assert.Contains("requiredCoverage", readinessVerifier);
+        Assert.Contains("productionScorecard.currentScore must equal the sum of category current scores", readinessVerifier);
+        Assert.Contains("sourceLawSnapshot.sourceCount must match sources length", readinessVerifier);
+        Assert.Contains("releaseVerificationManifest must include verify-release-artifact-pack.ps1", readinessVerifier);
+        Assert.Contains("visualQaCoverage.expectedScreenshotCount must be 28", readinessVerifier);
         Assert.Contains("productionSmokeUsesBuildFlag", script);
         Assert.Contains("requiredCoverage", script);
         Assert.Contains("sourceLawSourceIds", script);

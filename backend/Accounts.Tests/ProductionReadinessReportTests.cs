@@ -99,6 +99,8 @@ public class ProductionReadinessReportTests
         Assert.Contains("golden-filing-corpus", report.AssurancePacket.EvidenceItems);
         Assert.Contains("visual-smoke-screenshots", report.AssurancePacket.EvidenceItems);
         Assert.Contains("accountant-workbench-evidence-report", report.AssurancePacket.EvidenceItems);
+        Assert.Contains("production-readiness-report", report.AssurancePacket.EvidenceItems);
+        Assert.Contains("production-readiness-verification-report", report.AssurancePacket.EvidenceItems);
         Assert.Contains(report.AssurancePacket.ReleaseBlockers, blocker =>
             blocker.Contains("qualified accountant", StringComparison.OrdinalIgnoreCase));
         Assert.Equal(
@@ -858,7 +860,7 @@ public class ProductionReadinessReportTests
         var report = await new ProductionReadinessReportService(db).GetReportAsync();
 
         Assert.NotNull(report.ProductionScorecard);
-        Assert.Equal(564, report.ProductionScorecard.CurrentScore);
+        Assert.Equal(569, report.ProductionScorecard.CurrentScore);
         Assert.Equal(700, report.ProductionScorecard.TargetScore);
         Assert.Equal("review-required", report.ProductionScorecard.Status);
         Assert.Contains("source-law", report.ProductionScorecard.NextGate, StringComparison.OrdinalIgnoreCase);
@@ -879,7 +881,7 @@ public class ProductionReadinessReportTests
 
         var scores = categories.ToDictionary(category => category.Code);
         Assert.Equal((99, 100), (scores["architecture-documentation"].CurrentScore, scores["architecture-documentation"].TargetScore));
-        Assert.Equal((195, 250), (scores["backend-statutory-accounting-engine"].CurrentScore, scores["backend-statutory-accounting-engine"].TargetScore));
+        Assert.Equal((200, 250), (scores["backend-statutory-accounting-engine"].CurrentScore, scores["backend-statutory-accounting-engine"].TargetScore));
         Assert.Equal((145, 200), (scores["frontend-accountant-workbench"].CurrentScore, scores["frontend-accountant-workbench"].TargetScore));
         Assert.Equal((125, 150), (scores["security-auth-tenant-platform-guardrails"].CurrentScore, scores["security-auth-tenant-platform-guardrails"].TargetScore));
         Assert.Contains(scores["architecture-documentation"].CurrentEvidence, evidence =>
@@ -935,6 +937,9 @@ public class ProductionReadinessReportTests
             evidence.Contains("Manual handoff acceptance", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["backend-statutory-accounting-engine"].CurrentEvidence, evidence =>
             evidence.Contains("production-readiness-report.json", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(scores["backend-statutory-accounting-engine"].CurrentEvidence, evidence =>
+            evidence.Contains("verify-production-readiness-report.ps1", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("production-readiness-verification-report.json", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["backend-statutory-accounting-engine"].RemainingGaps, gap =>
             gap.Contains("manual handoff", StringComparison.OrdinalIgnoreCase));
     }
@@ -1113,7 +1118,22 @@ public class ProductionReadinessReportTests
         Assert.Contains(manifest, item =>
             StringProperty(item, "Code") == "production-stack-smoke"
             && StringProperty(item, "Command").Contains("smoke-production", StringComparison.OrdinalIgnoreCase)
+            && StringProperty(item, "Command").Contains("verify-production-readiness-report", StringComparison.OrdinalIgnoreCase)
             && BooleanProperty(item, "RunsInDefaultCi"));
+        Assert.Contains(manifest, item =>
+            StringProperty(item, "Code") == "production-readiness-report-verification"
+            && StringProperty(item, "Command").Contains("verify-production-readiness-report.ps1", StringComparison.OrdinalIgnoreCase)
+            && StringProperty(item, "Command").Contains("production-readiness-verification-report.json", StringComparison.OrdinalIgnoreCase)
+            && StringProperty(item, "EvidenceArtifact") == "production-readiness-report"
+            && BooleanProperty(item, "RunsInDefaultCi")
+            && BooleanProperty(item, "BlocksRelease"));
+        Assert.Contains(manifest, item =>
+            StringProperty(item, "Code") == "release-artifact-pack"
+            && StringProperty(item, "Command").Contains("verify-release-artifact-pack.ps1", StringComparison.OrdinalIgnoreCase)
+            && StringProperty(item, "Command").Contains("-CommitSha <release-commit-sha>", StringComparison.Ordinal)
+            && StringProperty(item, "EvidenceArtifact") == "release-artifact-pack-report"
+            && StringProperty(item, "CiScope") == "manual-release"
+            && BooleanProperty(item, "BlocksRelease"));
         Assert.Contains(manifest, item =>
             StringProperty(item, "Code") == "backup-restore-drill"
             && StringProperty(item, "Command").Contains("verify-postgres-backup", StringComparison.OrdinalIgnoreCase)

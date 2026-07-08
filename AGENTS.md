@@ -148,14 +148,18 @@ Backend/accounting-engine progress:
 - `scripts/verify-release-artifact-pack.ps1` now emits a release artifact pack
   manifest with optional release candidate identity plus per-report SHA-256 and
   byte-size evidence, so retained dependency, production safety, monitoring,
-  structured log, backup/restore, no-direct-submission, visual smoke,
-  accountant-workbench, and release-evidence reports can be tied to the exact
-  release candidate.
+  structured log, backup/restore, no-direct-submission, production-readiness
+  verification, visual smoke, accountant-workbench, and release-evidence reports
+  can be tied to the exact release candidate.
 - `scripts/smoke-production.ps1` now captures `production-readiness-report.json`
   from the live authenticated smoke stack, and CI uploads it as the
   `production-readiness-report` artifact so the exact candidate scorecard,
   source-law snapshot, golden corpus, release blockers and visual QA contract are
   retained with release evidence.
+- `scripts/verify-production-readiness-report.ps1` now emits
+  `production-readiness-verification-report.json`, proving the captured live
+  readiness report carries complete source-law, golden-corpus, scorecard,
+  release-blocker, visual-QA, assurance-packet and release-manifest coverage.
 
 Frontend UI/UX progress:
 
@@ -247,7 +251,7 @@ Recent successful local verification includes:
   production scorecard evidence are wired together, including canonical
   qualified-accountant golden corpus scenario codes, external ROS/iXBRL validation
   template coverage, source-law source coverage, manual handoff coverage, visual
-  smoke and accountant workbench evidence report references, and the 564/700
+  smoke and accountant workbench evidence report references, and the 569/700
   scorecard total
 - Backend focused release artifact pack verifier and scorecard tests:
   `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~ReleaseArtifactPackVerifier_RequiresExactOperationalEvidenceReports|FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers"`
@@ -435,8 +439,8 @@ As of July 8, 2026:
 - Code implementation is roughly 70-75% complete.
 - Production assurance is roughly 60-65% complete.
 - Overall goal is roughly 63-67% complete, with about one third left.
-- The production scorecard is now 564/700: architecture/documentation 99/100,
-  backend statutory/accounting engine 195/250, frontend accountant workbench 145/200,
+- The production scorecard is now 569/700: architecture/documentation 99/100,
+  backend statutory/accounting engine 200/250, frontend accountant workbench 145/200,
   and security/auth/tenant/platform guardrails 125/150.
 - Architecture/documentation is now scored 99/100 in the production scorecard because
   source-law review, release evidence templates, manual handoff evidence, runbook

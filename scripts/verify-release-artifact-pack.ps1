@@ -126,6 +126,7 @@ $structuredLog = Read-JsonEvidence $resolvedDirectory.Path "structured-log-repor
 $restore = Read-JsonEvidence $resolvedDirectory.Path "restore-drill-report.json" $failures
 $noDirectSubmission = Read-JsonEvidence $resolvedDirectory.Path "no-direct-filing-submission-report.json" $failures
 $productionReadiness = Read-JsonEvidence $resolvedDirectory.Path "production-readiness-report.json" $failures
+$productionReadinessVerification = Read-JsonEvidence $resolvedDirectory.Path "production-readiness-verification-report.json" $failures
 $visualSmoke = Read-JsonEvidence $resolvedDirectory.Path "visual-smoke-evidence-report.json" $failures
 $accountantWorkbench = Read-JsonEvidence $resolvedDirectory.Path "accountant-workbench-evidence-report.json" $failures
 $releaseEvidence = Read-JsonEvidence $resolvedDirectory.Path "release-evidence-report.json" $failures
@@ -138,6 +139,7 @@ $allEvidence = [ordered]@{
     "restore-drill-report.json" = $restore
     "no-direct-filing-submission-report.json" = $noDirectSubmission
     "production-readiness-report.json" = $productionReadiness
+    "production-readiness-verification-report.json" = $productionReadinessVerification
     "visual-smoke-evidence-report.json" = $visualSmoke
     "accountant-workbench-evidence-report.json" = $accountantWorkbench
     "release-evidence-report.json" = $releaseEvidence
@@ -231,13 +233,38 @@ if (-not ($productionReadiness.PSObject.Properties.Name -contains "__missing")) 
             }
         }
     }
-    foreach ($requiredEvidence in @("production-scorecard", "release-verification-manifest", "release-blocker-register")) {
+    foreach ($requiredEvidence in @("production-scorecard", "production-readiness-report", "production-readiness-verification-report", "release-verification-manifest", "release-blocker-register")) {
         Assert-ArrayContains @($productionReadiness.assurancePacket.evidenceItems) $requiredEvidence "production-readiness-report.json assurancePacket.evidenceItems" $failures
     }
     foreach ($requiredCollection in @("sourceLawSnapshot", "goldenFilingCorpus", "releaseBlockerRegister", "releaseVerificationManifest", "visualQaCoverage")) {
         if ($null -eq $productionReadiness.$requiredCollection) {
             Add-Failure $failures "production-readiness-report.json $requiredCollection must be present."
         }
+    }
+}
+
+if (-not ($productionReadinessVerification.PSObject.Properties.Name -contains "__missing")) {
+    if ([int]$productionReadinessVerification.failureCount -ne 0) {
+        Add-Failure $failures "production-readiness-verification-report.json failureCount must be zero."
+    }
+    foreach ($coverageProperty in @("categoryCodes", "goldenCorpusScenarioCodes", "sourceLawSourceIds", "releaseVerificationManifestCodes", "assuranceEvidenceItems")) {
+        if ($null -eq $productionReadinessVerification.requiredCoverage.$coverageProperty -or @($productionReadinessVerification.requiredCoverage.$coverageProperty).Count -eq 0) {
+            Add-Failure $failures "production-readiness-verification-report.json requiredCoverage.$coverageProperty must be present."
+        }
+    }
+    foreach ($scenarioCode in @("micro-ltd", "small-abridged-ltd", "dac-small", "clg-charity", "medium-audit-required")) {
+        Assert-ArrayContains @($productionReadinessVerification.requiredCoverage.goldenCorpusScenarioCodes) $scenarioCode "production-readiness-verification-report.json requiredCoverage.goldenCorpusScenarioCodes" $failures
+    }
+    foreach ($manifestCode in @("production-readiness-report-verification", "release-artifact-pack")) {
+        Assert-ArrayContains @($productionReadinessVerification.requiredCoverage.releaseVerificationManifestCodes) $manifestCode "production-readiness-verification-report.json requiredCoverage.releaseVerificationManifestCodes" $failures
+    }
+    if ([int]$productionReadinessVerification.requiredCoverage.expectedVisualScreenshotCount -ne 28) {
+        Add-Failure $failures "production-readiness-verification-report.json requiredCoverage.expectedVisualScreenshotCount must be 28."
+    }
+    if (-not [string]::IsNullOrWhiteSpace([string]$productionReadiness.__path) -and
+        -not [string]::IsNullOrWhiteSpace([string]$productionReadinessVerification.reportPath) -and
+        [IO.Path]::GetFileName([string]$productionReadinessVerification.reportPath) -ne "production-readiness-report.json") {
+        Add-Failure $failures "production-readiness-verification-report.json reportPath must reference production-readiness-report.json."
     }
 }
 

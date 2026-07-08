@@ -4511,6 +4511,18 @@ function assertProductionScorecard(report: ProductionReadinessReport) {
     );
   }
 
+  if (!report.assurancePacket.evidenceItems.includes("production-readiness-report")) {
+    throw new Error(
+      "Invalid production readiness report contract: assurancePacket.evidenceItems - production-readiness-report is required",
+    );
+  }
+
+  if (!report.assurancePacket.evidenceItems.includes("production-readiness-verification-report")) {
+    throw new Error(
+      "Invalid production readiness report contract: assurancePacket.evidenceItems - production-readiness-verification-report is required",
+    );
+  }
+
   if (missingCodes.length > 0) {
     throw new Error(
       `Invalid production readiness report contract: productionScorecard.categories - missing required categories: ${missingCodes.join(", ")}`,
