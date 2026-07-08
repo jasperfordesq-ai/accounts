@@ -131,6 +131,23 @@ $visualSmoke = Read-JsonEvidence $resolvedDirectory.Path "visual-smoke-evidence-
 $accountantWorkbench = Read-JsonEvidence $resolvedDirectory.Path "accountant-workbench-evidence-report.json" $failures
 $releaseEvidence = Read-JsonEvidence $resolvedDirectory.Path "release-evidence-report.json" $failures
 
+$requiredReadinessManifestCodes = @(
+    "backend-golden-corpus",
+    "frontend-workbench-contract",
+    "frontend-production-build",
+    "visual-smoke-light-dark",
+    "production-readiness-report-verification",
+    "ci-machine-evidence-pack",
+    "release-artifact-pack",
+    "production-stack-smoke",
+    "backup-restore-drill",
+    "qualified-accountant-final-signoff",
+    "source-law-change-review",
+    "external-ros-validation-evidence",
+    "no-direct-cro-ros-submission-control",
+    "manual-accountant-acceptance"
+)
+
 $allEvidence = [ordered]@{
     "dependency-audit-report.json" = $dependency
     "production-safety-report.json" = $productionSafety
@@ -255,7 +272,7 @@ if (-not ($productionReadinessVerification.PSObject.Properties.Name -contains "_
     foreach ($scenarioCode in @("micro-ltd", "small-abridged-ltd", "dac-small", "clg-charity", "medium-audit-required")) {
         Assert-ArrayContains @($productionReadinessVerification.requiredCoverage.goldenCorpusScenarioCodes) $scenarioCode "production-readiness-verification-report.json requiredCoverage.goldenCorpusScenarioCodes" $failures
     }
-    foreach ($manifestCode in @("production-readiness-report-verification", "release-artifact-pack")) {
+    foreach ($manifestCode in $requiredReadinessManifestCodes) {
         Assert-ArrayContains @($productionReadinessVerification.requiredCoverage.releaseVerificationManifestCodes) $manifestCode "production-readiness-verification-report.json requiredCoverage.releaseVerificationManifestCodes" $failures
     }
     if ([int]$productionReadinessVerification.requiredCoverage.expectedVisualScreenshotCount -ne 28) {

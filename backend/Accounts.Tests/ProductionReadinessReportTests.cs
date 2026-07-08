@@ -860,7 +860,7 @@ public class ProductionReadinessReportTests
         var report = await new ProductionReadinessReportService(db).GetReportAsync();
 
         Assert.NotNull(report.ProductionScorecard);
-        Assert.Equal(589, report.ProductionScorecard.CurrentScore);
+        Assert.Equal(594, report.ProductionScorecard.CurrentScore);
         Assert.Equal(700, report.ProductionScorecard.TargetScore);
         Assert.Equal("review-required", report.ProductionScorecard.Status);
         Assert.Contains("source-law", report.ProductionScorecard.NextGate, StringComparison.OrdinalIgnoreCase);
@@ -883,7 +883,7 @@ public class ProductionReadinessReportTests
         Assert.Equal((99, 100), (scores["architecture-documentation"].CurrentScore, scores["architecture-documentation"].TargetScore));
         Assert.Equal((200, 250), (scores["backend-statutory-accounting-engine"].CurrentScore, scores["backend-statutory-accounting-engine"].TargetScore));
         Assert.Equal((155, 200), (scores["frontend-accountant-workbench"].CurrentScore, scores["frontend-accountant-workbench"].TargetScore));
-        Assert.Equal((135, 150), (scores["security-auth-tenant-platform-guardrails"].CurrentScore, scores["security-auth-tenant-platform-guardrails"].TargetScore));
+        Assert.Equal((140, 150), (scores["security-auth-tenant-platform-guardrails"].CurrentScore, scores["security-auth-tenant-platform-guardrails"].TargetScore));
         Assert.Contains(scores["architecture-documentation"].CurrentEvidence, evidence =>
             evidence.Contains("verify-release-evidence.ps1", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["architecture-documentation"].CurrentEvidence, evidence =>
@@ -924,6 +924,10 @@ public class ProductionReadinessReportTests
             evidence.Contains("verify-production-readiness-report.ps1", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("no-direct CRO/ROS control", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("release artifact pack", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(scores["security-auth-tenant-platform-guardrails"].CurrentEvidence, evidence =>
+            evidence.Contains("verify-release-artifact-pack.ps1", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("production-readiness-verification-report.json", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("required default-CI and manual release manifest row", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["security-auth-tenant-platform-guardrails"].RemainingGaps, gap =>
             gap.Contains("release-evidence-report.json", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["frontend-accountant-workbench"].RemainingGaps, gap =>

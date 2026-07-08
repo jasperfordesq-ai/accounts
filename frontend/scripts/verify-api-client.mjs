@@ -105,7 +105,7 @@ const share = {
 
 function productionScorecardFixture() {
   return {
-    currentScore: 589,
+    currentScore: 594,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete source-law review, named visual QA, monitoring-provider confirmation, manual handoff and qualified-accountant acceptance evidence.",
@@ -162,7 +162,7 @@ function productionScorecardFixture() {
       {
         code: "security-auth-tenant-platform-guardrails",
         label: "Security/auth/tenant/platform guardrails",
-        currentScore: 135,
+        currentScore: 140,
         targetScore: 150,
         status: "operator-confirmation-required",
         currentEvidence: [
@@ -172,6 +172,7 @@ function productionScorecardFixture() {
           "release-artifact-pack-report.json records release candidate identity plus per-report SHA-256 and byte-size evidence.",
           "ci-machine-evidence-pack-report.json records exact commit/run identity plus machine-evidence SHA-256 inventory.",
           "verify-production-readiness-report.ps1 now requires default-CI and manual release manifest rows, including the no-direct CRO/ROS control, CI machine evidence pack and release artifact pack.",
+          "verify-release-artifact-pack.ps1 now rejects release packs unless production-readiness-verification-report.json proves every required default-CI and manual release manifest row.",
         ],
         remainingGaps: ["Confirm the controlled monitoring smoke event inside the configured provider and retain the full release-artifact-pack-report.json after release-evidence-report.json is completed with named human sign-offs."],
         completionTrackCodes: ["backend-code"],

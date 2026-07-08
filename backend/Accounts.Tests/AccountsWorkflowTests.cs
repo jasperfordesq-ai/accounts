@@ -18550,6 +18550,27 @@ public class AccountsWorkflowTests
         Assert.Contains("goldenFilingCorpus", script);
         Assert.Contains("production-readiness-verification-report.json failureCount must be zero", script);
         Assert.Contains("releaseVerificationManifestCodes", script);
+        foreach (var manifestCode in new[]
+        {
+            "backend-golden-corpus",
+            "frontend-workbench-contract",
+            "frontend-production-build",
+            "visual-smoke-light-dark",
+            "production-readiness-report-verification",
+            "ci-machine-evidence-pack",
+            "release-artifact-pack",
+            "production-stack-smoke",
+            "backup-restore-drill",
+            "qualified-accountant-final-signoff",
+            "source-law-change-review",
+            "external-ros-validation-evidence",
+            "no-direct-cro-ros-submission-control",
+            "manual-accountant-acceptance"
+        })
+        {
+            Assert.Contains(manifestCode, script);
+        }
+        Assert.Contains("requiredReadinessManifestCodes", script);
         Assert.Contains("ci-machine-evidence-pack", readinessVerifier);
         Assert.Contains("frontend-production-build", readinessVerifier);
         Assert.Contains("qualified-accountant-final-signoff", readinessVerifier);
