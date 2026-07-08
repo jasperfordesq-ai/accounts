@@ -1,15 +1,22 @@
-# Irish Statutory Accounts Production Platform
+# FilingBridge
 
 [![License: AGPL v3](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 
-A multi-company web application that replaces the traditional year-end accountant workflow for
-Irish private companies. It takes imported bank transactions and year-end business facts and
-produces statutory financial statements, CRO filing outputs, and Revenue CT1 / iXBRL support.
+FilingBridge is an early-development Irish annual-return and statutory filing preparation
+workbench. It takes imported bank transactions and year-end business facts and turns them into
+accountant-reviewable statutory financial statements, CRO filing packs, Revenue CT1 / iXBRL
+support, readiness evidence, and sign-off gates.
 
-> **Status:** firm authentication, tenant isolation, role-based access, CSRF protection, audit
-> integrity, and production startup safety checks are in place. Backend test suite (461 tests) and
-> the frontend production build both pass; CI additionally runs a full HTTPS production-stack smoke
-> test with a backup/restore drill.
+It is not bookkeeping software, not a transaction recorder, and not a direct CRO/ROS submission
+tool. The product is designed around the year-end preparation path: classify the company, collect
+year-end evidence, generate and review statutory outputs, record filing workflow states, and block
+real-world use until professional review is complete.
+
+> **Early development status:** FilingBridge is not production filing software yet. Core
+> authentication, tenant isolation, role-based access, CSRF protection, audit integrity, statutory
+> preparation workflows, and production startup safety checks are in place, but real CRO or Revenue
+> use must remain subject to named qualified-accountant review and further production-readiness
+> evidence.
 
 ## Tech stack
 
