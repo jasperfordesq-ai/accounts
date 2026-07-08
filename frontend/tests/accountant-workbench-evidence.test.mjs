@@ -44,6 +44,7 @@ describe("accountant workbench evidence report", () => {
       ]);
       assert.equal(result.routeAcceptanceCount, visualSmokeRoutes.length);
       assert.ok(result.requiredCoverage.expectedTextChecks.includes("route expected accountant decision text"));
+      assert.ok(result.requiredCoverage.expectedTextChecks.includes("visual smoke screenshots carry route expected accountant decision text"));
       assert.ok(result.requiredCoverage.expectedTextChecks.includes("visual smoke screenshots carry passed layout check results"));
       assert.ok(result.requiredCoverage.expectedTextChecks.includes("visual smoke screenshots carry passed automated theme contrast results"));
       assert.ok(result.requiredCoverage.routeAcceptanceEvidence.includes("filing-review-qualified-accountant-route-acceptance"));
@@ -54,6 +55,10 @@ describe("accountant workbench evidence report", () => {
       assert.equal(
         result.routeReadiness.find((route) => route.routeName === "filing-review")?.layoutCheckResultCount,
         visualSmokeThemes.length * visualSmokeViewports.length * visualSmokeLayoutChecks.length,
+      );
+      assert.equal(
+        result.routeReadiness.find((route) => route.routeName === "filing-review")?.expectedTextEvidenceCount,
+        visualSmokeThemes.length * visualSmokeViewports.length,
       );
       assert.equal(
         result.routeReadiness.find((route) => route.routeName === "filing-review")?.contrastCheckResultCount,
@@ -170,6 +175,25 @@ describe("accountant workbench evidence report", () => {
     }
   });
 
+  it("rejects visual evidence when screenshots omit the route expected text proof", async () => {
+    const { verifyAccountantWorkbenchEvidence } = await import("../scripts/verify-accountant-workbench-evidence.mjs");
+    const dir = await mkTempDir();
+    const visualReportPath = path.join(dir, "visual-smoke-evidence-report.json");
+    const report = visualSmokeReport();
+    report.screenshots[0].expectedText = "Wrong route heading";
+
+    await writeFile(visualReportPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+
+    try {
+      await assert.rejects(
+        () => verifyAccountantWorkbenchEvidence({ visualReportPath }),
+        /route dashboard screenshot dashboard-light-desktop\.png expectedText must be Firm command centre, found Wrong route heading/,
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("rejects visual evidence that omits per-screenshot layout check pass results", async () => {
     const { verifyAccountantWorkbenchEvidence } = await import("../scripts/verify-accountant-workbench-evidence.mjs");
     const dir = await mkTempDir();
@@ -214,6 +238,7 @@ function visualSmokeReport() {
           theme,
           viewportName: viewport.name,
           fileName: `${route.name}-${theme}-${viewport.name}.png`,
+          expectedText: route.expectedText,
           byteSize: 128,
           sha256: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
           reviewStatus: "required-review",

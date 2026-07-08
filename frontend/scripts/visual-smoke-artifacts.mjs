@@ -138,6 +138,7 @@ export async function verifyVisualSmokeManifest(manifestPath, options = {}) {
       theme: screenshot.theme,
       viewportName: screenshot.viewportName,
       fileName: screenshot.fileName,
+      expectedText: screenshot.expectedText,
       byteSize: evidence.byteSize,
       imageWidth: evidence.imageWidth,
       imageHeight: evidence.imageHeight,
@@ -172,6 +173,12 @@ export async function verifyVisualSmokeManifest(manifestPath, options = {}) {
 
     if (actual.fileName !== expected.fileName) {
       failures.push(`visual smoke screenshot file name mismatch for ${screenshotKey(expected)}: expected ${expected.fileName}, found ${actual.fileName}`);
+    }
+
+    if (actual.expectedText !== expected.expectedText) {
+      failures.push(
+        `visual smoke screenshot expected text mismatch for ${screenshotKey(expected)}: expected ${expected.expectedText}, found ${actual.expectedText ?? "(missing)"}`,
+      );
     }
 
     if (actual.reviewStatus !== "required-review") {

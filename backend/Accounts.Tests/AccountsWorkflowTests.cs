@@ -18682,6 +18682,10 @@ public class AccountsWorkflowTests
         Assert.Contains("accountant-workbench-evidence-report.json routeAcceptanceCount must be 7", script);
         Assert.Contains("routeAcceptanceSignOffGate must be qualified-accountant-route-acceptance", script);
         Assert.Contains("routeAcceptance.requiredAcceptanceEvidence must include qualified-accountant-route-acceptance", script);
+        Assert.Contains("routeReadiness.expectedTextEvidenceCount must be 4 for every route", script);
+        Assert.Contains("routeReadiness.expectedTextEvidenceCount must be 4 for every route", machineEvidencePack);
+        Assert.Contains("visual smoke screenshots carry route expected accountant decision text", script);
+        Assert.Contains("visual smoke screenshots carry route expected accountant decision text", machineEvidencePack);
         Assert.Contains("Assert-VisualSmokeDimensionEvidence", script);
         Assert.Contains("Assert-VisualSmokeDimensionEvidence", machineEvidencePack);
         Assert.Contains("viewportDimensions must include $($expected.name)", script);

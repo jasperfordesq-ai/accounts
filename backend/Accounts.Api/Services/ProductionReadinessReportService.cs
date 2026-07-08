@@ -840,7 +840,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             Category(
                 "frontend-accountant-workbench",
                 "Frontend accountant workbench",
-                166,
+                168,
                 200,
                 "visual-acceptance-required",
                 [
@@ -851,6 +851,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "Docs/release-evidence/visual-qa-signoff-template.md and scripts/verify-release-evidence.ps1 now require named reviewers to record the visual smoke nonblank pixel and contrast metrics before visual QA evidence can pass.",
                     "node scripts/verify-accountant-workbench-evidence.mjs now writes accountant-workbench-evidence-report.json proving route, workflow-stage, theme, viewport, layout-check and review-check coverage.",
                     "scripts/verify-release-artifact-pack.ps1 and scripts/verify-ci-machine-evidence-pack.ps1 reject visual evidence unless every screenshot reports passed console-error, horizontal-overflow, visible-text-overlap and automated theme-contrast smoke checks.",
+                    "Visual smoke and accountant-workbench evidence now retain and re-verify each route's expected accountant decision text across light/dark desktop/mobile screenshots.",
                     "accountant-workbench-evidence-report.json now includes route acceptance rows with stable route keys, expected decision text, blocking status and qualified-accountant route acceptance evidence for every workbench route.",
                     "Frontend parser invariants now require the CI machine evidence pack, production smoke, readiness verification, visual smoke and manual release-verification rows before rendering readiness data."
                 ],

@@ -535,6 +535,12 @@ if (-not ($accountantWorkbench.PSObject.Properties.Name -contains "__missing")) 
     foreach ($requiredEvidenceFile in @("visual-smoke-manifest.json", "visual-smoke-evidence-report.json", "accountant-workbench-evidence-report.json")) {
         Assert-ArrayContains @($accountantWorkbench.requiredCoverage.evidenceFiles) $requiredEvidenceFile "accountant-workbench-evidence-report.json requiredCoverage.evidenceFiles" $failures
     }
+    Assert-ArrayContains @($accountantWorkbench.requiredCoverage.expectedTextChecks) "visual smoke screenshots carry route expected accountant decision text" "accountant-workbench-evidence-report.json requiredCoverage.expectedTextChecks" $failures
+    foreach ($route in @($accountantWorkbench.routeReadiness)) {
+        if ([int]$route.expectedTextEvidenceCount -ne 4) {
+            Add-Failure $failures "accountant-workbench-evidence-report.json routeReadiness.expectedTextEvidenceCount must be 4 for every route."
+        }
+    }
     foreach ($route in @($accountantWorkbench.routeAcceptance)) {
         Assert-NonEmptyString $route.routeName "accountant-workbench-evidence-report.json routeAcceptance.routeName" $failures
         Assert-NonEmptyString $route.routeKey "accountant-workbench-evidence-report.json routeAcceptance.routeKey" $failures

@@ -91,6 +91,12 @@ export async function verifyAccountantWorkbenchEvidence(options = {}) {
         failures.push(`route ${route.name} screenshot ${screenshot.fileName ?? "(unnamed)"} routeKey must be ${route.routeKey}, found ${screenshot.routeKey}.`);
       }
 
+      if (screenshot.expectedText !== route.expectedText) {
+        failures.push(
+          `route ${route.name} screenshot ${screenshot.fileName ?? "(unnamed)"} expectedText must be ${route.expectedText}, found ${screenshot.expectedText ?? "(missing)"}.`,
+        );
+      }
+
       for (const layoutCheck of visualSmokeLayoutChecks) {
         const layoutResult = Array.isArray(screenshot.layoutCheckResults)
           ? screenshot.layoutCheckResults.find((result) => result?.check === layoutCheck)
@@ -146,6 +152,7 @@ export async function verifyAccountantWorkbenchEvidence(options = {}) {
         (total, screenshot) => total + (Array.isArray(screenshot.layoutCheckResults) ? screenshot.layoutCheckResults.length : 0),
         0,
       ),
+      expectedTextEvidenceCount: screenshots.filter((screenshot) => screenshot.expectedText === route.expectedText).length,
       contrastCheckResultCount: screenshots.filter((screenshot) => screenshot.themeContrastResult?.check === visualSmokeContrastCheck).length,
       minimumContrastRatio: Math.min(...screenshots.map((screenshot) => Number(screenshot.themeContrastResult?.minimumContrastRatio ?? 0))),
       requiredReviewChecks: coverage?.requiredReviewChecks ?? [],
@@ -198,6 +205,7 @@ export async function verifyAccountantWorkbenchEvidence(options = {}) {
       layoutChecks: visualSmokeLayoutChecks,
       expectedTextChecks: [
         "route expected accountant decision text",
+        "visual smoke screenshots carry route expected accountant decision text",
         "visual smoke routeKey matches planned routeKey",
         "visual smoke screenshots carry stable routeKey",
         "visual smoke screenshots carry passed layout check results",

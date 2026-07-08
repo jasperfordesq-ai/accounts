@@ -185,6 +185,7 @@ describe("visual smoke artifact evidence", () => {
       assert.equal(result.screenshots.length, 28);
       assert.equal(result.screenshots[0].imageWidth, 1440);
       assert.ok(result.screenshots[0].imageHeight >= 1000);
+      assert.equal(result.screenshots[0].expectedText, "Firm command centre");
       assert.ok(result.screenshots[0].sampledDistinctColorCount >= 4);
       assert.ok(result.screenshots[0].luminanceRange >= 10);
       assert.deepEqual(
@@ -240,6 +241,28 @@ describe("visual smoke artifact evidence", () => {
       await assert.rejects(
         () => verifyVisualSmokeManifest(manifestPath),
         /visual smoke screenshot dashboard-light-desktop\.png is missing passed layout check result visible-text-overlap/,
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects manifest screenshots whose expected text drifts from the visual smoke plan", async () => {
+    const { verifyVisualSmokeManifest, withScreenshotEvidence } = await import("../scripts/visual-smoke-artifacts.mjs");
+    const dir = await mkTempDir();
+    const manifestPath = path.join(dir, "visual-smoke-manifest.json");
+
+    const screenshots = await completeScreenshots(dir, withScreenshotEvidence);
+    await writeManifest(manifestPath, screenshots.map((screenshot, index) => (
+      index === 0
+        ? { ...screenshot, expectedText: "Wrong route heading" }
+        : screenshot
+    )));
+
+    try {
+      await assert.rejects(
+        () => verifyVisualSmokeManifest(manifestPath),
+        /visual smoke screenshot expected text mismatch for dashboard\/light\/desktop: expected Firm command centre, found Wrong route heading/,
       );
     } finally {
       await rm(dir, { recursive: true, force: true });

@@ -446,6 +446,12 @@ if (-not ($accountantWorkbench.PSObject.Properties.Name -contains "__missing")) 
     if ([string](Get-JsonProperty $accountantWorkbench @("requiredCoverage", "routeAcceptanceSignOffGate")) -ne "qualified-accountant-route-acceptance") {
         Add-Failure $failures "accountant-workbench-evidence-report.json requiredCoverage.routeAcceptanceSignOffGate must be qualified-accountant-route-acceptance."
     }
+    Assert-ArrayContains @((Get-JsonProperty $accountantWorkbench @("requiredCoverage", "expectedTextChecks"))) "visual smoke screenshots carry route expected accountant decision text" "accountant-workbench-evidence-report.json requiredCoverage.expectedTextChecks" $failures
+    foreach ($route in @((Get-JsonProperty $accountantWorkbench @("routeReadiness")))) {
+        if ([int](Get-JsonProperty $route @("expectedTextEvidenceCount")) -ne 4) {
+            Add-Failure $failures "accountant-workbench-evidence-report.json routeReadiness.expectedTextEvidenceCount must be 4 for every route."
+        }
+    }
 }
 
 $evidenceFileManifest = @(
