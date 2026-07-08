@@ -381,11 +381,11 @@ Recent successful local verification includes:
 
 CI status:
 
-- GitHub Actions run `28947103369` for commit
-  `85b1ad9 Add workbench route acceptance evidence` completed successfully on
+- GitHub Actions run `28948689483` for commit
+  `ac4ee17 Retain CI machine evidence pack` completed successfully on
   July 8, 2026.
-- Green jobs: Workflow Hygiene, Production Compose Config, Frontend, Backend, and
-  Production Stack Smoke.
+- Green jobs: Workflow Hygiene, Production Compose Config, Frontend, Backend,
+  Production Stack Smoke, and CI Machine Evidence Pack.
 - Latest retained CI evidence artifacts include:
   - `dependency-audit-release`: `dependency-audit-report.json` passed with 0 npm
     vulnerabilities, frontend lockfile/package hashes, and NuGet audit policy.
@@ -405,6 +405,9 @@ CI status:
     production smoke stack.
   - `visual-smoke-screenshots`: screenshot artifact, manifest, visual smoke evidence,
     and accountant workbench route acceptance evidence were retained for human review.
+  - `ci-machine-evidence-pack`: `ci-machine-evidence-pack-report.json` passed with
+    exact commit/run identity and SHA-256 inventory for the machine-generated
+    evidence artifacts; human release evidence is still required separately.
 
 ## What Is Left To Do
 
