@@ -376,8 +376,8 @@ Recent successful local verification includes:
 
 CI status:
 
-- GitHub Actions run `28945545279` for commit
-  `00bd8d1 Verify production readiness report evidence` completed successfully on
+- GitHub Actions run `28947103369` for commit
+  `85b1ad9 Add workbench route acceptance evidence` completed successfully on
   July 8, 2026.
 - Green jobs: Workflow Hygiene, Production Compose Config, Frontend, Backend, and
   Production Stack Smoke.
@@ -398,8 +398,8 @@ CI status:
   - `production-readiness-report`: `production-readiness-report.json` and
     `production-readiness-verification-report.json` were retained from the live
     production smoke stack.
-  - `visual-smoke-screenshots`: screenshot artifact and manifest were retained for
-    human review.
+  - `visual-smoke-screenshots`: screenshot artifact, manifest, visual smoke evidence,
+    and accountant workbench route acceptance evidence were retained for human review.
 
 ## What Is Left To Do
 
