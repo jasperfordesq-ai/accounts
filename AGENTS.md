@@ -71,6 +71,7 @@ Committed and pushed work on `main` includes:
 - `a6fd245 Require accepted monitoring provider evidence`
 - `f5dba82 Require visual layout pass evidence`
 - `4ef3e63 Require visual contrast smoke evidence`
+- `bd5454c Skip unresolved gradient backgrounds in contrast smoke`
 
 Backend/accounting-engine progress:
 
