@@ -860,7 +860,7 @@ public class ProductionReadinessReportTests
         var report = await new ProductionReadinessReportService(db).GetReportAsync();
 
         Assert.NotNull(report.ProductionScorecard);
-        Assert.Equal(607, report.ProductionScorecard.CurrentScore);
+        Assert.Equal(608, report.ProductionScorecard.CurrentScore);
         Assert.Equal(700, report.ProductionScorecard.TargetScore);
         Assert.Equal("review-required", report.ProductionScorecard.Status);
         Assert.Contains("source-law", report.ProductionScorecard.NextGate, StringComparison.OrdinalIgnoreCase);
@@ -883,7 +883,7 @@ public class ProductionReadinessReportTests
         Assert.Equal((99, 100), (scores["architecture-documentation"].CurrentScore, scores["architecture-documentation"].TargetScore));
         Assert.Equal((200, 250), (scores["backend-statutory-accounting-engine"].CurrentScore, scores["backend-statutory-accounting-engine"].TargetScore));
         Assert.Equal((160, 200), (scores["frontend-accountant-workbench"].CurrentScore, scores["frontend-accountant-workbench"].TargetScore));
-        Assert.Equal((148, 150), (scores["security-auth-tenant-platform-guardrails"].CurrentScore, scores["security-auth-tenant-platform-guardrails"].TargetScore));
+        Assert.Equal((149, 150), (scores["security-auth-tenant-platform-guardrails"].CurrentScore, scores["security-auth-tenant-platform-guardrails"].TargetScore));
         Assert.Contains(scores["architecture-documentation"].CurrentEvidence, evidence =>
             evidence.Contains("verify-release-evidence.ps1", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["architecture-documentation"].CurrentEvidence, evidence =>
@@ -905,6 +905,9 @@ public class ProductionReadinessReportTests
             evidence.Contains("releaseCandidate identity", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("CommitSha", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("GitHubActionsRunUrl", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(scores["security-auth-tenant-platform-guardrails"].CurrentEvidence, evidence =>
+            evidence.Contains("human release-evidence templates", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("matching hashes", StringComparison.OrdinalIgnoreCase));
 
         var trackCodes = report.CompletionTracks.Select(track => track.Code).ToHashSet(StringComparer.Ordinal);
         var blockerCodes = report.ReleaseBlockerRegister.Select(blocker => blocker.Code).ToHashSet(StringComparer.Ordinal);

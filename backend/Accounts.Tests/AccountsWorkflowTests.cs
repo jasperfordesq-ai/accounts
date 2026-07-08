@@ -18398,6 +18398,9 @@ public class AccountsWorkflowTests
         Assert.Contains("Assert-ConsistentReleaseIdentity", script);
         Assert.Contains("Get-ReleaseEvidenceIdentity", script);
         Assert.Contains("evidenceIdentityCount", script);
+        Assert.Contains("New-EvidenceFileManifestItem", script);
+        Assert.Contains("hasReleaseIdentity", script);
+        Assert.Contains("releaseEvidenceTemplateFiles", script);
         Assert.Contains("Release evidence identity mismatch", script);
         Assert.Contains("GitHub Actions run URL", script);
         Assert.Contains("40-character hexadecimal Git commit SHA", script);
@@ -18632,6 +18635,11 @@ public class AccountsWorkflowTests
         Assert.Contains("releaseCandidate.evidenceIdentityCount must be 6", script);
         Assert.Contains("releaseCandidate.commitSha must match CommitSha", script);
         Assert.Contains("releaseCandidate.githubActionsRunUrl must match GitHubActionsRunUrl", script);
+        Assert.Contains("Assert-ReleaseEvidenceTemplateManifest", script);
+        Assert.Contains("Release artifact pack must include completed release evidence template", script);
+        Assert.Contains("evidenceFiles must include retained release evidence template hashes", script);
+        Assert.Contains("sha256 must match the retained template file", script);
+        Assert.Contains("evidenceType = \"release-evidence-template\"", script);
         Assert.Contains("evidenceFiles", script);
         Assert.Contains("identityProvided", script);
         Assert.Contains("GitHubActionsRunUrl must be a GitHub Actions run URL", script);

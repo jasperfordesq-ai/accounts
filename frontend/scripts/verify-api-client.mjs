@@ -105,7 +105,7 @@ const share = {
 
 function productionScorecardFixture() {
   return {
-    currentScore: 607,
+    currentScore: 608,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete source-law review, named visual QA, monitoring-provider confirmation, manual handoff and qualified-accountant acceptance evidence.",
@@ -162,7 +162,7 @@ function productionScorecardFixture() {
       {
         code: "security-auth-tenant-platform-guardrails",
         label: "Security/auth/tenant/platform guardrails",
-        currentScore: 148,
+        currentScore: 149,
         targetScore: 150,
         status: "operator-confirmation-required",
         currentEvidence: [
@@ -176,6 +176,7 @@ function productionScorecardFixture() {
           "verify-release-artifact-pack.ps1 and verify-ci-machine-evidence-pack.ps1 now reject visual evidence packs unless visual-smoke-evidence-report.json carries planned PNG viewport dimensions for every screenshot.",
           "verify-release-evidence.ps1 now rejects completed human evidence when release candidate identity, UTC timestamps, SHA-256 digests, external iXBRL artifact hashes, or monitoring log confirmation fields are malformed.",
           "verify-release-evidence.ps1 emits a consistent releaseCandidate identity for all six human evidence templates, and verify-release-artifact-pack.ps1 rejects packs whose release-evidence-report.json identity does not match the pack CommitSha and GitHubActionsRunUrl.",
+          "verify-release-evidence.ps1 emits SHA-256/byte-size manifest entries for all six human release-evidence templates, and verify-release-artifact-pack.ps1 requires those completed templates to be retained in the pack with matching hashes.",
         ],
         remainingGaps: ["Confirm the controlled monitoring smoke event inside the configured provider and retain the full release-artifact-pack-report.json after release-evidence-report.json is completed with named human sign-offs."],
         completionTrackCodes: ["backend-code"],

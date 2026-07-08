@@ -797,7 +797,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "AGENTS.md carries the active production-readiness handoff.",
                     "Production runbook links release evidence templates for source-law review, visual QA, monitoring provider confirmation and qualified-accountant acceptance.",
                     "scripts/verify-release-evidence.ps1 validates completed release evidence templates before real filing use, including source-law source coverage.",
-                    "scripts/verify-release-artifact-pack.ps1 validates the collected release artifact reports as one exact evidence pack with release candidate identity and SHA-256 inventory.",
+                    "scripts/verify-release-artifact-pack.ps1 validates the collected release artifact reports and the retained human release-evidence templates as one exact evidence pack with release candidate identity and SHA-256 inventory.",
                     "CI artifacts now prove production safety, dependency audit, monitoring smoke, structured logs, visual smoke and backup restore drill."
                 ],
                 [
@@ -865,7 +865,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             Category(
                 "security-auth-tenant-platform-guardrails",
                 "Security/auth/tenant/platform guardrails",
-                148,
+                149,
                 150,
                 "operator-confirmation-required",
                 [
@@ -880,7 +880,8 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "scripts/verify-release-artifact-pack.ps1 now rejects release packs unless the retained production-readiness-verification-report.json proves every required default-CI and manual release manifest row.",
                     "scripts/verify-release-artifact-pack.ps1 and scripts/verify-ci-machine-evidence-pack.ps1 now reject visual evidence packs unless visual-smoke-evidence-report.json carries planned PNG viewport dimensions for every screenshot.",
                     "scripts/verify-release-evidence.ps1 now rejects completed human evidence when release candidate identity, UTC timestamps, SHA-256 digests, external iXBRL artifact hashes, or monitoring log confirmation fields are malformed.",
-                    "scripts/verify-release-evidence.ps1 emits a consistent releaseCandidate identity for all six human evidence templates, and scripts/verify-release-artifact-pack.ps1 rejects packs whose release-evidence-report.json identity does not match the pack CommitSha and GitHubActionsRunUrl."
+                    "scripts/verify-release-evidence.ps1 emits a consistent releaseCandidate identity for all six human evidence templates, and scripts/verify-release-artifact-pack.ps1 rejects packs whose release-evidence-report.json identity does not match the pack CommitSha and GitHubActionsRunUrl.",
+                    "scripts/verify-release-evidence.ps1 now emits SHA-256/byte-size manifest entries for all six human release-evidence templates, and scripts/verify-release-artifact-pack.ps1 requires those completed templates to be retained in the pack with matching hashes."
                 ],
                 [
                     "Confirm the controlled monitoring smoke event inside the configured provider and retain operator evidence.",

@@ -190,6 +190,70 @@ function Get-FileSha256 {
     return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
 }
 
+function Assert-ReleaseEvidenceTemplateManifest {
+    param(
+        [object]$ReleaseEvidence,
+        [string]$Directory,
+        [object[]]$RequiredTemplates,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    if ($ReleaseEvidence.PSObject.Properties.Name -contains "__missing" -or
+        $ReleaseEvidence.PSObject.Properties.Name -contains "__invalid") {
+        return
+    }
+
+    $manifest = @(Get-JsonProperty $ReleaseEvidence @("evidenceFiles"))
+    if ($manifest.Count -eq 0) {
+        Add-Failure $Failures "release-evidence-report.json evidenceFiles must include retained release evidence template hashes."
+        return
+    }
+
+    foreach ($required in $RequiredTemplates) {
+        $entry = $manifest |
+            Where-Object {
+                [string](Get-JsonProperty $_ @("fileName")) -eq [string]$required.fileName -and
+                [string](Get-JsonProperty $_ @("evidenceName")) -eq [string]$required.evidenceName
+            } |
+            Select-Object -First 1
+
+        if ($null -eq $entry) {
+            Add-Failure $Failures "release-evidence-report.json evidenceFiles must include $($required.fileName)."
+            continue
+        }
+
+        if ((Get-JsonProperty $entry @("present")) -ne $true) {
+            Add-Failure $Failures "release-evidence-report.json evidenceFiles.$($required.fileName).present must be true."
+        }
+
+        $manifestSha = [string](Get-JsonProperty $entry @("sha256"))
+        if ($manifestSha -notmatch '^[0-9a-f]{64}$') {
+            Add-Failure $Failures "release-evidence-report.json evidenceFiles.$($required.fileName).sha256 must be a lowercase SHA-256 hash."
+        }
+
+        $manifestByteSize = Get-JsonProperty $entry @("byteSize")
+        if ($null -eq $manifestByteSize -or [int]$manifestByteSize -le 0) {
+            Add-Failure $Failures "release-evidence-report.json evidenceFiles.$($required.fileName).byteSize must be greater than zero."
+        }
+
+        $templatePath = Join-Path $Directory $required.fileName
+        if (-not (Test-Path -LiteralPath $templatePath -PathType Leaf)) {
+            Add-Failure $Failures "Release artifact pack must include completed release evidence template: $($required.fileName)"
+            continue
+        }
+
+        $templateInfo = Get-Item -LiteralPath $templatePath
+        if ($null -ne $manifestByteSize -and [int64]$manifestByteSize -ne [int64]$templateInfo.Length) {
+            Add-Failure $Failures "release-evidence-report.json evidenceFiles.$($required.fileName).byteSize must match the retained template file."
+        }
+
+        $actualSha = Get-FileSha256 $templatePath
+        if ($manifestSha -match '^[0-9a-f]{64}$' -and $manifestSha -ne $actualSha) {
+            Add-Failure $Failures "release-evidence-report.json evidenceFiles.$($required.fileName).sha256 must match the retained template file."
+        }
+    }
+}
+
 $failures = [System.Collections.Generic.List[string]]::new()
 $resolvedDirectory = Resolve-Path -LiteralPath $EvidenceDirectory -ErrorAction Stop
 $releaseCommitSha = $CommitSha.Trim()
@@ -235,6 +299,15 @@ $requiredReadinessManifestCodes = @(
     "external-ros-validation-evidence",
     "no-direct-cro-ros-submission-control",
     "manual-accountant-acceptance"
+)
+
+$requiredReleaseEvidenceTemplates = @(
+    [pscustomobject]@{ evidenceName = "visualQa"; fileName = "visual-qa-signoff-template.md" },
+    [pscustomobject]@{ evidenceName = "sourceLawReview"; fileName = "source-law-review-template.md" },
+    [pscustomobject]@{ evidenceName = "externalRosIxbrlValidation"; fileName = "external-ros-ixbrl-validation-template.md" },
+    [pscustomobject]@{ evidenceName = "qualifiedAccountantAcceptance"; fileName = "qualified-accountant-acceptance-template.md" },
+    [pscustomobject]@{ evidenceName = "manualHandoffAcceptance"; fileName = "manual-handoff-acceptance-template.md" },
+    [pscustomobject]@{ evidenceName = "monitoringProviderConfirmation"; fileName = "monitoring-provider-confirmation-template.md" }
 )
 
 $allEvidence = [ordered]@{
@@ -446,6 +519,7 @@ if (-not ($releaseEvidence.PSObject.Properties.Name -contains "__missing")) {
             Add-Failure $failures "release-evidence-report.json requiredCoverage.$coverageProperty must be present."
         }
     }
+    Assert-ReleaseEvidenceTemplateManifest $releaseEvidence $resolvedDirectory.Path $requiredReleaseEvidenceTemplates $failures
 }
 
 $evidenceFileManifest = @(
@@ -469,6 +543,27 @@ $evidenceFileManifest = @(
     }
 )
 
+$releaseEvidenceTemplateManifest = @(
+    foreach ($template in $requiredReleaseEvidenceTemplates) {
+        $templatePath = Join-Path $resolvedDirectory.Path $template.fileName
+        if (-not (Test-Path -LiteralPath $templatePath -PathType Leaf)) {
+            continue
+        }
+
+        $fileInfo = Get-Item -LiteralPath $templatePath
+        [ordered]@{
+            fileName = $template.fileName
+            evidenceName = $template.evidenceName
+            evidenceType = "release-evidence-template"
+            path = $templatePath
+            byteSize = $fileInfo.Length
+            sha256 = Get-FileSha256 $templatePath
+            checkedAtUtc = ""
+            status = "retained"
+        }
+    }
+)
+
 $report = [ordered]@{
     status = if ($failures.Count -eq 0) { "passed" } else { "failed" }
     checkedAtUtc = (Get-Date).ToUniversalTime().ToString("o")
@@ -478,8 +573,8 @@ $report = [ordered]@{
         githubActionsRunUrl = $releaseRunUrl
         identityProvided = ($releaseCommitSha.Length -gt 0 -and $releaseRunUrl.Length -gt 0)
     }
-    requiredFiles = @($allEvidence.Keys)
-    evidenceFiles = $evidenceFileManifest
+    requiredFiles = @($allEvidence.Keys) + @($requiredReleaseEvidenceTemplates | ForEach-Object { $_.fileName })
+    evidenceFiles = @($evidenceFileManifest) + @($releaseEvidenceTemplateManifest)
     failureCount = $failures.Count
     failures = $failures.ToArray()
 }

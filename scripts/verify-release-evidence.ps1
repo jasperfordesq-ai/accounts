@@ -304,6 +304,46 @@ function Get-ReleaseEvidenceIdentity {
     }
 }
 
+function Get-FileSha256 {
+    param(
+        [string]$Path
+    )
+
+    return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+}
+
+function New-EvidenceFileManifestItem {
+    param(
+        [string]$EvidenceName,
+        [string]$Path,
+        [string]$Content
+    )
+
+    $fileName = Split-Path -Leaf $Path
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        return [ordered]@{
+            evidenceName = $EvidenceName
+            fileName = $fileName
+            path = $Path
+            present = $false
+            byteSize = 0
+            sha256 = ""
+            hasReleaseIdentity = $false
+        }
+    }
+
+    $fileInfo = Get-Item -LiteralPath $Path
+    [ordered]@{
+        evidenceName = $EvidenceName
+        fileName = $fileName
+        path = $Path
+        present = $true
+        byteSize = $fileInfo.Length
+        sha256 = Get-FileSha256 $Path
+        hasReleaseIdentity = $null -ne (Get-ReleaseEvidenceIdentity $Content $EvidenceName)
+    }
+}
+
 function Assert-ConsistentReleaseIdentity {
     param(
         [object[]]$Identities,
@@ -630,6 +670,15 @@ $accountant = [string](Read-EvidenceFile $accountantPath $failures)
 $manualHandoff = [string](Read-EvidenceFile $manualHandoffPath $failures)
 $monitoring = [string](Read-EvidenceFile $monitoringPath $failures)
 
+$evidenceFiles = @(
+    New-EvidenceFileManifestItem "visualQa" $visualPath $visual
+    New-EvidenceFileManifestItem "sourceLawReview" $sourceLawPath $sourceLaw
+    New-EvidenceFileManifestItem "externalRosIxbrlValidation" $externalRosIxbrlPath $externalRosIxbrl
+    New-EvidenceFileManifestItem "qualifiedAccountantAcceptance" $accountantPath $accountant
+    New-EvidenceFileManifestItem "manualHandoffAcceptance" $manualHandoffPath $manualHandoff
+    New-EvidenceFileManifestItem "monitoringProviderConfirmation" $monitoringPath $monitoring
+)
+
 if ($visual.Trim().Length -gt 0) {
     Test-VisualEvidence $visual $failures
 }
@@ -688,6 +737,7 @@ $report = [ordered]@{
         evidenceIdentityCount = @($releaseEvidenceIdentities).Count
     }
     evidenceIdentities = @($releaseEvidenceIdentities)
+    evidenceFiles = $evidenceFiles
     files = [ordered]@{
         visualQa = $visualPath
         sourceLawReview = $sourceLawPath
@@ -704,6 +754,7 @@ $report = [ordered]@{
         manualHandoffScenarioCodes = $requiredManualHandoffScenarioCodes
         manualHandoffPathCodes = $requiredManualHandoffPathCodes
         releaseArtifactNames = $requiredReleaseArtifactNames
+        releaseEvidenceTemplateFiles = @($evidenceFiles | ForEach-Object { $_.fileName })
     }
     failureCount = $failures.Count
     failures = $failures.ToArray()
