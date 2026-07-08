@@ -659,6 +659,7 @@ function Test-ExternalRosIxbrlEvidence {
     Assert-CompletedTableRows $Content $canonicalGoldenCorpusScenarioCodes $context $Failures
     Assert-CompletedTableColumnMatches $Content $canonicalGoldenCorpusScenarioCodes 1 "External reference" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real external validation reference" $context $Failures
     Assert-CompletedTableColumnMatches $Content $canonicalGoldenCorpusScenarioCodes 2 "Artifact hash" "^[0-9a-fA-F]{64}$" "a 64-character hexadecimal SHA-256 digest" $context $Failures
+    Assert-CompletedTableColumnMatches $Content $canonicalGoldenCorpusScenarioCodes 3 "Taxonomy package" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real retained taxonomy package reference" $context $Failures
     Assert-CompletedTableColumnMatches $Content $canonicalGoldenCorpusScenarioCodes 4 "Warnings/errors" "^(none|accepted\b.*|remediated\b.*)$" "none, accepted, or remediated warnings/errors" $context $Failures
     Assert-CompletedTableColumnMatches $Content $canonicalGoldenCorpusScenarioCodes 5 "Decision" "^(accepted|accepted\b.*)$" "accepted for this release candidate" $context $Failures
 }

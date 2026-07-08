@@ -18338,6 +18338,8 @@ public class AccountsWorkflowTests
         Assert.Contains("Generated iXBRL SHA-256", externalRosIxbrl);
         Assert.Contains("Use a real external validation reference for each scenario", externalRosIxbrl);
         Assert.Contains("in the `Decision` column only when the external reference", externalRosIxbrl);
+        Assert.Contains("Record the actual taxonomy package", externalRosIxbrl);
+        Assert.Contains("as the taxonomy package", externalRosIxbrl);
         Assert.Contains("micro-ltd", externalRosIxbrl);
         Assert.Contains("small-abridged-ltd", externalRosIxbrl);
         Assert.Contains("dac-small", externalRosIxbrl);
@@ -18450,6 +18452,8 @@ public class AccountsWorkflowTests
         Assert.Contains("Internal XML checks are not Revenue acceptance evidence", script);
         Assert.Contains("Accepted as external ROS/iXBRL validation evidence for this release candidate.", script);
         Assert.Contains("\"External reference\" \"^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+\"", script);
+        Assert.Contains("\"Taxonomy package\" \"^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+\"", script);
+        Assert.Contains("a real retained taxonomy package reference", script);
         Assert.Contains("\"Warnings/errors\" \"^(none|accepted\\b.*|remediated\\b.*)$\"", script);
         Assert.Contains("micro-ltd", script);
         Assert.Contains("small-abridged-ltd", script);

@@ -33,7 +33,9 @@ Use a real external validation reference for each scenario. Use `none`,
 warning or error has been accepted by the reviewer or remediated. Use `accepted`
 in the `Decision` column only when the external reference, artifact hash,
 taxonomy package, and warnings/errors status are accepted for the exact release
-candidate.
+candidate. Record the actual taxonomy package or retained package reference for
+each scenario; do not use `accepted`, `none`, `n/a`, `pending`, `todo`, or `tbd`
+as the taxonomy package.
 
 ## Required Evidence Pack
 
