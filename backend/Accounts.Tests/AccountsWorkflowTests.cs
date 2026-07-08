@@ -2794,9 +2794,10 @@ public class AccountsWorkflowTests
         // without a repro — the response carries a correlation id that also appears in the server log,
         // while no exception detail (which may carry secrets/PII) leaks to the client in production.
         var logger = new CapturingLogger<ExceptionMiddleware>();
+        var errorReporter = new CapturingErrorReporter();
         const string secret = "Server=db;Password=hunter2-SECRET";
         RequestDelegate next = _ => throw new InvalidOperationException(secret);
-        var middleware = new ExceptionMiddleware(next, logger);
+        var middleware = new ExceptionMiddleware(next, logger, errorReporter);
 
         var context = new DefaultHttpContext();
         context.Request.Method = "POST";
@@ -2829,6 +2830,12 @@ public class AccountsWorkflowTests
         Assert.Contains("/api/companies/1/periods/2/adjustments/generate", logged.Message);
         Assert.NotNull(logged.Exception);
         Assert.Contains(secret, logged.Exception!.Message);
+
+        var reported = Assert.Single(errorReporter.Reports);
+        Assert.Same(logged.Exception, reported.Exception);
+        Assert.Equal("POST", reported.Context.Method);
+        Assert.Equal("/api/companies/1/periods/2/adjustments/generate", reported.Context.Path);
+        Assert.Equal("corr-id-7f3a", reported.Context.CorrelationId);
     }
 
     [Fact]
@@ -3811,6 +3818,68 @@ public class AccountsWorkflowTests
         Assert.Equal(500m, trialBalance.Single(l => l.Code == bankCategory.Code).Debit);
         Assert.Equal(500m, trialBalance.Single(l => l.Code == retainedCategory.Code).Credit);
         Assert.Equal(trialBalance.Sum(l => l.Debit), trialBalance.Sum(l => l.Credit));
+    }
+
+    [Fact]
+    public async Task OpeningTrialBalanceTakeOn_BalancedReviewedBalancesClearOpeningReadinessWarnings()
+    {
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: false);
+        AddCategory(db, period.CompanyId, "1400", "Bank Current Account", AccountCategoryType.Asset);
+        var retainedCategory = AddCategory(db, period.CompanyId, "3100", "Retained Earnings", AccountCategoryType.Equity);
+        db.BankAccounts.Add(new BankAccount
+        {
+            CompanyId = period.CompanyId,
+            Name = "Current Account",
+            OpeningBalance = 500m,
+            OpeningBalanceDate = period.PeriodStart
+        });
+        db.OpeningBalances.Add(new OpeningBalance
+        {
+            PeriodId = period.Id,
+            AccountCategoryId = retainedCategory.Id,
+            Credit = 500m,
+            SourceNote = "Opening trial balance per prior signed accounts",
+            EnteredBy = "Accounts reviewer",
+            Reviewed = true,
+            ReviewedBy = "Accounts reviewer",
+            ReviewedAt = DateTime.UtcNow
+        });
+        await db.SaveChangesAsync();
+        var service = new FinancialStatementsService(db);
+
+        var readiness = await service.GetReadinessScoreAsync(period.CompanyId, period.Id);
+
+        Assert.DoesNotContain(readiness.MissingItems, item => item.Contains("opening balances", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(readiness.Warnings, warning => warning.Contains("Opening balances do not agree", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task FinalOutputs_BlockWhenOpeningTrialBalanceTakeOnDoesNotBalance()
+    {
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: false);
+        await MakePeriodReadyForCroDocumentsAsync(db, period);
+        var retainedCategory = AddCategory(db, period.CompanyId, "3100", "Retained Earnings", AccountCategoryType.Equity);
+        db.OpeningBalances.Add(new OpeningBalance
+        {
+            PeriodId = period.Id,
+            AccountCategoryId = retainedCategory.Id,
+            Credit = 50m,
+            SourceNote = "Unbalanced take-on credit",
+            EnteredBy = "Accounts reviewer",
+            Reviewed = true,
+            ReviewedBy = "Accounts reviewer",
+            ReviewedAt = DateTime.UtcNow
+        });
+        await db.SaveChangesAsync();
+        var statements = new FinancialStatementsService(db);
+        var documents = new DocumentGeneratorService(db, statements);
+
+        var error = await Assert.ThrowsAsync<BusinessRuleException>(() =>
+            documents.GenerateAccountsPackageAsync(period.CompanyId, period.Id));
+
+        Assert.Contains("Opening balances do not agree", error.Message);
     }
 
     [Fact]
@@ -6505,8 +6574,103 @@ public class AccountsWorkflowTests
         Assert.Contains("Configure<MonitoringConfig>", program);
         Assert.Contains("UseSentry", program);
         Assert.Contains("AddJsonConsole", program);
+        Assert.Contains("IncludeScopes = true", program);
+        Assert.Contains("AddSingleton<IErrorReporter, SentryErrorReporter>", program);
         Assert.Contains("Monitoring__ErrorTrackingDsn", compose);
+        Assert.Contains("Monitoring__ErrorTrackingProvider", compose);
         Assert.Contains("Monitoring__StructuredJsonConsole: \"true\"", compose);
+        Assert.Contains("Monitoring__IncludeCorrelationId: \"true\"", compose);
+        Assert.Contains("Monitoring__TracesSampleRate", compose);
+        Assert.Contains("Monitoring__ErrorSmokeEnabled", compose);
+    }
+
+    [Fact]
+    public async Task ProductionMonitoring_ErrorSmokeEndpointIsDisabledByDefault()
+    {
+        var reporter = new CapturingErrorReporter();
+        var context = new DefaultHttpContext
+        {
+            RequestServices = new ServiceCollection().AddLogging().BuildServiceProvider(),
+            Response =
+            {
+                Body = new MemoryStream()
+            }
+        };
+        context.Request.Method = HttpMethods.Post;
+        context.Request.Path = "/api/system/monitoring/error-smoke";
+        context.TraceIdentifier = "corr-disabled-smoke";
+        context.Items[AuthContext.ItemKey] = AuthenticatedRole("Owner");
+
+        var result = SystemEndpoints.EmitMonitoringSmokeError(
+            context,
+            Options.Create(new MonitoringConfig { ErrorSmokeEnabled = false }),
+            reporter,
+            NullLogger.Instance);
+
+        await result.ExecuteAsync(context);
+
+        Assert.Equal(StatusCodes.Status404NotFound, context.Response.StatusCode);
+        Assert.Empty(reporter.Reports);
+    }
+
+    [Theory]
+    [InlineData("Accountant", StatusCodes.Status403Forbidden)]
+    [InlineData("Reviewer", StatusCodes.Status403Forbidden)]
+    [InlineData("Client", StatusCodes.Status403Forbidden)]
+    public async Task ProductionMonitoring_ErrorSmokeEndpointRequiresOwner(string role, int expectedStatusCode)
+    {
+        var reporter = new CapturingErrorReporter();
+        var context = MonitoringSmokeContext(role, "corr-denied-smoke");
+
+        var result = SystemEndpoints.EmitMonitoringSmokeError(
+            context,
+            Options.Create(new MonitoringConfig { ErrorSmokeEnabled = true }),
+            reporter,
+            NullLogger.Instance);
+
+        await result.ExecuteAsync(context);
+
+        Assert.Equal(expectedStatusCode, context.Response.StatusCode);
+        Assert.Empty(reporter.Reports);
+    }
+
+    [Fact]
+    public async Task ProductionMonitoring_ErrorSmokeEndpointEmitsControlledNonPiiEventForOwner()
+    {
+        var reporter = new CapturingErrorReporter();
+        var logger = new CapturingLogger<AccountsWorkflowTests>();
+        var context = MonitoringSmokeContext("Owner", "corr-owner-smoke");
+
+        var result = SystemEndpoints.EmitMonitoringSmokeError(
+            context,
+            Options.Create(new MonitoringConfig
+            {
+                ErrorTrackingProvider = "Sentry-compatible",
+                ErrorSmokeEnabled = true
+            }),
+            reporter,
+            logger);
+
+        await result.ExecuteAsync(context);
+
+        context.Response.Body.Position = 0;
+        using var payload = await JsonDocument.ParseAsync(context.Response.Body);
+        Assert.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
+        Assert.Equal("reported", payload.RootElement.GetProperty("status").GetString());
+        Assert.Equal("captured-test-event-1", payload.RootElement.GetProperty("eventId").GetString());
+        Assert.Equal("corr-owner-smoke", payload.RootElement.GetProperty("correlationId").GetString());
+
+        var report = Assert.Single(reporter.Reports);
+        Assert.IsType<MonitoringSmokeException>(report.Exception);
+        Assert.Equal("Controlled non-PII monitoring smoke event.", report.Exception.Message);
+        Assert.Equal(HttpMethods.Post, report.Context.Method);
+        Assert.Equal("/api/system/monitoring/error-smoke", report.Context.Path);
+        Assert.Equal("corr-owner-smoke", report.Context.CorrelationId);
+
+        var log = Assert.Single(logger.Entries, entry => entry.Level == LogLevel.Warning);
+        Assert.Contains("corr-owner-smoke", log.Message);
+        Assert.Contains("captured-test-event-1", log.Message);
+        Assert.DoesNotContain("owner@example.ie", log.Message);
     }
 
     [Fact]
@@ -7822,6 +7986,118 @@ public class AccountsWorkflowTests
         Assert.True(await CompanyEndpointAccess.CanAccessCompanyAsync(tenantAContext, db, companyA.Id));
         Assert.False(await CompanyEndpointAccess.CanAccessCompanyAsync(tenantAContext, db, companyB.Id));
         Assert.False(await CompanyEndpointAccess.CanAccessCompanyPeriodAsync(tenantAContext, db, companyB.Id, periodB.Id));
+    }
+
+    [Fact]
+    public async Task TenantIsolation_DbContextCompanyQueryFilterBackstopsRequestScopedQueries()
+    {
+        var databaseName = Guid.NewGuid().ToString();
+        var root = new InMemoryDatabaseRoot();
+        await using (var seedDb = CreateDbContext(databaseName, root))
+        {
+            var tenantACompany = new Company { TenantId = 1, LegalName = "Tenant A Ltd", CroNumber = "100001", CompanyType = CompanyType.Private, IncorporationDate = new DateOnly(2025, 1, 1), ArdMonth = 12, RegisteredOfficeAddress1 = "1 A Street", RegisteredOfficeCity = "Dublin", RegisteredOfficeCounty = "Dublin" };
+            var tenantBCompany = new Company { TenantId = 2, LegalName = "Tenant B Ltd", CroNumber = "100002", CompanyType = CompanyType.Private, IncorporationDate = new DateOnly(2025, 1, 1), ArdMonth = 12, RegisteredOfficeAddress1 = "1 B Street", RegisteredOfficeCity = "Cork", RegisteredOfficeCounty = "Cork" };
+            seedDb.Companies.AddRange(tenantACompany, tenantBCompany);
+            await seedDb.SaveChangesAsync();
+
+            var tenantAPeriod = new AccountingPeriod { CompanyId = tenantACompany.Id, PeriodStart = new DateOnly(2025, 1, 1), PeriodEnd = new DateOnly(2025, 12, 31), IsFirstYear = true };
+            var tenantBPeriod = new AccountingPeriod { CompanyId = tenantBCompany.Id, PeriodStart = new DateOnly(2025, 1, 1), PeriodEnd = new DateOnly(2025, 12, 31), IsFirstYear = true };
+            var tenantABank = new BankAccount { CompanyId = tenantACompany.Id, Name = "Tenant A Bank", OpeningBalanceDate = new DateOnly(2025, 1, 1) };
+            var tenantBBank = new BankAccount { CompanyId = tenantBCompany.Id, Name = "Tenant B Bank", OpeningBalanceDate = new DateOnly(2025, 1, 1) };
+            var tenantACategory = new AccountCategory { CompanyId = tenantACompany.Id, Code = "A100", Name = "Tenant A Sales", Type = AccountCategoryType.Income };
+            var tenantBCategory = new AccountCategory { CompanyId = tenantBCompany.Id, Code = "B100", Name = "Tenant B Sales", Type = AccountCategoryType.Income };
+            var tenantAFixedAsset = new FixedAsset { CompanyId = tenantACompany.Id, Name = "Tenant A Laptop", Category = "Office", Cost = 1000m, AcquisitionDate = new DateOnly(2025, 2, 1) };
+            var tenantBFixedAsset = new FixedAsset { CompanyId = tenantBCompany.Id, Name = "Tenant B Laptop", Category = "Office", Cost = 1000m, AcquisitionDate = new DateOnly(2025, 2, 1) };
+            var tenantALoan = new Loan { CompanyId = tenantACompany.Id, Lender = "Tenant A Lender", OriginalAmount = 5000m, Balance = 5000m, DrawdownDate = new DateOnly(2025, 1, 1), BalanceAsOfDate = new DateOnly(2025, 12, 31) };
+            var tenantBLoan = new Loan { CompanyId = tenantBCompany.Id, Lender = "Tenant B Lender", OriginalAmount = 5000m, Balance = 5000m, DrawdownDate = new DateOnly(2025, 1, 1), BalanceAsOfDate = new DateOnly(2025, 12, 31) };
+            var tenantAUser = new UserAccount { TenantId = 1, Email = "owner@tenant-a.ie", DisplayName = "Tenant A Owner", Role = "Owner", PasswordHash = "hash", PasswordSalt = "salt", PasswordAlgorithm = "test" };
+            var tenantBUser = new UserAccount { TenantId = 2, Email = "owner@tenant-b.ie", DisplayName = "Tenant B Owner", Role = "Owner", PasswordHash = "hash", PasswordSalt = "salt", PasswordAlgorithm = "test" };
+
+            seedDb.AddRange(
+                tenantAPeriod,
+                tenantBPeriod,
+                new CompanyOfficer { CompanyId = tenantACompany.Id, Name = "Tenant A Director", Role = OfficerRole.Director, AppointedDate = new DateOnly(2025, 1, 1) },
+                new CompanyOfficer { CompanyId = tenantBCompany.Id, Name = "Tenant B Director", Role = OfficerRole.Director, AppointedDate = new DateOnly(2025, 1, 1) },
+                tenantABank,
+                tenantBBank,
+                tenantACategory,
+                tenantBCategory,
+                tenantAFixedAsset,
+                tenantBFixedAsset,
+                tenantALoan,
+                tenantBLoan,
+                new ShareCapital { CompanyId = tenantACompany.Id, ShareClass = "Tenant A Ordinary", IssueDate = new DateOnly(2025, 1, 1) },
+                new ShareCapital { CompanyId = tenantBCompany.Id, ShareClass = "Tenant B Ordinary", IssueDate = new DateOnly(2025, 1, 1) },
+                new FilingHistory { CompanyId = tenantACompany.Id, PeriodId = tenantAPeriod.Id, DeadlineType = DeadlineType.CRO, DueDate = new DateOnly(2026, 9, 30), FiledDate = new DateOnly(2026, 9, 1) },
+                new FilingHistory { CompanyId = tenantBCompany.Id, PeriodId = tenantBPeriod.Id, DeadlineType = DeadlineType.CRO, DueDate = new DateOnly(2026, 9, 30), FiledDate = new DateOnly(2026, 9, 1) },
+                tenantAUser,
+                tenantBUser);
+            await seedDb.SaveChangesAsync();
+
+            seedDb.AddRange(
+                new FilingDeadline { CompanyId = tenantACompany.Id, PeriodId = tenantAPeriod.Id, DeadlineType = DeadlineType.Revenue, DueDate = new DateOnly(2026, 9, 23) },
+                new FilingDeadline { CompanyId = tenantBCompany.Id, PeriodId = tenantBPeriod.Id, DeadlineType = DeadlineType.Revenue, DueDate = new DateOnly(2026, 9, 23) },
+                new Debtor { PeriodId = tenantAPeriod.Id, Name = "Tenant A Debtor", Amount = 100m },
+                new Debtor { PeriodId = tenantBPeriod.Id, Name = "Tenant B Debtor", Amount = 100m },
+                new ImportBatch { BankAccountId = tenantABank.Id, Filename = "tenant-a.csv" },
+                new ImportBatch { BankAccountId = tenantBBank.Id, Filename = "tenant-b.csv" },
+                new DepreciationEntry { AssetId = tenantAFixedAsset.Id, PeriodId = tenantAPeriod.Id, OpeningNbv = 1000m, Charge = 100m, ClosingNbv = 900m },
+                new DepreciationEntry { AssetId = tenantBFixedAsset.Id, PeriodId = tenantBPeriod.Id, OpeningNbv = 1000m, Charge = 100m, ClosingNbv = 900m },
+                new LoanBalanceSnapshot { LoanId = tenantALoan.Id, PeriodId = tenantAPeriod.Id, OpeningBalance = 5000m, ClosingBalance = 5000m },
+                new LoanBalanceSnapshot { LoanId = tenantBLoan.Id, PeriodId = tenantBPeriod.Id, OpeningBalance = 5000m, ClosingBalance = 5000m },
+                new UserCompanyAccess { UserId = tenantAUser.Id, CompanyId = tenantACompany.Id },
+                new UserCompanyAccess { UserId = tenantBUser.Id, CompanyId = tenantBCompany.Id });
+            await seedDb.SaveChangesAsync();
+        }
+
+        var tenantAContext = new DefaultHttpContext();
+        tenantAContext.Items[AuthContext.ItemKey] = new AuthenticatedUser(7, 1, "Firm A", "owner@a.ie", "Owner", "Owner");
+        await using var requestDb = CreateDbContext(databaseName, root, tenantAContext);
+
+        var visibleCompanies = await requestDb.Companies
+            .OrderBy(c => c.LegalName)
+            .Select(c => c.LegalName)
+            .ToListAsync();
+
+        Assert.Equal(["Tenant A Ltd"], visibleCompanies);
+        Assert.Equal(["Tenant A Director"], await requestDb.CompanyOfficers.Select(o => o.Name).ToListAsync());
+        Assert.Equal([new DateOnly(2025, 12, 31)], await requestDb.AccountingPeriods.Select(p => p.PeriodEnd).ToListAsync());
+        Assert.Equal(["Tenant A Bank"], await requestDb.BankAccounts.Select(b => b.Name).ToListAsync());
+        Assert.Equal(["Tenant A Sales"], await requestDb.AccountCategories.Select(c => c.Name).ToListAsync());
+        Assert.Equal(["Tenant A Laptop"], await requestDb.FixedAssets.Select(a => a.Name).ToListAsync());
+        Assert.Equal(["Tenant A Lender"], await requestDb.Loans.Select(l => l.Lender).ToListAsync());
+        Assert.Equal(["Tenant A Ordinary"], await requestDb.ShareCapitals.Select(s => s.ShareClass).ToListAsync());
+        Assert.Equal(["Tenant A Debtor"], await requestDb.Debtors.Select(d => d.Name).ToListAsync());
+        Assert.Single(await requestDb.FilingDeadlines.ToListAsync());
+        Assert.Single(await requestDb.FilingHistories.ToListAsync());
+        Assert.Equal(["tenant-a.csv"], await requestDb.ImportBatches.Select(b => b.Filename).ToListAsync());
+        Assert.Single(await requestDb.DepreciationEntries.ToListAsync());
+        Assert.Single(await requestDb.LoanBalanceSnapshots.ToListAsync());
+        Assert.Equal(["owner@tenant-a.ie"], await requestDb.UserAccounts.Select(u => u.Email).ToListAsync());
+        Assert.Single(await requestDb.UserCompanyAccesses.ToListAsync());
+        Assert.True(await requestDb.Companies.IgnoreQueryFilters().AnyAsync(c => c.LegalName == "Tenant B Ltd"));
+        Assert.True(await requestDb.CompanyOfficers.IgnoreQueryFilters().AnyAsync(o => o.Name == "Tenant B Director"));
+        Assert.True(await requestDb.Debtors.IgnoreQueryFilters().AnyAsync(d => d.Name == "Tenant B Debtor"));
+        Assert.True(await requestDb.ImportBatches.IgnoreQueryFilters().AnyAsync(b => b.Filename == "tenant-b.csv"));
+    }
+
+    [Fact]
+    public void TenantIsolation_QueryFiltersCoverRequiredDependentsOfFilteredEntities()
+    {
+        using var db = CreateDbContext();
+
+        var missingDependentFilters = db.Model.GetEntityTypes()
+            .SelectMany(entity => entity.GetForeignKeys()
+                .Where(foreignKey =>
+                    foreignKey.IsRequired
+                    && foreignKey.PrincipalEntityType.GetDeclaredQueryFilters().Any()
+                    && !foreignKey.DeclaringEntityType.GetDeclaredQueryFilters().Any())
+                .Select(foreignKey =>
+                    $"{foreignKey.DeclaringEntityType.ClrType.Name}->{foreignKey.PrincipalEntityType.ClrType.Name}"))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Empty(missingDependentFilters);
     }
 
     [Theory]
@@ -14855,7 +15131,12 @@ public class AccountsWorkflowTests
         Assert.Contains("cache: npm", frontendJob);
         Assert.Contains("cache-dependency-path: frontend/package-lock.json", frontendJob);
         Assert.Contains("npm ci", frontendJob);
-        Assert.Contains("npm audit --audit-level=moderate", frontendJob);
+        Assert.Contains("Audit frontend dependencies and write evidence", frontendJob);
+        Assert.Contains("npm audit --audit-level=moderate --json", frontendJob);
+        Assert.Contains("../scripts/write-dependency-evidence.ps1", frontendJob);
+        Assert.Contains("dependency-audit-report.json", frontendJob);
+        Assert.Contains("Upload dependency audit evidence", frontendJob);
+        Assert.Contains("name: dependency-audit-release", frontendJob);
         Assert.Contains("npm run lint", frontendJob);
         Assert.Contains("npx tsc --noEmit --incremental false", frontendJob);
         Assert.Contains("npm test", frontendJob);
@@ -14882,6 +15163,11 @@ public class AccountsWorkflowTests
         Assert.Contains("Validate production image contract", productionConfigJob);
         Assert.Contains("shell: pwsh", productionConfigJob);
         Assert.Contains("./scripts/verify-production-compose-images.ps1", productionConfigJob);
+        Assert.Contains("-EvidencePath (Join-Path $env:RUNNER_TEMP \"accounts-production-safety/production-safety-report.json\")", productionConfigJob);
+        Assert.Contains("Upload production safety evidence", productionConfigJob);
+        Assert.Contains("name: production-safety-config", productionConfigJob);
+        Assert.Contains("production-safety-report.json", productionConfigJob);
+        Assert.Contains("if-no-files-found: error", productionConfigJob);
         Assert.DoesNotContain("docker compose -f compose.production.yml config\r", productionConfigJob);
         Assert.DoesNotContain("docker compose -f compose.production.yml config\n", productionConfigJob);
         Assert.Contains("caddy validate --config /etc/caddy/Caddyfile", productionConfigJob);
@@ -14940,6 +15226,7 @@ public class AccountsWorkflowTests
         Assert.Contains("AUDIT_INTEGRITY_SIGNING_KEY_FILE", productionSmokeJob);
         Assert.Contains("ACCOUNTS_API_KEY_FILE", productionSmokeJob);
         Assert.Contains("BOOTSTRAP_OWNER_PASSWORD_FILE", productionSmokeJob);
+        Assert.Contains("MONITORING_ERROR_SMOKE_ENABLED: \"true\"", productionSmokeJob);
         Assert.Contains("set_masked_env ACCOUNTS_API_KEY_HASH \"$accounts_api_key_hash\"", productionSmokeJob);
         Assert.Contains("generate_bootstrap_owner_password()", productionSmokeJob);
         Assert.Contains("printf 'CiOwner1!%s' \"$(generate_secret)\"", productionSmokeJob);
@@ -14966,6 +15253,18 @@ public class AccountsWorkflowTests
         Assert.Contains("-BaseUrl https://accounts-smoke.local", productionSmokeJob);
         Assert.Contains("-Email $env:BOOTSTRAP_OWNER_EMAIL", productionSmokeJob);
         Assert.Contains("-Password $bootstrapOwnerPassword", productionSmokeJob);
+        Assert.Contains("-OutputDirectory (Join-Path $env:RUNNER_TEMP \"accounts-smoke\")", productionSmokeJob);
+        Assert.Contains("-CheckMonitoringErrorRouting", productionSmokeJob);
+        Assert.Contains("Upload monitoring error routing evidence", productionSmokeJob);
+        Assert.Contains("name: monitoring-error-routing-smoke", productionSmokeJob);
+        Assert.Contains("monitoring-error-routing-report.json", productionSmokeJob);
+        Assert.Contains("Capture structured API log sample", productionSmokeJob);
+        Assert.Contains("docker compose -f compose.production.yml logs --no-color --no-log-prefix api", productionSmokeJob);
+        Assert.Contains("./scripts/verify-structured-logs.ps1", productionSmokeJob);
+        Assert.Contains("api-structured.log", productionSmokeJob);
+        Assert.Contains("structured-log-report.json", productionSmokeJob);
+        Assert.Contains("Upload structured API log evidence", productionSmokeJob);
+        Assert.Contains("name: structured-json-log-sample", productionSmokeJob);
         Assert.Contains("Run production backup restore drill", productionSmokeJob);
         Assert.Contains("$env:RUNNER_TEMP", productionSmokeJob);
         Assert.Contains("accounts-backups", productionSmokeJob);
@@ -14977,8 +15276,14 @@ public class AccountsWorkflowTests
         Assert.Contains("$backup = $backups[0]", productionSmokeJob);
         Assert.Contains("Test-Path -LiteralPath \"$($backup.FullName).sha256\"", productionSmokeJob);
         Assert.Contains("Missing sha256 for", productionSmokeJob);
+        Assert.Contains("$restoreEvidencePath = Join-Path $backupDir \"restore-drill-report.json\"", productionSmokeJob);
         Assert.Contains("./scripts/verify-postgres-backup.ps1", productionSmokeJob);
         Assert.Contains("-BackupPath $backup.FullName", productionSmokeJob);
+        Assert.Contains("-EvidencePath $restoreEvidencePath", productionSmokeJob);
+        Assert.Contains("Upload backup restore drill evidence", productionSmokeJob);
+        Assert.Contains("name: postgres-backup-restore-drill", productionSmokeJob);
+        Assert.Contains("path: ${{ runner.temp }}/accounts-backups", productionSmokeJob);
+        Assert.Contains("if-no-files-found: error", productionSmokeJob);
         Assert.DoesNotContain("-AllowRepositoryOutputForLocalDryRun", productionSmokeJob);
         Assert.DoesNotContain("-BaseUrl http://127.0.0.1:3000", productionSmokeJob);
         Assert.DoesNotContain("-AllowInsecureHttp", productionSmokeJob);
@@ -15015,6 +15320,34 @@ public class AccountsWorkflowTests
     }
 
     [Fact]
+    public void DependencyEvidenceWriter_RecordsAuditPolicyAndLockfileHashes()
+    {
+        var root = RepositoryRoot();
+        var scriptPath = Path.Combine(root, "scripts", "write-dependency-evidence.ps1");
+        var workflow = File.ReadAllText(Path.Combine(root, ".github", "workflows", "ci.yml"));
+        var readinessService = File.ReadAllText(Path.Combine(root, "backend", "Accounts.Api", "Services", "ProductionReadinessReportService.cs"));
+
+        Assert.True(File.Exists(scriptPath), "Dependency evidence writer should retain release audit evidence.");
+        var script = File.ReadAllText(scriptPath);
+
+        Assert.Contains("[string]$NpmAuditJsonPath", script);
+        Assert.Contains("[string]$EvidencePath", script);
+        Assert.Contains("package-lock.json", script);
+        Assert.Contains("lockfileVersion", script);
+        Assert.Contains("metadata.vulnerabilities", script);
+        Assert.Contains("moderate/high/critical vulnerabilities", script);
+        Assert.Contains("NuGetAudit", script);
+        Assert.Contains("NU1901", script);
+        Assert.Contains("NU1904", script);
+        Assert.Contains("verify-ci-actions.mjs", script);
+        Assert.Contains("dependency-audit-report.json", workflow);
+        Assert.Contains("npm-audit.json", workflow);
+        Assert.Contains("dependency-audit-release", workflow);
+        Assert.Contains("write-dependency-evidence.ps1", readinessService);
+        Assert.Contains("dependency-audit-release", readinessService);
+    }
+
+    [Fact]
     public void ProductionCompose_UsesImmutableImageReferencesInsteadOfBuildContexts()
     {
         var compose = File.ReadAllText(Path.Combine(RepositoryRoot(), "compose.production.yml"));
@@ -15033,6 +15366,10 @@ public class AccountsWorkflowTests
         Assert.Contains("docker image inspect", runbook);
         Assert.Contains("CI-promoted immutable image", runbook);
         Assert.Contains("Do not deploy production by rebuilding from the checkout", runbook);
+        Assert.Contains("production-safety-config", runbook);
+        Assert.Contains("production-safety-report.json", runbook);
+        Assert.Contains("DatabaseStartup__AutoMigrateOnStartup=false", runbook);
+        Assert.Contains("demo seeding is disabled", runbook);
         var imageVerifierPath = Path.Combine(RepositoryRoot(), "scripts", "verify-production-compose-images.ps1");
         Assert.True(File.Exists(imageVerifierPath));
         var imageVerifier = File.ReadAllText(imageVerifierPath);
@@ -15047,6 +15384,37 @@ public class AccountsWorkflowTests
         Assert.Contains("accounts-api-ci:verify", imageVerifier);
         Assert.Contains("accounts-frontend-ci:verify", imageVerifier);
         Assert.Contains("--build", imageVerifier);
+    }
+
+    [Fact]
+    public void ProductionComposeVerifier_EmitsMigrationAndSeedSafetyEvidence()
+    {
+        var root = RepositoryRoot();
+        var compose = File.ReadAllText(Path.Combine(root, "compose.production.yml"));
+        var workflow = File.ReadAllText(Path.Combine(root, ".github", "workflows", "ci.yml"));
+        var imageVerifierPath = Path.Combine(root, "scripts", "verify-production-compose-images.ps1");
+        var imageVerifier = File.ReadAllText(imageVerifierPath);
+
+        Assert.Contains("command: [\"--migrate-only\"]", compose);
+        Assert.Contains("condition: service_completed_successfully", compose);
+        Assert.Contains("DatabaseStartup__AutoMigrateOnStartup: \"false\"", compose);
+        Assert.Contains("DatabaseStartup__SeedDemoData: \"false\"", compose);
+        Assert.DoesNotContain("DatabaseStartup__AllowStartupMigrationInProduction: \"true\"", compose);
+        Assert.DoesNotContain("DatabaseStartup__AllowDemoSeedInProduction: \"true\"", compose);
+
+        Assert.Contains("[string]$EvidencePath", imageVerifier);
+        Assert.Contains("migrate service must run exactly '--migrate-only'", imageVerifier);
+        Assert.Contains("DatabaseStartup__AutoMigrateOnStartup", imageVerifier);
+        Assert.Contains("DatabaseStartup__SeedDemoData", imageVerifier);
+        Assert.Contains("DatabaseStartup__AllowStartupMigrationInProduction", imageVerifier);
+        Assert.Contains("DatabaseStartup__AllowDemoSeedInProduction", imageVerifier);
+        Assert.Contains("BootstrapOwner__OwnerInitialPassword_FILE", imageVerifier);
+        Assert.Contains("api service must not mount or receive the bootstrap owner initial password", imageVerifier);
+        Assert.Contains("production-safety-report.json", workflow);
+        Assert.Contains("production-safety-config", workflow);
+        Assert.Contains("migrationSafety", imageVerifier);
+        Assert.Contains("seedSafety", imageVerifier);
+        Assert.Contains("Production safety evidence written", imageVerifier);
     }
 
     [Fact]
@@ -17743,12 +18111,22 @@ public class AccountsWorkflowTests
         Assert.Contains("Invoke-ScalarQuery", verifyScript);
         Assert.Contains("Assert-RestoredCountMatchesSource", verifyScript);
         Assert.Contains("SourceDatabase", verifyScript);
+        Assert.Contains("[string]$EvidencePath", verifyScript);
         Assert.Contains("VerifyDatabase must be different from SourceDatabase", verifyScript);
         Assert.Contains(".Equals($SourceDatabase, [StringComparison]::OrdinalIgnoreCase)", verifyScript);
         AssertOccursBefore(verifyScript, "VerifyDatabase must be different from SourceDatabase", "Drop previous restore verification database");
+        Assert.Contains("Checksum file not found", verifyScript);
+        Assert.Contains("Checksum file is not in sha256 format", verifyScript);
         Assert.Contains("[switch]$RequireNonEmpty", verifyScript);
         Assert.Contains("if ($RequireNonEmpty -and $sourceCount -le 0)", verifyScript);
         Assert.Contains("restoredCount -ne $sourceCount", verifyScript);
+        Assert.Contains("table = $TableName", verifyScript);
+        Assert.Contains("sourceCount = $sourceCount", verifyScript);
+        Assert.Contains("restoredCount = $restoredCount", verifyScript);
+        Assert.Contains("backupSha256", verifyScript);
+        Assert.Contains("tableChecks", verifyScript);
+        Assert.Contains("ConvertTo-Json -Depth 5", verifyScript);
+        Assert.Contains("Restore evidence written", verifyScript);
         AssertWrappedNativeCommand(verifyScript, "Drop previous restore verification database", "dropdb");
         AssertWrappedNativeCommand(verifyScript, "Create restore verification database", "createdb");
         Assert.Contains("Invoke-ScalarQuery \"Count source $TableName\" $SourceDatabase $Sql", verifyScript);
@@ -17761,6 +18139,9 @@ public class AccountsWorkflowTests
         Assert.Contains("finally", verifyScript);
         Assert.Contains("if (-not $KeepVerifyDatabase)", verifyScript);
         AssertWrappedNativeCommand(verifyScript, "Drop restore verification database", "dropdb");
+        var workflow = File.ReadAllText(Path.Combine(root, ".github", "workflows", "ci.yml"));
+        Assert.Contains("restore-drill-report.json", workflow);
+        Assert.Contains("postgres-backup-restore-drill", workflow);
         Assert.Contains("single transaction", runbook, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("exit on the first restore error", runbook, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(" sh -lc ", restoreScript);
@@ -17810,6 +18191,13 @@ public class AccountsWorkflowTests
         Assert.Contains("-CookieName \"accounts_session\" -Attribute \"Secure\"", smokeScript);
         Assert.Contains("-CookieName \"accounts_csrf\" -Attribute \"Secure\"", smokeScript);
         Assert.Contains("X-CSRF-Token", smokeScript);
+        Assert.Contains("CheckMonitoringErrorRouting", smokeScript);
+        Assert.Contains("/api/system/monitoring/error-smoke", smokeScript);
+        Assert.Contains("monitoring-error-routing-report.json", smokeScript);
+        Assert.Contains("Monitoring error-routing evidence written", smokeScript);
+        Assert.Contains("verify-structured-logs.ps1", runbook);
+        Assert.Contains("structured-log-report.json", runbook);
+        Assert.Contains("structured-json-log-sample", runbook);
         Assert.Contains("/api/auth/logout", smokeScript);
         Assert.Contains("Checking session is cleared after logout", smokeScript);
         Assert.Contains("Expected /api/auth/me to be unauthorized after logout", smokeScript);
@@ -17867,6 +18255,31 @@ public class AccountsWorkflowTests
         Assert.Contains("confirms logout clears the authenticated session", runbook);
         Assert.Contains("GET `/api/auth/me` must return `401 Unauthorized` after logout", runbook);
         Assert.DoesNotContain("Write-Host $Password", smokeScript);
+    }
+
+    [Fact]
+    public void StructuredLogVerifier_ParsesJsonLogsAndMatchesMonitoringSmokeEvidence()
+    {
+        var root = RepositoryRoot();
+        var scriptPath = Path.Combine(root, "scripts", "verify-structured-logs.ps1");
+        var workflow = File.ReadAllText(Path.Combine(root, ".github", "workflows", "ci.yml"));
+        var reportService = File.ReadAllText(Path.Combine(root, "backend", "Accounts.Api", "Services", "ProductionReadinessReportService.cs"));
+
+        Assert.True(File.Exists(scriptPath), "Structured log verifier should turn raw API logs into release evidence.");
+        var script = File.ReadAllText(scriptPath);
+
+        Assert.Contains("ConvertFrom-Json", script);
+        Assert.Contains("Timestamp", script);
+        Assert.Contains("LogLevel", script);
+        Assert.Contains("Category", script);
+        Assert.Contains("MonitoringEvidencePath", script);
+        Assert.Contains("correlationId", script);
+        Assert.Contains("Controlled monitoring smoke event emitted", script);
+        Assert.Contains("structured-log-report.json", workflow);
+        Assert.Contains("structured-json-log-sample", workflow);
+        Assert.Contains("api-structured.log", workflow);
+        Assert.Contains("structured-log-report.json", reportService);
+        Assert.Contains("api-structured.log", reportService);
     }
 
     [Fact]
@@ -18457,6 +18870,16 @@ public class AccountsWorkflowTests
         return new AccountsDbContext(builder.Options);
     }
 
+    private static AccountsDbContext CreateDbContext(string databaseName, InMemoryDatabaseRoot root, HttpContext httpContext)
+    {
+        var builder = new DbContextOptionsBuilder<AccountsDbContext>()
+            .UseInMemoryDatabase(databaseName, root);
+
+        return new AccountsDbContext(
+            builder.Options,
+            new HttpContextAccessor { HttpContext = httpContext });
+    }
+
     private static AccountsDbContext CreateAuditFailingDbContext(string databaseName, InMemoryDatabaseRoot root)
     {
         var options = new DbContextOptionsBuilder<AccountsDbContext>()
@@ -18639,6 +19062,27 @@ public class AccountsWorkflowTests
         context.Request.Method = method;
         context.Request.Path = path;
         context.Items[AuthContext.ItemKey] = AuthenticatedRole(role);
+        return context;
+    }
+
+    private static DefaultHttpContext MonitoringSmokeContext(string role, string correlationId)
+    {
+        var context = new DefaultHttpContext
+        {
+            RequestServices = new ServiceCollection().AddLogging().BuildServiceProvider(),
+            Response =
+            {
+                Body = new MemoryStream()
+            }
+        };
+        context.Request.Method = HttpMethods.Post;
+        context.Request.Path = "/api/system/monitoring/error-smoke";
+        context.TraceIdentifier = correlationId;
+        context.Items[AuthContext.ItemKey] = AuthenticatedRole(role) with
+        {
+            UserId = 41,
+            Email = "owner@example.ie"
+        };
         return context;
     }
 
@@ -18998,6 +19442,19 @@ public class AccountsWorkflowTests
         public bool IsEnabled(LogLevel logLevel) => true;
         public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
             => Entries.Add(new CapturedLog(logLevel, formatter(state, exception), exception));
+    }
+
+    private sealed record CapturedErrorReport(Exception Exception, ErrorReportContext Context);
+
+    private sealed class CapturingErrorReporter : IErrorReporter
+    {
+        public List<CapturedErrorReport> Reports { get; } = [];
+
+        public string CaptureUnexpectedException(Exception exception, ErrorReportContext context)
+        {
+            Reports.Add(new CapturedErrorReport(exception, context));
+            return $"captured-test-event-{Reports.Count}";
+        }
     }
 
     private sealed class FailingIxbrlService(AccountsDbContext db, FinancialStatementsService statementsService) : IxbrlService(db, statementsService)

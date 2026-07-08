@@ -32,7 +32,7 @@ export function ProductionReadinessPanel({
   if (!report) {
     return (
       <ReviewPanel title="Production Readiness" description="Control-room assurance status">
-        <div className="grid gap-3 md:grid-cols-4">
+        <div className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-4">
           {["Backend", "Corpus", "Sources", "Gates"].map((label) => (
             <div key={label} className="h-20 rounded-md border border-[var(--border)] bg-[var(--surface-subtle)]" />
           ))}
@@ -63,7 +63,7 @@ export function ProductionReadinessPanel({
         </>
       }
     >
-      <div className="grid gap-3 md:grid-cols-4">
+      <div className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-4">
         <ReadinessMetric
           icon={<ShieldCheck className="h-4 w-4" />}
           label="Hardened areas"
@@ -106,8 +106,8 @@ export function ProductionReadinessPanel({
         </div>
       )}
 
-      <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)]">
-        <div className="space-y-4">
+      <div className="mt-4 grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)]">
+        <div className="min-w-0 space-y-4">
           <DataGrid
             columns={["Golden scenario", "Fixture", "Scope", "Outcome", "Evidence tests", "Status"]}
             rows={report.goldenFilingCorpus.map((scenario) => [
@@ -135,7 +135,7 @@ export function ProductionReadinessPanel({
             ])}
           />
 
-          <section aria-label="Legal basis snapshots" className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
+          <section aria-label="Legal basis snapshots" className="min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Legal basis snapshots</p>
@@ -160,7 +160,7 @@ export function ProductionReadinessPanel({
                       {scenario.legalBasisSnapshot.manualProfessionalReviewRequired ? "Manual review" : "Standard gate"}
                     </StatusBadge>
                   </div>
-                  <div className="mt-3 grid gap-2 text-xs leading-5 text-[var(--muted-foreground)] sm:grid-cols-2">
+                  <div className="mt-3 grid min-w-0 grid-cols-1 gap-2 text-xs leading-5 text-[var(--muted-foreground)] sm:grid-cols-2">
                     <LedgerFact>{scenario.legalBasisSnapshot.companyType} / {scenario.legalBasisSnapshot.sizeClass} / {scenario.legalBasisSnapshot.electedRegime}</LedgerFact>
                     <LedgerFact>Sources: {scenario.legalBasisSnapshot.sourceIds.join(", ")}</LedgerFact>
                   </div>
@@ -169,7 +169,7 @@ export function ProductionReadinessPanel({
             </div>
           </section>
 
-          <section aria-label="Golden evidence ledger" className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
+          <section aria-label="Golden evidence ledger" className="min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Golden evidence ledger</p>
@@ -193,7 +193,7 @@ export function ProductionReadinessPanel({
                     </StatusBadge>
                   </div>
 
-                  <div className="mt-3 grid gap-2 text-xs leading-5 text-[var(--muted-foreground)] sm:grid-cols-2 xl:grid-cols-3">
+                  <div className="mt-3 grid min-w-0 grid-cols-1 gap-2 text-xs leading-5 text-[var(--muted-foreground)] sm:grid-cols-2 xl:grid-cols-3">
                     <LedgerFact>Readiness: {entry.filingReadinessState}</LedgerFact>
                     <LedgerFact>Expected CT: {formatCurrency(entry.expectedCorporationTax)}</LedgerFact>
                     <LedgerFact>Sign-off: {entry.signOffPacketState}</LedgerFact>
@@ -207,8 +207,8 @@ export function ProductionReadinessPanel({
           </section>
         </div>
 
-        <div className="space-y-3">
-          <div className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
+        <div className="min-w-0 space-y-3">
+          <div className="min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
             <div className="flex items-center justify-between gap-2">
               <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Completion tracks</p>
               <StatusBadge tone={report.completionTracks.every((track) => track.status === "complete") ? "good" : "warn"}>
@@ -239,7 +239,7 @@ export function ProductionReadinessPanel({
             </div>
           </div>
 
-          <div className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
+          <div className="min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
             <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Required gates</p>
             <div className="mt-3 space-y-2">
               {report.operationalGates.map((gate) => (
@@ -254,7 +254,7 @@ export function ProductionReadinessPanel({
             </div>
           </div>
 
-          <div className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
+          <div className="min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
             <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Source snapshot</p>
             <p className="mt-1 text-sm font-medium text-[var(--foreground)]">{report.sourceLawSnapshot.snapshotVersion}</p>
             <div className="mt-3 flex flex-wrap gap-2">

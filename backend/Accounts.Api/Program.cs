@@ -50,6 +50,7 @@ if (!builder.Environment.IsDevelopment() && !string.IsNullOrWhiteSpace(monitorin
 
 // Database
 var connectionString = DatabaseConnectionConfig.Resolve(builder.Configuration, builder.Environment);
+builder.Services.AddHttpContextAccessor();
 builder.Services.AddDbContext<AccountsDbContext>(options =>
     options.UseNpgsql(connectionString));
 
@@ -125,6 +126,7 @@ builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<BootstrapOwnerService>();
 builder.Services.AddSingleton<ApiAccessService>();
 builder.Services.AddSingleton<ProductionSafetyService>();
+builder.Services.AddSingleton<IErrorReporter, SentryErrorReporter>();
 builder.Services.AddSingleton(TimeProvider.System);
 
 // CORS

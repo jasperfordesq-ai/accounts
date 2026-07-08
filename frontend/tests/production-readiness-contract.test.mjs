@@ -163,6 +163,17 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.deepEqual(parsed.accountantWorkflowEvidencePack[0].visualArtifactNames, parsed.accountantJourneyAcceptanceChecklist[0].visualArtifactNames);
   assert.match(parsed.accountantWorkflowEvidencePack.find((item) => item.routeCode === "filing-review")?.decisionQuestion ?? "", /external ROS\/iXBRL validation/);
   assert.match(parsed.accountantWorkflowEvidencePack.find((item) => item.routeCode === "production-readiness")?.decisionQuestion ?? "", /release blockers/);
+  assert.equal(parsed.accountantWalkthroughEvidenceMatrix.length, 30);
+  assert.equal(parsed.accountantWalkthroughEvidenceMatrix[0].scenarioCode, "clg-charity");
+  assert.equal(parsed.accountantWalkthroughEvidenceMatrix[0].routeCode, "dashboard");
+  assert.equal(parsed.accountantWalkthroughEvidenceMatrix[0].evidenceArtifact, "clg-charity-dashboard-walkthrough-note");
+  assert.deepEqual(parsed.accountantWalkthroughEvidenceMatrix[0].visualArtifactNames, parsed.accountantJourneyAcceptanceChecklist[0].visualArtifactNames);
+  assert.ok(parsed.accountantWalkthroughEvidenceMatrix[0].blocksRelease);
+  assert.match(parsed.accountantWalkthroughEvidenceMatrix[0].acceptanceCriteria.at(-1) ?? "", /CLG charity annual reporting/);
+  assert.equal(
+    parsed.accountantWalkthroughEvidenceMatrix.find((item) => item.scenarioCode === "medium-audit-required" && item.routeCode === "filing-review")?.signOffPacketState,
+    "manual-handoff",
+  );
   assert.equal(parsed.workbenchVisualAcceptanceRegister[0].routeCode, "dashboard");
   assert.equal(parsed.workbenchVisualAcceptanceRegister[0].evidenceArtifact, "dashboard-visual-acceptance-note");
   assert.deepEqual(parsed.workbenchVisualAcceptanceRegister[0].screenshotArtifactNames, parsed.accountantJourneyAcceptanceChecklist[0].visualArtifactNames);
@@ -515,6 +526,38 @@ test("parseProductionReadinessReport rejects accountant journey acceptance witho
   assert.throws(
     () => parseProductionReadinessReport(payload),
     /Invalid production readiness report contract: assurancePacket\.evidenceItems - accountant-journey-acceptance-checklist is required/,
+  );
+});
+
+test("parseProductionReadinessReport rejects accountant walkthrough matrix row drift", () => {
+  const payload = sampleReport();
+  payload.accountantWalkthroughEvidenceMatrix = payload.accountantWalkthroughEvidenceMatrix.filter(
+    (item) => !(item.scenarioCode === "micro-ltd" && item.routeCode === "filing-review"),
+  );
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: accountantWalkthroughEvidenceMatrix\.length - expected 30, received 29/,
+  );
+});
+
+test("parseProductionReadinessReport rejects accountant walkthrough matrix without route screenshots", () => {
+  const payload = sampleReport();
+  payload.accountantWalkthroughEvidenceMatrix[0].visualArtifactNames = ["dashboard-light-desktop.png"];
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: accountantWalkthroughEvidenceMatrix\.0\.visualArtifactNames - expected dashboard-dark-desktop\.png/,
+  );
+});
+
+test("parseProductionReadinessReport rejects accountant walkthrough matrix without release-blocking status", () => {
+  const payload = sampleReport();
+  payload.accountantWalkthroughEvidenceMatrix[0].blocksRelease = false;
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: accountantWalkthroughEvidenceMatrix\.0\.status - walkthrough rows must block release until accepted/,
   );
 });
 
@@ -935,7 +978,7 @@ function sampleReport() {
       visualQaExpectedScreenshots: expectedVisualSmokeScreenshotCount(),
       requiredOperationalGates: 1,
       openCriticalActions: 3,
-      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "source-law-review-ledger", "revenue-taxonomy-range-evidence", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "production-audit-evidence-pack", "operations-evidence-pack", "visual-smoke-screenshots", "release-blocker-register", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "accountant-journey-acceptance-checklist", "accountant-workflow-evidence-pack", "workbench-visual-acceptance-register", "production-completion-map"],
+      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "source-law-review-ledger", "revenue-taxonomy-range-evidence", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "production-audit-evidence-pack", "operations-evidence-pack", "visual-smoke-screenshots", "release-blocker-register", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "accountant-journey-acceptance-checklist", "accountant-workflow-evidence-pack", "accountant-walkthrough-evidence-matrix", "workbench-visual-acceptance-register", "production-completion-map"],
       releaseBlockers: [
         "Qualified accountant sign-off required",
         "Source-law change review required",
@@ -2149,10 +2192,10 @@ function sampleReport() {
         category: "Dependency policy",
         ownerRole: "Engineering",
         required: true,
-        command: "Run npm ci, npm audit --audit-level=moderate, dotnet restore and the CI action hygiene verifier against the release commit.",
-        requiredArtifact: "dependency-audit-release-note",
+        command: "Run npm ci, npm audit --audit-level=moderate --json and scripts/write-dependency-evidence.ps1 against the release commit.",
+        requiredArtifact: "dependency-audit-release",
         releaseGateCode: "dependency-policy-controls",
-        verification: "Evidence must include npm audit result, lockfile reproducibility, NuGet restore/build status and GitHub Actions version-hygiene output.",
+        verification: "Evidence must include npm-audit.json and dependency-audit-report.json with package-lock hash, npm audit counts, NuGet audit policy, and GitHub Actions version-hygiene wiring.",
         failurePolicy: "Block release for moderate/high/critical advisories, unreproducible lockfiles, failed restore/build, or unverified CI action versions.",
       },
       {
@@ -2290,7 +2333,57 @@ function withGoldenLegalBasisSnapshots(report) {
     ...report,
     goldenFilingCorpus,
     goldenVerifierManifest: buildGoldenVerifierManifest(goldenFilingCorpus),
+    accountantWalkthroughEvidenceMatrix: buildAccountantWalkthroughEvidenceMatrix({
+      ...report,
+      goldenFilingCorpus,
+    }),
   };
+}
+
+function buildAccountantWalkthroughEvidenceMatrix(report) {
+  const acceptanceByScenario = new Map(
+    report.accountantAcceptanceCriteria.map((criterion) => [criterion.scenarioCode, criterion]),
+  );
+  const routeEvidenceByCode = new Map(
+    report.accountantWorkflowEvidencePack.map((item) => [item.routeCode, item]),
+  );
+
+  return [...report.goldenFilingCorpus]
+    .sort((left, right) => left.code.localeCompare(right.code))
+    .flatMap((scenario) => {
+      const acceptance = acceptanceByScenario.get(scenario.code);
+      if (!acceptance) return [];
+
+      return report.accountantJourneyAcceptanceChecklist.map((route) => {
+        const routeEvidence = routeEvidenceByCode.get(route.routeCode);
+        return {
+          scenarioCode: scenario.code,
+          scenarioLabel: scenario.label,
+          expectedOutcome: scenario.expectedOutcome,
+          filingReadinessState: scenario.evidencePack.expectedOutputs.filingReadinessState,
+          signOffPacketState: scenario.evidencePack.expectedOutputs.signOffPacketState,
+          manualProfessionalReviewRequired: scenario.fixture.manualProfessionalReviewRequired,
+          routeCode: route.routeCode,
+          routeLabel: route.routeLabel,
+          routeKey: route.routeKey,
+          workflowStages: route.workflowStages,
+          visualArtifactNames: route.visualArtifactNames,
+          evidenceArtifact: `${scenario.code}-${route.routeCode}-walkthrough-note`,
+          decisionQuestion: routeEvidence?.decisionQuestion ?? "",
+          requiredEvidence: [...new Set([...route.requiredEvidence, ...acceptance.requiredEvidence])].sort(),
+          acceptanceCriteria: [
+            ...route.acceptanceCriteria,
+            ...acceptance.reviewScope.map((scope) =>
+              `${scenario.label}: qualified-accountant review covers ${scope}.`,
+            ),
+          ],
+          releaseChecklistCode: "golden-corpus-accountant-acceptance",
+          signOffGate: route.signOffGate,
+          status: "required-review",
+          blocksRelease: true,
+        };
+      });
+    });
 }
 
 function buildGoldenVerifierManifest(goldenFilingCorpus) {

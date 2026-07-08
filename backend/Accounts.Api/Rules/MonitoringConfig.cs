@@ -8,4 +8,5 @@ public class MonitoringConfig
     public bool StructuredJsonConsole { get; set; }
     public bool IncludeCorrelationId { get; set; } = true;
     public double TracesSampleRate { get; set; }
+    public bool ErrorSmokeEnabled { get; set; }
 }

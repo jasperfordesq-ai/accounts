@@ -86,8 +86,28 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Audit frontend dependencies
-        run: npm audit --audit-level=moderate
+      - name: Audit frontend dependencies and write evidence
+        shell: pwsh
+        run: |
+          $auditDir = Join-Path $env:RUNNER_TEMP "accounts-dependency-audit"
+          New-Item -ItemType Directory -Force -Path $auditDir | Out-Null
+          $auditPath = Join-Path $auditDir "npm-audit.json"
+          npm audit --audit-level=moderate --json > $auditPath
+          $auditExitCode = $LASTEXITCODE
+          ../scripts/write-dependency-evidence.ps1 `
+            -NpmAuditJsonPath $auditPath `
+            -EvidencePath (Join-Path $auditDir "dependency-audit-report.json")
+          if ($auditExitCode -ne 0) {
+            exit $auditExitCode
+          }
+
+      - name: Upload dependency audit evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dependency-audit-release
+          path: ${{ runner.temp }}/accounts-dependency-audit
+          if-no-files-found: ignore
 
       - name: Type-check frontend
         run: npx tsc --noEmit --incremental false
@@ -133,6 +153,7 @@ jobs:
       BOOTSTRAP_OWNER_DISPLAY_NAME: CI Owner
       BOOTSTRAP_OWNER_MUST_CHANGE_PASSWORD: "false"
       MONITORING_ERROR_TRACKING_DSN: https://public@sentry.invalid/1
+      MONITORING_ERROR_SMOKE_ENABLED: "true"
       MONITORING_TRACES_SAMPLE_RATE: "0"
     steps:
       - name: Check out repository
@@ -194,7 +215,17 @@ jobs:
 
       - name: Validate production image contract
         shell: pwsh
-        run: ./scripts/verify-production-compose-images.ps1
+        run: |
+          ./scripts/verify-production-compose-images.ps1 `
+            -EvidencePath (Join-Path $env:RUNNER_TEMP "accounts-production-safety/production-safety-report.json")
+
+      - name: Upload production safety evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: production-safety-config
+          path: ${{ runner.temp }}/accounts-production-safety/production-safety-report.json
+          if-no-files-found: error
 
       - name: Validate Caddy ingress example
         run: >
@@ -234,6 +265,7 @@ jobs:
       BOOTSTRAP_OWNER_DISPLAY_NAME: CI Owner
       BOOTSTRAP_OWNER_MUST_CHANGE_PASSWORD: "false"
       MONITORING_ERROR_TRACKING_DSN: https://public@sentry.invalid/1
+      MONITORING_ERROR_SMOKE_ENABLED: "true"
       MONITORING_TRACES_SAMPLE_RATE: "0"
     steps:
       - name: Check out repository
@@ -378,7 +410,37 @@ jobs:
           ./scripts/smoke-production.ps1 `
             -BaseUrl https://accounts-smoke.local `
             -Email $env:BOOTSTRAP_OWNER_EMAIL `
-            -Password $bootstrapOwnerPassword
+            -Password $bootstrapOwnerPassword `
+            -OutputDirectory (Join-Path $env:RUNNER_TEMP "accounts-smoke") `
+            -CheckMonitoringErrorRouting
+
+      - name: Upload monitoring error routing evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: monitoring-error-routing-smoke
+          path: ${{ runner.temp }}/accounts-smoke/monitoring-error-routing-report.json
+          if-no-files-found: ignore
+
+      - name: Capture structured API log sample
+        shell: pwsh
+        run: |
+          $logDir = Join-Path $env:RUNNER_TEMP "accounts-logs"
+          New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+          $logPath = Join-Path $logDir "api-structured.log"
+          docker compose -f compose.production.yml logs --no-color --no-log-prefix api | Set-Content -LiteralPath $logPath -Encoding UTF8
+          ./scripts/verify-structured-logs.ps1 `
+            -LogPath $logPath `
+            -MonitoringEvidencePath (Join-Path $env:RUNNER_TEMP "accounts-smoke/monitoring-error-routing-report.json") `
+            -EvidencePath (Join-Path $logDir "structured-log-report.json")
+
+      - name: Upload structured API log evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: structured-json-log-sample
+          path: ${{ runner.temp }}/accounts-logs
+          if-no-files-found: ignore
 
       - name: Run visual smoke screenshots
         working-directory: frontend
@@ -421,8 +483,18 @@ jobs:
             throw "Missing sha256 for $($backup.FullName)."
           }
 
+          $restoreEvidencePath = Join-Path $backupDir "restore-drill-report.json"
           ./scripts/verify-postgres-backup.ps1 `
-            -BackupPath $backup.FullName
+            -BackupPath $backup.FullName `
+            -EvidencePath $restoreEvidencePath
+
+      - name: Upload backup restore drill evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: postgres-backup-restore-drill
+          path: ${{ runner.temp }}/accounts-backups
+          if-no-files-found: error
 
       - name: Show production stack diagnostics
         if: failure()

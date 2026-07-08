@@ -28,7 +28,9 @@ appsettings.Development.json
 
 # Build artifacts
 .dotnet-artifacts*/
+.dotnet-sdk/
 artifacts_*/
+frontend/artifacts/
 .tmp-*/
 *-probe/
 .codex-*/

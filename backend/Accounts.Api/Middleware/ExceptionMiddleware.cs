@@ -3,7 +3,10 @@ using System.Text.Json;
 
 namespace Accounts.Api.Middleware;
 
-public class ExceptionMiddleware(RequestDelegate next, ILogger<ExceptionMiddleware> logger)
+public class ExceptionMiddleware(
+    RequestDelegate next,
+    ILogger<ExceptionMiddleware> logger,
+    IErrorReporter? errorReporter = null)
 {
     public async Task InvokeAsync(HttpContext context)
     {
@@ -30,6 +33,9 @@ public class ExceptionMiddleware(RequestDelegate next, ILogger<ExceptionMiddlewa
             // method/path, and the correlation id so a support ticket can be triaged without a repro.
             logger.LogError(ex, "Unhandled exception handling {Method} {Path} (correlationId {CorrelationId})",
                 context.Request.Method, context.Request.Path, context.TraceIdentifier);
+            errorReporter?.CaptureUnexpectedException(
+                ex,
+                new ErrorReportContext(context.Request.Method, context.Request.Path, context.TraceIdentifier));
 
             // Outside Development the client message is generic so no exception detail (which may carry
             // connection strings, secrets or PII) leaks; the correlation id is the safe triage handle.

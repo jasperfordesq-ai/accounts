@@ -61,6 +61,10 @@ describe("ProductionReadinessWorkbench", () => {
     expectText("filing-review-accountant-route-acceptance-note");
     expectText(/external ROS\/iXBRL validation/);
     expectText(/release blockers/);
+    expect(screen.getByRole("heading", { name: "Accountant walkthrough evidence matrix" })).toBeInTheDocument();
+    expect(screen.getByRole("searchbox", { name: "Filter Accountant walkthrough evidence matrix" })).toBeInTheDocument();
+    expectText("micro-ltd-dashboard-walkthrough-note");
+    expectText("Manual handoff required");
     expect(screen.getByRole("heading", { name: "Workbench visual acceptance register" })).toBeInTheDocument();
     expect(screen.getByRole("searchbox", { name: "Filter Workbench visual acceptance register" })).toBeInTheDocument();
     expectText("dashboard-visual-acceptance-note");
@@ -184,7 +188,7 @@ describe("ProductionReadinessWorkbench", () => {
     expect(screen.getByRole("searchbox", { name: "Filter Operations evidence pack" })).toBeInTheDocument();
     expectText("sentry-production-error-routing-check");
     expectText("structured-json-log-sample");
-    expectText("dependency-audit-release-note");
+    expectText("dependency-audit-release");
     expectText("controlled-migration-release-note");
     expectText("production-seed-block-validation");
     expectText("postgres-backup-restore-drill-report");
@@ -404,7 +408,7 @@ function sampleReport(): ProductionReadinessReport {
       visualQaExpectedScreenshots: 28,
       requiredOperationalGates: 1,
       openCriticalActions: 1,
-      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "source-law-review-ledger", "revenue-taxonomy-range-evidence", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "production-audit-evidence-pack", "operations-evidence-pack", "visual-smoke-screenshots", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "accountant-journey-acceptance-checklist", "accountant-workflow-evidence-pack", "workbench-visual-acceptance-register", "production-completion-map"],
+      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "source-law-review-ledger", "revenue-taxonomy-range-evidence", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "production-audit-evidence-pack", "operations-evidence-pack", "visual-smoke-screenshots", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "accountant-journey-acceptance-checklist", "accountant-workflow-evidence-pack", "accountant-walkthrough-evidence-matrix", "workbench-visual-acceptance-register", "production-completion-map"],
       releaseBlockers: ["Qualified accountant sign-off required"],
     },
     accountantAcceptanceCriteria: [
@@ -521,6 +525,7 @@ function sampleReport(): ProductionReadinessReport {
       ]),
     ],
     accountantWorkflowEvidencePack: accountantWorkflowEvidencePack(),
+    accountantWalkthroughEvidenceMatrix: accountantWalkthroughEvidenceMatrix(),
     workbenchVisualAcceptanceRegister: workbenchVisualAcceptanceRegister(),
     areas: [
       {
@@ -1271,10 +1276,10 @@ function sampleReport(): ProductionReadinessReport {
         category: "Dependency policy",
         ownerRole: "Engineering",
         required: true,
-        command: "Run npm ci, npm audit --audit-level=moderate, dotnet restore and the CI action hygiene verifier against the release commit.",
-        requiredArtifact: "dependency-audit-release-note",
+        command: "Run npm ci, npm audit --audit-level=moderate --json and scripts/write-dependency-evidence.ps1 against the release commit.",
+        requiredArtifact: "dependency-audit-release",
         releaseGateCode: "dependency-policy-controls",
-        verification: "Evidence must include npm audit result, lockfile reproducibility, NuGet restore/build status and GitHub Actions version-hygiene output.",
+        verification: "Evidence must include npm-audit.json and dependency-audit-report.json with package-lock hash, npm audit counts, NuGet audit policy, and GitHub Actions version-hygiene wiring.",
         failurePolicy: "Block release for moderate/high/critical advisories, unreproducible lockfiles, failed restore/build, or unverified CI action versions.",
       },
       {
@@ -1678,6 +1683,73 @@ function accountantRouteEvidence(
     signOffGate: "golden-corpus-accountant-acceptance",
     failurePolicy: "Block release until a named qualified accountant accepts this route's outputs, gates, wording and evidence against the seeded golden corpus and reviewed visual artifacts.",
   };
+}
+
+function accountantWalkthroughEvidenceMatrix(): ProductionReadinessReport["accountantWalkthroughEvidenceMatrix"] {
+  return [
+    {
+      scenarioCode: "micro-ltd",
+      scenarioLabel: "Micro LTD",
+      expectedOutcome: "generated-pack",
+      filingReadinessState: "100% filing readiness",
+      signOffPacketState: "review-required",
+      manualProfessionalReviewRequired: false,
+      routeCode: "dashboard",
+      routeLabel: "Dashboard",
+      routeKey: "dashboard",
+      workflowStages: accountantWorkflowStages(),
+      visualArtifactNames: ["light-desktop", "light-mobile", "dark-desktop", "dark-mobile"].map(
+        (suffix) => `dashboard-${suffix}.png`,
+      ),
+      evidenceArtifact: "micro-ltd-dashboard-walkthrough-note",
+      decisionQuestion: "Does the Dashboard route let a qualified accountant accept the workflow state, blockers, next action, outputs, gates, wording and evidence for every seeded golden scenario?",
+      requiredEvidence: [
+        "named qualified-accountant route acceptance",
+        "visual smoke screenshots reviewed",
+        "golden corpus evidence accepted",
+        "Named qualified-accountant approval recorded against the generated pack.",
+      ],
+      acceptanceCriteria: [
+        "Dashboard route exposes the relevant accountant workflow state, blockers, next actions and evidence.",
+        "Micro LTD: qualified-accountant review covers PDF wording and micro statutory statement.",
+      ],
+      releaseChecklistCode: "golden-corpus-accountant-acceptance",
+      signOffGate: "golden-corpus-accountant-acceptance",
+      status: "required-review",
+      blocksRelease: true,
+    },
+    {
+      scenarioCode: "medium-audit-required",
+      scenarioLabel: "Medium audit-required",
+      expectedOutcome: "manual-handoff",
+      filingReadinessState: "manual-handoff-until-auditor-evidence",
+      signOffPacketState: "manual-handoff",
+      manualProfessionalReviewRequired: true,
+      routeCode: "filing-review",
+      routeLabel: "Filing review",
+      routeKey: "filing",
+      workflowStages: ["Review", "Filing"],
+      visualArtifactNames: ["light-desktop", "light-mobile", "dark-desktop", "dark-mobile"].map(
+        (suffix) => `filing-review-${suffix}.png`,
+      ),
+      evidenceArtifact: "medium-audit-required-filing-review-walkthrough-note",
+      decisionQuestion: "Does the filing review route let a qualified accountant accept readiness, source links, generated outputs, signatory gates, external ROS/iXBRL validation, filing state, outputs, gates, wording and evidence?",
+      requiredEvidence: [
+        "named qualified-accountant route acceptance",
+        "visual smoke screenshots reviewed",
+        "golden corpus evidence accepted",
+        "Signed auditor report and manual handoff note reviewed by the qualified accountant.",
+      ],
+      acceptanceCriteria: [
+        "Filing review route exposes readiness, source links, generated outputs, signatory gates, accountant sign-off packet, external ROS/iXBRL validation and filing state.",
+        "Medium audit-required: qualified-accountant review covers auditor handoff and signed auditor report evidence.",
+      ],
+      releaseChecklistCode: "golden-corpus-accountant-acceptance",
+      signOffGate: "golden-corpus-accountant-acceptance",
+      status: "required-review",
+      blocksRelease: true,
+    },
+  ];
 }
 
 function workbenchVisualAcceptanceRegister(): ProductionReadinessReport["workbenchVisualAcceptanceRegister"] {

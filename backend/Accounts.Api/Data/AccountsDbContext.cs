@@ -1,10 +1,29 @@
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Accounts.Api.Entities;
+using Accounts.Api.Services;
 
 namespace Accounts.Api.Data;
 
-public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : DbContext(options)
+public class AccountsDbContext : DbContext
 {
+    private readonly IHttpContextAccessor? _httpContextAccessor;
+
+    public AccountsDbContext(DbContextOptions<AccountsDbContext> options)
+        : this(options, null)
+    {
+    }
+
+    public AccountsDbContext(DbContextOptions<AccountsDbContext> options, IHttpContextAccessor? httpContextAccessor)
+        : base(options)
+    {
+        _httpContextAccessor = httpContextAccessor;
+    }
+
+    public int? CurrentTenantId => _httpContextAccessor?.HttpContext is { } context
+        ? AuthContext.GetUser(context)?.TenantId
+        : null;
+
     // Tenancy & Users
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<UserAccount> UserAccounts => Set<UserAccount>();
@@ -93,6 +112,7 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
         {
             e.ToTable("user_accounts");
             e.HasKey(u => u.Id);
+            e.HasQueryFilter(u => CurrentTenantId == null || u.TenantId == CurrentTenantId);
             e.Property(u => u.Email).HasMaxLength(320).IsRequired();
             e.Property(u => u.DisplayName).HasMaxLength(200).IsRequired();
             e.Property(u => u.Role).HasMaxLength(80).IsRequired();
@@ -111,6 +131,7 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
         {
             e.ToTable("user_company_accesses");
             e.HasKey(a => a.Id);
+            e.HasQueryFilter(a => CurrentTenantId == null || a.Company.TenantId == CurrentTenantId);
             e.HasOne(a => a.User).WithMany(u => u.CompanyAccesses).HasForeignKey(a => a.UserId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(a => a.Company).WithMany(c => c.UserAccesses).HasForeignKey(a => a.CompanyId).OnDelete(DeleteBehavior.Cascade);
             e.HasIndex(a => new { a.UserId, a.CompanyId }).IsUnique();
@@ -122,6 +143,7 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
         {
             e.ToTable("companies");
             e.HasKey(c => c.Id);
+            e.HasQueryFilter(c => CurrentTenantId == null || c.TenantId == CurrentTenantId);
             e.Property(c => c.LegalName).HasMaxLength(500).IsRequired();
             e.Property(c => c.TradingName).HasMaxLength(500);
             e.Property(c => c.CroNumber).HasMaxLength(20);
@@ -136,6 +158,7 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
         {
             e.ToTable("company_officers");
             e.HasKey(o => o.Id);
+            e.HasQueryFilter(o => CurrentTenantId == null || o.Company.TenantId == CurrentTenantId);
             e.Property(o => o.Name).HasMaxLength(300).IsRequired();
             e.HasOne(o => o.Company).WithMany(c => c.Officers).HasForeignKey(o => o.CompanyId).OnDelete(DeleteBehavior.Cascade);
         });
@@ -145,6 +168,7 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
         {
             e.ToTable("accounting_periods");
             e.HasKey(p => p.Id);
+            e.HasQueryFilter(p => CurrentTenantId == null || p.Company.TenantId == CurrentTenantId);
             e.Property(p => p.LockedBy).HasMaxLength(200);
             e.Property(p => p.ReopenedBy).HasMaxLength(200);
             e.Property(p => p.ReopenReason).HasMaxLength(1000);
@@ -157,6 +181,7 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
         {
             e.ToTable("size_classifications");
             e.HasKey(s => s.Id);
+            e.HasQueryFilter(s => CurrentTenantId == null || s.Period.Company.TenantId == CurrentTenantId);
             e.Property(s => s.Turnover).HasColumnType("decimal(18,2)");
             e.Property(s => s.BalanceSheetTotal).HasColumnType("decimal(18,2)");
             e.HasOne(s => s.Period).WithOne(p => p.SizeClassification).HasForeignKey<SizeClassification>(s => s.PeriodId).OnDelete(DeleteBehavior.Cascade);
@@ -167,6 +192,7 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
         {
             e.ToTable("filing_regimes");
             e.HasKey(f => f.Id);
+            e.HasQueryFilter(f => CurrentTenantId == null || f.Period.Company.TenantId == CurrentTenantId);
             e.HasOne(f => f.Period).WithOne(p => p.FilingRegime).HasForeignKey<FilingRegime>(f => f.PeriodId).OnDelete(DeleteBehavior.Cascade);
         });
 
@@ -175,6 +201,7 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
         {
             e.ToTable("cro_filing_packages");
             e.HasKey(c => c.Id);
+            e.HasQueryFilter(c => CurrentTenantId == null || c.Period.Company.TenantId == CurrentTenantId);
             e.HasOne(c => c.Period).WithOne(p => p.CroFilingPackage).HasForeignKey<CroFilingPackage>(c => c.PeriodId).OnDelete(DeleteBehavior.Cascade);
         });
 
@@ -183,6 +210,7 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
         {
             e.ToTable("revenue_filing_packages");
             e.HasKey(r => r.Id);
+            e.HasQueryFilter(r => CurrentTenantId == null || r.Period.Company.TenantId == CurrentTenantId);
             e.HasOne(r => r.Period).WithOne(p => p.RevenueFilingPackage).HasForeignKey<RevenueFilingPackage>(r => r.PeriodId).OnDelete(DeleteBehavior.Cascade);
         });
 
@@ -191,6 +219,7 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
         {
             e.ToTable("charity_filing_packages");
             e.HasKey(c => c.Id);
+            e.HasQueryFilter(c => CurrentTenantId == null || c.Period.Company.TenantId == CurrentTenantId);
             e.Property(c => c.ApprovedBy).HasMaxLength(200);
             e.Property(c => c.SubmittedBy).HasMaxLength(200);
             e.Property(c => c.AcceptedBy).HasMaxLength(200);
@@ -204,6 +233,7 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
         {
             e.ToTable("bank_accounts");
             e.HasKey(b => b.Id);
+            e.HasQueryFilter(b => CurrentTenantId == null || b.Company.TenantId == CurrentTenantId);
             e.Property(b => b.Name).HasMaxLength(200).IsRequired();
             e.Property(b => b.Iban).HasMaxLength(34);
             e.Property(b => b.Currency).HasMaxLength(3);
@@ -219,6 +249,7 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
         {
             e.ToTable("import_batches");
             e.HasKey(b => b.Id);
+            e.HasQueryFilter(b => CurrentTenantId == null || b.BankAccount.Company.TenantId == CurrentTenantId);
             e.Property(b => b.Filename).HasMaxLength(500).IsRequired();
             e.HasOne(b => b.BankAccount).WithMany(a => a.ImportBatches).HasForeignKey(b => b.BankAccountId).OnDelete(DeleteBehavior.Cascade);
         });
@@ -228,6 +259,7 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
         {
             e.ToTable("imported_transactions");
             e.HasKey(t => t.Id);
+            e.HasQueryFilter(t => CurrentTenantId == null || t.BankAccount.Company.TenantId == CurrentTenantId);
             e.Property(t => t.Description).HasMaxLength(1000).IsRequired();
             e.Property(t => t.Reference).HasMaxLength(200);
             e.Property(t => t.Amount).HasColumnType("decimal(18,2)");
@@ -245,6 +277,7 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
         {
             e.ToTable("transaction_rules");
             e.HasKey(r => r.Id);
+            e.HasQueryFilter(r => CurrentTenantId == null || r.Company.TenantId == CurrentTenantId);
             e.Property(r => r.Pattern).HasMaxLength(500).IsRequired();
             e.HasOne(r => r.Company).WithMany(c => c.TransactionRules).HasForeignKey(r => r.CompanyId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(r => r.Category).WithMany(c => c.Rules).HasForeignKey(r => r.CategoryId).OnDelete(DeleteBehavior.Cascade);
@@ -255,6 +288,7 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
         {
             e.ToTable("account_categories");
             e.HasKey(c => c.Id);
+            e.HasQueryFilter(c => CurrentTenantId == null || c.CompanyId == null || c.Company!.TenantId == CurrentTenantId);
             e.Property(c => c.Code).HasMaxLength(20).IsRequired();
             e.Property(c => c.Name).HasMaxLength(200).IsRequired();
             e.HasOne(c => c.Company).WithMany(co => co.Categories).HasForeignKey(c => c.CompanyId).OnDelete(DeleteBehavior.Cascade);
@@ -266,6 +300,7 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
         {
             e.ToTable("debtors");
             e.HasKey(d => d.Id);
+            e.HasQueryFilter(d => CurrentTenantId == null || d.Period.Company.TenantId == CurrentTenantId);
             e.Property(d => d.Name).HasMaxLength(300).IsRequired();
             e.Property(d => d.Amount).HasColumnType("decimal(18,2)");
             e.HasOne(d => d.Period).WithMany(p => p.Debtors).HasForeignKey(d => d.PeriodId).OnDelete(DeleteBehavior.Cascade);
@@ -276,6 +311,7 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
         {
             e.ToTable("creditors");
             e.HasKey(c => c.Id);
+            e.HasQueryFilter(c => CurrentTenantId == null || c.Period.Company.TenantId == CurrentTenantId);
             e.Property(c => c.Name).HasMaxLength(300).IsRequired();
             e.Property(c => c.Amount).HasColumnType("decimal(18,2)");
             e.HasOne(c => c.Period).WithMany(p => p.Creditors).HasForeignKey(c => c.PeriodId).OnDelete(DeleteBehavior.Cascade);
@@ -286,6 +322,7 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
         {
             e.ToTable("fixed_assets");
             e.HasKey(a => a.Id);
+            e.HasQueryFilter(a => CurrentTenantId == null || a.Company.TenantId == CurrentTenantId);
             e.Property(a => a.Name).HasMaxLength(300).IsRequired();
             e.Property(a => a.Category).HasMaxLength(100).IsRequired();
             e.Property(a => a.Cost).HasColumnType("decimal(18,2)");
@@ -298,6 +335,7 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
         {
             e.ToTable("depreciation_entries");
             e.HasKey(d => d.Id);
+            e.HasQueryFilter(d => CurrentTenantId == null || d.Period.Company.TenantId == CurrentTenantId);
             e.Property(d => d.OpeningNbv).HasColumnType("decimal(18,2)");
             e.Property(d => d.Charge).HasColumnType("decimal(18,2)");
             e.Property(d => d.ClosingNbv).HasColumnType("decimal(18,2)");
@@ -311,6 +349,7 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
         {
             e.ToTable("capital_allowance_claims");
             e.HasKey(c => c.Id);
+            e.HasQueryFilter(c => CurrentTenantId == null || c.Period.Company.TenantId == CurrentTenantId);
             e.Property(c => c.Cost).HasColumnType("decimal(18,2)");
             e.Property(c => c.Claim).HasColumnType("decimal(18,2)");
             e.HasOne(c => c.Asset).WithMany().HasForeignKey(c => c.AssetId).OnDelete(DeleteBehavior.Cascade);
@@ -323,6 +362,7 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
         {
             e.ToTable("inventories");
             e.HasKey(i => i.Id);
+            e.HasQueryFilter(i => CurrentTenantId == null || i.Period.Company.TenantId == CurrentTenantId);
             e.Property(i => i.Description).HasMaxLength(500).IsRequired();
             e.Property(i => i.Value).HasColumnType("decimal(18,2)");
             e.HasOne(i => i.Period).WithMany(p => p.Inventories).HasForeignKey(i => i.PeriodId).OnDelete(DeleteBehavior.Cascade);
@@ -333,6 +373,7 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
         {
             e.ToTable("opening_balances");
             e.HasKey(o => o.Id);
+            e.HasQueryFilter(o => CurrentTenantId == null || o.Period.Company.TenantId == CurrentTenantId);
             e.Property(o => o.Debit).HasColumnType("decimal(18,2)");
             e.Property(o => o.Credit).HasColumnType("decimal(18,2)");
             e.Property(o => o.SourceNote).HasMaxLength(1000);
@@ -348,6 +389,7 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
         {
             e.ToTable("year_end_review_confirmations");
             e.HasKey(r => r.Id);
+            e.HasQueryFilter(r => CurrentTenantId == null || r.Period.Company.TenantId == CurrentTenantId);
             e.Property(r => r.SectionKey).HasMaxLength(80).IsRequired();
             e.Property(r => r.ConfirmedBy).HasMaxLength(200);
             e.Property(r => r.Note).HasMaxLength(1000);
@@ -360,6 +402,7 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
         {
             e.ToTable("loans");
             e.HasKey(l => l.Id);
+            e.HasQueryFilter(l => CurrentTenantId == null || l.Company.TenantId == CurrentTenantId);
             e.Property(l => l.Lender).HasMaxLength(300).IsRequired();
             e.Property(l => l.OriginalAmount).HasColumnType("decimal(18,2)");
             e.Property(l => l.Balance).HasColumnType("decimal(18,2)");
@@ -379,6 +422,7 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
         {
             e.ToTable("loan_balance_snapshots");
             e.HasKey(s => s.Id);
+            e.HasQueryFilter(s => CurrentTenantId == null || s.Period.Company.TenantId == CurrentTenantId);
             e.Property(s => s.OpeningBalance).HasColumnType("decimal(18,2)");
             e.Property(s => s.Drawdowns).HasColumnType("decimal(18,2)");
             e.Property(s => s.Repayments).HasColumnType("decimal(18,2)");
@@ -398,6 +442,7 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
         {
             e.ToTable("director_loans");
             e.HasKey(d => d.Id);
+            e.HasQueryFilter(d => CurrentTenantId == null || d.Period.Company.TenantId == CurrentTenantId);
             e.Property(d => d.OpeningBalance).HasColumnType("decimal(18,2)");
             e.Property(d => d.Advances).HasColumnType("decimal(18,2)");
             e.Property(d => d.Repayments).HasColumnType("decimal(18,2)");
@@ -415,6 +460,7 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
         {
             e.ToTable("payroll_summaries");
             e.HasKey(p => p.Id);
+            e.HasQueryFilter(p => CurrentTenantId == null || p.Period.Company.TenantId == CurrentTenantId);
             e.Property(p => p.GrossWages).HasColumnType("decimal(18,2)");
             e.Property(p => p.EmployerPrsi).HasColumnType("decimal(18,2)");
             e.Property(p => p.PensionContributions).HasColumnType("decimal(18,2)");
@@ -426,6 +472,7 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
         {
             e.ToTable("tax_balances");
             e.HasKey(t => t.Id);
+            e.HasQueryFilter(t => CurrentTenantId == null || t.Period.Company.TenantId == CurrentTenantId);
             e.Property(t => t.Liability).HasColumnType("decimal(18,2)");
             e.Property(t => t.Paid).HasColumnType("decimal(18,2)");
             e.Property(t => t.Balance).HasColumnType("decimal(18,2)");
@@ -438,6 +485,7 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
         {
             e.ToTable("dividends");
             e.HasKey(d => d.Id);
+            e.HasQueryFilter(d => CurrentTenantId == null || d.Period.Company.TenantId == CurrentTenantId);
             e.Property(d => d.Amount).HasColumnType("decimal(18,2)");
             e.HasOne(d => d.Period).WithMany(p => p.Dividends).HasForeignKey(d => d.PeriodId).OnDelete(DeleteBehavior.Cascade);
         });
@@ -447,6 +495,7 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
         {
             e.ToTable("adjustments");
             e.HasKey(a => a.Id);
+            e.HasQueryFilter(a => CurrentTenantId == null || a.Period.Company.TenantId == CurrentTenantId);
             e.Property(a => a.Description).HasMaxLength(500).IsRequired();
             e.Property(a => a.Amount).HasColumnType("decimal(18,2)");
             e.Property(a => a.ImpactOnProfit).HasColumnType("decimal(18,2)");
@@ -461,6 +510,7 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
         {
             e.ToTable("reports");
             e.HasKey(r => r.Id);
+            e.HasQueryFilter(r => CurrentTenantId == null || r.Period.Company.TenantId == CurrentTenantId);
             e.HasOne(r => r.Period).WithMany(p => p.Reports).HasForeignKey(r => r.PeriodId).OnDelete(DeleteBehavior.Cascade);
         });
 
@@ -469,6 +519,7 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
         {
             e.ToTable("notes_disclosures");
             e.HasKey(n => n.Id);
+            e.HasQueryFilter(n => CurrentTenantId == null || n.Period.Company.TenantId == CurrentTenantId);
             e.Property(n => n.Title).HasMaxLength(300).IsRequired();
             e.HasOne(n => n.Period).WithMany(p => p.NotesDisclosures).HasForeignKey(n => n.PeriodId).OnDelete(DeleteBehavior.Cascade);
             e.HasIndex(n => new { n.PeriodId, n.NoteNumber }).IsUnique();
@@ -479,6 +530,7 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
         {
             e.ToTable("share_capitals");
             e.HasKey(s => s.Id);
+            e.HasQueryFilter(s => CurrentTenantId == null || s.Company.TenantId == CurrentTenantId);
             e.Property(s => s.ShareClass).HasMaxLength(100).IsRequired();
             e.Property(s => s.NominalValue).HasColumnType("decimal(18,2)");
             e.Property(s => s.TotalValue).HasColumnType("decimal(18,2)");
@@ -500,6 +552,7 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
         {
             e.ToTable("filing_deadlines");
             e.HasKey(f => f.Id);
+            e.HasQueryFilter(f => CurrentTenantId == null || f.Company.TenantId == CurrentTenantId);
             e.Property(f => f.PenaltyAmount).HasColumnType("decimal(18,2)");
             e.Property(f => f.FilingReference).HasMaxLength(200);
             e.Property(f => f.Notes).HasMaxLength(1000);
@@ -513,6 +566,7 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
         {
             e.ToTable("filing_histories");
             e.HasKey(f => f.Id);
+            e.HasQueryFilter(f => CurrentTenantId == null || f.Company.TenantId == CurrentTenantId);
             e.Property(f => f.PenaltyAmount).HasColumnType("decimal(18,2)");
             e.Property(f => f.FilingReference).HasMaxLength(200);
             e.HasOne(f => f.Company).WithMany(c => c.FilingHistories).HasForeignKey(f => f.CompanyId).OnDelete(DeleteBehavior.Cascade);
@@ -526,6 +580,7 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
         {
             e.ToTable("post_balance_sheet_events");
             e.HasKey(x => x.Id);
+            e.HasQueryFilter(x => CurrentTenantId == null || x.Period.Company.TenantId == CurrentTenantId);
             e.Property(x => x.Description).HasMaxLength(1000).IsRequired();
             e.Property(x => x.FinancialImpact).HasColumnType("decimal(18,2)");
             e.HasOne(x => x.Period).WithMany(p => p.PostBalanceSheetEvents).HasForeignKey(x => x.PeriodId).OnDelete(DeleteBehavior.Cascade);
@@ -536,6 +591,7 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
         {
             e.ToTable("related_party_transactions");
             e.HasKey(x => x.Id);
+            e.HasQueryFilter(x => CurrentTenantId == null || x.Period.Company.TenantId == CurrentTenantId);
             e.Property(x => x.PartyName).HasMaxLength(300).IsRequired();
             e.Property(x => x.Amount).HasColumnType("decimal(18,2)");
             e.Property(x => x.BalanceOwed).HasColumnType("decimal(18,2)");
@@ -547,6 +603,7 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
         {
             e.ToTable("contingent_liabilities");
             e.HasKey(x => x.Id);
+            e.HasQueryFilter(x => CurrentTenantId == null || x.Period.Company.TenantId == CurrentTenantId);
             e.Property(x => x.Description).HasMaxLength(1000).IsRequired();
             e.Property(x => x.EstimatedAmount).HasColumnType("decimal(18,2)");
             e.HasOne(x => x.Period).WithMany(p => p.ContingentLiabilities).HasForeignKey(x => x.PeriodId).OnDelete(DeleteBehavior.Cascade);
@@ -557,6 +614,7 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
         {
             e.ToTable("charity_infos");
             e.HasKey(x => x.Id);
+            e.HasQueryFilter(x => CurrentTenantId == null || x.Company.TenantId == CurrentTenantId);
             e.Property(x => x.CharityNumber).HasMaxLength(20);
             e.Property(x => x.GrossIncome).HasColumnType("decimal(18,2)");
             e.Property(x => x.TrusteeRemunerationAmount).HasColumnType("decimal(18,2)");
@@ -568,6 +626,7 @@ public class AccountsDbContext(DbContextOptions<AccountsDbContext> options) : Db
         {
             e.ToTable("fund_balances");
             e.HasKey(x => x.Id);
+            e.HasQueryFilter(x => CurrentTenantId == null || x.Period.Company.TenantId == CurrentTenantId);
             e.Property(x => x.FundName).HasMaxLength(300).IsRequired();
             e.Property(x => x.OpeningBalance).HasColumnType("decimal(18,2)");
             e.Property(x => x.IncomingResources).HasColumnType("decimal(18,2)");

@@ -1,3 +1,7 @@
+param(
+    [string]$EvidencePath = ""
+)
+
 $ErrorActionPreference = "Stop"
 
 $RepositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
@@ -93,6 +97,42 @@ function Assert-Equal([string]$Description, $Actual, $Expected) {
     }
 }
 
+function Get-ServiceEnvironmentValue($Service, [string]$Name) {
+    $environment = $Service.environment
+    if ($null -eq $environment) {
+        return $null
+    }
+
+    if ($environment -is [System.Collections.IDictionary]) {
+        return $environment[$Name]
+    }
+
+    $property = $environment.PSObject.Properties[$Name]
+    if ($null -ne $property) {
+        return $property.Value
+    }
+
+    foreach ($entry in @($environment)) {
+        if ($entry -is [string] -and $entry.StartsWith("$Name=", [StringComparison]::Ordinal)) {
+            return $entry.Substring($Name.Length + 1)
+        }
+    }
+
+    return $null
+}
+
+function Assert-ServiceEnvironmentValue($Service, [string]$ServiceName, [string]$Name, [string]$Expected) {
+    $actual = Get-ServiceEnvironmentValue $Service $Name
+    Assert-Equal "$ServiceName environment $Name" $actual $Expected
+}
+
+function Assert-ServiceEnvironmentMissingOrNotTrue($Service, [string]$ServiceName, [string]$Name) {
+    $actual = Get-ServiceEnvironmentValue $Service $Name
+    if ($null -ne $actual -and [string]$actual -eq "true") {
+        throw "$ServiceName environment $Name must not be true in the production compose profile."
+    }
+}
+
 function WorkflowJob([string]$Workflow, [string]$JobName) {
     $marker = "  ${JobName}:"
     $start = $Workflow.IndexOf($marker, [StringComparison]::Ordinal)
@@ -136,6 +176,26 @@ try {
         throw "API and frontend services must not use the same image reference."
     }
 
+    $migrateCommand = @($services.migrate.command)
+    if ($migrateCommand.Count -ne 1 -or $migrateCommand[0] -ne "--migrate-only") {
+        throw "migrate service must run exactly '--migrate-only'."
+    }
+
+    Assert-Equal "migrate restart policy" $services.migrate.restart "no"
+    Assert-Equal "api depends on migrate condition" $services.api.depends_on.migrate.condition "service_completed_successfully"
+    Assert-ServiceEnvironmentValue $services.migrate "migrate" "DatabaseStartup__AutoMigrateOnStartup" "false"
+    Assert-ServiceEnvironmentValue $services.api "api" "DatabaseStartup__AutoMigrateOnStartup" "false"
+    Assert-ServiceEnvironmentValue $services.migrate "migrate" "DatabaseStartup__SeedDemoData" "false"
+    Assert-ServiceEnvironmentValue $services.api "api" "DatabaseStartup__SeedDemoData" "false"
+    Assert-ServiceEnvironmentMissingOrNotTrue $services.migrate "migrate" "DatabaseStartup__AllowStartupMigrationInProduction"
+    Assert-ServiceEnvironmentMissingOrNotTrue $services.api "api" "DatabaseStartup__AllowStartupMigrationInProduction"
+    Assert-ServiceEnvironmentMissingOrNotTrue $services.migrate "migrate" "DatabaseStartup__AllowDemoSeedInProduction"
+    Assert-ServiceEnvironmentMissingOrNotTrue $services.api "api" "DatabaseStartup__AllowDemoSeedInProduction"
+    Assert-Equal "migrate bootstrap owner password secret" (Get-ServiceEnvironmentValue $services.migrate "BootstrapOwner__OwnerInitialPassword_FILE") "/run/secrets/bootstrap_owner_password"
+    if ($null -ne (Get-ServiceEnvironmentValue $services.api "BootstrapOwner__OwnerInitialPassword_FILE")) {
+        throw "api service must not mount or receive the bootstrap owner initial password."
+    }
+
     $workflow = Get-Content -LiteralPath (Join-Path $RepositoryRoot ".github/workflows/ci.yml") -Raw
     $smokeJob = WorkflowJob $workflow "production-smoke"
     $runBlocks = @(WorkflowRunBlocks $smokeJob)
@@ -149,6 +209,46 @@ try {
         if ($tokens -contains "--build") {
             throw "production-smoke compose up must not use --build."
         }
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($EvidencePath)) {
+        $evidenceDirectory = Split-Path -Parent $EvidencePath
+        if (-not [string]::IsNullOrWhiteSpace($evidenceDirectory)) {
+            New-Item -ItemType Directory -Force -Path $evidenceDirectory | Out-Null
+        }
+
+        [ordered]@{
+            status = "passed"
+            checkedAtUtc = [DateTime]::UtcNow.ToString("o")
+            composeFile = "compose.production.yml"
+            imageContract = @{
+                migrate = $services.migrate.image
+                api = $services.api.image
+                frontend = $services.frontend.image
+            }
+            migrationSafety = @{
+                migrateCommand = $migrateCommand
+                migrateRestart = $services.migrate.restart
+                apiDependsOnMigrate = $services.api.depends_on.migrate.condition
+                migrateAutoMigrateOnStartup = Get-ServiceEnvironmentValue $services.migrate "DatabaseStartup__AutoMigrateOnStartup"
+                apiAutoMigrateOnStartup = Get-ServiceEnvironmentValue $services.api "DatabaseStartup__AutoMigrateOnStartup"
+                startupMigrationOverridePresent = $null -ne (Get-ServiceEnvironmentValue $services.migrate "DatabaseStartup__AllowStartupMigrationInProduction") -or
+                    $null -ne (Get-ServiceEnvironmentValue $services.api "DatabaseStartup__AllowStartupMigrationInProduction")
+            }
+            seedSafety = @{
+                migrateSeedDemoData = Get-ServiceEnvironmentValue $services.migrate "DatabaseStartup__SeedDemoData"
+                apiSeedDemoData = Get-ServiceEnvironmentValue $services.api "DatabaseStartup__SeedDemoData"
+                demoSeedOverridePresent = $null -ne (Get-ServiceEnvironmentValue $services.migrate "DatabaseStartup__AllowDemoSeedInProduction") -or
+                    $null -ne (Get-ServiceEnvironmentValue $services.api "DatabaseStartup__AllowDemoSeedInProduction")
+                bootstrapOwnerPasswordOnlyOnMigrate = $true
+            }
+            workflowSafety = @{
+                productionSmokeStartsCompose = $composeUpBlocks.Count -gt 0
+                productionSmokeUsesBuildFlag = $false
+            }
+        } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $EvidencePath -Encoding UTF8
+
+        Write-Host "Production safety evidence written: $EvidencePath"
     }
 } finally {
     Remove-Item -LiteralPath $SecretRoot -Recurse -Force -ErrorAction SilentlyContinue

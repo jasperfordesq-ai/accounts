@@ -1934,6 +1934,28 @@ export interface AccountantWorkflowEvidencePackItem {
   failurePolicy: string;
 }
 
+export interface AccountantWalkthroughEvidenceMatrixItem {
+  scenarioCode: string;
+  scenarioLabel: string;
+  expectedOutcome: string;
+  filingReadinessState: string;
+  signOffPacketState: string;
+  manualProfessionalReviewRequired: boolean;
+  routeCode: string;
+  routeLabel: string;
+  routeKey: string;
+  workflowStages: string[];
+  visualArtifactNames: string[];
+  evidenceArtifact: string;
+  decisionQuestion: string;
+  requiredEvidence: string[];
+  acceptanceCriteria: string[];
+  releaseChecklistCode: string;
+  signOffGate: string;
+  status: string;
+  blocksRelease: boolean;
+}
+
 export interface WorkbenchVisualAcceptanceRegisterItem {
   routeCode: string;
   routeLabel: string;
@@ -2058,6 +2080,7 @@ export interface ProductionReadinessReport {
   accountantWorkflowWalkthroughProtocol: AccountantWorkflowWalkthroughProtocol;
   accountantJourneyAcceptanceChecklist: AccountantJourneyAcceptanceChecklistItem[];
   accountantWorkflowEvidencePack: AccountantWorkflowEvidencePackItem[];
+  accountantWalkthroughEvidenceMatrix: AccountantWalkthroughEvidenceMatrixItem[];
   workbenchVisualAcceptanceRegister: WorkbenchVisualAcceptanceRegisterItem[];
   areas: ProductionReadinessArea[];
   goldenFilingCorpus: GoldenFilingCorpusScenario[];
@@ -2515,6 +2538,28 @@ const accountantWorkflowEvidencePackItemSchema = z.object({
   failurePolicy: z.string().min(1),
 });
 
+const accountantWalkthroughEvidenceMatrixItemSchema = z.object({
+  scenarioCode: z.string().min(1),
+  scenarioLabel: z.string().min(1),
+  expectedOutcome: z.string().min(1),
+  filingReadinessState: z.string().min(1),
+  signOffPacketState: z.string().min(1),
+  manualProfessionalReviewRequired: z.boolean(),
+  routeCode: z.string().min(1),
+  routeLabel: z.string().min(1),
+  routeKey: z.string().min(1),
+  workflowStages: z.array(z.string().min(1)),
+  visualArtifactNames: z.array(z.string().min(1)),
+  evidenceArtifact: z.string().min(1),
+  decisionQuestion: z.string().min(1),
+  requiredEvidence: z.array(z.string().min(1)),
+  acceptanceCriteria: z.array(z.string().min(1)),
+  releaseChecklistCode: z.string().min(1),
+  signOffGate: z.string().min(1),
+  status: z.string().min(1),
+  blocksRelease: z.boolean(),
+});
+
 const workbenchVisualAcceptanceRegisterItemSchema = z.object({
   routeCode: z.string().min(1),
   routeLabel: z.string().min(1),
@@ -2609,6 +2654,7 @@ export const productionReadinessReportSchema = z.object({
   accountantWorkflowWalkthroughProtocol: accountantWorkflowWalkthroughProtocolSchema,
   accountantJourneyAcceptanceChecklist: z.array(accountantJourneyAcceptanceChecklistItemSchema),
   accountantWorkflowEvidencePack: z.array(accountantWorkflowEvidencePackItemSchema),
+  accountantWalkthroughEvidenceMatrix: z.array(accountantWalkthroughEvidenceMatrixItemSchema),
   workbenchVisualAcceptanceRegister: z.array(workbenchVisualAcceptanceRegisterItemSchema),
   areas: z.array(productionReadinessAreaSchema),
   goldenFilingCorpus: z.array(goldenFilingCorpusScenarioSchema),
@@ -2823,6 +2869,7 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
   assertAccountantWorkflowWalkthroughProtocol(report);
   assertAccountantJourneyAcceptanceChecklist(report);
   assertAccountantWorkflowEvidencePack(report);
+  assertAccountantWalkthroughEvidenceMatrix(report);
   assertWorkbenchVisualAcceptanceRegister(report);
 
   const snapshotSourceIds = new Set(report.sourceLawSnapshot.sources.map((source) => source.sourceId));
@@ -3878,6 +3925,144 @@ function assertAccountantWorkflowEvidencePack(report: ProductionReadinessReport)
     if (!item.failurePolicy.includes("Block release")) {
       throw new Error(
         `Invalid production readiness report contract: accountantWorkflowEvidencePack.${itemIndex}.failurePolicy - must block release until accountant route acceptance evidence is complete`,
+      );
+    }
+  });
+}
+
+function assertAccountantWalkthroughEvidenceMatrix(report: ProductionReadinessReport) {
+  const matrix = report.accountantWalkthroughEvidenceMatrix;
+  const expectedRowCount = report.goldenFilingCorpus.length * report.accountantJourneyAcceptanceChecklist.length;
+  const scenariosByCode = new Map(report.goldenFilingCorpus.map((scenario) => [scenario.code, scenario]));
+  const acceptanceByScenarioCode = new Map(report.accountantAcceptanceCriteria.map((criterion) => [criterion.scenarioCode, criterion]));
+  const checklistByRouteCode = new Map(report.accountantJourneyAcceptanceChecklist.map((item) => [item.routeCode, item]));
+  const evidenceByRouteCode = new Map(report.accountantWorkflowEvidencePack.map((item) => [item.routeCode, item]));
+  const releaseChecklistCodes = new Set(report.releaseReviewChecklist.map((item) => item.code));
+  const seenKeys = new Set<string>();
+
+  if (!report.assurancePacket.evidenceItems.includes("accountant-walkthrough-evidence-matrix")) {
+    throw new Error(
+      "Invalid production readiness report contract: assurancePacket.evidenceItems - accountant-walkthrough-evidence-matrix is required",
+    );
+  }
+
+  assertExpectedNumber(
+    "accountantWalkthroughEvidenceMatrix.length",
+    expectedRowCount,
+    matrix.length,
+  );
+
+  matrix.forEach((item, itemIndex) => {
+    const scenario = scenariosByCode.get(item.scenarioCode);
+    const acceptance = acceptanceByScenarioCode.get(item.scenarioCode);
+    const checklistItem = checklistByRouteCode.get(item.routeCode);
+    const routeEvidence = evidenceByRouteCode.get(item.routeCode);
+    const rowKey = `${item.scenarioCode}:${item.routeCode}`;
+
+    if (seenKeys.has(rowKey)) {
+      throw new Error(
+        `Invalid production readiness report contract: accountantWalkthroughEvidenceMatrix.${itemIndex} - duplicate scenario/route walkthrough row ${rowKey}`,
+      );
+    }
+    seenKeys.add(rowKey);
+
+    if (!scenario || !acceptance) {
+      throw new Error(
+        `Invalid production readiness report contract: accountantWalkthroughEvidenceMatrix.${itemIndex}.scenarioCode - must reference a golden scenario and accountant acceptance criterion`,
+      );
+    }
+
+    if (!checklistItem || !routeEvidence) {
+      throw new Error(
+        `Invalid production readiness report contract: accountantWalkthroughEvidenceMatrix.${itemIndex}.routeCode - must reference the accountant journey checklist and route evidence pack`,
+      );
+    }
+
+    if (item.scenarioLabel !== scenario.label || item.expectedOutcome !== scenario.expectedOutcome) {
+      throw new Error(
+        `Invalid production readiness report contract: accountantWalkthroughEvidenceMatrix.${itemIndex}.scenarioLabel - must mirror golden scenario metadata for ${item.scenarioCode}`,
+      );
+    }
+
+    if (
+      item.filingReadinessState !== scenario.evidencePack.expectedOutputs.filingReadinessState ||
+      item.signOffPacketState !== scenario.evidencePack.expectedOutputs.signOffPacketState ||
+      item.manualProfessionalReviewRequired !== scenario.fixture.manualProfessionalReviewRequired
+    ) {
+      throw new Error(
+        `Invalid production readiness report contract: accountantWalkthroughEvidenceMatrix.${itemIndex}.filingReadinessState - must mirror golden scenario output readiness state`,
+      );
+    }
+
+    if (item.routeLabel !== checklistItem.routeLabel || item.routeKey !== checklistItem.routeKey) {
+      throw new Error(
+        `Invalid production readiness report contract: accountantWalkthroughEvidenceMatrix.${itemIndex}.routeLabel - must mirror accountant journey route metadata for ${item.routeCode}`,
+      );
+    }
+
+    assertStringArrayEqual(
+      `accountantWalkthroughEvidenceMatrix.${itemIndex}.workflowStages`,
+      checklistItem.workflowStages,
+      item.workflowStages,
+    );
+    assertStringArrayEqual(
+      `accountantWalkthroughEvidenceMatrix.${itemIndex}.visualArtifactNames`,
+      [...checklistItem.visualArtifactNames].sort((left, right) => left.localeCompare(right)),
+      [...item.visualArtifactNames].sort((left, right) => left.localeCompare(right)),
+    );
+
+    if (item.evidenceArtifact !== `${item.scenarioCode}-${item.routeCode}-walkthrough-note`) {
+      throw new Error(
+        `Invalid production readiness report contract: accountantWalkthroughEvidenceMatrix.${itemIndex}.evidenceArtifact - must be scenario-route specific`,
+      );
+    }
+
+    if (item.decisionQuestion !== routeEvidence.decisionQuestion) {
+      throw new Error(
+        `Invalid production readiness report contract: accountantWalkthroughEvidenceMatrix.${itemIndex}.decisionQuestion - must mirror the route evidence decision question`,
+      );
+    }
+
+    if (!releaseChecklistCodes.has(item.releaseChecklistCode) || item.releaseChecklistCode !== "golden-corpus-accountant-acceptance") {
+      throw new Error(
+        `Invalid production readiness report contract: accountantWalkthroughEvidenceMatrix.${itemIndex}.releaseChecklistCode - must reference golden-corpus-accountant-acceptance`,
+      );
+    }
+
+    if (item.signOffGate !== checklistItem.signOffGate || !releaseChecklistCodes.has(item.signOffGate)) {
+      throw new Error(
+        `Invalid production readiness report contract: accountantWalkthroughEvidenceMatrix.${itemIndex}.signOffGate - must mirror the release checklist-backed route sign-off gate`,
+      );
+    }
+
+    if (!item.blocksRelease || item.status !== "required-review") {
+      throw new Error(
+        `Invalid production readiness report contract: accountantWalkthroughEvidenceMatrix.${itemIndex}.status - walkthrough rows must block release until accepted`,
+      );
+    }
+
+    for (const evidence of [
+      "named qualified-accountant route acceptance",
+      "visual smoke screenshots reviewed",
+      "golden corpus evidence accepted",
+      ...acceptance.requiredEvidence,
+    ]) {
+      if (!item.requiredEvidence.includes(evidence)) {
+        throw new Error(
+          `Invalid production readiness report contract: accountantWalkthroughEvidenceMatrix.${itemIndex}.requiredEvidence - ${evidence} is required`,
+        );
+      }
+    }
+
+    if (!item.acceptanceCriteria.some((criterion) => criterion.includes(item.routeLabel))) {
+      throw new Error(
+        `Invalid production readiness report contract: accountantWalkthroughEvidenceMatrix.${itemIndex}.acceptanceCriteria - must mention ${item.routeLabel}`,
+      );
+    }
+
+    if (!item.acceptanceCriteria.some((criterion) => criterion.includes(item.scenarioLabel))) {
+      throw new Error(
+        `Invalid production readiness report contract: accountantWalkthroughEvidenceMatrix.${itemIndex}.acceptanceCriteria - must mention ${item.scenarioLabel}`,
       );
     }
   });

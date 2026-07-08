@@ -657,6 +657,86 @@ public class ProductionReadinessReportTests
     }
 
     [Fact]
+    public async Task ProductionReadinessReport_ExposesScenarioRouteAccountantWalkthroughEvidenceMatrix()
+    {
+        await using var db = CreateDbContext();
+        var report = await new ProductionReadinessReportService(db).GetReportAsync();
+        var matrixProperty = report.GetType().GetProperty("AccountantWalkthroughEvidenceMatrix");
+
+        Assert.NotNull(matrixProperty);
+        var matrix = Assert.IsAssignableFrom<System.Collections.IEnumerable>(matrixProperty!.GetValue(report))
+            .Cast<object>()
+            .ToArray();
+
+        Assert.Contains(report.AssurancePacket.EvidenceItems, item => item == "accountant-walkthrough-evidence-matrix");
+        Assert.Equal(
+            report.GoldenFilingCorpus.Count * report.AccountantJourneyAcceptanceChecklist.Count,
+            matrix.Length);
+
+        foreach (var scenario in report.GoldenFilingCorpus)
+        {
+            var acceptance = Assert.Single(report.AccountantAcceptanceCriteria, criterion => criterion.ScenarioCode == scenario.Code);
+            var scenarioRows = matrix.Where(item => StringProperty(item, "ScenarioCode") == scenario.Code).ToArray();
+
+            Assert.Equal(report.AccountantJourneyAcceptanceChecklist.Count, scenarioRows.Length);
+            Assert.All(report.AccountantJourneyAcceptanceChecklist, route =>
+                Assert.Contains(scenarioRows, item => StringProperty(item, "RouteCode") == route.RouteCode));
+
+            foreach (var row in scenarioRows)
+            {
+                var route = Assert.Single(
+                    report.AccountantJourneyAcceptanceChecklist,
+                    item => item.RouteCode == StringProperty(row, "RouteCode"));
+                var routeEvidence = Assert.Single(
+                    report.AccountantWorkflowEvidencePack,
+                    item => item.RouteCode == route.RouteCode);
+
+                Assert.Equal(scenario.Label, StringProperty(row, "ScenarioLabel"));
+                Assert.Equal(scenario.ExpectedOutcome, StringProperty(row, "ExpectedOutcome"));
+                Assert.Equal(scenario.EvidencePack.ExpectedOutputs.FilingReadinessState, StringProperty(row, "FilingReadinessState"));
+                Assert.Equal(scenario.EvidencePack.ExpectedOutputs.SignOffPacketState, StringProperty(row, "SignOffPacketState"));
+                Assert.Equal(scenario.Fixture.ManualProfessionalReviewRequired, BooleanProperty(row, "ManualProfessionalReviewRequired"));
+                Assert.Equal(route.RouteLabel, StringProperty(row, "RouteLabel"));
+                Assert.Equal(route.RouteKey, StringProperty(row, "RouteKey"));
+                Assert.Equal(route.WorkflowStages, StringListProperty(row, "WorkflowStages"));
+                Assert.Equal(route.VisualArtifactNames.Order(StringComparer.Ordinal), StringListProperty(row, "VisualArtifactNames").Order(StringComparer.Ordinal));
+                Assert.Equal($"{scenario.Code}-{route.RouteCode}-walkthrough-note", StringProperty(row, "EvidenceArtifact"));
+                Assert.Equal(routeEvidence.DecisionQuestion, StringProperty(row, "DecisionQuestion"));
+                Assert.Equal("golden-corpus-accountant-acceptance", StringProperty(row, "ReleaseChecklistCode"));
+                Assert.Equal(route.SignOffGate, StringProperty(row, "SignOffGate"));
+                Assert.Equal("required-review", StringProperty(row, "Status"));
+                Assert.True(BooleanProperty(row, "BlocksRelease"));
+
+                Assert.Contains("named qualified-accountant route acceptance", StringListProperty(row, "RequiredEvidence"));
+                Assert.Contains("visual smoke screenshots reviewed", StringListProperty(row, "RequiredEvidence"));
+                Assert.Contains("golden corpus evidence accepted", StringListProperty(row, "RequiredEvidence"));
+                Assert.All(acceptance.RequiredEvidence, requiredEvidence =>
+                    Assert.Contains(requiredEvidence, StringListProperty(row, "RequiredEvidence")));
+                Assert.Contains(StringListProperty(row, "AcceptanceCriteria"), criterion =>
+                    criterion.Contains(route.RouteLabel, StringComparison.OrdinalIgnoreCase));
+                Assert.Contains(StringListProperty(row, "AcceptanceCriteria"), criterion =>
+                    criterion.Contains(scenario.Label, StringComparison.OrdinalIgnoreCase));
+            }
+        }
+
+        var mediumFiling = Assert.Single(matrix, item =>
+            StringProperty(item, "ScenarioCode") == "medium-audit-required"
+            && StringProperty(item, "RouteCode") == "filing-review");
+        Assert.True(BooleanProperty(mediumFiling, "ManualProfessionalReviewRequired"));
+        Assert.Equal("manual-handoff", StringProperty(mediumFiling, "SignOffPacketState"));
+        Assert.Contains(StringListProperty(mediumFiling, "RequiredEvidence"), evidence =>
+            evidence.Contains("manual handoff", StringComparison.OrdinalIgnoreCase)
+            || evidence.Contains("auditor", StringComparison.OrdinalIgnoreCase));
+
+        var productionReadinessRows = matrix
+            .Where(item => StringProperty(item, "RouteCode") == "production-readiness")
+            .ToArray();
+        Assert.Equal(report.GoldenFilingCorpus.Count, productionReadinessRows.Length);
+        Assert.All(productionReadinessRows, item =>
+            Assert.Contains("release blockers", StringProperty(item, "DecisionQuestion"), StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task ProductionReadinessReport_ExposesWorkbenchVisualAcceptanceRegisterForUiPolish()
     {
         await using var db = CreateDbContext();
@@ -1741,15 +1821,23 @@ public class ProductionReadinessReportTests
         Assert.Contains(pack, item =>
             StringProperty(item, "Code") == "dependency-audit"
             && StringProperty(item, "Command").Contains("npm audit", StringComparison.OrdinalIgnoreCase)
-            && StringProperty(item, "Command").Contains("dotnet restore", StringComparison.OrdinalIgnoreCase)
+            && StringProperty(item, "Command").Contains("write-dependency-evidence", StringComparison.OrdinalIgnoreCase)
+            && StringProperty(item, "RequiredArtifact") == "dependency-audit-release"
+            && StringProperty(item, "Verification").Contains("dependency-audit-report.json", StringComparison.OrdinalIgnoreCase)
             && StringProperty(item, "ReleaseGateCode") == "dependency-policy-controls");
         Assert.Contains(pack, item =>
             StringProperty(item, "Code") == "migration-safety"
-            && StringProperty(item, "Command").Contains("--migrate-only", StringComparison.Ordinal)
-            && StringProperty(item, "RequiredArtifact") == "controlled-migration-release-note");
+            && StringProperty(item, "Command").Contains("verify-production-compose-images", StringComparison.Ordinal)
+            && StringProperty(item, "Command").Contains("production-safety-report.json", StringComparison.Ordinal)
+            && StringProperty(item, "RequiredArtifact") == "production-safety-config"
+            && StringProperty(item, "Verification").Contains("--migrate-only", StringComparison.Ordinal)
+            && StringProperty(item, "Verification").Contains("AutoMigrateOnStartup", StringComparison.Ordinal));
         Assert.Contains(pack, item =>
             StringProperty(item, "Code") == "production-seed-block"
-            && StringProperty(item, "Command").Contains("SeedDemoData", StringComparison.Ordinal)
+            && StringProperty(item, "Command").Contains("production-safety-report.json", StringComparison.Ordinal)
+            && StringProperty(item, "RequiredArtifact") == "production-safety-config"
+            && StringProperty(item, "Verification").Contains("SeedDemoData", StringComparison.Ordinal)
+            && StringProperty(item, "Verification").Contains("bootstrap owner initial password", StringComparison.OrdinalIgnoreCase)
             && StringProperty(item, "FailurePolicy").Contains("demo seed", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(pack, item =>
             StringProperty(item, "Code") == "backup-restore-drill"

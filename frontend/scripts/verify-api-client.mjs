@@ -289,7 +289,7 @@ function productionReadinessReportFixture() {
       visualQaExpectedScreenshots: expectedVisualSmokeScreenshotCount(),
       requiredOperationalGates: 1,
       openCriticalActions: 1,
-      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "source-law-review-ledger", "revenue-taxonomy-range-evidence", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "production-audit-evidence-pack", "operations-evidence-pack", "visual-smoke-screenshots", "release-blocker-register", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "accountant-journey-acceptance-checklist", "accountant-workflow-evidence-pack", "workbench-visual-acceptance-register", "production-completion-map"],
+      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "source-law-review-ledger", "revenue-taxonomy-range-evidence", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "production-audit-evidence-pack", "operations-evidence-pack", "visual-smoke-screenshots", "release-blocker-register", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "accountant-journey-acceptance-checklist", "accountant-workflow-evidence-pack", "accountant-walkthrough-evidence-matrix", "workbench-visual-acceptance-register", "production-completion-map"],
       releaseBlockers: [
         "Qualified accountant sign-off required",
         "Source-law change review required",
@@ -439,7 +439,7 @@ function productionReadinessReportFixture() {
       protocolVersion: "accountant-workflow-walkthrough-v1",
       reviewerRole: "Qualified accountant",
       status: "required-review",
-      signOffGate: "accountant-final-signoff",
+      signOffGate: "golden-corpus-accountant-acceptance",
       failurePolicy: "Block release if a named qualified accountant has not walked the seeded golden corpus through the live accountant workflow and accepted the outputs, gates, wording and evidence.",
       seededScenarioCodes: ["clg-charity", "dac-small", "medium-audit-required", "micro-ltd", "small-abridged-ltd"],
       routeSequence: [
@@ -1024,7 +1024,7 @@ function productionReadinessReportFixture() {
         requiredEvidence: "Named accountant approval recorded against the period.",
         nextAction: "Run qualified-accountant acceptance on the golden corpus.",
         sourceActionCode: "qualified-accountant-signoff",
-        releaseChecklistCode: "accountant-final-signoff",
+        releaseChecklistCode: "golden-corpus-accountant-acceptance",
         operationalGateCode: "qualified-accountant-review",
         evidenceArtifact: "named-accountant-approval-record",
         blocksRelease: true,
@@ -1107,7 +1107,7 @@ function productionReadinessReportFixture() {
     ],
     releaseReviewChecklist: [
       {
-        code: "accountant-final-signoff",
+        code: "golden-corpus-accountant-acceptance",
         label: "Named accountant final sign-off",
         ownerRole: "Qualified accountant",
         required: true,
@@ -1341,13 +1341,86 @@ function productionReadinessReportFixture() {
 }
 
 function withGoldenLegalBasisSnapshots(report) {
+  const goldenFilingCorpus = report.goldenFilingCorpus.map((scenario) => ({
+    ...scenario,
+    legalBasisSnapshot: goldenLegalBasisSnapshot(scenario),
+  }));
+
   return {
     ...report,
-    goldenFilingCorpus: report.goldenFilingCorpus.map((scenario) => ({
-      ...scenario,
-      legalBasisSnapshot: goldenLegalBasisSnapshot(scenario),
-    })),
+    goldenFilingCorpus,
+    goldenVerifierManifest: buildGoldenVerifierManifest(goldenFilingCorpus),
+    accountantWalkthroughEvidenceMatrix: buildAccountantWalkthroughEvidenceMatrix({
+      ...report,
+      goldenFilingCorpus,
+    }),
   };
+}
+
+function buildAccountantWalkthroughEvidenceMatrix(report) {
+  const acceptanceByScenario = new Map(
+    report.accountantAcceptanceCriteria.map((criterion) => [criterion.scenarioCode, criterion]),
+  );
+  const routeEvidenceByCode = new Map(
+    report.accountantWorkflowEvidencePack.map((item) => [item.routeCode, item]),
+  );
+
+  return [...report.goldenFilingCorpus]
+    .sort((left, right) => left.code.localeCompare(right.code))
+    .flatMap((scenario) => {
+      const acceptance = acceptanceByScenario.get(scenario.code);
+      if (!acceptance) return [];
+
+      return report.accountantJourneyAcceptanceChecklist.map((route) => {
+        const routeEvidence = routeEvidenceByCode.get(route.routeCode);
+        return {
+          scenarioCode: scenario.code,
+          scenarioLabel: scenario.label,
+          expectedOutcome: scenario.expectedOutcome,
+          filingReadinessState: scenario.evidencePack.expectedOutputs.filingReadinessState,
+          signOffPacketState: scenario.evidencePack.expectedOutputs.signOffPacketState,
+          manualProfessionalReviewRequired: scenario.fixture.manualProfessionalReviewRequired,
+          routeCode: route.routeCode,
+          routeLabel: route.routeLabel,
+          routeKey: route.routeKey,
+          workflowStages: route.workflowStages,
+          visualArtifactNames: route.visualArtifactNames,
+          evidenceArtifact: `${scenario.code}-${route.routeCode}-walkthrough-note`,
+          decisionQuestion: routeEvidence?.decisionQuestion ?? "",
+          requiredEvidence: [...new Set([...route.requiredEvidence, ...acceptance.requiredEvidence])].sort(),
+          acceptanceCriteria: [
+            ...route.acceptanceCriteria,
+            ...acceptance.reviewScope.map((scope) =>
+              `${scenario.label}: qualified-accountant review covers ${scope}.`,
+            ),
+          ],
+          releaseChecklistCode: "golden-corpus-accountant-acceptance",
+          signOffGate: route.signOffGate,
+          status: "required-review",
+          blocksRelease: true,
+        };
+      });
+    });
+}
+
+function buildGoldenVerifierManifest(goldenFilingCorpus) {
+  return goldenFilingCorpus.flatMap((scenario) =>
+    scenario.evidenceVerifiers.map((verifier) => ({
+      scenarioCode: scenario.code,
+      scenarioLabel: scenario.label,
+      expectedOutcome: scenario.expectedOutcome,
+      coverageStatus: scenario.coverageStatus,
+      verifierName: verifier.name,
+      command: verifier.command,
+      ciScope: verifier.ciScope,
+      runsInDefaultCi: verifier.runsInDefaultCi,
+      evidenceLevel: verifier.evidenceLevel,
+      blocksRelease: true,
+      outputArtifacts: scenario.evidencePack.outputArtifacts,
+      decisionGates: scenario.evidencePack.decisionGates,
+      proofPointAreas: scenario.evidencePack.expectedProofPoints.map((proofPoint) => proofPoint.area),
+    })),
+  );
 }
 
 function goldenLegalBasisSnapshot(scenario) {
@@ -1442,7 +1515,7 @@ function journeyAcceptance(routeCode, routeLabel, routeKey, workflowStages, acce
       `${routeLabel} route exposes the relevant accountant workflow state, blockers, next actions and evidence.`,
       `A named qualified accountant accepts the ${routeLabel} route outputs, gates, wording and evidence for every seeded golden scenario.`,
     ],
-    signOffGate: "accountant-final-signoff",
+    signOffGate: "golden-corpus-accountant-acceptance",
     status: "required-review",
   };
 }
@@ -1484,7 +1557,7 @@ function accountantRouteEvidence(routeCode, routeLabel, workflowStages, decision
       "visual smoke screenshots reviewed",
       "golden corpus evidence accepted",
     ],
-    signOffGate: "accountant-final-signoff",
+    signOffGate: "golden-corpus-accountant-acceptance",
     failurePolicy: "Block release until a named qualified accountant accepts this route's outputs, gates, wording and evidence against the seeded golden corpus and reviewed visual artifacts.",
   };
 }

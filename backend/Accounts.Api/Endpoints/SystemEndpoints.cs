@@ -99,5 +99,55 @@ public static class SystemEndpoints
             return Results.Ok(report);
         })
            .WithTags("System");
+
+        app.MapPost("/api/system/monitoring/error-smoke", (
+            HttpContext context,
+            IOptions<MonitoringConfig> monitoringOptions,
+            IErrorReporter errorReporter,
+            ILoggerFactory loggerFactory) =>
+            EmitMonitoringSmokeError(
+                context,
+                monitoringOptions,
+                errorReporter,
+                loggerFactory.CreateLogger("Accounts.Api.Endpoints.SystemEndpoints")))
+           .WithTags("System");
+    }
+
+    public static IResult EmitMonitoringSmokeError(
+        HttpContext context,
+        IOptions<MonitoringConfig> monitoringOptions,
+        IErrorReporter errorReporter,
+        ILogger logger)
+    {
+        var monitoring = monitoringOptions.Value;
+        if (!monitoring.ErrorSmokeEnabled)
+            return Results.NotFound();
+
+        var user = AuthContext.GetUser(context);
+        if (user is null)
+            return Results.Json(new { error = "Authentication is required." }, statusCode: StatusCodes.Status401Unauthorized);
+
+        if (!user.Role.Trim().Equals("Owner", StringComparison.OrdinalIgnoreCase))
+            return Results.Json(new { error = "Owner role is required to emit a monitoring smoke event." }, statusCode: StatusCodes.Status403Forbidden);
+
+        var eventId = errorReporter.CaptureUnexpectedException(
+            new MonitoringSmokeException(),
+            new ErrorReportContext(context.Request.Method, context.Request.Path, context.TraceIdentifier));
+
+        logger.LogWarning(
+            "Controlled monitoring smoke event emitted by owner user {UserId} with provider {Provider} and event id {EventId} (correlationId {CorrelationId})",
+            user.UserId,
+            monitoring.ErrorTrackingProvider,
+            eventId,
+            context.TraceIdentifier);
+
+        return Results.Ok(new
+        {
+            status = "reported",
+            provider = monitoring.ErrorTrackingProvider,
+            eventId,
+            correlationId = context.TraceIdentifier,
+            timestamp = DateTime.UtcNow
+        });
     }
 }

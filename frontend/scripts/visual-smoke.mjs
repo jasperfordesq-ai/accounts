@@ -117,6 +117,10 @@ function companyHrefFromPeriodHref(href) {
   return match ? `/companies/${match[1]}` : null;
 }
 
+function periodPathFromHref(href, baseUrl) {
+  return new URL(href, `${baseUrl}/`).pathname;
+}
+
 async function apiJson(page, pathName, { method = "GET", body } = {}) {
   return page.evaluate(async ({ requestPath, requestMethod, requestBody }) => {
     const headers = new Headers({ "Content-Type": "application/json" });
@@ -231,6 +235,7 @@ async function discoverRoutes(page, baseUrl) {
   await page.waitForLoadState("networkidle", { timeout: 30_000 }).catch(() => {});
   await expect(mainText(page, "Company command centre")).toBeVisible({ timeout: 30_000 });
   periodHref ??= await firstHref(page, 'a[href*="/periods/"]', "period workspace");
+  const periodPath = periodPathFromHref(periodHref, baseUrl);
 
   return {
     dashboard: "/",
@@ -238,7 +243,7 @@ async function discoverRoutes(page, baseUrl) {
     company: companyHref,
     period: periodHref,
     filing: periodHref,
-    financialStatements: `${periodHref}/statements`,
+    financialStatements: `${periodPath}/statements`,
     workbenchPreview: "/workbench-preview",
   };
 }

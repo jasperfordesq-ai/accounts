@@ -139,7 +139,7 @@ function sampleReport(): ProductionReadinessReport {
       visualQaExpectedScreenshots: 28,
       requiredOperationalGates: 1,
       openCriticalActions: 1,
-      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "source-law-review-ledger", "revenue-taxonomy-range-evidence", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "production-audit-evidence-pack", "operations-evidence-pack", "visual-smoke-screenshots", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "accountant-journey-acceptance-checklist", "accountant-workflow-evidence-pack", "workbench-visual-acceptance-register", "production-completion-map"],
+      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "source-law-review-ledger", "revenue-taxonomy-range-evidence", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "production-audit-evidence-pack", "operations-evidence-pack", "visual-smoke-screenshots", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "accountant-journey-acceptance-checklist", "accountant-workflow-evidence-pack", "accountant-walkthrough-evidence-matrix", "workbench-visual-acceptance-register", "production-completion-map"],
       releaseBlockers: ["Qualified accountant sign-off required"],
     },
     accountantAcceptanceCriteria: [
@@ -184,7 +184,7 @@ function sampleReport(): ProductionReadinessReport {
       protocolVersion: "accountant-workflow-walkthrough-v1",
       reviewerRole: "Qualified accountant",
       status: "required-review",
-      signOffGate: "accountant-final-signoff",
+      signOffGate: "golden-corpus-accountant-acceptance",
       failurePolicy: "Block release if a named qualified accountant has not walked the seeded golden corpus through the live accountant workflow and accepted the outputs, gates, wording and evidence.",
       seededScenarioCodes: goldenScenarioCodes(),
       routeSequence: [
@@ -228,6 +228,7 @@ function sampleReport(): ProductionReadinessReport {
       ]),
     ],
     accountantWorkflowEvidencePack: accountantWorkflowEvidencePack(),
+    accountantWalkthroughEvidenceMatrix: accountantWalkthroughEvidenceMatrix(),
     workbenchVisualAcceptanceRegister: workbenchVisualAcceptanceRegister(),
     areas: [
       {
@@ -600,7 +601,7 @@ function sampleReport(): ProductionReadinessReport {
         requiredEvidence: "Named accountant approval recorded against the period.",
         nextAction: "Run qualified-accountant acceptance on the golden corpus.",
         sourceActionCode: "qualified-accountant-signoff",
-        releaseChecklistCode: "accountant-final-signoff",
+        releaseChecklistCode: "golden-corpus-accountant-acceptance",
         operationalGateCode: "qualified-accountant-review",
         evidenceArtifact: "named-accountant-approval-record",
         blocksRelease: true,
@@ -640,7 +641,7 @@ function sampleReport(): ProductionReadinessReport {
     ],
     releaseReviewChecklist: [
       {
-        code: "accountant-final-signoff",
+        code: "golden-corpus-accountant-acceptance",
         label: "Named accountant final sign-off",
         ownerRole: "Qualified accountant",
         required: true,
@@ -1003,7 +1004,7 @@ function journeyAcceptance(
       `${routeLabel} route exposes the relevant accountant workflow state, blockers, next actions and evidence.`,
       `A named qualified accountant accepts the ${routeLabel} route outputs, gates, wording and evidence for every seeded golden scenario.`,
     ],
-    signOffGate: "accountant-final-signoff",
+    signOffGate: "golden-corpus-accountant-acceptance",
     status: "required-review",
   };
 }
@@ -1052,9 +1053,45 @@ function accountantRouteEvidence(
       "visual smoke screenshots reviewed",
       "golden corpus evidence accepted",
     ],
-    signOffGate: "accountant-final-signoff",
+    signOffGate: "golden-corpus-accountant-acceptance",
     failurePolicy: "Block release until a named qualified accountant accepts this route's outputs, gates, wording and evidence against the seeded golden corpus and reviewed visual artifacts.",
   };
+}
+
+function accountantWalkthroughEvidenceMatrix(): ProductionReadinessReport["accountantWalkthroughEvidenceMatrix"] {
+  return [
+    {
+      scenarioCode: "micro-ltd",
+      scenarioLabel: "Micro LTD",
+      expectedOutcome: "generated-pack",
+      filingReadinessState: "100% filing readiness",
+      signOffPacketState: "review-required",
+      manualProfessionalReviewRequired: false,
+      routeCode: "dashboard",
+      routeLabel: "Dashboard",
+      routeKey: "dashboard",
+      workflowStages: accountantWorkflowStages(),
+      visualArtifactNames: ["light-desktop", "light-mobile", "dark-desktop", "dark-mobile"].map(
+        (suffix) => `dashboard-${suffix}.png`,
+      ),
+      evidenceArtifact: "micro-ltd-dashboard-walkthrough-note",
+      decisionQuestion: "Does the Dashboard route let a qualified accountant accept the workflow state, blockers, next action, outputs, gates, wording and evidence for every seeded golden scenario?",
+      requiredEvidence: [
+        "named qualified-accountant route acceptance",
+        "visual smoke screenshots reviewed",
+        "golden corpus evidence accepted",
+        "Named qualified-accountant approval recorded against the generated pack.",
+      ],
+      acceptanceCriteria: [
+        "Dashboard route exposes the relevant accountant workflow state, blockers, next actions and evidence.",
+        "Micro LTD: qualified-accountant review covers PDF wording and micro statutory statement.",
+      ],
+      releaseChecklistCode: "golden-corpus-accountant-acceptance",
+      signOffGate: "golden-corpus-accountant-acceptance",
+      status: "required-review",
+      blocksRelease: true,
+    },
+  ];
 }
 
 function workbenchVisualAcceptanceRegister(): ProductionReadinessReport["workbenchVisualAcceptanceRegister"] {

@@ -5,6 +5,7 @@ param(
     [int]$CompanyId = 0,
     [int]$PeriodId = 0,
     [switch]$CheckDownloads,
+    [switch]$CheckMonitoringErrorRouting,
     [string]$OutputDirectory = (Join-Path ([System.IO.Path]::GetTempPath()) "accounts-smoke"),
     [int]$TimeoutSeconds = 30,
     [int]$DownloadTimeoutSeconds = 120,
@@ -330,6 +331,41 @@ Invoke-RestMethod `
     -Method Get `
     -WebSession $session `
     -TimeoutSec $TimeoutSeconds | Out-Null
+
+if ($CheckMonitoringErrorRouting) {
+    New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
+
+    Write-Host "Checking controlled monitoring error routing..."
+    $monitoringResponse = Invoke-RestMethod `
+        -Uri "$base/api/system/monitoring/error-smoke" `
+        -Method Post `
+        -ContentType "application/json" `
+        -Headers @{ "X-CSRF-Token" = $csrfToken } `
+        -Body "{}" `
+        -WebSession $session `
+        -TimeoutSec $TimeoutSeconds
+
+    if ($monitoringResponse.status -ne "reported") {
+        throw "Monitoring smoke endpoint returned unexpected status '$($monitoringResponse.status)'."
+    }
+    if ([string]::IsNullOrWhiteSpace($monitoringResponse.correlationId)) {
+        throw "Monitoring smoke response did not include a correlationId."
+    }
+    if ([string]::IsNullOrWhiteSpace($monitoringResponse.eventId)) {
+        throw "Monitoring smoke response did not include an eventId."
+    }
+
+    $monitoringEvidencePath = Join-Path $OutputDirectory "monitoring-error-routing-report.json"
+    [ordered]@{
+        status = "passed"
+        checkedAtUtc = [DateTime]::UtcNow.ToString("o")
+        baseUrl = $base
+        provider = $monitoringResponse.provider
+        eventId = $monitoringResponse.eventId
+        correlationId = $monitoringResponse.correlationId
+    } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $monitoringEvidencePath -Encoding UTF8
+    Write-Host "Monitoring error-routing evidence written: $monitoringEvidencePath"
+}
 
 if ($CheckDownloads) {
     New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null

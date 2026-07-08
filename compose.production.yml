@@ -58,6 +58,7 @@ services:
       Monitoring__StructuredJsonConsole: "true"
       Monitoring__IncludeCorrelationId: "true"
       Monitoring__TracesSampleRate: "${MONITORING_TRACES_SAMPLE_RATE:-0}"
+      Monitoring__ErrorSmokeEnabled: "${MONITORING_ERROR_SMOKE_ENABLED:-false}"
       BootstrapOwner__Enabled: "true"
       BootstrapOwner__TenantName: "${BOOTSTRAP_TENANT_NAME:?set BOOTSTRAP_TENANT_NAME}"
       BootstrapOwner__TenantSlug: "${BOOTSTRAP_TENANT_SLUG:?set BOOTSTRAP_TENANT_SLUG}"
@@ -104,6 +105,7 @@ services:
       Monitoring__StructuredJsonConsole: "true"
       Monitoring__IncludeCorrelationId: "true"
       Monitoring__TracesSampleRate: "${MONITORING_TRACES_SAMPLE_RATE:-0}"
+      Monitoring__ErrorSmokeEnabled: "${MONITORING_ERROR_SMOKE_ENABLED:-false}"
       BootstrapOwner__TenantSlug: "${BOOTSTRAP_TENANT_SLUG:?set BOOTSTRAP_TENANT_SLUG}"
       BootstrapOwner__OwnerEmail: "${BOOTSTRAP_OWNER_EMAIL:?set BOOTSTRAP_OWNER_EMAIL}"
     depends_on:

@@ -72,6 +72,7 @@ Do not run plain `docker compose -f compose.production.yml config` with producti
 | `MONITORING_ERROR_TRACKING_DSN` | Required HTTPS DSN for the production error-tracking provider. Startup fails outside development when this is missing or not HTTPS. |
 | `MONITORING_ERROR_TRACKING_PROVIDER` | Optional; defaults to `Sentry-compatible`. Use a short provider label for the readiness report and operational records. |
 | `MONITORING_TRACES_SAMPLE_RATE` | Optional; defaults to `0`. Must be between `0` and `1` when set. |
+| `MONITORING_ERROR_SMOKE_ENABLED` | Optional; defaults to `false`. Set to `true` only for an operator-controlled release smoke run that emits a fixed non-PII event through `/api/system/monitoring/error-smoke`, then turn it back off if the endpoint should not remain available between releases. |
 | `BOOTSTRAP_TENANT_NAME`, `BOOTSTRAP_TENANT_SLUG` | Initial firm tenant created by the controlled migration/bootstrap job. |
 | `BOOTSTRAP_OWNER_EMAIL`, `BOOTSTRAP_OWNER_DISPLAY_NAME`, `BOOTSTRAP_OWNER_PASSWORD_FILE` | Initial owner account and Docker secret file path for the initial password; `BOOTSTRAP_OWNER_PASSWORD_FILE` must contain a password of at least 20 characters and include upper case, lower case, number, and symbol characters. Rotate the password at first login. |
 | `BOOTSTRAP_OWNER_MUST_CHANGE_PASSWORD` | Optional; defaults to `true`. When `true` the bootstrap owner must change the password at first sign-in before any other API access is allowed. |
@@ -118,6 +119,13 @@ Run a restore drill after every material schema change and at least monthly:
 
 The drill restores into `accounts_restore_verify`, queries core tables, and leaves the production database untouched.
 
+In CI, the production smoke job creates an ephemeral production-shape backup, verifies
+the restore, writes `restore-drill-report.json`, and uploads the
+`postgres-backup-restore-drill` artifact containing the `.dump`, `.dump.sha256`, and
+restore evidence report. Treat that artifact as the release proof for the CI candidate;
+for real production data, retain the same fields in the operations evidence store rather
+than uploading client data to CI.
+
 ## Production Restore
 
 Restores are destructive when `-Clean` is used. Stop application traffic first and set the explicit confirmation variable. The restore script verifies the adjacent `.sha256` file before restoring; use `-AllowUnverifiedBackupRestore` only for a documented break-glass incident where the checksum file is unavailable but the backup has been independently verified. The restore runs `pg_restore` in a single transaction and is configured to exit on the first restore error so a failed restore does not silently leave partially applied objects behind.
@@ -139,6 +147,20 @@ After restore:
 CI is the authoritative build gate for releases. Before promoting an image, confirm the backend tests and build, frontend audit, type-check, lint, readiness regression, production monitoring config gate, and Next production build have all passed. Production deployment must run CI-promoted immutable image references, not rebuild from the release checkout. Set `ACCOUNTS_API_IMAGE` to the tested backend image tag or digest and `ACCOUNTS_FRONTEND_IMAGE` to the tested frontend image tag or digest; the migration job and API service intentionally use the same `ACCOUNTS_API_IMAGE`.
 
 Do not deploy production by rebuilding from the checkout with `docker compose up --build`. Rebuilding on the production host can run code that differs from the CI-promoted immutable image and makes rollback, migration/app parity, and incident reconstruction weaker.
+
+Retain the CI `production-safety-config` artifact for each release candidate. It is produced by:
+
+```powershell
+.\scripts\verify-production-compose-images.ps1 -EvidencePath D:\accounts-smoke\production-safety-report.json
+```
+
+The report proves the production compose profile uses CI-promoted images, the migration job runs exactly `--migrate-only`, the API waits for that job to complete, normal API startup has `DatabaseStartup__AutoMigrateOnStartup=false`, demo seeding is disabled for both migration and API services, demo-seed override flags are absent, and the bootstrap owner initial password is available only to the migration job.
+
+Retain the CI `dependency-audit-release` artifact as the dependency evidence packet. It contains `npm-audit.json` and `dependency-audit-report.json`; the latter records package-lock and package.json hashes, npm audit counts, the backend NuGet audit policy (`NU1901`-`NU1904` as errors), and workflow action-hygiene wiring:
+
+```powershell
+.\scripts\write-dependency-evidence.ps1 -NpmAuditJsonPath D:\accounts-smoke\npm-audit.json -EvidencePath D:\accounts-smoke\dependency-audit-report.json
+```
 
 For local Windows or Codex workspaces where Next.js cannot spawn child-process workers or cannot clean a stale `.next` directory, use a clean checkout or temporary copy outside the repository and keep the standard `.next` output directory. The app exposes an opt-in worker-thread fallback for this verification path only:
 
@@ -168,7 +190,7 @@ docker image inspect $env:ACCOUNTS_API_IMAGE
 docker image inspect $env:ACCOUNTS_FRONTEND_IMAGE
 ```
 
-4. Run `docker compose -f compose.production.yml config --quiet`.
+4. Run `docker compose -f compose.production.yml config --quiet` and retain `production-safety-report.json`.
 5. Run the migration job.
 6. Start the API and frontend.
 7. Run the frontend/proxy/session smoke test:
@@ -180,12 +202,29 @@ $env:SMOKE_LOGIN_PASSWORD = "<read from the release secret store>"
 .\scripts\smoke-production.ps1
 ```
 
+To prove production error routing, deploy the stack with `MONITORING_ERROR_SMOKE_ENABLED=true` for the smoke window and run:
+
+```powershell
+.\scripts\smoke-production.ps1 -CheckMonitoringErrorRouting -OutputDirectory D:\accounts-smoke
+```
+
+The monitoring check is POST-only, CSRF-protected, Owner-only, and emits a fixed synthetic exception with no client data. Retain `monitoring-error-routing-report.json` with the provider event id and correlation id, then confirm the same event appears in the configured error-tracking project before approving real filing use.
+
+After the monitoring smoke check, retain a structured API log sample:
+
+```powershell
+docker compose -f compose.production.yml logs --no-color --no-log-prefix api > D:\accounts-smoke\api-structured.log
+.\scripts\verify-structured-logs.ps1 -LogPath D:\accounts-smoke\api-structured.log -MonitoringEvidencePath D:\accounts-smoke\monitoring-error-routing-report.json -EvidencePath D:\accounts-smoke\structured-log-report.json
+```
+
+The verifier parses JSON console lines, requires timestamp, level and category fields, and confirms the monitoring smoke correlation id appears in the structured log stream. CI uploads the same files as the `structured-json-log-sample` artifact.
+
 To include sample statutory output checks from a non-production tenant in the same deployment, pass an explicit company and period:
 
 ```powershell
 .\scripts\smoke-production.ps1 -CheckDownloads -CompanyId 1 -PeriodId 1 -OutputDirectory D:\accounts-smoke
 ```
 
-The smoke script checks `/health/ready`, validates browser security headers including the nonce-based Content Security Policy, signs in through the frontend proxy, verifies `/api/auth/me`, lists companies, performs a CSRF-protected logout, confirms logout clears the authenticated session by requiring GET `/api/auth/me` must return `401 Unauthorized` after logout, and optionally downloads a sample accounts PDF and iXBRL XHTML package. In HTTPS production runs, it rejects `script-src` policies that still allow `unsafe-inline`; `-AllowInsecureHttp` exists only for local dry runs.
+The smoke script checks `/health/ready`, validates browser security headers including the nonce-based Content Security Policy, signs in through the frontend proxy, verifies `/api/auth/me`, lists companies, optionally emits the controlled monitoring event, performs a CSRF-protected logout, confirms logout clears the authenticated session by requiring GET `/api/auth/me` must return `401 Unauthorized` after logout, and optionally downloads a sample accounts PDF and iXBRL XHTML package. In HTTPS production runs, it rejects `script-src` policies that still allow `unsafe-inline`; `-AllowInsecureHttp` exists only for local dry runs.
 
 The HTTPS smoke path also verifies that the login response sets the `accounts_session` and `accounts_csrf` cookies with the `Secure` attribute, so production cookies stay aligned with the ingress contract.

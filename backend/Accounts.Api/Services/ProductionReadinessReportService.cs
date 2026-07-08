@@ -378,6 +378,27 @@ public sealed record AccountantWorkflowEvidencePackItem(
     string SignOffGate,
     string FailurePolicy);
 
+public sealed record AccountantWalkthroughEvidenceMatrixItem(
+    string ScenarioCode,
+    string ScenarioLabel,
+    string ExpectedOutcome,
+    string FilingReadinessState,
+    string SignOffPacketState,
+    bool ManualProfessionalReviewRequired,
+    string RouteCode,
+    string RouteLabel,
+    string RouteKey,
+    IReadOnlyList<string> WorkflowStages,
+    IReadOnlyList<string> VisualArtifactNames,
+    string EvidenceArtifact,
+    string DecisionQuestion,
+    IReadOnlyList<string> RequiredEvidence,
+    IReadOnlyList<string> AcceptanceCriteria,
+    string ReleaseChecklistCode,
+    string SignOffGate,
+    string Status,
+    bool BlocksRelease);
+
 public sealed record WorkbenchVisualAcceptanceRegisterItem(
     string RouteCode,
     string RouteLabel,
@@ -480,6 +501,7 @@ public sealed record ProductionReadinessReport(
     AccountantWorkflowWalkthroughProtocol AccountantWorkflowWalkthroughProtocol,
     IReadOnlyList<AccountantJourneyAcceptanceChecklistItem> AccountantJourneyAcceptanceChecklist,
     IReadOnlyList<AccountantWorkflowEvidencePackItem> AccountantWorkflowEvidencePack,
+    IReadOnlyList<AccountantWalkthroughEvidenceMatrixItem> AccountantWalkthroughEvidenceMatrix,
     IReadOnlyList<WorkbenchVisualAcceptanceRegisterItem> WorkbenchVisualAcceptanceRegister,
     IReadOnlyList<ProductionReadinessArea> Areas,
     IReadOnlyList<GoldenFilingCorpusScenario> GoldenFilingCorpus,
@@ -539,6 +561,11 @@ public class ProductionReadinessReportService(AccountsDbContext db)
         var visualQaCoverage = BuildVisualQaCoverage();
         var accountantJourneyAcceptanceChecklist = BuildAccountantJourneyAcceptanceChecklist(goldenCorpus, visualQaCoverage);
         var accountantWorkflowEvidencePack = BuildAccountantWorkflowEvidencePack(accountantJourneyAcceptanceChecklist);
+        var accountantWalkthroughEvidenceMatrix = BuildAccountantWalkthroughEvidenceMatrix(
+            goldenCorpus,
+            accountantAcceptanceCriteria,
+            accountantJourneyAcceptanceChecklist,
+            accountantWorkflowEvidencePack);
         var workbenchVisualAcceptanceRegister = BuildWorkbenchVisualAcceptanceRegister(visualQaCoverage);
         var sourceLawTraceability = BuildSourceLawTraceability(
             sourceSnapshot,
@@ -574,6 +601,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             accountantWorkflowWalkthroughProtocol,
             accountantJourneyAcceptanceChecklist,
             accountantWorkflowEvidencePack,
+            accountantWalkthroughEvidenceMatrix,
             workbenchVisualAcceptanceRegister,
             areas,
             goldenCorpus,
@@ -656,6 +684,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "accountant-workflow-walkthrough-protocol",
             "accountant-journey-acceptance-checklist",
             "accountant-workflow-evidence-pack",
+            "accountant-walkthrough-evidence-matrix",
             "workbench-visual-acceptance-register",
             "production-completion-map"
         };
@@ -2493,13 +2522,13 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "production-stack-smoke",
             "Production compose smoke",
             "Operations",
-            "pwsh ./scripts/smoke-production.ps1",
+            "pwsh ./scripts/smoke-production.ps1 -CheckMonitoringErrorRouting; pwsh ./scripts/verify-structured-logs.ps1",
             "default-ci",
             RunsInDefaultCi: true,
             BlocksRelease: true,
             "ci-production-stack-smoke-and-backup-restore",
             "ci-production-stack-smoke-and-backup-restore",
-            "Run the production smoke script against the production compose profile and retain health, login and filing-workflow output."),
+            "Run the production smoke script against the production compose profile and retain health, login, monitoring-error-routing-report.json, structured-log-report.json and filing-workflow output."),
         new(
             "backup-restore-drill",
             "PostgreSQL backup and restore drill",
@@ -2925,7 +2954,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "Run production stack smoke and retain a structured JSON log sample containing timestamp, level, category, request id and correlation id.",
             "structured-json-log-sample",
             "production-monitoring",
-            "Evidence must prove safe error responses can be matched to server logs through the trace identifier/correlation id.",
+            "Evidence must include api-structured.log plus structured-log-report.json proving timestamp, level, category and the monitoring smoke correlation id are present in JSON logs.",
             "Block release if logs cannot be parsed or support tickets cannot be correlated to server evidence."),
         new(
             "dependency-audit",
@@ -2933,10 +2962,10 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "Dependency policy",
             "Engineering",
             true,
-            "Run npm ci, npm audit --audit-level=moderate, dotnet restore and the CI action hygiene verifier against the release commit.",
-            "dependency-audit-release-note",
+            "Run npm ci, npm audit --audit-level=moderate --json and scripts/write-dependency-evidence.ps1 against the release commit.",
+            "dependency-audit-release",
             "dependency-policy-controls",
-            "Evidence must include npm audit result, lockfile reproducibility, NuGet restore/build status and GitHub Actions version-hygiene output.",
+            "Evidence must include npm-audit.json and dependency-audit-report.json with package-lock hash, npm audit counts, NuGet audit policy, and GitHub Actions version-hygiene wiring.",
             "Block release for moderate/high/critical advisories, unreproducible lockfiles, failed restore/build, or unverified CI action versions."),
         new(
             "migration-safety",
@@ -2944,10 +2973,10 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "Deployment safety",
             "Platform owner",
             true,
-            "Run dotnet Accounts.Api.dll --migrate-only with production startup flags proving AutoMigrateOnStartup is disabled for normal web startup.",
-            "controlled-migration-release-note",
+            "Run scripts/verify-production-compose-images.ps1 -EvidencePath production-safety-report.json against the release compose profile.",
+            "production-safety-config",
             "deployment-safety-controls",
-            "Evidence must show migrations run as a separate release step and normal production startup remains guarded by ProductionSafetyService.",
+            "Evidence must show the migrate service runs exactly --migrate-only, the API depends on successful migration completion, and AutoMigrateOnStartup remains false for normal web startup.",
             "Block release if production startup can auto-migrate without explicit release approval."),
         new(
             "production-seed-block",
@@ -2955,10 +2984,10 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "Deployment safety",
             "Platform owner",
             true,
-            "Review production configuration and run startup validation proving DatabaseStartup:SeedDemoData is false outside development.",
-            "production-seed-block-validation",
+            "Run scripts/verify-production-compose-images.ps1 -EvidencePath production-safety-report.json and retain the CI production-safety-config artifact.",
+            "production-safety-config",
             "deployment-safety-controls",
-            "Evidence must show demo users, sample companies and preview-only accounting records cannot be inserted into a production database.",
+            "Evidence must show SeedDemoData is false for migrate and API services, demo-seed override flags are absent, and the bootstrap owner initial password is available only to the migration job.",
             "Block release if demo seed data can run outside development."),
         new(
             "backup-restore-drill",
@@ -3255,6 +3284,60 @@ public class ProductionReadinessReportService(AccountsDbContext db)
         }
 
         return $"Does the {item.RouteLabel} route let a qualified accountant accept the workflow state, blockers, next action, outputs, gates, wording and evidence for every seeded golden scenario?";
+    }
+
+    private static IReadOnlyList<AccountantWalkthroughEvidenceMatrixItem> BuildAccountantWalkthroughEvidenceMatrix(
+        IReadOnlyList<GoldenFilingCorpusScenario> goldenCorpus,
+        IReadOnlyList<AccountantAcceptanceCriterion> accountantAcceptanceCriteria,
+        IReadOnlyList<AccountantJourneyAcceptanceChecklistItem> checklist,
+        IReadOnlyList<AccountantWorkflowEvidencePackItem> evidencePack)
+    {
+        var acceptanceByScenario = accountantAcceptanceCriteria.ToDictionary(
+            criterion => criterion.ScenarioCode,
+            StringComparer.Ordinal);
+        var evidenceByRoute = evidencePack.ToDictionary(
+            item => item.RouteCode,
+            StringComparer.Ordinal);
+        var rows = new List<AccountantWalkthroughEvidenceMatrixItem>();
+
+        foreach (var scenario in goldenCorpus.OrderBy(scenario => scenario.Code, StringComparer.Ordinal))
+        {
+            var acceptance = acceptanceByScenario[scenario.Code];
+
+            foreach (var route in checklist)
+            {
+                var routeEvidence = evidenceByRoute[route.RouteCode];
+                rows.Add(new AccountantWalkthroughEvidenceMatrixItem(
+                    scenario.Code,
+                    scenario.Label,
+                    scenario.ExpectedOutcome,
+                    scenario.EvidencePack.ExpectedOutputs.FilingReadinessState,
+                    scenario.EvidencePack.ExpectedOutputs.SignOffPacketState,
+                    scenario.Fixture.ManualProfessionalReviewRequired,
+                    route.RouteCode,
+                    route.RouteLabel,
+                    route.RouteKey,
+                    route.WorkflowStages,
+                    route.VisualArtifactNames,
+                    $"{scenario.Code}-{route.RouteCode}-walkthrough-note",
+                    routeEvidence.DecisionQuestion,
+                    route.RequiredEvidence
+                        .Concat(acceptance.RequiredEvidence)
+                        .Distinct(StringComparer.Ordinal)
+                        .Order(StringComparer.Ordinal)
+                        .ToArray(),
+                    route.AcceptanceCriteria
+                        .Concat(acceptance.ReviewScope.Select(scope =>
+                            $"{scenario.Label}: qualified-accountant review covers {scope}."))
+                        .ToArray(),
+                    "golden-corpus-accountant-acceptance",
+                    route.SignOffGate,
+                    "required-review",
+                    BlocksRelease: true));
+            }
+        }
+
+        return rows.ToArray();
     }
 
     private static IReadOnlyList<WorkbenchVisualAcceptanceRegisterItem> BuildWorkbenchVisualAcceptanceRegister(

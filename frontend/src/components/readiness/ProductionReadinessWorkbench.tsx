@@ -43,6 +43,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
   const accountantWorkflowWalkthroughProtocol = report.accountantWorkflowWalkthroughProtocol;
   const accountantJourneyAcceptanceChecklist = report.accountantJourneyAcceptanceChecklist ?? [];
   const accountantWorkflowEvidencePack = report.accountantWorkflowEvidencePack ?? [];
+  const accountantWalkthroughEvidenceMatrix = report.accountantWalkthroughEvidenceMatrix ?? [];
   const workbenchVisualAcceptanceRegister = report.workbenchVisualAcceptanceRegister ?? [];
   const hardenedAreas = report.areas.filter((area) => area.status === "hardened").length;
   const coveredScenarios = report.goldenFilingCorpus.filter((scenario) => scenario.coverageStatus === "covered").length;
@@ -87,7 +88,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
           </StatusBadge>
         }
       >
-        <div className="grid overflow-hidden rounded-md border border-[var(--border)] bg-[var(--surface)] md:grid-cols-4 md:divide-x divide-y md:divide-y-0 divide-[var(--border)]">
+        <div className="grid min-w-0 grid-cols-1 overflow-hidden rounded-md border border-[var(--border)] bg-[var(--surface)] md:grid-cols-4 md:divide-x divide-y md:divide-y-0 divide-[var(--border)]">
           <DecisionSummaryItem
             label="Critical blockers"
             value={`${assurancePacket.openCriticalActions} critical ${assurancePacket.openCriticalActions === 1 ? "blocker" : "blockers"}`}
@@ -113,7 +114,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
             tone="warn"
           />
         </div>
-        <div className="mt-3 grid gap-3 rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-3 text-xs leading-5 text-[var(--muted-foreground)] md:grid-cols-3">
+        <div className="mt-3 grid min-w-0 grid-cols-1 gap-3 rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-3 text-xs leading-5 text-[var(--muted-foreground)] md:grid-cols-3">
           <div>
             <p className="font-semibold uppercase text-[var(--muted-foreground)]">Automated verifiers</p>
             <p className="mt-1 text-sm font-medium text-[var(--foreground)]">
@@ -142,7 +143,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
         description="A deterministic release-evidence fingerprint tying source law, golden corpus coverage, statutory rules, visual QA and operational gates together."
         actions={<StatusBadge tone={assurancePacket.status === "ready" ? "good" : "warn"}>{formatPacketStatus(assurancePacket.status)}</StatusBadge>}
       >
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+        <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
           <div className="rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-3">
             <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Packet id</p>
             <code className="mt-1 block break-all text-xs leading-5 text-[var(--foreground)]">{assurancePacket.packetId}</code>
@@ -152,7 +153,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
             </p>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <PacketMetric
               label="Golden corpus"
               value={`${assurancePacket.goldenCorpusCovered}/${assurancePacket.goldenCorpusTotal}`}
@@ -180,7 +181,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
           </div>
         </div>
 
-        <div className="mt-4 grid gap-4 xl:grid-cols-2">
+        <div className="mt-4 grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2">
           <div className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
             <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Evidence items</p>
             <div className="mt-2">
@@ -205,7 +206,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
         description="Release gate for keeping CRO, Revenue, FRC and charity guidance aligned with the pinned source-law snapshot before real filing use."
         actions={<StatusBadge tone={sourceLawMaintenanceProtocol.status === "complete" ? "good" : "warn"}>{formatStatus(sourceLawMaintenanceProtocol.status)}</StatusBadge>}
       >
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
+        <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
           <div className="rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-3">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
@@ -232,7 +233,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
             </div>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2">
             <div className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
               <p className="mb-2 text-xs font-semibold uppercase text-[var(--muted-foreground)]">Required evidence</p>
               <CompactList items={sourceLawMaintenanceProtocol.requiredEvidence} />
@@ -651,7 +652,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
         description="Named qualified-accountant walkthrough protocol for taking the seeded golden companies through the live accountant journey."
         actions={<StatusBadge tone="warn">{formatStatus(accountantWorkflowWalkthroughProtocol.status)}</StatusBadge>}
       >
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+        <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
           <div className="rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
@@ -683,7 +684,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
               <p>{accountantWorkflowWalkthroughProtocol.failurePolicy}</p>
             </div>
           </div>
-          <div className="grid gap-3 lg:grid-cols-3">
+          <div className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-3">
             <div className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
               <p className="mb-2 text-xs font-semibold uppercase text-[var(--foreground)]">Route sequence</p>
               <CompactList items={accountantWorkflowWalkthroughProtocol.routeSequence} />
@@ -795,6 +796,75 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
               <p key="failure-policy" className="min-w-72 text-xs leading-5 text-[var(--muted-foreground)]">
                 {item.failurePolicy}
               </p>,
+            ],
+          }))}
+        />
+      </ReviewPanel>
+
+      <ReviewPanel
+        title="Accountant walkthrough evidence matrix"
+        description="Scenario-by-route proof packet for qualified-accountant review across the seeded golden corpus and live workbench journey."
+        actions={<StatusBadge tone="warn">{accountantWalkthroughEvidenceMatrix.length} checks</StatusBadge>}
+      >
+        <DataGrid
+          caption="Accountant walkthrough evidence matrix"
+          filterPlaceholder="Filter accountant walkthrough evidence"
+          emptyState="No matching accountant walkthrough evidence rows"
+          columns={["Scenario", "Route", "Readiness", "Evidence artifact", "Decision question", "Visual evidence", "Status"]}
+          rows={accountantWalkthroughEvidenceMatrix.map((item) => ({
+            id: `${item.scenarioCode}-${item.routeCode}`,
+            tone: item.blocksRelease ? "warn" : "good",
+            searchText: [
+              item.scenarioCode,
+              item.scenarioLabel,
+              item.expectedOutcome,
+              item.filingReadinessState,
+              item.signOffPacketState,
+              item.routeCode,
+              item.routeLabel,
+              item.evidenceArtifact,
+              item.decisionQuestion,
+              item.releaseChecklistCode,
+              item.signOffGate,
+              item.status,
+              ...item.workflowStages,
+              ...item.visualArtifactNames,
+              ...item.requiredEvidence,
+              ...item.acceptanceCriteria,
+            ].join(" "),
+            cells: [
+              <div key="scenario" className="min-w-48 whitespace-normal">
+                <p className="font-medium">{item.scenarioLabel}</p>
+                <code className="mt-1 block break-all text-[11px] text-[var(--muted-foreground)]">{item.scenarioCode}</code>
+                {item.manualProfessionalReviewRequired && (
+                  <p className="mt-1 text-xs font-semibold text-[var(--danger)]">Manual handoff required</p>
+                )}
+              </div>,
+              <div key="route" className="min-w-44 whitespace-normal">
+                <p className="font-medium">{item.routeLabel}</p>
+                <code className="mt-1 block break-all text-[11px] text-[var(--muted-foreground)]">{item.routeCode}</code>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {item.workflowStages.map((stage) => (
+                    <StatusBadge key={stage} tone="default">{stage}</StatusBadge>
+                  ))}
+                </div>
+              </div>,
+              <div key="readiness" className="min-w-52 text-xs leading-5">
+                <p><span className="font-semibold text-[var(--foreground)]">Outcome:</span> {formatStatus(item.expectedOutcome)}</p>
+                <p><span className="font-semibold text-[var(--foreground)]">Readiness:</span> {formatStatus(item.filingReadinessState)}</p>
+                <p><span className="font-semibold text-[var(--foreground)]">Sign-off:</span> {formatStatus(item.signOffPacketState)}</p>
+              </div>,
+              <div key="evidence-artifact" className="min-w-56 whitespace-normal">
+                <code className="block break-all text-xs text-[var(--foreground)]">{item.evidenceArtifact}</code>
+                <p className="mt-1 text-xs text-[var(--muted-foreground)]">Checklist: {item.releaseChecklistCode}</p>
+              </div>,
+              <p key="decision-question" className="min-w-72 text-xs leading-5 text-[var(--foreground)]">
+                {item.decisionQuestion}
+              </p>,
+              <CodeStack key="visual-artifacts" items={item.visualArtifactNames} />,
+              <StatusBadge key="status" tone={item.blocksRelease ? "warn" : "good"}>
+                {formatStatus(item.status)}
+              </StatusBadge>,
             ],
           }))}
         />
@@ -1254,9 +1324,9 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
           description="CI screenshot evidence for the accountant workbench in light and dark mode across desktop and mobile viewports."
           actions={<StatusBadge tone="info">{visualQaCoverage.expectedScreenshotCount} screenshots</StatusBadge>}
         >
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,0.7fr)_minmax(0,1.3fr)]">
-            <div className="space-y-3">
-              <div className="rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-3">
+          <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,0.7fr)_minmax(0,1.3fr)]">
+            <div className="min-w-0 space-y-3">
+              <div className="min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-3">
                 <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Artifact</p>
                 <p className="mt-1 break-all text-sm font-medium text-[var(--foreground)]">{visualQaCoverage.artifactName}</p>
                 <p className="mt-1 break-all text-xs font-medium text-[var(--foreground)]">{visualQaCoverage.manifestFileName}</p>
@@ -1264,7 +1334,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
                   Enforced by {formatStatus(visualQaCoverage.enforcement)}
                 </p>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex min-w-0 flex-wrap gap-2">
                 {visualQaCoverage.themes.flatMap((theme) =>
                   visualQaCoverage.viewports.map((viewport) => (
                     <StatusBadge key={`${theme}-${viewport.name}`} tone="default">
@@ -1273,7 +1343,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
                   )),
                 )}
               </div>
-              <div className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
+              <div className="min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
                 <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Layout checks</p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {visualQaCoverage.layoutChecks.map((check) => (
@@ -1281,7 +1351,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
                   ))}
                 </div>
               </div>
-              <div className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
+              <div className="min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
                     <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Visual review protocol</p>
@@ -1290,7 +1360,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
                   </div>
                   <StatusBadge tone="warn">{formatStatus(visualQaCoverage.reviewProtocol.status)}</StatusBadge>
                 </div>
-                <div className="mt-3 grid gap-3 text-xs leading-5 text-[var(--muted-foreground)]">
+                <div className="mt-3 grid min-w-0 grid-cols-1 gap-3 text-xs leading-5 text-[var(--muted-foreground)]">
                   <div>
                     <p className="mb-1 font-semibold uppercase text-[var(--foreground)]">Sign-off gate</p>
                     <code className="break-all text-[11px] text-[var(--foreground)]">{visualQaCoverage.reviewProtocol.signOffGate}</code>
@@ -1308,43 +1378,45 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
               </div>
             </div>
 
-            <DataGrid
-              caption="Visual QA routes"
-              filterPlaceholder="Filter visual QA routes"
-              emptyState="No matching visual QA routes"
-              columns={["Route", "Capture key", "Workflow stages", "Required text", "Viewport evidence", "Tab action"]}
-              rows={visualQaCoverage.routes.map((route) => ({
-                id: route.code,
-                tone: route.openFilingTab ? "info" : "default",
-                searchText: [
-                  route.label,
-                  route.routeKey,
-                  route.description,
-                  route.requiredText,
-                  ...route.workflowStages,
-                  route.openFilingTab ? "filing tab" : "initial view",
-                ].join(" "),
-                cells: [
-                  <div key="route" className="min-w-44 whitespace-normal">
-                    <p className="font-medium">{route.label}</p>
-                    <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">{route.description}</p>
-                  </div>,
-                  <code key="route-key" className="break-all text-[11px] text-[var(--foreground)]">{route.routeKey}</code>,
-                  <div key="workflow-stages" className="flex min-w-44 flex-wrap gap-1.5">
-                    {route.workflowStages.map((stage) => (
-                      <StatusBadge key={stage} tone="default">{stage}</StatusBadge>
-                    ))}
-                  </div>,
-                  <span key="required-text" className="whitespace-normal text-[var(--muted-foreground)]">{route.requiredText}</span>,
-                  <span key="viewport-evidence" className="text-[var(--muted-foreground)]">
-                    {visualQaCoverage.themes.length * visualQaCoverage.viewports.length} screenshots
-                  </span>,
-                  <StatusBadge key="tab-action" tone={route.openFilingTab ? "info" : "default"}>
-                    {route.openFilingTab ? "Open filing tab" : "Initial view"}
-                  </StatusBadge>,
-                ],
-              }))}
-            />
+            <div className="min-w-0">
+              <DataGrid
+                caption="Visual QA routes"
+                filterPlaceholder="Filter visual QA routes"
+                emptyState="No matching visual QA routes"
+                columns={["Route", "Capture key", "Workflow stages", "Required text", "Viewport evidence", "Tab action"]}
+                rows={visualQaCoverage.routes.map((route) => ({
+                  id: route.code,
+                  tone: route.openFilingTab ? "info" : "default",
+                  searchText: [
+                    route.label,
+                    route.routeKey,
+                    route.description,
+                    route.requiredText,
+                    ...route.workflowStages,
+                    route.openFilingTab ? "filing tab" : "initial view",
+                  ].join(" "),
+                  cells: [
+                    <div key="route" className="min-w-44 whitespace-normal">
+                      <p className="font-medium">{route.label}</p>
+                      <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">{route.description}</p>
+                    </div>,
+                    <code key="route-key" className="break-all text-[11px] text-[var(--foreground)]">{route.routeKey}</code>,
+                    <div key="workflow-stages" className="flex min-w-44 flex-wrap gap-1.5">
+                      {route.workflowStages.map((stage) => (
+                        <StatusBadge key={stage} tone="default">{stage}</StatusBadge>
+                      ))}
+                    </div>,
+                    <span key="required-text" className="whitespace-normal text-[var(--muted-foreground)]">{route.requiredText}</span>,
+                    <span key="viewport-evidence" className="text-[var(--muted-foreground)]">
+                      {visualQaCoverage.themes.length * visualQaCoverage.viewports.length} screenshots
+                    </span>,
+                    <StatusBadge key="tab-action" tone={route.openFilingTab ? "info" : "default"}>
+                      {route.openFilingTab ? "Open filing tab" : "Initial view"}
+                    </StatusBadge>,
+                  ],
+                }))}
+              />
+            </div>
 
             <div className="mt-4">
               <div className="mb-3 flex flex-col gap-2 border-b border-[var(--border)] pb-3 md:flex-row md:items-end md:justify-between">
@@ -1738,7 +1810,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
         </div>
       </section>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
+      <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
         <ReviewPanel
           title="Backend and statutory coverage"
           description="Implementation areas that must remain source-backed, tested, and fail-closed."
@@ -1778,7 +1850,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
         </ReviewPanel>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(420px,1.1fr)]">
+      <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(420px,1.1fr)]">
         <ReviewPanel
           title="Operations and security"
           description="Controls that must stay enforced before any real customer filing pack is trusted."
@@ -1885,7 +1957,7 @@ function EvidenceRow({
   tone: "good" | "warn" | "bad" | "info" | "default";
 }) {
   return (
-    <div className="grid gap-3 py-3 first:pt-0 last:pb-0 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
+    <div className="grid min-w-0 grid-cols-1 gap-3 py-3 first:pt-0 last:pb-0 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
       <div className="flex min-w-0 items-start gap-3">
         <span className={toneIconClass(tone)}>{icon}</span>
         <div className="min-w-0">
