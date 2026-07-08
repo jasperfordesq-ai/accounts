@@ -384,8 +384,8 @@ Recent successful local verification includes:
 
 CI status:
 
-- GitHub Actions run `28950478650` for commit
-  `65aaec8 Require frontend release manifest evidence` completed successfully on
+- GitHub Actions run `28952116890` for commit
+  `5f20e25 Harden readiness manifest verification` completed successfully on
   July 8, 2026.
 - Green jobs: Workflow Hygiene, Production Compose Config, Frontend, Backend,
   Production Stack Smoke, and CI Machine Evidence Pack.
