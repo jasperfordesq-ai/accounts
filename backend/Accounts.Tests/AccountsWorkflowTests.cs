@@ -18357,6 +18357,8 @@ public class AccountsWorkflowTests
         Assert.Contains("Direct ROS submission remains unsupported", accountant);
         Assert.Contains("Qualified accountant signature", accountant);
         Assert.Contains("40-character commit SHA", accountant);
+        Assert.Contains("Use `accepted` in the `Decision` column", accountant);
+        Assert.Contains("Use `yes` or `accepted` for `Decision question answered`", accountant);
 
         var manualHandoff = File.ReadAllText(manualHandoffPath);
         Assert.Contains("Manual Handoff Acceptance", manualHandoff);
@@ -18454,6 +18456,10 @@ public class AccountsWorkflowTests
         Assert.Contains("JSON log line count", script);
         Assert.Contains("Direct CRO submission remains unsupported", script);
         Assert.Contains("Direct ROS submission remains unsupported", script);
+        Assert.Contains("\"Decision\" \"^(accepted|accepted\\b.*)$\"", script);
+        Assert.Contains("\"Decision question answered\" \"^(yes|accepted|accepted\\b.*)$\"", script);
+        Assert.Contains("\"Evidence accepted\" \"^(accepted|accepted\\b.*)$\"", script);
+        Assert.Contains("accepted for this release candidate", script);
         Assert.Contains("Test-ManualHandoffEvidence", script);
         Assert.Contains("manualHandoffAcceptance", script);
         Assert.Contains("manualHandoffScenarioCodes", script);

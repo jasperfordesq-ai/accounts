@@ -524,6 +524,9 @@ function Test-AccountantEvidence {
     Assert-UncheckedDecision $Content "Rejected; issues below must be remediated and re-reviewed." $context $Failures
     Assert-CompletedTableRows $Content $canonicalGoldenCorpusScenarioCodes $context $Failures
     Assert-CompletedTableRows $Content $requiredRouteCodes $context $Failures
+    Assert-CompletedTableColumnMatches $Content $canonicalGoldenCorpusScenarioCodes 6 "Decision" "^(accepted|accepted\b.*)$" "accepted for this release candidate" $context $Failures
+    Assert-CompletedTableColumnMatches $Content $requiredRouteCodes 1 "Decision question answered" "^(yes|accepted|accepted\b.*)$" "yes or accepted" $context $Failures
+    Assert-CompletedTableColumnMatches $Content $requiredRouteCodes 2 "Evidence accepted" "^(accepted|accepted\b.*)$" "accepted" $context $Failures
 
     foreach ($staleScenarioCode in @("micro-ltd-standard", "small-ltd-abridged")) {
         if ($Content.IndexOf($staleScenarioCode, [StringComparison]::OrdinalIgnoreCase) -ge 0) {

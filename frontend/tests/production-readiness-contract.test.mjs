@@ -191,7 +191,7 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.ok(parsed.assurancePacket.evidenceItems.includes("production-readiness-report"));
   assert.ok(parsed.assurancePacket.evidenceItems.includes("production-readiness-verification-report"));
   assert.equal(parsed.assurancePacket.releaseBlockers[0], "Qualified accountant sign-off required");
-  assert.equal(parsed.productionScorecard.currentScore, 610);
+  assert.equal(parsed.productionScorecard.currentScore, 611);
   assert.equal(parsed.productionScorecard.targetScore, 700);
   assert.deepEqual(parsed.productionScorecard.categories.map((category) => category.code), [
     "architecture-documentation",
@@ -199,7 +199,7 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
     "frontend-accountant-workbench",
     "security-auth-tenant-platform-guardrails",
   ]);
-  assert.equal(parsed.productionScorecard.categories[1].currentScore, 200);
+  assert.equal(parsed.productionScorecard.categories[1].currentScore, 201);
   assert.equal(parsed.productionScorecard.categories[1].targetScore, 250);
   assert.ok(parsed.productionScorecard.categories[2].remainingGaps[0].includes("visual QA"));
   assert.ok(parsed.productionScorecard.categories[3].completionTrackCodes.includes("backend-code"));
@@ -831,7 +831,7 @@ test("parseProductionReadinessReport rejects scorecard totals that do not match 
 
   assert.throws(
     () => parseProductionReadinessReport(payload),
-    /Invalid production readiness report contract: productionScorecard\.currentScore - expected 610, received 491/,
+    /Invalid production readiness report contract: productionScorecard\.currentScore - expected 611, received 491/,
   );
 });
 
@@ -928,7 +928,7 @@ test("parseProductionReadinessReport rejects release verification manifest that 
 
 function productionScorecard() {
   return {
-    currentScore: 610,
+    currentScore: 611,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete source-law review, named visual QA, monitoring-provider confirmation, manual handoff and qualified-accountant acceptance evidence.",
@@ -952,12 +952,13 @@ function productionScorecard() {
       {
         code: "backend-statutory-accounting-engine",
         label: "Backend statutory/accounting engine",
-        currentScore: 200,
+        currentScore: 201,
         targetScore: 250,
         status: "qualified-accountant-review-required",
         currentEvidence: [
           "Golden filing corpus covers the production scenarios.",
           "Qualified-accountant acceptance evidence uses canonical golden corpus scenario codes.",
+          "verify-release-evidence.ps1 rejects qualified-accountant acceptance unless every golden scenario decision and route evidence acceptance row is explicitly accepted.",
           "External ROS/iXBRL validation evidence has template and verifier coverage.",
           "Source-law review evidence has template and verifier coverage for every monitored source.",
           "Manual handoff acceptance evidence has template and verifier coverage.",

@@ -34,6 +34,8 @@ Required formats: use the full 40-character commit SHA, the exact
 
 For each scenario, record whether the generated outputs, gates, source-law evidence,
 wording, workbench journey, and manual handoff behavior are accepted.
+Use `accepted` in the `Decision` column only when the scenario is professionally
+accepted for this release candidate.
 
 | Scenario | Outputs | Gates | Source-law evidence | Wording | Workbench journey | Decision |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -47,6 +49,8 @@ wording, workbench journey, and manual handoff behavior are accepted.
 
 For each route, confirm the accountant can answer the route decision question using
 the visible evidence and generated artifacts.
+Use `yes` or `accepted` for `Decision question answered`; use `accepted` for
+`Evidence accepted` only when the route evidence is professionally accepted.
 
 | Route | Decision question answered | Evidence accepted | Notes |
 | --- | --- | --- | --- |

@@ -810,7 +810,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             Category(
                 "backend-statutory-accounting-engine",
                 "Backend statutory/accounting engine",
-                200,
+                201,
                 250,
                 "qualified-accountant-review-required",
                 [
@@ -818,6 +818,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "Source-law snapshot, traceability, review ledger and Revenue taxonomy ranges are exposed in the readiness report.",
                     "Filing readiness profiles, generated PDF/iXBRL evidence and audit snapshots are backed by automated tests.",
                     "Qualified-accountant acceptance evidence now uses canonical golden corpus scenario codes and the release verifier reports required scenario, route and artifact coverage.",
+                    "scripts/verify-release-evidence.ps1 now rejects qualified-accountant acceptance unless every golden scenario decision and every route evidence acceptance row is explicitly accepted.",
                     "External ROS/iXBRL validation evidence now has a checked-in template and release verifier coverage for each canonical golden corpus scenario.",
                     "Source-law review evidence now has a checked-in template and release verifier coverage for every monitored CRO, Revenue, FRC and Charities Regulator source.",
                     "Manual handoff acceptance now has a checked-in template and release verifier coverage for the audit-required golden scenario and unsupported path codes.",
