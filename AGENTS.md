@@ -60,6 +60,7 @@ Committed and pushed work on `main` includes:
 - `86efd7e Require visual dimensions in evidence packs`
 - `660b9ea Harden release evidence formats`
 - `4d558bb Verify release evidence candidate identity`
+- `a92ecd2 Retain release evidence templates in artifact packs`
 
 Backend/accounting-engine progress:
 
@@ -135,6 +136,10 @@ Backend/accounting-engine progress:
   across all six human evidence templates, and `scripts/verify-release-artifact-pack.ps1`
   rejects a release pack if `release-evidence-report.json` does not match the pack
   `CommitSha` and `GitHubActionsRunUrl`.
+- `scripts/verify-release-evidence.ps1` now emits SHA-256/byte-size manifest entries
+  for all six human release-evidence templates, and `scripts/verify-release-artifact-pack.ps1`
+  rejects release packs unless those completed Markdown templates are retained beside
+  `release-evidence-report.json` with matching hashes.
 - Source-law review now has a checked-in release evidence template covering all 12
   monitored CRO, Revenue, FRC, and Charities Regulator source IDs. The release
   verifier reports those IDs under `sourceLawSourceIds`.
@@ -276,7 +281,7 @@ Recent successful local verification includes:
   production scorecard evidence are wired together, including canonical
   qualified-accountant golden corpus scenario codes, external ROS/iXBRL validation
   template coverage, source-law source coverage, manual handoff coverage, visual
-  smoke and accountant workbench evidence report references, and the 607/700
+  smoke and accountant workbench evidence report references, and the 608/700
   scorecard total
 - Backend focused release artifact pack verifier and scorecard tests:
   `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~ReleaseArtifactPackVerifier_RequiresExactOperationalEvidenceReports|FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers"`
@@ -341,12 +346,17 @@ Recent successful local verification includes:
   with a mismatched monitoring-provider run URL failed; a synthetic release artifact
   pack passed when `release-evidence-report.json` matched `-CommitSha` and
   `-GitHubActionsRunUrl`, then failed when the pack commit SHA was changed.
+- Release evidence retained-template checks - passed. A temporary completed release
+  evidence directory produced `release-evidence-report.json` with six template
+  SHA-256/byte-size manifest entries; a synthetic release artifact pack passed only
+  when all six completed Markdown templates were retained with matching hashes, and
+  failed when `visual-qa-signoff-template.md` was removed.
 - PowerShell parser and synthetic completed-pack execution for
   `scripts\verify-release-artifact-pack.ps1` - passed. Temporary artifact reports pass
   with `release-artifact-pack-report.json`, including release candidate identity,
-  per-report SHA-256/byte-size manifest, monitoring correlation matching, backup
-  sha256/table checks, no-direct route coverage, visual smoke coverage,
-  accountant-workbench coverage, and release-evidence required coverage.
+  per-report and release-evidence-template SHA-256/byte-size manifest, monitoring
+  correlation matching, backup sha256/table checks, no-direct route coverage, visual
+  smoke coverage, accountant-workbench coverage, and release-evidence required coverage.
 - PowerShell parser and execution for `scripts\verify-no-direct-filing-submission.ps1`
   - passed; the generated `no-direct-filing-submission-report.json` records allowed
   filing workflow routes, forbidden outbound submission patterns, forbidden submit
@@ -376,7 +386,7 @@ Recent successful local verification includes:
   viewport widths and missing screenshot PNG dimension evidence
 - Backend focused scorecard/visual QA tests after adding PNG dimension evidence:
   `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers|FullyQualifiedName~ProductionReadinessReport_DeclaresVisualQaCoverageForAccountantWorkbenchRoutes"`
-  - 2 passed, proving the readiness report exposes the 607/700 scorecard and visual
+  - 2 passed, proving the readiness report exposes the 608/700 scorecard and visual
   review protocol requires screenshot PNG dimensions
 - Frontend scorecard render and type checks for the visual evidence report slice:
   - `node scripts/verify-api-client.mjs` - passed
@@ -435,13 +445,15 @@ CI status:
   July 8, 2026.
 - Green jobs: Workflow Hygiene, Production Compose Config, Frontend, Backend,
   Production Stack Smoke, and CI Machine Evidence Pack.
-- The scorecard exposed by the candidate is now 607/700, with frontend accountant
-  workbench at 160/200 and security/auth/tenant/platform guardrails at 148/150.
+- The scorecard exposed by the candidate is now 608/700, with frontend accountant
+  workbench at 160/200 and security/auth/tenant/platform guardrails at 149/150.
   The typed frontend parser and production-readiness verifier both require CI
   machine evidence, production smoke, readiness verification, visual smoke, release
   artifact pack, no-direct filing control, and named manual review manifest rows;
   the release artifact-pack verifier now also requires the retained readiness
-  verification report to prove every required default-CI and manual manifest row.
+  verification report to prove every required default-CI and manual manifest row,
+  and requires all six completed release-evidence Markdown templates to match the
+  SHA-256/byte-size manifest emitted by `release-evidence-report.json`.
 - Latest retained CI evidence artifacts include:
   - `dependency-audit-release`: `dependency-audit-report.json` passed with 0 npm
     vulnerabilities, frontend lockfile/package hashes, and NuGet audit policy.
@@ -509,9 +521,9 @@ As of July 8, 2026:
 - Code implementation is roughly 70-75% complete.
 - Production assurance is roughly 60-65% complete.
 - Overall goal is roughly 63-67% complete, with about one third left.
-- The production scorecard is now 607/700: architecture/documentation 99/100,
+- The production scorecard is now 608/700: architecture/documentation 99/100,
   backend statutory/accounting engine 200/250, frontend accountant workbench 160/200,
-  and security/auth/tenant/platform guardrails 148/150.
+  and security/auth/tenant/platform guardrails 149/150.
 - Architecture/documentation is now scored 99/100 in the production scorecard because
   source-law review, release evidence templates, manual handoff evidence, runbook
   links, and verifier coverage are in place, including an exact release artifact-pack
