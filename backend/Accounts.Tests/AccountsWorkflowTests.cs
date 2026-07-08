@@ -15292,6 +15292,19 @@ public class AccountsWorkflowTests
         Assert.DoesNotContain("ACCOUNTS_API_KEY: ", productionSmokeJob);
         Assert.DoesNotContain("ACCOUNTS_API_KEY_HASH: ", productionSmokeJob);
         Assert.DoesNotContain("POSTGRES_PASSWORD: ", productionSmokeJob);
+
+        var machineEvidenceJob = WorkflowJob(workflow, "ci-machine-evidence-pack");
+        Assert.Contains("actions/checkout", machineEvidenceJob);
+        Assert.Contains("actions/download-artifact@v7", machineEvidenceJob);
+        Assert.Contains("frontend", machineEvidenceJob);
+        Assert.Contains("production-config", machineEvidenceJob);
+        Assert.Contains("production-smoke", machineEvidenceJob);
+        Assert.Contains("accounts-ci-machine-evidence", machineEvidenceJob);
+        Assert.Contains("verify-ci-machine-evidence-pack.ps1", machineEvidenceJob);
+        Assert.Contains("-CommitSha $env:GITHUB_SHA", machineEvidenceJob);
+        Assert.Contains("-GitHubActionsRunUrl $runUrl", machineEvidenceJob);
+        Assert.Contains("ci-machine-evidence-pack-report.json", machineEvidenceJob);
+        Assert.Contains("name: ci-machine-evidence-pack", machineEvidenceJob);
     }
 
     [Fact]
@@ -15340,6 +15353,7 @@ public class AccountsWorkflowTests
         Assert.Contains("NU1901", script);
         Assert.Contains("NU1904", script);
         Assert.Contains("verify-ci-actions.mjs", script);
+        Assert.Contains("actions/download-artifact", File.ReadAllText(Path.Combine(root, "scripts", "verify-ci-actions.mjs")));
         Assert.Contains("dependency-audit-report.json", workflow);
         Assert.Contains("npm-audit.json", workflow);
         Assert.Contains("dependency-audit-release", workflow);
@@ -18455,15 +18469,18 @@ public class AccountsWorkflowTests
         var runbook = File.ReadAllText(Path.Combine(root, "Docs", "operations", "production-runbook.md"));
         var reportService = File.ReadAllText(Path.Combine(root, "backend", "Accounts.Api", "Services", "ProductionReadinessReportService.cs"));
         var scriptPath = Path.Combine(root, "scripts", "verify-release-artifact-pack.ps1");
+        var machineEvidencePackPath = Path.Combine(root, "scripts", "verify-ci-machine-evidence-pack.ps1");
         var readinessVerifierPath = Path.Combine(root, "scripts", "verify-production-readiness-report.ps1");
         var workflow = File.ReadAllText(Path.Combine(root, ".github", "workflows", "ci.yml"));
         var packageJson = File.ReadAllText(Path.Combine(root, "frontend", "package.json"));
         var workbenchVerifierPath = Path.Combine(root, "frontend", "scripts", "verify-accountant-workbench-evidence.mjs");
 
         Assert.True(File.Exists(scriptPath), "Release artifact pack verifier should make retained operational evidence machine-checkable.");
+        Assert.True(File.Exists(machineEvidencePackPath), "CI machine evidence pack verifier should retain exact non-human evidence for the candidate.");
         Assert.True(File.Exists(readinessVerifierPath), "Production readiness verifier should make the captured live readiness report machine-checkable.");
         Assert.True(File.Exists(workbenchVerifierPath), "Accountant workbench evidence verifier should produce visual-route release evidence.");
         var script = File.ReadAllText(scriptPath);
+        var machineEvidencePack = File.ReadAllText(machineEvidencePackPath);
         var readinessVerifier = File.ReadAllText(readinessVerifierPath);
         var workbenchVerifier = File.ReadAllText(workbenchVerifierPath);
 
@@ -18479,6 +18496,9 @@ public class AccountsWorkflowTests
         Assert.Contains("production-readiness-report.json", workflow);
         Assert.Contains("verify-production-readiness-report.ps1", workflow);
         Assert.Contains("production-readiness-verification-report.json", workflow);
+        Assert.Contains("verify-ci-machine-evidence-pack.ps1", workflow);
+        Assert.Contains("ci-machine-evidence-pack-report.json", workflow);
+        Assert.Contains("actions/download-artifact@v7", workflow);
         Assert.Contains("test:visual:workbench", packageJson);
         Assert.Contains("test:visual:workbench", workflow);
         Assert.Contains("accountant-workbench-evidence-report.json", workflow);
@@ -18502,6 +18522,24 @@ public class AccountsWorkflowTests
             Assert.Contains(evidenceFile, runbook);
         }
 
+        foreach (var machineEvidenceFile in new[]
+        {
+            "dependency-audit-report.json",
+            "production-safety-report.json",
+            "monitoring-error-routing-report.json",
+            "structured-log-report.json",
+            "restore-drill-report.json",
+            "no-direct-filing-submission-report.json",
+            "production-readiness-report.json",
+            "production-readiness-verification-report.json",
+            "visual-smoke-manifest.json",
+            "visual-smoke-evidence-report.json",
+            "accountant-workbench-evidence-report.json"
+        })
+        {
+            Assert.Contains(machineEvidenceFile, machineEvidencePack);
+        }
+
         Assert.Contains("matchedMonitoringSmokeLine", script);
         Assert.Contains("monitoringCorrelationId", script);
         Assert.Contains("backupSha256", script);
@@ -18512,6 +18550,7 @@ public class AccountsWorkflowTests
         Assert.Contains("goldenFilingCorpus", script);
         Assert.Contains("production-readiness-verification-report.json failureCount must be zero", script);
         Assert.Contains("releaseVerificationManifestCodes", script);
+        Assert.Contains("ci-machine-evidence-pack", readinessVerifier);
         Assert.Contains("verify-production-readiness-report.ps1", readinessVerifier);
         Assert.Contains("requiredCoverage", readinessVerifier);
         Assert.Contains("productionScorecard.currentScore must equal the sum of category current scores", readinessVerifier);
@@ -18539,6 +18578,11 @@ public class AccountsWorkflowTests
         Assert.Contains("routeKey must be", workbenchVerifier);
         Assert.Contains("expected accountant decision text", workbenchVerifier);
         Assert.Contains("qualified-accountant-route-acceptance", workbenchVerifier);
+        Assert.Contains("CommitSha is required for CI machine evidence packs", machineEvidencePack);
+        Assert.Contains("GitHubActionsRunUrl is required for CI machine evidence packs", machineEvidencePack);
+        Assert.Contains("humanEvidenceStillRequired", machineEvidencePack);
+        Assert.Contains("release-evidence-report.json", machineEvidencePack);
+        Assert.Contains("CI machine evidence pack verification failed", machineEvidencePack);
         Assert.Contains("visualSmokeReviewChecks", workbenchVerifier);
         Assert.Contains("ACCOUNTANT_WORKFLOW_STAGES", workbenchVerifier);
         Assert.Contains("Release artifact pack verification failed", script);

@@ -108,6 +108,7 @@ $requiredManifestCodes = @(
     "frontend-workbench-contract",
     "visual-smoke-light-dark",
     "production-readiness-report-verification",
+    "ci-machine-evidence-pack",
     "release-artifact-pack",
     "production-stack-smoke",
     "backup-restore-drill"

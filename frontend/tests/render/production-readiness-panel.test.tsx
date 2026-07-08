@@ -40,7 +40,7 @@ describe("ProductionReadinessPanel", () => {
 
 function productionScorecard(): ProductionReadinessReport["productionScorecard"] {
   return {
-    currentScore: 574,
+    currentScore: 579,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete source-law review, named visual QA, monitoring-provider confirmation, manual handoff and qualified-accountant acceptance evidence.",
@@ -96,7 +96,7 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
       {
         code: "security-auth-tenant-platform-guardrails",
         label: "Security/auth/tenant/platform guardrails",
-        currentScore: 125,
+        currentScore: 130,
         targetScore: 150,
         status: "operator-confirmation-required",
         currentEvidence: [
@@ -104,8 +104,9 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
           "CI retains no-direct-filing-submission-report.json for the no-direct CRO/ROS submission verifier.",
           "Release artifact pack verifier validates operational reports together.",
           "release-artifact-pack-report.json records release candidate identity plus per-report SHA-256 and byte-size evidence.",
+          "ci-machine-evidence-pack-report.json records exact commit/run identity plus machine-evidence SHA-256 inventory.",
         ],
-        remainingGaps: ["Confirm the controlled monitoring smoke event inside the configured provider and retain release-artifact-pack-report.json with commit SHA and GitHub Actions run URL."],
+        remainingGaps: ["Confirm the controlled monitoring smoke event inside the configured provider and retain the full release-artifact-pack-report.json after release-evidence-report.json is completed with named human sign-offs."],
         completionTrackCodes: ["backend-code"],
         releaseBlockerCodes: ["backend-code:qualified-accountant-signoff"],
       },

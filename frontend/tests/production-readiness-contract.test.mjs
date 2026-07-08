@@ -191,7 +191,7 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.ok(parsed.assurancePacket.evidenceItems.includes("production-readiness-report"));
   assert.ok(parsed.assurancePacket.evidenceItems.includes("production-readiness-verification-report"));
   assert.equal(parsed.assurancePacket.releaseBlockers[0], "Qualified accountant sign-off required");
-  assert.equal(parsed.productionScorecard.currentScore, 574);
+  assert.equal(parsed.productionScorecard.currentScore, 579);
   assert.equal(parsed.productionScorecard.targetScore, 700);
   assert.deepEqual(parsed.productionScorecard.categories.map((category) => category.code), [
     "architecture-documentation",
@@ -804,7 +804,7 @@ test("parseProductionReadinessReport rejects scorecard totals that do not match 
 
   assert.throws(
     () => parseProductionReadinessReport(payload),
-    /Invalid production readiness report contract: productionScorecard\.currentScore - expected 574, received 491/,
+    /Invalid production readiness report contract: productionScorecard\.currentScore - expected 579, received 491/,
   );
 });
 
@@ -862,7 +862,7 @@ test("parseProductionReadinessReport rejects release verification manifest that 
 
 function productionScorecard() {
   return {
-    currentScore: 574,
+    currentScore: 579,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete source-law review, named visual QA, monitoring-provider confirmation, manual handoff and qualified-accountant acceptance evidence.",
@@ -927,7 +927,7 @@ function productionScorecard() {
       {
         code: "security-auth-tenant-platform-guardrails",
         label: "Security/auth/tenant/platform guardrails",
-        currentScore: 125,
+        currentScore: 130,
         targetScore: 150,
         status: "operator-confirmation-required",
         currentEvidence: [
@@ -935,8 +935,9 @@ function productionScorecard() {
           "CI retains no-direct-filing-submission-report.json for the no-direct CRO/ROS submission verifier.",
           "Release artifact pack verifier validates operational reports together.",
           "release-artifact-pack-report.json records release candidate identity plus per-report SHA-256 and byte-size evidence.",
+          "ci-machine-evidence-pack-report.json records exact commit/run identity plus machine-evidence SHA-256 inventory.",
         ],
-        remainingGaps: ["Confirm the controlled monitoring smoke event inside the configured provider and retain release-artifact-pack-report.json with commit SHA and GitHub Actions run URL."],
+        remainingGaps: ["Confirm the controlled monitoring smoke event inside the configured provider and retain the full release-artifact-pack-report.json after release-evidence-report.json is completed with named human sign-offs."],
         completionTrackCodes: ["backend-code"],
         releaseBlockerCodes: ["backend-code:source-law-change-review", "backend-code:external-ros-validation"],
       },

@@ -6,6 +6,7 @@ const minimumMajorVersions = new Map([
   ["actions/checkout", 7],
   ["actions/setup-dotnet", 5],
   ["actions/setup-node", 6],
+  ["actions/download-artifact", 7],
   ["actions/upload-artifact", 7],
 ]);
 

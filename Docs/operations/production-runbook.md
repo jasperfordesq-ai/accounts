@@ -220,6 +220,14 @@ cross-report checks such as the monitoring smoke correlation id do not match. Th
 generated `release-artifact-pack-report.json` records the release commit, GitHub
 Actions run URL, and a SHA-256/byte-size manifest for each required report.
 
+CI also retains a machine-evidence pack before human sign-off evidence is complete.
+Download the `ci-machine-evidence-pack` artifact and keep
+`ci-machine-evidence-pack-report.json` with the candidate evidence. It proves the
+exact commit/run identity and SHA-256 inventory for dependency audit, production
+safety, monitoring smoke, structured logs, backup/restore, no-direct submission,
+production-readiness and visual/workbench evidence. It does not replace the full
+release artifact pack or any named human sign-off template.
+
 Before completing the visual QA sign-off, verify the CI visual smoke manifest and
 retain the generated evidence report with the screenshot artifact:
 
