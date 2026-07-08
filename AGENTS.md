@@ -70,6 +70,7 @@ Committed and pushed work on `main` includes:
 - `a3fb293 Require accepted source-law review rows`
 - `a6fd245 Require accepted monitoring provider evidence`
 - `f5dba82 Require visual layout pass evidence`
+- `4ef3e63 Require visual contrast smoke evidence`
 
 Backend/accounting-engine progress:
 
