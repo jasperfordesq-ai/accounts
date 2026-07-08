@@ -839,7 +839,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             Category(
                 "frontend-accountant-workbench",
                 "Frontend accountant workbench",
-                145,
+                150,
                 200,
                 "visual-acceptance-required",
                 [
@@ -847,7 +847,8 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "Shared workbench primitives and route-level render tests cover the main accountant journey.",
                     "Dense tables, workflow rails, blocker summaries and permission-denied states are surfaced in the workbench.",
                     "node scripts/verify-visual-smoke-artifacts.mjs now writes visual-smoke-evidence-report.json covering screenshot hashes, byte sizes and route/theme/viewport completeness before human review.",
-                    "node scripts/verify-accountant-workbench-evidence.mjs now writes accountant-workbench-evidence-report.json proving route, workflow-stage, theme, viewport, layout-check and review-check coverage."
+                    "node scripts/verify-accountant-workbench-evidence.mjs now writes accountant-workbench-evidence-report.json proving route, workflow-stage, theme, viewport, layout-check and review-check coverage.",
+                    "accountant-workbench-evidence-report.json now includes route acceptance rows with stable route keys, expected decision text, blocking status and qualified-accountant route acceptance evidence for every workbench route."
                 ],
                 [
                     "Complete named visual QA review against the light/dark desktop/mobile screenshot manifest and visual-smoke-evidence-report.json.",

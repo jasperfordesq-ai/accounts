@@ -11,6 +11,15 @@ import {
 } from "./visual-smoke-plan.mjs";
 
 const REPORT_FILE_NAME = "accountant-workbench-evidence-report.json";
+const ROUTE_ACCEPTANCE_SIGN_OFF_GATE = "qualified-accountant-route-acceptance";
+
+function routeAcceptanceEvidence(route) {
+  return [
+    `${route.name}-accountant-route-acceptance-note`,
+    `${route.name}-visual-smoke-screenshots-reviewed`,
+    `${route.name}-qualified-accountant-route-acceptance`,
+  ];
+}
 
 function arg(name, fallback) {
   const prefix = `--${name}=`;
@@ -52,6 +61,10 @@ export async function verifyAccountantWorkbenchEvidence(options = {}) {
     if (!coverage) {
       failures.push(`accountant workbench evidence is missing route coverage for ${route.name}.`);
     } else {
+      if (coverage.routeKey !== route.routeKey) {
+        failures.push(`route ${route.name} routeKey must be ${route.routeKey}, found ${coverage.routeKey}.`);
+      }
+
       if (coverage.screenshotCount !== visualSmokeThemes.length * visualSmokeViewports.length) {
         failures.push(`route ${route.name} must have 4 screenshots, found ${coverage.screenshotCount}.`);
       }
@@ -71,8 +84,18 @@ export async function verifyAccountantWorkbenchEvidence(options = {}) {
       failures.push(`route ${route.name} is missing screenshot coverage ${missing}.`);
     }
 
+    for (const screenshot of screenshots) {
+      if (screenshot.routeKey !== route.routeKey) {
+        failures.push(`route ${route.name} screenshot ${screenshot.fileName ?? "(unnamed)"} routeKey must be ${route.routeKey}, found ${screenshot.routeKey}.`);
+      }
+    }
+
     if (!route.workflowStages?.length) {
       failures.push(`route ${route.name} must declare accountant workflow stages.`);
+    }
+
+    if (typeof route.expectedText !== "string" || route.expectedText.trim().length === 0) {
+      failures.push(`route ${route.name} must declare expected accountant decision text.`);
     }
 
     return {
@@ -87,6 +110,19 @@ export async function verifyAccountantWorkbenchEvidence(options = {}) {
       reviewStatus: coverage?.reviewStatus ?? "missing",
     };
   });
+
+  const routeAcceptance = visualSmokeRoutes.map((route) => ({
+    routeName: route.name,
+    routeKey: route.routeKey,
+    label: route.label,
+    workflowStages: route.workflowStages,
+    expectedText: route.expectedText,
+    requiredAcceptanceEvidence: routeAcceptanceEvidence(route),
+    screenshotReviewEvidence: `${route.name}-light-dark-desktop-mobile-screenshot-review`,
+    signOffGate: ROUTE_ACCEPTANCE_SIGN_OFF_GATE,
+    reviewStatus: "required-review",
+    blocksRelease: true,
+  }));
 
   const coveredStages = new Set(visualSmokeRoutes.flatMap((route) => route.workflowStages ?? []));
   for (const stage of ACCOUNTANT_WORKFLOW_STAGES) {
@@ -109,6 +145,7 @@ export async function verifyAccountantWorkbenchEvidence(options = {}) {
     screenshotCount: visualReport.screenshotCount,
     expectedScreenshotCount: visualSmokeRoutes.length * visualSmokeThemes.length * visualSmokeViewports.length,
     workflowStageCount: ACCOUNTANT_WORKFLOW_STAGES.length,
+    routeAcceptanceCount: routeAcceptance.length,
     requiredCoverage: {
       routeCodes: visualSmokeRoutes.map((route) => route.name),
       routeKeys: visualSmokeRoutes.map((route) => route.routeKey),
@@ -117,6 +154,13 @@ export async function verifyAccountantWorkbenchEvidence(options = {}) {
       viewports: visualSmokeViewports.map((viewport) => viewport.name),
       reviewChecks: visualSmokeReviewChecks,
       layoutChecks: visualSmokeLayoutChecks,
+      expectedTextChecks: [
+        "route expected accountant decision text",
+        "visual smoke routeKey matches planned routeKey",
+        "visual smoke screenshots carry stable routeKey",
+      ],
+      routeAcceptanceEvidence: routeAcceptance.flatMap((route) => route.requiredAcceptanceEvidence),
+      routeAcceptanceSignOffGate: ROUTE_ACCEPTANCE_SIGN_OFF_GATE,
       evidenceFiles: [
         "visual-smoke-manifest.json",
         "visual-smoke-evidence-report.json",
@@ -124,6 +168,7 @@ export async function verifyAccountantWorkbenchEvidence(options = {}) {
       ],
     },
     routeReadiness,
+    routeAcceptance,
   };
 
   await mkdir(path.dirname(reportPath), { recursive: true });

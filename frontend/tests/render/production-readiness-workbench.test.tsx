@@ -20,14 +20,14 @@ describe("ProductionReadinessWorkbench", () => {
     expectText("3 companies");
     expectText("4 periods");
     expect(screen.getByRole("heading", { name: "Production scorecard" })).toBeInTheDocument();
-    expectText("569/700");
+    expectText("574/700");
     expectText("Architecture and documentation");
     expectText("Backend statutory/accounting engine");
     expectText("Frontend accountant workbench");
     expectText("Security/auth/tenant/platform guardrails");
     expectText("99 / 100");
     expectText("200 / 250");
-    expectText("145 / 200");
+    expectText("150 / 200");
     expectText("125 / 150");
     expectText(/Next score gate/);
     expect(screen.getByRole("searchbox", { name: "Filter Next assurance actions" })).toBeInTheDocument();
@@ -282,7 +282,7 @@ describe("ProductionReadinessWorkbench", () => {
 
 function productionScorecard(): ProductionReadinessReport["productionScorecard"] {
   return {
-    currentScore: 569,
+    currentScore: 574,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete source-law review, named visual QA, monitoring-provider confirmation, manual handoff and qualified-accountant acceptance evidence.",
@@ -323,13 +323,13 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
       {
         code: "frontend-accountant-workbench",
         label: "Frontend accountant workbench",
-        currentScore: 145,
+        currentScore: 150,
         targetScore: 200,
         status: "visual-acceptance-required",
         currentEvidence: [
           "Visual smoke plan covers the accountant journey.",
           "visual-smoke-evidence-report.json proves screenshot hash, byte-size and route/theme/viewport coverage.",
-          "accountant-workbench-evidence-report.json proves route workflow-stage and review-check coverage.",
+          "accountant-workbench-evidence-report.json proves route workflow-stage, review-check and qualified-accountant route acceptance coverage.",
         ],
         remainingGaps: ["Complete named visual QA review against the screenshot manifest and visual-smoke-evidence-report.json."],
         completionTrackCodes: ["frontend-ui-ux", "frontend-code"],

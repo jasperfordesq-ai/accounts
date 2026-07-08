@@ -18524,6 +18524,9 @@ public class AccountsWorkflowTests
         Assert.Contains("manualHandoffScenarioCodes", script);
         Assert.Contains("manualHandoffPathCodes", script);
         Assert.Contains("accountant-workbench-evidence-report.json routeCount must be 7", script);
+        Assert.Contains("accountant-workbench-evidence-report.json routeAcceptanceCount must be 7", script);
+        Assert.Contains("routeAcceptanceSignOffGate must be qualified-accountant-route-acceptance", script);
+        Assert.Contains("routeAcceptance.requiredAcceptanceEvidence must include qualified-accountant-route-acceptance", script);
         Assert.Contains("Get-FileHash", script);
         Assert.Contains("releaseCandidate", script);
         Assert.Contains("evidenceFiles", script);
@@ -18532,6 +18535,10 @@ public class AccountsWorkflowTests
         Assert.Contains("CommitSha must be a 7-40 character hexadecimal Git commit SHA", script);
         Assert.Contains("workflowStages", script);
         Assert.Contains("routeReadiness", workbenchVerifier);
+        Assert.Contains("routeAcceptance", workbenchVerifier);
+        Assert.Contains("routeKey must be", workbenchVerifier);
+        Assert.Contains("expected accountant decision text", workbenchVerifier);
+        Assert.Contains("qualified-accountant-route-acceptance", workbenchVerifier);
         Assert.Contains("visualSmokeReviewChecks", workbenchVerifier);
         Assert.Contains("ACCOUNTANT_WORKFLOW_STAGES", workbenchVerifier);
         Assert.Contains("Release artifact pack verification failed", script);

@@ -145,8 +145,8 @@ Backend/accounting-engine progress:
   before a named human reviewer signs off.
 - `node scripts/verify-accountant-workbench-evidence.mjs` now emits
   `accountant-workbench-evidence-report.json`, proving each accountant workbench route
-  has workflow-stage, route-key, review-check, theme, viewport and screenshot coverage
-  before named visual QA sign-off.
+  has workflow-stage, route-key, review-check, theme, viewport, screenshot and
+  qualified-accountant route acceptance evidence before named visual QA sign-off.
 - `scripts/verify-release-artifact-pack.ps1` now emits a release artifact pack
   manifest with optional release candidate identity plus per-report SHA-256 and
   byte-size evidence, so retained dependency, production safety, monitoring,
@@ -253,7 +253,7 @@ Recent successful local verification includes:
   production scorecard evidence are wired together, including canonical
   qualified-accountant golden corpus scenario codes, external ROS/iXBRL validation
   template coverage, source-law source coverage, manual handoff coverage, visual
-  smoke and accountant workbench evidence report references, and the 569/700
+  smoke and accountant workbench evidence report references, and the 574/700
   scorecard total
 - Backend focused release artifact pack verifier and scorecard tests:
   `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~ReleaseArtifactPackVerifier_RequiresExactOperationalEvidenceReports|FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers"`
@@ -444,8 +444,8 @@ As of July 8, 2026:
 - Code implementation is roughly 70-75% complete.
 - Production assurance is roughly 60-65% complete.
 - Overall goal is roughly 63-67% complete, with about one third left.
-- The production scorecard is now 569/700: architecture/documentation 99/100,
-  backend statutory/accounting engine 200/250, frontend accountant workbench 145/200,
+- The production scorecard is now 574/700: architecture/documentation 99/100,
+  backend statutory/accounting engine 200/250, frontend accountant workbench 150/200,
   and security/auth/tenant/platform guardrails 125/150.
 - Architecture/documentation is now scored 99/100 in the production scorecard because
   source-law review, release evidence templates, manual handoff evidence, runbook

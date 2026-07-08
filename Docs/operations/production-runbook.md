@@ -215,9 +215,10 @@ The artifact pack must include `dependency-audit-report.json`,
 `accountant-workbench-evidence-report.json`, and `release-evidence-report.json`.
 The verifier fails if any required report is missing,
 does not have `status: passed`, if supplied release candidate identity is incomplete
-or malformed, or if cross-report checks such as the monitoring smoke correlation id do
-not match. The generated `release-artifact-pack-report.json` records the release commit,
-GitHub Actions run URL, and a SHA-256/byte-size manifest for each required report.
+or malformed, if accountant workbench route acceptance rows are missing, or if
+cross-report checks such as the monitoring smoke correlation id do not match. The
+generated `release-artifact-pack-report.json` records the release commit, GitHub
+Actions run URL, and a SHA-256/byte-size manifest for each required report.
 
 Before completing the visual QA sign-off, verify the CI visual smoke manifest and
 retain the generated evidence report with the screenshot artifact:
@@ -227,6 +228,10 @@ cd frontend
 node scripts\verify-visual-smoke-artifacts.mjs --manifest=D:\accounts-smoke\visual-smoke\visual-smoke-manifest.json --report-path=D:\accounts-smoke\visual-smoke\visual-smoke-evidence-report.json
 node scripts\verify-accountant-workbench-evidence.mjs --visual-report=D:\accounts-smoke\visual-smoke\visual-smoke-evidence-report.json --report-path=D:\accounts-smoke\visual-smoke\accountant-workbench-evidence-report.json
 ```
+
+The accountant workbench evidence report must retain the seven planned route keys,
+expected route text, blocking status and required qualified-accountant route
+acceptance evidence for each workbench route.
 
 For local Windows or Codex workspaces where Next.js cannot spawn child-process workers or cannot clean a stale `.next` directory, use a clean checkout or temporary copy outside the repository and keep the standard `.next` output directory. The app exposes an opt-in worker-thread fallback for this verification path only:
 

@@ -34,10 +34,34 @@ describe("accountant workbench evidence report", () => {
       assert.deepEqual(result.requiredCoverage.workflowStages, ACCOUNTANT_WORKFLOW_STAGES);
       assert.deepEqual(result.requiredCoverage.routeCodes, visualSmokeRoutes.map((route) => route.name));
       assert.deepEqual(result.requiredCoverage.reviewChecks, visualSmokeReviewChecks);
+      assert.equal(result.routeAcceptanceCount, visualSmokeRoutes.length);
+      assert.ok(result.requiredCoverage.expectedTextChecks.includes("route expected accountant decision text"));
+      assert.ok(result.requiredCoverage.routeAcceptanceEvidence.includes("filing-review-qualified-accountant-route-acceptance"));
+      assert.equal(result.requiredCoverage.routeAcceptanceSignOffGate, "qualified-accountant-route-acceptance");
       assert.ok(result.requiredCoverage.evidenceFiles.includes("visual-smoke-evidence-report.json"));
       assert.ok(result.requiredCoverage.evidenceFiles.includes("accountant-workbench-evidence-report.json"));
       assert.equal(result.routeReadiness.find((route) => route.routeName === "filing-review")?.screenshotCount, 4);
-      assert.deepEqual(JSON.parse(await readFile(reportPath, "utf8")).requiredCoverage.themes, ["light", "dark"]);
+      const writtenReport = JSON.parse(await readFile(reportPath, "utf8"));
+      assert.deepEqual(writtenReport.requiredCoverage.themes, ["light", "dark"]);
+      assert.deepEqual(
+        writtenReport.routeAcceptance.find((route) => route.routeName === "production-readiness"),
+        {
+          routeName: "production-readiness",
+          routeKey: "readiness",
+          label: "Production readiness",
+          workflowStages: ["Review", "Filing"],
+          expectedText: "Production Readiness Checklist",
+          requiredAcceptanceEvidence: [
+            "production-readiness-accountant-route-acceptance-note",
+            "production-readiness-visual-smoke-screenshots-reviewed",
+            "production-readiness-qualified-accountant-route-acceptance",
+          ],
+          screenshotReviewEvidence: "production-readiness-light-dark-desktop-mobile-screenshot-review",
+          signOffGate: "qualified-accountant-route-acceptance",
+          reviewStatus: "required-review",
+          blocksRelease: true,
+        },
+      );
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -79,6 +103,26 @@ describe("accountant workbench evidence report", () => {
       await assert.rejects(
         () => verifyAccountantWorkbenchEvidence({ visualReportPath }),
         /route dashboard is missing screenshot coverage dark\/mobile/,
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects visual evidence when route keys drift from the visual smoke plan", async () => {
+    const { verifyAccountantWorkbenchEvidence } = await import("../scripts/verify-accountant-workbench-evidence.mjs");
+    const dir = await mkTempDir();
+    const visualReportPath = path.join(dir, "visual-smoke-evidence-report.json");
+    const report = visualSmokeReport();
+    report.routeCoverage[0].routeKey = "wrong-dashboard-key";
+    report.screenshots[0].routeKey = "wrong-dashboard-key";
+
+    await writeFile(visualReportPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+
+    try {
+      await assert.rejects(
+        () => verifyAccountantWorkbenchEvidence({ visualReportPath }),
+        /route dashboard routeKey must be dashboard, found wrong-dashboard-key/,
       );
     } finally {
       await rm(dir, { recursive: true, force: true });

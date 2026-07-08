@@ -191,7 +191,7 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.ok(parsed.assurancePacket.evidenceItems.includes("production-readiness-report"));
   assert.ok(parsed.assurancePacket.evidenceItems.includes("production-readiness-verification-report"));
   assert.equal(parsed.assurancePacket.releaseBlockers[0], "Qualified accountant sign-off required");
-  assert.equal(parsed.productionScorecard.currentScore, 569);
+  assert.equal(parsed.productionScorecard.currentScore, 574);
   assert.equal(parsed.productionScorecard.targetScore, 700);
   assert.deepEqual(parsed.productionScorecard.categories.map((category) => category.code), [
     "architecture-documentation",
@@ -804,7 +804,7 @@ test("parseProductionReadinessReport rejects scorecard totals that do not match 
 
   assert.throws(
     () => parseProductionReadinessReport(payload),
-    /Invalid production readiness report contract: productionScorecard\.currentScore - expected 569, received 491/,
+    /Invalid production readiness report contract: productionScorecard\.currentScore - expected 574, received 491/,
   );
 });
 
@@ -862,7 +862,7 @@ test("parseProductionReadinessReport rejects release verification manifest that 
 
 function productionScorecard() {
   return {
-    currentScore: 569,
+    currentScore: 574,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete source-law review, named visual QA, monitoring-provider confirmation, manual handoff and qualified-accountant acceptance evidence.",
@@ -908,13 +908,13 @@ function productionScorecard() {
       {
         code: "frontend-accountant-workbench",
         label: "Frontend accountant workbench",
-        currentScore: 145,
+        currentScore: 150,
         targetScore: 200,
         status: "visual-acceptance-required",
         currentEvidence: [
           "Visual smoke plan covers the accountant journey.",
           "visual-smoke-evidence-report.json proves screenshot hash, byte-size and route/theme/viewport coverage.",
-          "accountant-workbench-evidence-report.json proves route workflow-stage and review-check coverage.",
+          "accountant-workbench-evidence-report.json proves route workflow-stage, review-check and qualified-accountant route acceptance coverage.",
         ],
         remainingGaps: ["Complete named visual QA review against the light/dark desktop/mobile screenshot manifest and visual-smoke-evidence-report.json."],
         completionTrackCodes: ["frontend-ui-ux", "frontend-code"],

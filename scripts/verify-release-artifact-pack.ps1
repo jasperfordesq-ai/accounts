@@ -284,13 +284,31 @@ if (-not ($accountantWorkbench.PSObject.Properties.Name -contains "__missing")) 
     if ([int]$accountantWorkbench.screenshotCount -ne 28 -or [int]$accountantWorkbench.expectedScreenshotCount -ne 28) {
         Add-Failure $failures "accountant-workbench-evidence-report.json must cover 28 expected screenshots."
     }
-    foreach ($coverageProperty in @("routeCodes", "routeKeys", "workflowStages", "themes", "viewports", "reviewChecks", "layoutChecks", "evidenceFiles")) {
+    if ([int]$accountantWorkbench.routeAcceptanceCount -ne 7) {
+        Add-Failure $failures "accountant-workbench-evidence-report.json routeAcceptanceCount must be 7."
+    }
+    foreach ($coverageProperty in @("routeCodes", "routeKeys", "workflowStages", "themes", "viewports", "reviewChecks", "layoutChecks", "expectedTextChecks", "routeAcceptanceEvidence", "evidenceFiles")) {
         if ($null -eq $accountantWorkbench.requiredCoverage.$coverageProperty -or @($accountantWorkbench.requiredCoverage.$coverageProperty).Count -eq 0) {
             Add-Failure $failures "accountant-workbench-evidence-report.json requiredCoverage.$coverageProperty must be present."
         }
     }
+    if ([string]$accountantWorkbench.requiredCoverage.routeAcceptanceSignOffGate -ne "qualified-accountant-route-acceptance") {
+        Add-Failure $failures "accountant-workbench-evidence-report.json requiredCoverage.routeAcceptanceSignOffGate must be qualified-accountant-route-acceptance."
+    }
     foreach ($requiredEvidenceFile in @("visual-smoke-manifest.json", "visual-smoke-evidence-report.json", "accountant-workbench-evidence-report.json")) {
         Assert-ArrayContains @($accountantWorkbench.requiredCoverage.evidenceFiles) $requiredEvidenceFile "accountant-workbench-evidence-report.json requiredCoverage.evidenceFiles" $failures
+    }
+    foreach ($route in @($accountantWorkbench.routeAcceptance)) {
+        Assert-NonEmptyString $route.routeName "accountant-workbench-evidence-report.json routeAcceptance.routeName" $failures
+        Assert-NonEmptyString $route.routeKey "accountant-workbench-evidence-report.json routeAcceptance.routeKey" $failures
+        Assert-NonEmptyString $route.expectedText "accountant-workbench-evidence-report.json routeAcceptance.expectedText" $failures
+        Assert-Truthy $route.blocksRelease "accountant-workbench-evidence-report.json routeAcceptance.blocksRelease" $failures
+        if ([string]$route.signOffGate -ne "qualified-accountant-route-acceptance") {
+            Add-Failure $failures "accountant-workbench-evidence-report.json routeAcceptance.signOffGate must be qualified-accountant-route-acceptance."
+        }
+        if (-not (@($route.requiredAcceptanceEvidence) | Where-Object { [string]$_ -like "*qualified-accountant-route-acceptance" })) {
+            Add-Failure $failures "accountant-workbench-evidence-report.json routeAcceptance.requiredAcceptanceEvidence must include qualified-accountant-route-acceptance."
+        }
     }
 }
 
