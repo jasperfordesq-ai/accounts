@@ -649,6 +649,7 @@ function Test-MonitoringEvidence {
         "monitoring-error-routing-report.json",
         "structured-log-report.json",
         "/api/system/monitoring/error-smoke",
+        "Accepted as monitoring-provider confirmation evidence for this release candidate.",
         "No PII or client filing data",
         "Operator signature"
     )) {
@@ -664,7 +665,14 @@ function Test-MonitoringEvidence {
     Assert-UtcTimestampField $Content "Checked at UTC" $context $Failures
     Assert-PositiveIntegerField $Content "JSON log line count" $context $Failures
     Assert-FieldMatchesPattern $Content "Matched monitoring smoke line" "^yes$" "yes" $context $Failures
+    Assert-FieldMatchesPattern $Content "Provider" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real monitoring provider name" $context $Failures
+    Assert-FieldMatchesPattern $Content "Event id" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real provider event id" $context $Failures
+    Assert-FieldMatchesPattern $Content "Correlation id" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real monitoring correlation id" $context $Failures
+    Assert-FieldMatchesPattern $Content "Base URL" "^https://.+" "an HTTPS provider base URL" $context $Failures
+    Assert-FieldMatchesPattern $Content "Provider event URL or reference" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real provider event URL or evidence reference" $context $Failures
     Assert-NoUncheckedBoxes $Content $context $Failures
+    Assert-CheckedDecision $Content "Accepted as monitoring-provider confirmation evidence for this release candidate." $context $Failures
+    Assert-UncheckedDecision $Content "Rejected; monitoring-provider confirmation issues below must be remediated and re-reviewed." $context $Failures
 }
 
 function Test-SourceLawEvidence {

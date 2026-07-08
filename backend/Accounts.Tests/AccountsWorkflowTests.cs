@@ -18386,6 +18386,8 @@ public class AccountsWorkflowTests
         Assert.Contains("/api/system/monitoring/error-smoke", monitoring);
         Assert.Contains("No PII or client filing data", monitoring);
         Assert.Contains("positive integer JSON log line count", monitoring);
+        Assert.Contains("Use real provider, event, correlation, base URL", monitoring);
+        Assert.Contains("Accepted as monitoring-provider confirmation evidence for this release candidate.", monitoring);
         Assert.Contains("Operator signature", monitoring);
     }
 
@@ -18465,6 +18467,12 @@ public class AccountsWorkflowTests
         Assert.Contains("monitoring-error-routing-report.json", script);
         Assert.Contains("structured-log-report.json", script);
         Assert.Contains("Matched monitoring smoke line", script);
+        Assert.Contains("\"Provider\" \"^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+\"", script);
+        Assert.Contains("\"Event id\" \"^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+\"", script);
+        Assert.Contains("\"Correlation id\" \"^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+\"", script);
+        Assert.Contains("\"Base URL\" \"^https://.+\"", script);
+        Assert.Contains("\"Provider event URL or reference\" \"^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+\"", script);
+        Assert.Contains("Accepted as monitoring-provider confirmation evidence for this release candidate.", script);
         Assert.Contains("JSON log line count", script);
         Assert.Contains("Direct CRO submission remains unsupported", script);
         Assert.Contains("Direct ROS submission remains unsupported", script);

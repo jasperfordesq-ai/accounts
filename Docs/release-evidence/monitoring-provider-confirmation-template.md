@@ -17,6 +17,11 @@ Required formats: use the full 40-character commit SHA, the exact
 `https://github.com/.../actions/runs/...` run URL, UTC timestamps ending in `Z`
 or `+00:00`, a positive integer JSON log line count, and `yes` for the matched
 monitoring smoke line.
+Use real provider, event, correlation, base URL, and provider-event evidence
+references. Do not use `accepted`, `none`, `n/a`, `pending`, `todo`, or `tbd`
+as stand-ins for provider evidence. Use the accepted decision only after the
+provider event, structured log correlation, no-PII review, and alert routing path
+are confirmed for the exact release candidate.
 
 ## CI Evidence Values
 
@@ -47,5 +52,10 @@ From `structured-log-report.json`:
 Provider event URL or reference:
 
 Operator notes:
+
+## Decision
+
+- [ ] Accepted as monitoring-provider confirmation evidence for this release candidate.
+- [ ] Rejected; monitoring-provider confirmation issues below must be remediated and re-reviewed.
 
 Operator signature:
