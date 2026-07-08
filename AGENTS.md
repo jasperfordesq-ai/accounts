@@ -69,6 +69,7 @@ Committed and pushed work on `main` includes:
 - `76c9396 Require accepted manual handoff evidence rows`
 - `a3fb293 Require accepted source-law review rows`
 - `a6fd245 Require accepted monitoring provider evidence`
+- `f5dba82 Require visual layout pass evidence`
 
 Backend/accounting-engine progress:
 
@@ -195,11 +196,13 @@ Backend/accounting-engine progress:
   `visual-smoke-evidence-report.json`, proving the visual smoke artifact has the full
   route/theme/viewport matrix plus matching screenshot byte sizes, SHA-256 hashes,
   PNG dimensions, PNG image-data bytes, sampled pixel counts, distinct color buckets,
-  and luminance range before a named human reviewer signs off.
+  luminance range, and per-screenshot passed layout-check results before a named
+  human reviewer signs off.
 - `node scripts/verify-accountant-workbench-evidence.mjs` now emits
   `accountant-workbench-evidence-report.json`, proving each accountant workbench route
-  has workflow-stage, route-key, review-check, theme, viewport, screenshot and
-  qualified-accountant route acceptance evidence before named visual QA sign-off.
+  has workflow-stage, route-key, review-check, theme, viewport, screenshot,
+  per-screenshot layout-check pass evidence and qualified-accountant route acceptance
+  evidence before named visual QA sign-off.
 - `scripts/verify-release-artifact-pack.ps1` now emits a release artifact pack
   manifest with optional release candidate identity plus per-report SHA-256 and
   byte-size evidence, so retained dependency, production safety, monitoring,
@@ -210,7 +213,8 @@ Backend/accounting-engine progress:
   visual evidence packs unless `visual-smoke-evidence-report.json` carries the planned
   desktop/mobile PNG viewport dimensions and every screenshot summary records matching
   width, minimum height, retained PNG image data, sampled pixel count, distinct color
-  diversity, and luminance-range evidence.
+  diversity, luminance-range evidence, and passed console-error, horizontal-overflow
+  and visible-text-overlap layout-check results.
 - `scripts/smoke-production.ps1` now captures `production-readiness-report.json`
   from the live authenticated smoke stack, and CI uploads it as the
   `production-readiness-report` artifact so the exact candidate scorecard,
@@ -264,6 +268,10 @@ Frontend code/design-system progress:
 - The frontend parser now rejects visual QA protocols that omit screenshot nonblank
   pixel diversity evidence, so a release report cannot treat a structurally valid but
   blank PNG as sufficient visual QA proof.
+- Visual smoke and accountant-workbench evidence reports now carry per-screenshot
+  passed layout-check results for browser console errors, page-level horizontal
+  overflow and visible text overlap; release artifact-pack verifiers reject stale
+  visual evidence that omits those pass results.
 - The frontend parser now requires the release verification manifest to include the
   CI machine evidence pack, production smoke, readiness verification, visual smoke,
   release artifact pack, and named manual review rows before rendering readiness data.
@@ -565,6 +573,22 @@ Recent successful local verification includes:
   - `npx.cmd vitest run tests/render/production-readiness-panel.test.tsx tests/render/production-readiness-workbench.test.tsx`
     - 2 passed
   - `npx.cmd tsc --noEmit --incremental false` - passed
+- Frontend visual layout pass evidence checks after `f5dba82`:
+  - PowerShell parser checks for `scripts\verify-release-artifact-pack.ps1` and
+    `scripts\verify-ci-machine-evidence-pack.ps1` - passed
+  - `node --test tests/visual-smoke-artifacts.test.mjs tests/accountant-workbench-evidence.test.mjs tests/visual-smoke-plan.test.mjs`
+    - 17 passed, proving visual-smoke manifests and accountant-workbench evidence
+      reject screenshots without passed console-error, page-overflow and text-overlap
+      layout-check results
+  - `node --test tests/production-readiness-contract.test.mjs` - 49 passed
+  - `node scripts/verify-api-client.mjs` - passed
+  - `npx.cmd vitest run tests/render/production-readiness-panel.test.tsx tests/render/production-readiness-workbench.test.tsx`
+    - 2 passed
+  - `npx.cmd tsc --noEmit --incremental false` - passed
+  - Backend focused scorecard/release-artifact regression:
+    `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers|FullyQualifiedName~ReleaseArtifactPackVerifier_RequiresExactOperationalEvidenceReports"`
+    - 2 passed, proving the 617/700 scorecard and release-pack verifier layout-pass
+      checks are wired together
 - Backend focused scorecard/visual QA tests after adding PNG dimension evidence:
   `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers|FullyQualifiedName~ProductionReadinessReport_DeclaresVisualQaCoverageForAccountantWorkbenchRoutes"`
   - 2 passed, proving the readiness report exposes the 608/700 scorecard and visual
@@ -626,8 +650,8 @@ CI status:
   July 8, 2026.
 - Green jobs: Workflow Hygiene, Production Compose Config, Frontend, Backend,
   Production Stack Smoke, and CI Machine Evidence Pack.
-- The scorecard exposed by the candidate is now 615/700, with backend statutory/accounting
-  engine at 204/250, frontend accountant workbench at 162/200 and
+- The scorecard exposed by the candidate is now 617/700, with backend statutory/accounting
+  engine at 204/250, frontend accountant workbench at 164/200 and
   security/auth/tenant/platform guardrails at 150/150.
   The typed frontend parser and production-readiness verifier both require CI
   machine evidence, production smoke, readiness verification, visual smoke, release
@@ -708,8 +732,8 @@ As of July 8, 2026:
 - Code implementation is roughly 70-75% complete.
 - Production assurance is roughly 60-65% complete.
 - Overall goal is roughly 63-67% complete, with about one third left.
-- The production scorecard is now 615/700: architecture/documentation 99/100,
-  backend statutory/accounting engine 204/250, frontend accountant workbench 162/200,
+- The production scorecard is now 617/700: architecture/documentation 99/100,
+  backend statutory/accounting engine 204/250, frontend accountant workbench 164/200,
   and security/auth/tenant/platform guardrails 150/150.
 - Architecture/documentation is now scored 99/100 in the production scorecard because
   source-law review, release evidence templates, manual handoff evidence, runbook
