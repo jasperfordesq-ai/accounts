@@ -576,6 +576,12 @@ function Test-ManualHandoffEvidence {
     Assert-UncheckedDecision $Content "Rejected; manual handoff issues below must be remediated and re-reviewed." $context $Failures
     Assert-CompletedTableRows $Content $requiredManualHandoffScenarioCodes $context $Failures
     Assert-CompletedTableRows $Content $requiredManualHandoffPathCodes $context $Failures
+    Assert-CompletedTableColumnMatches $Content $requiredManualHandoffScenarioCodes 1 "Auditor evidence" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real signed auditor evidence reference" $context $Failures
+    Assert-CompletedTableColumnMatches $Content $requiredManualHandoffScenarioCodes 2 "Manual handoff note" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real manual handoff note reference" $context $Failures
+    Assert-CompletedTableColumnMatches $Content $requiredManualHandoffScenarioCodes 3 "Filing readiness snapshot" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real filing readiness snapshot reference" $context $Failures
+    Assert-CompletedTableColumnMatches $Content $requiredManualHandoffScenarioCodes 4 "Decision" "^(accepted|accepted\b.*)$" "accepted for this release candidate" $context $Failures
+    Assert-CompletedTableColumnMatches $Content $requiredManualHandoffPathCodes 1 "Release evidence reference" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real unsupported-path evidence reference" $context $Failures
+    Assert-CompletedTableColumnMatches $Content $requiredManualHandoffPathCodes 2 "Reviewer decision" "^(accepted|accepted\b.*)$" "accepted" $context $Failures
 }
 
 function Test-ExternalRosIxbrlEvidence {

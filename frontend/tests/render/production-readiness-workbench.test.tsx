@@ -20,13 +20,13 @@ describe("ProductionReadinessWorkbench", () => {
     expectText("3 companies");
     expectText("4 periods");
     expect(screen.getByRole("heading", { name: "Production scorecard" })).toBeInTheDocument();
-    expectText("612/700");
+    expectText("613/700");
     expectText("Architecture and documentation");
     expectText("Backend statutory/accounting engine");
     expectText("Frontend accountant workbench");
     expectText("Security/auth/tenant/platform guardrails");
     expectText("99 / 100");
-    expectText("202 / 250");
+    expectText("203 / 250");
     expectText("162 / 200");
     expectText("149 / 150");
     expectText(/Next score gate/);
@@ -284,7 +284,7 @@ describe("ProductionReadinessWorkbench", () => {
 
 function productionScorecard(): ProductionReadinessReport["productionScorecard"] {
   return {
-    currentScore: 612,
+    currentScore: 613,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete source-law review, named visual QA, monitoring-provider confirmation, manual handoff and qualified-accountant acceptance evidence.",
@@ -307,7 +307,7 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
       {
         code: "backend-statutory-accounting-engine",
         label: "Backend statutory/accounting engine",
-        currentScore: 202,
+        currentScore: 203,
         targetScore: 250,
         status: "qualified-accountant-review-required",
         currentEvidence: [
@@ -316,7 +316,7 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
           "verify-release-evidence.ps1 rejects qualified-accountant acceptance unless every golden scenario decision and route evidence acceptance row is explicitly accepted.",
           "External ROS/iXBRL validation evidence has template and verifier checks for real references, accepted/remediated warnings and accepted decisions.",
           "Source-law review evidence has template and verifier coverage for every monitored source.",
-          "Manual handoff acceptance evidence has template and verifier coverage.",
+          "Manual handoff acceptance evidence has template and verifier checks for real evidence references and accepted reviewer decisions.",
           "CI retains production-readiness-report.json from the live smoke stack with source-law, golden corpus, scorecard and release blocker evidence.",
         ],
         remainingGaps: ["Run and retain verified source-law, qualified-accountant acceptance, external ROS/iXBRL validation, and manual handoff evidence across every canonical golden corpus scenario."],

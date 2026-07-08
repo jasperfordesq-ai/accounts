@@ -17,6 +17,11 @@ mandatory before anyone relies on generated outputs for a manual handoff case.
 Required formats: use the full 40-character commit SHA, the exact
 `https://github.com/.../actions/runs/...` run URL, and UTC timestamps ending in
 `Z` or `+00:00`.
+Use real retained evidence references in the scenario and unsupported-path
+tables; do not use `accepted`, `none`, `n/a`, `pending`, `todo`, or `tbd` as
+stand-ins for evidence references. Use `accepted` in the `Decision` and
+`Reviewer decision` columns only when the reviewer has accepted the retained
+evidence and confirmed the path remains blocked to manual professional ownership.
 
 ## Required Evidence Pack
 

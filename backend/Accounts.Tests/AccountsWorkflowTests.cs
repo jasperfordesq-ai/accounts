@@ -18373,6 +18373,8 @@ public class AccountsWorkflowTests
         Assert.Contains("direct-cro-ros-submission", manualHandoff);
         Assert.Contains("Reviewer signature", manualHandoff);
         Assert.Contains("40-character commit SHA", manualHandoff);
+        Assert.Contains("Use real retained evidence references", manualHandoff);
+        Assert.Contains("Use `accepted` in the `Decision` and", manualHandoff);
 
         var monitoring = File.ReadAllText(monitoringPath);
         Assert.Contains("monitoring-error-routing-smoke", monitoring);
@@ -18469,6 +18471,11 @@ public class AccountsWorkflowTests
         Assert.Contains("manualHandoffScenarioCodes", script);
         Assert.Contains("manualHandoffPathCodes", script);
         Assert.Contains("Accepted as manual handoff evidence for this release candidate.", script);
+        Assert.Contains("\"Auditor evidence\" \"^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+\"", script);
+        Assert.Contains("\"Manual handoff note\" \"^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+\"", script);
+        Assert.Contains("\"Filing readiness snapshot\" \"^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+\"", script);
+        Assert.Contains("\"Release evidence reference\" \"^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+\"", script);
+        Assert.Contains("\"Reviewer decision\" \"^(accepted|accepted\\b.*)$\"", script);
         Assert.Contains("audit-required-without-auditor-report", script);
         Assert.Contains("No PII or client filing data", script);
         Assert.Contains("Accepted for this release candidate.", script);

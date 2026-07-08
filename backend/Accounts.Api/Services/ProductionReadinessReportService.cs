@@ -810,7 +810,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             Category(
                 "backend-statutory-accounting-engine",
                 "Backend statutory/accounting engine",
-                202,
+                203,
                 250,
                 "qualified-accountant-review-required",
                 [
@@ -821,7 +821,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "scripts/verify-release-evidence.ps1 now rejects qualified-accountant acceptance unless every golden scenario decision and every route evidence acceptance row is explicitly accepted.",
                     "External ROS/iXBRL validation evidence now has a checked-in template and the release verifier rejects rows without real references, accepted/remediated warning status and accepted scenario decisions.",
                     "Source-law review evidence now has a checked-in template and release verifier coverage for every monitored CRO, Revenue, FRC and Charities Regulator source.",
-                    "Manual handoff acceptance now has a checked-in template and release verifier coverage for the audit-required golden scenario and unsupported path codes.",
+                    "Manual handoff acceptance now has a checked-in template and the release verifier rejects audit-required or unsupported-path rows without real evidence references and accepted reviewer decisions.",
                     "CI now retains production-readiness-report.json from the live smoke stack, proving the exact source-law snapshot, golden corpus, scorecard and release blockers exposed by the candidate.",
                     "scripts/verify-production-readiness-report.ps1 emits production-readiness-verification-report.json and proves the captured live report has complete source-law, golden-corpus, scorecard, blocker, visual-QA and release-manifest coverage."
                 ],
