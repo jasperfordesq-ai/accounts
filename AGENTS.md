@@ -66,6 +66,7 @@ Committed and pushed work on `main` includes:
 - `a7cc5cc Require visual QA metric signoff evidence`
 - `923e163 Require explicit accountant acceptance rows`
 - `9c32438 Require accepted external ROS evidence rows`
+- `76c9396 Require accepted manual handoff evidence rows`
 
 Backend/accounting-engine progress:
 
@@ -171,6 +172,11 @@ Backend/accounting-engine progress:
   corpus scenario row to record a real external validation reference, a SHA-256
   artifact hash, accepted/remediated warnings or errors, and an explicit accepted
   scenario decision.
+- The manual handoff acceptance template and verifier now require the
+  `medium-audit-required` scenario to carry retained auditor evidence, manual
+  handoff note, filing readiness snapshot and accepted decision references, and
+  every unsupported path row to carry a real blocking-evidence reference plus an
+  accepted reviewer decision.
 - `scripts/verify-no-direct-filing-submission.ps1` now emits
   `no-direct-filing-submission-report.json`, proving release candidates still have no
   outbound CRO/ROS submission client or submit route and only record external filing
@@ -490,6 +496,25 @@ Recent successful local verification includes:
   - `npx.cmd vitest run tests/render/production-readiness-panel.test.tsx tests/render/production-readiness-workbench.test.tsx`
     - 2 passed
   - `npx.cmd tsc --noEmit --incremental false` - passed
+- Release evidence verifier manual handoff accepted-row checks:
+  - PowerShell parser check for `scripts\verify-release-evidence.ps1` - passed
+  - Temporary completed copies of all six release-evidence templates passed
+    `scripts\verify-release-evidence.ps1` with real auditor-report, manual-handoff
+    note, filing-readiness snapshot and unsupported-path blocker references plus
+    explicit `accepted` decisions
+  - A copied manual handoff template with a `pending` manual handoff note and
+    `pending` scenario decision failed as expected
+- Backend focused release evidence/scorecard tests after adding accepted manual
+  handoff rows:
+  `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~ReleaseEvidenceTemplates_CoverHumanVisualAccountantAndProviderSignoffs|FullyQualifiedName~ReleaseEvidenceVerifier_BlocksIncompleteHumanSignoffEvidence|FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers"`
+  - 3 passed, proving the manual handoff template, release evidence verifier,
+  accepted-row checks, and 613/700 production scorecard are wired together
+- Frontend scorecard contract checks after adding accepted manual handoff rows:
+  - `node --test tests/production-readiness-contract.test.mjs` - 49 passed
+  - `node scripts/verify-api-client.mjs` - passed
+  - `npx.cmd vitest run tests/render/production-readiness-panel.test.tsx tests/render/production-readiness-workbench.test.tsx`
+    - 2 passed
+  - `npx.cmd tsc --noEmit --incremental false` - passed
 - Backend focused scorecard/visual QA tests after adding PNG dimension evidence:
   `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers|FullyQualifiedName~ProductionReadinessReport_DeclaresVisualQaCoverageForAccountantWorkbenchRoutes"`
   - 2 passed, proving the readiness report exposes the 608/700 scorecard and visual
@@ -551,8 +576,8 @@ CI status:
   July 8, 2026.
 - Green jobs: Workflow Hygiene, Production Compose Config, Frontend, Backend,
   Production Stack Smoke, and CI Machine Evidence Pack.
-- The scorecard exposed by the candidate is now 612/700, with backend statutory/accounting
-  engine at 202/250, frontend accountant workbench at 162/200 and
+- The scorecard exposed by the candidate is now 613/700, with backend statutory/accounting
+  engine at 203/250, frontend accountant workbench at 162/200 and
   security/auth/tenant/platform guardrails at 149/150.
   The typed frontend parser and production-readiness verifier both require CI
   machine evidence, production smoke, readiness verification, visual smoke, release
@@ -605,7 +630,9 @@ Highest-priority next steps:
    validation evidence is still missing.
 5. Complete and retain manual handoff acceptance evidence for the `medium-audit-required`
    scenario and unsupported path codes before relying on audit-required or unsupported
-   outputs.
+   outputs; the template and verifier now require real retained evidence references
+   and accepted reviewer decisions, but real named manual handoff evidence is still
+   missing.
 6. Record qualified-accountant acceptance evidence for outputs, gates, wording,
    legal/source evidence, visual workflow, and manual handoff behavior.
 7. Promote CI monitoring smoke into release-grade evidence by confirming the controlled
@@ -629,8 +656,8 @@ As of July 8, 2026:
 - Code implementation is roughly 70-75% complete.
 - Production assurance is roughly 60-65% complete.
 - Overall goal is roughly 63-67% complete, with about one third left.
-- The production scorecard is now 612/700: architecture/documentation 99/100,
-  backend statutory/accounting engine 202/250, frontend accountant workbench 162/200,
+- The production scorecard is now 613/700: architecture/documentation 99/100,
+  backend statutory/accounting engine 203/250, frontend accountant workbench 162/200,
   and security/auth/tenant/platform guardrails 149/150.
 - Architecture/documentation is now scored 99/100 in the production scorecard because
   source-law review, release evidence templates, manual handoff evidence, runbook
