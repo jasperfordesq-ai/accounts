@@ -5,7 +5,12 @@ import os from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
 import { deflateSync } from "node:zlib";
-import { visualSmokeLayoutChecks, visualSmokeViewports } from "../scripts/visual-smoke-plan.mjs";
+import {
+  MIN_VISUAL_SMOKE_CONTRAST_RATIO,
+  visualSmokeContrastCheck,
+  visualSmokeLayoutChecks,
+  visualSmokeViewports,
+} from "../scripts/visual-smoke-plan.mjs";
 
 describe("visual smoke artifact evidence", () => {
   it("records byte size and sha256 for captured screenshots", async () => {
@@ -173,6 +178,9 @@ describe("visual smoke artifact evidence", () => {
       assert.equal(result.totalBytes, screenshots.reduce((sum, screenshot) => sum + screenshot.byteSize, 0));
       assert.equal(result.layoutChecksPassed, true);
       assert.equal(result.layoutCheckResultCount, screenshots.length * visualSmokeLayoutChecks.length);
+      assert.equal(result.themeContrastChecksPassed, true);
+      assert.equal(result.contrastCheckResultCount, screenshots.length);
+      assert.equal(result.minimumContrastRatio, MIN_VISUAL_SMOKE_CONTRAST_RATIO);
       assert.equal(result.routeCoverage.find((route) => route.routeName === "dashboard")?.screenshotCount, 4);
       assert.equal(result.screenshots.length, 28);
       assert.equal(result.screenshots[0].imageWidth, 1440);
@@ -183,7 +191,31 @@ describe("visual smoke artifact evidence", () => {
         result.screenshots[0].layoutCheckResults.map((item) => `${item.check}:${item.status}`),
         visualSmokeLayoutChecks.map((check) => `${check}:passed`),
       );
+      assert.equal(result.screenshots[0].themeContrastResult.check, visualSmokeContrastCheck);
+      assert.equal(result.screenshots[0].themeContrastResult.minimumContrastRatio, MIN_VISUAL_SMOKE_CONTRAST_RATIO);
       assert.equal(JSON.parse(await readFile(reportPath, "utf8")).status, "passed");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects manifest screenshots without passed theme contrast results", async () => {
+    const { verifyVisualSmokeManifest, withScreenshotEvidence } = await import("../scripts/visual-smoke-artifacts.mjs");
+    const dir = await mkTempDir();
+    const manifestPath = path.join(dir, "visual-smoke-manifest.json");
+
+    const screenshots = await completeScreenshots(dir, withScreenshotEvidence);
+    await writeManifest(manifestPath, screenshots.map((screenshot, index) => (
+      index === 0
+        ? { ...screenshot, themeContrastResult: { ...screenshot.themeContrastResult, minimumContrastRatio: 1.5 } }
+        : screenshot
+    )));
+
+    try {
+      await assert.rejects(
+        () => verifyVisualSmokeManifest(manifestPath),
+        /visual smoke screenshot dashboard-light-desktop\.png themeContrastResult\.minimumContrastRatio must be at least 3/,
+      );
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -269,7 +301,13 @@ describe("visual smoke artifact evidence", () => {
       manifestPath,
       screenshots,
       undefined,
-      ["visual-smoke-evidence-report.json", "screenshot SHA-256 checksums", "screenshot PNG dimensions", "screenshot nonblank pixel diversity evidence"],
+      [
+        "visual-smoke-evidence-report.json",
+        "screenshot SHA-256 checksums",
+        "screenshot PNG dimensions",
+        "screenshot nonblank pixel diversity evidence",
+        "per-screenshot automated theme contrast smoke evidence",
+      ],
     );
 
     try {
@@ -322,6 +360,7 @@ async function writeManifest(manifestPath, screenshots, routeAudits, requiredEvi
   "screenshot SHA-256 checksums",
   "screenshot PNG dimensions",
   "screenshot nonblank pixel diversity evidence",
+  "per-screenshot automated theme contrast smoke evidence",
 ]) {
   const {
     expectedVisualSmokeRouteAudits,

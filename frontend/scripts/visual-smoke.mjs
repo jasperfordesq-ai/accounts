@@ -6,6 +6,8 @@ import { findOverlappingTextBlocks, formatLayoutIssues } from "./visual-smoke-la
 import {
   expectedVisualSmokeManifest,
   expectedVisualSmokeRouteAudits,
+  MIN_VISUAL_SMOKE_CONTRAST_RATIO,
+  passedVisualSmokeContrastResult,
   passedVisualSmokeLayoutResults,
   visualSmokeLayoutChecks,
   visualSmokeRoutes,
@@ -477,6 +479,195 @@ async function checkNoTextOverlap(page, routeName) {
   }
 }
 
+async function checkThemeContrast(page, routeName) {
+  const result = await page.evaluate((minimumContrastRatio) => {
+    const root = document.querySelector("main");
+    if (!root) {
+      return { sampledTextCount: 0, minimumContrastRatio: 0, failures: ["missing main element"] };
+    }
+
+    const samples = [];
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode(node) {
+        const text = normalizeText(node.textContent || "");
+        if (text.length < 2) return NodeFilter.FILTER_REJECT;
+
+        const element = node.parentElement;
+        if (!element || !isVisiblyRendered(element)) return NodeFilter.FILTER_REJECT;
+        if (["SCRIPT", "STYLE", "NOSCRIPT", "SVG"].includes(element.tagName)) return NodeFilter.FILTER_REJECT;
+
+        return NodeFilter.FILTER_ACCEPT;
+      },
+    });
+
+    while (walker.nextNode()) {
+      const node = walker.currentNode;
+      const element = node.parentElement;
+      if (!element) continue;
+
+      const text = normalizeText(node.textContent || "");
+      const foreground = parseCssColor(window.getComputedStyle(element).color);
+      const background = effectiveBackgroundFor(element);
+      if (!foreground || !background) continue;
+
+      const ratio = contrastRatio(composite(foreground, background), background);
+      samples.push({
+        label: labelFor(element, text),
+        ratio,
+        text: previewText(text),
+      });
+    }
+
+    for (const element of Array.from(root.querySelectorAll("input, textarea, select"))) {
+      if (!isVisiblyRendered(element)) continue;
+      const text = controlTextFor(element);
+      if (text.length < 2) continue;
+
+      const style = window.getComputedStyle(element);
+      const foreground = parseCssColor(style.color);
+      const background = effectiveBackgroundFor(element);
+      if (!foreground || !background) continue;
+
+      const ratio = contrastRatio(composite(foreground, background), background);
+      samples.push({
+        label: labelFor(element, text),
+        ratio,
+        text: previewText(text),
+      });
+    }
+
+    const failures = samples
+      .filter((sample) => sample.ratio < minimumContrastRatio)
+      .sort((a, b) => a.ratio - b.ratio)
+      .slice(0, 8)
+      .map((sample) => `${sample.label} ratio=${sample.ratio.toFixed(2)} text="${sample.text}"`);
+
+    return {
+      sampledTextCount: samples.length,
+      minimumContrastRatio: samples.length === 0
+        ? 0
+        : Number(Math.min(...samples.map((sample) => sample.ratio)).toFixed(2)),
+      failures,
+    };
+
+    function effectiveBackgroundFor(element) {
+      let background = { r: 255, g: 255, b: 255, a: 1 };
+      const chain = [];
+      for (let current = element; current; current = current.parentElement) {
+        chain.push(current);
+        if (current === document.documentElement) break;
+      }
+
+      for (const current of chain.reverse()) {
+        const style = window.getComputedStyle(current);
+        const color = parseCssColor(style.backgroundColor);
+        if (color && color.a > 0) {
+          background = composite(color, background);
+        }
+      }
+
+      return background;
+    }
+
+    function composite(foreground, background) {
+      if (foreground.a >= 1) return { r: foreground.r, g: foreground.g, b: foreground.b, a: 1 };
+      const alpha = foreground.a;
+      return {
+        r: Math.round(foreground.r * alpha + background.r * (1 - alpha)),
+        g: Math.round(foreground.g * alpha + background.g * (1 - alpha)),
+        b: Math.round(foreground.b * alpha + background.b * (1 - alpha)),
+        a: 1,
+      };
+    }
+
+    function contrastRatio(first, second) {
+      const lighter = Math.max(relativeLuminance(first), relativeLuminance(second));
+      const darker = Math.min(relativeLuminance(first), relativeLuminance(second));
+      return (lighter + 0.05) / (darker + 0.05);
+    }
+
+    function relativeLuminance(color) {
+      const channel = (value) => {
+        const normalized = value / 255;
+        return normalized <= 0.03928
+          ? normalized / 12.92
+          : ((normalized + 0.055) / 1.055) ** 2.4;
+      };
+      return 0.2126 * channel(color.r) + 0.7152 * channel(color.g) + 0.0722 * channel(color.b);
+    }
+
+    function parseCssColor(value) {
+      const match = String(value).match(/^rgba?\(([^)]+)\)$/);
+      if (!match) return null;
+
+      const normalized = match[1]
+        .replace(/\s*\/\s*/g, " ")
+        .replace(/,/g, " ");
+      const parts = normalized.split(/\s+/).filter(Boolean);
+      if (parts.length < 3) return null;
+
+      return {
+        r: Number.parseFloat(parts[0]),
+        g: Number.parseFloat(parts[1]),
+        b: Number.parseFloat(parts[2]),
+        a: parts.length >= 4 ? Number.parseFloat(parts[3]) : 1,
+      };
+    }
+
+    function isVisiblyRendered(element) {
+      const closedDetails = element.closest("details:not([open])");
+      if (closedDetails && !element.closest("summary")) return false;
+      if (element.closest("[aria-hidden='true'], [hidden], [inert], [data-inert='true']")) return false;
+      const style = window.getComputedStyle(element);
+      if (style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0) return false;
+      const rect = element.getBoundingClientRect();
+      return rect.width > 1 && rect.height > 1;
+    }
+
+    function controlTextFor(element) {
+      if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+        return normalizeText(element.value || element.placeholder || "");
+      }
+
+      if (element instanceof HTMLSelectElement) {
+        return normalizeText(element.selectedOptions[0]?.textContent ?? element.value);
+      }
+
+      return "";
+    }
+
+    function labelFor(element, text) {
+      const tag = element.tagName.toLowerCase();
+      const id = element.id ? `#${element.id}` : "";
+      const role = element.getAttribute("role");
+      const roleLabel = role ? `[role="${role}"]` : "";
+      return `${tag}${id}${roleLabel} "${previewText(text)}"`;
+    }
+
+    function normalizeText(value) {
+      return value.replace(/\s+/g, " ").trim();
+    }
+
+    function previewText(value) {
+      const normalized = normalizeText(value);
+      return normalized.length > 40 ? `${normalized.slice(0, 39)}...` : normalized;
+    }
+  }, MIN_VISUAL_SMOKE_CONTRAST_RATIO);
+
+  if (result.sampledTextCount <= 0) {
+    throw new Error(`${routeName} had no visible text samples for theme contrast smoke evidence.`);
+  }
+
+  if (result.failures.length > 0) {
+    throw new Error(`${routeName} has low-contrast visible text:\n${result.failures.join("\n")}`);
+  }
+
+  return passedVisualSmokeContrastResult({
+    sampledTextCount: result.sampledTextCount,
+    minimumContrastRatio: result.minimumContrastRatio,
+  });
+}
+
 async function captureRoute({ page, routeName, href, expectedText, outputPath, openFilingTab }) {
   const routeErrors = [];
   const onConsole = (message) => {
@@ -507,13 +698,17 @@ async function captureRoute({ page, routeName, href, expectedText, outputPath, o
     await expect(mainText(page, expectedText)).toBeVisible({ timeout: 30_000 });
     await checkNoPageOverflow(page, routeName);
     await checkNoTextOverlap(page, routeName);
+    const themeContrastResult = await checkThemeContrast(page, routeName);
     await page.screenshot({ path: outputPath, fullPage: true });
 
     if (routeErrors.length > 0) {
       throw new Error(`${routeName} emitted browser errors:\n${routeErrors.join("\n")}`);
     }
 
-    return passedVisualSmokeLayoutResults();
+    return {
+      layoutCheckResults: passedVisualSmokeLayoutResults(),
+      themeContrastResult,
+    };
   } finally {
     page.off("console", onConsole);
     page.off("pageerror", onPageError);
@@ -551,7 +746,7 @@ async function run() {
         for (const spec of routeSpecs) {
           const fileName = `${safeName(spec.name)}-${theme}-${viewport.name}.png`;
           const outputPath = path.join(outputDir, fileName);
-          const layoutCheckResults = await captureRoute({
+          const smokeCheckResults = await captureRoute({
             page,
             routeName: `${spec.name}/${theme}/${viewport.name}`,
             href: toAbsoluteUrl(baseUrl, spec.href),
@@ -570,7 +765,8 @@ async function run() {
             openFilingTab: spec.openFilingTab,
             reviewStatus: "required-review",
             layoutChecks: visualSmokeLayoutChecks,
-            layoutCheckResults,
+            layoutCheckResults: smokeCheckResults.layoutCheckResults,
+            themeContrastResult: smokeCheckResults.themeContrastResult,
           }));
         }
 

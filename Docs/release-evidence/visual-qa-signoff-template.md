@@ -15,16 +15,17 @@ artifact before real CRO or Revenue filing use.
 - Minimum screenshot pixel sample count:
 - Minimum sampled distinct color count:
 - Minimum screenshot luminance range:
+- Minimum automated contrast ratio:
 - Reviewer name:
 - Reviewer role:
 - Review date/time UTC:
 
 Required formats: use the full 40-character commit SHA, the exact
 `https://github.com/.../actions/runs/...` run URL, and UTC timestamps ending in
-`Z` or `+00:00`. The four minimum visual evidence fields must be positive
+`Z` or `+00:00`. The first four minimum visual evidence fields must be positive
 integers copied from the retained `visual-smoke-evidence-report.json`; sampled
-distinct color count must be at least `4`, and luminance range must be at least
-`10`.
+distinct color count must be at least `4`, luminance range must be at least
+`10`, and minimum automated contrast ratio must be at least `3.0`.
 
 ## Required Artifact Checks
 
@@ -37,7 +38,8 @@ distinct color count must be at least `4`, and luminance range must be at least
 - [ ] Screenshot hashes and byte sizes match the manifest.
 - [ ] Evidence report status is `passed` and covers all route/theme/viewport combinations.
 - [ ] Evidence report includes screenshot nonblank pixel diversity evidence for every screenshot.
-- [ ] Every screenshot summary includes `pngIdatByteSize`, `pixelSampleCount`, `sampledDistinctColorCount`, and `luminanceRange`.
+- [ ] Evidence report includes passed automated `theme-contrast` smoke evidence for every screenshot.
+- [ ] Every screenshot summary includes `pngIdatByteSize`, `pixelSampleCount`, `sampledDistinctColorCount`, `luminanceRange`, and `themeContrastResult.minimumContrastRatio`.
 - [ ] No screenshot is blank, truncated, low-information, or obviously stale.
 
 ## Human Visual Review Scope

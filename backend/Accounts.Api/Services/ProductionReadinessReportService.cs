@@ -840,17 +840,17 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             Category(
                 "frontend-accountant-workbench",
                 "Frontend accountant workbench",
-                164,
+                166,
                 200,
                 "visual-acceptance-required",
                 [
                     "Production readiness, dashboard, company, period, filing review, financial statements and workbench preview routes are in the visual smoke plan.",
                     "Shared workbench primitives and route-level render tests cover the main accountant journey.",
                     "Dense tables, workflow rails, blocker summaries and permission-denied states are surfaced in the workbench.",
-                    "node scripts/verify-visual-smoke-artifacts.mjs now writes visual-smoke-evidence-report.json covering screenshot hashes, byte sizes, PNG dimensions, nonblank pixel diversity, per-screenshot layout-check pass results and route/theme/viewport completeness before human review.",
-                    "Docs/release-evidence/visual-qa-signoff-template.md and scripts/verify-release-evidence.ps1 now require named reviewers to record the visual smoke nonblank pixel metrics before visual QA evidence can pass.",
+                    "node scripts/verify-visual-smoke-artifacts.mjs now writes visual-smoke-evidence-report.json covering screenshot hashes, byte sizes, PNG dimensions, nonblank pixel diversity, per-screenshot layout-check pass results, automated theme-contrast smoke results and route/theme/viewport completeness before human review.",
+                    "Docs/release-evidence/visual-qa-signoff-template.md and scripts/verify-release-evidence.ps1 now require named reviewers to record the visual smoke nonblank pixel and contrast metrics before visual QA evidence can pass.",
                     "node scripts/verify-accountant-workbench-evidence.mjs now writes accountant-workbench-evidence-report.json proving route, workflow-stage, theme, viewport, layout-check and review-check coverage.",
-                    "scripts/verify-release-artifact-pack.ps1 and scripts/verify-ci-machine-evidence-pack.ps1 reject visual evidence unless every screenshot reports passed console-error, horizontal-overflow and visible-text-overlap layout checks.",
+                    "scripts/verify-release-artifact-pack.ps1 and scripts/verify-ci-machine-evidence-pack.ps1 reject visual evidence unless every screenshot reports passed console-error, horizontal-overflow, visible-text-overlap and automated theme-contrast smoke checks.",
                     "accountant-workbench-evidence-report.json now includes route acceptance rows with stable route keys, expected decision text, blocking status and qualified-accountant route acceptance evidence for every workbench route.",
                     "Frontend parser invariants now require the CI machine evidence pack, production smoke, readiness verification, visual smoke and manual release-verification rows before rendering readiness data."
                 ],
@@ -881,7 +881,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "CI runs scripts/verify-ci-machine-evidence-pack.ps1 and retains ci-machine-evidence-pack-report.json with exact commit/run identity plus SHA-256 inventory for dependency, safety, monitoring, structured log, backup/restore, no-direct, readiness and visual/workbench evidence.",
                     "scripts/verify-production-readiness-report.ps1 now requires default-CI and manual release manifest rows, including the no-direct CRO/ROS control, CI machine evidence pack and release artifact pack, before accepting a captured readiness report.",
                     "scripts/verify-release-artifact-pack.ps1 now rejects release packs unless the retained production-readiness-verification-report.json proves every required default-CI and manual release manifest row.",
-                    "scripts/verify-release-artifact-pack.ps1 and scripts/verify-ci-machine-evidence-pack.ps1 now reject visual evidence packs unless visual-smoke-evidence-report.json carries planned PNG viewport dimensions and passed layout-check results for every screenshot.",
+                    "scripts/verify-release-artifact-pack.ps1 and scripts/verify-ci-machine-evidence-pack.ps1 now reject visual evidence packs unless visual-smoke-evidence-report.json carries planned PNG viewport dimensions, passed layout-check results and automated theme-contrast smoke results for every screenshot.",
                     "scripts/verify-release-evidence.ps1 now rejects completed human evidence when release candidate identity, UTC timestamps, SHA-256 digests, external iXBRL artifact hashes, or monitoring log confirmation fields are malformed.",
                     "scripts/verify-release-evidence.ps1 emits a consistent releaseCandidate identity for all six human evidence templates, and scripts/verify-release-artifact-pack.ps1 rejects packs whose release-evidence-report.json identity does not match the pack CommitSha and GitHubActionsRunUrl.",
                     "scripts/verify-release-evidence.ps1 now emits SHA-256/byte-size manifest entries for all six human release-evidence templates, and scripts/verify-release-artifact-pack.ps1 requires those completed templates to be retained in the pack with matching hashes.",
@@ -3677,6 +3677,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 "screenshot SHA-256 checksums",
                 "screenshot PNG dimensions",
                 "screenshot nonblank pixel diversity evidence",
+                "per-screenshot automated theme contrast smoke evidence",
                 "route audit summary",
                 "named visual QA reviewer sign-off"
             ]);

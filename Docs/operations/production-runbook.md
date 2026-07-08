@@ -326,7 +326,7 @@ The HTTPS smoke path also verifies that the login response sets the `accounts_se
 8. Run `scripts\verify-no-direct-filing-submission.ps1` and retain `no-direct-filing-submission-report.json`.
 9. Run `scripts\verify-production-readiness-report.ps1 -ReportPath D:\accounts-smoke\production-readiness-report.json -EvidencePath D:\accounts-smoke\production-readiness-verification-report.json` and retain `production-readiness-verification-report.json`.
 10. Complete `Docs/release-evidence/source-law-review-template.md` against the production readiness source-law snapshot, source-law review ledger, and current CRO, Revenue, FRC, and Charities Regulator pages.
-11. Complete `Docs/release-evidence/visual-qa-signoff-template.md` using the CI `visual-smoke-screenshots` artifact, `visual-smoke-manifest.json`, `visual-smoke-evidence-report.json`, and the retained nonblank pixel metric minima.
+11. Complete `Docs/release-evidence/visual-qa-signoff-template.md` using the CI `visual-smoke-screenshots` artifact, `visual-smoke-manifest.json`, `visual-smoke-evidence-report.json`, and the retained nonblank pixel plus automated contrast metric minima.
 12. Complete `Docs/release-evidence/external-ros-ixbrl-validation-template.md` using external ROS/iXBRL validation references for the exact generated artifact hashes.
 13. Complete `Docs/release-evidence/monitoring-provider-confirmation-template.md` using the CI monitoring and structured-log artifacts plus the real provider event.
 14. Complete `Docs/release-evidence/qualified-accountant-acceptance-template.md` with a named qualified accountant before real filing preparation is used.

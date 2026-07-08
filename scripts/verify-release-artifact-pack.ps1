@@ -131,6 +131,8 @@ function Assert-VisualSmokeDimensionEvidence {
         "page-horizontal-overflow",
         "visible-text-overlap"
     )
+    $expectedContrastCheck = "theme-contrast"
+    $minimumContrastRatio = [decimal]3.0
     $viewportDimensions = Get-JsonProperty $VisualSmoke @("viewportDimensions")
     if ($null -eq $viewportDimensions -or @($viewportDimensions).Count -eq 0) {
         Add-Failure $Failures "visual-smoke-evidence-report.json viewportDimensions must be present."
@@ -174,6 +176,7 @@ function Assert-VisualSmokeDimensionEvidence {
         $luminanceRange = Get-JsonProperty $screenshot @("luminanceRange")
         $pngIdatByteSize = Get-JsonProperty $screenshot @("pngIdatByteSize")
         $layoutCheckResults = @(Get-JsonProperty $screenshot @("layoutCheckResults"))
+        $themeContrastResult = Get-JsonProperty $screenshot @("themeContrastResult")
 
         if ($null -eq $imageWidth -or [int]$imageWidth -ne [int]$expected.width) {
             Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.imageWidth must match planned viewport width."
@@ -207,6 +210,28 @@ function Assert-VisualSmokeDimensionEvidence {
                 Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.layoutCheckResults must include $layoutCheck."
             } elseif ([string](Get-JsonProperty $layoutResult @("status")) -ne "passed") {
                 Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.layoutCheckResults.$layoutCheck status must be passed."
+            }
+        }
+        if ($null -eq $themeContrastResult) {
+            Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.themeContrastResult must be present."
+        } else {
+            if ([string](Get-JsonProperty $themeContrastResult @("check")) -ne $expectedContrastCheck) {
+                Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.themeContrastResult.check must be theme-contrast."
+            }
+            if ([string](Get-JsonProperty $themeContrastResult @("status")) -ne "passed") {
+                Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.themeContrastResult.status must be passed."
+            }
+            if ([int](Get-JsonProperty $themeContrastResult @("sampledTextCount")) -le 0) {
+                Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.themeContrastResult.sampledTextCount must be greater than zero."
+            }
+            if ([int](Get-JsonProperty $themeContrastResult @("failingTextCount")) -ne 0) {
+                Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.themeContrastResult.failingTextCount must be zero."
+            }
+            if ([decimal](Get-JsonProperty $themeContrastResult @("minimumContrastRatio")) -lt $minimumContrastRatio) {
+                Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.themeContrastResult.minimumContrastRatio must be at least 3."
+            }
+            if ([decimal](Get-JsonProperty $themeContrastResult @("requiredMinimumContrastRatio")) -ne $minimumContrastRatio) {
+                Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.themeContrastResult.requiredMinimumContrastRatio must be 3."
             }
         }
 

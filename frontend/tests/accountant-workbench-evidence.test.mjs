@@ -5,6 +5,8 @@ import path from "node:path";
 import { describe, it } from "node:test";
 import {
   ACCOUNTANT_WORKFLOW_STAGES,
+  MIN_VISUAL_SMOKE_CONTRAST_RATIO,
+  visualSmokeContrastCheck,
   visualSmokeLayoutChecks,
   visualSmokeReviewChecks,
   visualSmokeRoutes,
@@ -36,9 +38,14 @@ describe("accountant workbench evidence report", () => {
       assert.deepEqual(result.requiredCoverage.routeCodes, visualSmokeRoutes.map((route) => route.name));
       assert.deepEqual(result.requiredCoverage.reviewChecks, visualSmokeReviewChecks);
       assert.deepEqual(result.requiredCoverage.layoutCheckEvidence, visualSmokeLayoutChecks.map((check) => `${check}:passed`));
+      assert.deepEqual(result.requiredCoverage.contrastCheckEvidence, [
+        "theme-contrast:passed",
+        "minimum-ratio:3",
+      ]);
       assert.equal(result.routeAcceptanceCount, visualSmokeRoutes.length);
       assert.ok(result.requiredCoverage.expectedTextChecks.includes("route expected accountant decision text"));
       assert.ok(result.requiredCoverage.expectedTextChecks.includes("visual smoke screenshots carry passed layout check results"));
+      assert.ok(result.requiredCoverage.expectedTextChecks.includes("visual smoke screenshots carry passed automated theme contrast results"));
       assert.ok(result.requiredCoverage.routeAcceptanceEvidence.includes("filing-review-qualified-accountant-route-acceptance"));
       assert.equal(result.requiredCoverage.routeAcceptanceSignOffGate, "qualified-accountant-route-acceptance");
       assert.ok(result.requiredCoverage.evidenceFiles.includes("visual-smoke-evidence-report.json"));
@@ -48,6 +55,11 @@ describe("accountant workbench evidence report", () => {
         result.routeReadiness.find((route) => route.routeName === "filing-review")?.layoutCheckResultCount,
         visualSmokeThemes.length * visualSmokeViewports.length * visualSmokeLayoutChecks.length,
       );
+      assert.equal(
+        result.routeReadiness.find((route) => route.routeName === "filing-review")?.contrastCheckResultCount,
+        visualSmokeThemes.length * visualSmokeViewports.length,
+      );
+      assert.equal(result.routeReadiness.find((route) => route.routeName === "filing-review")?.minimumContrastRatio, MIN_VISUAL_SMOKE_CONTRAST_RATIO);
       const writtenReport = JSON.parse(await readFile(reportPath, "utf8"));
       assert.deepEqual(writtenReport.requiredCoverage.themes, ["light", "dark"]);
       assert.deepEqual(
@@ -68,6 +80,28 @@ describe("accountant workbench evidence report", () => {
           reviewStatus: "required-review",
           blocksRelease: true,
         },
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects visual evidence that omits per-screenshot contrast pass results", async () => {
+    const { verifyAccountantWorkbenchEvidence } = await import("../scripts/verify-accountant-workbench-evidence.mjs");
+    const dir = await mkTempDir();
+    const visualReportPath = path.join(dir, "visual-smoke-evidence-report.json");
+    const report = visualSmokeReport();
+    report.screenshots[0].themeContrastResult = {
+      ...report.screenshots[0].themeContrastResult,
+      status: "failed",
+    };
+
+    await writeFile(visualReportPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+
+    try {
+      await assert.rejects(
+        () => verifyAccountantWorkbenchEvidence({ visualReportPath }),
+        /route dashboard screenshot dashboard-light-desktop\.png theme contrast status must be passed/,
       );
     } finally {
       await rm(dir, { recursive: true, force: true });
@@ -188,6 +222,15 @@ function visualSmokeReport() {
             status: "passed",
             evidence: `${check} passed`,
           })),
+          themeContrastResult: {
+            check: visualSmokeContrastCheck,
+            status: "passed",
+            minimumContrastRatio: MIN_VISUAL_SMOKE_CONTRAST_RATIO,
+            requiredMinimumContrastRatio: MIN_VISUAL_SMOKE_CONTRAST_RATIO,
+            sampledTextCount: 12,
+            failingTextCount: 0,
+            evidence: "theme contrast passed",
+          },
         })),
       ),
     ),

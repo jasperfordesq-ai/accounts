@@ -6,6 +6,8 @@ import {
   expectedVisualSmokeArtifacts,
   expectedVisualSmokeRouteAudits,
   expectedVisualSmokeScreenshotCount,
+  MIN_VISUAL_SMOKE_CONTRAST_RATIO,
+  visualSmokeContrastCheck,
   visualSmokeLayoutChecks,
   visualSmokeReviewChecks,
   visualSmokeThemes,
@@ -85,6 +87,10 @@ export async function verifyVisualSmokeManifest(manifestPath, options = {}) {
     failures.push("visual smoke manifest review protocol must require screenshot nonblank pixel diversity evidence");
   }
 
+  if (!manifest.reviewProtocol?.requiredEvidence?.includes("per-screenshot automated theme contrast smoke evidence")) {
+    failures.push("visual smoke manifest review protocol must require per-screenshot automated theme contrast smoke evidence");
+  }
+
   if (!manifest.reviewProtocol?.requiredEvidence?.includes(VISUAL_SMOKE_EVIDENCE_REPORT_FILE)) {
     failures.push(`visual smoke manifest review protocol must require ${VISUAL_SMOKE_EVIDENCE_REPORT_FILE}`);
   }
@@ -145,6 +151,7 @@ export async function verifyVisualSmokeManifest(manifestPath, options = {}) {
       sha256: evidence.sha256,
       reviewStatus: screenshot.reviewStatus,
       layoutCheckResults: Array.isArray(screenshot.layoutCheckResults) ? screenshot.layoutCheckResults : [],
+      themeContrastResult: screenshot.themeContrastResult ?? null,
     });
   }
 
@@ -185,6 +192,8 @@ export async function verifyVisualSmokeManifest(manifestPath, options = {}) {
         failures.push(`visual smoke screenshot ${actual.fileName} layout check ${layoutCheck} must have status passed.`);
       }
     }
+
+    validateThemeContrastResult(actual.themeContrastResult, actual.fileName, failures);
   }
 
   for (const audit of manifest.routeAudits ?? []) {
@@ -240,6 +249,11 @@ export async function verifyVisualSmokeManifest(manifestPath, options = {}) {
       (total, screenshot) => total + screenshot.layoutCheckResults.length,
       0,
     ),
+    themeContrastChecksPassed: true,
+    contrastCheckResultCount: screenshotSummaries.filter((screenshot) => screenshot.themeContrastResult?.check === visualSmokeContrastCheck).length,
+    minimumContrastRatio: Math.min(
+      ...screenshotSummaries.map((screenshot) => Number(screenshot.themeContrastResult?.minimumContrastRatio ?? 0)),
+    ),
     routeCoverage: expectedVisualSmokeRouteAudits().map((audit) => ({
       routeName: audit.routeName,
       routeKey: audit.routeKey,
@@ -258,6 +272,41 @@ export async function verifyVisualSmokeManifest(manifestPath, options = {}) {
   }
 
   return report;
+}
+
+function validateThemeContrastResult(result, fileName, failures) {
+  if (!result) {
+    failures.push(`visual smoke screenshot ${fileName} is missing automated theme contrast result.`);
+    return;
+  }
+
+  if (result.check !== visualSmokeContrastCheck) {
+    failures.push(`visual smoke screenshot ${fileName} themeContrastResult.check must be ${visualSmokeContrastCheck}.`);
+  }
+
+  if (result.status !== "passed") {
+    failures.push(`visual smoke screenshot ${fileName} themeContrastResult.status must be passed.`);
+  }
+
+  if (Number(result.sampledTextCount) <= 0) {
+    failures.push(`visual smoke screenshot ${fileName} themeContrastResult.sampledTextCount must be greater than zero.`);
+  }
+
+  if (Number(result.failingTextCount) !== 0) {
+    failures.push(`visual smoke screenshot ${fileName} themeContrastResult.failingTextCount must be zero.`);
+  }
+
+  if (Number(result.requiredMinimumContrastRatio) !== MIN_VISUAL_SMOKE_CONTRAST_RATIO) {
+    failures.push(
+      `visual smoke screenshot ${fileName} themeContrastResult.requiredMinimumContrastRatio must be ${MIN_VISUAL_SMOKE_CONTRAST_RATIO}.`,
+    );
+  }
+
+  if (Number(result.minimumContrastRatio) < MIN_VISUAL_SMOKE_CONTRAST_RATIO) {
+    failures.push(
+      `visual smoke screenshot ${fileName} themeContrastResult.minimumContrastRatio must be at least ${MIN_VISUAL_SMOKE_CONTRAST_RATIO}.`,
+    );
+  }
 }
 
 function resolveArtifactPath(artifactPath) {

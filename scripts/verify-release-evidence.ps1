@@ -192,6 +192,26 @@ function Assert-MinimumIntegerField {
     }
 }
 
+function Assert-MinimumDecimalField {
+    param(
+        [string]$Content,
+        [string]$FieldName,
+        [decimal]$MinimumValue,
+        [string]$Context,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    $value = Get-FieldValue $Content $FieldName
+    if ($null -eq $value -or $value.Length -eq 0) {
+        return
+    }
+
+    $number = [decimal]0
+    if (-not [decimal]::TryParse($value, [Globalization.NumberStyles]::Number, [Globalization.CultureInfo]::InvariantCulture, [ref]$number) -or $number -lt $MinimumValue) {
+        Add-Failure $Failures "$Context field '$FieldName' must be a number greater than or equal to $MinimumValue."
+    }
+}
+
 function Assert-NoUncheckedBoxes {
     param(
         [string]$Content,
@@ -458,10 +478,12 @@ function Test-VisualEvidence {
         "visual-smoke-evidence-report.json",
         "accountant-workbench-evidence-report.json",
         "screenshot nonblank pixel diversity evidence",
+        "theme-contrast",
         "pngIdatByteSize",
         "pixelSampleCount",
         "sampledDistinctColorCount",
         "luminanceRange",
+        "themeContrastResult.minimumContrastRatio",
         "Reviewer signature"
     )) {
         Assert-ContainsText $Content $text $context $Failures
@@ -477,6 +499,7 @@ function Test-VisualEvidence {
         "Minimum screenshot pixel sample count",
         "Minimum sampled distinct color count",
         "Minimum screenshot luminance range",
+        "Minimum automated contrast ratio",
         "Reviewer name",
         "Reviewer role",
         "Review date/time UTC",
@@ -491,6 +514,7 @@ function Test-VisualEvidence {
     Assert-PositiveIntegerField $Content "Minimum screenshot pixel sample count" $context $Failures
     Assert-MinimumIntegerField $Content "Minimum sampled distinct color count" 4 $context $Failures
     Assert-MinimumIntegerField $Content "Minimum screenshot luminance range" 10 $context $Failures
+    Assert-MinimumDecimalField $Content "Minimum automated contrast ratio" ([decimal]3.0) $context $Failures
     Assert-NoUncheckedBoxes $Content $context $Failures
     Assert-CheckedDecision $Content "Accepted for this release candidate." $context $Failures
     Assert-UncheckedDecision $Content "Rejected; defects listed below must be fixed and re-reviewed." $context $Failures

@@ -3,6 +3,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   ACCOUNTANT_WORKFLOW_STAGES,
+  MIN_VISUAL_SMOKE_CONTRAST_RATIO,
+  visualSmokeContrastCheck,
   visualSmokeLayoutChecks,
   visualSmokeReviewChecks,
   visualSmokeRoutes,
@@ -99,6 +101,29 @@ export async function verifyAccountantWorkbenchEvidence(options = {}) {
           failures.push(`route ${route.name} screenshot ${screenshot.fileName ?? "(unnamed)"} layout check ${layoutCheck} must have status passed.`);
         }
       }
+
+      const themeContrastResult = screenshot.themeContrastResult;
+      if (!themeContrastResult) {
+        failures.push(`route ${route.name} screenshot ${screenshot.fileName ?? "(unnamed)"} is missing automated theme contrast result.`);
+      } else {
+        if (themeContrastResult.check !== visualSmokeContrastCheck) {
+          failures.push(`route ${route.name} screenshot ${screenshot.fileName ?? "(unnamed)"} themeContrastResult.check must be ${visualSmokeContrastCheck}.`);
+        }
+        if (themeContrastResult.status !== "passed") {
+          failures.push(`route ${route.name} screenshot ${screenshot.fileName ?? "(unnamed)"} theme contrast status must be passed.`);
+        }
+        if (Number(themeContrastResult.minimumContrastRatio) < MIN_VISUAL_SMOKE_CONTRAST_RATIO) {
+          failures.push(
+            `route ${route.name} screenshot ${screenshot.fileName ?? "(unnamed)"} minimum contrast ratio must be at least ${MIN_VISUAL_SMOKE_CONTRAST_RATIO}.`,
+          );
+        }
+        if (Number(themeContrastResult.sampledTextCount) <= 0) {
+          failures.push(`route ${route.name} screenshot ${screenshot.fileName ?? "(unnamed)"} sampledTextCount must be greater than zero.`);
+        }
+        if (Number(themeContrastResult.failingTextCount) !== 0) {
+          failures.push(`route ${route.name} screenshot ${screenshot.fileName ?? "(unnamed)"} failingTextCount must be zero.`);
+        }
+      }
     }
 
     if (!route.workflowStages?.length) {
@@ -121,6 +146,8 @@ export async function verifyAccountantWorkbenchEvidence(options = {}) {
         (total, screenshot) => total + (Array.isArray(screenshot.layoutCheckResults) ? screenshot.layoutCheckResults.length : 0),
         0,
       ),
+      contrastCheckResultCount: screenshots.filter((screenshot) => screenshot.themeContrastResult?.check === visualSmokeContrastCheck).length,
+      minimumContrastRatio: Math.min(...screenshots.map((screenshot) => Number(screenshot.themeContrastResult?.minimumContrastRatio ?? 0))),
       requiredReviewChecks: coverage?.requiredReviewChecks ?? [],
       reviewStatus: coverage?.reviewStatus ?? "missing",
     };
@@ -174,8 +201,13 @@ export async function verifyAccountantWorkbenchEvidence(options = {}) {
         "visual smoke routeKey matches planned routeKey",
         "visual smoke screenshots carry stable routeKey",
         "visual smoke screenshots carry passed layout check results",
+        "visual smoke screenshots carry passed automated theme contrast results",
       ],
       layoutCheckEvidence: visualSmokeLayoutChecks.map((check) => `${check}:passed`),
+      contrastCheckEvidence: [
+        `${visualSmokeContrastCheck}:passed`,
+        `minimum-ratio:${MIN_VISUAL_SMOKE_CONTRAST_RATIO}`,
+      ],
       routeAcceptanceEvidence: routeAcceptance.flatMap((route) => route.requiredAcceptanceEvidence),
       routeAcceptanceSignOffGate: ROUTE_ACCEPTANCE_SIGN_OFF_GATE,
       evidenceFiles: [

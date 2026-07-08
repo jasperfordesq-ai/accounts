@@ -589,6 +589,27 @@ Recent successful local verification includes:
     `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers|FullyQualifiedName~ReleaseArtifactPackVerifier_RequiresExactOperationalEvidenceReports"`
     - 2 passed, proving the 617/700 scorecard and release-pack verifier layout-pass
       checks are wired together
+- Frontend visual contrast smoke evidence checks:
+  - PowerShell parser checks for `scripts\verify-release-evidence.ps1`,
+    `scripts\verify-release-artifact-pack.ps1` and
+    `scripts\verify-ci-machine-evidence-pack.ps1` - passed
+  - `node --test tests/visual-smoke-artifacts.test.mjs tests/accountant-workbench-evidence.test.mjs tests/visual-smoke-plan.test.mjs tests/production-readiness-contract.test.mjs`
+    - 69 passed, proving visual-smoke manifests, accountant-workbench evidence,
+      production-readiness parser invariants and scorecard fixtures reject missing
+      automated theme-contrast smoke evidence
+  - `node scripts/verify-api-client.mjs` - passed
+  - `npx.cmd vitest run tests/render/production-readiness-panel.test.tsx tests/render/production-readiness-workbench.test.tsx`
+    - 2 passed
+  - `npx.cmd tsc --noEmit --incremental false` - passed
+  - Local refreshed visual evidence:
+    `node scripts/verify-visual-smoke-artifacts.mjs` and
+    `node scripts/verify-accountant-workbench-evidence.mjs`
+    - passed with 28 screenshots, 84 layout-check pass results and 28
+      per-screenshot `theme-contrast` pass results
+  - Backend focused scorecard/release evidence regression:
+    `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers|FullyQualifiedName~ReleaseArtifactPackVerifier_RequiresExactOperationalEvidenceReports|FullyQualifiedName~ReleaseEvidenceVerifier_BlocksIncompleteHumanSignoffEvidence|FullyQualifiedName~ReleaseEvidenceTemplates_CoverHumanVisualAccountantAndProviderSignoffs"`
+    - 4 passed, proving the 619/700 scorecard, visual QA template contrast field,
+      release-evidence verifier and artifact-pack contrast checks are wired together
 - Backend focused scorecard/visual QA tests after adding PNG dimension evidence:
   `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers|FullyQualifiedName~ProductionReadinessReport_DeclaresVisualQaCoverageForAccountantWorkbenchRoutes"`
   - 2 passed, proving the readiness report exposes the 608/700 scorecard and visual
@@ -653,8 +674,8 @@ CI status:
   2026.
 - Green jobs: Workflow Hygiene, Production Compose Config, Frontend, Backend,
   Production Stack Smoke, and CI Machine Evidence Pack.
-- The scorecard exposed by the candidate is now 617/700, with backend statutory/accounting
-  engine at 204/250, frontend accountant workbench at 164/200 and
+- The scorecard exposed by the candidate is now 619/700, with backend statutory/accounting
+  engine at 204/250, frontend accountant workbench at 166/200 and
   security/auth/tenant/platform guardrails at 150/150.
   The typed frontend parser and production-readiness verifier both require CI
   machine evidence, production smoke, readiness verification, visual smoke, release
@@ -681,8 +702,9 @@ CI status:
     `production-readiness-verification-report.json` were retained from the live
     production smoke stack.
   - `visual-smoke-screenshots`: screenshot artifact, manifest, visual smoke evidence,
-    PNG dimension evidence, nonblank pixel diversity evidence, and accountant
-    workbench route acceptance evidence were retained for human review.
+    PNG dimension evidence, nonblank pixel diversity evidence, automated
+    theme-contrast smoke evidence, and accountant workbench route acceptance
+    evidence were retained for human review.
   - `ci-machine-evidence-pack`: `ci-machine-evidence-pack-report.json` passed with
     exact commit/run identity and SHA-256 inventory for the machine-generated
     evidence artifacts; human release evidence is still required separately.
@@ -735,8 +757,8 @@ As of July 8, 2026:
 - Code implementation is roughly 70-75% complete.
 - Production assurance is roughly 60-65% complete.
 - Overall goal is roughly 63-67% complete, with about one third left.
-- The production scorecard is now 617/700: architecture/documentation 99/100,
-  backend statutory/accounting engine 204/250, frontend accountant workbench 164/200,
+- The production scorecard is now 619/700: architecture/documentation 99/100,
+  backend statutory/accounting engine 204/250, frontend accountant workbench 166/200,
   and security/auth/tenant/platform guardrails 150/150.
 - Architecture/documentation is now scored 99/100 in the production scorecard because
   source-law review, release evidence templates, manual handoff evidence, runbook

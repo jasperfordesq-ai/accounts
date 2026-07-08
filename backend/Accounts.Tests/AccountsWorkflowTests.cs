@@ -18310,10 +18310,12 @@ public class AccountsWorkflowTests
         Assert.Contains("Minimum screenshot pixel sample count", visual);
         Assert.Contains("Minimum sampled distinct color count", visual);
         Assert.Contains("Minimum screenshot luminance range", visual);
+        Assert.Contains("Minimum automated contrast ratio", visual);
         Assert.Contains("pngIdatByteSize", visual);
         Assert.Contains("pixelSampleCount", visual);
         Assert.Contains("sampledDistinctColorCount", visual);
         Assert.Contains("luminanceRange", visual);
+        Assert.Contains("themeContrastResult.minimumContrastRatio", visual);
 
         var sourceLaw = File.ReadAllText(sourceLawPath);
         Assert.Contains("source-law-snapshot-fingerprint", sourceLaw);
@@ -18457,13 +18459,18 @@ public class AccountsWorkflowTests
         Assert.Contains("Minimum screenshot pixel sample count", script);
         Assert.Contains("Minimum sampled distinct color count", script);
         Assert.Contains("Minimum screenshot luminance range", script);
+        Assert.Contains("Minimum automated contrast ratio", script);
         Assert.Contains("\"Minimum sampled distinct color count\" 4", script);
         Assert.Contains("\"Minimum screenshot luminance range\" 10", script);
+        Assert.Contains("\"Minimum automated contrast ratio\" ([decimal]3.0)", script);
+        Assert.Contains("Assert-MinimumDecimalField", script);
         Assert.Contains("integer greater than or equal to $MinimumValue", script);
         Assert.Contains("pngIdatByteSize", script);
         Assert.Contains("pixelSampleCount", script);
         Assert.Contains("sampledDistinctColorCount", script);
         Assert.Contains("luminanceRange", script);
+        Assert.Contains("theme-contrast", script);
+        Assert.Contains("themeContrastResult.minimumContrastRatio", script);
         Assert.Contains("monitoring-error-routing-report.json", script);
         Assert.Contains("structured-log-report.json", script);
         Assert.Contains("Matched monitoring smoke line", script);
@@ -18701,6 +18708,14 @@ public class AccountsWorkflowTests
         Assert.Contains("screenshots.layoutCheckResults must include $layoutCheck", machineEvidencePack);
         Assert.Contains("screenshots.layoutCheckResults.$layoutCheck status must be passed", script);
         Assert.Contains("screenshots.layoutCheckResults.$layoutCheck status must be passed", machineEvidencePack);
+        Assert.Contains("expectedContrastCheck", script);
+        Assert.Contains("expectedContrastCheck", machineEvidencePack);
+        Assert.Contains("\"theme-contrast\"", script);
+        Assert.Contains("\"theme-contrast\"", machineEvidencePack);
+        Assert.Contains("screenshots.themeContrastResult must be present", script);
+        Assert.Contains("screenshots.themeContrastResult must be present", machineEvidencePack);
+        Assert.Contains("screenshots.themeContrastResult.minimumContrastRatio must be at least 3", script);
+        Assert.Contains("screenshots.themeContrastResult.minimumContrastRatio must be at least 3", machineEvidencePack);
         Assert.Contains("Get-FileHash", script);
         Assert.Contains("releaseCandidate", script);
         Assert.Contains("releaseCandidate.identityConsistent must be true", script);

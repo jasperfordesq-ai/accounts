@@ -24,6 +24,10 @@ export const visualSmokeLayoutChecks = [
   "visible-text-overlap",
 ];
 
+export const visualSmokeContrastCheck = "theme-contrast";
+
+export const MIN_VISUAL_SMOKE_CONTRAST_RATIO = 3;
+
 export function passedVisualSmokeLayoutResults() {
   return [
     {
@@ -42,6 +46,18 @@ export function passedVisualSmokeLayoutResults() {
       evidence: "Rendered visible text blocks did not overlap beyond the visual smoke tolerance.",
     },
   ];
+}
+
+export function passedVisualSmokeContrastResult({ sampledTextCount = 1, minimumContrastRatio = MIN_VISUAL_SMOKE_CONTRAST_RATIO } = {}) {
+  return {
+    check: visualSmokeContrastCheck,
+    status: "passed",
+    minimumContrastRatio,
+    requiredMinimumContrastRatio: MIN_VISUAL_SMOKE_CONTRAST_RATIO,
+    sampledTextCount,
+    failingTextCount: 0,
+    evidence: "Rendered visible text met the automated light/dark contrast smoke floor before screenshot capture.",
+  };
 }
 
 export const visualSmokeReviewChecks = [
@@ -72,6 +88,7 @@ export const visualSmokeReviewProtocol = {
     "screenshot SHA-256 checksums",
     "screenshot PNG dimensions",
     "screenshot nonblank pixel diversity evidence",
+    "per-screenshot automated theme contrast smoke evidence",
     "route audit summary",
     "named visual QA reviewer sign-off",
   ],
@@ -164,6 +181,7 @@ export function expectedVisualSmokeArtifacts(outputDir = "artifacts/visual-smoke
           reviewStatus: "required-review",
           layoutChecks: visualSmokeLayoutChecks,
           layoutCheckResults: passedVisualSmokeLayoutResults(),
+          themeContrastResult: passedVisualSmokeContrastResult(),
         };
       }),
     ),

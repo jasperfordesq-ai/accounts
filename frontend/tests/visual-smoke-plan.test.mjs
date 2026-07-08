@@ -14,7 +14,10 @@ import {
   expectedVisualSmokeArtifacts,
   expectedVisualSmokeRouteAudits,
   expectedVisualSmokeManifest,
+  MIN_VISUAL_SMOKE_CONTRAST_RATIO,
+  passedVisualSmokeContrastResult,
   passedVisualSmokeLayoutResults,
+  visualSmokeContrastCheck,
 } from "../scripts/visual-smoke-plan.mjs";
 
 describe("visual smoke plan", () => {
@@ -36,6 +39,8 @@ describe("visual smoke plan", () => {
       "page-horizontal-overflow",
       "visible-text-overlap",
     ]);
+    assert.equal(visualSmokeContrastCheck, "theme-contrast");
+    assert.equal(MIN_VISUAL_SMOKE_CONTRAST_RATIO, 3);
     assert.deepEqual(visualSmokeReviewChecks, [
       "accountant-workflow-hierarchy",
       "table-scanability",
@@ -63,6 +68,7 @@ describe("visual smoke plan", () => {
         "screenshot SHA-256 checksums",
         "screenshot PNG dimensions",
         "screenshot nonblank pixel diversity evidence",
+        "per-screenshot automated theme contrast smoke evidence",
         "route audit summary",
         "named visual QA reviewer sign-off",
       ],
@@ -88,6 +94,7 @@ describe("visual smoke plan", () => {
       reviewStatus: "required-review",
       layoutChecks: visualSmokeLayoutChecks,
       layoutCheckResults: passedVisualSmokeLayoutResults(),
+      themeContrastResult: passedVisualSmokeContrastResult(),
     });
     assert.equal(
       expectedVisualSmokeArtifacts().at(-1)?.artifactPath,

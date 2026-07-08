@@ -4239,6 +4239,12 @@ function assertVisualQaArtifacts(report: ProductionReadinessReport) {
     );
   }
 
+  if (!reviewProtocol.requiredEvidence.includes("per-screenshot automated theme contrast smoke evidence")) {
+    throw new Error(
+      "Invalid production readiness report contract: visualQaCoverage.reviewProtocol.requiredEvidence - must include per-screenshot automated theme contrast smoke evidence",
+    );
+  }
+
   if (!reviewProtocol.requiredEvidence.includes("visual-smoke-evidence-report.json")) {
     throw new Error(
       "Invalid production readiness report contract: visualQaCoverage.reviewProtocol.requiredEvidence - must include visual-smoke-evidence-report.json",
