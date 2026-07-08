@@ -54,6 +54,8 @@ Committed and pushed work on `main` includes:
 - `f142912 Add external validation release evidence`
 - `ba6b52d Add release artifact pack checksums`
 - `1565113 Retain no-direct filing evidence in CI`
+- `18f25d0 Retain production readiness report evidence`
+- `00bd8d1 Verify production readiness report evidence`
 
 Backend/accounting-engine progress:
 
@@ -374,12 +376,12 @@ Recent successful local verification includes:
 
 CI status:
 
-- GitHub Actions run `28943546525` for commit
-  `1565113 Retain no-direct filing evidence in CI` completed successfully on
+- GitHub Actions run `28945545279` for commit
+  `00bd8d1 Verify production readiness report evidence` completed successfully on
   July 8, 2026.
 - Green jobs: Workflow Hygiene, Production Compose Config, Frontend, Backend, and
   Production Stack Smoke.
-- CI artifacts were downloaded and spot-checked:
+- Latest retained CI evidence artifacts include:
   - `dependency-audit-release`: `dependency-audit-report.json` passed with 0 npm
     vulnerabilities, frontend lockfile/package hashes, and NuGet audit policy.
   - `production-safety-config`: `production-safety-report.json` passed with
@@ -393,6 +395,9 @@ CI status:
     the monitoring-smoke correlation id in JSON console output.
   - `postgres-backup-restore-drill`: `restore-drill-report.json` passed with dump
     sha256 and table-count comparisons.
+  - `production-readiness-report`: `production-readiness-report.json` and
+    `production-readiness-verification-report.json` were retained from the live
+    production smoke stack.
   - `visual-smoke-screenshots`: screenshot artifact and manifest were retained for
     human review.
 
