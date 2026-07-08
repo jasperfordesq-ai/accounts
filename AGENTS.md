@@ -68,6 +68,7 @@ Committed and pushed work on `main` includes:
 - `9c32438 Require accepted external ROS evidence rows`
 - `76c9396 Require accepted manual handoff evidence rows`
 - `a3fb293 Require accepted source-law review rows`
+- `a6fd245 Require accepted monitoring provider evidence`
 
 Backend/accounting-engine progress:
 
@@ -181,6 +182,10 @@ Backend/accounting-engine progress:
 - The source-law review template and verifier now require every monitored source
   row to record URL reachability, effective-date review, guidance wording
   comparison, platform impact classification and an explicit accepted decision.
+- The monitoring-provider confirmation template and verifier now require real
+  provider, event, correlation and provider-event references, an HTTPS provider
+  base URL, a matched structured-log smoke line and an explicit accepted operator
+  decision before monitoring evidence can pass.
 - `scripts/verify-no-direct-filing-submission.ps1` now emits
   `no-direct-filing-submission-report.json`, proving release candidates still have no
   outbound CRO/ROS submission client or submit route and only record external filing
@@ -538,6 +543,28 @@ Recent successful local verification includes:
   - `npx.cmd vitest run tests/render/production-readiness-panel.test.tsx tests/render/production-readiness-workbench.test.tsx`
     - 2 passed
   - `npx.cmd tsc --noEmit --incremental false` - passed
+- Release evidence verifier monitoring-provider accepted-evidence checks:
+  - PowerShell parser check for `scripts\verify-release-evidence.ps1` - passed
+  - Temporary completed copies of all six release-evidence templates passed
+    `scripts\verify-release-evidence.ps1` with real provider/event/correlation
+    references, HTTPS provider base URL, matched structured-log smoke line and an
+    explicit accepted operator decision
+  - A copied monitoring-provider confirmation template with an HTTP base URL,
+    placeholder provider-event reference and unchecked accepted decision failed as
+    expected
+- Backend focused release evidence/scorecard tests after adding accepted monitoring
+  provider evidence:
+  `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~ReleaseEvidenceTemplates_CoverHumanVisualAccountantAndProviderSignoffs|FullyQualifiedName~ReleaseEvidenceVerifier_BlocksIncompleteHumanSignoffEvidence|FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers"`
+  - 3 passed, proving the monitoring-provider template, release evidence verifier,
+  accepted operator decision, provider reference checks, and 615/700 production
+  scorecard are wired together
+- Frontend scorecard contract checks after adding accepted monitoring-provider
+  evidence:
+  - `node --test tests/production-readiness-contract.test.mjs` - 49 passed
+  - `node scripts/verify-api-client.mjs` - passed
+  - `npx.cmd vitest run tests/render/production-readiness-panel.test.tsx tests/render/production-readiness-workbench.test.tsx`
+    - 2 passed
+  - `npx.cmd tsc --noEmit --incremental false` - passed
 - Backend focused scorecard/visual QA tests after adding PNG dimension evidence:
   `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers|FullyQualifiedName~ProductionReadinessReport_DeclaresVisualQaCoverageForAccountantWorkbenchRoutes"`
   - 2 passed, proving the readiness report exposes the 608/700 scorecard and visual
@@ -599,9 +626,9 @@ CI status:
   July 8, 2026.
 - Green jobs: Workflow Hygiene, Production Compose Config, Frontend, Backend,
   Production Stack Smoke, and CI Machine Evidence Pack.
-- The scorecard exposed by the candidate is now 614/700, with backend statutory/accounting
+- The scorecard exposed by the candidate is now 615/700, with backend statutory/accounting
   engine at 204/250, frontend accountant workbench at 162/200 and
-  security/auth/tenant/platform guardrails at 149/150.
+  security/auth/tenant/platform guardrails at 150/150.
   The typed frontend parser and production-readiness verifier both require CI
   machine evidence, production smoke, readiness verification, visual smoke, release
   artifact pack, no-direct filing control, and named manual review manifest rows;
@@ -660,7 +687,9 @@ Highest-priority next steps:
    legal/source evidence, visual workflow, and manual handoff behavior.
 7. Promote CI monitoring smoke into release-grade evidence by confirming the controlled
    event inside the configured provider and retaining a named operator record before
-   real filing use.
+   real filing use; the template and verifier now require real provider references,
+   an HTTPS provider URL and an accepted operator decision, but real named provider
+   confirmation evidence is still missing.
 8. Run `scripts\verify-no-direct-filing-submission.ps1` and retain
    `no-direct-filing-submission-report.json` with the exact release candidate.
 9. Run `scripts\verify-release-evidence.ps1` against completed release evidence and
@@ -679,9 +708,9 @@ As of July 8, 2026:
 - Code implementation is roughly 70-75% complete.
 - Production assurance is roughly 60-65% complete.
 - Overall goal is roughly 63-67% complete, with about one third left.
-- The production scorecard is now 614/700: architecture/documentation 99/100,
+- The production scorecard is now 615/700: architecture/documentation 99/100,
   backend statutory/accounting engine 204/250, frontend accountant workbench 162/200,
-  and security/auth/tenant/platform guardrails 149/150.
+  and security/auth/tenant/platform guardrails 150/150.
 - Architecture/documentation is now scored 99/100 in the production scorecard because
   source-law review, release evidence templates, manual handoff evidence, runbook
   links, and verifier coverage are in place, including an exact release artifact-pack
