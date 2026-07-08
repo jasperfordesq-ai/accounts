@@ -56,7 +56,7 @@ export function passedVisualSmokeContrastResult({ sampledTextCount = 1, minimumC
     requiredMinimumContrastRatio: MIN_VISUAL_SMOKE_CONTRAST_RATIO,
     sampledTextCount,
     failingTextCount: 0,
-    evidence: "Rendered visible text with a resolvable solid background met the automated light/dark contrast smoke floor before screenshot capture.",
+    evidence: "Rendered non-interactive visible text with a resolvable solid background met the automated light/dark contrast smoke floor before screenshot capture.",
   };
 }
 

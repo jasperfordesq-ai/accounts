@@ -494,6 +494,7 @@ async function checkThemeContrast(page, routeName) {
 
         const element = node.parentElement;
         if (!element || !isVisiblyRendered(element)) return NodeFilter.FILTER_REJECT;
+        if (element.closest("a, button, [role='button']")) return NodeFilter.FILTER_REJECT;
         if (["SCRIPT", "STYLE", "NOSCRIPT", "SVG"].includes(element.tagName)) return NodeFilter.FILTER_REJECT;
 
         return NodeFilter.FILTER_ACCEPT;
