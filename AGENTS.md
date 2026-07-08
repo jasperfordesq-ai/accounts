@@ -74,6 +74,7 @@ Committed and pushed work on `main` includes:
 - `bd5454c Skip unresolved gradient backgrounds in contrast smoke`
 - `f51ae46 Ignore gradient backgrounds in contrast sampler`
 - `425fc33 Limit contrast smoke to non-interactive text`
+- `d018e37 Verify visual route expected text evidence`
 
 Backend/accounting-engine progress:
 
@@ -614,6 +615,24 @@ Recent successful local verification includes:
     `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers|FullyQualifiedName~ReleaseArtifactPackVerifier_RequiresExactOperationalEvidenceReports|FullyQualifiedName~ReleaseEvidenceVerifier_BlocksIncompleteHumanSignoffEvidence|FullyQualifiedName~ReleaseEvidenceTemplates_CoverHumanVisualAccountantAndProviderSignoffs"`
     - 4 passed, proving the 619/700 scorecard, visual QA template contrast field,
       release-evidence verifier and artifact-pack contrast checks are wired together
+- Frontend visual route expected-text evidence checks:
+  - PowerShell parser checks for `scripts\verify-release-artifact-pack.ps1` and
+    `scripts\verify-ci-machine-evidence-pack.ps1` - passed
+  - `node --test tests/visual-smoke-artifacts.test.mjs tests/accountant-workbench-evidence.test.mjs tests/production-readiness-contract.test.mjs`
+    - 69 passed, proving visual-smoke screenshots retain each planned route's
+      expected accountant decision text and the accountant-workbench evidence
+      report rejects missing or drifted route text proof
+  - `node scripts/verify-visual-smoke-artifacts.mjs` and
+    `node scripts/verify-accountant-workbench-evidence.mjs`
+    - passed locally with 28 screenshots and `expectedTextEvidenceCount: 4`
+      for all seven workbench routes
+  - `node scripts/verify-api-client.mjs`,
+    `npx.cmd vitest run tests/render/production-readiness-panel.test.tsx tests/render/production-readiness-workbench.test.tsx`,
+    and `npx.cmd tsc --noEmit --incremental false` - passed
+  - Backend focused scorecard/release evidence regression:
+    `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers|FullyQualifiedName~ReleaseArtifactPackVerifier_RequiresExactOperationalEvidenceReports|FullyQualifiedName~ReleaseEvidenceVerifier_BlocksIncompleteHumanSignoffEvidence|FullyQualifiedName~ReleaseEvidenceTemplates_CoverHumanVisualAccountantAndProviderSignoffs"`
+    - 4 passed, proving the 621/700 scorecard, frontend 168/200 category,
+      route expected-text evidence, and release-pack checks are wired together
 - Backend focused scorecard/visual QA tests after adding PNG dimension evidence:
   `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers|FullyQualifiedName~ProductionReadinessReport_DeclaresVisualQaCoverageForAccountantWorkbenchRoutes"`
   - 2 passed, proving the readiness report exposes the 608/700 scorecard and visual
@@ -678,8 +697,8 @@ CI status:
   2026.
 - Green jobs: Workflow Hygiene, Production Compose Config, Frontend, Backend,
   Production Stack Smoke, and CI Machine Evidence Pack.
-- The scorecard exposed by the candidate is now 619/700, with backend statutory/accounting
-  engine at 204/250, frontend accountant workbench at 166/200 and
+- The scorecard exposed by the candidate is now 621/700, with backend statutory/accounting
+  engine at 204/250, frontend accountant workbench at 168/200 and
   security/auth/tenant/platform guardrails at 150/150.
   The typed frontend parser and production-readiness verifier both require CI
   machine evidence, production smoke, readiness verification, visual smoke, release
@@ -761,8 +780,8 @@ As of July 8, 2026:
 - Code implementation is roughly 70-75% complete.
 - Production assurance is roughly 60-65% complete.
 - Overall goal is roughly 63-67% complete, with about one third left.
-- The production scorecard is now 619/700: architecture/documentation 99/100,
-  backend statutory/accounting engine 204/250, frontend accountant workbench 166/200,
+- The production scorecard is now 621/700: architecture/documentation 99/100,
+  backend statutory/accounting engine 204/250, frontend accountant workbench 168/200,
   and security/auth/tenant/platform guardrails 150/150.
 - Architecture/documentation is now scored 99/100 in the production scorecard because
   source-law review, release evidence templates, manual handoff evidence, runbook
