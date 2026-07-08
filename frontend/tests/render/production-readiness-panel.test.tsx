@@ -40,7 +40,7 @@ describe("ProductionReadinessPanel", () => {
 
 function productionScorecard(): ProductionReadinessReport["productionScorecard"] {
   return {
-    currentScore: 549,
+    currentScore: 554,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete source-law review, named visual QA, monitoring-provider confirmation, manual handoff and qualified-accountant acceptance evidence.",
@@ -54,7 +54,7 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
         currentEvidence: [
           "Canonical architecture guide and active handoff are present.",
           "source-law-review-template.md is checked in and release-verifier covered.",
-          "verify-release-artifact-pack.ps1 is documented for exact release evidence packs.",
+          "verify-release-artifact-pack.ps1 is documented for exact release evidence packs with checksum inventory.",
         ],
         remainingGaps: ["Complete release evidence templates with named reviewers, including source-law-review-template.md."],
         completionTrackCodes: ["backend-code", "frontend-ui-ux", "frontend-code"],
@@ -95,15 +95,16 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
       {
         code: "security-auth-tenant-platform-guardrails",
         label: "Security/auth/tenant/platform guardrails",
-        currentScore: 115,
+        currentScore: 120,
         targetScore: 150,
         status: "operator-confirmation-required",
         currentEvidence: [
           "Auth, tenant and platform release gates are represented in readiness evidence.",
           "No-direct CRO/ROS submission verifier evidence is generated.",
           "Release artifact pack verifier validates operational reports together.",
+          "release-artifact-pack-report.json records release candidate identity plus per-report SHA-256 and byte-size evidence.",
         ],
-        remainingGaps: ["Confirm the controlled monitoring smoke event inside the configured provider and retain release-artifact-pack-report.json."],
+        remainingGaps: ["Confirm the controlled monitoring smoke event inside the configured provider and retain release-artifact-pack-report.json with commit SHA and GitHub Actions run URL."],
         completionTrackCodes: ["backend-code"],
         releaseBlockerCodes: ["backend-code:qualified-accountant-signoff"],
       },

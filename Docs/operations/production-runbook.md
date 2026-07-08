@@ -192,7 +192,7 @@ After collecting the release candidate artifact reports into one evidence direct
 run the artifact-pack verifier and retain its JSON report:
 
 ```powershell
-.\scripts\verify-release-artifact-pack.ps1 -EvidenceDirectory D:\accounts-smoke -ReportPath D:\accounts-smoke\release-artifact-pack-report.json
+.\scripts\verify-release-artifact-pack.ps1 -EvidenceDirectory D:\accounts-smoke -ReportPath D:\accounts-smoke\release-artifact-pack-report.json -CommitSha <release-commit-sha> -GitHubActionsRunUrl <ci-run-url>
 ```
 
 The artifact pack must include `dependency-audit-report.json`,
@@ -201,8 +201,10 @@ The artifact pack must include `dependency-audit-report.json`,
 `no-direct-filing-submission-report.json`, `visual-smoke-evidence-report.json`,
 `accountant-workbench-evidence-report.json`, and `release-evidence-report.json`.
 The verifier fails if any required report is missing,
-does not have `status: passed`, or if cross-report checks such as the monitoring smoke
-correlation id do not match.
+does not have `status: passed`, if supplied release candidate identity is incomplete
+or malformed, or if cross-report checks such as the monitoring smoke correlation id do
+not match. The generated `release-artifact-pack-report.json` records the release commit,
+GitHub Actions run URL, and a SHA-256/byte-size manifest for each required report.
 
 Before completing the visual QA sign-off, verify the CI visual smoke manifest and
 retain the generated evidence report with the screenshot artifact:
@@ -288,4 +290,4 @@ The HTTPS smoke path also verifies that the login response sets the `accounts_se
 13. Complete `Docs/release-evidence/qualified-accountant-acceptance-template.md` with a named qualified accountant before real filing preparation is used.
 14. Complete `Docs/release-evidence/manual-handoff-acceptance-template.md` for `medium-audit-required` and every unsupported path code before any audit-required or unsupported output is relied on.
 15. Run `scripts\verify-release-evidence.ps1` and retain `release-evidence-report.json`; real filing use stays blocked if any required checkbox, signature, artifact reference, table row, accepted decision, canonical golden corpus scenario row, source-law source row, external ROS/iXBRL validation row, manual handoff scenario/path row, route row, visual smoke evidence report reference, or required coverage entry is missing.
-16. Run `scripts\verify-release-artifact-pack.ps1` and retain `release-artifact-pack-report.json`; real filing use stays blocked if the exact release artifact pack is missing dependency, production safety, monitoring, structured log, backup/restore, no-direct-submission, visual smoke, accountant-workbench evidence, or completed release-evidence reports.
+16. Run `scripts\verify-release-artifact-pack.ps1` with the release commit SHA and GitHub Actions run URL, then retain `release-artifact-pack-report.json`; real filing use stays blocked if the exact release artifact pack is missing dependency, production safety, monitoring, structured log, backup/restore, no-direct-submission, visual smoke, accountant-workbench evidence, completed release-evidence reports, or SHA-256/byte-size inventory.

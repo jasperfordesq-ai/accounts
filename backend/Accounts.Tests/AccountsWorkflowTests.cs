@@ -18456,6 +18456,8 @@ public class AccountsWorkflowTests
         Assert.Contains("release-artifact-pack-report.json", runbook);
         Assert.Contains("verify-release-artifact-pack.ps1", reportService);
         Assert.Contains("release-artifact-pack-report.json", reportService);
+        Assert.Contains("-CommitSha <release-commit-sha>", runbook);
+        Assert.Contains("-GitHubActionsRunUrl <ci-run-url>", runbook);
         Assert.Contains("verify-accountant-workbench-evidence.mjs", runbook);
         Assert.Contains("accountant-workbench-evidence-report.json", runbook);
         Assert.Contains("test:visual:workbench", packageJson);
@@ -18489,6 +18491,12 @@ public class AccountsWorkflowTests
         Assert.Contains("manualHandoffScenarioCodes", script);
         Assert.Contains("manualHandoffPathCodes", script);
         Assert.Contains("accountant-workbench-evidence-report.json routeCount must be 7", script);
+        Assert.Contains("Get-FileHash", script);
+        Assert.Contains("releaseCandidate", script);
+        Assert.Contains("evidenceFiles", script);
+        Assert.Contains("identityProvided", script);
+        Assert.Contains("GitHubActionsRunUrl must be a GitHub Actions run URL", script);
+        Assert.Contains("CommitSha must be a 7-40 character hexadecimal Git commit SHA", script);
         Assert.Contains("workflowStages", script);
         Assert.Contains("routeReadiness", workbenchVerifier);
         Assert.Contains("visualSmokeReviewChecks", workbenchVerifier);

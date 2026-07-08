@@ -142,6 +142,12 @@ Backend/accounting-engine progress:
   `accountant-workbench-evidence-report.json`, proving each accountant workbench route
   has workflow-stage, route-key, review-check, theme, viewport and screenshot coverage
   before named visual QA sign-off.
+- `scripts/verify-release-artifact-pack.ps1` now emits a release artifact pack
+  manifest with optional release candidate identity plus per-report SHA-256 and
+  byte-size evidence, so retained dependency, production safety, monitoring,
+  structured log, backup/restore, no-direct-submission, visual smoke,
+  accountant-workbench, and release-evidence reports can be tied to the exact
+  release candidate.
 
 Frontend UI/UX progress:
 
@@ -233,7 +239,7 @@ Recent successful local verification includes:
   production scorecard evidence are wired together, including canonical
   qualified-accountant golden corpus scenario codes, external ROS/iXBRL validation
   template coverage, source-law source coverage, manual handoff coverage, visual
-  smoke and accountant workbench evidence report references, and the 549/700
+  smoke and accountant workbench evidence report references, and the 554/700
   scorecard total
 - Backend focused release artifact pack verifier and scorecard tests:
   `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~ReleaseArtifactPackVerifier_RequiresExactOperationalEvidenceReports|FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers"`
@@ -284,9 +290,10 @@ Recent successful local verification includes:
   release-artifact coverage.
 - PowerShell parser and synthetic completed-pack execution for
   `scripts\verify-release-artifact-pack.ps1` - passed. Temporary artifact reports pass
-  with `release-artifact-pack-report.json`, including monitoring correlation matching,
-  backup sha256/table checks, no-direct route coverage, visual smoke coverage, and
-  release-evidence required coverage.
+  with `release-artifact-pack-report.json`, including release candidate identity,
+  per-report SHA-256/byte-size manifest, monitoring correlation matching, backup
+  sha256/table checks, no-direct route coverage, visual smoke coverage,
+  accountant-workbench coverage, and release-evidence required coverage.
 - PowerShell parser and execution for `scripts\verify-no-direct-filing-submission.ps1`
   - passed; the generated `no-direct-filing-submission-report.json` records allowed
   filing workflow routes, forbidden outbound submission patterns, forbidden submit
@@ -355,8 +362,8 @@ Recent successful local verification includes:
 
 CI status:
 
-- GitHub Actions run `28935735490` for commit
-  `201975c Add release evidence verifier` completed successfully on
+- GitHub Actions run `28942188247` for commit
+  `5011b1b Add accountant workbench evidence verifier` completed successfully on
   July 8, 2026.
 - Green jobs: Workflow Hygiene, Production Compose Config, Frontend, Backend, and
   Production Stack Smoke.
@@ -420,9 +427,9 @@ As of July 8, 2026:
 - Code implementation is roughly 70-75% complete.
 - Production assurance is roughly 60-65% complete.
 - Overall goal is roughly 63-67% complete, with about one third left.
-- The production scorecard is now 549/700: architecture/documentation 99/100,
+- The production scorecard is now 554/700: architecture/documentation 99/100,
   backend statutory/accounting engine 190/250, frontend accountant workbench 145/200,
-  and security/auth/tenant/platform guardrails 115/150.
+  and security/auth/tenant/platform guardrails 120/150.
 - Architecture/documentation is now scored 99/100 in the production scorecard because
   source-law review, release evidence templates, manual handoff evidence, runbook
   links, and verifier coverage are in place, including an exact release artifact-pack

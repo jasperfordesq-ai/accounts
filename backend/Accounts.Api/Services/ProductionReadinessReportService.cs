@@ -795,7 +795,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "AGENTS.md carries the active production-readiness handoff.",
                     "Production runbook links release evidence templates for source-law review, visual QA, monitoring provider confirmation and qualified-accountant acceptance.",
                     "scripts/verify-release-evidence.ps1 validates completed release evidence templates before real filing use, including source-law source coverage.",
-                    "scripts/verify-release-artifact-pack.ps1 validates the collected release artifact reports as one exact evidence pack.",
+                    "scripts/verify-release-artifact-pack.ps1 validates the collected release artifact reports as one exact evidence pack with release candidate identity and SHA-256 inventory.",
                     "CI artifacts now prove production safety, dependency audit, monitoring smoke, structured logs, visual smoke and backup restore drill."
                 ],
                 [
@@ -859,7 +859,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             Category(
                 "security-auth-tenant-platform-guardrails",
                 "Security/auth/tenant/platform guardrails",
-                115,
+                120,
                 150,
                 "operator-confirmation-required",
                 [
@@ -867,11 +867,12 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "Request-scoped EF query filters backstop tenant isolation across company-owned and period-owned child tables.",
                     "Production compose gates enforce immutable images, migrate-only job ordering, demo seed blocking and structured monitoring evidence.",
                     "scripts/verify-no-direct-filing-submission.ps1 proves final CRO/ROS operations remain recorded workflow states with no outbound submission client wired.",
-                    "scripts/verify-release-artifact-pack.ps1 validates dependency, production safety, monitoring, structured log, backup/restore, no-direct-submission, visual smoke and release-evidence reports together."
+                    "scripts/verify-release-artifact-pack.ps1 validates dependency, production safety, monitoring, structured log, backup/restore, no-direct-submission, visual smoke and release-evidence reports together.",
+                    "release-artifact-pack-report.json now records release candidate identity plus per-report SHA-256 and byte-size evidence."
                 ],
                 [
                     "Confirm the controlled monitoring smoke event inside the configured provider and retain operator evidence.",
-                    "Run and retain release-artifact-pack-report.json for the exact release candidate.",
+                    "Run and retain release-artifact-pack-report.json for the exact release candidate with commit SHA and GitHub Actions run URL.",
                     "Retain production backup/restore drill and dependency evidence for the exact release commit."
                 ],
                 ["backend-code"],

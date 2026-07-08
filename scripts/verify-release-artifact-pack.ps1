@@ -1,6 +1,8 @@
 param(
     [string]$EvidenceDirectory = ".",
-    [string]$ReportPath = ""
+    [string]$ReportPath = "",
+    [string]$CommitSha = "",
+    [string]$GitHubActionsRunUrl = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -91,8 +93,31 @@ function Assert-ArrayContains {
     }
 }
 
+function Get-FileSha256 {
+    param(
+        [string]$Path
+    )
+
+    return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+}
+
 $failures = [System.Collections.Generic.List[string]]::new()
 $resolvedDirectory = Resolve-Path -LiteralPath $EvidenceDirectory -ErrorAction Stop
+$releaseCommitSha = $CommitSha.Trim()
+$releaseRunUrl = $GitHubActionsRunUrl.Trim()
+
+if (($releaseCommitSha.Length -gt 0 -and $releaseRunUrl.Length -eq 0) -or
+    ($releaseCommitSha.Length -eq 0 -and $releaseRunUrl.Length -gt 0)) {
+    Add-Failure $failures "CommitSha and GitHubActionsRunUrl must be provided together when release candidate identity is supplied."
+}
+
+if ($releaseCommitSha.Length -gt 0 -and $releaseCommitSha -notmatch '^[0-9a-fA-F]{7,40}$') {
+    Add-Failure $failures "CommitSha must be a 7-40 character hexadecimal Git commit SHA."
+}
+
+if ($releaseRunUrl.Length -gt 0 -and $releaseRunUrl -notmatch '^https://github\.com/.+/actions/runs/[0-9]+') {
+    Add-Failure $failures "GitHubActionsRunUrl must be a GitHub Actions run URL."
+}
 
 $dependency = Read-JsonEvidence $resolvedDirectory.Path "dependency-audit-report.json" $failures
 $productionSafety = Read-JsonEvidence $resolvedDirectory.Path "production-safety-report.json" $failures
@@ -217,11 +242,38 @@ if (-not ($releaseEvidence.PSObject.Properties.Name -contains "__missing")) {
     }
 }
 
+$evidenceFileManifest = @(
+    foreach ($entry in $allEvidence.GetEnumerator()) {
+        $evidence = $entry.Value
+        if ($evidence.PSObject.Properties.Name -contains "__missing" -or
+            $evidence.PSObject.Properties.Name -contains "__invalid") {
+            continue
+        }
+
+        $filePath = [string]$evidence.__path
+        $fileInfo = Get-Item -LiteralPath $filePath
+        [ordered]@{
+            fileName = $entry.Key
+            path = $filePath
+            byteSize = $fileInfo.Length
+            sha256 = Get-FileSha256 $filePath
+            checkedAtUtc = if ($evidence.PSObject.Properties.Name -contains "checkedAtUtc") { [string]$evidence.checkedAtUtc } else { "" }
+            status = if ($evidence.PSObject.Properties.Name -contains "status") { [string]$evidence.status } else { "" }
+        }
+    }
+)
+
 $report = [ordered]@{
     status = if ($failures.Count -eq 0) { "passed" } else { "failed" }
     checkedAtUtc = (Get-Date).ToUniversalTime().ToString("o")
     evidenceDirectory = $resolvedDirectory.Path
+    releaseCandidate = [ordered]@{
+        commitSha = $releaseCommitSha
+        githubActionsRunUrl = $releaseRunUrl
+        identityProvided = ($releaseCommitSha.Length -gt 0 -and $releaseRunUrl.Length -gt 0)
+    }
     requiredFiles = @($allEvidence.Keys)
+    evidenceFiles = $evidenceFileManifest
     failureCount = $failures.Count
     failures = $failures.ToArray()
 }
