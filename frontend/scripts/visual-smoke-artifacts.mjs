@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { inflateSync } from "node:zlib";
 import {
   expectedVisualSmokeArtifacts,
   expectedVisualSmokeRouteAudits,
@@ -12,6 +13,8 @@ import {
 } from "./visual-smoke-plan.mjs";
 
 const VISUAL_SMOKE_EVIDENCE_REPORT_FILE = "visual-smoke-evidence-report.json";
+const MIN_VISUAL_SMOKE_DISTINCT_COLORS = 4;
+const MIN_VISUAL_SMOKE_LUMINANCE_RANGE = 10;
 
 export async function withScreenshotEvidence(artifact) {
   const bytes = await readFile(artifact.artifactPath);
@@ -19,31 +22,36 @@ export async function withScreenshotEvidence(artifact) {
     throw new Error(`visual smoke screenshot is empty: ${artifact.fileName}`);
   }
 
-  const dimensions = readPngDimensions(bytes, artifact.fileName);
+  const png = readPngEvidence(bytes, artifact.fileName);
   const viewport = visualSmokeViewports.find((item) => item.name === artifact.viewportName);
   if (!viewport) {
     throw new Error(`visual smoke screenshot uses unknown viewport: ${artifact.fileName}`);
   }
 
-  if (dimensions.width !== viewport.width) {
+  if (png.width !== viewport.width) {
     throw new Error(
-      `visual smoke screenshot width mismatch: ${artifact.fileName} expected ${viewport.width}px, found ${dimensions.width}px`,
+      `visual smoke screenshot width mismatch: ${artifact.fileName} expected ${viewport.width}px, found ${png.width}px`,
     );
   }
 
-  if (dimensions.height < viewport.height) {
+  if (png.height < viewport.height) {
     throw new Error(
-      `visual smoke screenshot height is smaller than viewport: ${artifact.fileName} expected at least ${viewport.height}px, found ${dimensions.height}px`,
+      `visual smoke screenshot height is smaller than viewport: ${artifact.fileName} expected at least ${viewport.height}px, found ${png.height}px`,
     );
   }
 
   return {
     ...artifact,
     byteSize: bytes.length,
-    imageWidth: dimensions.width,
-    imageHeight: dimensions.height,
+    imageWidth: png.width,
+    imageHeight: png.height,
     expectedViewportWidth: viewport.width,
     minimumViewportHeight: viewport.height,
+    pngChunkCount: png.chunkCount,
+    pngIdatByteSize: png.idatByteSize,
+    pixelSampleCount: png.pixelSampleCount,
+    sampledDistinctColorCount: png.sampledDistinctColorCount,
+    luminanceRange: png.luminanceRange,
     sha256: `sha256:${createHash("sha256").update(bytes).digest("hex")}`,
   };
 }
@@ -71,6 +79,10 @@ export async function verifyVisualSmokeManifest(manifestPath, options = {}) {
 
   if (!manifest.reviewProtocol?.requiredEvidence?.includes("screenshot PNG dimensions")) {
     failures.push("visual smoke manifest review protocol must require screenshot PNG dimensions");
+  }
+
+  if (!manifest.reviewProtocol?.requiredEvidence?.includes("screenshot nonblank pixel diversity evidence")) {
+    failures.push("visual smoke manifest review protocol must require screenshot nonblank pixel diversity evidence");
   }
 
   if (!manifest.reviewProtocol?.requiredEvidence?.includes(VISUAL_SMOKE_EVIDENCE_REPORT_FILE)) {
@@ -125,6 +137,11 @@ export async function verifyVisualSmokeManifest(manifestPath, options = {}) {
       imageHeight: evidence.imageHeight,
       expectedViewportWidth: evidence.expectedViewportWidth,
       minimumViewportHeight: evidence.minimumViewportHeight,
+      pngChunkCount: evidence.pngChunkCount,
+      pngIdatByteSize: evidence.pngIdatByteSize,
+      pixelSampleCount: evidence.pixelSampleCount,
+      sampledDistinctColorCount: evidence.sampledDistinctColorCount,
+      luminanceRange: evidence.luminanceRange,
       sha256: evidence.sha256,
       reviewStatus: screenshot.reviewStatus,
     });
@@ -236,17 +253,160 @@ function screenshotKey(screenshot) {
   return `${screenshot.routeName}/${screenshot.theme}/${screenshot.viewportName}`;
 }
 
-function readPngDimensions(bytes, fileName) {
+function readPngEvidence(bytes, fileName) {
   const pngSignature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
   const hasPngSignature = pngSignature.every((value, index) => bytes[index] === value);
-  const hasIhdrChunk = bytes.length >= 24 && bytes.toString("ascii", 12, 16) === "IHDR";
+  const hasIhdrChunk = bytes.length >= 29 && bytes.toString("ascii", 12, 16) === "IHDR";
 
   if (!hasPngSignature || !hasIhdrChunk) {
     throw new Error(`visual smoke screenshot is not a PNG with an IHDR header: ${fileName}`);
   }
 
+  const width = bytes.readUInt32BE(16);
+  const height = bytes.readUInt32BE(20);
+  const bitDepth = bytes[24];
+  const colorType = bytes[25];
+  const idatChunks = [];
+  let chunkCount = 0;
+  let hasIend = false;
+  let offset = 8;
+  while (offset + 12 <= bytes.length) {
+    const length = bytes.readUInt32BE(offset);
+    const type = bytes.toString("ascii", offset + 4, offset + 8);
+    const dataStart = offset + 8;
+    const dataEnd = dataStart + length;
+    const crcEnd = dataEnd + 4;
+    if (crcEnd > bytes.length) {
+      throw new Error(`visual smoke screenshot has a truncated PNG chunk: ${fileName}`);
+    }
+
+    chunkCount += 1;
+    if (type === "IDAT") {
+      idatChunks.push(bytes.subarray(dataStart, dataEnd));
+    }
+    if (type === "IEND") {
+      hasIend = true;
+      break;
+    }
+    offset = crcEnd;
+  }
+
+  if (idatChunks.length === 0 || !hasIend) {
+    throw new Error(`visual smoke screenshot is missing PNG image data: ${fileName}`);
+  }
+
+  const metrics = analyzePngPixels({
+    fileName,
+    width,
+    height,
+    bitDepth,
+    colorType,
+    compressedPixels: Buffer.concat(idatChunks),
+  });
+
+  if (
+    metrics.sampledDistinctColorCount < MIN_VISUAL_SMOKE_DISTINCT_COLORS ||
+    metrics.luminanceRange < MIN_VISUAL_SMOKE_LUMINANCE_RANGE
+  ) {
+    throw new Error(
+      `visual smoke screenshot appears visually blank or low-information: ${fileName} ` +
+      `distinctColors=${metrics.sampledDistinctColorCount}, luminanceRange=${metrics.luminanceRange}`,
+    );
+  }
+
   return {
     width: bytes.readUInt32BE(16),
     height: bytes.readUInt32BE(20),
+    bitDepth,
+    colorType,
+    chunkCount,
+    idatByteSize: idatChunks.reduce((sum, chunk) => sum + chunk.length, 0),
+    ...metrics,
   };
+}
+
+function analyzePngPixels({ fileName, width, height, bitDepth, colorType, compressedPixels }) {
+  if (bitDepth !== 8 || ![0, 2, 6].includes(colorType)) {
+    throw new Error(`visual smoke screenshot uses unsupported PNG color format: ${fileName}`);
+  }
+
+  const channels = colorType === 0 ? 1 : colorType === 2 ? 3 : 4;
+  const bytesPerPixel = channels;
+  const stride = width * channels;
+  const expectedLength = height * (stride + 1);
+  const inflated = inflateSync(compressedPixels);
+  if (inflated.length < expectedLength) {
+    throw new Error(`visual smoke screenshot has truncated PNG pixel data: ${fileName}`);
+  }
+
+  const previous = Buffer.alloc(stride);
+  const current = Buffer.alloc(stride);
+  const colorBuckets = new Set();
+  const sampleEvery = Math.max(1, Math.floor((width * height) / 4000));
+  let pixelIndex = 0;
+  let sampleCount = 0;
+  let minLuminance = Number.POSITIVE_INFINITY;
+  let maxLuminance = Number.NEGATIVE_INFINITY;
+
+  for (let y = 0; y < height; y += 1) {
+    const rowStart = y * (stride + 1);
+    const filter = inflated[rowStart];
+    const row = inflated.subarray(rowStart + 1, rowStart + 1 + stride);
+    unfilterPngRow(row, current, previous, filter, bytesPerPixel, fileName);
+
+    for (let x = 0; x < width; x += 1) {
+      if (pixelIndex % sampleEvery === 0) {
+        const offset = x * channels;
+        const r = colorType === 0 ? current[offset] : current[offset];
+        const g = colorType === 0 ? current[offset] : current[offset + 1];
+        const b = colorType === 0 ? current[offset] : current[offset + 2];
+        const luminance = Math.round(0.2126 * r + 0.7152 * g + 0.0722 * b);
+        minLuminance = Math.min(minLuminance, luminance);
+        maxLuminance = Math.max(maxLuminance, luminance);
+        colorBuckets.add(`${r >> 4}:${g >> 4}:${b >> 4}`);
+        sampleCount += 1;
+      }
+      pixelIndex += 1;
+    }
+
+    previous.set(current);
+  }
+
+  return {
+    pixelSampleCount: sampleCount,
+    sampledDistinctColorCount: colorBuckets.size,
+    luminanceRange: Math.max(0, maxLuminance - minLuminance),
+  };
+}
+
+function unfilterPngRow(source, target, previous, filter, bytesPerPixel, fileName) {
+  for (let i = 0; i < source.length; i += 1) {
+    const raw = source[i];
+    const left = i >= bytesPerPixel ? target[i - bytesPerPixel] : 0;
+    const up = previous[i] ?? 0;
+    const upLeft = i >= bytesPerPixel ? previous[i - bytesPerPixel] : 0;
+    if (filter === 0) {
+      target[i] = raw;
+    } else if (filter === 1) {
+      target[i] = (raw + left) & 0xff;
+    } else if (filter === 2) {
+      target[i] = (raw + up) & 0xff;
+    } else if (filter === 3) {
+      target[i] = (raw + Math.floor((left + up) / 2)) & 0xff;
+    } else if (filter === 4) {
+      target[i] = (raw + paethPredictor(left, up, upLeft)) & 0xff;
+    } else {
+      throw new Error(`visual smoke screenshot uses unsupported PNG row filter ${filter}: ${fileName}`);
+    }
+  }
+}
+
+function paethPredictor(left, up, upLeft) {
+  const estimate = left + up - upLeft;
+  const leftDistance = Math.abs(estimate - left);
+  const upDistance = Math.abs(estimate - up);
+  const upLeftDistance = Math.abs(estimate - upLeft);
+  if (leftDistance <= upDistance && leftDistance <= upLeftDistance) return left;
+  if (upDistance <= upLeftDistance) return up;
+  return upLeft;
 }

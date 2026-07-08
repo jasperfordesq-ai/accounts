@@ -18629,6 +18629,12 @@ public class AccountsWorkflowTests
         Assert.Contains("screenshots.imageWidth must match planned viewport width", machineEvidencePack);
         Assert.Contains("screenshots.minimumViewportHeight must match planned viewport height", script);
         Assert.Contains("screenshots.minimumViewportHeight must match planned viewport height", machineEvidencePack);
+        Assert.Contains("screenshots.pngIdatByteSize must prove retained PNG image data", script);
+        Assert.Contains("screenshots.pngIdatByteSize must prove retained PNG image data", machineEvidencePack);
+        Assert.Contains("screenshots.sampledDistinctColorCount must be at least 4", script);
+        Assert.Contains("screenshots.sampledDistinctColorCount must be at least 4", machineEvidencePack);
+        Assert.Contains("screenshots.luminanceRange must be at least 10", script);
+        Assert.Contains("screenshots.luminanceRange must be at least 10", machineEvidencePack);
         Assert.Contains("Get-FileHash", script);
         Assert.Contains("releaseCandidate", script);
         Assert.Contains("releaseCandidate.identityConsistent must be true", script);

@@ -164,6 +164,10 @@ function Assert-VisualSmokeDimensionEvidence {
         $imageHeight = Get-JsonProperty $screenshot @("imageHeight")
         $expectedViewportWidth = Get-JsonProperty $screenshot @("expectedViewportWidth")
         $minimumViewportHeight = Get-JsonProperty $screenshot @("minimumViewportHeight")
+        $pixelSampleCount = Get-JsonProperty $screenshot @("pixelSampleCount")
+        $sampledDistinctColorCount = Get-JsonProperty $screenshot @("sampledDistinctColorCount")
+        $luminanceRange = Get-JsonProperty $screenshot @("luminanceRange")
+        $pngIdatByteSize = Get-JsonProperty $screenshot @("pngIdatByteSize")
 
         if ($null -eq $imageWidth -or [int]$imageWidth -ne [int]$expected.width) {
             Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.imageWidth must match planned viewport width."
@@ -176,6 +180,18 @@ function Assert-VisualSmokeDimensionEvidence {
         }
         if ($null -eq $minimumViewportHeight -or [int]$minimumViewportHeight -ne [int]$expected.height) {
             Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.minimumViewportHeight must match planned viewport height."
+        }
+        if ($null -eq $pngIdatByteSize -or [int]$pngIdatByteSize -le 0) {
+            Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.pngIdatByteSize must prove retained PNG image data."
+        }
+        if ($null -eq $pixelSampleCount -or [int]$pixelSampleCount -le 0) {
+            Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.pixelSampleCount must be greater than zero."
+        }
+        if ($null -eq $sampledDistinctColorCount -or [int]$sampledDistinctColorCount -lt 4) {
+            Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.sampledDistinctColorCount must be at least 4."
+        }
+        if ($null -eq $luminanceRange -or [int]$luminanceRange -lt 10) {
+            Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.luminanceRange must be at least 10."
         }
 
         $index += 1

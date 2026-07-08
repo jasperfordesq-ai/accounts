@@ -61,6 +61,7 @@ describe("visual smoke plan", () => {
         "28 visual smoke screenshots",
         "screenshot SHA-256 checksums",
         "screenshot PNG dimensions",
+        "screenshot nonblank pixel diversity evidence",
         "route audit summary",
         "named visual QA reviewer sign-off",
       ],

@@ -4,6 +4,7 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
+import { deflateSync } from "node:zlib";
 import { visualSmokeViewports } from "../scripts/visual-smoke-plan.mjs";
 
 describe("visual smoke artifact evidence", () => {
@@ -35,6 +36,11 @@ describe("visual smoke artifact evidence", () => {
       assert.equal(evidence.imageHeight, 1200);
       assert.equal(evidence.expectedViewportWidth, 1440);
       assert.equal(evidence.minimumViewportHeight, 1000);
+      assert.ok(evidence.pngChunkCount >= 3);
+      assert.ok(evidence.pngIdatByteSize > 0);
+      assert.ok(evidence.pixelSampleCount > 0);
+      assert.ok(evidence.sampledDistinctColorCount >= 4);
+      assert.ok(evidence.luminanceRange >= 10);
       assert.equal(evidence.fileName, "dashboard-light-desktop.png");
       assert.equal(evidence.artifactPath, screenshotPath);
     } finally {
@@ -64,6 +70,34 @@ describe("visual smoke artifact evidence", () => {
           layoutChecks: ["browser-console-errors"],
         }),
         /visual smoke screenshot is empty: empty\.png/,
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects structurally valid screenshots that are visually blank", async () => {
+    const { withScreenshotEvidence } = await import("../scripts/visual-smoke-artifacts.mjs");
+    const dir = await mkTempDir();
+    const screenshotPath = path.join(dir, "blank.png");
+
+    await writeFile(screenshotPath, pngBytes(1440, 1200, { blank: true }));
+
+    try {
+      await assert.rejects(
+        () => withScreenshotEvidence({
+          routeName: "dashboard",
+          routeKey: "dashboard",
+          theme: "light",
+          viewportName: "desktop",
+          fileName: "blank.png",
+          artifactPath: screenshotPath,
+          expectedText: "Production Readiness",
+          openFilingTab: false,
+          reviewStatus: "required-review",
+          layoutChecks: ["browser-console-errors"],
+        }),
+        /visual smoke screenshot appears visually blank or low-information: blank\.png/,
       );
     } finally {
       await rm(dir, { recursive: true, force: true });
@@ -141,6 +175,8 @@ describe("visual smoke artifact evidence", () => {
       assert.equal(result.screenshots.length, 28);
       assert.equal(result.screenshots[0].imageWidth, 1440);
       assert.ok(result.screenshots[0].imageHeight >= 1000);
+      assert.ok(result.screenshots[0].sampledDistinctColorCount >= 4);
+      assert.ok(result.screenshots[0].luminanceRange >= 10);
       assert.equal(JSON.parse(await readFile(reportPath, "utf8")).status, "passed");
     } finally {
       await rm(dir, { recursive: true, force: true });
@@ -198,7 +234,12 @@ describe("visual smoke artifact evidence", () => {
     const manifestPath = path.join(dir, "visual-smoke-manifest.json");
 
     const screenshots = await completeScreenshots(dir, withScreenshotEvidence);
-    await writeManifest(manifestPath, screenshots, undefined, ["visual-smoke-evidence-report.json", "screenshot SHA-256 checksums", "screenshot PNG dimensions"]);
+    await writeManifest(
+      manifestPath,
+      screenshots,
+      undefined,
+      ["visual-smoke-evidence-report.json", "screenshot SHA-256 checksums", "screenshot PNG dimensions", "screenshot nonblank pixel diversity evidence"],
+    );
 
     try {
       await assert.rejects(
@@ -244,7 +285,13 @@ async function completeScreenshots(dir, withScreenshotEvidence) {
   return screenshots;
 }
 
-async function writeManifest(manifestPath, screenshots, routeAudits, requiredEvidence = ["visual-smoke-evidence-report.json", "accountant-workbench-evidence-report.json", "screenshot SHA-256 checksums", "screenshot PNG dimensions"]) {
+async function writeManifest(manifestPath, screenshots, routeAudits, requiredEvidence = [
+  "visual-smoke-evidence-report.json",
+  "accountant-workbench-evidence-report.json",
+  "screenshot SHA-256 checksums",
+  "screenshot PNG dimensions",
+  "screenshot nonblank pixel diversity evidence",
+]) {
   const {
     expectedVisualSmokeRouteAudits,
     visualSmokeLayoutChecks,
@@ -273,17 +320,60 @@ async function mkTempDir() {
   return dir;
 }
 
-function pngBytes(width, height) {
-  const bytes = Buffer.alloc(33);
-  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(bytes, 0);
-  bytes.writeUInt32BE(13, 8);
-  bytes.write("IHDR", 12, "ascii");
-  bytes.writeUInt32BE(width, 16);
-  bytes.writeUInt32BE(height, 20);
-  bytes[24] = 8;
-  bytes[25] = 2;
-  bytes[26] = 0;
-  bytes[27] = 0;
-  bytes[28] = 0;
-  return bytes;
+function pngBytes(width, height, options = {}) {
+  const bytesPerPixel = 3;
+  const stride = width * bytesPerPixel;
+  const raw = Buffer.alloc(height * (stride + 1));
+  for (let y = 0; y < height; y += 1) {
+    const rowStart = y * (stride + 1);
+    raw[rowStart] = 0;
+    for (let x = 0; x < width; x += 1) {
+      const offset = rowStart + 1 + x * bytesPerPixel;
+      if (options.blank) {
+        raw[offset] = 255;
+        raw[offset + 1] = 255;
+        raw[offset + 2] = 255;
+      } else {
+        raw[offset] = (x * 17 + y * 3) & 0xff;
+        raw[offset + 1] = (x * 5 + y * 11) & 0xff;
+        raw[offset + 2] = (x * 13 + y * 7) & 0xff;
+      }
+    }
+  }
+
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8;
+  ihdr[9] = 2;
+  ihdr[10] = 0;
+  ihdr[11] = 0;
+  ihdr[12] = 0;
+
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk("IHDR", ihdr),
+    pngChunk("IDAT", deflateSync(raw)),
+    pngChunk("IEND", Buffer.alloc(0)),
+  ]);
+}
+
+function pngChunk(type, data) {
+  const header = Buffer.alloc(8);
+  header.writeUInt32BE(data.length, 0);
+  header.write(type, 4, "ascii");
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(crc32(Buffer.concat([Buffer.from(type, "ascii"), data])), 0);
+  return Buffer.concat([header, data, crc]);
+}
+
+function crc32(bytes) {
+  let crc = 0xffffffff;
+  for (const byte of bytes) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit += 1) {
+      crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
+    }
+  }
+  return (crc ^ 0xffffffff) >>> 0;
 }
