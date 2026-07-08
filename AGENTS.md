@@ -67,6 +67,7 @@ Committed and pushed work on `main` includes:
 - `923e163 Require explicit accountant acceptance rows`
 - `9c32438 Require accepted external ROS evidence rows`
 - `76c9396 Require accepted manual handoff evidence rows`
+- `a3fb293 Require accepted source-law review rows`
 
 Backend/accounting-engine progress:
 
@@ -177,6 +178,9 @@ Backend/accounting-engine progress:
   handoff note, filing readiness snapshot and accepted decision references, and
   every unsupported path row to carry a real blocking-evidence reference plus an
   accepted reviewer decision.
+- The source-law review template and verifier now require every monitored source
+  row to record URL reachability, effective-date review, guidance wording
+  comparison, platform impact classification and an explicit accepted decision.
 - `scripts/verify-no-direct-filing-submission.ps1` now emits
   `no-direct-filing-submission-report.json`, proving release candidates still have no
   outbound CRO/ROS submission client or submit route and only record external filing
@@ -515,6 +519,25 @@ Recent successful local verification includes:
   - `npx.cmd vitest run tests/render/production-readiness-panel.test.tsx tests/render/production-readiness-workbench.test.tsx`
     - 2 passed
   - `npx.cmd tsc --noEmit --incremental false` - passed
+- Release evidence verifier source-law accepted-row checks:
+  - PowerShell parser check for `scripts\verify-release-evidence.ps1` - passed
+  - Temporary completed copies of all six release-evidence templates passed
+    `scripts\verify-release-evidence.ps1` with URL reachability, effective-date
+    review, guidance wording comparison, platform impact classification and
+    explicit `accepted` decisions for every monitored source
+  - A copied source-law review template with `pending` URL/effective-date/decision
+    and invalid impact wording for `revenue-accepted-taxonomies` failed as expected
+- Backend focused release evidence/scorecard tests after adding accepted source-law
+  rows:
+  `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~ReleaseEvidenceTemplates_CoverHumanVisualAccountantAndProviderSignoffs|FullyQualifiedName~ReleaseEvidenceVerifier_BlocksIncompleteHumanSignoffEvidence|FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers"`
+  - 3 passed, proving the source-law review template, release evidence verifier,
+  accepted-row checks, and 614/700 production scorecard are wired together
+- Frontend scorecard contract checks after adding accepted source-law rows:
+  - `node --test tests/production-readiness-contract.test.mjs` - 49 passed
+  - `node scripts/verify-api-client.mjs` - passed
+  - `npx.cmd vitest run tests/render/production-readiness-panel.test.tsx tests/render/production-readiness-workbench.test.tsx`
+    - 2 passed
+  - `npx.cmd tsc --noEmit --incremental false` - passed
 - Backend focused scorecard/visual QA tests after adding PNG dimension evidence:
   `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers|FullyQualifiedName~ProductionReadinessReport_DeclaresVisualQaCoverageForAccountantWorkbenchRoutes"`
   - 2 passed, proving the readiness report exposes the 608/700 scorecard and visual
@@ -576,8 +599,8 @@ CI status:
   July 8, 2026.
 - Green jobs: Workflow Hygiene, Production Compose Config, Frontend, Backend,
   Production Stack Smoke, and CI Machine Evidence Pack.
-- The scorecard exposed by the candidate is now 613/700, with backend statutory/accounting
-  engine at 203/250, frontend accountant workbench at 162/200 and
+- The scorecard exposed by the candidate is now 614/700, with backend statutory/accounting
+  engine at 204/250, frontend accountant workbench at 162/200 and
   security/auth/tenant/platform guardrails at 149/150.
   The typed frontend parser and production-readiness verifier both require CI
   machine evidence, production smoke, readiness verification, visual smoke, release
@@ -656,8 +679,8 @@ As of July 8, 2026:
 - Code implementation is roughly 70-75% complete.
 - Production assurance is roughly 60-65% complete.
 - Overall goal is roughly 63-67% complete, with about one third left.
-- The production scorecard is now 613/700: architecture/documentation 99/100,
-  backend statutory/accounting engine 203/250, frontend accountant workbench 162/200,
+- The production scorecard is now 614/700: architecture/documentation 99/100,
+  backend statutory/accounting engine 204/250, frontend accountant workbench 162/200,
   and security/auth/tenant/platform guardrails 149/150.
 - Architecture/documentation is now scored 99/100 in the production scorecard because
   source-law review, release evidence templates, manual handoff evidence, runbook
