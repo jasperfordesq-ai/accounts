@@ -105,7 +105,7 @@ const share = {
 
 function productionScorecardFixture() {
   return {
-    currentScore: 594,
+    currentScore: 599,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete source-law review, named visual QA, monitoring-provider confirmation, manual handoff and qualified-accountant acceptance evidence.",
@@ -146,12 +146,12 @@ function productionScorecardFixture() {
       {
         code: "frontend-accountant-workbench",
         label: "Frontend accountant workbench",
-        currentScore: 155,
+        currentScore: 160,
         targetScore: 200,
         status: "visual-acceptance-required",
         currentEvidence: [
           "Visual smoke routes and workbench primitives are typed.",
-          "visual-smoke-evidence-report.json proves screenshot hash, byte-size and route/theme/viewport coverage.",
+          "visual-smoke-evidence-report.json proves screenshot hash, byte-size, PNG dimension and route/theme/viewport coverage.",
           "accountant-workbench-evidence-report.json proves route workflow-stage, review-check and qualified-accountant route acceptance coverage.",
           "Frontend parser invariants now require the CI machine evidence pack, production smoke, readiness verification, visual smoke and manual release-verification rows before rendering readiness data.",
         ],

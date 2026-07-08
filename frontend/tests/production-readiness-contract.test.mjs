@@ -191,7 +191,7 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.ok(parsed.assurancePacket.evidenceItems.includes("production-readiness-report"));
   assert.ok(parsed.assurancePacket.evidenceItems.includes("production-readiness-verification-report"));
   assert.equal(parsed.assurancePacket.releaseBlockers[0], "Qualified accountant sign-off required");
-  assert.equal(parsed.productionScorecard.currentScore, 594);
+  assert.equal(parsed.productionScorecard.currentScore, 599);
   assert.equal(parsed.productionScorecard.targetScore, 700);
   assert.deepEqual(parsed.productionScorecard.categories.map((category) => category.code), [
     "architecture-documentation",
@@ -271,6 +271,7 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
     "accountant-workbench-evidence-report.json",
     "28 visual smoke screenshots",
     "screenshot SHA-256 checksums",
+    "screenshot PNG dimensions",
     "route audit summary",
     "named visual QA reviewer sign-off",
   ]);
@@ -458,6 +459,17 @@ test("parseProductionReadinessReport rejects visual review protocols without che
   assert.throws(
     () => parseProductionReadinessReport(payload),
     /Invalid production readiness report contract: visualQaCoverage\.reviewProtocol\.requiredEvidence - must include screenshot SHA-256 checksums/,
+  );
+});
+
+test("parseProductionReadinessReport rejects visual review protocols without PNG dimension evidence", () => {
+  const payload = sampleReport();
+  payload.visualQaCoverage.reviewProtocol.requiredEvidence =
+    payload.visualQaCoverage.reviewProtocol.requiredEvidence.filter((item) => item !== "screenshot PNG dimensions");
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: visualQaCoverage\.reviewProtocol\.requiredEvidence - must include screenshot PNG dimensions/,
   );
 });
 
@@ -807,7 +819,7 @@ test("parseProductionReadinessReport rejects scorecard totals that do not match 
 
   assert.throws(
     () => parseProductionReadinessReport(payload),
-    /Invalid production readiness report contract: productionScorecard\.currentScore - expected 594, received 491/,
+    /Invalid production readiness report contract: productionScorecard\.currentScore - expected 599, received 491/,
   );
 });
 
@@ -904,7 +916,7 @@ test("parseProductionReadinessReport rejects release verification manifest that 
 
 function productionScorecard() {
   return {
-    currentScore: 594,
+    currentScore: 599,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete source-law review, named visual QA, monitoring-provider confirmation, manual handoff and qualified-accountant acceptance evidence.",
@@ -950,12 +962,12 @@ function productionScorecard() {
       {
         code: "frontend-accountant-workbench",
         label: "Frontend accountant workbench",
-        currentScore: 155,
+        currentScore: 160,
         targetScore: 200,
         status: "visual-acceptance-required",
         currentEvidence: [
           "Visual smoke plan covers the accountant journey.",
-          "visual-smoke-evidence-report.json proves screenshot hash, byte-size and route/theme/viewport coverage.",
+          "visual-smoke-evidence-report.json proves screenshot hash, byte-size, PNG dimension and route/theme/viewport coverage.",
           "accountant-workbench-evidence-report.json proves route workflow-stage, review-check and qualified-accountant route acceptance coverage.",
           "Frontend parser invariants now require the CI machine evidence pack, production smoke, readiness verification, visual smoke and manual release-verification rows before rendering readiness data.",
         ],

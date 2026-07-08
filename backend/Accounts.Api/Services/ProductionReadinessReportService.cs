@@ -839,14 +839,14 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             Category(
                 "frontend-accountant-workbench",
                 "Frontend accountant workbench",
-                155,
+                160,
                 200,
                 "visual-acceptance-required",
                 [
                     "Production readiness, dashboard, company, period, filing review, financial statements and workbench preview routes are in the visual smoke plan.",
                     "Shared workbench primitives and route-level render tests cover the main accountant journey.",
                     "Dense tables, workflow rails, blocker summaries and permission-denied states are surfaced in the workbench.",
-                    "node scripts/verify-visual-smoke-artifacts.mjs now writes visual-smoke-evidence-report.json covering screenshot hashes, byte sizes and route/theme/viewport completeness before human review.",
+                    "node scripts/verify-visual-smoke-artifacts.mjs now writes visual-smoke-evidence-report.json covering screenshot hashes, byte sizes, PNG dimensions and route/theme/viewport completeness before human review.",
                     "node scripts/verify-accountant-workbench-evidence.mjs now writes accountant-workbench-evidence-report.json proving route, workflow-stage, theme, viewport, layout-check and review-check coverage.",
                     "accountant-workbench-evidence-report.json now includes route acceptance rows with stable route keys, expected decision text, blocking status and qualified-accountant route acceptance evidence for every workbench route.",
                     "Frontend parser invariants now require the CI machine evidence pack, production smoke, readiness verification, visual smoke and manual release-verification rows before rendering readiness data."
@@ -3667,6 +3667,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 "accountant-workbench-evidence-report.json",
                 "28 visual smoke screenshots",
                 "screenshot SHA-256 checksums",
+                "screenshot PNG dimensions",
                 "route audit summary",
                 "named visual QA reviewer sign-off"
             ]);

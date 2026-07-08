@@ -4227,6 +4227,12 @@ function assertVisualQaArtifacts(report: ProductionReadinessReport) {
     );
   }
 
+  if (!reviewProtocol.requiredEvidence.includes("screenshot PNG dimensions")) {
+    throw new Error(
+      "Invalid production readiness report contract: visualQaCoverage.reviewProtocol.requiredEvidence - must include screenshot PNG dimensions",
+    );
+  }
+
   if (!reviewProtocol.requiredEvidence.includes("visual-smoke-evidence-report.json")) {
     throw new Error(
       "Invalid production readiness report contract: visualQaCoverage.reviewProtocol.requiredEvidence - must include visual-smoke-evidence-report.json",

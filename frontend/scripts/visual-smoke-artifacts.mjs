@@ -19,9 +19,31 @@ export async function withScreenshotEvidence(artifact) {
     throw new Error(`visual smoke screenshot is empty: ${artifact.fileName}`);
   }
 
+  const dimensions = readPngDimensions(bytes, artifact.fileName);
+  const viewport = visualSmokeViewports.find((item) => item.name === artifact.viewportName);
+  if (!viewport) {
+    throw new Error(`visual smoke screenshot uses unknown viewport: ${artifact.fileName}`);
+  }
+
+  if (dimensions.width !== viewport.width) {
+    throw new Error(
+      `visual smoke screenshot width mismatch: ${artifact.fileName} expected ${viewport.width}px, found ${dimensions.width}px`,
+    );
+  }
+
+  if (dimensions.height < viewport.height) {
+    throw new Error(
+      `visual smoke screenshot height is smaller than viewport: ${artifact.fileName} expected at least ${viewport.height}px, found ${dimensions.height}px`,
+    );
+  }
+
   return {
     ...artifact,
     byteSize: bytes.length,
+    imageWidth: dimensions.width,
+    imageHeight: dimensions.height,
+    expectedViewportWidth: viewport.width,
+    minimumViewportHeight: viewport.height,
     sha256: `sha256:${createHash("sha256").update(bytes).digest("hex")}`,
   };
 }
@@ -45,6 +67,10 @@ export async function verifyVisualSmokeManifest(manifestPath, options = {}) {
 
   if (!manifest.reviewProtocol?.requiredEvidence?.includes("screenshot SHA-256 checksums")) {
     failures.push("visual smoke manifest review protocol must require screenshot SHA-256 checksums");
+  }
+
+  if (!manifest.reviewProtocol?.requiredEvidence?.includes("screenshot PNG dimensions")) {
+    failures.push("visual smoke manifest review protocol must require screenshot PNG dimensions");
   }
 
   if (!manifest.reviewProtocol?.requiredEvidence?.includes(VISUAL_SMOKE_EVIDENCE_REPORT_FILE)) {
@@ -79,6 +105,14 @@ export async function verifyVisualSmokeManifest(manifestPath, options = {}) {
       failures.push(`visual smoke screenshot hash mismatch: ${screenshot.fileName}`);
     }
 
+    if (screenshot.imageWidth !== undefined && screenshot.imageWidth !== evidence.imageWidth) {
+      failures.push(`visual smoke screenshot recorded width mismatch: ${screenshot.fileName}`);
+    }
+
+    if (screenshot.imageHeight !== undefined && screenshot.imageHeight !== evidence.imageHeight) {
+      failures.push(`visual smoke screenshot recorded height mismatch: ${screenshot.fileName}`);
+    }
+
     totalBytes += evidence.byteSize;
     screenshotSummaries.push({
       routeName: screenshot.routeName,
@@ -87,6 +121,10 @@ export async function verifyVisualSmokeManifest(manifestPath, options = {}) {
       viewportName: screenshot.viewportName,
       fileName: screenshot.fileName,
       byteSize: evidence.byteSize,
+      imageWidth: evidence.imageWidth,
+      imageHeight: evidence.imageHeight,
+      expectedViewportWidth: evidence.expectedViewportWidth,
+      minimumViewportHeight: evidence.minimumViewportHeight,
       sha256: evidence.sha256,
       reviewStatus: screenshot.reviewStatus,
     });
@@ -168,6 +206,7 @@ export async function verifyVisualSmokeManifest(manifestPath, options = {}) {
     expectedScreenshotCount: expectedVisualSmokeScreenshotCount(),
     themes: visualSmokeThemes,
     viewports: visualSmokeViewports.map((viewport) => viewport.name),
+    viewportDimensions: visualSmokeViewports,
     totalBytes,
     routeCoverage: expectedVisualSmokeRouteAudits().map((audit) => ({
       routeName: audit.routeName,
@@ -195,4 +234,19 @@ function resolveArtifactPath(artifactPath) {
 
 function screenshotKey(screenshot) {
   return `${screenshot.routeName}/${screenshot.theme}/${screenshot.viewportName}`;
+}
+
+function readPngDimensions(bytes, fileName) {
+  const pngSignature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+  const hasPngSignature = pngSignature.every((value, index) => bytes[index] === value);
+  const hasIhdrChunk = bytes.length >= 24 && bytes.toString("ascii", 12, 16) === "IHDR";
+
+  if (!hasPngSignature || !hasIhdrChunk) {
+    throw new Error(`visual smoke screenshot is not a PNG with an IHDR header: ${fileName}`);
+  }
+
+  return {
+    width: bytes.readUInt32BE(16),
+    height: bytes.readUInt32BE(20),
+  };
 }

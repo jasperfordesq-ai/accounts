@@ -141,8 +141,8 @@ Backend/accounting-engine progress:
   uploads the `no-direct-filing-submission-control` artifact for each candidate.
 - `node scripts/verify-visual-smoke-artifacts.mjs` now emits
   `visual-smoke-evidence-report.json`, proving the visual smoke artifact has the full
-  route/theme/viewport matrix plus matching screenshot byte sizes and SHA-256 hashes
-  before a named human reviewer signs off.
+  route/theme/viewport matrix plus matching screenshot byte sizes, SHA-256 hashes and
+  PNG dimensions before a named human reviewer signs off.
 - `node scripts/verify-accountant-workbench-evidence.mjs` now emits
   `accountant-workbench-evidence-report.json`, proving each accountant workbench route
   has workflow-stage, route-key, review-check, theme, viewport, screenshot and
@@ -261,7 +261,7 @@ Recent successful local verification includes:
   production scorecard evidence are wired together, including canonical
   qualified-accountant golden corpus scenario codes, external ROS/iXBRL validation
   template coverage, source-law source coverage, manual handoff coverage, visual
-  smoke and accountant workbench evidence report references, and the 594/700
+  smoke and accountant workbench evidence report references, and the 599/700
   scorecard total
 - Backend focused release artifact pack verifier and scorecard tests:
   `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~ReleaseArtifactPackVerifier_RequiresExactOperationalEvidenceReports|FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers"`
@@ -336,8 +336,17 @@ Recent successful local verification includes:
 - Frontend visual smoke evidence report checks:
   `node --test tests/accountant-workbench-evidence.test.mjs tests/visual-smoke-plan.test.mjs tests/visual-smoke-artifacts.test.mjs tests/production-readiness-contract.test.mjs`
   - passed, proving the 28-screenshot matrix, verifier report generation,
-  accountant workbench evidence report generation, duplicate coverage rejection,
-  parser invariants, and scorecard contract
+  PNG dimension checks, accountant workbench evidence report generation, duplicate
+  coverage rejection, parser invariants, and scorecard contract
+- Frontend focused visual evidence hardening checks after adding PNG dimension
+  validation:
+  `node --test tests/visual-smoke-artifacts.test.mjs tests/visual-smoke-plan.test.mjs tests/production-readiness-contract.test.mjs`
+  - 58 passed, proving the visual smoke verifier rejects non-PNG screenshots, wrong
+  viewport widths and missing screenshot PNG dimension evidence
+- Backend focused scorecard/visual QA tests after adding PNG dimension evidence:
+  `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers|FullyQualifiedName~ProductionReadinessReport_DeclaresVisualQaCoverageForAccountantWorkbenchRoutes"`
+  - 2 passed, proving the readiness report exposes the 599/700 scorecard and visual
+  review protocol requires screenshot PNG dimensions
 - Frontend scorecard render and type checks for the visual evidence report slice:
   - `node scripts/verify-api-client.mjs` - passed
   - `npm.cmd run test:render -- production-readiness-workbench` - 1 passed
@@ -389,8 +398,8 @@ CI status:
   July 8, 2026.
 - Green jobs: Workflow Hygiene, Production Compose Config, Frontend, Backend,
   Production Stack Smoke, and CI Machine Evidence Pack.
-- The scorecard exposed by the candidate is now 594/700, with frontend accountant
-  workbench at 155/200 and security/auth/tenant/platform guardrails at 140/150.
+- The scorecard exposed by the candidate is now 599/700, with frontend accountant
+  workbench at 160/200 and security/auth/tenant/platform guardrails at 140/150.
   The typed frontend parser and production-readiness verifier both require CI
   machine evidence, production smoke, readiness verification, visual smoke, release
   artifact pack, no-direct filing control, and named manual review manifest rows;
@@ -462,8 +471,8 @@ As of July 8, 2026:
 - Code implementation is roughly 70-75% complete.
 - Production assurance is roughly 60-65% complete.
 - Overall goal is roughly 63-67% complete, with about one third left.
-- The production scorecard is now 594/700: architecture/documentation 99/100,
-  backend statutory/accounting engine 200/250, frontend accountant workbench 155/200,
+- The production scorecard is now 599/700: architecture/documentation 99/100,
+  backend statutory/accounting engine 200/250, frontend accountant workbench 160/200,
   and security/auth/tenant/platform guardrails 140/150.
 - Architecture/documentation is now scored 99/100 in the production scorecard because
   source-law review, release evidence templates, manual handoff evidence, runbook

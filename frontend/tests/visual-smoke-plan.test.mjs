@@ -60,6 +60,7 @@ describe("visual smoke plan", () => {
         "accountant-workbench-evidence-report.json",
         "28 visual smoke screenshots",
         "screenshot SHA-256 checksums",
+        "screenshot PNG dimensions",
         "route audit summary",
         "named visual QA reviewer sign-off",
       ],

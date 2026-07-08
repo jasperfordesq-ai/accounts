@@ -1,15 +1,17 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
+import { visualSmokeViewports } from "../scripts/visual-smoke-plan.mjs";
 
 describe("visual smoke artifact evidence", () => {
   it("records byte size and sha256 for captured screenshots", async () => {
     const { withScreenshotEvidence } = await import("../scripts/visual-smoke-artifacts.mjs");
     const dir = await mkTempDir();
     const screenshotPath = path.join(dir, "dashboard-light-desktop.png");
-    const screenshotBytes = Buffer.from("not a real png, but deterministic evidence bytes", "utf8");
+    const screenshotBytes = pngBytes(1440, 1200);
 
     await writeFile(screenshotPath, screenshotBytes);
 
@@ -28,10 +30,11 @@ describe("visual smoke artifact evidence", () => {
       });
 
       assert.equal(evidence.byteSize, screenshotBytes.length);
-      assert.equal(
-        evidence.sha256,
-        "sha256:7285fca36498abf5103a4dcf4dd97ee26d341f8c89c6eca86ae99179cb64e471",
-      );
+      assert.equal(evidence.sha256, `sha256:${createHash("sha256").update(screenshotBytes).digest("hex")}`);
+      assert.equal(evidence.imageWidth, 1440);
+      assert.equal(evidence.imageHeight, 1200);
+      assert.equal(evidence.expectedViewportWidth, 1440);
+      assert.equal(evidence.minimumViewportHeight, 1000);
       assert.equal(evidence.fileName, "dashboard-light-desktop.png");
       assert.equal(evidence.artifactPath, screenshotPath);
     } finally {
@@ -67,6 +70,46 @@ describe("visual smoke artifact evidence", () => {
     }
   });
 
+  it("rejects screenshots that are not PNG images matching the planned viewport width", async () => {
+    const { withScreenshotEvidence } = await import("../scripts/visual-smoke-artifacts.mjs");
+    const dir = await mkTempDir();
+    const textPath = path.join(dir, "dashboard-light-desktop.png");
+    const wrongWidthPath = path.join(dir, "dashboard-light-desktop-wrong-width.png");
+
+    await writeFile(textPath, "not a real png", "utf8");
+    await writeFile(wrongWidthPath, pngBytes(1024, 1200));
+
+    try {
+      const artifact = {
+        routeName: "dashboard",
+        routeKey: "dashboard",
+        theme: "light",
+        viewportName: "desktop",
+        fileName: "dashboard-light-desktop.png",
+        artifactPath: textPath,
+        expectedText: "Production Readiness",
+        openFilingTab: false,
+        reviewStatus: "required-review",
+        layoutChecks: ["browser-console-errors"],
+      };
+
+      await assert.rejects(
+        () => withScreenshotEvidence(artifact),
+        /visual smoke screenshot is not a PNG with an IHDR header: dashboard-light-desktop\.png/,
+      );
+      await assert.rejects(
+        () => withScreenshotEvidence({
+          ...artifact,
+          fileName: "dashboard-light-desktop-wrong-width.png",
+          artifactPath: wrongWidthPath,
+        }),
+        /visual smoke screenshot width mismatch: dashboard-light-desktop-wrong-width\.png expected 1440px, found 1024px/,
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("verifies manifest screenshots against recorded hash and byte size", async () => {
     const { verifyVisualSmokeManifest, withScreenshotEvidence } = await import("../scripts/visual-smoke-artifacts.mjs");
     const dir = await mkTempDir();
@@ -92,9 +135,12 @@ describe("visual smoke artifact evidence", () => {
       assert.equal(result.expectedScreenshotCount, 28);
       assert.deepEqual(result.themes, ["light", "dark"]);
       assert.deepEqual(result.viewports, ["desktop", "mobile"]);
+      assert.deepEqual(result.viewportDimensions, visualSmokeViewports);
       assert.equal(result.totalBytes, screenshots.reduce((sum, screenshot) => sum + screenshot.byteSize, 0));
       assert.equal(result.routeCoverage.find((route) => route.routeName === "dashboard")?.screenshotCount, 4);
       assert.equal(result.screenshots.length, 28);
+      assert.equal(result.screenshots[0].imageWidth, 1440);
+      assert.ok(result.screenshots[0].imageHeight >= 1000);
       assert.equal(JSON.parse(await readFile(reportPath, "utf8")).status, "passed");
     } finally {
       await rm(dir, { recursive: true, force: true });
@@ -152,7 +198,7 @@ describe("visual smoke artifact evidence", () => {
     const manifestPath = path.join(dir, "visual-smoke-manifest.json");
 
     const screenshots = await completeScreenshots(dir, withScreenshotEvidence);
-    await writeManifest(manifestPath, screenshots, undefined, ["visual-smoke-evidence-report.json", "screenshot SHA-256 checksums"]);
+    await writeManifest(manifestPath, screenshots, undefined, ["visual-smoke-evidence-report.json", "screenshot SHA-256 checksums", "screenshot PNG dimensions"]);
 
     try {
       await assert.rejects(
@@ -184,35 +230,21 @@ describe("visual smoke artifact evidence", () => {
   });
 });
 
-function baseScreenshot(screenshotPath) {
-  return {
-    routeName: "dashboard",
-    routeKey: "dashboard",
-    theme: "light",
-    viewportName: "desktop",
-    fileName: "dashboard-light-desktop.png",
-    artifactPath: screenshotPath,
-    expectedText: "Production Readiness",
-    openFilingTab: false,
-    reviewStatus: "required-review",
-    layoutChecks: ["browser-console-errors"],
-  };
-}
-
 async function completeScreenshots(dir, withScreenshotEvidence) {
   const { expectedVisualSmokeArtifacts } = await import("../scripts/visual-smoke-plan.mjs");
   const screenshots = [];
 
   for (const artifact of expectedVisualSmokeArtifacts(dir)) {
     const screenshotPath = path.join(dir, artifact.fileName);
-    await writeFile(screenshotPath, `visual evidence bytes ${artifact.fileName}`, "utf8");
+    const viewport = visualSmokeViewports.find((item) => item.name === artifact.viewportName);
+    await writeFile(screenshotPath, pngBytes(viewport.width, viewport.height + 200));
     screenshots.push(await withScreenshotEvidence({ ...artifact, artifactPath: screenshotPath }));
   }
 
   return screenshots;
 }
 
-async function writeManifest(manifestPath, screenshots, routeAudits, requiredEvidence = ["visual-smoke-evidence-report.json", "accountant-workbench-evidence-report.json", "screenshot SHA-256 checksums"]) {
+async function writeManifest(manifestPath, screenshots, routeAudits, requiredEvidence = ["visual-smoke-evidence-report.json", "accountant-workbench-evidence-report.json", "screenshot SHA-256 checksums", "screenshot PNG dimensions"]) {
   const {
     expectedVisualSmokeRouteAudits,
     visualSmokeLayoutChecks,
@@ -239,4 +271,19 @@ async function mkTempDir() {
   const dir = path.join(os.tmpdir(), `visual-smoke-artifacts-${Date.now()}-${Math.random().toString(16).slice(2)}`);
   await mkdir(dir, { recursive: true });
   return dir;
+}
+
+function pngBytes(width, height) {
+  const bytes = Buffer.alloc(33);
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(bytes, 0);
+  bytes.writeUInt32BE(13, 8);
+  bytes.write("IHDR", 12, "ascii");
+  bytes.writeUInt32BE(width, 16);
+  bytes.writeUInt32BE(height, 20);
+  bytes[24] = 8;
+  bytes[25] = 2;
+  bytes[26] = 0;
+  bytes[27] = 0;
+  bytes[28] = 0;
+  return bytes;
 }
