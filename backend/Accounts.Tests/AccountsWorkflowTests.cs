@@ -18598,6 +18598,14 @@ public class AccountsWorkflowTests
         Assert.Contains("accountant-workbench-evidence-report.json routeAcceptanceCount must be 7", script);
         Assert.Contains("routeAcceptanceSignOffGate must be qualified-accountant-route-acceptance", script);
         Assert.Contains("routeAcceptance.requiredAcceptanceEvidence must include qualified-accountant-route-acceptance", script);
+        Assert.Contains("Assert-VisualSmokeDimensionEvidence", script);
+        Assert.Contains("Assert-VisualSmokeDimensionEvidence", machineEvidencePack);
+        Assert.Contains("viewportDimensions must include $($expected.name)", script);
+        Assert.Contains("viewportDimensions must include $($expected.name)", machineEvidencePack);
+        Assert.Contains("screenshots.imageWidth must match planned viewport width", script);
+        Assert.Contains("screenshots.imageWidth must match planned viewport width", machineEvidencePack);
+        Assert.Contains("screenshots.minimumViewportHeight must match planned viewport height", script);
+        Assert.Contains("screenshots.minimumViewportHeight must match planned viewport height", machineEvidencePack);
         Assert.Contains("Get-FileHash", script);
         Assert.Contains("releaseCandidate", script);
         Assert.Contains("evidenceFiles", script);

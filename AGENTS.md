@@ -154,6 +154,10 @@ Backend/accounting-engine progress:
   structured log, backup/restore, no-direct-submission, production-readiness
   verification, visual smoke, accountant-workbench, and release-evidence reports
   can be tied to the exact release candidate.
+- The release artifact pack verifier and CI machine evidence pack verifier now reject
+  visual evidence packs unless `visual-smoke-evidence-report.json` carries the planned
+  desktop/mobile PNG viewport dimensions and every screenshot summary records matching
+  width and minimum height evidence.
 - `scripts/smoke-production.ps1` now captures `production-readiness-report.json`
   from the live authenticated smoke stack, and CI uploads it as the
   `production-readiness-report` artifact so the exact candidate scorecard,
@@ -262,13 +266,19 @@ Recent successful local verification includes:
   production scorecard evidence are wired together, including canonical
   qualified-accountant golden corpus scenario codes, external ROS/iXBRL validation
   template coverage, source-law source coverage, manual handoff coverage, visual
-  smoke and accountant workbench evidence report references, and the 599/700
+  smoke and accountant workbench evidence report references, and the 604/700
   scorecard total
 - Backend focused release artifact pack verifier and scorecard tests:
   `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~ReleaseArtifactPackVerifier_RequiresExactOperationalEvidenceReports|FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers"`
-  - passed, proving `scripts/verify-release-artifact-pack.ps1`, runbook linkage,
-  exact operational report names, and the security/platform scorecard evidence are
-  wired together
+  - 2 passed, proving `scripts/verify-release-artifact-pack.ps1`,
+  `scripts/verify-ci-machine-evidence-pack.ps1`, runbook linkage, exact operational
+  report names, PNG dimension evidence checks, and the security/platform scorecard
+  evidence are wired together
+- Synthetic release artifact and CI machine evidence pack dimension checks:
+  temporary evidence reports passed both `scripts\verify-release-artifact-pack.ps1`
+  and `scripts\verify-ci-machine-evidence-pack.ps1`; removing
+  `visual-smoke-evidence-report.json.viewportDimensions` then failed both verifiers as
+  expected.
 - Backend focused no-direct submission verifier and scorecard tests:
   `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~NoDirectFilingSubmissionVerifier_ProvesRecordedWorkflowStateOnlyControl|FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers"`
   - 2 passed, proving the no-direct CRO/ROS submission verifier, runbook linkage,
@@ -346,7 +356,7 @@ Recent successful local verification includes:
   viewport widths and missing screenshot PNG dimension evidence
 - Backend focused scorecard/visual QA tests after adding PNG dimension evidence:
   `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers|FullyQualifiedName~ProductionReadinessReport_DeclaresVisualQaCoverageForAccountantWorkbenchRoutes"`
-  - 2 passed, proving the readiness report exposes the 599/700 scorecard and visual
+  - 2 passed, proving the readiness report exposes the 604/700 scorecard and visual
   review protocol requires screenshot PNG dimensions
 - Frontend scorecard render and type checks for the visual evidence report slice:
   - `node scripts/verify-api-client.mjs` - passed
@@ -399,8 +409,8 @@ CI status:
   July 8, 2026.
 - Green jobs: Workflow Hygiene, Production Compose Config, Frontend, Backend,
   Production Stack Smoke, and CI Machine Evidence Pack.
-- The scorecard exposed by the candidate is now 599/700, with frontend accountant
-  workbench at 160/200 and security/auth/tenant/platform guardrails at 140/150.
+- The scorecard exposed by the candidate is now 604/700, with frontend accountant
+  workbench at 160/200 and security/auth/tenant/platform guardrails at 145/150.
   The typed frontend parser and production-readiness verifier both require CI
   machine evidence, production smoke, readiness verification, visual smoke, release
   artifact pack, no-direct filing control, and named manual review manifest rows;
@@ -424,7 +434,8 @@ CI status:
     `production-readiness-verification-report.json` were retained from the live
     production smoke stack.
   - `visual-smoke-screenshots`: screenshot artifact, manifest, visual smoke evidence,
-    and accountant workbench route acceptance evidence were retained for human review.
+    PNG dimension evidence, and accountant workbench route acceptance evidence were
+    retained for human review.
   - `ci-machine-evidence-pack`: `ci-machine-evidence-pack-report.json` passed with
     exact commit/run identity and SHA-256 inventory for the machine-generated
     evidence artifacts; human release evidence is still required separately.
@@ -472,9 +483,9 @@ As of July 8, 2026:
 - Code implementation is roughly 70-75% complete.
 - Production assurance is roughly 60-65% complete.
 - Overall goal is roughly 63-67% complete, with about one third left.
-- The production scorecard is now 599/700: architecture/documentation 99/100,
+- The production scorecard is now 604/700: architecture/documentation 99/100,
   backend statutory/accounting engine 200/250, frontend accountant workbench 160/200,
-  and security/auth/tenant/platform guardrails 140/150.
+  and security/auth/tenant/platform guardrails 145/150.
 - Architecture/documentation is now scored 99/100 in the production scorecard because
   source-law review, release evidence templates, manual handoff evidence, runbook
   links, and verifier coverage are in place, including an exact release artifact-pack

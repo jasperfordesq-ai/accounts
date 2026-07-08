@@ -17,6 +17,24 @@ function Add-Failure {
     $Failures.Add($Message) | Out-Null
 }
 
+function Get-JsonProperty {
+    param(
+        [object]$Object,
+        [string[]]$Path
+    )
+
+    $current = $Object
+    foreach ($segment in $Path) {
+        if ($null -eq $current -or -not ($current.PSObject.Properties.Name -contains $segment)) {
+            return $null
+        }
+
+        $current = $current.$segment
+    }
+
+    return $current
+}
+
 function Read-JsonEvidence {
     param(
         [string]$Directory,
@@ -90,6 +108,77 @@ function Assert-ArrayContains {
 
     if (-not (@($Values) -contains $Needle)) {
         Add-Failure $Failures "$Context must include $Needle."
+    }
+}
+
+function Assert-VisualSmokeDimensionEvidence {
+    param(
+        [object]$VisualSmoke,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    if ($VisualSmoke.PSObject.Properties.Name -contains "__missing" -or
+        $VisualSmoke.PSObject.Properties.Name -contains "__invalid") {
+        return
+    }
+
+    $expectedViewports = @(
+        [pscustomobject]@{ name = "desktop"; width = 1440; height = 1000 },
+        [pscustomobject]@{ name = "mobile"; width = 390; height = 844 }
+    )
+    $viewportDimensions = Get-JsonProperty $VisualSmoke @("viewportDimensions")
+    if ($null -eq $viewportDimensions -or @($viewportDimensions).Count -eq 0) {
+        Add-Failure $Failures "visual-smoke-evidence-report.json viewportDimensions must be present."
+    } else {
+        foreach ($expected in $expectedViewports) {
+            $actual = @($viewportDimensions) | Where-Object { [string](Get-JsonProperty $_ @("name")) -eq $expected.name } | Select-Object -First 1
+            if ($null -eq $actual) {
+                Add-Failure $Failures "visual-smoke-evidence-report.json viewportDimensions must include $($expected.name)."
+                continue
+            }
+
+            if ([int](Get-JsonProperty $actual @("width")) -ne [int]$expected.width -or
+                [int](Get-JsonProperty $actual @("height")) -ne [int]$expected.height) {
+                Add-Failure $Failures "visual-smoke-evidence-report.json viewportDimensions.$($expected.name) must be $($expected.width)x$($expected.height)."
+            }
+        }
+    }
+
+    $screenshots = Get-JsonProperty $VisualSmoke @("screenshots")
+    if ($null -eq $screenshots -or @($screenshots).Count -eq 0) {
+        Add-Failure $Failures "visual-smoke-evidence-report.json screenshots must include PNG dimension evidence."
+        return
+    }
+
+    $index = 0
+    foreach ($screenshot in @($screenshots)) {
+        $viewportName = [string](Get-JsonProperty $screenshot @("viewportName"))
+        $expected = $expectedViewports | Where-Object { $_.name -eq $viewportName } | Select-Object -First 1
+        if ($null -eq $expected) {
+            Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.$index viewportName must be a planned viewport."
+            $index += 1
+            continue
+        }
+
+        $imageWidth = Get-JsonProperty $screenshot @("imageWidth")
+        $imageHeight = Get-JsonProperty $screenshot @("imageHeight")
+        $expectedViewportWidth = Get-JsonProperty $screenshot @("expectedViewportWidth")
+        $minimumViewportHeight = Get-JsonProperty $screenshot @("minimumViewportHeight")
+
+        if ($null -eq $imageWidth -or [int]$imageWidth -ne [int]$expected.width) {
+            Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.imageWidth must match planned viewport width."
+        }
+        if ($null -eq $expectedViewportWidth -or [int]$expectedViewportWidth -ne [int]$expected.width) {
+            Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.expectedViewportWidth must match planned viewport width."
+        }
+        if ($null -eq $imageHeight -or [int]$imageHeight -lt [int]$expected.height) {
+            Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.imageHeight must be at least the planned viewport height."
+        }
+        if ($null -eq $minimumViewportHeight -or [int]$minimumViewportHeight -ne [int]$expected.height) {
+            Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.minimumViewportHeight must match planned viewport height."
+        }
+
+        $index += 1
     }
 }
 
@@ -292,6 +381,7 @@ if (-not ($visualSmoke.PSObject.Properties.Name -contains "__missing")) {
     if ([int]$visualSmoke.routeCount -ne 7) {
         Add-Failure $failures "visual-smoke-evidence-report.json routeCount must be 7."
     }
+    Assert-VisualSmokeDimensionEvidence $visualSmoke $failures
 }
 
 if (-not ($accountantWorkbench.PSObject.Properties.Name -contains "__missing")) {
