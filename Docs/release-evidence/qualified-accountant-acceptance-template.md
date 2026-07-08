@@ -28,6 +28,7 @@ Required formats: use the full 40-character commit SHA, the exact
 - [ ] `production-readiness-report`
 - [ ] `production-readiness-verification-report.json`
 - [ ] `visual-smoke-screenshots`
+- [ ] `accountant-workbench-evidence-report.json`
 - [ ] Generated PDF/iXBRL/tax support outputs for each accepted scenario
 
 ## Golden Corpus Walkthrough
@@ -51,16 +52,19 @@ For each route, confirm the accountant can answer the route decision question us
 the visible evidence and generated artifacts.
 Use `yes` or `accepted` for `Decision question answered`; use `accepted` for
 `Evidence accepted` only when the route evidence is professionally accepted.
+Record a real retained workbench evidence reference for every accepted route, such as
+`accountant-workbench-evidence-report.json#routeAcceptance.dashboard`; do not use
+`accepted`, `none`, `n/a`, `pending`, `todo`, or `tbd` as the evidence reference.
 
-| Route | Decision question answered | Evidence accepted | Notes |
-| --- | --- | --- | --- |
-| dashboard |  |  |  |
-| company-detail |  |  |  |
-| period-workspace |  |  |  |
-| filing-review |  |  |  |
-| financial-statements |  |  |  |
-| production-readiness |  |  |  |
-| workbench-preview |  |  |  |
+| Route | Decision question answered | Evidence accepted | Workbench evidence reference | Notes |
+| --- | --- | --- | --- | --- |
+| dashboard |  |  |  |  |
+| company-detail |  |  |  |  |
+| period-workspace |  |  |  |  |
+| filing-review |  |  |  |  |
+| financial-statements |  |  |  |  |
+| production-readiness |  |  |  |  |
+| workbench-preview |  |  |  |  |
 
 ## Explicit Non-Automation Acceptance
 

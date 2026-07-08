@@ -18365,6 +18365,9 @@ public class AccountsWorkflowTests
         Assert.Contains("40-character commit SHA", accountant);
         Assert.Contains("Use `accepted` in the `Decision` column", accountant);
         Assert.Contains("Use `yes` or `accepted` for `Decision question answered`", accountant);
+        Assert.Contains("accountant-workbench-evidence-report.json", accountant);
+        Assert.Contains("Workbench evidence reference", accountant);
+        Assert.Contains("do not use", accountant, StringComparison.OrdinalIgnoreCase);
 
         var manualHandoff = File.ReadAllText(manualHandoffPath);
         Assert.Contains("Manual Handoff Acceptance", manualHandoff);
@@ -18486,6 +18489,8 @@ public class AccountsWorkflowTests
         Assert.Contains("\"Decision\" \"^(accepted|accepted\\b.*)$\"", script);
         Assert.Contains("\"Decision question answered\" \"^(yes|accepted|accepted\\b.*)$\"", script);
         Assert.Contains("\"Evidence accepted\" \"^(accepted|accepted\\b.*)$\"", script);
+        Assert.Contains("\"Workbench evidence reference\" \"^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+\"", script);
+        Assert.Contains("a real retained workbench evidence reference", script);
         Assert.Contains("accepted for this release candidate", script);
         Assert.Contains("Test-ManualHandoffEvidence", script);
         Assert.Contains("manualHandoffAcceptance", script);

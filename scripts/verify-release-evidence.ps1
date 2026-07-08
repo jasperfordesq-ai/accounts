@@ -529,6 +529,8 @@ function Test-AccountantEvidence {
 
     $context = "Qualified-accountant acceptance evidence"
     foreach ($text in $requiredReleaseArtifactNames + @(
+        "accountant-workbench-evidence-report.json",
+        "Workbench evidence reference",
         "Direct CRO submission remains unsupported",
         "Direct ROS submission remains unsupported",
         "Qualified accountant signature"
@@ -551,6 +553,7 @@ function Test-AccountantEvidence {
     Assert-CompletedTableColumnMatches $Content $canonicalGoldenCorpusScenarioCodes 6 "Decision" "^(accepted|accepted\b.*)$" "accepted for this release candidate" $context $Failures
     Assert-CompletedTableColumnMatches $Content $requiredRouteCodes 1 "Decision question answered" "^(yes|accepted|accepted\b.*)$" "yes or accepted" $context $Failures
     Assert-CompletedTableColumnMatches $Content $requiredRouteCodes 2 "Evidence accepted" "^(accepted|accepted\b.*)$" "accepted" $context $Failures
+    Assert-CompletedTableColumnMatches $Content $requiredRouteCodes 3 "Workbench evidence reference" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real retained workbench evidence reference" $context $Failures
 
     foreach ($staleScenarioCode in @("micro-ltd-standard", "small-ltd-abridged")) {
         if ($Content.IndexOf($staleScenarioCode, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
