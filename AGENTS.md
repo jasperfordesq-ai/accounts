@@ -64,6 +64,7 @@ Committed and pushed work on `main` includes:
 - `26b9f75 Record release template retention handoff`
 - `3e53b47 Require visual smoke nonblank pixel evidence`
 - `a7cc5cc Require visual QA metric signoff evidence`
+- `923e163 Require explicit accountant acceptance rows`
 
 Backend/accounting-engine progress:
 
@@ -159,6 +160,9 @@ Backend/accounting-engine progress:
   golden corpus scenario codes (`micro-ltd`, `small-abridged-ltd`, `dac-small`,
   `clg-charity`, and `medium-audit-required`) and the verifier report emits
   required scenario, route, and release-artifact coverage.
+- The qualified-accountant acceptance template and verifier now require explicit
+  `accepted` scenario decisions plus `yes`/`accepted` route decision and evidence
+  acceptance rows, so arbitrary non-empty notes cannot satisfy accountant acceptance.
 - External ROS/iXBRL validation now has a checked-in release evidence template and
   verifier coverage for every canonical golden corpus scenario, so internal XML
   checks cannot be mistaken for Revenue acceptance evidence.
@@ -444,6 +448,24 @@ Recent successful local verification includes:
   - `npm.cmd run test:render -- production-readiness-workbench production-readiness-panel`
     - 2 passed
   - `npx.cmd tsc --noEmit --incremental false` - passed
+- Release evidence verifier qualified-accountant acceptance checks:
+  - Temporary completed copies of all six release-evidence templates passed
+    `scripts\verify-release-evidence.ps1` with explicit accepted scenario and route
+    evidence rows
+  - A copied qualified-accountant acceptance template with `dashboard | no |
+    accepted | needs rework` failed as expected on the route decision column
+- Backend focused release evidence/scorecard tests after adding explicit accountant
+  acceptance rows:
+  `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~ReleaseEvidenceTemplates_CoverHumanVisualAccountantAndProviderSignoffs|FullyQualifiedName~ReleaseEvidenceVerifier_BlocksIncompleteHumanSignoffEvidence|FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers"`
+  - 3 passed, proving the qualified-accountant template, release evidence verifier,
+  accepted-row checks, and 611/700 production scorecard are wired together
+- Frontend scorecard contract checks after adding explicit accountant acceptance rows:
+  - `node --test --experimental-strip-types tests/production-readiness-contract.test.mjs`
+    - 49 passed
+  - `node scripts/verify-api-client.mjs` - passed
+  - `npm.cmd run test:render -- production-readiness-workbench production-readiness-panel`
+    - 2 passed
+  - `npx.cmd tsc --noEmit --incremental false` - passed
 - Backend focused scorecard/visual QA tests after adding PNG dimension evidence:
   `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers|FullyQualifiedName~ProductionReadinessReport_DeclaresVisualQaCoverageForAccountantWorkbenchRoutes"`
   - 2 passed, proving the readiness report exposes the 608/700 scorecard and visual
@@ -505,8 +527,9 @@ CI status:
   July 8, 2026.
 - Green jobs: Workflow Hygiene, Production Compose Config, Frontend, Backend,
   Production Stack Smoke, and CI Machine Evidence Pack.
-- The scorecard exposed by the candidate is now 610/700, with frontend accountant
-  workbench at 162/200 and security/auth/tenant/platform guardrails at 149/150.
+- The scorecard exposed by the candidate is now 611/700, with backend statutory/accounting
+  engine at 201/250, frontend accountant workbench at 162/200 and
+  security/auth/tenant/platform guardrails at 149/150.
   The typed frontend parser and production-readiness verifier both require CI
   machine evidence, production smoke, readiness verification, visual smoke, release
   artifact pack, no-direct filing control, and named manual review manifest rows;
@@ -581,8 +604,8 @@ As of July 8, 2026:
 - Code implementation is roughly 70-75% complete.
 - Production assurance is roughly 60-65% complete.
 - Overall goal is roughly 63-67% complete, with about one third left.
-- The production scorecard is now 610/700: architecture/documentation 99/100,
-  backend statutory/accounting engine 200/250, frontend accountant workbench 162/200,
+- The production scorecard is now 611/700: architecture/documentation 99/100,
+  backend statutory/accounting engine 201/250, frontend accountant workbench 162/200,
   and security/auth/tenant/platform guardrails 149/150.
 - Architecture/documentation is now scored 99/100 in the production scorecard because
   source-law review, release evidence templates, manual handoff evidence, runbook
