@@ -65,6 +65,7 @@ Committed and pushed work on `main` includes:
 - `3e53b47 Require visual smoke nonblank pixel evidence`
 - `a7cc5cc Require visual QA metric signoff evidence`
 - `923e163 Require explicit accountant acceptance rows`
+- `9c32438 Require accepted external ROS evidence rows`
 
 Backend/accounting-engine progress:
 
@@ -166,6 +167,10 @@ Backend/accounting-engine progress:
 - External ROS/iXBRL validation now has a checked-in release evidence template and
   verifier coverage for every canonical golden corpus scenario, so internal XML
   checks cannot be mistaken for Revenue acceptance evidence.
+- The external ROS/iXBRL validation template and verifier now require every golden
+  corpus scenario row to record a real external validation reference, a SHA-256
+  artifact hash, accepted/remediated warnings or errors, and an explicit accepted
+  scenario decision.
 - `scripts/verify-no-direct-filing-submission.ps1` now emits
   `no-direct-filing-submission-report.json`, proving release candidates still have no
   outbound CRO/ROS submission client or submit route and only record external filing
@@ -466,6 +471,25 @@ Recent successful local verification includes:
   - `npm.cmd run test:render -- production-readiness-workbench production-readiness-panel`
     - 2 passed
   - `npx.cmd tsc --noEmit --incremental false` - passed
+- Release evidence verifier external ROS/iXBRL accepted-row checks:
+  - PowerShell parser check for `scripts\verify-release-evidence.ps1` - passed
+  - Temporary completed copies of all six release-evidence templates passed
+    `scripts\verify-release-evidence.ps1` with real external validation references,
+    SHA-256 artifact hashes, `none` warnings/errors, and explicit `accepted`
+    decisions for every golden corpus scenario
+  - A copied external ROS/iXBRL validation template with `unresolved` warnings/errors
+    and `pending` decision for `micro-ltd` failed as expected
+- Backend focused release evidence/scorecard tests after adding accepted external
+  ROS/iXBRL rows:
+  `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~ReleaseEvidenceTemplates_CoverHumanVisualAccountantAndProviderSignoffs|FullyQualifiedName~ReleaseEvidenceVerifier_BlocksIncompleteHumanSignoffEvidence|FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers"`
+  - 3 passed, proving the external ROS/iXBRL template, release evidence verifier,
+  accepted-row checks, and 612/700 production scorecard are wired together
+- Frontend scorecard contract checks after adding accepted external ROS/iXBRL rows:
+  - `node --test tests/production-readiness-contract.test.mjs` - 49 passed
+  - `node scripts/verify-api-client.mjs` - passed
+  - `npx.cmd vitest run tests/render/production-readiness-panel.test.tsx tests/render/production-readiness-workbench.test.tsx`
+    - 2 passed
+  - `npx.cmd tsc --noEmit --incremental false` - passed
 - Backend focused scorecard/visual QA tests after adding PNG dimension evidence:
   `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers|FullyQualifiedName~ProductionReadinessReport_DeclaresVisualQaCoverageForAccountantWorkbenchRoutes"`
   - 2 passed, proving the readiness report exposes the 608/700 scorecard and visual
@@ -527,8 +551,8 @@ CI status:
   July 8, 2026.
 - Green jobs: Workflow Hygiene, Production Compose Config, Frontend, Backend,
   Production Stack Smoke, and CI Machine Evidence Pack.
-- The scorecard exposed by the candidate is now 611/700, with backend statutory/accounting
-  engine at 201/250, frontend accountant workbench at 162/200 and
+- The scorecard exposed by the candidate is now 612/700, with backend statutory/accounting
+  engine at 202/250, frontend accountant workbench at 162/200 and
   security/auth/tenant/platform guardrails at 149/150.
   The typed frontend parser and production-readiness verifier both require CI
   machine evidence, production smoke, readiness verification, visual smoke, release
@@ -576,8 +600,9 @@ Highest-priority next steps:
    evidence matrix and canonical acceptance template rows, but the human walkthrough
    note is still missing.
 4. Complete and retain external ROS/iXBRL validation references for the exact generated
-   artifact hashes; the template and verifier now exist, but real external validation
-   evidence is still missing.
+   artifact hashes; the template and verifier now require accepted rows with real
+   references, hashes, warning/error status, and decisions, but real external
+   validation evidence is still missing.
 5. Complete and retain manual handoff acceptance evidence for the `medium-audit-required`
    scenario and unsupported path codes before relying on audit-required or unsupported
    outputs.
@@ -604,8 +629,8 @@ As of July 8, 2026:
 - Code implementation is roughly 70-75% complete.
 - Production assurance is roughly 60-65% complete.
 - Overall goal is roughly 63-67% complete, with about one third left.
-- The production scorecard is now 611/700: architecture/documentation 99/100,
-  backend statutory/accounting engine 201/250, frontend accountant workbench 162/200,
+- The production scorecard is now 612/700: architecture/documentation 99/100,
+  backend statutory/accounting engine 202/250, frontend accountant workbench 162/200,
   and security/auth/tenant/platform guardrails 149/150.
 - Architecture/documentation is now scored 99/100 in the production scorecard because
   source-law review, release evidence templates, manual handoff evidence, runbook
