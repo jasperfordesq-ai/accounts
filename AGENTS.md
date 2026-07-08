@@ -73,6 +73,7 @@ Committed and pushed work on `main` includes:
 - `4ef3e63 Require visual contrast smoke evidence`
 - `bd5454c Skip unresolved gradient backgrounds in contrast smoke`
 - `f51ae46 Ignore gradient backgrounds in contrast sampler`
+- `425fc33 Limit contrast smoke to non-interactive text`
 
 Backend/accounting-engine progress:
 
