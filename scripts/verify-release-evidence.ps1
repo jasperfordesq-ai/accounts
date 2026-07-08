@@ -713,6 +713,11 @@ function Test-SourceLawEvidence {
     Assert-CheckedDecision $Content "Accepted as source-law review evidence for this release candidate." $context $Failures
     Assert-UncheckedDecision $Content "Rejected; source-law issues below must be remediated and re-reviewed." $context $Failures
     Assert-CompletedTableRows $Content $requiredSourceLawSourceIds $context $Failures
+    Assert-CompletedTableColumnMatches $Content $requiredSourceLawSourceIds 1 "URL reachable" "^(yes|accepted|accepted\b.*)$" "yes or accepted" $context $Failures
+    Assert-CompletedTableColumnMatches $Content $requiredSourceLawSourceIds 2 "Effective date checked" "^([0-9]{4}-[0-9]{2}-[0-9]{2}|accepted|accepted\b.*)$" "YYYY-MM-DD or accepted" $context $Failures
+    Assert-CompletedTableColumnMatches $Content $requiredSourceLawSourceIds 3 "Guidance wording compared" "^(yes|accepted|accepted\b.*)$" "yes or accepted" $context $Failures
+    Assert-CompletedTableColumnMatches $Content $requiredSourceLawSourceIds 4 "Platform impact" "^(no change|reflected\b.*|blocking\b.*|accepted\b.*)$" "no change, reflected, blocking, or accepted" $context $Failures
+    Assert-CompletedTableColumnMatches $Content $requiredSourceLawSourceIds 5 "Decision" "^(accepted|accepted\b.*)$" "accepted for this release candidate" $context $Failures
 }
 
 $failures = [System.Collections.Generic.List[string]]::new()

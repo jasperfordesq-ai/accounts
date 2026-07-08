@@ -18327,6 +18327,8 @@ public class AccountsWorkflowTests
         Assert.Contains("charities-regulator-annual-report", sourceLaw);
         Assert.Contains("Qualified accountant source-law sign-off", sourceLaw);
         Assert.Contains("64-character SHA-256 digest", sourceLaw);
+        Assert.Contains("Use `yes` or `accepted` for `URL reachable`", sourceLaw);
+        Assert.Contains("Use `no change`, `reflected...`, or `blocking...`", sourceLaw);
 
         var externalRosIxbrl = File.ReadAllText(externalRosIxbrlPath);
         Assert.Contains("External ROS/iXBRL validation", externalRosIxbrl);
@@ -18430,6 +18432,10 @@ public class AccountsWorkflowTests
         Assert.Contains("sourceLawSourceIds", script);
         Assert.Contains("requiredSourceLawSourceIds", script);
         Assert.Contains("qualified-accountant-source-law-signoff", script);
+        Assert.Contains("\"URL reachable\" \"^(yes|accepted|accepted\\b.*)$\"", script);
+        Assert.Contains("\"Effective date checked\" \"^([0-9]{4}-[0-9]{2}-[0-9]{2}|accepted|accepted\\b.*)$\"", script);
+        Assert.Contains("\"Guidance wording compared\" \"^(yes|accepted|accepted\\b.*)$\"", script);
+        Assert.Contains("\"Platform impact\" \"^(no change|reflected\\b.*|blocking\\b.*|accepted\\b.*)$\"", script);
         Assert.Contains("Test-ExternalRosIxbrlEvidence", script);
         Assert.Contains("externalRosIxbrlValidation", script);
         Assert.Contains("externalRosIxbrlScenarioCodes", script);
