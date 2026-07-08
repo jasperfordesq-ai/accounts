@@ -105,7 +105,7 @@ const share = {
 
 function productionScorecardFixture() {
   return {
-    currentScore: 611,
+    currentScore: 612,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete source-law review, named visual QA, monitoring-provider confirmation, manual handoff and qualified-accountant acceptance evidence.",
@@ -128,14 +128,14 @@ function productionScorecardFixture() {
       {
         code: "backend-statutory-accounting-engine",
         label: "Backend statutory/accounting engine",
-        currentScore: 201,
+        currentScore: 202,
         targetScore: 250,
         status: "qualified-accountant-review-required",
         currentEvidence: [
           "Golden filing corpus and source-law evidence are exposed.",
           "Qualified-accountant acceptance evidence uses canonical golden corpus scenario codes.",
           "verify-release-evidence.ps1 rejects qualified-accountant acceptance unless every golden scenario decision and route evidence acceptance row is explicitly accepted.",
-          "External ROS/iXBRL validation evidence has template and verifier coverage.",
+          "External ROS/iXBRL validation evidence has template and verifier checks for real references, accepted/remediated warnings and accepted decisions.",
           "Source-law review evidence has template and verifier coverage for every monitored source.",
           "Manual handoff acceptance evidence has template and verifier coverage.",
           "CI retains production-readiness-report.json from the live smoke stack with source-law, golden corpus, scorecard and release blocker evidence.",

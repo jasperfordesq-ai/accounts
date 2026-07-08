@@ -624,7 +624,10 @@ function Test-ExternalRosIxbrlEvidence {
     Assert-CheckedDecision $Content "Accepted as external ROS/iXBRL validation evidence for this release candidate." $context $Failures
     Assert-UncheckedDecision $Content "Rejected; validation issues below must be remediated and re-reviewed." $context $Failures
     Assert-CompletedTableRows $Content $canonicalGoldenCorpusScenarioCodes $context $Failures
+    Assert-CompletedTableColumnMatches $Content $canonicalGoldenCorpusScenarioCodes 1 "External reference" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real external validation reference" $context $Failures
     Assert-CompletedTableColumnMatches $Content $canonicalGoldenCorpusScenarioCodes 2 "Artifact hash" "^[0-9a-fA-F]{64}$" "a 64-character hexadecimal SHA-256 digest" $context $Failures
+    Assert-CompletedTableColumnMatches $Content $canonicalGoldenCorpusScenarioCodes 4 "Warnings/errors" "^(none|accepted\b.*|remediated\b.*)$" "none, accepted, or remediated warnings/errors" $context $Failures
+    Assert-CompletedTableColumnMatches $Content $canonicalGoldenCorpusScenarioCodes 5 "Decision" "^(accepted|accepted\b.*)$" "accepted for this release candidate" $context $Failures
 }
 
 function Test-MonitoringEvidence {
