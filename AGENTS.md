@@ -2226,6 +2226,22 @@ Release artifact pack workspace verification parsing:
   identity, and list exactly the canonical 19 prepared workspace files with positive
   byte sizes and lowercase SHA-256 hashes.
 
+Release artifact pack workspace inventory retention:
+
+- This slice makes `scripts/verify-release-artifact-pack.ps1` require every file named
+  by the canonical 19-file prepared workspace inventory to be retained in the final
+  artifact pack.
+- Immutable machine/reviewer handoff files must retain byte size and SHA-256 matching
+  `release-evidence-workspace-verification-report.json`; the six human templates and
+  final `release-evidence-report.json` are allowed to change because reviewers complete
+  them after the prepared workspace verification report is generated.
+- The final pack now explicitly requires the reviewer handoff files
+  `release-evidence-reviewer-index.md`,
+  `release-evidence-reviewer-completion.json`,
+  `release-evidence-reviewer-blockers.md`, and
+  `release-evidence-verifier-output.txt`, so the handoff trail cannot be reduced to
+  a JSON assertion after review.
+
 ## What Is Left To Do
 
 Highest-priority next steps:

@@ -253,6 +253,16 @@ $expectedReleaseEvidenceWorkspaceInventory = @(
     "release-evidence-verifier-output.txt"
 )
 
+$mutableReleaseEvidenceWorkspaceInventoryFiles = @(
+    "visual-qa-signoff-template.md",
+    "source-law-review-template.md",
+    "external-ros-ixbrl-validation-template.md",
+    "qualified-accountant-acceptance-template.md",
+    "manual-handoff-acceptance-template.md",
+    "monitoring-provider-confirmation-template.md",
+    "release-evidence-report.json"
+)
+
 function Assert-AccountantWorkbenchRequiredCoverage {
     param(
         [object]$AccountantWorkbench,
@@ -998,6 +1008,55 @@ function Assert-ReleaseEvidenceWorkspaceVerificationReport {
     }
 }
 
+function Assert-ReleaseEvidenceWorkspaceInventoryRetention {
+    param(
+        [object]$WorkspaceVerificationReport,
+        [string]$Directory,
+        [string[]]$ExpectedWorkspaceFiles,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    if ($WorkspaceVerificationReport.PSObject.Properties.Name -contains "__missing" -or
+        $WorkspaceVerificationReport.PSObject.Properties.Name -contains "__invalid") {
+        return
+    }
+
+    $workspaceFiles = @((Get-JsonProperty $WorkspaceVerificationReport @("workspaceFiles")))
+    foreach ($expectedFile in $ExpectedWorkspaceFiles) {
+        $entry = $workspaceFiles |
+            Where-Object { [string]::Equals([string](Get-JsonProperty $_ @("fileName")), $expectedFile, [StringComparison]::OrdinalIgnoreCase) } |
+            Select-Object -First 1
+
+        if ($null -eq $entry) {
+            continue
+        }
+
+        $retainedPath = Join-Path $Directory $expectedFile
+        if (-not (Test-Path -LiteralPath $retainedPath -PathType Leaf)) {
+            Add-Failure $Failures "Release artifact pack must retain workspace inventory file: $expectedFile"
+            continue
+        }
+
+        if ($expectedFile -in $mutableReleaseEvidenceWorkspaceInventoryFiles) {
+            continue
+        }
+
+        $expectedByteSize = [int64](Get-JsonProperty $entry @("byteSize"))
+        $actualFile = Get-Item -LiteralPath $retainedPath
+        if ($expectedByteSize -gt 0 -and [int64]$actualFile.Length -ne $expectedByteSize) {
+            Add-Failure $Failures "Release artifact pack retained workspace inventory file $expectedFile byteSize must match release-evidence-workspace-verification-report.json."
+        }
+
+        $expectedSha256 = [string](Get-JsonProperty $entry @("sha256"))
+        if ($expectedSha256 -match '^[0-9a-f]{64}$') {
+            $actualSha256 = Get-FileSha256 $retainedPath
+            if ($actualSha256 -ne $expectedSha256) {
+                Add-Failure $Failures "Release artifact pack retained workspace inventory file $expectedFile sha256 must match release-evidence-workspace-verification-report.json."
+            }
+        }
+    }
+}
+
 $failures = [System.Collections.Generic.List[string]]::new()
 $resolvedDirectory = Resolve-Path -LiteralPath $EvidenceDirectory -ErrorAction Stop
 $releaseCommitSha = $CommitSha.Trim()
@@ -1302,6 +1361,7 @@ if (-not ($releaseEvidence.PSObject.Properties.Name -contains "__missing")) {
     Assert-ReleaseEvidenceHumanCompletionManifest $releaseEvidence $requiredReleaseEvidenceTemplates $failures
     Assert-ReleaseEvidenceWorkspaceControlManifest $releaseEvidence $resolvedDirectory.Path $requiredReleaseEvidenceWorkspaceControls $failures
     Assert-ReleaseEvidenceWorkspaceVerificationReport $releaseEvidenceWorkspaceVerificationReport $releaseEvidence $releaseCommitSha $releaseRunUrl $expectedReleaseEvidenceWorkspaceInventory $failures
+    Assert-ReleaseEvidenceWorkspaceInventoryRetention $releaseEvidenceWorkspaceVerificationReport $resolvedDirectory.Path $expectedReleaseEvidenceWorkspaceInventory $failures
 }
 
 $evidenceFileManifest = @(
@@ -1376,7 +1436,7 @@ $report = [ordered]@{
         githubActionsRunUrl = $releaseRunUrl
         identityProvided = ($releaseCommitSha.Length -gt 0 -and $releaseRunUrl.Length -gt 0)
     }
-    requiredFiles = @($allEvidence.Keys) + @($requiredReleaseEvidenceTemplates | ForEach-Object { $_.fileName }) + @($requiredReleaseEvidenceWorkspaceControls | ForEach-Object { $_.fileName })
+    requiredFiles = @($allEvidence.Keys) + @($requiredReleaseEvidenceTemplates | ForEach-Object { $_.fileName }) + @($requiredReleaseEvidenceWorkspaceControls | ForEach-Object { $_.fileName }) + @("release-evidence-reviewer-index.md", "release-evidence-reviewer-completion.json", "release-evidence-reviewer-blockers.md", "release-evidence-verifier-output.txt")
     evidenceFiles = @($evidenceFileManifest) + @($releaseEvidenceTemplateManifest) + @($releaseEvidenceWorkspaceControlManifest)
     failureCount = $failures.Count
     failures = $failures.ToArray()

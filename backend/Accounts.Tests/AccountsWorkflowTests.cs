@@ -19160,6 +19160,13 @@ public class AccountsWorkflowTests
         Assert.Contains("release-evidence-workspace-verification-report.json releaseCandidate.commitSha must match the release evidence candidate", script);
         Assert.Contains("release-evidence-workspace-verification-report.json requiredWorkspaceFiles", script);
         Assert.Contains("release-evidence-workspace-verification-report.json workspaceFiles", script);
+        Assert.Contains("Assert-ReleaseEvidenceWorkspaceInventoryRetention", script);
+        Assert.Contains("Release artifact pack must retain workspace inventory file", script);
+        Assert.Contains("retained workspace inventory file $expectedFile sha256 must match release-evidence-workspace-verification-report.json", script);
+        Assert.Contains("release-evidence-reviewer-index.md", script);
+        Assert.Contains("release-evidence-reviewer-completion.json", script);
+        Assert.Contains("release-evidence-reviewer-blockers.md", script);
+        Assert.Contains("release-evidence-verifier-output.txt", script);
         Assert.Contains("evidenceType = \"release-evidence-workspace-control\"", script);
         Assert.Contains("evidenceFiles", script);
         Assert.Contains("identityProvided", script);
