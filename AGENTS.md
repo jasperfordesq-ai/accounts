@@ -1968,6 +1968,31 @@ Release evidence reviewer blocker summary:
     the blocker summary appears in `workspaceFiles` with a positive byte size
     and 64-character SHA-256 hash.
 
+Release evidence reviewer exact workspace inventory:
+
+- This slice tightens `scripts/verify-release-evidence-workspace.ps1` so
+  `release-evidence-workspace-verification-report.json` includes
+  `requiredWorkspaceFiles` and the verifier fails if the pre-report workspace
+  inventory is missing any required handoff file or contains unexpected files.
+  A pre-existing `release-evidence-workspace-verification-report.json` is
+  ignored for exact-set purposes because the verifier writes that report at the
+  end.
+- The required set is the six prepared templates,
+  `release-evidence-workspace-manifest.json`,
+  `release-evidence-reviewer-index.md`,
+  `release-evidence-reviewer-completion.json`,
+  `release-evidence-reviewer-blockers.md`, the expected failed
+  `release-evidence-report.json`, and `release-evidence-verifier-output.txt`.
+- Verification completed locally:
+  - PowerShell parser check passed for
+    `scripts/verify-release-evidence-workspace.ps1`.
+  - `node scripts/verify-ci-actions.mjs` passed.
+  - Backend focused regression passed:
+    `ReleaseEvidenceVerifier_BlocksIncompleteHumanSignoffEvidence`.
+  - A local nested-artifact simulation generated and verified a workspace,
+    confirmed `workspaceFiles` and `requiredWorkspaceFiles` both contain the
+    same 12 pre-report files, with no missing or unexpected entries.
+
 ## What Is Left To Do
 
 Highest-priority next steps:

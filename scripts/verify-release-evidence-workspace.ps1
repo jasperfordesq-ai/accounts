@@ -17,6 +17,18 @@ $requiredTemplates = @(
     "monitoring-provider-confirmation-template.md"
 )
 
+$requiredWorkspaceFiles = @(
+    $requiredTemplates +
+    @(
+        "release-evidence-workspace-manifest.json",
+        "release-evidence-reviewer-index.md",
+        "release-evidence-reviewer-completion.json",
+        "release-evidence-reviewer-blockers.md",
+        "release-evidence-report.json",
+        "release-evidence-verifier-output.txt"
+    )
+)
+
 $requiredReviewerQueue = @(
     [pscustomobject]@{
         EvidenceGate = "Visual QA sign-off"
@@ -418,6 +430,23 @@ $workspaceFiles = @(
     }
 )
 
+$inventoriedFileNames = @($workspaceFiles | ForEach-Object { [string]$_["fileName"] })
+foreach ($requiredWorkspaceFile in $requiredWorkspaceFiles) {
+    if (-not ($inventoriedFileNames | Where-Object { $_ -eq $requiredWorkspaceFile })) {
+        Add-Failure $failures "Workspace file inventory must include $requiredWorkspaceFile."
+    }
+}
+
+foreach ($inventoriedFileName in $inventoriedFileNames) {
+    if ($inventoriedFileName -eq "release-evidence-workspace-verification-report.json") {
+        continue
+    }
+
+    if (-not ($requiredWorkspaceFiles | Where-Object { $_ -eq $inventoriedFileName })) {
+        Add-Failure $failures "Workspace file inventory must not include unexpected file $inventoriedFileName."
+    }
+}
+
 $verificationReport = [ordered]@{
     status = if ($failures.Count -eq 0) { "passed" } else { "failed" }
     checkedAtUtc = [DateTimeOffset]::UtcNow.ToString("O")
@@ -427,6 +456,7 @@ $verificationReport = [ordered]@{
     reviewerCompletionPath = $reviewerCompletionPath
     reviewerBlockersPath = $reviewerBlockersPath
     workspaceFiles = $workspaceFiles
+    requiredWorkspaceFiles = $requiredWorkspaceFiles
     requiredTemplateCount = $requiredTemplates.Count
     failureCount = $failures.Count
     failures = @($failures)

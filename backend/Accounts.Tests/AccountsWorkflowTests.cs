@@ -18483,6 +18483,9 @@ public class AccountsWorkflowTests
         Assert.Contains("Write-ReviewerBlockerSummary", workspaceVerifier);
         Assert.Contains("reviewerBlockersPath", workspaceVerifier);
         Assert.Contains("workspaceFiles", workspaceVerifier);
+        Assert.Contains("requiredWorkspaceFiles", workspaceVerifier);
+        Assert.Contains("Workspace file inventory must include", workspaceVerifier);
+        Assert.Contains("Workspace file inventory must not include unexpected file", workspaceVerifier);
         Assert.Contains("byteSize", workspaceVerifier);
         Assert.Contains("sha256", workspaceVerifier);
         Assert.Contains("Get-FileSha256", workspaceVerifier);
