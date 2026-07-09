@@ -40,7 +40,7 @@ describe("ProductionReadinessPanel", () => {
 
 function productionScorecard(): ProductionReadinessReport["productionScorecard"] {
   return {
-    currentScore: 631,
+    currentScore: 633,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete source-law review, named visual QA, monitoring-provider confirmation, manual handoff and qualified-accountant acceptance evidence.",
@@ -63,7 +63,7 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
       {
         code: "backend-statutory-accounting-engine",
         label: "Backend statutory/accounting engine",
-        currentScore: 212,
+        currentScore: 214,
         targetScore: 250,
         status: "qualified-accountant-review-required",
         currentEvidence: [
@@ -71,6 +71,7 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
           "Qualified-accountant acceptance evidence uses canonical golden corpus scenario codes.",
           "verify-release-evidence.ps1 rejects qualified-accountant acceptance unless every golden scenario decision and route evidence acceptance row is explicitly accepted.",
           "Qualified-accountant acceptance requires explicit accepted scenario scope cells for outputs, gates, source-law evidence, wording and workbench journey before a scenario decision can pass.",
+          "Qualified-accountant route walkthrough rows require exact yes/accepted decisions and exact accepted evidence cells before route acceptance can pass.",
           "Qualified-accountant route acceptance requires a real retained workbench evidence reference for every accepted route.",
           "External ROS/iXBRL validation evidence has template and verifier checks for real references, retained taxonomy package references, accepted/remediated warnings and accepted decisions.",
           "Source-law review evidence has template and verifier checks for concrete URL reachability, dated or not-dated effective-date review, guidance comparison, platform impact classification and exact accepted decisions.",

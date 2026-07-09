@@ -860,7 +860,7 @@ public class ProductionReadinessReportTests
         var report = await new ProductionReadinessReportService(db).GetReportAsync();
 
         Assert.NotNull(report.ProductionScorecard);
-        Assert.Equal(631, report.ProductionScorecard.CurrentScore);
+        Assert.Equal(633, report.ProductionScorecard.CurrentScore);
         Assert.Equal(700, report.ProductionScorecard.TargetScore);
         Assert.Equal("review-required", report.ProductionScorecard.Status);
         Assert.Contains("source-law", report.ProductionScorecard.NextGate, StringComparison.OrdinalIgnoreCase);
@@ -881,7 +881,7 @@ public class ProductionReadinessReportTests
 
         var scores = categories.ToDictionary(category => category.Code);
         Assert.Equal((99, 100), (scores["architecture-documentation"].CurrentScore, scores["architecture-documentation"].TargetScore));
-        Assert.Equal((212, 250), (scores["backend-statutory-accounting-engine"].CurrentScore, scores["backend-statutory-accounting-engine"].TargetScore));
+        Assert.Equal((214, 250), (scores["backend-statutory-accounting-engine"].CurrentScore, scores["backend-statutory-accounting-engine"].TargetScore));
         Assert.Equal((170, 200), (scores["frontend-accountant-workbench"].CurrentScore, scores["frontend-accountant-workbench"].TargetScore));
         Assert.Equal((150, 150), (scores["security-auth-tenant-platform-guardrails"].CurrentScore, scores["security-auth-tenant-platform-guardrails"].TargetScore));
         Assert.Contains(scores["architecture-documentation"].CurrentEvidence, evidence =>
@@ -1002,6 +1002,9 @@ public class ProductionReadinessReportTests
             evidence.Contains("explicit accepted scenario scope cells", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("source-law evidence", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("workbench journey", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(scores["backend-statutory-accounting-engine"].CurrentEvidence, evidence =>
+            evidence.Contains("exact yes/accepted decisions", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("exact accepted evidence cells", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["backend-statutory-accounting-engine"].CurrentEvidence, evidence =>
             evidence.Contains("External ROS/iXBRL validation evidence", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["backend-statutory-accounting-engine"].CurrentEvidence, evidence =>

@@ -58,6 +58,8 @@ Use `yes` or `accepted` for `Decision question answered`; use `accepted` for
 Record a real retained workbench evidence reference for every accepted route, such as
 `accountant-workbench-evidence-report.json#routeAcceptance.dashboard`; do not use
 `accepted`, `none`, `n/a`, `pending`, `todo`, or `tbd` as the evidence reference.
+The verifier rejects ambiguous route decision/evidence cells; use exact `yes` or
+`accepted` values.
 
 | Route | Decision question answered | Evidence accepted | Workbench evidence reference | Notes |
 | --- | --- | --- | --- | --- |
