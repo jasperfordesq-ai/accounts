@@ -577,10 +577,57 @@ jobs:
             -CommitSha $env:GITHUB_SHA `
             -GitHubActionsRunUrl $runUrl
 
+      - name: Prepare release evidence reviewer workspace
+        shell: pwsh
+        run: |
+          $runUrl = "https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
+          $machineEvidenceRoot = Join-Path $env:RUNNER_TEMP "accounts-ci-machine-evidence"
+          $workspaceRoot = Join-Path $env:RUNNER_TEMP "accounts-release-evidence-workspace"
+          ./scripts/new-release-evidence-workspace.ps1 `
+            -OutputDirectory $workspaceRoot `
+            -CommitSha $env:GITHUB_SHA `
+            -GitHubActionsRunUrl $runUrl `
+            -ProductionReadinessReportPath (Join-Path $machineEvidenceRoot "production-readiness-report/production-readiness-report.json") `
+            -VisualSmokeEvidenceReportPath (Join-Path $machineEvidenceRoot "visual-smoke-screenshots/visual-smoke-evidence-report.json") `
+            -MonitoringErrorRoutingReportPath (Join-Path $machineEvidenceRoot "monitoring-error-routing-smoke/monitoring-error-routing-report.json") `
+            -StructuredLogReportPath (Join-Path $machineEvidenceRoot "structured-json-log-sample/structured-log-report.json")
+
+          $releaseEvidenceReport = Join-Path $workspaceRoot "release-evidence-report.json"
+          $releaseEvidenceStillBlocked = $false
+          try {
+            ./scripts/verify-release-evidence.ps1 `
+              -EvidenceDirectory $workspaceRoot `
+              -ReportPath $releaseEvidenceReport
+          } catch {
+            $releaseEvidenceStillBlocked = $true
+          }
+
+          if (-not $releaseEvidenceStillBlocked) {
+            throw "Prepared release evidence workspace unexpectedly passed before named human sign-off."
+          }
+
+          $report = Get-Content -LiteralPath $releaseEvidenceReport -Raw | ConvertFrom-Json
+          if ([string]$report.status -ne "failed") {
+            throw "Prepared release evidence workspace report must remain failed before named human sign-off."
+          }
+
+          $unexpectedStatuses = @($report.humanEvidenceCompletion | Where-Object { [string]$_.status -ne "incomplete" })
+          if ($unexpectedStatuses.Count -ne 0) {
+            throw "Prepared release evidence workspace must keep all human evidence entries incomplete."
+          }
+
       - name: Upload CI machine evidence pack report
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: ci-machine-evidence-pack
           path: ${{ runner.temp }}/accounts-ci-machine-evidence-pack/ci-machine-evidence-pack-report.json
+          if-no-files-found: error
+
+      - name: Upload release evidence reviewer workspace
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-evidence-reviewer-workspace
+          path: ${{ runner.temp }}/accounts-release-evidence-workspace
           if-no-files-found: error

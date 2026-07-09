@@ -18444,6 +18444,7 @@ public class AccountsWorkflowTests
         var runbook = File.ReadAllText(Path.Combine(root, "Docs", "operations", "production-runbook.md"));
         var scriptPath = Path.Combine(root, "scripts", "verify-release-evidence.ps1");
         var workspaceScriptPath = Path.Combine(root, "scripts", "new-release-evidence-workspace.ps1");
+        var workflow = File.ReadAllText(Path.Combine(root, ".github", "workflows", "ci.yml"));
 
         Assert.True(File.Exists(scriptPath), "Release evidence verifier should make completed human sign-off templates machine-checkable.");
         Assert.True(File.Exists(workspaceScriptPath), "Release evidence workspace preparer should create reviewer-ready template copies without faking sign-off.");
@@ -18459,6 +18460,11 @@ public class AccountsWorkflowTests
         Assert.Contains("release-evidence-report.json", runbook);
         Assert.Contains("visual-smoke-evidence-report.json", runbook);
         Assert.Contains("real filing use stays blocked", runbook, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Prepare release evidence reviewer workspace", workflow);
+        Assert.Contains("new-release-evidence-workspace.ps1", workflow);
+        Assert.Contains("release-evidence-reviewer-workspace", workflow);
+        Assert.Contains("Prepared release evidence workspace unexpectedly passed before named human sign-off.", workflow);
+        Assert.Contains("Prepared release evidence workspace must keep all human evidence entries incomplete.", workflow);
         Assert.Contains("pending-human-evidence", workspaceScript);
         Assert.Contains("humanFieldsLeftBlank", workspaceScript);
         Assert.Contains("Copy-PreparedTemplate", workspaceScript);

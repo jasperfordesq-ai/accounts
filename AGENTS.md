@@ -1833,6 +1833,28 @@ Release evidence workspace preparer:
   - Backend focused regression passed:
     `ReleaseEvidenceVerifier_BlocksIncompleteHumanSignoffEvidence`.
 
+CI release evidence reviewer workspace:
+
+- This slice wires the CI machine-evidence job to run
+  `scripts/new-release-evidence-workspace.ps1` after
+  `scripts/verify-ci-machine-evidence-pack.ps1`, using the exact
+  `production-readiness-report`, `visual-smoke-screenshots`,
+  `monitoring-error-routing-smoke`, and `structured-json-log-sample` artifacts
+  from the same run.
+- CI then runs `scripts/verify-release-evidence.ps1` against the prepared
+  workspace and expects failure with all six `humanEvidenceCompletion` entries
+  still `incomplete`, proving the uploaded
+  `release-evidence-reviewer-workspace` artifact is only reviewer prep and not
+  sign-off.
+- Verification completed locally:
+  - `node scripts/verify-ci-actions.mjs` passed.
+  - Backend focused regression passed:
+    `ReleaseEvidenceVerifier_BlocksIncompleteHumanSignoffEvidence`.
+  - A local simulation of the GitHub `download-artifact` directory layout
+    generated the reviewer workspace and confirmed
+    `scripts/verify-release-evidence.ps1` still fails with all six human gates
+    incomplete.
+
 ## What Is Left To Do
 
 Highest-priority next steps:
