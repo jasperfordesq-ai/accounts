@@ -19131,6 +19131,12 @@ public class AccountsWorkflowTests
         Assert.Contains("Assert-ReleaseEvidenceTemplateManifest", script);
         Assert.Contains("Release artifact pack must include completed release evidence template", script);
         Assert.Contains("evidenceFiles must include retained release evidence template hashes", script);
+        Assert.Contains("Assert-ReleaseEvidenceHumanCompletionManifest", script);
+        Assert.Contains("humanEvidenceCompletion must include completed human release evidence gate entries", script);
+        Assert.Contains("humanEvidenceCompletion.$($required.evidenceName).status must be accepted", script);
+        Assert.Contains("humanEvidenceCompletion.$($required.evidenceName).blockingFailureCount must be 0", script);
+        Assert.Contains("humanEvidenceCompletion.$($required.evidenceName).blockingFailures must be empty", script);
+        Assert.Contains("releaseEvidenceTemplateFiles", script);
         Assert.Contains("sha256 must match the retained template file", script);
         Assert.Contains("evidenceType = \"release-evidence-template\"", script);
         Assert.Contains("Assert-ReleaseEvidenceWorkspaceControlManifest", script);

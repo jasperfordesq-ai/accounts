@@ -2175,6 +2175,22 @@ Release artifact pack workspace-control retention:
   - Focused backend regression passed:
     `ReleaseArtifactPackVerifier_RequiresExactOperationalEvidenceReports`.
 
+Release artifact pack human-completion ledger:
+
+- This slice hardens the final release artifact pack gate so completed Markdown
+  templates are not enough on their own. `scripts/verify-release-artifact-pack.ps1`
+  now requires `release-evidence-report.json.humanEvidenceCompletion` to contain
+  exactly the six canonical human evidence gates, each with the expected template
+  file, required reviewer role, sign-off gate, `present: true`,
+  `hasReleaseIdentity: true`, `status: accepted`, `blockingFailureCount: 0`, and
+  an empty `blockingFailures` array.
+- The verifier also requires `requiredCoverage.releaseEvidenceTemplateFiles` to
+  name the retained human evidence templates, tying the final pack's template
+  byte-size/SHA-256 checks to the explicit human-completion ledger.
+- This is still evidence-chain hardening, not a substitute for named visual QA,
+  source-law, external ROS/iXBRL, accountant, manual handoff, or monitoring-provider
+  sign-off.
+
 ## What Is Left To Do
 
 Highest-priority next steps:

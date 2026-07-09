@@ -701,6 +701,8 @@ function Assert-ReleaseEvidenceTemplateManifest {
     }
 
     foreach ($required in $RequiredTemplates) {
+        Assert-ArrayContains @((Get-JsonProperty $ReleaseEvidence @("requiredCoverage", "releaseEvidenceTemplateFiles"))) $required.fileName "release-evidence-report.json requiredCoverage.releaseEvidenceTemplateFiles" $Failures
+
         $entry = $manifest |
             Where-Object {
                 [string](Get-JsonProperty $_ @("fileName")) -eq [string]$required.fileName -and
@@ -741,6 +743,71 @@ function Assert-ReleaseEvidenceTemplateManifest {
         $actualSha = Get-FileSha256 $templatePath
         if ($manifestSha -match '^[0-9a-f]{64}$' -and $manifestSha -ne $actualSha) {
             Add-Failure $Failures "release-evidence-report.json evidenceFiles.$($required.fileName).sha256 must match the retained template file."
+        }
+    }
+}
+
+function Assert-ReleaseEvidenceHumanCompletionManifest {
+    param(
+        [object]$ReleaseEvidence,
+        [object[]]$RequiredTemplates,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    if ($ReleaseEvidence.PSObject.Properties.Name -contains "__missing" -or
+        $ReleaseEvidence.PSObject.Properties.Name -contains "__invalid") {
+        return
+    }
+
+    $completion = @(Get-JsonProperty $ReleaseEvidence @("humanEvidenceCompletion"))
+    if ($completion.Count -eq 0) {
+        Add-Failure $Failures "release-evidence-report.json humanEvidenceCompletion must include completed human release evidence gate entries."
+        return
+    }
+
+    if ($completion.Count -ne $RequiredTemplates.Count) {
+        Add-Failure $Failures "release-evidence-report.json humanEvidenceCompletion must include exactly $($RequiredTemplates.Count) completed human evidence gate entries."
+    }
+
+    foreach ($required in $RequiredTemplates) {
+        $entry = $completion |
+            Where-Object {
+                [string](Get-JsonProperty $_ @("evidenceName")) -eq [string]$required.evidenceName -and
+                [string](Get-JsonProperty $_ @("templateFile")) -eq [string]$required.fileName
+            } |
+            Select-Object -First 1
+
+        if ($null -eq $entry) {
+            Add-Failure $Failures "release-evidence-report.json humanEvidenceCompletion must include $($required.evidenceName) for $($required.fileName)."
+            continue
+        }
+
+        if ([string](Get-JsonProperty $entry @("requiredReviewerRole")) -ne [string]$required.requiredReviewerRole) {
+            Add-Failure $Failures "release-evidence-report.json humanEvidenceCompletion.$($required.evidenceName).requiredReviewerRole must be $($required.requiredReviewerRole)."
+        }
+
+        if ([string](Get-JsonProperty $entry @("signOffGate")) -ne [string]$required.signOffGate) {
+            Add-Failure $Failures "release-evidence-report.json humanEvidenceCompletion.$($required.evidenceName).signOffGate must be $($required.signOffGate)."
+        }
+
+        if ((Get-JsonProperty $entry @("present")) -ne $true) {
+            Add-Failure $Failures "release-evidence-report.json humanEvidenceCompletion.$($required.evidenceName).present must be true."
+        }
+
+        if ((Get-JsonProperty $entry @("hasReleaseIdentity")) -ne $true) {
+            Add-Failure $Failures "release-evidence-report.json humanEvidenceCompletion.$($required.evidenceName).hasReleaseIdentity must be true."
+        }
+
+        if ([string](Get-JsonProperty $entry @("status")) -ne "accepted") {
+            Add-Failure $Failures "release-evidence-report.json humanEvidenceCompletion.$($required.evidenceName).status must be accepted."
+        }
+
+        if ([int](Get-JsonProperty $entry @("blockingFailureCount")) -ne 0) {
+            Add-Failure $Failures "release-evidence-report.json humanEvidenceCompletion.$($required.evidenceName).blockingFailureCount must be 0."
+        }
+
+        if (@((Get-JsonProperty $entry @("blockingFailures"))).Count -ne 0) {
+            Add-Failure $Failures "release-evidence-report.json humanEvidenceCompletion.$($required.evidenceName).blockingFailures must be empty."
         }
     }
 }
@@ -860,12 +927,12 @@ $requiredReadinessManifestCodes = @(
 )
 
 $requiredReleaseEvidenceTemplates = @(
-    [pscustomobject]@{ evidenceName = "visualQa"; fileName = "visual-qa-signoff-template.md" },
-    [pscustomobject]@{ evidenceName = "sourceLawReview"; fileName = "source-law-review-template.md" },
-    [pscustomobject]@{ evidenceName = "externalRosIxbrlValidation"; fileName = "external-ros-ixbrl-validation-template.md" },
-    [pscustomobject]@{ evidenceName = "qualifiedAccountantAcceptance"; fileName = "qualified-accountant-acceptance-template.md" },
-    [pscustomobject]@{ evidenceName = "manualHandoffAcceptance"; fileName = "manual-handoff-acceptance-template.md" },
-    [pscustomobject]@{ evidenceName = "monitoringProviderConfirmation"; fileName = "monitoring-provider-confirmation-template.md" }
+    [pscustomobject]@{ evidenceName = "visualQa"; fileName = "visual-qa-signoff-template.md"; requiredReviewerRole = "Named visual QA reviewer"; signOffGate = "visual-qa-screenshot-review" },
+    [pscustomobject]@{ evidenceName = "sourceLawReview"; fileName = "source-law-review-template.md"; requiredReviewerRole = "Named source-law reviewer plus qualified accountant"; signOffGate = "source-law-change-review" },
+    [pscustomobject]@{ evidenceName = "externalRosIxbrlValidation"; fileName = "external-ros-ixbrl-validation-template.md"; requiredReviewerRole = "External ROS/iXBRL validation reviewer"; signOffGate = "external-ros-validation-evidence" },
+    [pscustomobject]@{ evidenceName = "qualifiedAccountantAcceptance"; fileName = "qualified-accountant-acceptance-template.md"; requiredReviewerRole = "Named qualified accountant"; signOffGate = "qualified-accountant-final-signoff" },
+    [pscustomobject]@{ evidenceName = "manualHandoffAcceptance"; fileName = "manual-handoff-acceptance-template.md"; requiredReviewerRole = "Named manual handoff reviewer"; signOffGate = "manual-accountant-acceptance" },
+    [pscustomobject]@{ evidenceName = "monitoringProviderConfirmation"; fileName = "monitoring-provider-confirmation-template.md"; requiredReviewerRole = "Named release operator"; signOffGate = "production-monitoring" }
 )
 
 $requiredReleaseEvidenceWorkspaceControls = @(
@@ -1104,12 +1171,13 @@ if (-not ($releaseEvidence.PSObject.Properties.Name -contains "__missing")) {
             Add-Failure $failures "release-evidence-report.json releaseCandidate.githubActionsRunUrl must match GitHubActionsRunUrl."
         }
     }
-    foreach ($coverageProperty in @("sourceLawSourceIds", "goldenCorpusScenarioCodes", "externalRosIxbrlScenarioCodes", "routeCodes", "manualHandoffScenarioCodes", "manualHandoffPathCodes", "releaseArtifactNames", "releaseEvidenceWorkspaceFiles")) {
+    foreach ($coverageProperty in @("sourceLawSourceIds", "goldenCorpusScenarioCodes", "externalRosIxbrlScenarioCodes", "routeCodes", "manualHandoffScenarioCodes", "manualHandoffPathCodes", "releaseArtifactNames", "releaseEvidenceTemplateFiles", "releaseEvidenceWorkspaceFiles")) {
         if ($null -eq $releaseEvidence.requiredCoverage.$coverageProperty -or @($releaseEvidence.requiredCoverage.$coverageProperty).Count -eq 0) {
             Add-Failure $failures "release-evidence-report.json requiredCoverage.$coverageProperty must be present."
         }
     }
     Assert-ReleaseEvidenceTemplateManifest $releaseEvidence $resolvedDirectory.Path $requiredReleaseEvidenceTemplates $failures
+    Assert-ReleaseEvidenceHumanCompletionManifest $releaseEvidence $requiredReleaseEvidenceTemplates $failures
     Assert-ReleaseEvidenceWorkspaceControlManifest $releaseEvidence $resolvedDirectory.Path $requiredReleaseEvidenceWorkspaceControls $failures
 }
 
