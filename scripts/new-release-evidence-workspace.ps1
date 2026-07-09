@@ -389,6 +389,28 @@ function Set-QualifiedAccountantRouteReferences {
     return $updated
 }
 
+function Set-ExternalRosIxbrlScenarioReferences {
+    param(
+        [string]$Content,
+        [string[]]$ScenarioCodes
+    )
+
+    $updated = $Content
+    foreach ($scenarioCode in $ScenarioCodes) {
+        $escaped = [regex]::Escape($scenarioCode)
+        $pattern = "(?m)^(\|\s*$escaped\s*\|)\s*[^|]*\|\s*[^|]*\|\s*[^|]*\|\s*[^|]*\|\s*[^|]*\|$"
+        if (-not [regex]::IsMatch($updated, $pattern)) {
+            throw "External ROS/iXBRL validation template is missing scenario row '$scenarioCode'."
+        }
+
+        $externalReference = "external-ros-validation-ledger#$scenarioCode"
+        $taxonomyReference = "revenue-taxonomy-package-ledger#$scenarioCode"
+        $updated = [regex]::Replace($updated, $pattern, "`$1 $externalReference |  | $taxonomyReference |  |  |")
+    }
+
+    return $updated
+}
+
 function Set-SourceLawReviewNoteReferences {
     param(
         [string]$Content,
@@ -436,6 +458,10 @@ function Copy-PreparedTemplate {
 
     if ((Split-Path -Leaf $DestinationPath) -eq "source-law-review-template.md") {
         $content = Set-SourceLawReviewNoteReferences $content $SourceLawSourceIds
+    }
+
+    if ((Split-Path -Leaf $DestinationPath) -eq "external-ros-ixbrl-validation-template.md") {
+        $content = Set-ExternalRosIxbrlScenarioReferences $content $GoldenCorpusScenarioCodes
     }
 
     if ((Split-Path -Leaf $DestinationPath) -eq "qualified-accountant-acceptance-template.md") {
@@ -700,7 +726,7 @@ $manifest = [ordered]@{
         "source-law source row decisions",
         "visual route pass/fail cells",
         "golden corpus and route acceptance rows",
-        "external ROS/iXBRL validation references and artifact hashes",
+        "external ROS/iXBRL provider/run evidence, artifact hashes, warnings/errors and decisions",
         "manual handoff scenario/path decisions",
         "monitoring provider URL/reference and operator decision"
     )

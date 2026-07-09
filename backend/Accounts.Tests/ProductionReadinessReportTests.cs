@@ -938,6 +938,10 @@ public class ProductionReadinessReportTests
             && evidence.Contains("run/reference", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("XHTML, HTML or ZIP iXBRL artifact name", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["backend-statutory-accounting-engine"].CurrentEvidence, evidence =>
+            evidence.Contains("Release evidence reviewer workspaces", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("prefill external ROS/iXBRL validation and taxonomy package anchors", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("artifact hash, warnings/errors and decision cells blank", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(scores["backend-statutory-accounting-engine"].CurrentEvidence, evidence =>
             evidence.Contains("Manual handoff acceptance", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("real evidence references", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("accepted reviewer decisions", StringComparison.OrdinalIgnoreCase));

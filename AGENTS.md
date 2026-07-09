@@ -2388,6 +2388,21 @@ Qualified-accountant reviewer workspace anchors:
   UTC timestamp, and signature before `scripts/verify-release-evidence.ps1` can
   pass.
 
+### External ROS/iXBRL Reviewer Workspace Anchors
+
+- `scripts/new-release-evidence-workspace.ps1` now pre-fills each external
+  ROS/iXBRL golden corpus scenario row with exact
+  `external-ros-validation-ledger#<scenario>` and
+  `revenue-taxonomy-package-ledger#<scenario>` anchors.
+- The generated workspace still leaves external artifact hash, warnings/errors,
+  decision, provider/run evidence, reviewer identity, timestamp, and signature
+  fields blank; real external validation evidence is still required before any
+  filing use.
+- `scripts/verify-release-evidence-workspace.ps1` now rejects prepared reviewer
+  workspaces when those external validation/taxonomy anchors are missing or when
+  artifact hash, warnings/errors, or decision cells are filled before named
+  external validation sign-off.
+
 ## What Is Left To Do
 
 Highest-priority next steps:

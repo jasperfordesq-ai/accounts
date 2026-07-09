@@ -18511,6 +18511,10 @@ public class AccountsWorkflowTests
         Assert.Contains("Prepared qualified-accountant template route row $routeName Workbench evidence reference cell must be", workspaceVerifier);
         Assert.Contains("must leave scenario acceptance cells blank before named professional sign-off", workspaceVerifier);
         Assert.Contains("must leave route acceptance cells blank before named professional sign-off", workspaceVerifier);
+        Assert.Contains("Assert-ExternalRosIxbrlPreparedEvidenceReferences", workspaceVerifier);
+        Assert.Contains("Prepared external ROS/iXBRL template scenario row $scenarioCode External reference cell must be", workspaceVerifier);
+        Assert.Contains("Prepared external ROS/iXBRL template scenario row $scenarioCode Taxonomy package cell must be", workspaceVerifier);
+        Assert.Contains("must leave artifact hash, warnings/errors and decision cells blank before named external validation sign-off", workspaceVerifier);
         Assert.Contains("machineEvidenceSummaryPath", workspaceVerifier);
         Assert.Contains("releaseCandidate", workspaceVerifier);
         Assert.Contains("identityProvided", workspaceVerifier);
@@ -18594,6 +18598,9 @@ public class AccountsWorkflowTests
         Assert.Contains("source-law-review-ledger#$sourceId", workspaceScript);
         Assert.Contains("Get-GoldenCorpusScenarioCodes", workspaceScript);
         Assert.Contains("Get-AccountantWorkbenchRouteNames", workspaceScript);
+        Assert.Contains("Set-ExternalRosIxbrlScenarioReferences", workspaceScript);
+        Assert.Contains("external-ros-validation-ledger#$scenarioCode", workspaceScript);
+        Assert.Contains("revenue-taxonomy-package-ledger#$scenarioCode", workspaceScript);
         Assert.Contains("Set-QualifiedAccountantScenarioReferences", workspaceScript);
         Assert.Contains("Set-QualifiedAccountantRouteReferences", workspaceScript);
         Assert.Contains("qualified-accountant-walkthrough-ledger#$scenarioCode", workspaceScript);

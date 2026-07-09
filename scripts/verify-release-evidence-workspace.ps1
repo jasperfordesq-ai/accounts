@@ -264,6 +264,68 @@ function Assert-SourceLawPreparedEvidenceReferences {
     }
 }
 
+function Assert-ExternalRosIxbrlPreparedEvidenceReferences {
+    param(
+        [string]$WorkspaceDirectory,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    $productionReadinessPath = Join-Path $WorkspaceDirectory "production-readiness-report.json"
+    $externalRosTemplatePath = Join-Path $WorkspaceDirectory "external-ros-ixbrl-validation-template.md"
+
+    if (-not (Test-Path -LiteralPath $productionReadinessPath -PathType Leaf) -or -not (Test-Path -LiteralPath $externalRosTemplatePath -PathType Leaf)) {
+        return
+    }
+
+    $productionReadiness = Get-Content -LiteralPath $productionReadinessPath -Raw | ConvertFrom-Json
+    $scenarioCodes = @((Get-JsonPropertyValue $productionReadiness "goldenFilingCorpus") | ForEach-Object {
+        [string](Get-JsonPropertyValue $_ "code")
+    } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+
+    if ($scenarioCodes.Count -eq 0) {
+        Add-Failure $Failures "production-readiness-report.json goldenFilingCorpus must include scenario codes."
+        return
+    }
+
+    $content = Get-Content -LiteralPath $externalRosTemplatePath -Raw
+    $lines = $content -split "\r?\n"
+    foreach ($scenarioCode in $scenarioCodes) {
+        $escaped = [regex]::Escape($scenarioCode)
+        $row = $lines | Where-Object { $_ -match "^\|\s*$escaped\s*\|" } | Select-Object -First 1
+        if (-not $row) {
+            Add-Failure $Failures "Prepared external ROS/iXBRL template must include scenario row $scenarioCode."
+            continue
+        }
+
+        $cells = @($row -split "\|")
+        if ($cells.Count -lt 8) {
+            Add-Failure $Failures "Prepared external ROS/iXBRL template scenario row $scenarioCode must include all validation and decision cells."
+            continue
+        }
+
+        $hasPrematureHumanEvidence = $false
+        foreach ($decisionIndex in @(3, 5, 6)) {
+            if (-not [string]::IsNullOrWhiteSpace($cells[$decisionIndex])) {
+                $hasPrematureHumanEvidence = $true
+            }
+        }
+
+        if ($hasPrematureHumanEvidence) {
+            Add-Failure $Failures "Prepared external ROS/iXBRL template scenario row $scenarioCode must leave artifact hash, warnings/errors and decision cells blank before named external validation sign-off."
+        }
+
+        $expectedExternalReference = "external-ros-validation-ledger#$scenarioCode"
+        if ($cells[2].Trim() -ne $expectedExternalReference) {
+            Add-Failure $Failures "Prepared external ROS/iXBRL template scenario row $scenarioCode External reference cell must be $expectedExternalReference."
+        }
+
+        $expectedTaxonomyReference = "revenue-taxonomy-package-ledger#$scenarioCode"
+        if ($cells[4].Trim() -ne $expectedTaxonomyReference) {
+            Add-Failure $Failures "Prepared external ROS/iXBRL template scenario row $scenarioCode Taxonomy package cell must be $expectedTaxonomyReference."
+        }
+    }
+}
+
 function Assert-QualifiedAccountantPreparedEvidenceReferences {
     param(
         [string]$WorkspaceDirectory,
@@ -545,7 +607,7 @@ if (-not (Test-Path -LiteralPath $manifestPath)) {
     foreach ($humanField in @(
         "reviewer/operator/accountant identity and role",
         "review dates and signatures",
-        "external ROS/iXBRL validation references and artifact hashes"
+        "external ROS/iXBRL provider/run evidence, artifact hashes, warnings/errors and decisions"
     )) {
         Assert-ArrayContains @((Get-JsonPropertyValue $manifest "humanFieldsLeftBlank")) $humanField "Workspace manifest humanFieldsLeftBlank" $failures
     }
@@ -652,6 +714,7 @@ if (-not (Test-Path -LiteralPath $machineEvidenceSummaryPath)) {
 
 Assert-VisualQaPreparedRouteReferences $resolvedWorkspace.Path $failures
 Assert-SourceLawPreparedEvidenceReferences $resolvedWorkspace.Path $failures
+Assert-ExternalRosIxbrlPreparedEvidenceReferences $resolvedWorkspace.Path $failures
 Assert-QualifiedAccountantPreparedEvidenceReferences $resolvedWorkspace.Path $failures
 
 if (-not (Test-Path -LiteralPath $reviewerIndexPath)) {

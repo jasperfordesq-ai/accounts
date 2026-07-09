@@ -863,6 +863,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "External ROS/iXBRL validation rows now must match exact retained external validation and taxonomy package ledger anchors for every canonical golden corpus scenario.",
                     "External ROS/iXBRL validation warnings/errors now require exact none, accepted or remediated values, and scenario decisions require exact accepted values before evidence can pass.",
                     "External ROS/iXBRL validation top-level evidence now rejects placeholder provider, environment, run/reference, report, taxonomy and company/period fields, and requires a retained XHTML, HTML or ZIP iXBRL artifact name.",
+                    "Release evidence reviewer workspaces now prefill external ROS/iXBRL validation and taxonomy package anchors for every golden corpus scenario while leaving artifact hash, warnings/errors and decision cells blank.",
                     "Source-law review evidence now has a checked-in template and the release verifier rejects monitored-source rows without concrete URL reachability, dated or not-dated effective-date review, guidance comparison, platform impact classification and exact accepted decisions.",
                     "Source-law review platform impact cells now require exact no change, reflected or blocking values before review evidence can pass.",
                     "Source-law review notes now must match the exact source-law-review-ledger anchor for every monitored source before acceptance can pass.",
