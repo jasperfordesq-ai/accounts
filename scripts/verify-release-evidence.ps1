@@ -474,6 +474,70 @@ function Assert-CompletedTableColumnMatchesScenarioWalkthroughReference {
     }
 }
 
+function Assert-CompletedTableColumnMatchesExternalValidationReference {
+    param(
+        [string]$Content,
+        [string[]]$RowLabels,
+        [int]$ColumnIndex,
+        [string]$ColumnLabel,
+        [string]$Context,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    $lines = $Content -split "\r?\n"
+    foreach ($label in $RowLabels) {
+        $escaped = [regex]::Escape($label)
+        $row = $lines | Where-Object { $_ -match "^\|\s*$escaped\s*\|" } | Select-Object -First 1
+        if (-not $row) {
+            continue
+        }
+
+        $cells = @($row.Trim() -split "\|").Where({ $_.Trim().Length -gt 0 })
+        if ($cells.Count -le $ColumnIndex) {
+            Add-Failure $Failures "$Context table row '$label' is missing column '$ColumnLabel'."
+            continue
+        }
+
+        $value = $cells[$ColumnIndex].Trim()
+        $expected = "external-ros-validation-ledger#$label"
+        if (-not [string]::Equals($value, $expected, [StringComparison]::OrdinalIgnoreCase)) {
+            Add-Failure $Failures "$Context table row '$label' column '$ColumnLabel' must be $expected."
+        }
+    }
+}
+
+function Assert-CompletedTableColumnMatchesTaxonomyPackageReference {
+    param(
+        [string]$Content,
+        [string[]]$RowLabels,
+        [int]$ColumnIndex,
+        [string]$ColumnLabel,
+        [string]$Context,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    $lines = $Content -split "\r?\n"
+    foreach ($label in $RowLabels) {
+        $escaped = [regex]::Escape($label)
+        $row = $lines | Where-Object { $_ -match "^\|\s*$escaped\s*\|" } | Select-Object -First 1
+        if (-not $row) {
+            continue
+        }
+
+        $cells = @($row.Trim() -split "\|").Where({ $_.Trim().Length -gt 0 })
+        if ($cells.Count -le $ColumnIndex) {
+            Add-Failure $Failures "$Context table row '$label' is missing column '$ColumnLabel'."
+            continue
+        }
+
+        $value = $cells[$ColumnIndex].Trim()
+        $expected = "revenue-taxonomy-package-ledger#$label"
+        if (-not [string]::Equals($value, $expected, [StringComparison]::OrdinalIgnoreCase)) {
+            Add-Failure $Failures "$Context table row '$label' column '$ColumnLabel' must be $expected."
+        }
+    }
+}
+
 function Assert-CompletedTableColumnContainsRowLabel {
     param(
         [string]$Content,
@@ -874,8 +938,8 @@ function Test-ExternalRosIxbrlEvidence {
     Assert-CompletedTableColumnMatches $Content $canonicalGoldenCorpusScenarioCodes 3 "Taxonomy package" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real retained taxonomy package reference" $context $Failures
     Assert-CompletedTableColumnMatches $Content $canonicalGoldenCorpusScenarioCodes 4 "Warnings/errors" "^(none|accepted|remediated)$" "exactly none, accepted, or remediated" $context $Failures
     Assert-CompletedTableColumnMatches $Content $canonicalGoldenCorpusScenarioCodes 5 "Decision" "^accepted$" "exactly accepted for this release candidate" $context $Failures
-    Assert-CompletedTableColumnContainsRowLabel $Content $canonicalGoldenCorpusScenarioCodes 1 "External reference" $context $Failures
-    Assert-CompletedTableColumnContainsRowLabel $Content $canonicalGoldenCorpusScenarioCodes 3 "Taxonomy package" $context $Failures
+    Assert-CompletedTableColumnMatchesExternalValidationReference $Content $canonicalGoldenCorpusScenarioCodes 1 "External reference" $context $Failures
+    Assert-CompletedTableColumnMatchesTaxonomyPackageReference $Content $canonicalGoldenCorpusScenarioCodes 3 "Taxonomy package" $context $Failures
 }
 
 function Test-MonitoringEvidence {

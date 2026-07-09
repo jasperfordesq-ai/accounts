@@ -38,9 +38,11 @@ notes`; retain details in the validation reference, validation report, or notes.
 Record the actual taxonomy package or retained package reference for each
 scenario; do not use `accepted`, `none`, `n/a`, `pending`, `todo`, or `tbd` as
 the taxonomy package.
-Scenario external validation references and retained taxonomy package references
-must include the scenario code, so evidence cannot be reused against the wrong
-golden corpus row.
+Each scenario `External reference` cell must be the exact retained external
+validation reference `external-ros-validation-ledger#<scenario>`, and each
+scenario `Taxonomy package` cell must be the exact retained taxonomy package
+reference `revenue-taxonomy-package-ledger#<scenario>`. Do not use accepted,
+none, n/a, pending, todo, tbd, or another scenario's anchor.
 
 ## Required Evidence Pack
 

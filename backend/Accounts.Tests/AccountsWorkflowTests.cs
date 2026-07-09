@@ -18349,8 +18349,9 @@ public class AccountsWorkflowTests
         Assert.Contains("in the `Decision` column only when the external reference", externalRosIxbrl);
         Assert.Contains("Record the actual taxonomy package", externalRosIxbrl);
         Assert.Contains("the taxonomy package", externalRosIxbrl);
-        Assert.Contains("must include the scenario code", externalRosIxbrl);
-        Assert.Contains("golden corpus row", externalRosIxbrl);
+        Assert.Contains("external-ros-validation-ledger#<scenario>", externalRosIxbrl);
+        Assert.Contains("revenue-taxonomy-package-ledger#<scenario>", externalRosIxbrl);
+        Assert.Contains("must be the exact retained", externalRosIxbrl, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("micro-ltd", externalRosIxbrl);
         Assert.Contains("small-abridged-ltd", externalRosIxbrl);
         Assert.Contains("dac-small", externalRosIxbrl);
@@ -18484,8 +18485,10 @@ public class AccountsWorkflowTests
         Assert.Contains("\"External reference\" \"^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+\"", script);
         Assert.Contains("\"Taxonomy package\" \"^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+\"", script);
         Assert.Contains("a real retained taxonomy package reference", script);
-        Assert.Contains("Assert-CompletedTableColumnContainsRowLabel $Content $canonicalGoldenCorpusScenarioCodes 1 \"External reference\"", script);
-        Assert.Contains("Assert-CompletedTableColumnContainsRowLabel $Content $canonicalGoldenCorpusScenarioCodes 3 \"Taxonomy package\"", script);
+        Assert.Contains("Assert-CompletedTableColumnMatchesExternalValidationReference $Content $canonicalGoldenCorpusScenarioCodes 1 \"External reference\"", script);
+        Assert.Contains("external-ros-validation-ledger#$label", script);
+        Assert.Contains("Assert-CompletedTableColumnMatchesTaxonomyPackageReference $Content $canonicalGoldenCorpusScenarioCodes 3 \"Taxonomy package\"", script);
+        Assert.Contains("revenue-taxonomy-package-ledger#$label", script);
         Assert.Contains("Use exactly `none`,", externalRosIxbrl);
         Assert.Contains("`accepted` in the `Decision` column", externalRosIxbrl);
         Assert.Contains("accepted with", externalRosIxbrl);
