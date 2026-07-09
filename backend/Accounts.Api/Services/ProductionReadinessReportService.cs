@@ -858,7 +858,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             Category(
                 "frontend-accountant-workbench",
                 "Frontend accountant workbench",
-                180,
+                182,
                 200,
                 "visual-acceptance-required",
                 [
@@ -876,6 +876,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "scripts/verify-release-artifact-pack.ps1 and scripts/verify-ci-machine-evidence-pack.ps1 reject visual evidence unless every screenshot reports passed console-error, horizontal-overflow, visible-text-overlap and automated theme-contrast smoke checks.",
                     "Visual smoke and accountant-workbench evidence now retain and re-verify each route's expected accountant decision text across light/dark desktop/mobile screenshots.",
                     "accountant-workbench-evidence-report.json now includes route acceptance rows with stable route keys, expected decision text, blocking status and qualified-accountant route acceptance evidence for every workbench route.",
+                    "Release artifact and CI machine evidence pack verifiers now require exact accountant-workbench route acceptance names, route keys, expected decision text and per-route acceptance evidence ids for every workbench route.",
                     "Frontend parser invariants now require the CI machine evidence pack, production smoke, readiness verification, visual smoke and manual release-verification rows before rendering readiness data."
                 ],
                 [

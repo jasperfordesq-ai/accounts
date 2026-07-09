@@ -20,14 +20,14 @@ describe("ProductionReadinessWorkbench", () => {
     expectText("3 companies");
     expectText("4 periods");
     expect(screen.getByRole("heading", { name: "Production scorecard" })).toBeInTheDocument();
-    expectText("679/700");
+    expectText("681/700");
     expectText("Architecture and documentation");
     expectText("Backend statutory/accounting engine");
     expectText("Frontend accountant workbench");
     expectText("Security/auth/tenant/platform guardrails");
     expectText("99 / 100");
     expectText("250 / 250");
-    expectText("180 / 200");
+    expectText("182 / 200");
     expectText("150 / 150");
     expectText(/Next score gate/);
     expect(screen.getByRole("searchbox", { name: "Filter Next assurance actions" })).toBeInTheDocument();
@@ -284,7 +284,7 @@ describe("ProductionReadinessWorkbench", () => {
 
 function productionScorecard(): ProductionReadinessReport["productionScorecard"] {
   return {
-    currentScore: 679,
+    currentScore: 681,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete source-law review, named visual QA, monitoring-provider confirmation, manual handoff and qualified-accountant acceptance evidence.",
@@ -344,7 +344,7 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
       {
         code: "frontend-accountant-workbench",
         label: "Frontend accountant workbench",
-        currentScore: 180,
+        currentScore: 182,
         targetScore: 200,
         status: "visual-acceptance-required",
         currentEvidence: [
@@ -357,6 +357,7 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
           "Visual QA release evidence requires exact visual-smoke manifest, visual evidence report and accountant workbench evidence report filenames before sign-off evidence can pass.",
           "Visual QA top-level evidence rejects placeholder reviewer name, reviewer role and reviewer signature fields before human visual sign-off evidence can pass.",
           "accountant-workbench-evidence-report.json proves route workflow-stage, review-check, expected accountant decision text and qualified-accountant route acceptance coverage.",
+          "Release artifact and CI machine evidence pack verifiers require exact accountant-workbench route acceptance names, route keys, expected decision text and per-route acceptance evidence ids for every workbench route.",
           "Frontend parser invariants now require the CI machine evidence pack, production smoke, readiness verification, visual smoke and manual release-verification rows before rendering readiness data.",
         ],
         remainingGaps: ["Complete named visual QA review against the screenshot manifest and visual-smoke-evidence-report.json."],

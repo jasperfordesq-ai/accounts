@@ -111,6 +111,70 @@ function Assert-ArrayContains {
     }
 }
 
+$expectedAccountantWorkbenchRouteAcceptance = @(
+    [pscustomobject]@{ routeName = "dashboard"; routeKey = "dashboard"; expectedText = "Firm command centre" },
+    [pscustomobject]@{ routeName = "production-readiness"; routeKey = "readiness"; expectedText = "Production Readiness Checklist" },
+    [pscustomobject]@{ routeName = "company-detail"; routeKey = "company"; expectedText = "Company command centre" },
+    [pscustomobject]@{ routeName = "period-workspace"; routeKey = "period"; expectedText = "Filing readiness" },
+    [pscustomobject]@{ routeName = "filing-review"; routeKey = "filing"; expectedText = "Filing readiness profile" },
+    [pscustomobject]@{ routeName = "financial-statements"; routeKey = "financialStatements"; expectedText = "Financial Statements" },
+    [pscustomobject]@{ routeName = "workbench-preview"; routeKey = "workbenchPreview"; expectedText = "Workbench Component Preview" }
+)
+
+function Assert-AccountantWorkbenchRouteAcceptance {
+    param(
+        [object]$AccountantWorkbench,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    $routeAcceptance = @($AccountantWorkbench.routeAcceptance)
+    $routeReadiness = @($AccountantWorkbench.routeReadiness)
+    foreach ($expected in $expectedAccountantWorkbenchRouteAcceptance) {
+        Assert-ArrayContains @($AccountantWorkbench.requiredCoverage.routeCodes) $expected.routeName "accountant-workbench-evidence-report.json requiredCoverage.routeCodes" $Failures
+        Assert-ArrayContains @($AccountantWorkbench.requiredCoverage.routeKeys) $expected.routeKey "accountant-workbench-evidence-report.json requiredCoverage.routeKeys" $Failures
+
+        foreach ($evidenceId in @(
+            "$($expected.routeName)-accountant-route-acceptance-note",
+            "$($expected.routeName)-visual-smoke-screenshots-reviewed",
+            "$($expected.routeName)-qualified-accountant-route-acceptance"
+        )) {
+            Assert-ArrayContains @($AccountantWorkbench.requiredCoverage.routeAcceptanceEvidence) $evidenceId "accountant-workbench-evidence-report.json requiredCoverage.routeAcceptanceEvidence" $Failures
+        }
+
+        $readiness = $routeReadiness | Where-Object { [string]$_.routeName -eq $expected.routeName } | Select-Object -First 1
+        if ($null -eq $readiness) {
+            Add-Failure $Failures "accountant-workbench-evidence-report.json routeReadiness must include $($expected.routeName)."
+        } else {
+            if ([string]$readiness.routeKey -ne [string]$expected.routeKey) {
+                Add-Failure $Failures "accountant-workbench-evidence-report.json routeReadiness.$($expected.routeName).routeKey must be $($expected.routeKey)."
+            }
+            if ([string]$readiness.expectedText -ne [string]$expected.expectedText) {
+                Add-Failure $Failures "accountant-workbench-evidence-report.json routeReadiness.$($expected.routeName).expectedText must be $($expected.expectedText)."
+            }
+        }
+
+        $acceptance = $routeAcceptance | Where-Object { [string]$_.routeName -eq $expected.routeName } | Select-Object -First 1
+        if ($null -eq $acceptance) {
+            Add-Failure $Failures "accountant-workbench-evidence-report.json routeAcceptance must include $($expected.routeName)."
+            continue
+        }
+
+        if ([string]$acceptance.routeKey -ne [string]$expected.routeKey) {
+            Add-Failure $Failures "accountant-workbench-evidence-report.json routeAcceptance.$($expected.routeName).routeKey must be $($expected.routeKey)."
+        }
+        if ([string]$acceptance.expectedText -ne [string]$expected.expectedText) {
+            Add-Failure $Failures "accountant-workbench-evidence-report.json routeAcceptance.$($expected.routeName).expectedText must be $($expected.expectedText)."
+        }
+        foreach ($evidenceId in @(
+            "$($expected.routeName)-accountant-route-acceptance-note",
+            "$($expected.routeName)-visual-smoke-screenshots-reviewed",
+            "$($expected.routeName)-qualified-accountant-route-acceptance"
+        )) {
+            Assert-ArrayContains @($acceptance.requiredAcceptanceEvidence) $evidenceId "accountant-workbench-evidence-report.json routeAcceptance.$($expected.routeName).requiredAcceptanceEvidence" $Failures
+        }
+    }
+}
+
 function Assert-VisualSmokeDimensionEvidence {
     param(
         [object]$VisualSmoke,
@@ -568,6 +632,7 @@ if (-not ($accountantWorkbench.PSObject.Properties.Name -contains "__missing")) 
             Add-Failure $failures "accountant-workbench-evidence-report.json routeAcceptance.requiredAcceptanceEvidence must include qualified-accountant-route-acceptance."
         }
     }
+    Assert-AccountantWorkbenchRouteAcceptance $accountantWorkbench $failures
 }
 
 if (-not ($releaseEvidence.PSObject.Properties.Name -contains "__missing")) {
