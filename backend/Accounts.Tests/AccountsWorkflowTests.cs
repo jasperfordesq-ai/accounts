@@ -18497,6 +18497,7 @@ public class AccountsWorkflowTests
         Assert.Contains("Machine evidence summary monitoringEvidence.jsonLogLineCount must be greater than zero.", workspaceVerifier);
         Assert.Contains("Machine evidence summary monitoringEvidence.matchedMonitoringSmokeLine must be true.", workspaceVerifier);
         Assert.Contains("machineEvidenceSummaryPath", workspaceVerifier);
+        Assert.Contains("Convert-JsonValueToEvidenceString", workspaceScript);
         Assert.Contains("Workspace manifest retainedMachineEvidence must contain exactly", workspaceVerifier);
         Assert.Contains("Workspace must include retained machine evidence file", workspaceVerifier);
         Assert.Contains("Workspace manifest retainedMachineEvidence.$requiredMachineEvidenceFile.sourceArtifactName must be", workspaceVerifier);
@@ -18562,6 +18563,19 @@ public class AccountsWorkflowTests
         Assert.Contains("Assert-UtcTimestampField", script);
         Assert.Contains("Assert-Sha256Field", script);
         Assert.Contains("Assert-PositiveIntegerField", script);
+        Assert.Contains("Read-JsonEvidenceFile", script);
+        Assert.Contains("Test-ReleaseWorkspaceControlEvidence", script);
+        Assert.Contains("workspaceControlFiles", script);
+        Assert.Contains("releaseEvidenceWorkspaceFiles", script);
+        Assert.Contains("Assert-JsonStringEquals $WorkspaceManifest \"machineEvidenceSummaryFile\" \"release-evidence-machine-summary.json\" \"Release evidence workspace manifest\"", script);
+        Assert.Contains("Assert-MachineEvidenceEntries (Get-JsonPropertyValue $WorkspaceManifest \"retainedMachineEvidence\") \"Release evidence workspace manifest\"", script);
+        Assert.Contains("Assert-MachineEvidenceEntries (Get-JsonPropertyValue $MachineEvidenceSummary \"retainedMachineEvidence\") \"Release evidence machine summary\"", script);
+        Assert.Contains("$Context retainedMachineEvidence must contain exactly", script);
+        Assert.Contains("Release evidence machine summary monitoringEvidence.jsonLogLineCount must be greater than zero.", script);
+        Assert.Contains("Assert-JsonStringEquals $WorkspaceVerificationReport \"status\" \"passed\" \"Release evidence workspace verification report\"", script);
+        Assert.Contains("Release evidence workspace verification report failureCount must be 0.", script);
+        Assert.Contains("Release evidence workspace verification report workspaceFiles", script);
+        Assert.Contains("release-evidence-machine-summary.json", script);
         Assert.Contains("Assert-MinimumIntegerField", script);
         Assert.Contains("Assert-CompletedTableColumnMatches", script);
         Assert.Contains("Assert-ConsistentReleaseIdentity", script);

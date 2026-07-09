@@ -2097,6 +2097,58 @@ Release evidence reviewer machine summary:
     value in the summary and the workspace verifier failed with the expected
     manifest mismatch blocker.
 
+Release evidence structured-log summary compatibility:
+
+- This slice fixed the reviewer workspace machine summary to accept the actual
+  structured-log verifier field `logFileName` as the retained structured log
+  file name, while still supporting the older `structuredLogFile` property.
+- `scripts/verify-release-evidence-workspace.ps1` now checks the stronger
+  structured-log evidence facts in the machine summary: positive
+  `jsonLogLineCount` and `matchedMonitoringSmokeLine: true`, instead of
+  failing on a brittle source field name.
+- Verification completed locally and in CI:
+  - Parser checks passed for `scripts/new-release-evidence-workspace.ps1` and
+    `scripts/verify-release-evidence-workspace.ps1`.
+  - `node scripts/verify-ci-actions.mjs` passed.
+  - The patched workspace verifier accepted the exact failed CI reviewer
+    workspace artifact from run `29035701849`.
+  - A regenerated reviewer workspace wrote `StructuredLogFile: api-structured.log`.
+  - A tampered summary with `jsonLogLineCount = 0` failed as expected.
+  - Focused backend regression passed:
+    `ReleaseEvidenceVerifier_BlocksIncompleteHumanSignoffEvidence`.
+  - CI run `29036498842` passed for commit `7a59a05`, including
+    `CI Machine Evidence Pack` and `Prepare release evidence reviewer workspace`.
+
+Release evidence workspace-control retention:
+
+- This slice makes final release evidence verification retain the machine
+  evidence provenance chain, not just the six human Markdown templates.
+  `scripts/verify-release-evidence.ps1` now requires completed evidence
+  directories to include `release-evidence-workspace-manifest.json`,
+  `release-evidence-machine-summary.json`, and
+  `release-evidence-workspace-verification-report.json`.
+- The release evidence report now emits a separate `workspaceControlFiles`
+  manifest and `requiredCoverage.releaseEvidenceWorkspaceFiles`, while keeping
+  the six human templates in `evidenceFiles`.
+- `scripts/new-release-evidence-workspace.ps1` now normalizes JSON-derived
+  timestamp values back to ISO UTC strings before pre-filling templates, so
+  generated monitoring evidence keeps `Checked at UTC` in verifier-compatible
+  UTC format.
+- Verification completed locally:
+  - PowerShell parser checks passed for `scripts/new-release-evidence-workspace.ps1`
+    and `scripts/verify-release-evidence.ps1`.
+  - `node scripts/verify-ci-actions.mjs` passed.
+  - A reviewer workspace regenerated from CI run `29036498842` passed
+    `scripts/verify-release-evidence-workspace.ps1`.
+  - Running `scripts/verify-release-evidence.ps1` against that fresh workspace
+    still failed as expected before named human sign-off, reported three
+    `workspaceControlFiles`, had zero workspace-control failures, and kept
+    `Checked at UTC` as an ISO UTC timestamp.
+  - Focused backend regression passed:
+    `ReleaseEvidenceVerifier_BlocksIncompleteHumanSignoffEvidence`.
+  - This is evidence-chain hardening, not a substitute for named human or
+    external professional approval.
+
 ## What Is Left To Do
 
 Highest-priority next steps:

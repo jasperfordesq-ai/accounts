@@ -29,6 +29,44 @@ function Read-EvidenceFile {
     return Get-Content -LiteralPath $Path -Raw
 }
 
+function Read-JsonEvidenceFile {
+    param(
+        [string]$Path,
+        [string]$Context,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        Add-Failure $Failures "Missing evidence file: $Path"
+        return $null
+    }
+
+    try {
+        return Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
+    } catch {
+        Add-Failure $Failures "$Context must be valid JSON: $($_.Exception.Message)"
+        return $null
+    }
+}
+
+function Get-JsonPropertyValue {
+    param(
+        $Object,
+        [string]$Name
+    )
+
+    if ($null -eq $Object) {
+        return $null
+    }
+
+    $property = $Object.PSObject.Properties[$Name]
+    if ($null -eq $property) {
+        return $null
+    }
+
+    return $property.Value
+}
+
 function Assert-ContainsText {
     param(
         [string]$Content,
@@ -632,6 +670,145 @@ function Assert-ReleaseIdentityFields {
     Assert-GitHubActionsRunUrlField $Content $Context $Failures
 }
 
+function Assert-JsonStringEquals {
+    param(
+        $Object,
+        [string]$PropertyName,
+        [string]$ExpectedValue,
+        [string]$Context,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    $value = [string](Get-JsonPropertyValue $Object $PropertyName)
+    if (-not [string]::Equals($value, $ExpectedValue, [StringComparison]::OrdinalIgnoreCase)) {
+        Add-Failure $Failures "$Context $PropertyName must be $ExpectedValue."
+    }
+}
+
+function Assert-JsonArrayContains {
+    param(
+        $Values,
+        [string]$ExpectedValue,
+        [string]$Context,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    $matches = @($Values | Where-Object {
+        [string]::Equals([string]$_, $ExpectedValue, [StringComparison]::OrdinalIgnoreCase)
+    })
+
+    if ($matches.Count -eq 0) {
+        Add-Failure $Failures "$Context must include $ExpectedValue."
+    }
+}
+
+function Assert-MachineEvidenceEntries {
+    param(
+        $Entries,
+        [string]$Context,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    $entryList = @($Entries)
+    if ($entryList.Count -ne $requiredMachineEvidenceFiles.Count) {
+        Add-Failure $Failures "$Context retainedMachineEvidence must contain exactly $($requiredMachineEvidenceFiles.Count) entries."
+    }
+
+    foreach ($fileName in $requiredMachineEvidenceFiles) {
+        $entry = $entryList | Where-Object {
+            [string]::Equals([string](Get-JsonPropertyValue $_ "fileName"), $fileName, [StringComparison]::OrdinalIgnoreCase)
+        } | Select-Object -First 1
+
+        if ($null -eq $entry) {
+            Add-Failure $Failures "$Context retainedMachineEvidence must include $fileName."
+            continue
+        }
+
+        $byteSize = [int](Get-JsonPropertyValue $entry "byteSize")
+        if ($byteSize -le 0) {
+            Add-Failure $Failures "$Context retainedMachineEvidence.$fileName.byteSize must be a positive integer."
+        }
+
+        $sha256 = [string](Get-JsonPropertyValue $entry "sha256")
+        if ($sha256 -notmatch "^[0-9a-f]{64}$") {
+            Add-Failure $Failures "$Context retainedMachineEvidence.$fileName.sha256 must be a lowercase 64-character SHA-256 digest."
+        }
+    }
+}
+
+function Test-ReleaseWorkspaceControlEvidence {
+    param(
+        $WorkspaceManifest,
+        $MachineEvidenceSummary,
+        $WorkspaceVerificationReport,
+        [string]$ReleaseCandidateCommitSha,
+        [string]$ReleaseCandidateRunUrl,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    if ($null -ne $WorkspaceManifest) {
+        Assert-JsonStringEquals $WorkspaceManifest "machineEvidenceSummaryFile" "release-evidence-machine-summary.json" "Release evidence workspace manifest" $Failures
+        foreach ($templateFile in $requiredReleaseEvidenceTemplateFiles) {
+            Assert-JsonArrayContains (Get-JsonPropertyValue $WorkspaceManifest "preparedTemplates") $templateFile "Release evidence workspace manifest preparedTemplates" $Failures
+        }
+
+        Assert-MachineEvidenceEntries (Get-JsonPropertyValue $WorkspaceManifest "retainedMachineEvidence") "Release evidence workspace manifest" $Failures
+
+        if (-not [string]::IsNullOrWhiteSpace($ReleaseCandidateCommitSha)) {
+            Assert-JsonStringEquals $WorkspaceManifest "commitSha" $ReleaseCandidateCommitSha "Release evidence workspace manifest" $Failures
+        }
+
+        if (-not [string]::IsNullOrWhiteSpace($ReleaseCandidateRunUrl)) {
+            Assert-JsonStringEquals $WorkspaceManifest "githubActionsRunUrl" $ReleaseCandidateRunUrl "Release evidence workspace manifest" $Failures
+        }
+    }
+
+    if ($null -ne $MachineEvidenceSummary) {
+        $summaryCandidate = Get-JsonPropertyValue $MachineEvidenceSummary "releaseCandidate"
+        if (-not [string]::IsNullOrWhiteSpace($ReleaseCandidateCommitSha)) {
+            Assert-JsonStringEquals $summaryCandidate "commitSha" $ReleaseCandidateCommitSha "Release evidence machine summary releaseCandidate" $Failures
+        }
+
+        if (-not [string]::IsNullOrWhiteSpace($ReleaseCandidateRunUrl)) {
+            Assert-JsonStringEquals $summaryCandidate "githubActionsRunUrl" $ReleaseCandidateRunUrl "Release evidence machine summary releaseCandidate" $Failures
+        }
+
+        Assert-MachineEvidenceEntries (Get-JsonPropertyValue $MachineEvidenceSummary "retainedMachineEvidence") "Release evidence machine summary" $Failures
+
+        $reviewerQueue = @((Get-JsonPropertyValue $MachineEvidenceSummary "reviewerQueue"))
+        if ($reviewerQueue.Count -ne $requiredReviewerQueue.Count) {
+            Add-Failure $Failures "Release evidence machine summary reviewerQueue must contain exactly $($requiredReviewerQueue.Count) entries."
+        }
+
+        $monitoringEvidence = Get-JsonPropertyValue $MachineEvidenceSummary "monitoringEvidence"
+        if ([int](Get-JsonPropertyValue $monitoringEvidence "jsonLogLineCount") -le 0) {
+            Add-Failure $Failures "Release evidence machine summary monitoringEvidence.jsonLogLineCount must be greater than zero."
+        }
+
+        if ([bool](Get-JsonPropertyValue $monitoringEvidence "matchedMonitoringSmokeLine") -ne $true) {
+            Add-Failure $Failures "Release evidence machine summary monitoringEvidence.matchedMonitoringSmokeLine must be true."
+        }
+    }
+
+    if ($null -ne $WorkspaceVerificationReport) {
+        Assert-JsonStringEquals $WorkspaceVerificationReport "status" "passed" "Release evidence workspace verification report" $Failures
+
+        if ([int](Get-JsonPropertyValue $WorkspaceVerificationReport "failureCount") -ne 0) {
+            Add-Failure $Failures "Release evidence workspace verification report failureCount must be 0."
+        }
+
+        foreach ($workspaceFile in @(
+            "release-evidence-workspace-manifest.json",
+            "release-evidence-machine-summary.json"
+        )) {
+            $workspaceFiles = @((Get-JsonPropertyValue $WorkspaceVerificationReport "workspaceFiles") | ForEach-Object {
+                Get-JsonPropertyValue $_ "fileName"
+            })
+            Assert-JsonArrayContains $workspaceFiles $workspaceFile "Release evidence workspace verification report workspaceFiles" $Failures
+        }
+    }
+}
+
 function Get-ReleaseEvidenceIdentity {
     param(
         [string]$Content,
@@ -791,6 +968,33 @@ $requiredReleaseArtifactNames = @(
     "production-readiness-report",
     "production-readiness-verification-report.json",
     "visual-smoke-screenshots"
+)
+
+$requiredReleaseEvidenceTemplateFiles = @(
+    "visual-qa-signoff-template.md",
+    "source-law-review-template.md",
+    "external-ros-ixbrl-validation-template.md",
+    "qualified-accountant-acceptance-template.md",
+    "manual-handoff-acceptance-template.md",
+    "monitoring-provider-confirmation-template.md"
+)
+
+$requiredMachineEvidenceFiles = @(
+    "production-readiness-report.json",
+    "visual-smoke-manifest.json",
+    "visual-smoke-evidence-report.json",
+    "accountant-workbench-evidence-report.json",
+    "monitoring-error-routing-report.json",
+    "structured-log-report.json"
+)
+
+$requiredReviewerQueue = @(
+    "visual-qa-screenshot-review",
+    "source-law-change-review",
+    "external-ros-validation-evidence",
+    "qualified-accountant-final-signoff",
+    "manual-accountant-acceptance",
+    "production-monitoring"
 )
 
 $requiredSourceLawSourceIds = @(
@@ -1157,6 +1361,9 @@ $externalRosIxbrlPath = Join-Path $resolvedDirectory "external-ros-ixbrl-validat
 $accountantPath = Join-Path $resolvedDirectory "qualified-accountant-acceptance-template.md"
 $manualHandoffPath = Join-Path $resolvedDirectory "manual-handoff-acceptance-template.md"
 $monitoringPath = Join-Path $resolvedDirectory "monitoring-provider-confirmation-template.md"
+$workspaceManifestPath = Join-Path $resolvedDirectory "release-evidence-workspace-manifest.json"
+$machineEvidenceSummaryPath = Join-Path $resolvedDirectory "release-evidence-machine-summary.json"
+$workspaceVerificationReportPath = Join-Path $resolvedDirectory "release-evidence-workspace-verification-report.json"
 
 $visual = [string](Read-EvidenceFile $visualPath $failures)
 $sourceLaw = [string](Read-EvidenceFile $sourceLawPath $failures)
@@ -1164,6 +1371,9 @@ $externalRosIxbrl = [string](Read-EvidenceFile $externalRosIxbrlPath $failures)
 $accountant = [string](Read-EvidenceFile $accountantPath $failures)
 $manualHandoff = [string](Read-EvidenceFile $manualHandoffPath $failures)
 $monitoring = [string](Read-EvidenceFile $monitoringPath $failures)
+$workspaceManifest = Read-JsonEvidenceFile $workspaceManifestPath "release-evidence-workspace-manifest.json" $failures
+$machineEvidenceSummary = Read-JsonEvidenceFile $machineEvidenceSummaryPath "release-evidence-machine-summary.json" $failures
+$workspaceVerificationReport = Read-JsonEvidenceFile $workspaceVerificationReportPath "release-evidence-workspace-verification-report.json" $failures
 
 $evidenceFiles = @(
     New-EvidenceFileManifestItem "visualQa" $visualPath $visual
@@ -1172,6 +1382,12 @@ $evidenceFiles = @(
     New-EvidenceFileManifestItem "qualifiedAccountantAcceptance" $accountantPath $accountant
     New-EvidenceFileManifestItem "manualHandoffAcceptance" $manualHandoffPath $manualHandoff
     New-EvidenceFileManifestItem "monitoringProviderConfirmation" $monitoringPath $monitoring
+)
+
+$workspaceControlFiles = @(
+    New-EvidenceFileManifestItem "releaseEvidenceWorkspaceManifest" $workspaceManifestPath ""
+    New-EvidenceFileManifestItem "releaseEvidenceMachineSummary" $machineEvidenceSummaryPath ""
+    New-EvidenceFileManifestItem "releaseEvidenceWorkspaceVerificationReport" $workspaceVerificationReportPath ""
 )
 
 $visualFailures = [System.Collections.Generic.List[string]]::new()
@@ -1245,6 +1461,8 @@ if ($releaseEvidenceIdentities.Length -gt 0) {
     $releaseCandidateRunUrl = [string]$releaseEvidenceIdentities[0].githubActionsRunUrl
 }
 
+Test-ReleaseWorkspaceControlEvidence $workspaceManifest $machineEvidenceSummary $workspaceVerificationReport $releaseCandidateCommitSha $releaseCandidateRunUrl $failures
+
 $releaseIdentityConsistent = $true
 $uniqueCommitShas = @($releaseEvidenceIdentities | Select-Object -ExpandProperty commitSha -Unique)
 $uniqueRunUrls = @($releaseEvidenceIdentities | Select-Object -ExpandProperty githubActionsRunUrl -Unique)
@@ -1264,6 +1482,7 @@ $report = [ordered]@{
     }
     evidenceIdentities = @($releaseEvidenceIdentities)
     evidenceFiles = $evidenceFiles
+    workspaceControlFiles = $workspaceControlFiles
     humanEvidenceCompletion = $humanEvidenceCompletion
     files = [ordered]@{
         visualQa = $visualPath
@@ -1272,6 +1491,9 @@ $report = [ordered]@{
         qualifiedAccountantAcceptance = $accountantPath
         manualHandoffAcceptance = $manualHandoffPath
         monitoringProviderConfirmation = $monitoringPath
+        releaseEvidenceWorkspaceManifest = $workspaceManifestPath
+        releaseEvidenceMachineSummary = $machineEvidenceSummaryPath
+        releaseEvidenceWorkspaceVerificationReport = $workspaceVerificationReportPath
     }
     requiredCoverage = [ordered]@{
         goldenCorpusScenarioCodes = $canonicalGoldenCorpusScenarioCodes
@@ -1282,6 +1504,7 @@ $report = [ordered]@{
         manualHandoffPathCodes = $requiredManualHandoffPathCodes
         releaseArtifactNames = $requiredReleaseArtifactNames
         releaseEvidenceTemplateFiles = @($evidenceFiles | ForEach-Object { $_.fileName })
+        releaseEvidenceWorkspaceFiles = @($workspaceControlFiles | ForEach-Object { $_.fileName })
     }
     failureCount = $failures.Count
     failures = $failures.ToArray()

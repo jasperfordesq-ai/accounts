@@ -161,6 +161,24 @@ function Get-FirstJsonPropertyValue {
     return ""
 }
 
+function Convert-JsonValueToEvidenceString {
+    param($Value)
+
+    if ($null -eq $Value) {
+        return ""
+    }
+
+    if ($Value -is [DateTimeOffset]) {
+        return $Value.ToUniversalTime().ToString("o")
+    }
+
+    if ($Value -is [DateTime]) {
+        return $Value.ToUniversalTime().ToString("o")
+    }
+
+    return [string]$Value
+}
+
 function Get-JsonPathValue {
     param(
         $Object,
@@ -253,8 +271,8 @@ $visualSmokeEvidenceReport = Read-JsonFile $visualSmokeEvidenceReportPath
 $monitoringErrorRoutingReport = Read-JsonFile $monitoringErrorRoutingReportPath
 $structuredLogReport = Read-JsonFile $structuredLogReportPath
 
-$productionReadinessTimestamp = [string](Get-JsonPropertyValue $productionReadinessReport "generatedAt")
-$checkedAtUtc = [string](Get-JsonPropertyValue $monitoringErrorRoutingReport "checkedAtUtc")
+$productionReadinessTimestamp = Convert-JsonValueToEvidenceString (Get-JsonPropertyValue $productionReadinessReport "generatedAt")
+$checkedAtUtc = Convert-JsonValueToEvidenceString (Get-JsonPropertyValue $monitoringErrorRoutingReport "checkedAtUtc")
 
 New-Item -ItemType Directory -Path $resolvedOutputDirectory -Force | Out-Null
 
