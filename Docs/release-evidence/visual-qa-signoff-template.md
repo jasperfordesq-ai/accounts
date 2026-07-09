@@ -54,6 +54,10 @@ For each route in the manifest, record pass/fail and notes for:
 - Release blockers and sign-off states are visually obvious.
 - Accountant next actions are visible without relying on explanatory copy.
 
+Use `pass` or `accepted` in each light/dark desktop/mobile cell only when that
+route capture is visually accepted for this release candidate. The verifier
+rejects blank, failed, pending, or ambiguous route acceptance cells.
+
 | Route | Desktop light | Desktop dark | Mobile light | Mobile dark | Notes |
 | --- | --- | --- | --- | --- | --- |
 | dashboard |  |  |  |  |  |

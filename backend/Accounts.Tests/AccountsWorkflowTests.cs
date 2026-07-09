@@ -18316,6 +18316,8 @@ public class AccountsWorkflowTests
         Assert.Contains("sampledDistinctColorCount", visual);
         Assert.Contains("luminanceRange", visual);
         Assert.Contains("themeContrastResult.minimumContrastRatio", visual);
+        Assert.Contains("Use `pass` or `accepted`", visual);
+        Assert.Contains("rejects blank, failed, pending, or ambiguous", visual);
 
         var sourceLaw = File.ReadAllText(sourceLawPath);
         Assert.Contains("source-law-snapshot-fingerprint", sourceLaw);
@@ -18470,6 +18472,10 @@ public class AccountsWorkflowTests
         Assert.Contains("\"Minimum sampled distinct color count\" 4", script);
         Assert.Contains("\"Minimum screenshot luminance range\" 10", script);
         Assert.Contains("\"Minimum automated contrast ratio\" ([decimal]3.0)", script);
+        Assert.Contains("\"Desktop light\" \"^(pass|accepted)$\"", script);
+        Assert.Contains("\"Desktop dark\" \"^(pass|accepted)$\"", script);
+        Assert.Contains("\"Mobile light\" \"^(pass|accepted)$\"", script);
+        Assert.Contains("\"Mobile dark\" \"^(pass|accepted)$\"", script);
         Assert.Contains("Assert-MinimumDecimalField", script);
         Assert.Contains("integer greater than or equal to $MinimumValue", script);
         Assert.Contains("pngIdatByteSize", script);

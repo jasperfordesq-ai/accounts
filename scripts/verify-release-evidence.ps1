@@ -519,6 +519,10 @@ function Test-VisualEvidence {
     Assert-CheckedDecision $Content "Accepted for this release candidate." $context $Failures
     Assert-UncheckedDecision $Content "Rejected; defects listed below must be fixed and re-reviewed." $context $Failures
     Assert-CompletedTableRows $Content $requiredRouteCodes $context $Failures
+    Assert-CompletedTableColumnMatches $Content $requiredRouteCodes 1 "Desktop light" "^(pass|accepted)$" "pass or accepted" $context $Failures
+    Assert-CompletedTableColumnMatches $Content $requiredRouteCodes 2 "Desktop dark" "^(pass|accepted)$" "pass or accepted" $context $Failures
+    Assert-CompletedTableColumnMatches $Content $requiredRouteCodes 3 "Mobile light" "^(pass|accepted)$" "pass or accepted" $context $Failures
+    Assert-CompletedTableColumnMatches $Content $requiredRouteCodes 4 "Mobile dark" "^(pass|accepted)$" "pass or accepted" $context $Failures
 }
 
 function Test-AccountantEvidence {
