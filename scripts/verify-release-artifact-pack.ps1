@@ -129,16 +129,6 @@ function Assert-ArrayContainsExactly {
     }
 }
 
-$expectedAccountantWorkbenchRouteAcceptance = @(
-    [pscustomobject]@{ routeName = "dashboard"; routeKey = "dashboard"; label = "Dashboard"; expectedText = "Firm command centre" },
-    [pscustomobject]@{ routeName = "production-readiness"; routeKey = "readiness"; label = "Production readiness"; expectedText = "Production Readiness Checklist" },
-    [pscustomobject]@{ routeName = "company-detail"; routeKey = "company"; label = "Company detail"; expectedText = "Company command centre" },
-    [pscustomobject]@{ routeName = "period-workspace"; routeKey = "period"; label = "Period workspace"; expectedText = "Filing readiness" },
-    [pscustomobject]@{ routeName = "filing-review"; routeKey = "filing"; label = "Filing review"; expectedText = "Filing readiness profile" },
-    [pscustomobject]@{ routeName = "financial-statements"; routeKey = "financialStatements"; label = "Financial statements"; expectedText = "Financial Statements" },
-    [pscustomobject]@{ routeName = "workbench-preview"; routeKey = "workbenchPreview"; label = "Workbench preview"; expectedText = "Workbench Component Preview" }
-)
-
 $expectedAccountantWorkbenchWorkflowStages = @(
     "Setup",
     "Import",
@@ -152,6 +142,17 @@ $expectedAccountantWorkbenchWorkflowStages = @(
 
 $expectedAccountantWorkbenchThemes = @("light", "dark")
 $expectedAccountantWorkbenchViewports = @("desktop", "mobile")
+$expectedAccountantWorkbenchThemeViewportCoverage = @("dark/desktop", "dark/mobile", "light/desktop", "light/mobile")
+
+$expectedAccountantWorkbenchRouteAcceptance = @(
+    [pscustomobject]@{ routeName = "dashboard"; routeKey = "dashboard"; label = "Dashboard"; expectedText = "Firm command centre"; workflowStages = $expectedAccountantWorkbenchWorkflowStages },
+    [pscustomobject]@{ routeName = "production-readiness"; routeKey = "readiness"; label = "Production readiness"; expectedText = "Production Readiness Checklist"; workflowStages = @("Review", "Filing") },
+    [pscustomobject]@{ routeName = "company-detail"; routeKey = "company"; label = "Company detail"; expectedText = "Company command centre"; workflowStages = @("Setup") },
+    [pscustomobject]@{ routeName = "period-workspace"; routeKey = "period"; label = "Period workspace"; expectedText = "Filing readiness"; workflowStages = $expectedAccountantWorkbenchWorkflowStages },
+    [pscustomobject]@{ routeName = "filing-review"; routeKey = "filing"; label = "Filing review"; expectedText = "Filing readiness profile"; workflowStages = @("Review", "Filing") },
+    [pscustomobject]@{ routeName = "financial-statements"; routeKey = "financialStatements"; label = "Financial statements"; expectedText = "Financial Statements"; workflowStages = @("Statements") },
+    [pscustomobject]@{ routeName = "workbench-preview"; routeKey = "workbenchPreview"; label = "Workbench preview"; expectedText = "Workbench Component Preview"; workflowStages = $expectedAccountantWorkbenchWorkflowStages }
+)
 
 $expectedAccountantWorkbenchReviewChecks = @(
     "accountant-workflow-hierarchy",
@@ -231,6 +232,8 @@ function Assert-AccountantWorkbenchRouteAcceptance {
             if ([string]$readiness.expectedText -ne [string]$expected.expectedText) {
                 Add-Failure $Failures "accountant-workbench-evidence-report.json routeReadiness.$($expected.routeName).expectedText must be $($expected.expectedText)."
             }
+            Assert-ArrayContainsExactly @($readiness.workflowStages) @($expected.workflowStages) "accountant-workbench-evidence-report.json routeReadiness.$($expected.routeName).workflowStages" $Failures
+            Assert-ArrayContainsExactly @($readiness.themeViewportCoverage) $expectedAccountantWorkbenchThemeViewportCoverage "accountant-workbench-evidence-report.json routeReadiness.$($expected.routeName).themeViewportCoverage" $Failures
             if ([int]$readiness.screenshotCount -ne 4) {
                 Add-Failure $Failures "accountant-workbench-evidence-report.json routeReadiness.$($expected.routeName).screenshotCount must be 4."
             }
@@ -266,6 +269,7 @@ function Assert-AccountantWorkbenchRouteAcceptance {
         if ([string]$acceptance.expectedText -ne [string]$expected.expectedText) {
             Add-Failure $Failures "accountant-workbench-evidence-report.json routeAcceptance.$($expected.routeName).expectedText must be $($expected.expectedText)."
         }
+        Assert-ArrayContainsExactly @($acceptance.workflowStages) @($expected.workflowStages) "accountant-workbench-evidence-report.json routeAcceptance.$($expected.routeName).workflowStages" $Failures
         if ([string]$acceptance.screenshotReviewEvidence -ne "$($expected.routeName)-light-dark-desktop-mobile-screenshot-review") {
             Add-Failure $Failures "accountant-workbench-evidence-report.json routeAcceptance.$($expected.routeName).screenshotReviewEvidence must be $($expected.routeName)-light-dark-desktop-mobile-screenshot-review."
         }

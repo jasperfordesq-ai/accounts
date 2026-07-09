@@ -858,7 +858,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             Category(
                 "frontend-accountant-workbench",
                 "Frontend accountant workbench",
-                194,
+                196,
                 200,
                 "visual-acceptance-required",
                 [
@@ -882,6 +882,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "Release artifact and CI machine evidence pack verifiers now require exact accountant-workbench route acceptance names, route keys, expected decision text and per-route acceptance evidence ids for every workbench route.",
                     "Release artifact and CI machine evidence pack verifiers now require exact accountant-workbench route acceptance labels, screenshot-review evidence anchors and required-review status for every workbench route.",
                     "Release artifact and CI machine evidence pack verifiers now require exact accountant-workbench route readiness screenshot counts, layout-check counts, contrast counts, minimum contrast ratios, required-review status and required review checks for every workbench route.",
+                    "Release artifact and CI machine evidence pack verifiers now require exact accountant-workbench route workflow-stage coverage and light/dark desktop/mobile theme-viewport coverage before retained route readiness evidence can pass.",
                     "Release artifact and CI machine evidence pack verifiers now require exact accountant-workbench required coverage for workflow stages, themes, viewports, review checks, layout checks, expected-text checks, layout/contrast evidence and retained visual evidence files.",
                     "Frontend parser invariants now require the CI machine evidence pack, production smoke, readiness verification, visual smoke and manual release-verification rows before rendering readiness data."
                 ],

@@ -18930,6 +18930,12 @@ public class AccountsWorkflowTests
         Assert.Contains("screenshots.sha256 must be a canonical sha256 checksum", machineEvidencePack);
         Assert.Contains("screenshots.pngIdatByteSize must prove retained PNG image data", script);
         Assert.Contains("screenshots.pngIdatByteSize must prove retained PNG image data", machineEvidencePack);
+        Assert.Contains("routeReadiness.$($expected.routeName).workflowStages", script);
+        Assert.Contains("routeReadiness.$($expected.routeName).workflowStages", machineEvidencePack);
+        Assert.Contains("routeReadiness.$($expected.routeName).themeViewportCoverage", script);
+        Assert.Contains("routeReadiness.$($expected.routeName).themeViewportCoverage", machineEvidencePack);
+        Assert.Contains("routeAcceptance.$($expected.routeName).workflowStages", script);
+        Assert.Contains("routeAcceptance.$($expected.routeName).workflowStages", machineEvidencePack);
         Assert.Contains("screenshots.sampledDistinctColorCount must be at least 4", script);
         Assert.Contains("screenshots.sampledDistinctColorCount must be at least 4", machineEvidencePack);
         Assert.Contains("screenshots.luminanceRange must be at least 10", script);
