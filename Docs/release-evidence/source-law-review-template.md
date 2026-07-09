@@ -21,12 +21,13 @@ Required formats: use the full 40-character commit SHA, the exact
 `https://github.com/.../actions/runs/...` run URL, UTC timestamps ending in `Z`
 or `+00:00`, and a 64-character SHA-256 digest for the source-law snapshot
 content hash.
-Use `yes` or `accepted` for `URL reachable` and `Guidance wording compared`
-only after the current source page has been checked. Use the checked effective
-date in `YYYY-MM-DD` format, or `accepted` when the source has no dated update.
-Use `no change`, `reflected...`, or `blocking...` in `Platform impact`; use
+Use `yes` for `URL reachable` and `Guidance wording compared` only after the
+current source page has been checked. Use the checked effective date in
+`YYYY-MM-DD` format, or `not dated` when the source has no dated update. Use
+`no change`, `reflected...`, or `blocking...` in `Platform impact`; use
 `accepted` in `Decision` only when the source row is accepted for this release
-candidate.
+candidate. The verifier rejects generic `accepted` placeholders in the URL,
+effective-date, guidance-comparison and platform-impact cells.
 
 ## Required Evidence Pack
 

@@ -20,13 +20,13 @@ describe("ProductionReadinessWorkbench", () => {
     expectText("3 companies");
     expectText("4 periods");
     expect(screen.getByRole("heading", { name: "Production scorecard" })).toBeInTheDocument();
-    expectText("627/700");
+    expectText("629/700");
     expectText("Architecture and documentation");
     expectText("Backend statutory/accounting engine");
     expectText("Frontend accountant workbench");
     expectText("Security/auth/tenant/platform guardrails");
     expectText("99 / 100");
-    expectText("208 / 250");
+    expectText("210 / 250");
     expectText("170 / 200");
     expectText("150 / 150");
     expectText(/Next score gate/);
@@ -284,7 +284,7 @@ describe("ProductionReadinessWorkbench", () => {
 
 function productionScorecard(): ProductionReadinessReport["productionScorecard"] {
   return {
-    currentScore: 627,
+    currentScore: 629,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete source-law review, named visual QA, monitoring-provider confirmation, manual handoff and qualified-accountant acceptance evidence.",
@@ -307,7 +307,7 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
       {
         code: "backend-statutory-accounting-engine",
         label: "Backend statutory/accounting engine",
-        currentScore: 208,
+        currentScore: 210,
         targetScore: 250,
         status: "qualified-accountant-review-required",
         currentEvidence: [
@@ -316,7 +316,7 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
           "verify-release-evidence.ps1 rejects qualified-accountant acceptance unless every golden scenario decision and route evidence acceptance row is explicitly accepted.",
           "Qualified-accountant route acceptance requires a real retained workbench evidence reference for every accepted route.",
           "External ROS/iXBRL validation evidence has template and verifier checks for real references, retained taxonomy package references, accepted/remediated warnings and accepted decisions.",
-          "Source-law review evidence has template and verifier checks for reachability, effective-date review, guidance comparison, impact classification and accepted decisions.",
+          "Source-law review evidence has template and verifier checks for concrete URL reachability, dated or not-dated effective-date review, guidance comparison, platform impact classification and exact accepted decisions.",
           "Manual handoff acceptance evidence has template and verifier checks for real evidence references and accepted reviewer decisions.",
           "CI retains production-readiness-report.json from the live smoke stack with source-law, golden corpus, scorecard and release blocker evidence.",
         ],
