@@ -18554,6 +18554,15 @@ public class AccountsWorkflowTests
         Assert.Contains("Release Evidence Reviewer Workspace", workspaceScript);
         Assert.Contains("release-evidence-reviewer-index.md", workspaceScript);
         Assert.Contains("Reviewer Completion Ledger", workspaceScript);
+        Assert.Contains("Reviewer Handoff Files", workspaceScript);
+        Assert.Contains("Reviewer Closeout Sequence", workspaceScript);
+        Assert.Contains("six accepted ``humanEvidenceCompletion`` entries", workspaceScript);
+        Assert.Contains("scripts/verify-release-artifact-pack.ps1", workspaceScript);
+        Assert.Contains("release-evidence-workspace-verification-report.json", workspaceScript);
+        Assert.Contains("Reviewer Handoff Files", workspaceVerifier);
+        Assert.Contains("Reviewer Closeout Sequence", workspaceVerifier);
+        Assert.Contains("six accepted ``humanEvidenceCompletion`` entries", workspaceVerifier);
+        Assert.Contains("scripts/verify-release-artifact-pack.ps1", workspaceVerifier);
         Assert.Contains("This workspace is reviewer preparation only.", workspaceScript);
         Assert.Contains("Copy-PreparedTemplate", workspaceScript);
         Assert.Contains("Get-MinimumVisualMetric", workspaceScript);

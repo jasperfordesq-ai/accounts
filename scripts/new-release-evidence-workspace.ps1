@@ -536,6 +536,17 @@ $($reviewerRows -join "`n")
 
 Use ``release-evidence-reviewer-completion.json`` as the handoff checklist. It is generated with all six entries in ``pending-human-evidence`` status and must not be treated as approval. The release evidence verifier remains the authority after reviewers complete the Markdown templates.
 
+## Reviewer Handoff Files
+
+After workspace verification runs, retain ``release-evidence-reviewer-blockers.md``, ``release-evidence-verifier-output.txt``, and ``release-evidence-workspace-verification-report.json`` with this index. These files show why the prepared workspace is still blocked before named human sign-off and preserve the machine-evidence provenance chain reviewers must not overwrite.
+
+## Reviewer Closeout Sequence
+
+1. Complete the six Markdown templates with named reviewer identities, UTC timestamps, retained evidence references, accepted decisions, and signatures.
+2. Run ``scripts/verify-release-evidence.ps1 -EvidenceDirectory <this-workspace> -ReportPath <this-workspace>/release-evidence-report.json`` and retain the passing ``release-evidence-report.json``.
+3. Confirm ``release-evidence-report.json`` has six accepted ``humanEvidenceCompletion`` entries and no blocking failures.
+4. Run ``scripts/verify-release-artifact-pack.ps1`` against the final collected release artifacts for the same commit SHA and GitHub Actions run URL.
+
 ## Completion Gate
 
 Run `scripts/verify-release-evidence.ps1 -EvidenceDirectory <this-workspace> -ReportPath <this-workspace>/release-evidence-report.json` after all reviewers complete the templates. The workspace must remain blocked until the verifier passes with all six human evidence templates completed by named reviewers.

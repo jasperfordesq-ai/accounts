@@ -2262,6 +2262,16 @@ Production readiness report evidence surface:
   operators to collect workspace verification and reviewer handoff reports alongside
   machine and human release evidence for the exact candidate.
 
+Release evidence reviewer closeout sequence:
+
+- This slice updates the generated `release-evidence-reviewer-index.md` so reviewer
+  workspaces carry a strict closeout sequence: complete all six Markdown templates
+  with named identities and accepted decisions, rerun `scripts\verify-release-evidence.ps1`,
+  confirm six accepted `humanEvidenceCompletion` rows with no blocking failures, then
+  run `scripts\verify-release-artifact-pack.ps1` for the same commit/run identity.
+- `scripts\verify-release-evidence-workspace.ps1` now requires that closeout sequence
+  and the retained handoff files to appear in the reviewer index.
+
 ## What Is Left To Do
 
 Highest-priority next steps:
