@@ -1861,6 +1861,31 @@ CI release evidence reviewer workspace:
     incomplete.
 - CI is green on July 9, 2026 for the reviewer-index artifact slice at commit
   `bb86649`: `https://github.com/jasperfordesq-ai/accounts/actions/runs/29026280027`.
+
+Release evidence workspace verifier:
+
+- This slice adds `scripts/verify-release-evidence-workspace.ps1` so both CI
+  and manual release prep can verify the prepared reviewer workspace with one
+  command. The verifier checks the manifest, reviewer index, six template files,
+  release identity, six reviewer-queue entries, and then runs
+  `scripts/verify-release-evidence.ps1` expecting the workspace to remain
+  blocked before named sign-off.
+- The verifier writes `release-evidence-workspace-verification-report.json` into
+  the workspace so the uploaded `release-evidence-reviewer-workspace` artifact
+  has an explicit machine-readable proof that it is reviewer prep only.
+- `release-evidence-verifier-output.txt` is also retained so the expected
+  detailed human-evidence failures are available in the artifact without
+  flooding CI logs.
+- Verification completed locally:
+  - PowerShell parser checks passed for `scripts/new-release-evidence-workspace.ps1`
+    and `scripts/verify-release-evidence-workspace.ps1`.
+  - `node scripts/verify-ci-actions.mjs` passed.
+  - Backend focused regression passed:
+    `ReleaseEvidenceVerifier_BlocksIncompleteHumanSignoffEvidence`.
+  - A local nested-artifact simulation generated and verified a workspace,
+    wrote `release-evidence-workspace-verification-report.json`, retained
+    `release-evidence-verifier-output.txt`, and confirmed the prepared
+    `release-evidence-report.json` remains failed before named human sign-off.
 - Verification completed locally:
   - `node scripts/verify-ci-actions.mjs` passed.
   - Backend focused regression passed:

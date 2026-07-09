@@ -1,0 +1,280 @@
+param(
+    [string]$WorkspaceDirectory = (Join-Path $PSScriptRoot "..\artifacts\release-evidence-workspace"),
+    [string]$ReportPath = "",
+    [string]$CommitSha = "",
+    [string]$GitHubActionsRunUrl = ""
+)
+
+$ErrorActionPreference = "Stop"
+Set-StrictMode -Version Latest
+
+$requiredTemplates = @(
+    "visual-qa-signoff-template.md",
+    "source-law-review-template.md",
+    "external-ros-ixbrl-validation-template.md",
+    "qualified-accountant-acceptance-template.md",
+    "manual-handoff-acceptance-template.md",
+    "monitoring-provider-confirmation-template.md"
+)
+
+$requiredReviewerQueue = @(
+    [pscustomobject]@{
+        EvidenceGate = "Visual QA sign-off"
+        TemplateFile = "visual-qa-signoff-template.md"
+        ReviewerRole = "Named visual QA reviewer"
+        SignOffGate = "visual-qa-screenshot-review"
+    },
+    [pscustomobject]@{
+        EvidenceGate = "Source-law review"
+        TemplateFile = "source-law-review-template.md"
+        ReviewerRole = "Named source-law reviewer plus qualified accountant"
+        SignOffGate = "source-law-change-review"
+    },
+    [pscustomobject]@{
+        EvidenceGate = "External ROS/iXBRL validation"
+        TemplateFile = "external-ros-ixbrl-validation-template.md"
+        ReviewerRole = "External ROS/iXBRL validation reviewer"
+        SignOffGate = "external-ros-validation-evidence"
+    },
+    [pscustomobject]@{
+        EvidenceGate = "Qualified-accountant acceptance"
+        TemplateFile = "qualified-accountant-acceptance-template.md"
+        ReviewerRole = "Named qualified accountant"
+        SignOffGate = "qualified-accountant-final-signoff"
+    },
+    [pscustomobject]@{
+        EvidenceGate = "Manual handoff acceptance"
+        TemplateFile = "manual-handoff-acceptance-template.md"
+        ReviewerRole = "Named manual handoff reviewer"
+        SignOffGate = "manual-accountant-acceptance"
+    },
+    [pscustomobject]@{
+        EvidenceGate = "Monitoring provider confirmation"
+        TemplateFile = "monitoring-provider-confirmation-template.md"
+        ReviewerRole = "Named release operator"
+        SignOffGate = "production-monitoring"
+    }
+)
+
+function Add-Failure {
+    param(
+        [System.Collections.Generic.List[string]]$Failures,
+        [string]$Message
+    )
+
+    $Failures.Add($Message) | Out-Null
+}
+
+function Get-JsonPropertyValue {
+    param(
+        $Object,
+        [string]$Name
+    )
+
+    if ($null -eq $Object) {
+        return $null
+    }
+
+    $property = $Object.PSObject.Properties[$Name]
+    if ($null -eq $property) {
+        return $null
+    }
+
+    return $property.Value
+}
+
+function Assert-ArrayContains {
+    param(
+        [object[]]$Values,
+        [string]$Expected,
+        [string]$Context,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    if (-not (@($Values) | Where-Object { [string]$_ -eq $Expected })) {
+        Add-Failure $Failures "$Context must include $Expected."
+    }
+}
+
+function Assert-TextContains {
+    param(
+        [string]$Content,
+        [string]$Needle,
+        [string]$Context,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    if ($Content.IndexOf($Needle, [StringComparison]::OrdinalIgnoreCase) -lt 0) {
+        Add-Failure $Failures "$Context must include '$Needle'."
+    }
+}
+
+$resolvedWorkspace = Resolve-Path -LiteralPath $WorkspaceDirectory
+if ([string]::IsNullOrWhiteSpace($ReportPath)) {
+    $ReportPath = Join-Path $resolvedWorkspace.Path "release-evidence-report.json"
+}
+
+$failures = New-Object System.Collections.Generic.List[string]
+
+$manifestPath = Join-Path $resolvedWorkspace.Path "release-evidence-workspace-manifest.json"
+$reviewerIndexPath = Join-Path $resolvedWorkspace.Path "release-evidence-reviewer-index.md"
+$releaseEvidenceVerifierOutputPath = Join-Path $resolvedWorkspace.Path "release-evidence-verifier-output.txt"
+
+if (-not (Test-Path -LiteralPath $manifestPath)) {
+    Add-Failure $failures "Workspace must include release-evidence-workspace-manifest.json."
+} else {
+    $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+
+    if ([string](Get-JsonPropertyValue $manifest "status") -ne "pending-human-evidence") {
+        Add-Failure $failures "Workspace manifest status must be pending-human-evidence."
+    }
+
+    if ([string](Get-JsonPropertyValue $manifest "reviewerIndexFile") -ne "release-evidence-reviewer-index.md") {
+        Add-Failure $failures "Workspace manifest reviewerIndexFile must be release-evidence-reviewer-index.md."
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($CommitSha) -and [string](Get-JsonPropertyValue $manifest "commitSha") -ne $CommitSha) {
+        Add-Failure $failures "Workspace manifest commitSha must match CommitSha."
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($GitHubActionsRunUrl) -and [string](Get-JsonPropertyValue $manifest "githubActionsRunUrl") -ne $GitHubActionsRunUrl) {
+        Add-Failure $failures "Workspace manifest githubActionsRunUrl must match GitHubActionsRunUrl."
+    }
+
+    foreach ($template in $requiredTemplates) {
+        Assert-ArrayContains @((Get-JsonPropertyValue $manifest "preparedTemplates")) $template "Workspace manifest preparedTemplates" $failures
+    }
+
+    $preparedTemplates = @((Get-JsonPropertyValue $manifest "preparedTemplates"))
+    if ($preparedTemplates.Count -ne $requiredTemplates.Count) {
+        Add-Failure $failures "Workspace manifest preparedTemplates must contain exactly $($requiredTemplates.Count) entries."
+    }
+
+    $reviewerQueue = @((Get-JsonPropertyValue $manifest "reviewerQueue"))
+    if ($reviewerQueue.Count -ne $requiredReviewerQueue.Count) {
+        Add-Failure $failures "Workspace manifest reviewerQueue must contain exactly $($requiredReviewerQueue.Count) entries."
+    }
+
+    foreach ($expected in $requiredReviewerQueue) {
+        $entry = $reviewerQueue | Where-Object {
+            [string](Get-JsonPropertyValue $_ "TemplateFile") -eq $expected.TemplateFile
+        } | Select-Object -First 1
+
+        if ($null -eq $entry) {
+            Add-Failure $failures "Workspace manifest reviewerQueue must include $($expected.TemplateFile)."
+            continue
+        }
+
+        foreach ($propertyName in @("EvidenceGate", "ReviewerRole", "SignOffGate")) {
+            $actual = [string](Get-JsonPropertyValue $entry $propertyName)
+            $expectedValue = [string](Get-JsonPropertyValue $expected $propertyName)
+            if ($actual -ne $expectedValue) {
+                Add-Failure $failures "Workspace manifest reviewerQueue.$($expected.TemplateFile).$propertyName must be '$expectedValue'."
+            }
+        }
+
+        if ([string]::IsNullOrWhiteSpace([string](Get-JsonPropertyValue $entry "HumanAction"))) {
+            Add-Failure $failures "Workspace manifest reviewerQueue.$($expected.TemplateFile).HumanAction must describe the remaining human-only action."
+        }
+    }
+
+    foreach ($humanField in @(
+        "reviewer/operator/accountant identity and role",
+        "review dates and signatures",
+        "external ROS/iXBRL validation references and artifact hashes"
+    )) {
+        Assert-ArrayContains @((Get-JsonPropertyValue $manifest "humanFieldsLeftBlank")) $humanField "Workspace manifest humanFieldsLeftBlank" $failures
+    }
+}
+
+if (-not (Test-Path -LiteralPath $reviewerIndexPath)) {
+    Add-Failure $failures "Workspace must include release-evidence-reviewer-index.md."
+} else {
+    $reviewerIndex = Get-Content -LiteralPath $reviewerIndexPath -Raw
+    foreach ($needle in @(
+        "Release Evidence Reviewer Workspace",
+        "Status: pending-human-evidence",
+        "This workspace is reviewer preparation only.",
+        "It is not release approval",
+        "Reviewer Queue",
+        "Completion Gate",
+        "scripts/verify-release-evidence.ps1"
+    )) {
+        Assert-TextContains $reviewerIndex $needle "release-evidence-reviewer-index.md" $failures
+    }
+
+    foreach ($expected in $requiredReviewerQueue) {
+        Assert-TextContains $reviewerIndex $expected.EvidenceGate "release-evidence-reviewer-index.md" $failures
+        Assert-TextContains $reviewerIndex $expected.TemplateFile "release-evidence-reviewer-index.md" $failures
+        Assert-TextContains $reviewerIndex $expected.ReviewerRole "release-evidence-reviewer-index.md" $failures
+        Assert-TextContains $reviewerIndex $expected.SignOffGate "release-evidence-reviewer-index.md" $failures
+    }
+}
+
+foreach ($template in $requiredTemplates) {
+    if (-not (Test-Path -LiteralPath (Join-Path $resolvedWorkspace.Path $template))) {
+        Add-Failure $failures "Workspace must include $template."
+    }
+}
+
+$releaseEvidenceStillBlocked = $false
+try {
+    & (Join-Path $PSScriptRoot "verify-release-evidence.ps1") `
+        -EvidenceDirectory $resolvedWorkspace.Path `
+        -ReportPath $ReportPath `
+        *> $releaseEvidenceVerifierOutputPath
+} catch {
+    $releaseEvidenceStillBlocked = $true
+}
+
+if (-not $releaseEvidenceStillBlocked) {
+    Add-Failure $failures "Prepared release evidence workspace unexpectedly passed before named human sign-off."
+}
+
+if (-not (Test-Path -LiteralPath $ReportPath)) {
+    Add-Failure $failures "Workspace verification must write release-evidence-report.json."
+} else {
+    $report = Get-Content -LiteralPath $ReportPath -Raw | ConvertFrom-Json
+    if ([string](Get-JsonPropertyValue $report "status") -ne "failed") {
+        Add-Failure $failures "Prepared release evidence workspace report must remain failed before named human sign-off."
+    }
+
+    $completion = @((Get-JsonPropertyValue $report "humanEvidenceCompletion"))
+    if ($completion.Count -ne $requiredTemplates.Count) {
+        Add-Failure $failures "Prepared release evidence workspace report must include six humanEvidenceCompletion entries."
+    }
+
+    foreach ($entry in $completion) {
+        if ([string](Get-JsonPropertyValue $entry "status") -ne "incomplete") {
+            Add-Failure $failures "Prepared release evidence workspace must keep all human evidence entries incomplete."
+        }
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($CommitSha) -and [string](Get-JsonPropertyValue (Get-JsonPropertyValue $report "releaseCandidate") "commitSha") -ne $CommitSha) {
+        Add-Failure $failures "Prepared release evidence report commitSha must match CommitSha."
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($GitHubActionsRunUrl) -and [string](Get-JsonPropertyValue (Get-JsonPropertyValue $report "releaseCandidate") "githubActionsRunUrl") -ne $GitHubActionsRunUrl) {
+        Add-Failure $failures "Prepared release evidence report githubActionsRunUrl must match GitHubActionsRunUrl."
+    }
+}
+
+$verificationReport = [ordered]@{
+    status = if ($failures.Count -eq 0) { "passed" } else { "failed" }
+    checkedAtUtc = [DateTimeOffset]::UtcNow.ToString("O")
+    workspaceDirectory = $resolvedWorkspace.Path
+    releaseEvidenceReportPath = $ReportPath
+    releaseEvidenceVerifierOutputPath = $releaseEvidenceVerifierOutputPath
+    requiredTemplateCount = $requiredTemplates.Count
+    failureCount = $failures.Count
+    failures = @($failures)
+}
+
+$workspaceReportPath = Join-Path $resolvedWorkspace.Path "release-evidence-workspace-verification-report.json"
+$verificationReport | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $workspaceReportPath
+
+if ($failures.Count -gt 0) {
+    throw "Release evidence workspace verification failed with $($failures.Count) issue(s)."
+}
+
+Write-Host "Release evidence workspace verification passed for $($resolvedWorkspace.Path)."

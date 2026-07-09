@@ -592,40 +592,11 @@ jobs:
             -MonitoringErrorRoutingReportPath (Join-Path $machineEvidenceRoot "monitoring-error-routing-smoke/monitoring-error-routing-report.json") `
             -StructuredLogReportPath (Join-Path $machineEvidenceRoot "structured-json-log-sample/structured-log-report.json")
 
-          $releaseEvidenceReport = Join-Path $workspaceRoot "release-evidence-report.json"
-          $releaseEvidenceStillBlocked = $false
-          try {
-            ./scripts/verify-release-evidence.ps1 `
-              -EvidenceDirectory $workspaceRoot `
-              -ReportPath $releaseEvidenceReport
-          } catch {
-            $releaseEvidenceStillBlocked = $true
-          }
-
-          if (-not $releaseEvidenceStillBlocked) {
-            throw "Prepared release evidence workspace unexpectedly passed before named human sign-off."
-          }
-
-          $workspaceManifestPath = Join-Path $workspaceRoot "release-evidence-workspace-manifest.json"
-          $workspaceIndexPath = Join-Path $workspaceRoot "release-evidence-reviewer-index.md"
-          if (-not (Test-Path -LiteralPath $workspaceIndexPath)) {
-            throw "Prepared release evidence workspace must include release-evidence-reviewer-index.md."
-          }
-
-          $workspaceManifest = Get-Content -LiteralPath $workspaceManifestPath -Raw | ConvertFrom-Json
-          if ([string]$workspaceManifest.reviewerIndexFile -ne "release-evidence-reviewer-index.md") {
-            throw "Prepared release evidence workspace manifest must reference release-evidence-reviewer-index.md."
-          }
-
-          $report = Get-Content -LiteralPath $releaseEvidenceReport -Raw | ConvertFrom-Json
-          if ([string]$report.status -ne "failed") {
-            throw "Prepared release evidence workspace report must remain failed before named human sign-off."
-          }
-
-          $unexpectedStatuses = @($report.humanEvidenceCompletion | Where-Object { [string]$_.status -ne "incomplete" })
-          if ($unexpectedStatuses.Count -ne 0) {
-            throw "Prepared release evidence workspace must keep all human evidence entries incomplete."
-          }
+          ./scripts/verify-release-evidence-workspace.ps1 `
+            -WorkspaceDirectory $workspaceRoot `
+            -ReportPath (Join-Path $workspaceRoot "release-evidence-report.json") `
+            -CommitSha $env:GITHUB_SHA `
+            -GitHubActionsRunUrl $runUrl
 
       - name: Upload CI machine evidence pack report
         if: always()
