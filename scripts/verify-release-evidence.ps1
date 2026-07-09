@@ -314,6 +314,38 @@ function Assert-CompletedTableColumnMatches {
     }
 }
 
+function Assert-CompletedTableColumnMatchesRouteReference {
+    param(
+        [string]$Content,
+        [string[]]$RowLabels,
+        [int]$ColumnIndex,
+        [string]$ColumnLabel,
+        [string]$Context,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    $lines = $Content -split "\r?\n"
+    foreach ($label in $RowLabels) {
+        $escaped = [regex]::Escape($label)
+        $row = $lines | Where-Object { $_ -match "^\|\s*$escaped\s*\|" } | Select-Object -First 1
+        if (-not $row) {
+            continue
+        }
+
+        $cells = @($row.Trim() -split "\|").Where({ $_.Trim().Length -gt 0 })
+        if ($cells.Count -le $ColumnIndex) {
+            Add-Failure $Failures "$Context table row '$label' is missing column '$ColumnLabel'."
+            continue
+        }
+
+        $value = $cells[$ColumnIndex].Trim()
+        $expected = "accountant-workbench-evidence-report.json#routeAcceptance.$label"
+        if (-not [string]::Equals($value, $expected, [StringComparison]::OrdinalIgnoreCase)) {
+            Add-Failure $Failures "$Context table row '$label' column '$ColumnLabel' must be $expected."
+        }
+    }
+}
+
 function Assert-ReleaseIdentityFields {
     param(
         [string]$Content,
@@ -563,6 +595,7 @@ function Test-AccountantEvidence {
     Assert-CompletedTableColumnMatches $Content $requiredRouteCodes 1 "Decision question answered" "^(yes|accepted)$" "yes or accepted" $context $Failures
     Assert-CompletedTableColumnMatches $Content $requiredRouteCodes 2 "Evidence accepted" "^accepted$" "accepted" $context $Failures
     Assert-CompletedTableColumnMatches $Content $requiredRouteCodes 3 "Workbench evidence reference" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real retained workbench evidence reference" $context $Failures
+    Assert-CompletedTableColumnMatchesRouteReference $Content $requiredRouteCodes 3 "Workbench evidence reference" $context $Failures
 
     foreach ($staleScenarioCode in @("micro-ltd-standard", "small-ltd-abridged")) {
         if ($Content.IndexOf($staleScenarioCode, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
