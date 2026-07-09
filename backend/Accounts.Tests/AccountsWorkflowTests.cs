@@ -18494,6 +18494,8 @@ public class AccountsWorkflowTests
         Assert.Contains("Machine evidence summary retainedMachineEvidence must contain exactly", workspaceVerifier);
         Assert.Contains("Machine evidence summary retainedMachineEvidence.$requiredMachineEvidenceFile.$propertyName must match the workspace manifest.", workspaceVerifier);
         Assert.Contains("Machine evidence summary monitoringEvidence.$field must be present.", workspaceVerifier);
+        Assert.Contains("Machine evidence summary monitoringEvidence.jsonLogLineCount must be greater than zero.", workspaceVerifier);
+        Assert.Contains("Machine evidence summary monitoringEvidence.matchedMonitoringSmokeLine must be true.", workspaceVerifier);
         Assert.Contains("machineEvidenceSummaryPath", workspaceVerifier);
         Assert.Contains("Workspace manifest retainedMachineEvidence must contain exactly", workspaceVerifier);
         Assert.Contains("Workspace must include retained machine evidence file", workspaceVerifier);

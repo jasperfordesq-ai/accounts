@@ -145,6 +145,22 @@ function Get-JsonPropertyValue {
     return $property.Value
 }
 
+function Get-FirstJsonPropertyValue {
+    param(
+        $Object,
+        [string[]]$Names
+    )
+
+    foreach ($name in $Names) {
+        $value = Get-JsonPropertyValue $Object $name
+        if ($null -ne $value -and -not [string]::IsNullOrWhiteSpace([string]$value)) {
+            return $value
+        }
+    }
+
+    return ""
+}
+
 function Get-JsonPathValue {
     param(
         $Object,
@@ -298,7 +314,7 @@ $preparedTemplates = @(
             "Correlation id" = [string](Get-JsonPropertyValue $monitoringErrorRoutingReport "correlationId")
             "Base URL" = [string](Get-JsonPropertyValue $monitoringErrorRoutingReport "baseUrl")
             "Checked at UTC" = $checkedAtUtc
-            "Structured log file" = [string](Get-JsonPropertyValue $structuredLogReport "structuredLogFile")
+            "Structured log file" = [string](Get-FirstJsonPropertyValue $structuredLogReport @("structuredLogFile", "logFileName"))
             "JSON log line count" = [string](Get-JsonPropertyValue $structuredLogReport "jsonLogLineCount")
             "Matched monitoring smoke line" = if ([bool](Get-JsonPropertyValue $structuredLogReport "matchedMonitoringSmokeLine")) { "yes" } else { "" }
         }
@@ -385,7 +401,7 @@ $machineEvidenceSummary = [ordered]@{
         correlationId = [string](Get-JsonPropertyValue $monitoringErrorRoutingReport "correlationId")
         baseUrl = [string](Get-JsonPropertyValue $monitoringErrorRoutingReport "baseUrl")
         checkedAtUtc = $checkedAtUtc
-        structuredLogFile = [string](Get-JsonPropertyValue $structuredLogReport "structuredLogFile")
+        structuredLogFile = [string](Get-FirstJsonPropertyValue $structuredLogReport @("structuredLogFile", "logFileName"))
         jsonLogLineCount = Get-JsonPropertyValue $structuredLogReport "jsonLogLineCount"
         matchedMonitoringSmokeLine = [bool](Get-JsonPropertyValue $structuredLogReport "matchedMonitoringSmokeLine")
     }

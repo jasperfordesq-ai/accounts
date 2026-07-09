@@ -399,10 +399,18 @@ if (-not (Test-Path -LiteralPath $machineEvidenceSummaryPath)) {
     }
 
     $summaryMonitoringEvidence = Get-JsonPropertyValue $machineEvidenceSummary "monitoringEvidence"
-    foreach ($field in @("provider", "eventId", "correlationId", "baseUrl", "checkedAtUtc", "structuredLogFile")) {
+    foreach ($field in @("provider", "eventId", "correlationId", "baseUrl", "checkedAtUtc")) {
         if ([string]::IsNullOrWhiteSpace([string](Get-JsonPropertyValue $summaryMonitoringEvidence $field))) {
             Add-Failure $failures "Machine evidence summary monitoringEvidence.$field must be present."
         }
+    }
+
+    if ([int](Get-JsonPropertyValue $summaryMonitoringEvidence "jsonLogLineCount") -le 0) {
+        Add-Failure $failures "Machine evidence summary monitoringEvidence.jsonLogLineCount must be greater than zero."
+    }
+
+    if ([bool](Get-JsonPropertyValue $summaryMonitoringEvidence "matchedMonitoringSmokeLine") -ne $true) {
+        Add-Failure $failures "Machine evidence summary monitoringEvidence.matchedMonitoringSmokeLine must be true."
     }
 
     $summaryReviewerQueue = @((Get-JsonPropertyValue $machineEvidenceSummary "reviewerQueue"))
