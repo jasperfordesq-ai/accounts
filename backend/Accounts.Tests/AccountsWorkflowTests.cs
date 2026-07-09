@@ -18401,7 +18401,8 @@ public class AccountsWorkflowTests
         Assert.Contains("Reviewer signature", manualHandoff);
         Assert.Contains("40-character commit SHA", manualHandoff);
         Assert.Contains("Use real retained evidence references", manualHandoff);
-        Assert.Contains("Use `accepted` in the `Decision` and", manualHandoff);
+        Assert.Contains("Use exactly `accepted` in the `Decision` and", manualHandoff);
+        Assert.Contains("rejects ambiguous decision text", manualHandoff);
         Assert.Contains("Scenario evidence references must include the scenario code", manualHandoff);
         Assert.Contains("evidence references must include the path code", manualHandoff);
 
@@ -18549,7 +18550,8 @@ public class AccountsWorkflowTests
         Assert.Contains("\"Release evidence reference\" \"^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+\"", script);
         Assert.Contains("Assert-CompletedTableColumnContainsRowLabel", script);
         Assert.Contains("must include row code", script);
-        Assert.Contains("\"Reviewer decision\" \"^(accepted|accepted\\b.*)$\"", script);
+        Assert.Contains("\"Decision\" \"^accepted$\" \"exactly accepted for this release candidate\"", script);
+        Assert.Contains("\"Reviewer decision\" \"^accepted$\" \"exactly accepted\"", script);
         Assert.Contains("audit-required-without-auditor-report", script);
         Assert.Contains("No PII or client filing data", script);
         Assert.Contains("Accepted for this release candidate.", script);

@@ -686,9 +686,9 @@ function Test-ManualHandoffEvidence {
     Assert-CompletedTableColumnMatches $Content $requiredManualHandoffScenarioCodes 1 "Auditor evidence" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real signed auditor evidence reference" $context $Failures
     Assert-CompletedTableColumnMatches $Content $requiredManualHandoffScenarioCodes 2 "Manual handoff note" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real manual handoff note reference" $context $Failures
     Assert-CompletedTableColumnMatches $Content $requiredManualHandoffScenarioCodes 3 "Filing readiness snapshot" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real filing readiness snapshot reference" $context $Failures
-    Assert-CompletedTableColumnMatches $Content $requiredManualHandoffScenarioCodes 4 "Decision" "^(accepted|accepted\b.*)$" "accepted for this release candidate" $context $Failures
+    Assert-CompletedTableColumnMatches $Content $requiredManualHandoffScenarioCodes 4 "Decision" "^accepted$" "exactly accepted for this release candidate" $context $Failures
     Assert-CompletedTableColumnMatches $Content $requiredManualHandoffPathCodes 1 "Release evidence reference" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real unsupported-path evidence reference" $context $Failures
-    Assert-CompletedTableColumnMatches $Content $requiredManualHandoffPathCodes 2 "Reviewer decision" "^(accepted|accepted\b.*)$" "accepted" $context $Failures
+    Assert-CompletedTableColumnMatches $Content $requiredManualHandoffPathCodes 2 "Reviewer decision" "^accepted$" "exactly accepted" $context $Failures
     Assert-CompletedTableColumnContainsRowLabel $Content $requiredManualHandoffScenarioCodes 1 "Auditor evidence" $context $Failures
     Assert-CompletedTableColumnContainsRowLabel $Content $requiredManualHandoffScenarioCodes 2 "Manual handoff note" $context $Failures
     Assert-CompletedTableColumnContainsRowLabel $Content $requiredManualHandoffScenarioCodes 3 "Filing readiness snapshot" $context $Failures

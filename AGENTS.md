@@ -768,8 +768,8 @@ CI status:
   2026.
 - Green jobs: Workflow Hygiene, Production Compose Config, Frontend, Backend,
   Production Stack Smoke, and CI Machine Evidence Pack.
-- The scorecard exposed by the candidate is now 647/700, with backend statutory/accounting
-  engine at 226/250, frontend accountant workbench at 172/200 and
+- The scorecard exposed by the candidate is now 649/700, with backend statutory/accounting
+  engine at 228/250, frontend accountant workbench at 172/200 and
   security/auth/tenant/platform guardrails at 150/150.
   The typed frontend parser and production-readiness verifier both require CI
   machine evidence, production smoke, readiness verification, visual smoke, release
@@ -1035,8 +1035,8 @@ Backend qualified-accountant route note evidence checks:
   `qualified-accountant-route-walkthrough#dashboard` in every route `Notes`
   cell, so route sign-off notes cannot be reused against the wrong workbench
   route.
-- The production scorecard is now 647/700, with backend statutory/accounting
-  engine at 226/250.
+- That slice raised the production scorecard to 647/700, with backend
+  statutory/accounting engine at 226/250.
 - Verification completed locally:
   - PowerShell parser check for `scripts\verify-release-evidence.ps1` passed.
   - Temporary completed release-evidence pack outside the repo passed with
@@ -1045,6 +1045,35 @@ Backend qualified-accountant route note evidence checks:
   - A copied pack with `production-readiness` replaced by `wrong-route` in that
     route's Notes cell failed with the expected qualified-accountant row-code
     verifier error.
+  - Backend focused regression passed 3 tests:
+    `ReleaseEvidenceVerifier_BlocksIncompleteHumanSignoffEvidence`,
+    `ReleaseEvidenceTemplates_CoverHumanVisualAccountantAndProviderSignoffs`,
+    and
+    `ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers`.
+  - Frontend contract/API/render/type checks passed:
+    `node --test tests/production-readiness-contract.test.mjs`,
+    `node scripts/verify-api-client.mjs`,
+    `npx.cmd vitest run tests/render/production-readiness-panel.test.tsx tests/render/production-readiness-workbench.test.tsx`,
+    and `npx.cmd tsc --noEmit --incremental false`.
+
+Backend manual handoff exact decision checks:
+
+- This slice tightened `scripts/verify-release-evidence.ps1` so manual handoff
+  scenario `Decision` cells and unsupported-path `Reviewer decision` cells must
+  be exactly `accepted`.
+- The manual handoff acceptance template now tells reviewers that ambiguous
+  decision text such as `accepted with notes` is rejected, so acceptance
+  limitations must live in retained evidence references or notes rather than in
+  the decision cell.
+- The production scorecard is now 649/700, with backend statutory/accounting
+  engine at 228/250.
+- Verification completed locally:
+  - PowerShell parser check for `scripts\verify-release-evidence.ps1` passed.
+  - Temporary completed release-evidence pack outside the repo passed with exact
+    `accepted` manual handoff decisions.
+  - A copied pack with the `medium-audit-required` decision set to
+    `accepted with notes` failed with the expected manual handoff verifier
+    error.
   - Backend focused regression passed 3 tests:
     `ReleaseEvidenceVerifier_BlocksIncompleteHumanSignoffEvidence`,
     `ReleaseEvidenceTemplates_CoverHumanVisualAccountantAndProviderSignoffs`,
@@ -1105,8 +1134,8 @@ As of July 8, 2026:
 - Code implementation is roughly 70-75% complete.
 - Production assurance is roughly 60-65% complete.
 - Overall goal is roughly 63-67% complete, with about one third left.
-- The production scorecard is now 647/700: architecture/documentation 99/100,
-  backend statutory/accounting engine 226/250, frontend accountant workbench 172/200,
+- The production scorecard is now 649/700: architecture/documentation 99/100,
+  backend statutory/accounting engine 228/250, frontend accountant workbench 172/200,
   and security/auth/tenant/platform guardrails 150/150.
 - Architecture/documentation is now scored 99/100 in the production scorecard because
   source-law review, release evidence templates, manual handoff evidence, runbook
