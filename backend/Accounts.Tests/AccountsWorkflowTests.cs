@@ -18319,8 +18319,8 @@ public class AccountsWorkflowTests
         Assert.Contains("Use exactly `pass`", visual);
         Assert.Contains("rejects", visual);
         Assert.Contains("`accepted`, or other ambiguous", visual);
-        Assert.Contains("Each route `Notes` cell must include", visual);
-        Assert.Contains("matching route code", visual);
+        Assert.Contains("Each route `Notes` cell must be the exact retained visual evidence reference", visual);
+        Assert.Contains("visual-smoke-evidence-report.json#routeAcceptance.<route>", visual);
 
         var sourceLaw = File.ReadAllText(sourceLawPath);
         Assert.Contains("source-law-snapshot-fingerprint", sourceLaw);
@@ -18513,7 +18513,8 @@ public class AccountsWorkflowTests
         Assert.Contains("\"Mobile light\" \"^pass$\" \"exactly pass\"", script);
         Assert.Contains("\"Mobile dark\" \"^pass$\" \"exactly pass\"", script);
         Assert.Contains("a real retained visual evidence note or reference", script);
-        Assert.Contains("Assert-CompletedTableColumnContainsRowLabel $Content $requiredRouteCodes 5 \"Notes\"", script);
+        Assert.Contains("Assert-CompletedTableColumnMatchesVisualRouteReference $Content $requiredRouteCodes 5 \"Notes\"", script);
+        Assert.Contains("visual-smoke-evidence-report.json#routeAcceptance.$label", script);
         Assert.Contains("Assert-MinimumDecimalField", script);
         Assert.Contains("integer greater than or equal to $MinimumValue", script);
         Assert.Contains("pngIdatByteSize", script);

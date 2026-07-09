@@ -57,8 +57,7 @@ For each route in the manifest, record pass/fail and notes for:
 Use exactly `pass` in each light/dark desktop/mobile cell only when that route
 capture is visually accepted for this release candidate. The verifier rejects
 blank, failed, pending, `accepted`, or other ambiguous route acceptance cells.
-Each route `Notes` cell must include a retained visual evidence note or reference
-containing the matching route code, for example
+Each route `Notes` cell must be the exact retained visual evidence reference
 `visual-smoke-evidence-report.json#routeAcceptance.<route>`.
 
 | Route | Desktop light | Desktop dark | Mobile light | Mobile dark | Notes |
