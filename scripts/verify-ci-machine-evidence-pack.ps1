@@ -317,6 +317,7 @@ function Assert-VisualSmokeDimensionEvidence {
         [pscustomobject]@{ name = "desktop"; width = 1440; height = 1000 },
         [pscustomobject]@{ name = "mobile"; width = 390; height = 844 }
     )
+    $expectedThemes = @("light", "dark")
     $expectedLayoutChecks = @(
         "browser-console-errors",
         "page-horizontal-overflow",
@@ -324,10 +325,36 @@ function Assert-VisualSmokeDimensionEvidence {
     )
     $expectedContrastCheck = "theme-contrast"
     $minimumContrastRatio = [decimal]3.0
+
+    Assert-ArrayContainsExactly @((Get-JsonProperty $VisualSmoke @("themes"))) $expectedThemes "visual-smoke-evidence-report.json themes" $Failures
+    Assert-ArrayContainsExactly @((Get-JsonProperty $VisualSmoke @("viewports"))) @($expectedViewports | ForEach-Object { $_.name }) "visual-smoke-evidence-report.json viewports" $Failures
+
+    if ([int](Get-JsonProperty $VisualSmoke @("layoutCheckResultCount")) -ne 84) {
+        Add-Failure $Failures "visual-smoke-evidence-report.json layoutCheckResultCount must be 84."
+    }
+    if ([string](Get-JsonProperty $VisualSmoke @("layoutChecksPassed")) -ne "True") {
+        Add-Failure $Failures "visual-smoke-evidence-report.json layoutChecksPassed must be true."
+    }
+    if ([int](Get-JsonProperty $VisualSmoke @("contrastCheckResultCount")) -ne 28) {
+        Add-Failure $Failures "visual-smoke-evidence-report.json contrastCheckResultCount must be 28."
+    }
+    if ([string](Get-JsonProperty $VisualSmoke @("themeContrastChecksPassed")) -ne "True") {
+        Add-Failure $Failures "visual-smoke-evidence-report.json themeContrastChecksPassed must be true."
+    }
+    if ([decimal](Get-JsonProperty $VisualSmoke @("minimumContrastRatio")) -lt $minimumContrastRatio) {
+        Add-Failure $Failures "visual-smoke-evidence-report.json minimumContrastRatio must be at least 3."
+    }
+    if ([int](Get-JsonProperty $VisualSmoke @("totalBytes")) -le 0) {
+        Add-Failure $Failures "visual-smoke-evidence-report.json totalBytes must prove retained screenshot bytes."
+    }
+
     $viewportDimensions = Get-JsonProperty $VisualSmoke @("viewportDimensions")
     if ($null -eq $viewportDimensions -or @($viewportDimensions).Count -eq 0) {
         Add-Failure $Failures "visual-smoke-evidence-report.json viewportDimensions must be present."
     } else {
+        if (@($viewportDimensions).Count -ne $expectedViewports.Count) {
+            Add-Failure $Failures "visual-smoke-evidence-report.json viewportDimensions must include exactly $($expectedViewports.Count) planned viewport(s)."
+        }
         foreach ($expected in $expectedViewports) {
             $actual = @($viewportDimensions) | Where-Object { [string](Get-JsonProperty $_ @("name")) -eq $expected.name } | Select-Object -First 1
             if ($null -eq $actual) {
@@ -338,6 +365,34 @@ function Assert-VisualSmokeDimensionEvidence {
             if ([int](Get-JsonProperty $actual @("width")) -ne [int]$expected.width -or
                 [int](Get-JsonProperty $actual @("height")) -ne [int]$expected.height) {
                 Add-Failure $Failures "visual-smoke-evidence-report.json viewportDimensions.$($expected.name) must be $($expected.width)x$($expected.height)."
+            }
+        }
+    }
+
+    $routeCoverage = Get-JsonProperty $VisualSmoke @("routeCoverage")
+    if ($null -eq $routeCoverage -or @($routeCoverage).Count -eq 0) {
+        Add-Failure $Failures "visual-smoke-evidence-report.json routeCoverage must be present."
+    } else {
+        if (@($routeCoverage).Count -ne $expectedAccountantWorkbenchRouteAcceptance.Count) {
+            Add-Failure $Failures "visual-smoke-evidence-report.json routeCoverage must include exactly 7 route(s)."
+        }
+        foreach ($expectedRoute in $expectedAccountantWorkbenchRouteAcceptance) {
+            $actualRoute = @($routeCoverage) | Where-Object { [string](Get-JsonProperty $_ @("routeName")) -eq $expectedRoute.routeName } | Select-Object -First 1
+            if ($null -eq $actualRoute) {
+                Add-Failure $Failures "visual-smoke-evidence-report.json routeCoverage must include $($expectedRoute.routeName)."
+                continue
+            }
+            if ([string](Get-JsonProperty $actualRoute @("routeKey")) -ne [string]$expectedRoute.routeKey) {
+                Add-Failure $Failures "visual-smoke-evidence-report.json routeCoverage.$($expectedRoute.routeName).routeKey must be $($expectedRoute.routeKey)."
+            }
+            if ([int](Get-JsonProperty $actualRoute @("screenshotCount")) -ne 4) {
+                Add-Failure $Failures "visual-smoke-evidence-report.json routeCoverage.$($expectedRoute.routeName).screenshotCount must be 4."
+            }
+            if ([string](Get-JsonProperty $actualRoute @("reviewStatus")) -ne "required-review") {
+                Add-Failure $Failures "visual-smoke-evidence-report.json routeCoverage.$($expectedRoute.routeName).reviewStatus must be required-review."
+            }
+            foreach ($reviewCheck in $expectedAccountantWorkbenchReviewChecks) {
+                Assert-ArrayContains @((Get-JsonProperty $actualRoute @("requiredReviewChecks"))) $reviewCheck "visual-smoke-evidence-report.json routeCoverage.$($expectedRoute.routeName).requiredReviewChecks" $Failures
             }
         }
     }
