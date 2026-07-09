@@ -18407,8 +18407,11 @@ public class AccountsWorkflowTests
         Assert.Contains("Use real retained evidence references", manualHandoff);
         Assert.Contains("Use exactly `accepted` in the `Decision` and", manualHandoff);
         Assert.Contains("rejects ambiguous decision text", manualHandoff);
-        Assert.Contains("Scenario evidence references must include the scenario code", manualHandoff);
-        Assert.Contains("evidence references must include the path code", manualHandoff);
+        Assert.Contains("signed-auditor-report-evidence#<scenario>", manualHandoff);
+        Assert.Contains("manual-handoff-note#<scenario>", manualHandoff);
+        Assert.Contains("filing-readiness-snapshot#<scenario>", manualHandoff);
+        Assert.Contains("unsupported-path-evidence#<path-code>", manualHandoff);
+        Assert.Contains("exact retained reference", manualHandoff, StringComparison.OrdinalIgnoreCase);
 
         var monitoring = File.ReadAllText(monitoringPath);
         Assert.Contains("monitoring-error-routing-smoke", monitoring);
@@ -18567,8 +18570,10 @@ public class AccountsWorkflowTests
         Assert.Contains("\"Manual handoff note\" \"^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+\"", script);
         Assert.Contains("\"Filing readiness snapshot\" \"^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+\"", script);
         Assert.Contains("\"Release evidence reference\" \"^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+\"", script);
-        Assert.Contains("Assert-CompletedTableColumnContainsRowLabel", script);
-        Assert.Contains("must include row code", script);
+        Assert.Contains("Assert-CompletedTableColumnMatchesEvidenceAnchor $Content $requiredManualHandoffScenarioCodes 1 \"Auditor evidence\" \"signed-auditor-report-evidence\"", script);
+        Assert.Contains("Assert-CompletedTableColumnMatchesEvidenceAnchor $Content $requiredManualHandoffScenarioCodes 2 \"Manual handoff note\" \"manual-handoff-note\"", script);
+        Assert.Contains("Assert-CompletedTableColumnMatchesEvidenceAnchor $Content $requiredManualHandoffScenarioCodes 3 \"Filing readiness snapshot\" \"filing-readiness-snapshot\"", script);
+        Assert.Contains("Assert-CompletedTableColumnMatchesEvidenceAnchor $Content $requiredManualHandoffPathCodes 1 \"Release evidence reference\" \"unsupported-path-evidence\"", script);
         Assert.Contains("\"Decision\" \"^accepted$\" \"exactly accepted for this release candidate\"", script);
         Assert.Contains("\"Reviewer decision\" \"^accepted$\" \"exactly accepted\"", script);
         Assert.Contains("audit-required-without-auditor-report", script);

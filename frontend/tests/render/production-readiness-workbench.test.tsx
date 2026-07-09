@@ -20,13 +20,13 @@ describe("ProductionReadinessWorkbench", () => {
     expectText("3 companies");
     expectText("4 periods");
     expect(screen.getByRole("heading", { name: "Production scorecard" })).toBeInTheDocument();
-    expectText("667/700");
+    expectText("669/700");
     expectText("Architecture and documentation");
     expectText("Backend statutory/accounting engine");
     expectText("Frontend accountant workbench");
     expectText("Security/auth/tenant/platform guardrails");
     expectText("99 / 100");
-    expectText("242 / 250");
+    expectText("244 / 250");
     expectText("176 / 200");
     expectText("150 / 150");
     expectText(/Next score gate/);
@@ -284,7 +284,7 @@ describe("ProductionReadinessWorkbench", () => {
 
 function productionScorecard(): ProductionReadinessReport["productionScorecard"] {
   return {
-    currentScore: 667,
+    currentScore: 669,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete source-law review, named visual QA, monitoring-provider confirmation, manual handoff and qualified-accountant acceptance evidence.",
@@ -307,7 +307,7 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
       {
         code: "backend-statutory-accounting-engine",
         label: "Backend statutory/accounting engine",
-        currentScore: 242,
+        currentScore: 244,
         targetScore: 250,
         status: "qualified-accountant-review-required",
         currentEvidence: [
@@ -331,6 +331,7 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
           "Manual handoff acceptance evidence has template and verifier checks for real evidence references and accepted reviewer decisions.",
           "Manual handoff scenario and unsupported-path decisions require exact accepted reviewer decisions before acceptance evidence can pass.",
           "Manual handoff evidence references require the matching scenario or unsupported-path code before acceptance can pass.",
+          "Manual handoff evidence rows must match exact retained auditor-report, handoff-note, readiness-snapshot and unsupported-path anchors before acceptance can pass.",
           "CI retains production-readiness-report.json from the live smoke stack with source-law, golden corpus, scorecard and release blocker evidence.",
         ],
         remainingGaps: ["Run and retain verified source-law, qualified-accountant acceptance, external ROS/iXBRL validation, and manual handoff evidence across every canonical golden corpus scenario."],

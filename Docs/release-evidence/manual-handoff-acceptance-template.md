@@ -23,9 +23,13 @@ stand-ins for evidence references. Use exactly `accepted` in the `Decision` and
 `Reviewer decision` columns only when the reviewer has accepted the retained
 evidence and confirmed the path remains blocked to manual professional ownership;
 the verifier rejects ambiguous decision text such as `accepted with notes`.
-Scenario evidence references must include the scenario code, and unsupported-path
-evidence references must include the path code, so retained evidence cannot be
-reused against the wrong manual handoff row.
+Scenario `Auditor evidence`, `Manual handoff note`, and `Filing readiness
+snapshot` cells must be the exact retained references
+`signed-auditor-report-evidence#<scenario>`, `manual-handoff-note#<scenario>`,
+and `filing-readiness-snapshot#<scenario>`. Unsupported-path `Release evidence
+reference` cells must be the exact retained reference
+`unsupported-path-evidence#<path-code>`. Do not use another scenario or path
+anchor.
 
 ## Required Evidence Pack
 

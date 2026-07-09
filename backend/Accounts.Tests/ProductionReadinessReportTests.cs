@@ -860,7 +860,7 @@ public class ProductionReadinessReportTests
         var report = await new ProductionReadinessReportService(db).GetReportAsync();
 
         Assert.NotNull(report.ProductionScorecard);
-        Assert.Equal(667, report.ProductionScorecard.CurrentScore);
+        Assert.Equal(669, report.ProductionScorecard.CurrentScore);
         Assert.Equal(700, report.ProductionScorecard.TargetScore);
         Assert.Equal("review-required", report.ProductionScorecard.Status);
         Assert.Contains("source-law", report.ProductionScorecard.NextGate, StringComparison.OrdinalIgnoreCase);
@@ -881,7 +881,7 @@ public class ProductionReadinessReportTests
 
         var scores = categories.ToDictionary(category => category.Code);
         Assert.Equal((99, 100), (scores["architecture-documentation"].CurrentScore, scores["architecture-documentation"].TargetScore));
-        Assert.Equal((242, 250), (scores["backend-statutory-accounting-engine"].CurrentScore, scores["backend-statutory-accounting-engine"].TargetScore));
+        Assert.Equal((244, 250), (scores["backend-statutory-accounting-engine"].CurrentScore, scores["backend-statutory-accounting-engine"].TargetScore));
         Assert.Equal((176, 200), (scores["frontend-accountant-workbench"].CurrentScore, scores["frontend-accountant-workbench"].TargetScore));
         Assert.Equal((150, 150), (scores["security-auth-tenant-platform-guardrails"].CurrentScore, scores["security-auth-tenant-platform-guardrails"].TargetScore));
         Assert.Contains(scores["architecture-documentation"].CurrentEvidence, evidence =>
@@ -932,6 +932,10 @@ public class ProductionReadinessReportTests
         Assert.Contains(scores["backend-statutory-accounting-engine"].CurrentEvidence, evidence =>
             evidence.Contains("Manual handoff evidence references", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("matching scenario or unsupported-path code", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(scores["backend-statutory-accounting-engine"].CurrentEvidence, evidence =>
+            evidence.Contains("Manual handoff evidence rows", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("exact retained auditor-report", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("unsupported-path anchors", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["backend-statutory-accounting-engine"].CurrentEvidence, evidence =>
             evidence.Contains("Qualified-accountant scenario walkthrough rows", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("exact qualified-accountant-walkthrough-ledger anchor", StringComparison.OrdinalIgnoreCase));
