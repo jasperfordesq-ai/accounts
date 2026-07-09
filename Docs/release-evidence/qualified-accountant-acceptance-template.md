@@ -35,8 +35,11 @@ Required formats: use the full 40-character commit SHA, the exact
 
 For each scenario, record whether the generated outputs, gates, source-law evidence,
 wording, workbench journey, and manual handoff behavior are accepted.
-Use `accepted` in the `Decision` column only when the scenario is professionally
-accepted for this release candidate.
+Use `accepted` in each scenario review cell only when that review scope is
+professionally accepted for the release candidate. Use `accepted` in the
+`Decision` column only when the whole scenario is professionally accepted for
+this release candidate. The verifier rejects blank, pending, failed, or
+ambiguous scenario scope acceptance cells.
 
 | Scenario | Outputs | Gates | Source-law evidence | Wording | Workbench journey | Decision |
 | --- | --- | --- | --- | --- | --- | --- |

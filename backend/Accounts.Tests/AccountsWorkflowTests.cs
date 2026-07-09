@@ -18368,7 +18368,9 @@ public class AccountsWorkflowTests
         Assert.Contains("Direct ROS submission remains unsupported", accountant);
         Assert.Contains("Qualified accountant signature", accountant);
         Assert.Contains("40-character commit SHA", accountant);
-        Assert.Contains("Use `accepted` in the `Decision` column", accountant);
+        Assert.Contains("Use `accepted` in each scenario review cell", accountant);
+        Assert.Contains("`Decision` column only when the whole scenario", accountant);
+        Assert.Contains("ambiguous scenario scope acceptance cells", accountant);
         Assert.Contains("Use `yes` or `accepted` for `Decision question answered`", accountant);
         Assert.Contains("accountant-workbench-evidence-report.json", accountant);
         Assert.Contains("Workbench evidence reference", accountant);
@@ -18498,7 +18500,12 @@ public class AccountsWorkflowTests
         Assert.Contains("JSON log line count", script);
         Assert.Contains("Direct CRO submission remains unsupported", script);
         Assert.Contains("Direct ROS submission remains unsupported", script);
-        Assert.Contains("\"Decision\" \"^(accepted|accepted\\b.*)$\"", script);
+        Assert.Contains("\"Outputs\" \"^accepted$\"", script);
+        Assert.Contains("\"Gates\" \"^accepted$\"", script);
+        Assert.Contains("\"Source-law evidence\" \"^accepted$\"", script);
+        Assert.Contains("\"Wording\" \"^accepted$\"", script);
+        Assert.Contains("\"Workbench journey\" \"^accepted$\"", script);
+        Assert.Contains("\"Decision\" \"^accepted$\"", script);
         Assert.Contains("\"Decision question answered\" \"^(yes|accepted|accepted\\b.*)$\"", script);
         Assert.Contains("\"Evidence accepted\" \"^(accepted|accepted\\b.*)$\"", script);
         Assert.Contains("\"Workbench evidence reference\" \"^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+\"", script);
