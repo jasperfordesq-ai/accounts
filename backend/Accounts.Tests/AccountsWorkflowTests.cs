@@ -18497,6 +18497,8 @@ public class AccountsWorkflowTests
         Assert.Contains("Machine evidence summary monitoringEvidence.jsonLogLineCount must be greater than zero.", workspaceVerifier);
         Assert.Contains("Machine evidence summary monitoringEvidence.matchedMonitoringSmokeLine must be true.", workspaceVerifier);
         Assert.Contains("machineEvidenceSummaryPath", workspaceVerifier);
+        Assert.Contains("releaseCandidate", workspaceVerifier);
+        Assert.Contains("identityProvided", workspaceVerifier);
         Assert.Contains("Assert-WorkspaceVerificationInventory", script);
         Assert.Contains("Release evidence workspace verification report requiredWorkspaceFiles must contain exactly", script);
         Assert.Contains("Release evidence workspace verification report workspaceFiles", script);
@@ -18581,6 +18583,7 @@ public class AccountsWorkflowTests
         Assert.Contains("Release evidence machine summary monitoringEvidence.jsonLogLineCount must be greater than zero.", script);
         Assert.Contains("Assert-JsonStringEquals $WorkspaceVerificationReport \"status\" \"passed\" \"Release evidence workspace verification report\"", script);
         Assert.Contains("Release evidence workspace verification report failureCount must be 0.", script);
+        Assert.Contains("Release evidence workspace verification report releaseCandidate", script);
         Assert.Contains("Release evidence workspace verification report workspaceFiles", script);
         Assert.Contains("release-evidence-machine-summary.json", script);
         Assert.Contains("Assert-MinimumIntegerField", script);

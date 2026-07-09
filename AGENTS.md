@@ -2207,6 +2207,15 @@ Release evidence workspace inventory verification:
   size and lowercase SHA-256 digest, so completed human evidence cannot be detached
   from the prepared reviewer workspace provenance chain.
 
+Release evidence workspace identity binding:
+
+- This slice makes `scripts/verify-release-evidence-workspace.ps1` write the release
+  candidate commit SHA and GitHub Actions run URL into
+  `release-evidence-workspace-verification-report.json`.
+- `scripts/verify-release-evidence.ps1` now rejects completed release evidence if the
+  retained workspace verification report's `releaseCandidate` identity does not match
+  the common identity recorded across the six completed human evidence templates.
+
 ## What Is Left To Do
 
 Highest-priority next steps:

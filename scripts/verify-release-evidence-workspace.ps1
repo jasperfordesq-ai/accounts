@@ -603,6 +603,15 @@ $workspaceFiles = @(
     }
 )
 
+$verificationCommitSha = $CommitSha
+$verificationRunUrl = $GitHubActionsRunUrl
+if ([string]::IsNullOrWhiteSpace($verificationCommitSha) -and $null -ne $manifest) {
+    $verificationCommitSha = [string](Get-JsonPropertyValue $manifest "commitSha")
+}
+if ([string]::IsNullOrWhiteSpace($verificationRunUrl) -and $null -ne $manifest) {
+    $verificationRunUrl = [string](Get-JsonPropertyValue $manifest "githubActionsRunUrl")
+}
+
 $inventoriedFileNames = @($workspaceFiles | ForEach-Object { [string]$_["fileName"] })
 foreach ($requiredWorkspaceFile in $requiredWorkspaceFiles) {
     if (-not ($inventoriedFileNames | Where-Object { $_ -eq $requiredWorkspaceFile })) {
@@ -629,6 +638,11 @@ $verificationReport = [ordered]@{
     reviewerCompletionPath = $reviewerCompletionPath
     reviewerBlockersPath = $reviewerBlockersPath
     machineEvidenceSummaryPath = $machineEvidenceSummaryPath
+    releaseCandidate = [ordered]@{
+        commitSha = $verificationCommitSha
+        githubActionsRunUrl = $verificationRunUrl
+        identityProvided = (-not [string]::IsNullOrWhiteSpace($verificationCommitSha) -and -not [string]::IsNullOrWhiteSpace($verificationRunUrl))
+    }
     workspaceFiles = $workspaceFiles
     requiredWorkspaceFiles = $requiredWorkspaceFiles
     requiredTemplateCount = $requiredTemplates.Count

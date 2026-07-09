@@ -851,6 +851,15 @@ function Test-ReleaseWorkspaceControlEvidence {
             Add-Failure $Failures "Release evidence workspace verification report failureCount must be 0."
         }
 
+        $workspaceVerificationCandidate = Get-JsonPropertyValue $WorkspaceVerificationReport "releaseCandidate"
+        if (-not [string]::IsNullOrWhiteSpace($ReleaseCandidateCommitSha)) {
+            Assert-JsonStringEquals $workspaceVerificationCandidate "commitSha" $ReleaseCandidateCommitSha "Release evidence workspace verification report releaseCandidate" $Failures
+        }
+
+        if (-not [string]::IsNullOrWhiteSpace($ReleaseCandidateRunUrl)) {
+            Assert-JsonStringEquals $workspaceVerificationCandidate "githubActionsRunUrl" $ReleaseCandidateRunUrl "Release evidence workspace verification report releaseCandidate" $Failures
+        }
+
         Assert-WorkspaceVerificationInventory $WorkspaceVerificationReport $Failures
     }
 }
