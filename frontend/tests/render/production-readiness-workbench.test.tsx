@@ -135,6 +135,15 @@ describe("ProductionReadinessWorkbench", () => {
     expectText("manual-handoff-acceptance-template.md");
     expectText("monitoring-provider-confirmation-template.md");
     expectText("Complete and verify visual-qa-signoff-template.md for the exact release candidate.");
+    expect(screen.getByRole("heading", { name: "Human evidence closeout path" })).toBeInTheDocument();
+    expectText("Complete templates");
+    expectText("Complete 6 retained Markdown templates with named reviewers");
+    expectText("Run release evidence verifier");
+    expectText("scripts/verify-release-evidence.ps1");
+    expectText("Confirm human completion");
+    expectText("6 accepted humanEvidenceCompletion rows");
+    expectText("Verify final artifact pack");
+    expectText("scripts/verify-release-artifact-pack.ps1");
     expect(screen.getByRole("heading", { name: "Statutory rules matrix" })).toBeInTheDocument();
     expectText("LTD micro");
     expectText("CLG charity");

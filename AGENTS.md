@@ -2272,6 +2272,16 @@ Release evidence reviewer closeout sequence:
 - `scripts\verify-release-evidence-workspace.ps1` now requires that closeout sequence
   and the retained handoff files to appear in the reviewer index.
 
+Production readiness workbench closeout path:
+
+- This slice adds a `Human evidence closeout path` panel to the accountant-facing
+  production readiness workbench. It surfaces the same four-step release sequence
+  from the reviewer workspace: complete the six templates, run
+  `scripts/verify-release-evidence.ps1`, confirm six accepted
+  `humanEvidenceCompletion` rows, then run `scripts/verify-release-artifact-pack.ps1`.
+- The render regression now asserts that the live workbench shows the verifier,
+  report and final artifact-pack handoff steps.
+
 ## What Is Left To Do
 
 Highest-priority next steps:
