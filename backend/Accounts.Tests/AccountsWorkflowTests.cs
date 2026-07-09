@@ -18462,6 +18462,7 @@ public class AccountsWorkflowTests
         Assert.Contains("release-evidence-workspace-manifest.json", runbook);
         Assert.Contains("release-evidence-reviewer-index.md", runbook);
         Assert.Contains("release-evidence-reviewer-completion.json", runbook);
+        Assert.Contains("release-evidence-reviewer-blockers.md", runbook);
         Assert.Contains("release-evidence-workspace-verification-report.json", runbook);
         Assert.Contains("release-evidence-verifier-output.txt", runbook);
         Assert.Contains("leaves all reviewer identity, decisions, signatures", runbook);
@@ -18476,6 +18477,11 @@ public class AccountsWorkflowTests
         Assert.Contains("release-evidence-verifier-output.txt", workspaceVerifier);
         Assert.Contains("release-evidence-reviewer-index.md", workspaceVerifier);
         Assert.Contains("release-evidence-reviewer-completion.json", workspaceVerifier);
+        Assert.Contains("release-evidence-reviewer-blockers.md", workspaceVerifier);
+        Assert.Contains("Release Evidence Reviewer Blockers", workspaceVerifier);
+        Assert.Contains("reviewer-action-required", workspaceVerifier);
+        Assert.Contains("Write-ReviewerBlockerSummary", workspaceVerifier);
+        Assert.Contains("reviewerBlockersPath", workspaceVerifier);
         Assert.Contains("workspaceFiles", workspaceVerifier);
         Assert.Contains("byteSize", workspaceVerifier);
         Assert.Contains("sha256", workspaceVerifier);

@@ -1944,6 +1944,30 @@ Release evidence reviewer workspace file inventory:
     ledger, verifier output, and failed release evidence report all have
     positive byte sizes plus 64-character SHA-256 hashes.
 
+Release evidence reviewer blocker summary:
+
+- This slice extends `scripts/verify-release-evidence-workspace.ps1` to write
+  `release-evidence-reviewer-blockers.md` after the expected failed
+  `release-evidence-report.json` is generated. The summary is reviewer-facing:
+  one row per human evidence gate, with evidence name, template file, required
+  reviewer role, sign-off gate, incomplete status, blocker count, and first
+  blocker.
+- The workspace verifier now fails if the blocker summary is missing or does
+  not name all six template files, reviewer roles, and sign-off gates. Its
+  verification report records `reviewerBlockersPath`, and the workspace file
+  inventory includes the blocker summary with byte size and SHA-256 hash.
+- Verification completed locally:
+  - PowerShell parser check passed for
+    `scripts/verify-release-evidence-workspace.ps1`.
+  - `node scripts/verify-ci-actions.mjs` passed.
+  - Backend focused regression passed:
+    `ReleaseEvidenceVerifier_BlocksIncompleteHumanSignoffEvidence`.
+  - A local nested-artifact simulation generated and verified a workspace,
+    confirmed `release-evidence-reviewer-blockers.md` has six blocker rows,
+    confirmed visual QA and monitoring-provider gates are present, and confirmed
+    the blocker summary appears in `workspaceFiles` with a positive byte size
+    and 64-character SHA-256 hash.
+
 ## What Is Left To Do
 
 Highest-priority next steps:

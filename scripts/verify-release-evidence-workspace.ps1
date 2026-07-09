@@ -125,6 +125,42 @@ function Get-FileSha256 {
     }
 }
 
+function Format-MarkdownTableCell {
+    param($Value)
+
+    return ([string]$Value).Replace("`r", " ").Replace("`n", " ").Replace("|", "\|")
+}
+
+function Write-ReviewerBlockerSummary {
+    param(
+        $Report,
+        [string]$Path
+    )
+
+    $completion = @((Get-JsonPropertyValue $Report "humanEvidenceCompletion"))
+    $rows = @($completion | ForEach-Object {
+        $blockingFailures = @((Get-JsonPropertyValue $_ "blockingFailures"))
+        $firstBlockingFailure = if ($blockingFailures.Count -gt 0) { [string]$blockingFailures[0] } else { "" }
+        "| $(Format-MarkdownTableCell (Get-JsonPropertyValue $_ "evidenceName")) | $(Format-MarkdownTableCell (Get-JsonPropertyValue $_ "templateFile")) | $(Format-MarkdownTableCell (Get-JsonPropertyValue $_ "requiredReviewerRole")) | $(Format-MarkdownTableCell (Get-JsonPropertyValue $_ "signOffGate")) | $(Format-MarkdownTableCell (Get-JsonPropertyValue $_ "status")) | $(Format-MarkdownTableCell (Get-JsonPropertyValue $_ "blockingFailureCount")) | $(Format-MarkdownTableCell $firstBlockingFailure) |"
+    })
+
+    $content = @"
+# Release Evidence Reviewer Blockers
+
+Status: reviewer-action-required
+
+This summary is generated from ``release-evidence-report.json``. It is not release approval and it is not professional sign-off.
+
+| Evidence name | Template file | Required reviewer | Sign-off gate | Status | Blocking failures | First blocker |
+| --- | --- | --- | --- | --- | ---: | --- |
+$($rows -join "`n")
+
+Run ``scripts/verify-release-evidence.ps1`` again after named reviewers complete the Markdown templates. The release remains blocked until all six rows are accepted.
+"@
+
+    Set-Content -LiteralPath $Path -Value $content -NoNewline
+}
+
 $resolvedWorkspace = Resolve-Path -LiteralPath $WorkspaceDirectory
 if ([string]::IsNullOrWhiteSpace($ReportPath)) {
     $ReportPath = Join-Path $resolvedWorkspace.Path "release-evidence-report.json"
@@ -135,6 +171,7 @@ $failures = New-Object System.Collections.Generic.List[string]
 $manifestPath = Join-Path $resolvedWorkspace.Path "release-evidence-workspace-manifest.json"
 $reviewerIndexPath = Join-Path $resolvedWorkspace.Path "release-evidence-reviewer-index.md"
 $reviewerCompletionPath = Join-Path $resolvedWorkspace.Path "release-evidence-reviewer-completion.json"
+$reviewerBlockersPath = Join-Path $resolvedWorkspace.Path "release-evidence-reviewer-blockers.md"
 $releaseEvidenceVerifierOutputPath = Join-Path $resolvedWorkspace.Path "release-evidence-verifier-output.txt"
 
 if (-not (Test-Path -LiteralPath $manifestPath)) {
@@ -333,6 +370,8 @@ if (-not (Test-Path -LiteralPath $ReportPath)) {
         Add-Failure $failures "Prepared release evidence workspace report must include six humanEvidenceCompletion entries."
     }
 
+    Write-ReviewerBlockerSummary $report $reviewerBlockersPath
+
     foreach ($entry in $completion) {
         if ([string](Get-JsonPropertyValue $entry "status") -ne "incomplete") {
             Add-Failure $failures "Prepared release evidence workspace must keep all human evidence entries incomplete."
@@ -345,6 +384,27 @@ if (-not (Test-Path -LiteralPath $ReportPath)) {
 
     if (-not [string]::IsNullOrWhiteSpace($GitHubActionsRunUrl) -and [string](Get-JsonPropertyValue (Get-JsonPropertyValue $report "releaseCandidate") "githubActionsRunUrl") -ne $GitHubActionsRunUrl) {
         Add-Failure $failures "Prepared release evidence report githubActionsRunUrl must match GitHubActionsRunUrl."
+    }
+}
+
+if (-not (Test-Path -LiteralPath $reviewerBlockersPath)) {
+    Add-Failure $failures "Workspace must include release-evidence-reviewer-blockers.md."
+} else {
+    $reviewerBlockers = Get-Content -LiteralPath $reviewerBlockersPath -Raw
+    foreach ($needle in @(
+        "Release Evidence Reviewer Blockers",
+        "Status: reviewer-action-required",
+        "generated from ``release-evidence-report.json``",
+        "It is not release approval",
+        "Run ``scripts/verify-release-evidence.ps1`` again"
+    )) {
+        Assert-TextContains $reviewerBlockers $needle "release-evidence-reviewer-blockers.md" $failures
+    }
+
+    foreach ($expected in $requiredReviewerQueue) {
+        Assert-TextContains $reviewerBlockers $expected.TemplateFile "release-evidence-reviewer-blockers.md" $failures
+        Assert-TextContains $reviewerBlockers $expected.ReviewerRole "release-evidence-reviewer-blockers.md" $failures
+        Assert-TextContains $reviewerBlockers $expected.SignOffGate "release-evidence-reviewer-blockers.md" $failures
     }
 }
 
@@ -365,6 +425,7 @@ $verificationReport = [ordered]@{
     releaseEvidenceReportPath = $ReportPath
     releaseEvidenceVerifierOutputPath = $releaseEvidenceVerifierOutputPath
     reviewerCompletionPath = $reviewerCompletionPath
+    reviewerBlockersPath = $reviewerBlockersPath
     workspaceFiles = $workspaceFiles
     requiredTemplateCount = $requiredTemplates.Count
     failureCount = $failures.Count
