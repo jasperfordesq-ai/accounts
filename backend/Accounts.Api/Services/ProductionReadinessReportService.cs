@@ -851,7 +851,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             Category(
                 "frontend-accountant-workbench",
                 "Frontend accountant workbench",
-                172,
+                174,
                 200,
                 "visual-acceptance-required",
                 [
@@ -860,7 +860,8 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "Dense tables, workflow rails, blocker summaries and permission-denied states are surfaced in the workbench.",
                     "node scripts/verify-visual-smoke-artifacts.mjs now writes visual-smoke-evidence-report.json covering screenshot hashes, byte sizes, PNG dimensions, nonblank pixel diversity, per-screenshot layout-check pass results, automated theme-contrast smoke results and route/theme/viewport completeness before human review.",
                     "Docs/release-evidence/visual-qa-signoff-template.md and scripts/verify-release-evidence.ps1 now require named reviewers to record the visual smoke nonblank pixel and contrast metrics before visual QA evidence can pass.",
-                    "Visual QA sign-off now requires explicit pass/accepted decisions for every route across desktop light, desktop dark, mobile light and mobile dark captures.",
+                    "Visual QA sign-off now requires exact pass decisions for every route across desktop light, desktop dark, mobile light and mobile dark captures.",
+                    "Visual QA route capture cells now reject accepted-style ambiguous text so reviewer limitations must stay in retained route notes or references.",
                     "Visual QA route notes now must include a retained route-specific visual evidence note or reference containing the matching route code before sign-off evidence can pass.",
                     "node scripts/verify-accountant-workbench-evidence.mjs now writes accountant-workbench-evidence-report.json proving route, workflow-stage, theme, viewport, layout-check and review-check coverage.",
                     "scripts/verify-release-artifact-pack.ps1 and scripts/verify-ci-machine-evidence-pack.ps1 reject visual evidence unless every screenshot reports passed console-error, horizontal-overflow, visible-text-overlap and automated theme-contrast smoke checks.",

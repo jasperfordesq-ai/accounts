@@ -18316,8 +18316,9 @@ public class AccountsWorkflowTests
         Assert.Contains("sampledDistinctColorCount", visual);
         Assert.Contains("luminanceRange", visual);
         Assert.Contains("themeContrastResult.minimumContrastRatio", visual);
-        Assert.Contains("Use `pass` or `accepted`", visual);
-        Assert.Contains("rejects blank, failed, pending, or ambiguous", visual);
+        Assert.Contains("Use exactly `pass`", visual);
+        Assert.Contains("rejects", visual);
+        Assert.Contains("`accepted`, or other ambiguous", visual);
         Assert.Contains("Each route `Notes` cell must include", visual);
         Assert.Contains("matching route code", visual);
 
@@ -18429,6 +18430,7 @@ public class AccountsWorkflowTests
         Assert.True(File.Exists(scriptPath), "Release evidence verifier should make completed human sign-off templates machine-checkable.");
         var script = File.ReadAllText(scriptPath);
         var externalRosIxbrl = File.ReadAllText(Path.Combine(root, "Docs", "release-evidence", "external-ros-ixbrl-validation-template.md"));
+        var visual = File.ReadAllText(Path.Combine(root, "Docs", "release-evidence", "visual-qa-signoff-template.md"));
 
         Assert.Contains("verify-release-evidence.ps1", runbook);
         Assert.Contains("release-evidence-report.json", runbook);
@@ -18502,10 +18504,12 @@ public class AccountsWorkflowTests
         Assert.Contains("\"Minimum sampled distinct color count\" 4", script);
         Assert.Contains("\"Minimum screenshot luminance range\" 10", script);
         Assert.Contains("\"Minimum automated contrast ratio\" ([decimal]3.0)", script);
-        Assert.Contains("\"Desktop light\" \"^(pass|accepted)$\"", script);
-        Assert.Contains("\"Desktop dark\" \"^(pass|accepted)$\"", script);
-        Assert.Contains("\"Mobile light\" \"^(pass|accepted)$\"", script);
-        Assert.Contains("\"Mobile dark\" \"^(pass|accepted)$\"", script);
+        Assert.Contains("Use exactly `pass`", visual);
+        Assert.Contains("`accepted`, or other ambiguous route acceptance cells", visual);
+        Assert.Contains("\"Desktop light\" \"^pass$\" \"exactly pass\"", script);
+        Assert.Contains("\"Desktop dark\" \"^pass$\" \"exactly pass\"", script);
+        Assert.Contains("\"Mobile light\" \"^pass$\" \"exactly pass\"", script);
+        Assert.Contains("\"Mobile dark\" \"^pass$\" \"exactly pass\"", script);
         Assert.Contains("a real retained visual evidence note or reference", script);
         Assert.Contains("Assert-CompletedTableColumnContainsRowLabel $Content $requiredRouteCodes 5 \"Notes\"", script);
         Assert.Contains("Assert-MinimumDecimalField", script);
