@@ -18443,16 +18443,31 @@ public class AccountsWorkflowTests
         var root = RepositoryRoot();
         var runbook = File.ReadAllText(Path.Combine(root, "Docs", "operations", "production-runbook.md"));
         var scriptPath = Path.Combine(root, "scripts", "verify-release-evidence.ps1");
+        var workspaceScriptPath = Path.Combine(root, "scripts", "new-release-evidence-workspace.ps1");
 
         Assert.True(File.Exists(scriptPath), "Release evidence verifier should make completed human sign-off templates machine-checkable.");
+        Assert.True(File.Exists(workspaceScriptPath), "Release evidence workspace preparer should create reviewer-ready template copies without faking sign-off.");
         var script = File.ReadAllText(scriptPath);
+        var workspaceScript = File.ReadAllText(workspaceScriptPath);
         var externalRosIxbrl = File.ReadAllText(Path.Combine(root, "Docs", "release-evidence", "external-ros-ixbrl-validation-template.md"));
         var visual = File.ReadAllText(Path.Combine(root, "Docs", "release-evidence", "visual-qa-signoff-template.md"));
 
         Assert.Contains("verify-release-evidence.ps1", runbook);
+        Assert.Contains("new-release-evidence-workspace.ps1", runbook);
+        Assert.Contains("release-evidence-workspace-manifest.json", runbook);
+        Assert.Contains("leaves all reviewer identity, decisions, signatures", runbook);
         Assert.Contains("release-evidence-report.json", runbook);
         Assert.Contains("visual-smoke-evidence-report.json", runbook);
         Assert.Contains("real filing use stays blocked", runbook, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("pending-human-evidence", workspaceScript);
+        Assert.Contains("humanFieldsLeftBlank", workspaceScript);
+        Assert.Contains("Copy-PreparedTemplate", workspaceScript);
+        Assert.Contains("Get-MinimumVisualMetric", workspaceScript);
+        Assert.Contains("Assert-GitHubActionsRunUrl", workspaceScript);
+        Assert.Contains("Refusing to overwrite existing evidence file", workspaceScript);
+        Assert.Contains("VisualSmokeEvidenceReportPath", workspaceScript);
+        Assert.Contains("MonitoringErrorRoutingReportPath", workspaceScript);
+        Assert.Contains("StructuredLogReportPath", workspaceScript);
         Assert.Contains("Assert-NoUncheckedBoxes", script);
         Assert.Contains("Assert-CheckedDecision", script);
         Assert.Contains("Assert-UncheckedDecision", script);

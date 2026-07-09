@@ -1809,6 +1809,30 @@ Human release evidence readiness map:
 - CI is green on July 9, 2026 for the runtime/UI readiness-map slice at commit
   `13373dd`: `https://github.com/jasperfordesq-ai/accounts/actions/runs/29022858042`.
 
+Release evidence workspace preparer:
+
+- This slice adds `scripts/new-release-evidence-workspace.ps1` to create a
+  release-specific copy of the six human evidence templates. It can stamp the
+  full commit SHA, GitHub Actions run URL, production-readiness timestamp,
+  visual smoke metric minima, monitoring smoke identifiers, and structured-log
+  line count from retained machine JSON reports.
+- The generated `release-evidence-workspace-manifest.json` records
+  `status: pending-human-evidence` and lists the human fields intentionally left
+  blank, so the helper cannot be mistaken for professional sign-off.
+- The existing `scripts/verify-release-evidence.ps1` remains the blocking gate:
+  copied templates prepared by the helper still fail until named reviewers add
+  real identities, decisions, references, hashes, timestamps, and signatures.
+- Verification completed locally:
+  - PowerShell parser check for `scripts/new-release-evidence-workspace.ps1`
+    passed.
+  - A temporary workspace generated six prepared Markdown templates plus
+    `release-evidence-workspace-manifest.json`; visual QA machine metric minima
+    were copied from `frontend/artifacts/visual-smoke/visual-smoke-evidence-report.json`.
+  - `scripts/verify-release-evidence.ps1` rejected the prepared workspace as
+    expected with all six `humanEvidenceCompletion` entries still incomplete.
+  - Backend focused regression passed:
+    `ReleaseEvidenceVerifier_BlocksIncompleteHumanSignoffEvidence`.
+
 ## What Is Left To Do
 
 Highest-priority next steps:
