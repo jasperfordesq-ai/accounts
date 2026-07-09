@@ -1886,16 +1886,12 @@ Release evidence workspace verifier:
     wrote `release-evidence-workspace-verification-report.json`, retained
     `release-evidence-verifier-output.txt`, and confirmed the prepared
     `release-evidence-report.json` remains failed before named human sign-off.
-- Verification completed locally:
-  - `node scripts/verify-ci-actions.mjs` passed.
-  - Backend focused regression passed:
-    `ReleaseEvidenceVerifier_BlocksIncompleteHumanSignoffEvidence`.
-  - A local simulation of the GitHub `download-artifact` directory layout
-    generated the reviewer workspace and confirmed
-    `scripts/verify-release-evidence.ps1` still fails with all six human gates
-    incomplete.
-- CI is green on July 9, 2026 for the workflow artifact slice at commit
-  `06f0327`: `https://github.com/jasperfordesq-ai/accounts/actions/runs/29024761644`.
+- CI is green on July 9, 2026 for the release evidence workspace verifier
+  slice at commit `aecc5a2`:
+  `https://github.com/jasperfordesq-ai/accounts/actions/runs/29028324416`.
+  That run uploaded `release-evidence-reviewer-workspace`, including
+  `release-evidence-workspace-verification-report.json` and
+  `release-evidence-verifier-output.txt`.
 
 ## What Is Left To Do
 
@@ -1903,7 +1899,7 @@ Highest-priority next steps:
 
 1. Rerun the full local production gate before release if runtime, script, workflow,
    or template changes land; the latest runtime/script gate is green on July 9, 2026
-   for commit `bb86649`.
+   for commit `aecc5a2`.
 2. Perform and record human visual review of the generated light/dark desktop/mobile
    visual smoke artifact set; the screenshot manifest now verifies locally, but
    named visual QA sign-off is still required.
