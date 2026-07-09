@@ -828,6 +828,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "scripts/verify-release-evidence.ps1 validates completed release evidence templates before real filing use, including source-law source coverage.",
                     "scripts/verify-release-artifact-pack.ps1 validates the collected release artifact reports and the retained human release-evidence templates as one exact evidence pack with release candidate identity and SHA-256 inventory.",
                     "Production readiness report exposes the six human release-evidence gates with template files, reviewer roles, sign-off gates and required retained evidence.",
+                    "Release evidence reviewer workspace verification now rejects prepared human templates whose top-level reviewer/accountant identity, signature or acceptance checkbox fields are filled before named human sign-off.",
                     "CI artifacts now prove production safety, dependency audit, monitoring smoke, structured logs, visual smoke and backup restore drill."
                 ],
                 [

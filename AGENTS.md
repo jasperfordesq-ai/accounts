@@ -2430,6 +2430,22 @@ Qualified-accountant reviewer workspace anchors:
   confirmation/decision checkboxes are filled before named release-operator
   sign-off.
 
+Prepared workspace top-level human fields:
+
+- This slice hardens `scripts/verify-release-evidence-workspace.ps1` for the
+  prepared reviewer workspace phase across the non-monitoring human templates.
+  The verifier now rejects prepared visual QA, source-law, external ROS/iXBRL,
+  qualified-accountant, or manual handoff templates if top-level
+  reviewer/accountant identity, role/capacity, review timestamp, signature, or
+  provider/run evidence fields are filled before named human sign-off.
+- It also rejects checked Markdown evidence/acceptance boxes in those prepared
+  human templates, so the reviewer workspace cannot look approved before the
+  named reviewers complete the templates and rerun the release-evidence verifier.
+- The production readiness scorecard and runbook now surface this prepared
+  workspace control; it remains process hardening only, not a replacement for
+  real visual QA, source-law, external ROS/iXBRL, accountant, manual handoff, or
+  monitoring-provider evidence.
+
 ## What Is Left To Do
 
 Highest-priority next steps:

@@ -225,6 +225,109 @@ function Assert-MarkdownFieldBlank {
     }
 }
 
+function Assert-PreparedHumanFieldBlank {
+    param(
+        [string]$Content,
+        [string]$FieldName,
+        [string]$Context,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    $actual = Get-MarkdownFieldValue $Content $FieldName
+    if ($null -eq $actual) {
+        Add-Failure $Failures "$Context must include field $FieldName."
+        return
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($actual)) {
+        Add-Failure $Failures "$Context $FieldName field must remain blank before named human sign-off."
+    }
+}
+
+function Assert-PreparedTemplateHumanFieldsBlank {
+    param(
+        [string]$WorkspaceDirectory,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    $templateHumanFields = @(
+        [pscustomobject]@{
+            FileName = "visual-qa-signoff-template.md"
+            Context = "Prepared visual QA template"
+            Fields = @("Reviewer name", "Reviewer role", "Review date/time UTC", "Reviewer signature")
+        },
+        [pscustomobject]@{
+            FileName = "source-law-review-template.md"
+            Context = "Prepared source-law template"
+            Fields = @(
+                "Reviewer name",
+                "Reviewer role",
+                "Review date/time UTC",
+                "Qualified accountant name",
+                "Qualification / professional body",
+                "Reviewer signature",
+                "Qualified accountant source-law sign-off"
+            )
+        },
+        [pscustomobject]@{
+            FileName = "external-ros-ixbrl-validation-template.md"
+            Context = "Prepared external ROS/iXBRL template"
+            Fields = @(
+                "Reviewer name",
+                "Reviewer role",
+                "Review date/time UTC",
+                "External validation provider",
+                "Validation environment",
+                "Validation run/reference id",
+                "Validation report file or URL",
+                "Generated iXBRL artifact name",
+                "Generated iXBRL SHA-256",
+                "Taxonomy package",
+                "Company/period reference",
+                "Reviewer signature"
+            )
+        },
+        [pscustomobject]@{
+            FileName = "qualified-accountant-acceptance-template.md"
+            Context = "Prepared qualified-accountant template"
+            Fields = @(
+                "Accountant name",
+                "Qualification / professional body",
+                "Firm / reviewer capacity",
+                "Review date/time UTC",
+                "Qualified accountant signature"
+            )
+        },
+        [pscustomobject]@{
+            FileName = "manual-handoff-acceptance-template.md"
+            Context = "Prepared manual handoff template"
+            Fields = @(
+                "Reviewer name",
+                "Reviewer role",
+                "Firm / reviewer capacity",
+                "Review date/time UTC",
+                "Reviewer signature"
+            )
+        }
+    )
+
+    foreach ($template in $templateHumanFields) {
+        $path = Join-Path $WorkspaceDirectory $template.FileName
+        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+            continue
+        }
+
+        $content = Get-Content -LiteralPath $path -Raw
+        foreach ($field in $template.Fields) {
+            Assert-PreparedHumanFieldBlank $content $field $template.Context $Failures
+        }
+
+        if ([regex]::IsMatch($content, "(?im)^[`t ]*-[`t ]*\[[xX]\]")) {
+            Add-Failure $Failures "$($template.Context) must leave human acceptance and evidence checkboxes unchecked before named human sign-off."
+        }
+    }
+}
+
 function Assert-MarkdownTimestampFieldEquals {
     param(
         [string]$Content,
@@ -969,6 +1072,7 @@ Assert-ExternalRosIxbrlPreparedEvidenceReferences $resolvedWorkspace.Path $failu
 Assert-QualifiedAccountantPreparedEvidenceReferences $resolvedWorkspace.Path $failures
 Assert-ManualHandoffPreparedEvidenceReferences $resolvedWorkspace.Path $failures
 Assert-MonitoringProviderPreparedEvidenceReferences $resolvedWorkspace.Path $failures
+Assert-PreparedTemplateHumanFieldsBlank $resolvedWorkspace.Path $failures
 
 if (-not (Test-Path -LiteralPath $reviewerIndexPath)) {
     Add-Failure $failures "Workspace must include release-evidence-reviewer-index.md."

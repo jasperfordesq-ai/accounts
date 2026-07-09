@@ -891,6 +891,10 @@ public class ProductionReadinessReportTests
             evidence.Contains("verify-release-artifact-pack.ps1", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["architecture-documentation"].CurrentEvidence, evidence =>
             evidence.Contains("source-law", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(scores["architecture-documentation"].CurrentEvidence, evidence =>
+            evidence.Contains("Release evidence reviewer workspace verification", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("top-level reviewer/accountant identity", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("acceptance checkbox fields", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["architecture-documentation"].RemainingGaps, gap =>
             gap.Contains("release-evidence-report.json", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["architecture-documentation"].RemainingGaps, gap =>

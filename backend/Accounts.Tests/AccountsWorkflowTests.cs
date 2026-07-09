@@ -18525,6 +18525,15 @@ public class AccountsWorkflowTests
         Assert.Contains("$Context $FieldName field must remain blank before named operator sign-off.", workspaceVerifier);
         Assert.Contains("\"Provider event URL or reference\"", workspaceVerifier);
         Assert.Contains("Prepared monitoring-provider template must leave provider confirmation and decision checkboxes unchecked before named operator sign-off.", workspaceVerifier);
+        Assert.Contains("Assert-PreparedTemplateHumanFieldsBlank", workspaceVerifier);
+        Assert.Contains("Assert-PreparedHumanFieldBlank", workspaceVerifier);
+        Assert.Contains("$Context $FieldName field must remain blank before named human sign-off.", workspaceVerifier);
+        Assert.Contains("Prepared visual QA template", workspaceVerifier);
+        Assert.Contains("Prepared source-law template", workspaceVerifier);
+        Assert.Contains("Prepared external ROS/iXBRL template", workspaceVerifier);
+        Assert.Contains("Prepared qualified-accountant template", workspaceVerifier);
+        Assert.Contains("Prepared manual handoff template", workspaceVerifier);
+        Assert.Contains("must leave human acceptance and evidence checkboxes unchecked before named human sign-off.", workspaceVerifier);
         Assert.Contains("Get-MarkdownFieldValue", workspaceVerifier);
         Assert.Contains("Assert-MarkdownFieldEquals", workspaceVerifier);
         Assert.Contains("Assert-MarkdownFieldBlank", workspaceVerifier);

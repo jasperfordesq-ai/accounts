@@ -62,6 +62,7 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
           "Canonical architecture guide and active handoff are present.",
           "source-law-review-template.md is checked in and release-verifier covered.",
           "verify-release-artifact-pack.ps1 is documented for exact release evidence packs with checksum inventory.",
+          "Release evidence reviewer workspace verification rejects prepared human templates with prefilled top-level reviewer/accountant identity, signature or acceptance checkbox fields.",
         ],
         remainingGaps: ["Complete release evidence templates with named reviewers, including source-law-review-template.md."],
         completionTrackCodes: ["backend-code", "frontend-ui-ux", "frontend-code"],
