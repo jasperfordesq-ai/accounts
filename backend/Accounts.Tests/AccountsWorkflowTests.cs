@@ -18487,8 +18487,11 @@ public class AccountsWorkflowTests
         Assert.Contains("workspaceFiles", workspaceVerifier);
         Assert.Contains("requiredWorkspaceFiles", workspaceVerifier);
         Assert.Contains("requiredMachineEvidenceFiles", workspaceVerifier);
+        Assert.Contains("requiredMachineEvidenceProvenance", workspaceVerifier);
         Assert.Contains("Workspace manifest retainedMachineEvidence must contain exactly", workspaceVerifier);
         Assert.Contains("Workspace must include retained machine evidence file", workspaceVerifier);
+        Assert.Contains("Workspace manifest retainedMachineEvidence.$requiredMachineEvidenceFile.sourceArtifactName must be", workspaceVerifier);
+        Assert.Contains("Workspace manifest retainedMachineEvidence.$requiredMachineEvidenceFile.sourceArtifactFile must be", workspaceVerifier);
         Assert.Contains("Workspace manifest retainedMachineEvidence.$requiredMachineEvidenceFile.byteSize must be a positive integer.", workspaceVerifier);
         Assert.Contains("Workspace manifest retainedMachineEvidence.$requiredMachineEvidenceFile.sha256 must be a lowercase 64-character SHA-256 digest.", workspaceVerifier);
         Assert.Contains("Workspace manifest retainedMachineEvidence.$requiredMachineEvidenceFile.byteSize must match the retained file byte size.", workspaceVerifier);
@@ -18513,6 +18516,11 @@ public class AccountsWorkflowTests
         Assert.Contains("reviewerQueue", workspaceScript);
         Assert.Contains("Copy-MachineEvidenceInput", workspaceScript);
         Assert.Contains("retainedMachineEvidence", workspaceScript);
+        Assert.Contains("sourceArtifactName = $SourceArtifactName", workspaceScript);
+        Assert.Contains("sourceArtifactFile = $SourceArtifactFile", workspaceScript);
+        Assert.Contains("production-readiness-report\" \"production-readiness-report.json", workspaceScript);
+        Assert.Contains("visual-smoke-screenshots\" \"accountant-workbench-evidence-report.json", workspaceScript);
+        Assert.Contains("structured-json-log-sample\" \"structured-log-report.json", workspaceScript);
         Assert.Contains("byteSize = $destination.Length", workspaceScript);
         Assert.Contains("sha256 = Get-FileSha256 $destinationPath", workspaceScript);
         Assert.Contains("accountant-workbench-evidence-report.json", workspaceScript);

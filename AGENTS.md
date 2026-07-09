@@ -2043,13 +2043,37 @@ Release evidence reviewer machine input hash binding:
     value and the workspace verifier failed with the expected hash-mismatch
     blocker.
 
+Release evidence reviewer machine input source provenance:
+
+- This slice makes the retained machine evidence manifest name the CI artifact
+  origin for each copied JSON input, alongside its retained file name, byte
+  size, and SHA-256 digest. For example, the visual smoke manifest, visual
+  smoke evidence report, and accountant workbench evidence report are all
+  recorded as coming from the `visual-smoke-screenshots` CI artifact.
+- `scripts/verify-release-evidence-workspace.ps1` now rejects reviewer
+  workspaces whose `retainedMachineEvidence` entries drift from the expected
+  source artifact name or source artifact file for any of the six retained
+  machine inputs.
+- Verification completed locally:
+  - PowerShell parser checks passed for `scripts/new-release-evidence-workspace.ps1`
+    and `scripts/verify-release-evidence-workspace.ps1`.
+  - `node scripts/verify-ci-actions.mjs` passed.
+  - Backend focused regression passed:
+    `ReleaseEvidenceVerifier_BlocksIncompleteHumanSignoffEvidence`.
+  - A local nested-artifact simulation generated and verified a workspace whose
+    six retained machine evidence entries carried source CI artifact names,
+    source artifact files, byte sizes, and SHA-256 digests.
+  - A tampered-manifest simulation changed a retained machine evidence source
+    artifact name and the workspace verifier failed with the expected
+    provenance blocker.
+
 ## What Is Left To Do
 
 Highest-priority next steps:
 
 1. Rerun the full local production gate before release if runtime, script, workflow,
-   or template changes land; the latest runtime/script gate is green on July 9, 2026
-   for commit `d9bcf32`.
+   or template changes land; before any release, confirm the latest GitHub Actions
+   run for current `main`/HEAD is green and retain its machine evidence artifacts.
 2. Perform and record human visual review of the generated light/dark desktop/mobile
    visual smoke artifact set; the screenshot manifest now verifies locally, but
    named visual QA sign-off is still required.

@@ -54,7 +54,9 @@ function Copy-MachineEvidenceInput {
         [string]$SourcePath,
         [string]$OutputDirectory,
         [string]$RequiredFileName,
-        [string]$EvidenceName
+        [string]$EvidenceName,
+        [string]$SourceArtifactName,
+        [string]$SourceArtifactFile
     )
 
     if ([string]::IsNullOrWhiteSpace($SourcePath) -or -not (Test-Path -LiteralPath $SourcePath -PathType Leaf)) {
@@ -68,6 +70,8 @@ function Copy-MachineEvidenceInput {
     [ordered]@{
         evidenceName = $EvidenceName
         fileName = $RequiredFileName
+        sourceArtifactName = $SourceArtifactName
+        sourceArtifactFile = $SourceArtifactFile
         sourcePath = $SourcePath
         byteSize = $destination.Length
         sha256 = Get-FileSha256 $destinationPath
@@ -222,12 +226,12 @@ $checkedAtUtc = [string](Get-JsonPropertyValue $monitoringErrorRoutingReport "ch
 New-Item -ItemType Directory -Path $resolvedOutputDirectory -Force | Out-Null
 
 $retainedMachineEvidence = @(
-    Copy-MachineEvidenceInput $productionReadinessReportPath $resolvedOutputDirectory "production-readiness-report.json" "Production readiness report"
-    Copy-MachineEvidenceInput $visualSmokeManifestPath $resolvedOutputDirectory "visual-smoke-manifest.json" "Visual smoke manifest"
-    Copy-MachineEvidenceInput $visualSmokeEvidenceReportPath $resolvedOutputDirectory "visual-smoke-evidence-report.json" "Visual smoke evidence report"
-    Copy-MachineEvidenceInput $accountantWorkbenchEvidenceReportPath $resolvedOutputDirectory "accountant-workbench-evidence-report.json" "Accountant workbench evidence report"
-    Copy-MachineEvidenceInput $monitoringErrorRoutingReportPath $resolvedOutputDirectory "monitoring-error-routing-report.json" "Monitoring error routing report"
-    Copy-MachineEvidenceInput $structuredLogReportPath $resolvedOutputDirectory "structured-log-report.json" "Structured log report"
+    Copy-MachineEvidenceInput $productionReadinessReportPath $resolvedOutputDirectory "production-readiness-report.json" "Production readiness report" "production-readiness-report" "production-readiness-report.json"
+    Copy-MachineEvidenceInput $visualSmokeManifestPath $resolvedOutputDirectory "visual-smoke-manifest.json" "Visual smoke manifest" "visual-smoke-screenshots" "visual-smoke-manifest.json"
+    Copy-MachineEvidenceInput $visualSmokeEvidenceReportPath $resolvedOutputDirectory "visual-smoke-evidence-report.json" "Visual smoke evidence report" "visual-smoke-screenshots" "visual-smoke-evidence-report.json"
+    Copy-MachineEvidenceInput $accountantWorkbenchEvidenceReportPath $resolvedOutputDirectory "accountant-workbench-evidence-report.json" "Accountant workbench evidence report" "visual-smoke-screenshots" "accountant-workbench-evidence-report.json"
+    Copy-MachineEvidenceInput $monitoringErrorRoutingReportPath $resolvedOutputDirectory "monitoring-error-routing-report.json" "Monitoring error routing report" "monitoring-error-routing-smoke" "monitoring-error-routing-report.json"
+    Copy-MachineEvidenceInput $structuredLogReportPath $resolvedOutputDirectory "structured-log-report.json" "Structured log report" "structured-json-log-sample" "structured-log-report.json"
 )
 
 $commonFields = @{
@@ -413,12 +417,14 @@ This workspace is reviewer preparation only. It is not release approval and it i
 
 ## Machine Evidence Inputs
 
-- Production readiness report: production-readiness-report.json
-- Visual smoke manifest: visual-smoke-manifest.json
-- Visual smoke evidence report: visual-smoke-evidence-report.json
-- Accountant workbench evidence report: accountant-workbench-evidence-report.json
-- Monitoring error routing report: monitoring-error-routing-report.json
-- Structured log report: structured-log-report.json
+| Evidence input | Retained file | Source CI artifact |
+| --- | --- | --- |
+| Production readiness report | production-readiness-report.json | production-readiness-report / production-readiness-report.json |
+| Visual smoke manifest | visual-smoke-manifest.json | visual-smoke-screenshots / visual-smoke-manifest.json |
+| Visual smoke evidence report | visual-smoke-evidence-report.json | visual-smoke-screenshots / visual-smoke-evidence-report.json |
+| Accountant workbench evidence report | accountant-workbench-evidence-report.json | visual-smoke-screenshots / accountant-workbench-evidence-report.json |
+| Monitoring error routing report | monitoring-error-routing-report.json | monitoring-error-routing-smoke / monitoring-error-routing-report.json |
+| Structured log report | structured-log-report.json | structured-json-log-sample / structured-log-report.json |
 
 ## Reviewer Queue
 

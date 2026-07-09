@@ -83,6 +83,15 @@ $requiredMachineEvidenceFiles = @(
     "structured-log-report.json"
 )
 
+$requiredMachineEvidenceProvenance = @(
+    [pscustomobject]@{ FileName = "production-readiness-report.json"; SourceArtifactName = "production-readiness-report"; SourceArtifactFile = "production-readiness-report.json" },
+    [pscustomobject]@{ FileName = "visual-smoke-manifest.json"; SourceArtifactName = "visual-smoke-screenshots"; SourceArtifactFile = "visual-smoke-manifest.json" },
+    [pscustomobject]@{ FileName = "visual-smoke-evidence-report.json"; SourceArtifactName = "visual-smoke-screenshots"; SourceArtifactFile = "visual-smoke-evidence-report.json" },
+    [pscustomobject]@{ FileName = "accountant-workbench-evidence-report.json"; SourceArtifactName = "visual-smoke-screenshots"; SourceArtifactFile = "accountant-workbench-evidence-report.json" },
+    [pscustomobject]@{ FileName = "monitoring-error-routing-report.json"; SourceArtifactName = "monitoring-error-routing-smoke"; SourceArtifactFile = "monitoring-error-routing-report.json" },
+    [pscustomobject]@{ FileName = "structured-log-report.json"; SourceArtifactName = "structured-json-log-sample"; SourceArtifactFile = "structured-log-report.json" }
+)
+
 function Add-Failure {
     param(
         [System.Collections.Generic.List[string]]$Failures,
@@ -235,7 +244,8 @@ if (-not (Test-Path -LiteralPath $manifestPath)) {
         Add-Failure $failures "Workspace manifest retainedMachineEvidence must contain exactly $($requiredMachineEvidenceFiles.Count) entries."
     }
 
-    foreach ($requiredMachineEvidenceFile in $requiredMachineEvidenceFiles) {
+    foreach ($expectedMachineEvidence in $requiredMachineEvidenceProvenance) {
+        $requiredMachineEvidenceFile = $expectedMachineEvidence.FileName
         $entry = $retainedMachineEvidence | Where-Object {
             [string](Get-JsonPropertyValue $_ "fileName") -eq $requiredMachineEvidenceFile
         } | Select-Object -First 1
@@ -248,6 +258,14 @@ if (-not (Test-Path -LiteralPath $manifestPath)) {
         $manifestByteSize = [string](Get-JsonPropertyValue $entry "byteSize")
         $manifestSha256 = [string](Get-JsonPropertyValue $entry "sha256")
         $retainedPath = Join-Path $resolvedWorkspace.Path $requiredMachineEvidenceFile
+
+        if ([string](Get-JsonPropertyValue $entry "sourceArtifactName") -ne $expectedMachineEvidence.SourceArtifactName) {
+            Add-Failure $failures "Workspace manifest retainedMachineEvidence.$requiredMachineEvidenceFile.sourceArtifactName must be $($expectedMachineEvidence.SourceArtifactName)."
+        }
+
+        if ([string](Get-JsonPropertyValue $entry "sourceArtifactFile") -ne $expectedMachineEvidence.SourceArtifactFile) {
+            Add-Failure $failures "Workspace manifest retainedMachineEvidence.$requiredMachineEvidenceFile.sourceArtifactFile must be $($expectedMachineEvidence.SourceArtifactFile)."
+        }
 
         if ($manifestByteSize -notmatch "^[1-9][0-9]*$") {
             Add-Failure $failures "Workspace manifest retainedMachineEvidence.$requiredMachineEvidenceFile.byteSize must be a positive integer."
