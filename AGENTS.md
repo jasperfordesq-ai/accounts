@@ -657,6 +657,18 @@ Recent successful local verification includes:
     `node scripts/verify-api-client.mjs`,
     `npx.cmd vitest run tests/render/production-readiness-panel.test.tsx tests/render/production-readiness-workbench.test.tsx`,
     and `npx.cmd tsc --noEmit --incremental false` - passed
+- Frontend visual QA route acceptance decision checks:
+  - Commit `aa24207 Require visual QA route acceptance decisions`.
+  - PowerShell parser check for `scripts\verify-release-evidence.ps1` - passed.
+  - Backend focused release-evidence/scorecard regression:
+    `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~ReleaseEvidenceVerifier_BlocksIncompleteHumanSignoffEvidence|FullyQualifiedName~ReleaseEvidenceTemplates_CoverHumanVisualAccountantAndProviderSignoffs|FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers"`
+    - 3 passed, proving visual QA sign-off now requires explicit `pass` or
+      `accepted` route decisions across desktop light, desktop dark, mobile light
+      and mobile dark captures, and the frontend scorecard is 170/200.
+  - `node --test tests/production-readiness-contract.test.mjs`,
+    `node scripts/verify-api-client.mjs`,
+    `npx.cmd vitest run tests/render/production-readiness-panel.test.tsx tests/render/production-readiness-workbench.test.tsx`,
+    and `npx.cmd tsc --noEmit --incremental false` - passed.
 - Backend focused scorecard/visual QA tests after adding PNG dimension evidence:
   `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art --filter "FullyQualifiedName~ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers|FullyQualifiedName~ProductionReadinessReport_DeclaresVisualQaCoverageForAccountantWorkbenchRoutes"`
   - 2 passed, proving the readiness report exposes the 608/700 scorecard and visual
@@ -721,8 +733,8 @@ CI status:
   2026.
 - Green jobs: Workflow Hygiene, Production Compose Config, Frontend, Backend,
   Production Stack Smoke, and CI Machine Evidence Pack.
-- The scorecard exposed by the candidate is now 625/700, with backend statutory/accounting
-  engine at 208/250, frontend accountant workbench at 168/200 and
+- The scorecard exposed by the candidate is now 627/700, with backend statutory/accounting
+  engine at 208/250, frontend accountant workbench at 170/200 and
   security/auth/tenant/platform guardrails at 150/150.
   The typed frontend parser and production-readiness verifier both require CI
   machine evidence, production smoke, readiness verification, visual smoke, release
@@ -804,8 +816,8 @@ As of July 8, 2026:
 - Code implementation is roughly 70-75% complete.
 - Production assurance is roughly 60-65% complete.
 - Overall goal is roughly 63-67% complete, with about one third left.
-- The production scorecard is now 625/700: architecture/documentation 99/100,
-  backend statutory/accounting engine 208/250, frontend accountant workbench 168/200,
+- The production scorecard is now 627/700: architecture/documentation 99/100,
+  backend statutory/accounting engine 208/250, frontend accountant workbench 170/200,
   and security/auth/tenant/platform guardrails 150/150.
 - Architecture/documentation is now scored 99/100 in the production scorecard because
   source-law review, release evidence templates, manual handoff evidence, runbook
