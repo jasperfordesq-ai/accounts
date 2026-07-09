@@ -264,6 +264,103 @@ function Assert-SourceLawPreparedEvidenceReferences {
     }
 }
 
+function Assert-QualifiedAccountantPreparedEvidenceReferences {
+    param(
+        [string]$WorkspaceDirectory,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    $productionReadinessPath = Join-Path $WorkspaceDirectory "production-readiness-report.json"
+    $accountantWorkbenchPath = Join-Path $WorkspaceDirectory "accountant-workbench-evidence-report.json"
+    $qualifiedAccountantTemplatePath = Join-Path $WorkspaceDirectory "qualified-accountant-acceptance-template.md"
+
+    if (-not (Test-Path -LiteralPath $productionReadinessPath -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $accountantWorkbenchPath -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $qualifiedAccountantTemplatePath -PathType Leaf)) {
+        return
+    }
+
+    $productionReadiness = Get-Content -LiteralPath $productionReadinessPath -Raw | ConvertFrom-Json
+    $scenarioCodes = @((Get-JsonPropertyValue $productionReadiness "goldenFilingCorpus") | ForEach-Object {
+        [string](Get-JsonPropertyValue $_ "code")
+    } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+
+    if ($scenarioCodes.Count -eq 0) {
+        Add-Failure $Failures "production-readiness-report.json goldenFilingCorpus must include scenario codes."
+        return
+    }
+
+    $accountantWorkbench = Get-Content -LiteralPath $accountantWorkbenchPath -Raw | ConvertFrom-Json
+    $routeNames = @((Get-JsonPropertyValue $accountantWorkbench "routeAcceptance") | ForEach-Object {
+        [string](Get-JsonPropertyValue $_ "routeName")
+    } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+
+    if ($routeNames.Count -eq 0) {
+        Add-Failure $Failures "accountant-workbench-evidence-report.json routeAcceptance must include route names."
+        return
+    }
+
+    $content = Get-Content -LiteralPath $qualifiedAccountantTemplatePath -Raw
+    $lines = $content -split "\r?\n"
+
+    foreach ($scenarioCode in $scenarioCodes) {
+        $escaped = [regex]::Escape($scenarioCode)
+        $row = $lines | Where-Object { $_ -match "^\|\s*$escaped\s*\|" } | Select-Object -First 1
+        if (-not $row) {
+            Add-Failure $Failures "Prepared qualified-accountant template must include scenario row $scenarioCode."
+            continue
+        }
+
+        $cells = @($row -split "\|")
+        if ($cells.Count -lt 10) {
+            Add-Failure $Failures "Prepared qualified-accountant template scenario row $scenarioCode must include all review and evidence cells."
+            continue
+        }
+
+        foreach ($decisionIndex in 2..7) {
+            if (-not [string]::IsNullOrWhiteSpace($cells[$decisionIndex])) {
+                Add-Failure $Failures "Prepared qualified-accountant template scenario row $scenarioCode must leave scenario acceptance cells blank before named professional sign-off."
+            }
+        }
+
+        $expectedReference = "qualified-accountant-walkthrough-ledger#$scenarioCode"
+        if ($cells[8].Trim() -ne $expectedReference) {
+            Add-Failure $Failures "Prepared qualified-accountant template scenario row $scenarioCode Scenario evidence reference cell must be $expectedReference."
+        }
+    }
+
+    foreach ($routeName in $routeNames) {
+        $escaped = [regex]::Escape($routeName)
+        $row = $lines | Where-Object { $_ -match "^\|\s*$escaped\s*\|" } | Select-Object -First 1
+        if (-not $row) {
+            Add-Failure $Failures "Prepared qualified-accountant template must include route row $routeName."
+            continue
+        }
+
+        $cells = @($row -split "\|")
+        if ($cells.Count -lt 7) {
+            Add-Failure $Failures "Prepared qualified-accountant template route row $routeName must include all decision and evidence cells."
+            continue
+        }
+
+        foreach ($decisionIndex in 2..3) {
+            if (-not [string]::IsNullOrWhiteSpace($cells[$decisionIndex])) {
+                Add-Failure $Failures "Prepared qualified-accountant template route row $routeName must leave route acceptance cells blank before named professional sign-off."
+            }
+        }
+
+        $expectedWorkbenchReference = "accountant-workbench-evidence-report.json#routeAcceptance.$routeName"
+        if ($cells[4].Trim() -ne $expectedWorkbenchReference) {
+            Add-Failure $Failures "Prepared qualified-accountant template route row $routeName Workbench evidence reference cell must be $expectedWorkbenchReference."
+        }
+
+        $expectedWalkthroughReference = "qualified-accountant-route-walkthrough#$routeName"
+        if ($cells[5].Trim() -ne $expectedWalkthroughReference) {
+            Add-Failure $Failures "Prepared qualified-accountant template route row $routeName Notes cell must be $expectedWalkthroughReference."
+        }
+    }
+}
+
 function Get-FileSha256 {
     param([string]$Path)
 
@@ -555,6 +652,7 @@ if (-not (Test-Path -LiteralPath $machineEvidenceSummaryPath)) {
 
 Assert-VisualQaPreparedRouteReferences $resolvedWorkspace.Path $failures
 Assert-SourceLawPreparedEvidenceReferences $resolvedWorkspace.Path $failures
+Assert-QualifiedAccountantPreparedEvidenceReferences $resolvedWorkspace.Path $failures
 
 if (-not (Test-Path -LiteralPath $reviewerIndexPath)) {
     Add-Failure $failures "Workspace must include release-evidence-reviewer-index.md."

@@ -285,6 +285,46 @@ function Get-SourceLawSourceIds {
     return @($sourceIds)
 }
 
+function Get-GoldenCorpusScenarioCodes {
+    param($ProductionReadinessReport)
+
+    $scenarioCodes = @((Get-JsonPropertyValue $ProductionReadinessReport "goldenFilingCorpus") | ForEach-Object {
+        [string](Get-JsonPropertyValue $_ "code")
+    } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+
+    if ($scenarioCodes.Count -eq 0) {
+        $scenarioCodes = @((Get-JsonPropertyValue $ProductionReadinessReport "goldenEvidenceLedger") | ForEach-Object {
+            [string](Get-JsonPropertyValue $_ "scenarioCode")
+        } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    }
+
+    if ($scenarioCodes.Count -eq 0) {
+        throw "Production readiness report must contain goldenFilingCorpus code or goldenEvidenceLedger scenarioCode entries."
+    }
+
+    return @($scenarioCodes)
+}
+
+function Get-AccountantWorkbenchRouteNames {
+    param($AccountantWorkbenchReport)
+
+    $routeNames = @((Get-JsonPropertyValue $AccountantWorkbenchReport "routeAcceptance") | ForEach-Object {
+        [string](Get-JsonPropertyValue $_ "routeName")
+    } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+
+    if ($routeNames.Count -eq 0) {
+        $routeNames = @((Get-JsonPathValue $AccountantWorkbenchReport @("requiredCoverage", "routeCodes")) | ForEach-Object {
+            [string]$_
+        } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    }
+
+    if ($routeNames.Count -eq 0) {
+        throw "Accountant workbench evidence report must contain routeAcceptance routeName or requiredCoverage.routeCodes entries."
+    }
+
+    return @($routeNames)
+}
+
 function Set-VisualQaRouteReferenceNotes {
     param(
         [string]$Content,
@@ -301,6 +341,49 @@ function Set-VisualQaRouteReferenceNotes {
 
         $reference = "visual-smoke-evidence-report.json#routeAcceptance.$routeName"
         $updated = [regex]::Replace($updated, $pattern, "`$1 $reference |")
+    }
+
+    return $updated
+}
+
+function Set-QualifiedAccountantScenarioReferences {
+    param(
+        [string]$Content,
+        [string[]]$ScenarioCodes
+    )
+
+    $updated = $Content
+    foreach ($scenarioCode in $ScenarioCodes) {
+        $escaped = [regex]::Escape($scenarioCode)
+        $pattern = "(?m)^(\|\s*$escaped\s*\|\s*[^|]*\|\s*[^|]*\|\s*[^|]*\|\s*[^|]*\|\s*[^|]*\|\s*[^|]*\|)\s*[^|]*\|$"
+        if (-not [regex]::IsMatch($updated, $pattern)) {
+            throw "Qualified-accountant acceptance template is missing scenario row '$scenarioCode'."
+        }
+
+        $reference = "qualified-accountant-walkthrough-ledger#$scenarioCode"
+        $updated = [regex]::Replace($updated, $pattern, "`$1 $reference |")
+    }
+
+    return $updated
+}
+
+function Set-QualifiedAccountantRouteReferences {
+    param(
+        [string]$Content,
+        [string[]]$RouteNames
+    )
+
+    $updated = $Content
+    foreach ($routeName in $RouteNames) {
+        $escaped = [regex]::Escape($routeName)
+        $pattern = "(?m)^(\|\s*$escaped\s*\|\s*[^|]*\|\s*[^|]*\|)\s*[^|]*\|\s*[^|]*\|$"
+        if (-not [regex]::IsMatch($updated, $pattern)) {
+            throw "Qualified-accountant acceptance template is missing route row '$routeName'."
+        }
+
+        $workbenchReference = "accountant-workbench-evidence-report.json#routeAcceptance.$routeName"
+        $walkthroughReference = "qualified-accountant-route-walkthrough#$routeName"
+        $updated = [regex]::Replace($updated, $pattern, "`$1 $workbenchReference | $walkthroughReference |")
     }
 
     return $updated
@@ -333,7 +416,9 @@ function Copy-PreparedTemplate {
         [string]$DestinationPath,
         [hashtable]$Fields,
         [string[]]$VisualRouteNames = @(),
-        [string[]]$SourceLawSourceIds = @()
+        [string[]]$SourceLawSourceIds = @(),
+        [string[]]$GoldenCorpusScenarioCodes = @(),
+        [string[]]$AccountantWorkbenchRouteNames = @()
     )
 
     if ((Test-Path -LiteralPath $DestinationPath) -and -not $Force) {
@@ -351,6 +436,11 @@ function Copy-PreparedTemplate {
 
     if ((Split-Path -Leaf $DestinationPath) -eq "source-law-review-template.md") {
         $content = Set-SourceLawReviewNoteReferences $content $SourceLawSourceIds
+    }
+
+    if ((Split-Path -Leaf $DestinationPath) -eq "qualified-accountant-acceptance-template.md") {
+        $content = Set-QualifiedAccountantScenarioReferences $content $GoldenCorpusScenarioCodes
+        $content = Set-QualifiedAccountantRouteReferences $content $AccountantWorkbenchRouteNames
     }
 
     Set-Content -LiteralPath $DestinationPath -Value $content -NoNewline
@@ -383,6 +473,9 @@ $structuredLogReport = Read-JsonFile $structuredLogReportPath
 $visualRouteNames = Get-VisualRouteNames $visualSmokeEvidenceReport
 $sourceLawSnapshotHash = Get-SourceLawSnapshotContentHash $productionReadinessReport
 $sourceLawSourceIds = Get-SourceLawSourceIds $productionReadinessReport
+$goldenCorpusScenarioCodes = Get-GoldenCorpusScenarioCodes $productionReadinessReport
+$accountantWorkbenchEvidenceReport = Read-JsonFile $accountantWorkbenchEvidenceReportPath
+$accountantWorkbenchRouteNames = Get-AccountantWorkbenchRouteNames $accountantWorkbenchEvidenceReport
 
 $productionReadinessTimestamp = Convert-JsonValueToEvidenceString (Get-JsonPropertyValue $productionReadinessReport "generatedAt")
 $checkedAtUtc = Convert-JsonValueToEvidenceString (Get-JsonPropertyValue $monitoringErrorRoutingReport "checkedAtUtc")
@@ -553,7 +646,7 @@ $machineEvidenceSummary | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $ma
 foreach ($template in $preparedTemplates) {
     $source = Join-Path $resolvedTemplateDirectory $template.FileName
     $destination = Join-Path $resolvedOutputDirectory $template.FileName
-    Copy-PreparedTemplate $source $destination $template.Fields $visualRouteNames $sourceLawSourceIds
+    Copy-PreparedTemplate $source $destination $template.Fields $visualRouteNames $sourceLawSourceIds $goldenCorpusScenarioCodes $accountantWorkbenchRouteNames
 }
 
 $completionLedgerFile = "release-evidence-reviewer-completion.json"

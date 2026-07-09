@@ -958,6 +958,10 @@ public class ProductionReadinessReportTests
             evidence.Contains("Qualified-accountant route walkthrough notes", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("exact qualified-accountant-route-walkthrough anchor", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["backend-statutory-accounting-engine"].CurrentEvidence, evidence =>
+            evidence.Contains("Release evidence reviewer workspaces", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("prefill qualified-accountant scenario walkthrough", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("professional acceptance cells blank", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(scores["backend-statutory-accounting-engine"].CurrentEvidence, evidence =>
             evidence.Contains("Qualified-accountant acceptance top-level evidence", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("placeholder accountant name", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("reviewer capacity", StringComparison.OrdinalIgnoreCase)

@@ -1046,6 +1046,7 @@ function productionScorecard() {
           "Qualified-accountant route walkthrough rows require route-specific accountant-workbench evidence anchors for every accepted route.",
           "Qualified-accountant route acceptance requires a real retained workbench evidence reference for every accepted route.",
           "Qualified-accountant route walkthrough notes must match the exact qualified-accountant-route-walkthrough anchor for every accepted route.",
+          "Release evidence reviewer workspaces now prefill qualified-accountant scenario walkthrough, route workbench evidence and route walkthrough anchors while leaving all professional acceptance cells blank.",
           "Qualified-accountant acceptance top-level evidence rejects placeholder accountant name, qualification, reviewer capacity and signature fields before professional sign-off evidence can pass.",
           "External ROS/iXBRL validation evidence has template and verifier checks for real references, retained taxonomy package references, accepted/remediated warnings and accepted decisions.",
           "External ROS/iXBRL validation and taxonomy references require the matching golden corpus scenario code before acceptance can pass.",

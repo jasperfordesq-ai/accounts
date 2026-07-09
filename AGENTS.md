@@ -2369,6 +2369,25 @@ Source-law reviewer workspace anchors:
   decisions, and provide named reviewer plus qualified-accountant sign-off before
   `scripts/verify-release-evidence.ps1` can pass.
 
+Qualified-accountant reviewer workspace anchors:
+
+- This slice makes `scripts/new-release-evidence-workspace.ps1` read retained
+  `production-readiness-report.json` golden corpus codes and
+  `accountant-workbench-evidence-report.json` route acceptance rows, then prefill
+  `qualified-accountant-acceptance-template.md` with exact
+  `qualified-accountant-walkthrough-ledger#<scenario>`,
+  `accountant-workbench-evidence-report.json#routeAcceptance.<route>`, and
+  `qualified-accountant-route-walkthrough#<route>` anchors.
+- `scripts/verify-release-evidence-workspace.ps1` now rejects prepared reviewer
+  workspaces when any qualified-accountant scenario/route anchor is missing or
+  when any scenario/route professional acceptance cell is filled before named
+  qualified-accountant sign-off.
+- This improves the accountant walkthrough handoff without approving outputs:
+  the qualified accountant still has to review each golden scenario and route,
+  enter exact accepted/yes decisions, provide identity/qualification/capacity,
+  UTC timestamp, and signature before `scripts/verify-release-evidence.ps1` can
+  pass.
+
 ## What Is Left To Do
 
 Highest-priority next steps:
