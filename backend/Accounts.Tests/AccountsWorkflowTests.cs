@@ -18346,6 +18346,10 @@ public class AccountsWorkflowTests
         Assert.Contains("External ROS/iXBRL validation", externalRosIxbrl);
         Assert.Contains("Internal XML checks are not Revenue acceptance evidence", externalRosIxbrl);
         Assert.Contains("Generated iXBRL SHA-256", externalRosIxbrl);
+        Assert.Contains("validation environment", externalRosIxbrl, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("real retained evidence values, not placeholders", externalRosIxbrl);
+        Assert.Contains("Generated iXBRL artifact name", externalRosIxbrl);
+        Assert.Contains("`.xhtml`, `.html`, or\n`.zip` artifact", externalRosIxbrl);
         Assert.Contains("Use a real external validation reference for each scenario", externalRosIxbrl);
         Assert.Contains("in the `Decision` column only when the external reference", externalRosIxbrl);
         Assert.Contains("Record the actual taxonomy package", externalRosIxbrl);
@@ -18487,6 +18491,13 @@ public class AccountsWorkflowTests
         Assert.Contains("Generated iXBRL SHA-256", script);
         Assert.Contains("Internal XML checks are not Revenue acceptance evidence", script);
         Assert.Contains("Accepted as external ROS/iXBRL validation evidence for this release candidate.", script);
+        Assert.Contains("\"External validation provider\" \"^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+\" \"a real external validation provider\"", script);
+        Assert.Contains("\"Validation environment\" \"^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+\" \"a real validation environment\"", script);
+        Assert.Contains("\"Validation run/reference id\" \"^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+\" \"a real validation run or reference id\"", script);
+        Assert.Contains("\"Validation report file or URL\" \"^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+\" \"a real validation report file or URL\"", script);
+        Assert.Contains("\"Generated iXBRL artifact name\" \"^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+\\.(xhtml|html|zip)$\" \"a retained .xhtml, .html, or .zip artifact name\"", script);
+        Assert.Contains("\"Taxonomy package\" \"^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+\" \"a real taxonomy package or retained package reference\"", script);
+        Assert.Contains("\"Company/period reference\" \"^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+\" \"a real company/period reference\"", script);
         Assert.Contains("\"External reference\" \"^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+\"", script);
         Assert.Contains("\"Taxonomy package\" \"^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+\"", script);
         Assert.Contains("a real retained taxonomy package reference", script);

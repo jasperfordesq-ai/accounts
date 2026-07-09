@@ -20,13 +20,13 @@ describe("ProductionReadinessWorkbench", () => {
     expectText("3 companies");
     expectText("4 periods");
     expect(screen.getByRole("heading", { name: "Production scorecard" })).toBeInTheDocument();
-    expectText("671/700");
+    expectText("673/700");
     expectText("Architecture and documentation");
     expectText("Backend statutory/accounting engine");
     expectText("Frontend accountant workbench");
     expectText("Security/auth/tenant/platform guardrails");
     expectText("99 / 100");
-    expectText("244 / 250");
+    expectText("246 / 250");
     expectText("178 / 200");
     expectText("150 / 150");
     expectText(/Next score gate/);
@@ -284,7 +284,7 @@ describe("ProductionReadinessWorkbench", () => {
 
 function productionScorecard(): ProductionReadinessReport["productionScorecard"] {
   return {
-    currentScore: 671,
+    currentScore: 673,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete source-law review, named visual QA, monitoring-provider confirmation, manual handoff and qualified-accountant acceptance evidence.",
@@ -307,7 +307,7 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
       {
         code: "backend-statutory-accounting-engine",
         label: "Backend statutory/accounting engine",
-        currentScore: 244,
+        currentScore: 246,
         targetScore: 250,
         status: "qualified-accountant-review-required",
         currentEvidence: [
@@ -325,6 +325,7 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
           "External ROS/iXBRL validation and taxonomy references require the matching golden corpus scenario code before acceptance can pass.",
           "External ROS/iXBRL validation rows must match exact retained external validation and taxonomy package ledger anchors for every canonical golden corpus scenario.",
           "External ROS/iXBRL validation warnings/errors require exact none, accepted or remediated values, and scenario decisions require exact accepted values before evidence can pass.",
+          "External ROS/iXBRL validation top-level evidence rejects placeholder provider, environment, run/reference, report, taxonomy and company/period fields, and requires a retained XHTML, HTML or ZIP iXBRL artifact name.",
           "Source-law review evidence has template and verifier checks for concrete URL reachability, dated or not-dated effective-date review, guidance comparison, platform impact classification and exact accepted decisions.",
           "Source-law review platform impact cells require exact no change, reflected or blocking values before review evidence can pass.",
           "Source-law review notes must match the exact source-law-review-ledger anchor for every monitored source before acceptance can pass.",

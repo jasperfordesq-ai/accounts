@@ -983,7 +983,14 @@ function Test-ExternalRosIxbrlEvidence {
     Assert-ReleaseIdentityFields $Content $context $Failures
     Assert-UtcTimestampField $Content "Production readiness report timestamp" $context $Failures
     Assert-UtcTimestampField $Content "Review date/time UTC" $context $Failures
+    Assert-FieldMatchesPattern $Content "External validation provider" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real external validation provider" $context $Failures
+    Assert-FieldMatchesPattern $Content "Validation environment" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real validation environment" $context $Failures
+    Assert-FieldMatchesPattern $Content "Validation run/reference id" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real validation run or reference id" $context $Failures
+    Assert-FieldMatchesPattern $Content "Validation report file or URL" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real validation report file or URL" $context $Failures
+    Assert-FieldMatchesPattern $Content "Generated iXBRL artifact name" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+\.(xhtml|html|zip)$" "a retained .xhtml, .html, or .zip artifact name" $context $Failures
     Assert-Sha256Field $Content "Generated iXBRL SHA-256" $context $Failures
+    Assert-FieldMatchesPattern $Content "Taxonomy package" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real taxonomy package or retained package reference" $context $Failures
+    Assert-FieldMatchesPattern $Content "Company/period reference" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real company/period reference" $context $Failures
     Assert-NoUncheckedBoxes $Content $context $Failures
     Assert-CheckedDecision $Content "Accepted as external ROS/iXBRL validation evidence for this release candidate." $context $Failures
     Assert-UncheckedDecision $Content "Rejected; validation issues below must be remediated and re-reviewed." $context $Failures

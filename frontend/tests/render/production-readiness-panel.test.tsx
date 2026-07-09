@@ -40,7 +40,7 @@ describe("ProductionReadinessPanel", () => {
 
 function productionScorecard(): ProductionReadinessReport["productionScorecard"] {
   return {
-    currentScore: 671,
+    currentScore: 673,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete source-law review, named visual QA, monitoring-provider confirmation, manual handoff and qualified-accountant acceptance evidence.",
@@ -63,7 +63,7 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
       {
         code: "backend-statutory-accounting-engine",
         label: "Backend statutory/accounting engine",
-        currentScore: 244,
+        currentScore: 246,
         targetScore: 250,
         status: "qualified-accountant-review-required",
         currentEvidence: [
@@ -81,6 +81,7 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
           "External ROS/iXBRL validation and taxonomy references require the matching golden corpus scenario code before acceptance can pass.",
           "External ROS/iXBRL validation rows must match exact retained external validation and taxonomy package ledger anchors for every canonical golden corpus scenario.",
           "External ROS/iXBRL validation warnings/errors require exact none, accepted or remediated values, and scenario decisions require exact accepted values before evidence can pass.",
+          "External ROS/iXBRL validation top-level evidence rejects placeholder provider, environment, run/reference, report, taxonomy and company/period fields, and requires a retained XHTML, HTML or ZIP iXBRL artifact name.",
           "Source-law review evidence has template and verifier checks for concrete URL reachability, dated or not-dated effective-date review, guidance comparison, platform impact classification and exact accepted decisions.",
           "Source-law review platform impact cells require exact no change, reflected or blocking values before review evidence can pass.",
           "Source-law review notes must match the exact source-law-review-ledger anchor for every monitored source before acceptance can pass.",

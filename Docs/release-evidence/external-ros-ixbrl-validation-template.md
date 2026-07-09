@@ -28,6 +28,11 @@ Internal XML checks are not Revenue acceptance evidence.
 Required formats: use the full 40-character commit SHA, the exact
 `https://github.com/.../actions/runs/...` run URL, UTC timestamps ending in `Z`
 or `+00:00`, and 64-character SHA-256 digests for every generated iXBRL hash.
+The external validation provider, validation environment, validation
+run/reference id, validation report, taxonomy package, and company/period
+reference fields must be real retained evidence values, not placeholders.
+`Generated iXBRL artifact name` must name a retained `.xhtml`, `.html`, or
+`.zip` artifact for the release candidate.
 Use a real external validation reference for each scenario. Use exactly `none`,
 `accepted`, or `remediated` in the `Warnings/errors` column only when every
 warning or error has been accepted by the reviewer or remediated. Use exactly
