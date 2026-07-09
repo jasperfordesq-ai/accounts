@@ -606,6 +606,17 @@ jobs:
             throw "Prepared release evidence workspace unexpectedly passed before named human sign-off."
           }
 
+          $workspaceManifestPath = Join-Path $workspaceRoot "release-evidence-workspace-manifest.json"
+          $workspaceIndexPath = Join-Path $workspaceRoot "release-evidence-reviewer-index.md"
+          if (-not (Test-Path -LiteralPath $workspaceIndexPath)) {
+            throw "Prepared release evidence workspace must include release-evidence-reviewer-index.md."
+          }
+
+          $workspaceManifest = Get-Content -LiteralPath $workspaceManifestPath -Raw | ConvertFrom-Json
+          if ([string]$workspaceManifest.reviewerIndexFile -ne "release-evidence-reviewer-index.md") {
+            throw "Prepared release evidence workspace manifest must reference release-evidence-reviewer-index.md."
+          }
+
           $report = Get-Content -LiteralPath $releaseEvidenceReport -Raw | ConvertFrom-Json
           if ([string]$report.status -ne "failed") {
             throw "Prepared release evidence workspace report must remain failed before named human sign-off."

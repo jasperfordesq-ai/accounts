@@ -231,6 +231,51 @@ $preparedTemplates = @(
     }
 )
 
+$reviewerQueue = @(
+    [pscustomobject]@{
+        EvidenceGate = "Visual QA sign-off"
+        TemplateFile = "visual-qa-signoff-template.md"
+        ReviewerRole = "Named visual QA reviewer"
+        SignOffGate = "visual-qa-screenshot-review"
+        HumanAction = "Review every retained light/dark desktop/mobile screenshot and record exact pass cells, notes, decision, reviewer identity, UTC time, and signature."
+    },
+    [pscustomobject]@{
+        EvidenceGate = "Source-law review"
+        TemplateFile = "source-law-review-template.md"
+        ReviewerRole = "Named source-law reviewer plus qualified accountant"
+        SignOffGate = "source-law-change-review"
+        HumanAction = "Check current CRO, Revenue, FRC, and Charities Regulator sources, record source-row outcomes, qualified-accountant source-law sign-off, UTC time, and signatures."
+    },
+    [pscustomobject]@{
+        EvidenceGate = "External ROS/iXBRL validation"
+        TemplateFile = "external-ros-ixbrl-validation-template.md"
+        ReviewerRole = "External ROS/iXBRL validation reviewer"
+        SignOffGate = "external-ros-validation-evidence"
+        HumanAction = "Retain external validation provider references for the exact generated iXBRL hashes, taxonomy package references, warnings/errors status, decision, UTC time, and signature."
+    },
+    [pscustomobject]@{
+        EvidenceGate = "Qualified-accountant acceptance"
+        TemplateFile = "qualified-accountant-acceptance-template.md"
+        ReviewerRole = "Named qualified accountant"
+        SignOffGate = "qualified-accountant-final-signoff"
+        HumanAction = "Walk the golden corpus and workbench routes, record accepted scenario and route rows, accountant identity, UTC time, and signature."
+    },
+    [pscustomobject]@{
+        EvidenceGate = "Manual handoff acceptance"
+        TemplateFile = "manual-handoff-acceptance-template.md"
+        ReviewerRole = "Named manual handoff reviewer"
+        SignOffGate = "manual-accountant-acceptance"
+        HumanAction = "Review audit-required and unsupported paths, retain exact handoff evidence anchors, accepted decisions, reviewer identity, UTC time, and signature."
+    },
+    [pscustomobject]@{
+        EvidenceGate = "Monitoring provider confirmation"
+        TemplateFile = "monitoring-provider-confirmation-template.md"
+        ReviewerRole = "Named release operator"
+        SignOffGate = "production-monitoring"
+        HumanAction = "Confirm the controlled smoke event in the real provider, retain provider URL/reference, no-PII and alert-routing review, accepted decision, UTC time, and signature."
+    }
+)
+
 foreach ($template in $preparedTemplates) {
     $source = Join-Path $resolvedTemplateDirectory $template.FileName
     $destination = Join-Path $resolvedOutputDirectory $template.FileName
@@ -248,7 +293,9 @@ $manifest = [ordered]@{
     visualSmokeEvidenceReportPath = $visualSmokeEvidenceReportPath
     monitoringErrorRoutingReportPath = $monitoringErrorRoutingReportPath
     structuredLogReportPath = $structuredLogReportPath
+    reviewerIndexFile = "release-evidence-reviewer-index.md"
     preparedTemplates = @($preparedTemplates | ForEach-Object { $_.FileName })
+    reviewerQueue = @($reviewerQueue)
     humanFieldsLeftBlank = @(
         "reviewer/operator/accountant identity and role",
         "review dates and signatures",
@@ -264,9 +311,48 @@ $manifest = [ordered]@{
 $manifestPath = Join-Path $resolvedOutputDirectory "release-evidence-workspace-manifest.json"
 $manifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $manifestPath
 
+$reviewerRows = @($reviewerQueue | ForEach-Object {
+    "| $($_.EvidenceGate) | $($_.TemplateFile) | $($_.ReviewerRole) | $($_.SignOffGate) | $($_.HumanAction) |"
+})
+
+$indexContent = @"
+# Release Evidence Reviewer Workspace
+
+Status: pending-human-evidence
+
+This workspace is reviewer preparation only. It is not release approval and it is not professional sign-off.
+
+## Release Candidate
+
+- Commit SHA: $CommitSha
+- GitHub Actions run URL: $GitHubActionsRunUrl
+- Production readiness report timestamp: $productionReadinessTimestamp
+
+## Machine Evidence Inputs
+
+- Production readiness report: $productionReadinessReportPath
+- Visual smoke evidence report: $visualSmokeEvidenceReportPath
+- Monitoring error routing report: $monitoringErrorRoutingReportPath
+- Structured log report: $structuredLogReportPath
+
+## Reviewer Queue
+
+| Evidence gate | Template file | Required reviewer | Sign-off gate | Human action still required |
+| --- | --- | --- | --- | --- |
+$($reviewerRows -join "`n")
+
+## Completion Gate
+
+Run `scripts/verify-release-evidence.ps1 -EvidenceDirectory <this-workspace> -ReportPath <this-workspace>/release-evidence-report.json` after all reviewers complete the templates. The workspace must remain blocked until the verifier passes with all six human evidence templates completed by named reviewers.
+"@
+
+$reviewerIndexPath = Join-Path $resolvedOutputDirectory "release-evidence-reviewer-index.md"
+Set-Content -LiteralPath $reviewerIndexPath -Value $indexContent -NoNewline
+
 [pscustomobject]@{
     status = "pending-human-evidence"
     outputDirectory = $resolvedOutputDirectory
     manifestPath = $manifestPath
+    reviewerIndexPath = $reviewerIndexPath
     preparedTemplateCount = $preparedTemplates.Count
 }

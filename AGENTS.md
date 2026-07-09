@@ -1846,6 +1846,19 @@ CI release evidence reviewer workspace:
   still `incomplete`, proving the uploaded
   `release-evidence-reviewer-workspace` artifact is only reviewer prep and not
   sign-off.
+- The workspace now includes `release-evidence-reviewer-index.md`, a generated
+  reviewer queue that maps each of the six human gates to its template,
+  reviewer role, sign-off gate, and remaining human-only action.
+- Verification completed locally:
+  - PowerShell parser check for `scripts/new-release-evidence-workspace.ps1`
+    passed.
+  - `node scripts/verify-ci-actions.mjs` passed.
+  - Backend focused regression passed:
+    `ReleaseEvidenceVerifier_BlocksIncompleteHumanSignoffEvidence`.
+  - A local nested-artifact simulation generated the reviewer index, confirmed
+    the manifest `reviewerQueue` contains all six gates, and confirmed
+    `scripts/verify-release-evidence.ps1` still fails with all human gates
+    incomplete.
 - Verification completed locally:
   - `node scripts/verify-ci-actions.mjs` passed.
   - Backend focused regression passed:

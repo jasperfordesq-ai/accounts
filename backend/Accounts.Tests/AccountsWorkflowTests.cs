@@ -18456,6 +18456,7 @@ public class AccountsWorkflowTests
         Assert.Contains("verify-release-evidence.ps1", runbook);
         Assert.Contains("new-release-evidence-workspace.ps1", runbook);
         Assert.Contains("release-evidence-workspace-manifest.json", runbook);
+        Assert.Contains("release-evidence-reviewer-index.md", runbook);
         Assert.Contains("leaves all reviewer identity, decisions, signatures", runbook);
         Assert.Contains("release-evidence-report.json", runbook);
         Assert.Contains("visual-smoke-evidence-report.json", runbook);
@@ -18463,10 +18464,16 @@ public class AccountsWorkflowTests
         Assert.Contains("Prepare release evidence reviewer workspace", workflow);
         Assert.Contains("new-release-evidence-workspace.ps1", workflow);
         Assert.Contains("release-evidence-reviewer-workspace", workflow);
+        Assert.Contains("release-evidence-reviewer-index.md", workflow);
+        Assert.Contains("workspaceManifest.reviewerIndexFile", workflow);
         Assert.Contains("Prepared release evidence workspace unexpectedly passed before named human sign-off.", workflow);
         Assert.Contains("Prepared release evidence workspace must keep all human evidence entries incomplete.", workflow);
         Assert.Contains("pending-human-evidence", workspaceScript);
         Assert.Contains("humanFieldsLeftBlank", workspaceScript);
+        Assert.Contains("reviewerQueue", workspaceScript);
+        Assert.Contains("Release Evidence Reviewer Workspace", workspaceScript);
+        Assert.Contains("release-evidence-reviewer-index.md", workspaceScript);
+        Assert.Contains("This workspace is reviewer preparation only.", workspaceScript);
         Assert.Contains("Copy-PreparedTemplate", workspaceScript);
         Assert.Contains("Get-MinimumVisualMetric", workspaceScript);
         Assert.Contains("Assert-GitHubActionsRunUrl", workspaceScript);
