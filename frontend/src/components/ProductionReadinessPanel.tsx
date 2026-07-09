@@ -45,8 +45,9 @@ export function ProductionReadinessPanel({
   const coveredScenarios = report.goldenFilingCorpus.filter((scenario) => scenario.coverageStatus === "covered").length;
   const nextAction = report.assuranceActions?.[0];
   const statusTone = report.overallStatus === "ready" ? "good" : "warn";
-  const pendingHumanEvidenceCount = report.humanReleaseEvidence.filter((item) => item.blocksRelease).length;
-  const humanEvidenceTemplateCount = report.humanReleaseEvidence.length;
+  const humanReleaseEvidence = report.humanReleaseEvidence ?? [];
+  const pendingHumanEvidenceCount = humanReleaseEvidence.filter((item) => item.blocksRelease).length;
+  const humanEvidenceTemplateCount = humanReleaseEvidence.length;
 
   return (
     <ReviewPanel
