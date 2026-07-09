@@ -201,6 +201,69 @@ function Assert-VisualQaPreparedRouteReferences {
     }
 }
 
+function Assert-SourceLawPreparedEvidenceReferences {
+    param(
+        [string]$WorkspaceDirectory,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    $productionReadinessPath = Join-Path $WorkspaceDirectory "production-readiness-report.json"
+    $sourceLawTemplatePath = Join-Path $WorkspaceDirectory "source-law-review-template.md"
+
+    if (-not (Test-Path -LiteralPath $productionReadinessPath -PathType Leaf) -or -not (Test-Path -LiteralPath $sourceLawTemplatePath -PathType Leaf)) {
+        return
+    }
+
+    $productionReadiness = Get-Content -LiteralPath $productionReadinessPath -Raw | ConvertFrom-Json
+    $sourceLawSnapshot = Get-JsonPropertyValue $productionReadiness "sourceLawSnapshot"
+    $contentHash = [string](Get-JsonPropertyValue $sourceLawSnapshot "contentHash")
+    if ($contentHash -notmatch "^sha256:([0-9a-f]{64})$") {
+        Add-Failure $Failures "production-readiness-report.json sourceLawSnapshot.contentHash must be sha256:<64 lowercase hex>."
+        return
+    }
+
+    $bareHash = $Matches[1]
+    $sourceIds = @((Get-JsonPropertyValue $sourceLawSnapshot "sources") | ForEach-Object {
+        [string](Get-JsonPropertyValue $_ "sourceId")
+    } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+
+    if ($sourceIds.Count -eq 0) {
+        Add-Failure $Failures "production-readiness-report.json sourceLawSnapshot.sources must include source IDs."
+        return
+    }
+
+    $content = Get-Content -LiteralPath $sourceLawTemplatePath -Raw
+    Assert-TextContains $content "Source-law snapshot fingerprint: source-law-snapshot-fingerprint#$bareHash" "Prepared source-law template" $Failures
+    Assert-TextContains $content "Source-law snapshot content hash: $bareHash" "Prepared source-law template" $Failures
+
+    $lines = $content -split "\r?\n"
+    foreach ($sourceId in $sourceIds) {
+        $escaped = [regex]::Escape($sourceId)
+        $row = $lines | Where-Object { $_ -match "^\|\s*$escaped\s*\|" } | Select-Object -First 1
+        if (-not $row) {
+            Add-Failure $Failures "Prepared source-law template must include source row $sourceId."
+            continue
+        }
+
+        $cells = @($row -split "\|")
+        if ($cells.Count -lt 9) {
+            Add-Failure $Failures "Prepared source-law template source row $sourceId must include all review and notes cells."
+            continue
+        }
+
+        foreach ($decisionIndex in 2..6) {
+            if (-not [string]::IsNullOrWhiteSpace($cells[$decisionIndex])) {
+                Add-Failure $Failures "Prepared source-law template source row $sourceId must leave source review decision cells blank before named human sign-off."
+            }
+        }
+
+        $expectedReference = "source-law-review-ledger#$sourceId"
+        if ($cells[7].Trim() -ne $expectedReference) {
+            Add-Failure $Failures "Prepared source-law template source row $sourceId Notes cell must be $expectedReference."
+        }
+    }
+}
+
 function Get-FileSha256 {
     param([string]$Path)
 
@@ -491,6 +554,7 @@ if (-not (Test-Path -LiteralPath $machineEvidenceSummaryPath)) {
 }
 
 Assert-VisualQaPreparedRouteReferences $resolvedWorkspace.Path $failures
+Assert-SourceLawPreparedEvidenceReferences $resolvedWorkspace.Path $failures
 
 if (-not (Test-Path -LiteralPath $reviewerIndexPath)) {
     Add-Failure $failures "Workspace must include release-evidence-reviewer-index.md."

@@ -865,6 +865,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "Source-law review evidence now has a checked-in template and the release verifier rejects monitored-source rows without concrete URL reachability, dated or not-dated effective-date review, guidance comparison, platform impact classification and exact accepted decisions.",
                     "Source-law review platform impact cells now require exact no change, reflected or blocking values before review evidence can pass.",
                     "Source-law review notes now must match the exact source-law-review-ledger anchor for every monitored source before acceptance can pass.",
+                    "Release evidence reviewer workspaces now prefill source-law snapshot fingerprint, content hash and per-source review ledger note anchors from the retained production-readiness report while leaving source review decision cells blank.",
                     "Source-law review top-level evidence now requires an exact source-law-snapshot-fingerprint retained evidence anchor plus real reviewer and qualified-accountant identity, signature and sign-off fields before review evidence can pass.",
                     "Manual handoff acceptance now has a checked-in template and the release verifier rejects audit-required or unsupported-path rows without real evidence references and accepted reviewer decisions.",
                     "Manual handoff scenario and unsupported-path decisions now require exact accepted reviewer decisions before acceptance evidence can pass.",

@@ -250,6 +250,41 @@ function Get-VisualRouteNames {
     return @($routes)
 }
 
+function Get-SourceLawSnapshotContentHash {
+    param($ProductionReadinessReport)
+
+    $hash = [string](Get-JsonPathValue $ProductionReadinessReport @("sourceLawSnapshot", "contentHash"))
+    if ([string]::IsNullOrWhiteSpace($hash)) {
+        $hash = [string](Get-JsonPathValue $ProductionReadinessReport @("assurancePacket", "sourceLawSnapshotHash"))
+    }
+
+    if ($hash -notmatch "^sha256:([0-9a-f]{64})$") {
+        throw "Production readiness report must include sourceLawSnapshot.contentHash as sha256:<64 lowercase hex>."
+    }
+
+    return $Matches[1]
+}
+
+function Get-SourceLawSourceIds {
+    param($ProductionReadinessReport)
+
+    $sourceIds = @((Get-JsonPathValue $ProductionReadinessReport @("sourceLawSnapshot", "sources")) | ForEach-Object {
+        [string](Get-JsonPropertyValue $_ "sourceId")
+    } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+
+    if ($sourceIds.Count -eq 0) {
+        $sourceIds = @((Get-JsonPropertyValue $ProductionReadinessReport "sourceLawReviewLedger") | ForEach-Object {
+            [string](Get-JsonPropertyValue $_ "sourceId")
+        } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    }
+
+    if ($sourceIds.Count -eq 0) {
+        throw "Production readiness report must contain sourceLawSnapshot.sources or sourceLawReviewLedger sourceId entries."
+    }
+
+    return @($sourceIds)
+}
+
 function Set-VisualQaRouteReferenceNotes {
     param(
         [string]$Content,
@@ -271,12 +306,34 @@ function Set-VisualQaRouteReferenceNotes {
     return $updated
 }
 
+function Set-SourceLawReviewNoteReferences {
+    param(
+        [string]$Content,
+        [string[]]$SourceIds
+    )
+
+    $updated = $Content
+    foreach ($sourceId in $SourceIds) {
+        $escaped = [regex]::Escape($sourceId)
+        $pattern = "(?m)^(\|\s*$escaped\s*\|\s*[^|]*\|\s*[^|]*\|\s*[^|]*\|\s*[^|]*\|\s*[^|]*\|)\s*[^|]*\|$"
+        if (-not [regex]::IsMatch($updated, $pattern)) {
+            throw "Source-law review template is missing source row '$sourceId'."
+        }
+
+        $reference = "source-law-review-ledger#$sourceId"
+        $updated = [regex]::Replace($updated, $pattern, "`$1 $reference |")
+    }
+
+    return $updated
+}
+
 function Copy-PreparedTemplate {
     param(
         [string]$TemplatePath,
         [string]$DestinationPath,
         [hashtable]$Fields,
-        [string[]]$VisualRouteNames = @()
+        [string[]]$VisualRouteNames = @(),
+        [string[]]$SourceLawSourceIds = @()
     )
 
     if ((Test-Path -LiteralPath $DestinationPath) -and -not $Force) {
@@ -290,6 +347,10 @@ function Copy-PreparedTemplate {
 
     if ((Split-Path -Leaf $DestinationPath) -eq "visual-qa-signoff-template.md") {
         $content = Set-VisualQaRouteReferenceNotes $content $VisualRouteNames
+    }
+
+    if ((Split-Path -Leaf $DestinationPath) -eq "source-law-review-template.md") {
+        $content = Set-SourceLawReviewNoteReferences $content $SourceLawSourceIds
     }
 
     Set-Content -LiteralPath $DestinationPath -Value $content -NoNewline
@@ -320,6 +381,8 @@ $visualSmokeEvidenceReport = Read-JsonFile $visualSmokeEvidenceReportPath
 $monitoringErrorRoutingReport = Read-JsonFile $monitoringErrorRoutingReportPath
 $structuredLogReport = Read-JsonFile $structuredLogReportPath
 $visualRouteNames = Get-VisualRouteNames $visualSmokeEvidenceReport
+$sourceLawSnapshotHash = Get-SourceLawSnapshotContentHash $productionReadinessReport
+$sourceLawSourceIds = Get-SourceLawSourceIds $productionReadinessReport
 
 $productionReadinessTimestamp = Convert-JsonValueToEvidenceString (Get-JsonPropertyValue $productionReadinessReport "generatedAt")
 $checkedAtUtc = Convert-JsonValueToEvidenceString (Get-JsonPropertyValue $monitoringErrorRoutingReport "checkedAtUtc")
@@ -361,7 +424,10 @@ $preparedTemplates = @(
     },
     [pscustomobject]@{
         FileName = "source-law-review-template.md"
-        Fields = $commonFields + $timestampFields
+        Fields = $commonFields + $timestampFields + @{
+            "Source-law snapshot fingerprint" = "source-law-snapshot-fingerprint#$sourceLawSnapshotHash"
+            "Source-law snapshot content hash" = $sourceLawSnapshotHash
+        }
     },
     [pscustomobject]@{
         FileName = "qualified-accountant-acceptance-template.md"
@@ -487,7 +553,7 @@ $machineEvidenceSummary | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $ma
 foreach ($template in $preparedTemplates) {
     $source = Join-Path $resolvedTemplateDirectory $template.FileName
     $destination = Join-Path $resolvedOutputDirectory $template.FileName
-    Copy-PreparedTemplate $source $destination $template.Fields $visualRouteNames
+    Copy-PreparedTemplate $source $destination $template.Fields $visualRouteNames $sourceLawSourceIds
 }
 
 $completionLedgerFile = "release-evidence-reviewer-completion.json"

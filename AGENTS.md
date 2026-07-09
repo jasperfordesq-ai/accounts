@@ -2350,6 +2350,25 @@ Visual QA reviewer workspace route anchors:
   enter exact `pass` decisions, reviewer identity, UTC timestamp, decision and
   signature before `scripts/verify-release-evidence.ps1` can pass.
 
+Source-law reviewer workspace anchors:
+
+- This slice makes `scripts/new-release-evidence-workspace.ps1` read the retained
+  `production-readiness-report.json` source-law snapshot and prefill
+  `source-law-review-template.md` with
+  `source-law-snapshot-fingerprint#<snapshot-hash>`, the bare 64-character
+  source-law content hash, and exact `source-law-review-ledger#<source-id>`
+  anchors for each monitored source row.
+- `scripts/verify-release-evidence-workspace.ps1` now rejects prepared reviewer
+  workspaces when any source-law row is missing the exact ledger note anchor, when
+  the snapshot fingerprint/content hash drift from the retained production
+  readiness report, or when any source review decision cell is filled before named
+  human/qualified-accountant sign-off.
+- This improves the source-law review handoff without treating machine evidence
+  as legal review: reviewers still have to check current CRO, Revenue, FRC, and
+  Charities Regulator pages, enter URL/effective-date/guidance/platform-impact
+  decisions, and provide named reviewer plus qualified-accountant sign-off before
+  `scripts/verify-release-evidence.ps1` can pass.
+
 ## What Is Left To Do
 
 Highest-priority next steps:

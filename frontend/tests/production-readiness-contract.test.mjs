@@ -1055,6 +1055,7 @@ function productionScorecard() {
           "Source-law review evidence has template and verifier checks for concrete URL reachability, dated or not-dated effective-date review, guidance comparison, platform impact classification and exact accepted decisions.",
           "Source-law review platform impact cells require exact no change, reflected or blocking values before review evidence can pass.",
           "Source-law review notes must match the exact source-law-review-ledger anchor for every monitored source before acceptance can pass.",
+          "Release evidence reviewer workspaces now prefill source-law snapshot fingerprint, content hash and per-source review ledger note anchors from the retained production-readiness report while leaving source review decision cells blank.",
           "Source-law review top-level evidence requires an exact source-law-snapshot-fingerprint retained evidence anchor plus real reviewer and qualified-accountant identity, signature and sign-off fields before review evidence can pass.",
           "Manual handoff acceptance evidence has template and verifier checks for real evidence references and accepted reviewer decisions.",
           "Manual handoff scenario and unsupported-path decisions require exact accepted reviewer decisions before acceptance evidence can pass.",

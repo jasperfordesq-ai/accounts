@@ -907,6 +907,10 @@ public class ProductionReadinessReportTests
             evidence.Contains("Source-law review notes", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("exact source-law-review-ledger anchor", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["backend-statutory-accounting-engine"].CurrentEvidence, evidence =>
+            evidence.Contains("Release evidence reviewer workspaces", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("prefill source-law snapshot fingerprint", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("source review decision cells blank", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(scores["backend-statutory-accounting-engine"].CurrentEvidence, evidence =>
             evidence.Contains("Source-law review top-level evidence", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("source-law-snapshot-fingerprint retained evidence anchor", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("qualified-accountant identity", StringComparison.OrdinalIgnoreCase)

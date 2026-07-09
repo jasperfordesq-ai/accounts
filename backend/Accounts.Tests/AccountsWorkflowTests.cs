@@ -18468,7 +18468,7 @@ public class AccountsWorkflowTests
         Assert.Contains("structured-log-report.json", runbook);
         Assert.Contains("release-evidence-workspace-verification-report.json", runbook);
         Assert.Contains("release-evidence-verifier-output.txt", runbook);
-        Assert.Contains("leaves all reviewer identity, pass/fail decisions, signatures", runbook);
+        Assert.Contains("leaves all reviewer identity, pass/fail/source-review decisions, signatures", runbook);
         Assert.Contains("release-evidence-report.json", runbook);
         Assert.Contains("visual-smoke-evidence-report.json", runbook);
         Assert.Contains("real filing use stays blocked", runbook, StringComparison.OrdinalIgnoreCase);
@@ -18503,6 +18503,9 @@ public class AccountsWorkflowTests
         Assert.Contains("Assert-VisualQaPreparedRouteReferences", workspaceVerifier);
         Assert.Contains("Prepared visual QA template route row $routeName Notes cell must be", workspaceVerifier);
         Assert.Contains("must leave route pass/fail decision cells blank before named human sign-off", workspaceVerifier);
+        Assert.Contains("Assert-SourceLawPreparedEvidenceReferences", workspaceVerifier);
+        Assert.Contains("Prepared source-law template source row $sourceId Notes cell must be", workspaceVerifier);
+        Assert.Contains("must leave source review decision cells blank before named human sign-off", workspaceVerifier);
         Assert.Contains("machineEvidenceSummaryPath", workspaceVerifier);
         Assert.Contains("releaseCandidate", workspaceVerifier);
         Assert.Contains("identityProvided", workspaceVerifier);
@@ -18580,6 +18583,10 @@ public class AccountsWorkflowTests
         Assert.Contains("Get-VisualRouteNames", workspaceScript);
         Assert.Contains("Set-VisualQaRouteReferenceNotes", workspaceScript);
         Assert.Contains("visual-smoke-evidence-report.json#routeAcceptance.$routeName", workspaceScript);
+        Assert.Contains("Get-SourceLawSnapshotContentHash", workspaceScript);
+        Assert.Contains("Get-SourceLawSourceIds", workspaceScript);
+        Assert.Contains("Set-SourceLawReviewNoteReferences", workspaceScript);
+        Assert.Contains("source-law-review-ledger#$sourceId", workspaceScript);
         Assert.Contains("Assert-GitHubActionsRunUrl", workspaceScript);
         Assert.Contains("Refusing to overwrite existing evidence file", workspaceScript);
         Assert.Contains("VisualSmokeEvidenceReportPath", workspaceScript);
