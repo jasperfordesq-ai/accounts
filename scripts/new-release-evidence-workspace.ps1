@@ -33,6 +33,22 @@ function Read-JsonFile {
     return Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
 }
 
+function Get-FileSha256 {
+    param([string]$Path)
+
+    $stream = [IO.File]::OpenRead($Path)
+    try {
+        $sha = [System.Security.Cryptography.SHA256]::Create()
+        try {
+            return [BitConverter]::ToString($sha.ComputeHash($stream)).Replace("-", "").ToLowerInvariant()
+        } finally {
+            $sha.Dispose()
+        }
+    } finally {
+        $stream.Dispose()
+    }
+}
+
 function Copy-MachineEvidenceInput {
     param(
         [string]$SourcePath,
@@ -47,11 +63,14 @@ function Copy-MachineEvidenceInput {
 
     $destinationPath = Join-Path $OutputDirectory $RequiredFileName
     Copy-Item -LiteralPath $SourcePath -Destination $destinationPath -Force
+    $destination = Get-Item -LiteralPath $destinationPath
 
     [ordered]@{
         evidenceName = $EvidenceName
         fileName = $RequiredFileName
         sourcePath = $SourcePath
+        byteSize = $destination.Length
+        sha256 = Get-FileSha256 $destinationPath
     }
 }
 

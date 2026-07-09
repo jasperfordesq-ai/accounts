@@ -242,6 +242,30 @@ if (-not (Test-Path -LiteralPath $manifestPath)) {
 
         if ($null -eq $entry) {
             Add-Failure $failures "Workspace manifest retainedMachineEvidence must include $requiredMachineEvidenceFile."
+            continue
+        }
+
+        $manifestByteSize = [string](Get-JsonPropertyValue $entry "byteSize")
+        $manifestSha256 = [string](Get-JsonPropertyValue $entry "sha256")
+        $retainedPath = Join-Path $resolvedWorkspace.Path $requiredMachineEvidenceFile
+
+        if ($manifestByteSize -notmatch "^[1-9][0-9]*$") {
+            Add-Failure $failures "Workspace manifest retainedMachineEvidence.$requiredMachineEvidenceFile.byteSize must be a positive integer."
+        }
+
+        if ($manifestSha256 -notmatch "^[0-9a-f]{64}$") {
+            Add-Failure $failures "Workspace manifest retainedMachineEvidence.$requiredMachineEvidenceFile.sha256 must be a lowercase 64-character SHA-256 digest."
+        }
+
+        if (Test-Path -LiteralPath $retainedPath -PathType Leaf) {
+            $retainedItem = Get-Item -LiteralPath $retainedPath
+            if ($manifestByteSize -match "^[1-9][0-9]*$" -and [int64]$manifestByteSize -ne $retainedItem.Length) {
+                Add-Failure $failures "Workspace manifest retainedMachineEvidence.$requiredMachineEvidenceFile.byteSize must match the retained file byte size."
+            }
+
+            if ($manifestSha256 -match "^[0-9a-f]{64}$" -and $manifestSha256 -ne (Get-FileSha256 $retainedPath)) {
+                Add-Failure $failures "Workspace manifest retainedMachineEvidence.$requiredMachineEvidenceFile.sha256 must match the retained file SHA-256 digest."
+            }
         }
     }
 

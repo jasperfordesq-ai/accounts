@@ -2020,13 +2020,36 @@ Release evidence reviewer retained machine inputs:
     `workspaceFiles` and `requiredWorkspaceFiles` both contain 18 pre-report
     files, and confirmed no missing or unexpected entries.
 
+Release evidence reviewer machine input hash binding:
+
+- This slice strengthens the retained machine evidence handoff by recording
+  byte size and SHA-256 digest for each copied machine JSON input in
+  `release-evidence-workspace-manifest.json` under `retainedMachineEvidence`.
+- `scripts/verify-release-evidence-workspace.ps1` now rejects a reviewer
+  workspace if any retained machine evidence manifest entry has a missing or
+  malformed byte size, a missing or malformed lowercase SHA-256 digest, or a
+  byte-size/SHA-256 mismatch against the copied JSON file. The existing
+  workspace file inventory still records hashes for all 18 pre-report files.
+- Verification completed locally:
+  - PowerShell parser checks passed for `scripts/new-release-evidence-workspace.ps1`
+    and `scripts/verify-release-evidence-workspace.ps1`.
+  - `node scripts/verify-ci-actions.mjs` passed.
+  - Backend focused regression passed:
+    `ReleaseEvidenceVerifier_BlocksIncompleteHumanSignoffEvidence`.
+  - A local nested-artifact simulation generated and verified a workspace with
+    six hash-bound retained machine evidence entries, 18 workspace files, and no
+    verifier failures.
+  - A tampered-manifest simulation changed a retained machine evidence SHA-256
+    value and the workspace verifier failed with the expected hash-mismatch
+    blocker.
+
 ## What Is Left To Do
 
 Highest-priority next steps:
 
 1. Rerun the full local production gate before release if runtime, script, workflow,
    or template changes land; the latest runtime/script gate is green on July 9, 2026
-   for commit `aecc5a2`.
+   for commit `d9bcf32`.
 2. Perform and record human visual review of the generated light/dark desktop/mobile
    visual smoke artifact set; the screenshot manifest now verifies locally, but
    named visual QA sign-off is still required.
