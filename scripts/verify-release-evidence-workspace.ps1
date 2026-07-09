@@ -250,6 +250,7 @@ function Assert-PreparedTemplateHumanFieldsBlank {
         [System.Collections.Generic.List[string]]$Failures
     )
 
+    $verifiedTemplates = @()
     $templateHumanFields = @(
         [pscustomobject]@{
             FileName = "visual-qa-signoff-template.md"
@@ -325,7 +326,16 @@ function Assert-PreparedTemplateHumanFieldsBlank {
         if ([regex]::IsMatch($content, "(?im)^[`t ]*-[`t ]*\[[xX]\]")) {
             Add-Failure $Failures "$($template.Context) must leave human acceptance and evidence checkboxes unchecked before named human sign-off."
         }
+
+        $verifiedTemplates += [ordered]@{
+            fileName = $template.FileName
+            context = $template.Context
+            blankFields = @($template.Fields)
+            checkboxPolicy = "unchecked-before-named-human-signoff"
+        }
     }
+
+    return @($verifiedTemplates)
 }
 
 function Assert-MarkdownTimestampFieldEquals {
@@ -1072,7 +1082,7 @@ Assert-ExternalRosIxbrlPreparedEvidenceReferences $resolvedWorkspace.Path $failu
 Assert-QualifiedAccountantPreparedEvidenceReferences $resolvedWorkspace.Path $failures
 Assert-ManualHandoffPreparedEvidenceReferences $resolvedWorkspace.Path $failures
 Assert-MonitoringProviderPreparedEvidenceReferences $resolvedWorkspace.Path $failures
-Assert-PreparedTemplateHumanFieldsBlank $resolvedWorkspace.Path $failures
+$preparedHumanTemplateControls = @(Assert-PreparedTemplateHumanFieldsBlank $resolvedWorkspace.Path $failures)
 
 if (-not (Test-Path -LiteralPath $reviewerIndexPath)) {
     Add-Failure $failures "Workspace must include release-evidence-reviewer-index.md."
@@ -1307,6 +1317,7 @@ $verificationReport = [ordered]@{
     }
     workspaceFiles = $workspaceFiles
     requiredWorkspaceFiles = $requiredWorkspaceFiles
+    preparedHumanTemplateControls = $preparedHumanTemplateControls
     requiredTemplateCount = $requiredTemplates.Count
     failureCount = $failures.Count
     failures = @($failures)

@@ -18662,6 +18662,10 @@ public class AccountsWorkflowTests
         Assert.Contains("Release evidence workspace verification report failureCount must be 0.", script);
         Assert.Contains("Release evidence workspace verification report releaseCandidate", script);
         Assert.Contains("Release evidence workspace verification report workspaceFiles", script);
+        Assert.Contains("Assert-PreparedHumanTemplateControls", script);
+        Assert.Contains("Release evidence workspace verification report preparedHumanTemplateControls must contain exactly", script);
+        Assert.Contains("Assert-JsonStringEquals $entry \"checkboxPolicy\" \"unchecked-before-named-human-signoff\"", script);
+        Assert.Contains("unchecked-before-named-human-signoff", script);
         Assert.Contains("release-evidence-machine-summary.json", script);
         Assert.Contains("Assert-MinimumIntegerField", script);
         Assert.Contains("Assert-CompletedTableColumnMatches", script);
@@ -19253,6 +19257,9 @@ public class AccountsWorkflowTests
         Assert.Contains("release-evidence-workspace-verification-report.json releaseCandidate.commitSha must match the release evidence candidate", script);
         Assert.Contains("release-evidence-workspace-verification-report.json requiredWorkspaceFiles", script);
         Assert.Contains("release-evidence-workspace-verification-report.json workspaceFiles", script);
+        Assert.Contains("Assert-ReleaseEvidenceWorkspacePreparedHumanControls", script);
+        Assert.Contains("release-evidence-workspace-verification-report.json preparedHumanTemplateControls must include exactly", script);
+        Assert.Contains("preparedHumanTemplateControls.$expectedFile.checkboxPolicy must be unchecked-before-named-human-signoff", script);
         Assert.Contains("Assert-ReleaseEvidenceWorkspaceInventoryRetention", script);
         Assert.Contains("Release artifact pack must retain workspace inventory file", script);
         Assert.Contains("retained workspace inventory file $expectedFile sha256 must match release-evidence-workspace-verification-report.json", script);

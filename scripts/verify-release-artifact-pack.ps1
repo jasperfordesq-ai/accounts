@@ -254,6 +254,67 @@ $expectedReleaseEvidenceWorkspaceInventory = @(
     "release-evidence-verifier-output.txt"
 )
 
+$expectedPreparedHumanTemplateControls = @(
+    [pscustomobject]@{
+        fileName = "visual-qa-signoff-template.md"
+        context = "Prepared visual QA template"
+        blankFields = @("Reviewer name", "Reviewer role", "Review date/time UTC", "Reviewer signature")
+    },
+    [pscustomobject]@{
+        fileName = "source-law-review-template.md"
+        context = "Prepared source-law template"
+        blankFields = @(
+            "Reviewer name",
+            "Reviewer role",
+            "Review date/time UTC",
+            "Qualified accountant name",
+            "Qualification / professional body",
+            "Reviewer signature",
+            "Qualified accountant source-law sign-off"
+        )
+    },
+    [pscustomobject]@{
+        fileName = "external-ros-ixbrl-validation-template.md"
+        context = "Prepared external ROS/iXBRL template"
+        blankFields = @(
+            "Reviewer name",
+            "Reviewer role",
+            "Review date/time UTC",
+            "External validation provider",
+            "Validation environment",
+            "Validation run/reference id",
+            "Validation report file or URL",
+            "Generated iXBRL artifact name",
+            "Generated iXBRL SHA-256",
+            "Taxonomy package",
+            "Company/period reference",
+            "Reviewer signature"
+        )
+    },
+    [pscustomobject]@{
+        fileName = "qualified-accountant-acceptance-template.md"
+        context = "Prepared qualified-accountant template"
+        blankFields = @(
+            "Accountant name",
+            "Qualification / professional body",
+            "Firm / reviewer capacity",
+            "Review date/time UTC",
+            "Qualified accountant signature"
+        )
+    },
+    [pscustomobject]@{
+        fileName = "manual-handoff-acceptance-template.md"
+        context = "Prepared manual handoff template"
+        blankFields = @(
+            "Reviewer name",
+            "Reviewer role",
+            "Firm / reviewer capacity",
+            "Review date/time UTC",
+            "Reviewer signature"
+        )
+    }
+)
+
 $mutableReleaseEvidenceWorkspaceInventoryFiles = @(
     "visual-qa-signoff-template.md",
     "source-law-review-template.md",
@@ -1006,6 +1067,42 @@ function Assert-ReleaseEvidenceWorkspaceVerificationReport {
         if ([string](Get-JsonProperty $entry @("sha256")) -notmatch '^[0-9a-f]{64}$') {
             Add-Failure $Failures "release-evidence-workspace-verification-report.json workspaceFiles.$expectedFile.sha256 must be a lowercase SHA-256 hash."
         }
+    }
+
+    Assert-ReleaseEvidenceWorkspacePreparedHumanControls $WorkspaceVerificationReport $Failures
+}
+
+function Assert-ReleaseEvidenceWorkspacePreparedHumanControls {
+    param(
+        [object]$WorkspaceVerificationReport,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    $controls = @((Get-JsonProperty $WorkspaceVerificationReport @("preparedHumanTemplateControls")))
+    if ($controls.Count -ne $expectedPreparedHumanTemplateControls.Count) {
+        Add-Failure $Failures "release-evidence-workspace-verification-report.json preparedHumanTemplateControls must include exactly $($expectedPreparedHumanTemplateControls.Count) item(s)."
+    }
+
+    foreach ($expected in $expectedPreparedHumanTemplateControls) {
+        $expectedFile = [string](Get-JsonProperty $expected @("fileName"))
+        $entry = $controls |
+            Where-Object { [string]::Equals([string](Get-JsonProperty $_ @("fileName")), $expectedFile, [StringComparison]::OrdinalIgnoreCase) } |
+            Select-Object -First 1
+
+        if ($null -eq $entry) {
+            Add-Failure $Failures "release-evidence-workspace-verification-report.json preparedHumanTemplateControls must include $expectedFile."
+            continue
+        }
+
+        if ([string](Get-JsonProperty $entry @("context")) -ne [string](Get-JsonProperty $expected @("context"))) {
+            Add-Failure $Failures "release-evidence-workspace-verification-report.json preparedHumanTemplateControls.$expectedFile.context must match the prepared template context."
+        }
+
+        if ([string](Get-JsonProperty $entry @("checkboxPolicy")) -ne "unchecked-before-named-human-signoff") {
+            Add-Failure $Failures "release-evidence-workspace-verification-report.json preparedHumanTemplateControls.$expectedFile.checkboxPolicy must be unchecked-before-named-human-signoff."
+        }
+
+        Assert-ArrayContainsExactly @((Get-JsonProperty $entry @("blankFields"))) @((Get-JsonProperty $expected @("blankFields"))) "release-evidence-workspace-verification-report.json preparedHumanTemplateControls.$expectedFile.blankFields" $Failures
     }
 }
 

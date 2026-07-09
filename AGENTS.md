@@ -2446,6 +2446,22 @@ Prepared workspace top-level human fields:
   real visual QA, source-law, external ROS/iXBRL, accountant, manual handoff, or
   monitoring-provider evidence.
 
+Prepared workspace human-control inventory:
+
+- `release-evidence-workspace-verification-report.json` now includes
+  `preparedHumanTemplateControls`, a five-entry inventory for the prepared
+  visual QA, source-law, external ROS/iXBRL, qualified-accountant, and manual
+  handoff templates. Each entry records the template file, context, exact
+  top-level fields that had to remain blank, and the
+  `unchecked-before-named-human-signoff` checkbox policy.
+- `scripts/verify-release-evidence.ps1` and
+  `scripts/verify-release-artifact-pack.ps1` now reject release evidence or a
+  final artifact pack if that workspace verification report does not retain the
+  exact prepared-human-template control inventory.
+- This makes the blank prepared-workspace control durable across handoff and
+  final pack verification, while still leaving the release blocked until real
+  named human evidence is supplied.
+
 ## What Is Left To Do
 
 Highest-priority next steps:
