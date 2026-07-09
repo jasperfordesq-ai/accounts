@@ -282,6 +282,34 @@ foreach ($template in $preparedTemplates) {
     Copy-PreparedTemplate $source $destination $template.Fields
 }
 
+$completionLedgerFile = "release-evidence-reviewer-completion.json"
+$completionLedger = [ordered]@{
+    status = "pending-human-evidence"
+    generatedAt = [DateTimeOffset]::UtcNow.ToString("O")
+    releaseCandidate = [ordered]@{
+        commitSha = $CommitSha
+        githubActionsRunUrl = $GitHubActionsRunUrl
+    }
+    completionPolicy = "All six entries must be completed by named human reviewers before release evidence can pass."
+    entries = @($reviewerQueue | ForEach-Object {
+        [ordered]@{
+            evidenceGate = $_.EvidenceGate
+            templateFile = $_.TemplateFile
+            reviewerRole = $_.ReviewerRole
+            signOffGate = $_.SignOffGate
+            status = "pending-human-evidence"
+            completed = $false
+            completedBy = ""
+            completedAtUtc = ""
+            evidenceReportStatus = "incomplete-before-review"
+            humanAction = $_.HumanAction
+        }
+    })
+}
+
+$completionLedgerPath = Join-Path $resolvedOutputDirectory $completionLedgerFile
+$completionLedger | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $completionLedgerPath
+
 $manifest = [ordered]@{
     status = "pending-human-evidence"
     generatedAt = [DateTimeOffset]::UtcNow.ToString("O")
@@ -294,6 +322,7 @@ $manifest = [ordered]@{
     monitoringErrorRoutingReportPath = $monitoringErrorRoutingReportPath
     structuredLogReportPath = $structuredLogReportPath
     reviewerIndexFile = "release-evidence-reviewer-index.md"
+    reviewerCompletionFile = $completionLedgerFile
     preparedTemplates = @($preparedTemplates | ForEach-Object { $_.FileName })
     reviewerQueue = @($reviewerQueue)
     humanFieldsLeftBlank = @(
@@ -341,6 +370,10 @@ This workspace is reviewer preparation only. It is not release approval and it i
 | --- | --- | --- | --- | --- |
 $($reviewerRows -join "`n")
 
+## Reviewer Completion Ledger
+
+Use ``release-evidence-reviewer-completion.json`` as the handoff checklist. It is generated with all six entries in ``pending-human-evidence`` status and must not be treated as approval. The release evidence verifier remains the authority after reviewers complete the Markdown templates.
+
 ## Completion Gate
 
 Run `scripts/verify-release-evidence.ps1 -EvidenceDirectory <this-workspace> -ReportPath <this-workspace>/release-evidence-report.json` after all reviewers complete the templates. The workspace must remain blocked until the verifier passes with all six human evidence templates completed by named reviewers.
@@ -354,5 +387,6 @@ Set-Content -LiteralPath $reviewerIndexPath -Value $indexContent -NoNewline
     outputDirectory = $resolvedOutputDirectory
     manifestPath = $manifestPath
     reviewerIndexPath = $reviewerIndexPath
+    reviewerCompletionPath = $completionLedgerPath
     preparedTemplateCount = $preparedTemplates.Count
 }

@@ -1893,6 +1893,32 @@ Release evidence workspace verifier:
   `release-evidence-workspace-verification-report.json` and
   `release-evidence-verifier-output.txt`.
 
+Release evidence reviewer completion ledger:
+
+- This slice adds `release-evidence-reviewer-completion.json` to generated
+  reviewer workspaces. The ledger records the same six human evidence gates as
+  pending reviewer work, including template file, reviewer role, sign-off gate,
+  pending status, blank completion fields, and the remaining human-only action.
+- `release-evidence-workspace-manifest.json` now references the ledger with
+  `reviewerCompletionFile`, and `release-evidence-reviewer-index.md` tells
+  reviewers to use the ledger as the handoff checklist without treating it as
+  approval.
+- `scripts/verify-release-evidence-workspace.ps1` now fails if the ledger is
+  missing, has the wrong candidate identity, omits any of the six gates, marks
+  any entry completed before named human sign-off, or loses the pending
+  human-action metadata. Its verification report records
+  `reviewerCompletionPath`.
+- Verification completed locally:
+  - PowerShell parser checks passed for `scripts/new-release-evidence-workspace.ps1`
+    and `scripts/verify-release-evidence-workspace.ps1`.
+  - `node scripts/verify-ci-actions.mjs` passed.
+  - Backend focused regression passed:
+    `ReleaseEvidenceVerifier_BlocksIncompleteHumanSignoffEvidence`.
+  - A local nested-artifact simulation generated and verified a workspace with
+    `release-evidence-reviewer-completion.json`, confirmed all six ledger
+    entries are `pending-human-evidence`, and confirmed the workspace verifier
+    report records the ledger path while release evidence remains blocked.
+
 ## What Is Left To Do
 
 Highest-priority next steps:

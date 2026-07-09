@@ -118,6 +118,7 @@ $failures = New-Object System.Collections.Generic.List[string]
 
 $manifestPath = Join-Path $resolvedWorkspace.Path "release-evidence-workspace-manifest.json"
 $reviewerIndexPath = Join-Path $resolvedWorkspace.Path "release-evidence-reviewer-index.md"
+$reviewerCompletionPath = Join-Path $resolvedWorkspace.Path "release-evidence-reviewer-completion.json"
 $releaseEvidenceVerifierOutputPath = Join-Path $resolvedWorkspace.Path "release-evidence-verifier-output.txt"
 
 if (-not (Test-Path -LiteralPath $manifestPath)) {
@@ -131,6 +132,10 @@ if (-not (Test-Path -LiteralPath $manifestPath)) {
 
     if ([string](Get-JsonPropertyValue $manifest "reviewerIndexFile") -ne "release-evidence-reviewer-index.md") {
         Add-Failure $failures "Workspace manifest reviewerIndexFile must be release-evidence-reviewer-index.md."
+    }
+
+    if ([string](Get-JsonPropertyValue $manifest "reviewerCompletionFile") -ne "release-evidence-reviewer-completion.json") {
+        Add-Failure $failures "Workspace manifest reviewerCompletionFile must be release-evidence-reviewer-completion.json."
     }
 
     if (-not [string]::IsNullOrWhiteSpace($CommitSha) -and [string](Get-JsonPropertyValue $manifest "commitSha") -ne $CommitSha) {
@@ -197,6 +202,8 @@ if (-not (Test-Path -LiteralPath $reviewerIndexPath)) {
         "This workspace is reviewer preparation only.",
         "It is not release approval",
         "Reviewer Queue",
+        "Reviewer Completion Ledger",
+        "release-evidence-reviewer-completion.json",
         "Completion Gate",
         "scripts/verify-release-evidence.ps1"
     )) {
@@ -208,6 +215,72 @@ if (-not (Test-Path -LiteralPath $reviewerIndexPath)) {
         Assert-TextContains $reviewerIndex $expected.TemplateFile "release-evidence-reviewer-index.md" $failures
         Assert-TextContains $reviewerIndex $expected.ReviewerRole "release-evidence-reviewer-index.md" $failures
         Assert-TextContains $reviewerIndex $expected.SignOffGate "release-evidence-reviewer-index.md" $failures
+    }
+}
+
+if (-not (Test-Path -LiteralPath $reviewerCompletionPath)) {
+    Add-Failure $failures "Workspace must include release-evidence-reviewer-completion.json."
+} else {
+    $completionLedger = Get-Content -LiteralPath $reviewerCompletionPath -Raw | ConvertFrom-Json
+
+    if ([string](Get-JsonPropertyValue $completionLedger "status") -ne "pending-human-evidence") {
+        Add-Failure $failures "Reviewer completion ledger status must be pending-human-evidence."
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($CommitSha) -and [string](Get-JsonPropertyValue (Get-JsonPropertyValue $completionLedger "releaseCandidate") "commitSha") -ne $CommitSha) {
+        Add-Failure $failures "Reviewer completion ledger releaseCandidate.commitSha must match CommitSha."
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($GitHubActionsRunUrl) -and [string](Get-JsonPropertyValue (Get-JsonPropertyValue $completionLedger "releaseCandidate") "githubActionsRunUrl") -ne $GitHubActionsRunUrl) {
+        Add-Failure $failures "Reviewer completion ledger releaseCandidate.githubActionsRunUrl must match GitHubActionsRunUrl."
+    }
+
+    $completionEntries = @((Get-JsonPropertyValue $completionLedger "entries"))
+    if ($completionEntries.Count -ne $requiredReviewerQueue.Count) {
+        Add-Failure $failures "Reviewer completion ledger entries must contain exactly $($requiredReviewerQueue.Count) entries."
+    }
+
+    foreach ($expected in $requiredReviewerQueue) {
+        $entry = $completionEntries | Where-Object {
+            [string](Get-JsonPropertyValue $_ "templateFile") -eq $expected.TemplateFile
+        } | Select-Object -First 1
+
+        if ($null -eq $entry) {
+            Add-Failure $failures "Reviewer completion ledger entries must include $($expected.TemplateFile)."
+            continue
+        }
+
+        $expectedFields = @{
+            evidenceGate = $expected.EvidenceGate
+            reviewerRole = $expected.ReviewerRole
+            signOffGate = $expected.SignOffGate
+            status = "pending-human-evidence"
+            evidenceReportStatus = "incomplete-before-review"
+        }
+
+        foreach ($propertyName in $expectedFields.Keys) {
+            $actual = [string](Get-JsonPropertyValue $entry $propertyName)
+            $expectedValue = [string]$expectedFields[$propertyName]
+            if ($actual -ne $expectedValue) {
+                Add-Failure $failures "Reviewer completion ledger $($expected.TemplateFile).$propertyName must be '$expectedValue'."
+            }
+        }
+
+        if ([bool](Get-JsonPropertyValue $entry "completed")) {
+            Add-Failure $failures "Reviewer completion ledger $($expected.TemplateFile).completed must remain false before named human sign-off."
+        }
+
+        if (-not [string]::IsNullOrWhiteSpace([string](Get-JsonPropertyValue $entry "completedBy"))) {
+            Add-Failure $failures "Reviewer completion ledger $($expected.TemplateFile).completedBy must be blank before named human sign-off."
+        }
+
+        if (-not [string]::IsNullOrWhiteSpace([string](Get-JsonPropertyValue $entry "completedAtUtc"))) {
+            Add-Failure $failures "Reviewer completion ledger $($expected.TemplateFile).completedAtUtc must be blank before named human sign-off."
+        }
+
+        if ([string]::IsNullOrWhiteSpace([string](Get-JsonPropertyValue $entry "humanAction"))) {
+            Add-Failure $failures "Reviewer completion ledger $($expected.TemplateFile).humanAction must describe the remaining human-only action."
+        }
     }
 }
 
@@ -265,6 +338,7 @@ $verificationReport = [ordered]@{
     workspaceDirectory = $resolvedWorkspace.Path
     releaseEvidenceReportPath = $ReportPath
     releaseEvidenceVerifierOutputPath = $releaseEvidenceVerifierOutputPath
+    reviewerCompletionPath = $reviewerCompletionPath
     requiredTemplateCount = $requiredTemplates.Count
     failureCount = $failures.Count
     failures = @($failures)
