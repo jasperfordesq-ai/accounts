@@ -1757,13 +1757,35 @@ Release artifact runbook manifest alignment:
   - Backend focused regression passed:
     `ReleaseArtifactPackVerifier_RequiresExactOperationalEvidenceReports`.
 
+Release evidence human completion report:
+
+- This slice updates `scripts/verify-release-evidence.ps1` so the retained
+  `release-evidence-report.json` includes a `humanEvidenceCompletion` array with
+  six entries: visual QA, source-law review, external ROS/iXBRL validation,
+  qualified-accountant acceptance, manual handoff acceptance, and monitoring
+  provider confirmation.
+- Each entry names the required reviewer role, sign-off gate, current status, and
+  template-specific blocking failures. The top-level combined `failures` list is
+  preserved, so the release remains blocked until real named human evidence is
+  complete.
+- The production scorecard remains 698/700; this is reviewer coordination evidence,
+  not a substitute for professional sign-off.
+- Verification completed locally:
+  - PowerShell parser check for `scripts\verify-release-evidence.ps1` passed.
+  - Checked-in draft templates failed as expected while still writing a
+    `release-evidence-report.json` with six `humanEvidenceCompletion` entries.
+  - Backend focused regression passed:
+    `ReleaseEvidenceVerifier_BlocksIncompleteHumanSignoffEvidence`.
+- CI is green on July 9, 2026 for the runtime/script slice at commit `9a48f5f`:
+  `https://github.com/jasperfordesq-ai/accounts/actions/runs/29020086016`.
+
 ## What Is Left To Do
 
 Highest-priority next steps:
 
-1. Rerun the full local production gate before release if more code changes land; the
-   latest fully green remote gate before this local slice was July 9, 2026 for commit
-   `1e3ddc2`.
+1. Rerun the full local production gate before release if runtime, script, workflow,
+   or template changes land; the latest runtime/script gate is green on July 9, 2026
+   for commit `9a48f5f`.
 2. Perform and record human visual review of the generated light/dark desktop/mobile
    visual smoke artifact set; the screenshot manifest now verifies locally, but
    named visual QA sign-off is still required.
