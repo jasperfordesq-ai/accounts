@@ -632,6 +632,8 @@ function Test-AccountantEvidence {
     Assert-CompletedTableColumnMatches $Content $requiredRouteCodes 2 "Evidence accepted" "^accepted$" "accepted" $context $Failures
     Assert-CompletedTableColumnMatches $Content $requiredRouteCodes 3 "Workbench evidence reference" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real retained workbench evidence reference" $context $Failures
     Assert-CompletedTableColumnMatchesRouteReference $Content $requiredRouteCodes 3 "Workbench evidence reference" $context $Failures
+    Assert-CompletedTableColumnMatches $Content $requiredRouteCodes 4 "Notes" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real retained route walkthrough note or reference" $context $Failures
+    Assert-CompletedTableColumnContainsRowLabel $Content $requiredRouteCodes 4 "Notes" $context $Failures
 
     foreach ($staleScenarioCode in @("micro-ltd-standard", "small-ltd-abridged")) {
         if ($Content.IndexOf($staleScenarioCode, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
