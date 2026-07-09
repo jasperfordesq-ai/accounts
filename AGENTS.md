@@ -2242,6 +2242,16 @@ Release artifact pack workspace inventory retention:
   `release-evidence-verifier-output.txt`, so the handoff trail cannot be reduced to
   a JSON assertion after review.
 
+Release artifact pack reviewer handoff manifest:
+
+- This slice makes `release-artifact-pack-report.json` include retained reviewer
+  handoff files in its `evidenceFiles` manifest with
+  `evidenceType: release-evidence-reviewer-handoff`, byte size, SHA-256 and retained
+  status.
+- The final report now inventories the reviewer index, reviewer completion ledger,
+  reviewer blocker summary, and retained verifier output alongside the machine reports,
+  completed templates, and workspace control files.
+
 ## What Is Left To Do
 
 Highest-priority next steps:

@@ -19168,6 +19168,9 @@ public class AccountsWorkflowTests
         Assert.Contains("release-evidence-reviewer-blockers.md", script);
         Assert.Contains("release-evidence-verifier-output.txt", script);
         Assert.Contains("evidenceType = \"release-evidence-workspace-control\"", script);
+        Assert.Contains("requiredReleaseEvidenceReviewerHandoffFiles", script);
+        Assert.Contains("releaseEvidenceReviewerHandoffManifest", script);
+        Assert.Contains("evidenceType = \"release-evidence-reviewer-handoff\"", script);
         Assert.Contains("evidenceFiles", script);
         Assert.Contains("identityProvided", script);
         Assert.Contains("GitHubActionsRunUrl must be a GitHub Actions run URL", script);

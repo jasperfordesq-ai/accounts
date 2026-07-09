@@ -1122,6 +1122,13 @@ $requiredReleaseEvidenceWorkspaceControls = @(
     [pscustomobject]@{ evidenceName = "releaseEvidenceWorkspaceVerificationReport"; fileName = "release-evidence-workspace-verification-report.json" }
 )
 
+$requiredReleaseEvidenceReviewerHandoffFiles = @(
+    [pscustomobject]@{ evidenceName = "releaseEvidenceReviewerIndex"; fileName = "release-evidence-reviewer-index.md" },
+    [pscustomobject]@{ evidenceName = "releaseEvidenceReviewerCompletion"; fileName = "release-evidence-reviewer-completion.json" },
+    [pscustomobject]@{ evidenceName = "releaseEvidenceReviewerBlockers"; fileName = "release-evidence-reviewer-blockers.md" },
+    [pscustomobject]@{ evidenceName = "releaseEvidenceVerifierOutput"; fileName = "release-evidence-verifier-output.txt" }
+)
+
 $allEvidence = [ordered]@{
     "dependency-audit-report.json" = $dependency
     "production-safety-report.json" = $productionSafety
@@ -1427,6 +1434,27 @@ $releaseEvidenceWorkspaceControlManifest = @(
     }
 )
 
+$releaseEvidenceReviewerHandoffManifest = @(
+    foreach ($handoff in $requiredReleaseEvidenceReviewerHandoffFiles) {
+        $handoffPath = Join-Path $resolvedDirectory.Path $handoff.fileName
+        if (-not (Test-Path -LiteralPath $handoffPath -PathType Leaf)) {
+            continue
+        }
+
+        $fileInfo = Get-Item -LiteralPath $handoffPath
+        [ordered]@{
+            fileName = $handoff.fileName
+            evidenceName = $handoff.evidenceName
+            evidenceType = "release-evidence-reviewer-handoff"
+            path = $handoffPath
+            byteSize = $fileInfo.Length
+            sha256 = Get-FileSha256 $handoffPath
+            checkedAtUtc = ""
+            status = "retained"
+        }
+    }
+)
+
 $report = [ordered]@{
     status = if ($failures.Count -eq 0) { "passed" } else { "failed" }
     checkedAtUtc = (Get-Date).ToUniversalTime().ToString("o")
@@ -1436,8 +1464,8 @@ $report = [ordered]@{
         githubActionsRunUrl = $releaseRunUrl
         identityProvided = ($releaseCommitSha.Length -gt 0 -and $releaseRunUrl.Length -gt 0)
     }
-    requiredFiles = @($allEvidence.Keys) + @($requiredReleaseEvidenceTemplates | ForEach-Object { $_.fileName }) + @($requiredReleaseEvidenceWorkspaceControls | ForEach-Object { $_.fileName }) + @("release-evidence-reviewer-index.md", "release-evidence-reviewer-completion.json", "release-evidence-reviewer-blockers.md", "release-evidence-verifier-output.txt")
-    evidenceFiles = @($evidenceFileManifest) + @($releaseEvidenceTemplateManifest) + @($releaseEvidenceWorkspaceControlManifest)
+    requiredFiles = @($allEvidence.Keys) + @($requiredReleaseEvidenceTemplates | ForEach-Object { $_.fileName }) + @($requiredReleaseEvidenceWorkspaceControls | ForEach-Object { $_.fileName }) + @($requiredReleaseEvidenceReviewerHandoffFiles | ForEach-Object { $_.fileName })
+    evidenceFiles = @($evidenceFileManifest) + @($releaseEvidenceTemplateManifest) + @($releaseEvidenceWorkspaceControlManifest) + @($releaseEvidenceReviewerHandoffManifest)
     failureCount = $failures.Count
     failures = $failures.ToArray()
 }
