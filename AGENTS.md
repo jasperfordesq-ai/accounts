@@ -2216,6 +2216,16 @@ Release evidence workspace identity binding:
   retained workspace verification report's `releaseCandidate` identity does not match
   the common identity recorded across the six completed human evidence templates.
 
+Release artifact pack workspace verification parsing:
+
+- This slice makes `scripts/verify-release-artifact-pack.ps1` independently parse the
+  retained `release-evidence-workspace-verification-report.json`, rather than only
+  trusting its hash entry in `release-evidence-report.json`.
+- The final artifact-pack gate now requires that retained workspace verification
+  report to be `passed`, have zero failures, carry the same release candidate
+  identity, and list exactly the canonical 19 prepared workspace files with positive
+  byte sizes and lowercase SHA-256 hashes.
+
 ## What Is Left To Do
 
 Highest-priority next steps:

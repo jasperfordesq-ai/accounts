@@ -58,6 +58,28 @@ function Read-JsonEvidence {
     }
 }
 
+function Read-JsonEvidenceFile {
+    param(
+        [string]$Path,
+        [string]$FileName,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        Add-Failure $Failures "Missing release artifact evidence file: $FileName"
+        return [pscustomobject]@{ __missing = $true; __path = $Path }
+    }
+
+    try {
+        $json = Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
+        $json | Add-Member -NotePropertyName __path -NotePropertyValue $Path -Force
+        return $json
+    } catch {
+        Add-Failure $Failures "Release artifact evidence file is not valid JSON: $FileName"
+        return [pscustomobject]@{ __invalid = $true; __path = $Path }
+    }
+}
+
 function Assert-StatusPassed {
     param(
         [object]$Evidence,
@@ -207,6 +229,28 @@ $expectedAccountantWorkbenchEvidenceFiles = @(
     "visual-smoke-manifest.json",
     "visual-smoke-evidence-report.json",
     "accountant-workbench-evidence-report.json"
+)
+
+$expectedReleaseEvidenceWorkspaceInventory = @(
+    "visual-qa-signoff-template.md",
+    "source-law-review-template.md",
+    "external-ros-ixbrl-validation-template.md",
+    "qualified-accountant-acceptance-template.md",
+    "manual-handoff-acceptance-template.md",
+    "monitoring-provider-confirmation-template.md",
+    "production-readiness-report.json",
+    "visual-smoke-manifest.json",
+    "visual-smoke-evidence-report.json",
+    "accountant-workbench-evidence-report.json",
+    "monitoring-error-routing-report.json",
+    "structured-log-report.json",
+    "release-evidence-workspace-manifest.json",
+    "release-evidence-machine-summary.json",
+    "release-evidence-reviewer-index.md",
+    "release-evidence-reviewer-completion.json",
+    "release-evidence-reviewer-blockers.md",
+    "release-evidence-report.json",
+    "release-evidence-verifier-output.txt"
 )
 
 function Assert-AccountantWorkbenchRequiredCoverage {
@@ -878,6 +922,82 @@ function Assert-ReleaseEvidenceWorkspaceControlManifest {
     }
 }
 
+function Assert-ReleaseEvidenceWorkspaceVerificationReport {
+    param(
+        [object]$WorkspaceVerificationReport,
+        [object]$ReleaseEvidence,
+        [string]$ReleaseCommitSha,
+        [string]$ReleaseRunUrl,
+        [string[]]$ExpectedWorkspaceFiles,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    if ($WorkspaceVerificationReport.PSObject.Properties.Name -contains "__missing" -or
+        $WorkspaceVerificationReport.PSObject.Properties.Name -contains "__invalid") {
+        return
+    }
+
+    if ([string](Get-JsonProperty $WorkspaceVerificationReport @("status")) -ne "passed") {
+        Add-Failure $Failures "release-evidence-workspace-verification-report.json status must be passed."
+    }
+
+    if ([int](Get-JsonProperty $WorkspaceVerificationReport @("failureCount")) -ne 0) {
+        Add-Failure $Failures "release-evidence-workspace-verification-report.json failureCount must be 0."
+    }
+
+    if ((Get-JsonProperty $WorkspaceVerificationReport @("releaseCandidate", "identityProvided")) -ne $true) {
+        Add-Failure $Failures "release-evidence-workspace-verification-report.json releaseCandidate.identityProvided must be true."
+    }
+
+    $expectedCommitSha = $ReleaseCommitSha
+    if ([string]::IsNullOrWhiteSpace($expectedCommitSha)) {
+        $expectedCommitSha = [string](Get-JsonProperty $ReleaseEvidence @("releaseCandidate", "commitSha"))
+    }
+
+    $expectedRunUrl = $ReleaseRunUrl
+    if ([string]::IsNullOrWhiteSpace($expectedRunUrl)) {
+        $expectedRunUrl = [string](Get-JsonProperty $ReleaseEvidence @("releaseCandidate", "githubActionsRunUrl"))
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($expectedCommitSha)) {
+        $actualCommitSha = [string](Get-JsonProperty $WorkspaceVerificationReport @("releaseCandidate", "commitSha"))
+        if (-not [string]::Equals($actualCommitSha, $expectedCommitSha, [StringComparison]::OrdinalIgnoreCase)) {
+            Add-Failure $Failures "release-evidence-workspace-verification-report.json releaseCandidate.commitSha must match the release evidence candidate."
+        }
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($expectedRunUrl)) {
+        $actualRunUrl = [string](Get-JsonProperty $WorkspaceVerificationReport @("releaseCandidate", "githubActionsRunUrl"))
+        if (-not [string]::Equals($actualRunUrl, $expectedRunUrl, [StringComparison]::OrdinalIgnoreCase)) {
+            Add-Failure $Failures "release-evidence-workspace-verification-report.json releaseCandidate.githubActionsRunUrl must match the release evidence candidate."
+        }
+    }
+
+    Assert-ArrayContainsExactly @((Get-JsonProperty $WorkspaceVerificationReport @("requiredWorkspaceFiles"))) $ExpectedWorkspaceFiles "release-evidence-workspace-verification-report.json requiredWorkspaceFiles" $Failures
+
+    $workspaceFiles = @((Get-JsonProperty $WorkspaceVerificationReport @("workspaceFiles")))
+    $workspaceFileNames = @($workspaceFiles | ForEach-Object { [string](Get-JsonProperty $_ @("fileName")) })
+    Assert-ArrayContainsExactly $workspaceFileNames $ExpectedWorkspaceFiles "release-evidence-workspace-verification-report.json workspaceFiles" $Failures
+
+    foreach ($expectedFile in $ExpectedWorkspaceFiles) {
+        $entry = $workspaceFiles |
+            Where-Object { [string]::Equals([string](Get-JsonProperty $_ @("fileName")), $expectedFile, [StringComparison]::OrdinalIgnoreCase) } |
+            Select-Object -First 1
+
+        if ($null -eq $entry) {
+            continue
+        }
+
+        if ([int](Get-JsonProperty $entry @("byteSize")) -le 0) {
+            Add-Failure $Failures "release-evidence-workspace-verification-report.json workspaceFiles.$expectedFile.byteSize must be greater than zero."
+        }
+
+        if ([string](Get-JsonProperty $entry @("sha256")) -notmatch '^[0-9a-f]{64}$') {
+            Add-Failure $Failures "release-evidence-workspace-verification-report.json workspaceFiles.$expectedFile.sha256 must be a lowercase SHA-256 hash."
+        }
+    }
+}
+
 $failures = [System.Collections.Generic.List[string]]::new()
 $resolvedDirectory = Resolve-Path -LiteralPath $EvidenceDirectory -ErrorAction Stop
 $releaseCommitSha = $CommitSha.Trim()
@@ -908,6 +1028,8 @@ $visualManifest = Read-JsonEvidence $resolvedDirectory.Path "visual-smoke-manife
 $visualSmoke = Read-JsonEvidence $resolvedDirectory.Path "visual-smoke-evidence-report.json" $failures
 $accountantWorkbench = Read-JsonEvidence $resolvedDirectory.Path "accountant-workbench-evidence-report.json" $failures
 $releaseEvidence = Read-JsonEvidence $resolvedDirectory.Path "release-evidence-report.json" $failures
+$releaseEvidenceWorkspaceVerificationReportPath = Join-Path $resolvedDirectory.Path "release-evidence-workspace-verification-report.json"
+$releaseEvidenceWorkspaceVerificationReport = Read-JsonEvidenceFile $releaseEvidenceWorkspaceVerificationReportPath "release-evidence-workspace-verification-report.json" $failures
 
 $requiredReadinessManifestCodes = @(
     "backend-golden-corpus",
@@ -1179,6 +1301,7 @@ if (-not ($releaseEvidence.PSObject.Properties.Name -contains "__missing")) {
     Assert-ReleaseEvidenceTemplateManifest $releaseEvidence $resolvedDirectory.Path $requiredReleaseEvidenceTemplates $failures
     Assert-ReleaseEvidenceHumanCompletionManifest $releaseEvidence $requiredReleaseEvidenceTemplates $failures
     Assert-ReleaseEvidenceWorkspaceControlManifest $releaseEvidence $resolvedDirectory.Path $requiredReleaseEvidenceWorkspaceControls $failures
+    Assert-ReleaseEvidenceWorkspaceVerificationReport $releaseEvidenceWorkspaceVerificationReport $releaseEvidence $releaseCommitSha $releaseRunUrl $expectedReleaseEvidenceWorkspaceInventory $failures
 }
 
 $evidenceFileManifest = @(

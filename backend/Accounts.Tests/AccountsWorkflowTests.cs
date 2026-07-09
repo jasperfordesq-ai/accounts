@@ -19154,6 +19154,12 @@ public class AccountsWorkflowTests
         Assert.Contains("Release artifact pack must include retained release evidence workspace control file", script);
         Assert.Contains("releaseEvidenceWorkspaceFiles", script);
         Assert.Contains("workspaceControlFiles.$($required.fileName).sha256 must match the retained workspace control file", script);
+        Assert.Contains("Assert-ReleaseEvidenceWorkspaceVerificationReport", script);
+        Assert.Contains("release-evidence-workspace-verification-report.json status must be passed", script);
+        Assert.Contains("release-evidence-workspace-verification-report.json releaseCandidate.identityProvided must be true", script);
+        Assert.Contains("release-evidence-workspace-verification-report.json releaseCandidate.commitSha must match the release evidence candidate", script);
+        Assert.Contains("release-evidence-workspace-verification-report.json requiredWorkspaceFiles", script);
+        Assert.Contains("release-evidence-workspace-verification-report.json workspaceFiles", script);
         Assert.Contains("evidenceType = \"release-evidence-workspace-control\"", script);
         Assert.Contains("evidenceFiles", script);
         Assert.Contains("identityProvided", script);

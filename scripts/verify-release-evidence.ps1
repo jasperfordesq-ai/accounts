@@ -767,6 +767,10 @@ function Assert-WorkspaceVerificationInventory {
 
     $workspaceFiles = @((Get-JsonPropertyValue $WorkspaceVerificationReport "workspaceFiles"))
     $workspaceFileNames = @($workspaceFiles | ForEach-Object { [string](Get-JsonPropertyValue $_ "fileName") })
+    if ($workspaceFileNames.Count -ne $expectedWorkspaceFiles.Count) {
+        Add-Failure $Failures "Release evidence workspace verification report workspaceFiles must contain exactly $($expectedWorkspaceFiles.Count) entries."
+    }
+
     foreach ($expectedFile in $expectedWorkspaceFiles) {
         Assert-JsonArrayContains $workspaceFileNames $expectedFile "Release evidence workspace verification report workspaceFiles" $Failures
 
