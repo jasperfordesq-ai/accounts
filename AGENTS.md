@@ -2191,6 +2191,22 @@ Release artifact pack human-completion ledger:
   source-law, external ROS/iXBRL, accountant, manual handoff, or monitoring-provider
   sign-off.
 
+Release evidence workspace inventory verification:
+
+- This slice tightens `scripts/verify-release-evidence.ps1` so completed release
+  evidence must retain a workspace verification report that names the exact prepared
+  reviewer workspace inventory. The verifier now checks
+  `release-evidence-workspace-verification-report.json.requiredWorkspaceFiles` for
+  the canonical 19 files: six human templates, six retained machine evidence JSONs,
+  `release-evidence-workspace-manifest.json`,
+  `release-evidence-machine-summary.json`, `release-evidence-reviewer-index.md`,
+  `release-evidence-reviewer-completion.json`,
+  `release-evidence-reviewer-blockers.md`, the expected
+  `release-evidence-report.json`, and `release-evidence-verifier-output.txt`.
+- It also checks `workspaceFiles` includes every required file with a positive byte
+  size and lowercase SHA-256 digest, so completed human evidence cannot be detached
+  from the prepared reviewer workspace provenance chain.
+
 ## What Is Left To Do
 
 Highest-priority next steps:

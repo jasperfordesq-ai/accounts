@@ -18497,6 +18497,13 @@ public class AccountsWorkflowTests
         Assert.Contains("Machine evidence summary monitoringEvidence.jsonLogLineCount must be greater than zero.", workspaceVerifier);
         Assert.Contains("Machine evidence summary monitoringEvidence.matchedMonitoringSmokeLine must be true.", workspaceVerifier);
         Assert.Contains("machineEvidenceSummaryPath", workspaceVerifier);
+        Assert.Contains("Assert-WorkspaceVerificationInventory", script);
+        Assert.Contains("Release evidence workspace verification report requiredWorkspaceFiles must contain exactly", script);
+        Assert.Contains("Release evidence workspace verification report workspaceFiles", script);
+        Assert.Contains("release-evidence-reviewer-index.md", script);
+        Assert.Contains("release-evidence-reviewer-completion.json", script);
+        Assert.Contains("release-evidence-reviewer-blockers.md", script);
+        Assert.Contains("release-evidence-verifier-output.txt", script);
         Assert.Contains("Convert-JsonValueToEvidenceString", workspaceScript);
         Assert.Contains("Workspace manifest retainedMachineEvidence must contain exactly", workspaceVerifier);
         Assert.Contains("Workspace must include retained machine evidence file", workspaceVerifier);

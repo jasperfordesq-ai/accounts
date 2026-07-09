@@ -736,6 +736,60 @@ function Assert-MachineEvidenceEntries {
     }
 }
 
+function Assert-WorkspaceVerificationInventory {
+    param(
+        $WorkspaceVerificationReport,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    $expectedWorkspaceFiles = @(
+        $requiredReleaseEvidenceTemplateFiles +
+        $requiredMachineEvidenceFiles +
+        @(
+            "release-evidence-workspace-manifest.json",
+            "release-evidence-machine-summary.json",
+            "release-evidence-reviewer-index.md",
+            "release-evidence-reviewer-completion.json",
+            "release-evidence-reviewer-blockers.md",
+            "release-evidence-report.json",
+            "release-evidence-verifier-output.txt"
+        )
+    )
+
+    $requiredWorkspaceFiles = @((Get-JsonPropertyValue $WorkspaceVerificationReport "requiredWorkspaceFiles") | ForEach-Object { [string]$_ })
+    if ($requiredWorkspaceFiles.Count -ne $expectedWorkspaceFiles.Count) {
+        Add-Failure $Failures "Release evidence workspace verification report requiredWorkspaceFiles must contain exactly $($expectedWorkspaceFiles.Count) entries."
+    }
+
+    foreach ($expectedFile in $expectedWorkspaceFiles) {
+        Assert-JsonArrayContains $requiredWorkspaceFiles $expectedFile "Release evidence workspace verification report requiredWorkspaceFiles" $Failures
+    }
+
+    $workspaceFiles = @((Get-JsonPropertyValue $WorkspaceVerificationReport "workspaceFiles"))
+    $workspaceFileNames = @($workspaceFiles | ForEach-Object { [string](Get-JsonPropertyValue $_ "fileName") })
+    foreach ($expectedFile in $expectedWorkspaceFiles) {
+        Assert-JsonArrayContains $workspaceFileNames $expectedFile "Release evidence workspace verification report workspaceFiles" $Failures
+
+        $entry = $workspaceFiles | Where-Object {
+            [string]::Equals([string](Get-JsonPropertyValue $_ "fileName"), $expectedFile, [StringComparison]::OrdinalIgnoreCase)
+        } | Select-Object -First 1
+
+        if ($null -eq $entry) {
+            continue
+        }
+
+        $byteSize = [int](Get-JsonPropertyValue $entry "byteSize")
+        if ($byteSize -le 0) {
+            Add-Failure $Failures "Release evidence workspace verification report workspaceFiles.$expectedFile.byteSize must be a positive integer."
+        }
+
+        $sha256 = [string](Get-JsonPropertyValue $entry "sha256")
+        if ($sha256 -notmatch "^[0-9a-f]{64}$") {
+            Add-Failure $Failures "Release evidence workspace verification report workspaceFiles.$expectedFile.sha256 must be a lowercase 64-character SHA-256 digest."
+        }
+    }
+}
+
 function Test-ReleaseWorkspaceControlEvidence {
     param(
         $WorkspaceManifest,
@@ -797,15 +851,7 @@ function Test-ReleaseWorkspaceControlEvidence {
             Add-Failure $Failures "Release evidence workspace verification report failureCount must be 0."
         }
 
-        foreach ($workspaceFile in @(
-            "release-evidence-workspace-manifest.json",
-            "release-evidence-machine-summary.json"
-        )) {
-            $workspaceFiles = @((Get-JsonPropertyValue $WorkspaceVerificationReport "workspaceFiles") | ForEach-Object {
-                Get-JsonPropertyValue $_ "fileName"
-            })
-            Assert-JsonArrayContains $workspaceFiles $workspaceFile "Release evidence workspace verification report workspaceFiles" $Failures
-        }
+        Assert-WorkspaceVerificationInventory $WorkspaceVerificationReport $Failures
     }
 }
 
