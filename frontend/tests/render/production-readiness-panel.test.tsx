@@ -40,7 +40,7 @@ describe("ProductionReadinessPanel", () => {
 
 function productionScorecard(): ProductionReadinessReport["productionScorecard"] {
   return {
-    currentScore: 637,
+    currentScore: 639,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete source-law review, named visual QA, monitoring-provider confirmation, manual handoff and qualified-accountant acceptance evidence.",
@@ -63,7 +63,7 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
       {
         code: "backend-statutory-accounting-engine",
         label: "Backend statutory/accounting engine",
-        currentScore: 218,
+        currentScore: 220,
         targetScore: 250,
         status: "qualified-accountant-review-required",
         currentEvidence: [
@@ -75,6 +75,7 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
           "Qualified-accountant route walkthrough rows require route-specific accountant-workbench evidence anchors for every accepted route.",
           "Qualified-accountant route acceptance requires a real retained workbench evidence reference for every accepted route.",
           "External ROS/iXBRL validation evidence has template and verifier checks for real references, retained taxonomy package references, accepted/remediated warnings and accepted decisions.",
+          "External ROS/iXBRL validation and taxonomy references require the matching golden corpus scenario code before acceptance can pass.",
           "Source-law review evidence has template and verifier checks for concrete URL reachability, dated or not-dated effective-date review, guidance comparison, platform impact classification and exact accepted decisions.",
           "Manual handoff acceptance evidence has template and verifier checks for real evidence references and accepted reviewer decisions.",
           "Manual handoff evidence references require the matching scenario or unsupported-path code before acceptance can pass.",

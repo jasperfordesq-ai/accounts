@@ -18343,6 +18343,8 @@ public class AccountsWorkflowTests
         Assert.Contains("in the `Decision` column only when the external reference", externalRosIxbrl);
         Assert.Contains("Record the actual taxonomy package", externalRosIxbrl);
         Assert.Contains("as the taxonomy package", externalRosIxbrl);
+        Assert.Contains("must include the scenario code", externalRosIxbrl);
+        Assert.Contains("golden corpus row", externalRosIxbrl);
         Assert.Contains("micro-ltd", externalRosIxbrl);
         Assert.Contains("small-abridged-ltd", externalRosIxbrl);
         Assert.Contains("dac-small", externalRosIxbrl);
@@ -18464,6 +18466,8 @@ public class AccountsWorkflowTests
         Assert.Contains("\"External reference\" \"^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+\"", script);
         Assert.Contains("\"Taxonomy package\" \"^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+\"", script);
         Assert.Contains("a real retained taxonomy package reference", script);
+        Assert.Contains("Assert-CompletedTableColumnContainsRowLabel $Content $canonicalGoldenCorpusScenarioCodes 1 \"External reference\"", script);
+        Assert.Contains("Assert-CompletedTableColumnContainsRowLabel $Content $canonicalGoldenCorpusScenarioCodes 3 \"Taxonomy package\"", script);
         Assert.Contains("\"Warnings/errors\" \"^(none|accepted\\b.*|remediated\\b.*)$\"", script);
         Assert.Contains("micro-ltd", script);
         Assert.Contains("small-abridged-ltd", script);

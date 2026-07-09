@@ -36,6 +36,9 @@ taxonomy package, and warnings/errors status are accepted for the exact release
 candidate. Record the actual taxonomy package or retained package reference for
 each scenario; do not use `accepted`, `none`, `n/a`, `pending`, `todo`, or `tbd`
 as the taxonomy package.
+Scenario external validation references and retained taxonomy package references
+must include the scenario code, so evidence cannot be reused against the wrong
+golden corpus row.
 
 ## Required Evidence Pack
 

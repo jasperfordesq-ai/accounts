@@ -739,6 +739,8 @@ function Test-ExternalRosIxbrlEvidence {
     Assert-CompletedTableColumnMatches $Content $canonicalGoldenCorpusScenarioCodes 3 "Taxonomy package" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real retained taxonomy package reference" $context $Failures
     Assert-CompletedTableColumnMatches $Content $canonicalGoldenCorpusScenarioCodes 4 "Warnings/errors" "^(none|accepted\b.*|remediated\b.*)$" "none, accepted, or remediated warnings/errors" $context $Failures
     Assert-CompletedTableColumnMatches $Content $canonicalGoldenCorpusScenarioCodes 5 "Decision" "^(accepted|accepted\b.*)$" "accepted for this release candidate" $context $Failures
+    Assert-CompletedTableColumnContainsRowLabel $Content $canonicalGoldenCorpusScenarioCodes 1 "External reference" $context $Failures
+    Assert-CompletedTableColumnContainsRowLabel $Content $canonicalGoldenCorpusScenarioCodes 3 "Taxonomy package" $context $Failures
 }
 
 function Test-MonitoringEvidence {
