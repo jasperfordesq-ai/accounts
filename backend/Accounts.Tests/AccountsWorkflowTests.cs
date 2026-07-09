@@ -18671,6 +18671,7 @@ public class AccountsWorkflowTests
     {
         var root = RepositoryRoot();
         var runbook = File.ReadAllText(Path.Combine(root, "Docs", "operations", "production-runbook.md"));
+        var runbookLf = runbook.Replace("\r\n", "\n", StringComparison.Ordinal);
         var reportService = File.ReadAllText(Path.Combine(root, "backend", "Accounts.Api", "Services", "ProductionReadinessReportService.cs"));
         var scriptPath = Path.Combine(root, "scripts", "verify-release-artifact-pack.ps1");
         var machineEvidencePackPath = Path.Combine(root, "scripts", "verify-ci-machine-evidence-pack.ps1");
@@ -18694,6 +18695,10 @@ public class AccountsWorkflowTests
         Assert.Contains("release-artifact-pack-report.json", reportService);
         Assert.Contains("-CommitSha <release-commit-sha>", runbook);
         Assert.Contains("-GitHubActionsRunUrl <ci-run-url>", runbook);
+        Assert.Contains("The artifact pack must include `dependency-audit-report.json`,", runbook);
+        Assert.Contains("`visual-smoke-manifest.json`,\n`visual-smoke-evidence-report.json`,", runbookLf);
+        Assert.Contains("visual smoke manifest route audits or screenshot rows do not match the retained", runbook);
+        Assert.Contains("visual smoke manifest and evidence report", runbook);
         Assert.Contains("verify-accountant-workbench-evidence.mjs", runbook);
         Assert.Contains("accountant-workbench-evidence-report.json", runbook);
         Assert.Contains("production-readiness-report", workflow);

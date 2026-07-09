@@ -214,6 +214,7 @@ The artifact pack must include `dependency-audit-report.json`,
 `structured-log-report.json`, `restore-drill-report.json`,
 `no-direct-filing-submission-report.json`, `production-readiness-report.json`,
 `production-readiness-verification-report.json`,
+`visual-smoke-manifest.json`,
 `visual-smoke-evidence-report.json`,
 `accountant-workbench-evidence-report.json`, `release-evidence-report.json`,
 and the six completed `Docs/release-evidence/*.md` human sign-off templates.
@@ -223,7 +224,9 @@ or malformed, if the completed release-evidence templates are absent from the
 artifact pack or do not match the SHA-256/byte-size manifest in
 `release-evidence-report.json`, if accountant workbench route acceptance rows are
 missing, if visual smoke screenshot summaries omit retained PNG image data,
-sample counts, distinct color diversity, or luminance range evidence, or if
+sample counts, distinct color diversity, or luminance range evidence, if the
+visual smoke manifest route audits or screenshot rows do not match the retained
+visual smoke evidence report, or if
 cross-report checks such as the monitoring smoke correlation id do not match. The
 generated `release-artifact-pack-report.json` records the release commit, GitHub
 Actions run URL, and a SHA-256/byte-size manifest for each required report and
@@ -335,4 +338,4 @@ The HTTPS smoke path also verifies that the login response sets the `accounts_se
 14. Complete `Docs/release-evidence/qualified-accountant-acceptance-template.md` with a named qualified accountant before real filing preparation is used.
 15. Complete `Docs/release-evidence/manual-handoff-acceptance-template.md` for `medium-audit-required` and every unsupported path code before any audit-required or unsupported output is relied on.
 16. Run `scripts\verify-release-evidence.ps1` and retain `release-evidence-report.json`; real filing use stays blocked if any required checkbox, signature, artifact reference, release identity, UTC timestamp, SHA-256 digest, table row, accepted decision, canonical golden corpus scenario row, source-law source row or per-source note reference, external ROS/iXBRL validation row, manual handoff scenario/path row, route row, visual smoke evidence report reference, visual nonblank metric field, monitoring log confirmation field, required coverage entry, or same-candidate identity across all six human evidence templates is missing or malformed.
-17. Run `scripts\verify-release-artifact-pack.ps1` with the release commit SHA and GitHub Actions run URL, then retain `release-artifact-pack-report.json`; real filing use stays blocked if the exact release artifact pack is missing dependency, production safety, monitoring, structured log, backup/restore, no-direct-submission, production-readiness report and verification, visual smoke, accountant-workbench evidence, completed release-evidence reports, the six completed release-evidence Markdown templates with matching SHA-256/byte-size inventory, or a release-evidence candidate identity matching the pack `CommitSha` and `GitHubActionsRunUrl`.
+17. Run `scripts\verify-release-artifact-pack.ps1` with the release commit SHA and GitHub Actions run URL, then retain `release-artifact-pack-report.json`; real filing use stays blocked if the exact release artifact pack is missing dependency, production safety, monitoring, structured log, backup/restore, no-direct-submission, production-readiness report and verification, visual smoke manifest and evidence report, accountant-workbench evidence, completed release-evidence reports, the six completed release-evidence Markdown templates with matching SHA-256/byte-size inventory, or a release-evidence candidate identity matching the pack `CommitSha` and `GitHubActionsRunUrl`.

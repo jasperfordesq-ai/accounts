@@ -1740,12 +1740,25 @@ Frontend visual-smoke manifest/evidence cross-checks:
     `npx.cmd vitest run tests/render/production-readiness-panel.test.tsx tests/render/production-readiness-workbench.test.tsx`,
     and `npx.cmd tsc --noEmit --incremental false`.
 
+Release artifact runbook manifest alignment:
+
+- This slice updates `Docs/operations/production-runbook.md` so the release
+  artifact pack instructions explicitly require `visual-smoke-manifest.json`
+  alongside `visual-smoke-evidence-report.json`, and document that manifest
+  route audits plus screenshot rows must match the retained evidence report.
+- The production scorecard remains 698/700; this is documentation/contract
+  alignment for the remaining named release evidence, not a substitute for
+  human sign-off.
+- Verification completed locally:
+  - Backend focused regression passed:
+    `ReleaseArtifactPackVerifier_RequiresExactOperationalEvidenceReports`.
+
 ## What Is Left To Do
 
 Highest-priority next steps:
 
 1. Rerun the full local production gate before release if more code changes land; the
-   current local gate is green on July 8, 2026.
+   current local/CI gate is green on July 9, 2026 for commit `2fd79ca`.
 2. Perform and record human visual review of the generated light/dark desktop/mobile
    visual smoke artifact set; the screenshot manifest now verifies locally, but
    named visual QA sign-off is still required.
