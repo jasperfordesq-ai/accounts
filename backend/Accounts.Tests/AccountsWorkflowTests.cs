@@ -18717,6 +18717,7 @@ public class AccountsWorkflowTests
             "no-direct-filing-submission-report.json",
             "production-readiness-report.json",
             "production-readiness-verification-report.json",
+            "visual-smoke-manifest.json",
             "visual-smoke-evidence-report.json",
             "accountant-workbench-evidence-report.json",
             "release-evidence-report.json"
@@ -18876,6 +18877,14 @@ public class AccountsWorkflowTests
         Assert.Contains("visual smoke screenshots carry route expected accountant decision text", machineEvidencePack);
         Assert.Contains("Assert-VisualSmokeDimensionEvidence", script);
         Assert.Contains("Assert-VisualSmokeDimensionEvidence", machineEvidencePack);
+        Assert.Contains("Assert-VisualSmokeManifestEvidence", script);
+        Assert.Contains("Assert-VisualSmokeManifestEvidence", machineEvidencePack);
+        Assert.Contains("visual-smoke-manifest.json routeAudits must include exactly 7 route(s)", script);
+        Assert.Contains("visual-smoke-manifest.json routeAudits must include exactly 7 route(s)", machineEvidencePack);
+        Assert.Contains("visual-smoke-manifest.json screenshots must include exactly 28 retained screenshots", script);
+        Assert.Contains("visual-smoke-manifest.json screenshots must include exactly 28 retained screenshots", machineEvidencePack);
+        Assert.Contains("visual-smoke-manifest.json screenshots.$($expectedRoute.routeName).$theme.$($expectedViewport.name).$field must match visual-smoke-evidence-report.json", script);
+        Assert.Contains("visual-smoke-manifest.json screenshots.$($expectedRoute.routeName).$theme.$($expectedViewport.name).$field must match visual-smoke-evidence-report.json", machineEvidencePack);
         Assert.Contains("visual-smoke-evidence-report.json themes", script);
         Assert.Contains("visual-smoke-evidence-report.json themes", machineEvidencePack);
         Assert.Contains("visual-smoke-evidence-report.json viewports", script);

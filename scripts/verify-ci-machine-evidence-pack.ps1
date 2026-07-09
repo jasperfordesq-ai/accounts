@@ -571,6 +571,128 @@ function Assert-VisualSmokeDimensionEvidence {
     }
 }
 
+function Assert-VisualSmokeManifestEvidence {
+    param(
+        [object]$VisualManifest,
+        [object]$VisualSmoke,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    if ($VisualManifest.PSObject.Properties.Name -contains "__missing" -or
+        $VisualManifest.PSObject.Properties.Name -contains "__invalid" -or
+        $VisualSmoke.PSObject.Properties.Name -contains "__missing" -or
+        $VisualSmoke.PSObject.Properties.Name -contains "__invalid") {
+        return
+    }
+
+    if ([string](Get-JsonProperty $VisualManifest @("artifactName")) -ne "visual-smoke-screenshots") {
+        Add-Failure $Failures "visual-smoke-manifest.json artifactName must be visual-smoke-screenshots."
+    }
+    if ([string](Get-JsonProperty $VisualManifest @("manifestFileName")) -ne "visual-smoke-manifest.json") {
+        Add-Failure $Failures "visual-smoke-manifest.json manifestFileName must be visual-smoke-manifest.json."
+    }
+    if ([int](Get-JsonProperty $VisualManifest @("expectedScreenshotCount")) -ne 28) {
+        Add-Failure $Failures "visual-smoke-manifest.json expectedScreenshotCount must be 28."
+    }
+
+    Assert-ArrayContainsExactly @((Get-JsonProperty $VisualManifest @("layoutChecks"))) $expectedAccountantWorkbenchLayoutChecks "visual-smoke-manifest.json layoutChecks" $Failures
+    Assert-ArrayContainsExactly @((Get-JsonProperty $VisualManifest @("reviewChecks"))) $expectedAccountantWorkbenchReviewChecks "visual-smoke-manifest.json reviewChecks" $Failures
+
+    $routeAudits = @(Get-JsonProperty $VisualManifest @("routeAudits"))
+    if ($routeAudits.Count -ne $expectedAccountantWorkbenchRouteAcceptance.Count) {
+        Add-Failure $Failures "visual-smoke-manifest.json routeAudits must include exactly 7 route(s)."
+    }
+
+    foreach ($expectedRoute in $expectedAccountantWorkbenchRouteAcceptance) {
+        $routeAudit = $routeAudits |
+            Where-Object { [string](Get-JsonProperty $_ @("routeName")) -eq [string]$expectedRoute.routeName } |
+            Select-Object -First 1
+
+        if ($null -eq $routeAudit) {
+            Add-Failure $Failures "visual-smoke-manifest.json routeAudits must include $($expectedRoute.routeName)."
+            continue
+        }
+
+        if ([string](Get-JsonProperty $routeAudit @("routeKey")) -ne [string]$expectedRoute.routeKey) {
+            Add-Failure $Failures "visual-smoke-manifest.json routeAudits.$($expectedRoute.routeName).routeKey must be $($expectedRoute.routeKey)."
+        }
+        if ([string](Get-JsonProperty $routeAudit @("label")) -ne [string]$expectedRoute.label) {
+            Add-Failure $Failures "visual-smoke-manifest.json routeAudits.$($expectedRoute.routeName).label must be $($expectedRoute.label)."
+        }
+        Assert-ArrayContainsExactly @((Get-JsonProperty $routeAudit @("workflowStages"))) @($expectedRoute.workflowStages) "visual-smoke-manifest.json routeAudits.$($expectedRoute.routeName).workflowStages" $Failures
+        if ([int](Get-JsonProperty $routeAudit @("screenshotCount")) -ne 4) {
+            Add-Failure $Failures "visual-smoke-manifest.json routeAudits.$($expectedRoute.routeName).screenshotCount must be 4."
+        }
+        if ([string](Get-JsonProperty $routeAudit @("reviewStatus")) -ne "required-review") {
+            Add-Failure $Failures "visual-smoke-manifest.json routeAudits.$($expectedRoute.routeName).reviewStatus must be required-review."
+        }
+        Assert-ArrayContainsExactly @((Get-JsonProperty $routeAudit @("reviewChecks"))) $expectedAccountantWorkbenchReviewChecks "visual-smoke-manifest.json routeAudits.$($expectedRoute.routeName).reviewChecks" $Failures
+    }
+
+    $manifestScreenshots = @(Get-JsonProperty $VisualManifest @("screenshots"))
+    $evidenceScreenshots = @(Get-JsonProperty $VisualSmoke @("screenshots"))
+    if ($manifestScreenshots.Count -ne 28) {
+        Add-Failure $Failures "visual-smoke-manifest.json screenshots must include exactly 28 retained screenshots."
+    }
+
+    $expectedViewports = @(
+        [pscustomobject]@{ name = "desktop"; width = 1440; height = 1000 },
+        [pscustomobject]@{ name = "mobile"; width = 390; height = 844 }
+    )
+
+    foreach ($expectedRoute in $expectedAccountantWorkbenchRouteAcceptance) {
+        foreach ($theme in $expectedAccountantWorkbenchThemes) {
+            foreach ($expectedViewport in $expectedViewports) {
+                $expectedFileName = "$($expectedRoute.routeName)-$theme-$($expectedViewport.name).png"
+                $manifestScreenshot = $manifestScreenshots |
+                    Where-Object {
+                        [string](Get-JsonProperty $_ @("routeName")) -eq [string]$expectedRoute.routeName -and
+                        [string](Get-JsonProperty $_ @("theme")) -eq [string]$theme -and
+                        [string](Get-JsonProperty $_ @("viewportName")) -eq [string]$expectedViewport.name
+                    } |
+                    Select-Object -First 1
+                $evidenceScreenshot = $evidenceScreenshots |
+                    Where-Object {
+                        [string](Get-JsonProperty $_ @("routeName")) -eq [string]$expectedRoute.routeName -and
+                        [string](Get-JsonProperty $_ @("theme")) -eq [string]$theme -and
+                        [string](Get-JsonProperty $_ @("viewportName")) -eq [string]$expectedViewport.name
+                    } |
+                    Select-Object -First 1
+
+                if ($null -eq $manifestScreenshot) {
+                    Add-Failure $Failures "visual-smoke-manifest.json screenshots must include $($expectedRoute.routeName)/$theme/$($expectedViewport.name)."
+                    continue
+                }
+                if ($null -eq $evidenceScreenshot) {
+                    continue
+                }
+
+                if ([string](Get-JsonProperty $manifestScreenshot @("routeKey")) -ne [string]$expectedRoute.routeKey) {
+                    Add-Failure $Failures "visual-smoke-manifest.json screenshots.$($expectedRoute.routeName).$theme.$($expectedViewport.name).routeKey must be $($expectedRoute.routeKey)."
+                }
+                if ([string](Get-JsonProperty $manifestScreenshot @("fileName")) -ne $expectedFileName) {
+                    Add-Failure $Failures "visual-smoke-manifest.json screenshots.$($expectedRoute.routeName).$theme.$($expectedViewport.name).fileName must be $expectedFileName."
+                }
+                if ([IO.Path]::GetFileName([string](Get-JsonProperty $manifestScreenshot @("artifactPath"))) -ne $expectedFileName) {
+                    Add-Failure $Failures "visual-smoke-manifest.json screenshots.$($expectedRoute.routeName).$theme.$($expectedViewport.name).artifactPath must end with $expectedFileName."
+                }
+                if ([string](Get-JsonProperty $manifestScreenshot @("expectedText")) -ne [string]$expectedRoute.expectedText) {
+                    Add-Failure $Failures "visual-smoke-manifest.json screenshots.$($expectedRoute.routeName).$theme.$($expectedViewport.name).expectedText must be $($expectedRoute.expectedText)."
+                }
+                if ([string](Get-JsonProperty $manifestScreenshot @("reviewStatus")) -ne "required-review") {
+                    Add-Failure $Failures "visual-smoke-manifest.json screenshots.$($expectedRoute.routeName).$theme.$($expectedViewport.name).reviewStatus must be required-review."
+                }
+
+                foreach ($field in @("fileName", "routeKey", "expectedText", "reviewStatus", "byteSize", "sha256", "imageWidth", "minimumViewportHeight")) {
+                    if ([string](Get-JsonProperty $manifestScreenshot @($field)) -ne [string](Get-JsonProperty $evidenceScreenshot @($field))) {
+                        Add-Failure $Failures "visual-smoke-manifest.json screenshots.$($expectedRoute.routeName).$theme.$($expectedViewport.name).$field must match visual-smoke-evidence-report.json."
+                    }
+                }
+            }
+        }
+    }
+}
+
 function Get-FileSha256 {
     param(
         [string]$Path
@@ -755,6 +877,8 @@ if (-not ($visualSmoke.PSObject.Properties.Name -contains "__missing")) {
     }
     Assert-VisualSmokeDimensionEvidence $visualSmoke $resolvedDirectory.Path $failures
 }
+
+Assert-VisualSmokeManifestEvidence $visualManifest $visualSmoke $failures
 
 if (-not ($accountantWorkbench.PSObject.Properties.Name -contains "__missing")) {
     if ([int](Get-JsonProperty $accountantWorkbench @("routeCount")) -ne 7) {

@@ -20,14 +20,14 @@ describe("ProductionReadinessWorkbench", () => {
     expectText("3 companies");
     expectText("4 periods");
     expect(screen.getByRole("heading", { name: "Production scorecard" })).toBeInTheDocument();
-    expectText("697/700");
+    expectText("698/700");
     expectText("Architecture and documentation");
     expectText("Backend statutory/accounting engine");
     expectText("Frontend accountant workbench");
     expectText("Security/auth/tenant/platform guardrails");
     expectText("99 / 100");
     expectText("250 / 250");
-    expectText("198 / 200");
+    expectText("199 / 200");
     expectText("150 / 150");
     expectText(/Next score gate/);
     expect(screen.getByRole("searchbox", { name: "Filter Next assurance actions" })).toBeInTheDocument();
@@ -284,7 +284,7 @@ describe("ProductionReadinessWorkbench", () => {
 
 function productionScorecard(): ProductionReadinessReport["productionScorecard"] {
   return {
-    currentScore: 697,
+    currentScore: 698,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete source-law review, named visual QA, monitoring-provider confirmation, manual handoff and qualified-accountant acceptance evidence.",
@@ -344,7 +344,7 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
       {
         code: "frontend-accountant-workbench",
         label: "Frontend accountant workbench",
-        currentScore: 198,
+        currentScore: 199,
         targetScore: 200,
         status: "visual-acceptance-required",
         currentEvidence: [
@@ -359,6 +359,7 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
           "accountant-workbench-evidence-report.json proves route workflow-stage, review-check, expected accountant decision text and qualified-accountant route acceptance coverage.",
           "Release artifact and CI machine evidence pack verifiers require exact visual-smoke top-level themes, viewports, planned viewport dimensions, layout/contrast result counts, minimum contrast ratio, retained screenshot bytes and per-route coverage before retained visual evidence can pass.",
           "Release artifact and CI machine evidence pack verifiers require the exact visual-smoke screenshot matrix for every route, theme and viewport, including route keys, file names, expected accountant decision text and required-review status.",
+          "Release artifact and CI machine evidence pack verifiers cross-check visual-smoke-manifest.json route audits and screenshot rows against visual-smoke-evidence-report.json before retained visual evidence can pass.",
           "Release artifact and CI machine evidence pack verifiers require every visual-smoke screenshot row to retain a positive byte size and canonical sha256:<64 lowercase hex> checksum before retained visual evidence can pass.",
           "Release artifact and CI machine evidence pack verifiers require every visual-smoke screenshot row to match a retained PNG file by file name, byte size and sha256 checksum before retained visual evidence can pass.",
           "Release artifact and CI machine evidence pack verifiers require exact accountant-workbench route acceptance names, route keys, expected decision text and per-route acceptance evidence ids for every workbench route.",
