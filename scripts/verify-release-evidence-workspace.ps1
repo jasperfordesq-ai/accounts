@@ -225,6 +225,34 @@ function Assert-MarkdownFieldBlank {
     }
 }
 
+function Assert-MarkdownTimestampFieldEquals {
+    param(
+        [string]$Content,
+        [string]$FieldName,
+        [string]$Expected,
+        [string]$Context,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    $actual = Get-MarkdownFieldValue $Content $FieldName
+    if ($null -eq $actual) {
+        Add-Failure $Failures "$Context must include field $FieldName."
+        return
+    }
+
+    try {
+        $actualInstant = [DateTimeOffset]::Parse($actual, [Globalization.CultureInfo]::InvariantCulture).ToUniversalTime()
+        $expectedInstant = [DateTimeOffset]::Parse($Expected, [Globalization.CultureInfo]::InvariantCulture).ToUniversalTime()
+        if ($actualInstant.UtcTicks -ne $expectedInstant.UtcTicks) {
+            Add-Failure $Failures "$Context $FieldName field must be $Expected."
+        }
+    } catch {
+        if ($actual -ne $Expected) {
+            Add-Failure $Failures "$Context $FieldName field must be $Expected."
+        }
+    }
+}
+
 function Assert-ArrayContains {
     param(
         [object[]]$Values,
@@ -527,7 +555,7 @@ function Assert-MonitoringProviderPreparedEvidenceReferences {
     Assert-MarkdownFieldEquals $content "Event id" ([string](Get-JsonPropertyValue $monitoringReport "eventId")) $context $Failures
     Assert-MarkdownFieldEquals $content "Correlation id" ([string](Get-JsonPropertyValue $monitoringReport "correlationId")) $context $Failures
     Assert-MarkdownFieldEquals $content "Base URL" ([string](Get-JsonPropertyValue $monitoringReport "baseUrl")) $context $Failures
-    Assert-MarkdownFieldEquals $content "Checked at UTC" (Convert-JsonValueToEvidenceString (Get-JsonPropertyValue $monitoringReport "checkedAtUtc")) $context $Failures
+    Assert-MarkdownTimestampFieldEquals $content "Checked at UTC" (Convert-JsonValueToEvidenceString (Get-JsonPropertyValue $monitoringReport "checkedAtUtc")) $context $Failures
     Assert-MarkdownFieldEquals $content "Structured log file" ([string](Get-FirstJsonPropertyValue $structuredLogReport @("structuredLogFile", "logFileName"))) $context $Failures
     Assert-MarkdownFieldEquals $content "JSON log line count" ([string](Get-JsonPropertyValue $structuredLogReport "jsonLogLineCount")) $context $Failures
     $matchedMonitoringSmokeLine = if ([bool](Get-JsonPropertyValue $structuredLogReport "matchedMonitoringSmokeLine")) { "yes" } else { "" }
