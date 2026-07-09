@@ -18463,6 +18463,7 @@ public class AccountsWorkflowTests
         Assert.Contains("release-evidence-reviewer-index.md", runbook);
         Assert.Contains("release-evidence-reviewer-completion.json", runbook);
         Assert.Contains("release-evidence-reviewer-blockers.md", runbook);
+        Assert.Contains("release-evidence-machine-summary.json", runbook);
         Assert.Contains("accountant-workbench-evidence-report.json", runbook);
         Assert.Contains("structured-log-report.json", runbook);
         Assert.Contains("release-evidence-workspace-verification-report.json", runbook);
@@ -18488,6 +18489,12 @@ public class AccountsWorkflowTests
         Assert.Contains("requiredWorkspaceFiles", workspaceVerifier);
         Assert.Contains("requiredMachineEvidenceFiles", workspaceVerifier);
         Assert.Contains("requiredMachineEvidenceProvenance", workspaceVerifier);
+        Assert.Contains("Workspace manifest machineEvidenceSummaryFile must be release-evidence-machine-summary.json.", workspaceVerifier);
+        Assert.Contains("Workspace must include release-evidence-machine-summary.json.", workspaceVerifier);
+        Assert.Contains("Machine evidence summary retainedMachineEvidence must contain exactly", workspaceVerifier);
+        Assert.Contains("Machine evidence summary retainedMachineEvidence.$requiredMachineEvidenceFile.$propertyName must match the workspace manifest.", workspaceVerifier);
+        Assert.Contains("Machine evidence summary monitoringEvidence.$field must be present.", workspaceVerifier);
+        Assert.Contains("machineEvidenceSummaryPath", workspaceVerifier);
         Assert.Contains("Workspace manifest retainedMachineEvidence must contain exactly", workspaceVerifier);
         Assert.Contains("Workspace must include retained machine evidence file", workspaceVerifier);
         Assert.Contains("Workspace manifest retainedMachineEvidence.$requiredMachineEvidenceFile.sourceArtifactName must be", workspaceVerifier);
@@ -18514,6 +18521,9 @@ public class AccountsWorkflowTests
         Assert.Contains("pending-human-evidence", workspaceScript);
         Assert.Contains("humanFieldsLeftBlank", workspaceScript);
         Assert.Contains("reviewerQueue", workspaceScript);
+        Assert.Contains("machineEvidenceSummaryFile", workspaceScript);
+        Assert.Contains("release-evidence-machine-summary.json", workspaceScript);
+        Assert.Contains("This summary is machine evidence only", workspaceScript);
         Assert.Contains("Copy-MachineEvidenceInput", workspaceScript);
         Assert.Contains("retainedMachineEvidence", workspaceScript);
         Assert.Contains("sourceArtifactName = $SourceArtifactName", workspaceScript);

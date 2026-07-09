@@ -145,6 +145,23 @@ function Get-JsonPropertyValue {
     return $property.Value
 }
 
+function Get-JsonPathValue {
+    param(
+        $Object,
+        [string[]]$Path
+    )
+
+    $current = $Object
+    foreach ($segment in $Path) {
+        $current = Get-JsonPropertyValue $current $segment
+        if ($null -eq $current) {
+            return $null
+        }
+    }
+
+    return $current
+}
+
 function Get-MinimumVisualMetric {
     param(
         $VisualReport,
@@ -333,6 +350,52 @@ $reviewerQueue = @(
     }
 )
 
+$machineEvidenceSummaryFile = "release-evidence-machine-summary.json"
+$machineEvidenceSummary = [ordered]@{
+    status = "pending-human-evidence"
+    generatedAt = [DateTimeOffset]::UtcNow.ToString("O")
+    releaseCandidate = [ordered]@{
+        commitSha = $CommitSha
+        githubActionsRunUrl = $GitHubActionsRunUrl
+    }
+    retainedMachineEvidence = @($retainedMachineEvidence)
+    productionReadiness = [ordered]@{
+        generatedAt = $productionReadinessTimestamp
+        overallStatus = [string](Get-JsonPropertyValue $productionReadinessReport "overallStatus")
+        scorecardStatus = [string](Get-JsonPathValue $productionReadinessReport @("productionScorecard", "status"))
+        currentScore = Get-JsonPathValue $productionReadinessReport @("productionScorecard", "currentScore")
+        targetScore = Get-JsonPathValue $productionReadinessReport @("productionScorecard", "targetScore")
+    }
+    visualEvidence = [ordered]@{
+        manifestFile = "visual-smoke-manifest.json"
+        evidenceReportFile = "visual-smoke-evidence-report.json"
+        accountantWorkbenchEvidenceReportFile = "accountant-workbench-evidence-report.json"
+        screenshotCount = Get-JsonPropertyValue $visualSmokeEvidenceReport "screenshotCount"
+        expectedScreenshotCount = Get-JsonPropertyValue $visualSmokeEvidenceReport "expectedScreenshotCount"
+        routeCount = Get-JsonPropertyValue $visualSmokeEvidenceReport "routeCount"
+        minimumPngIdatByteSize = Get-MinimumVisualMetric $visualSmokeEvidenceReport @("pngIdatByteSize")
+        minimumScreenshotPixelSampleCount = Get-MinimumVisualMetric $visualSmokeEvidenceReport @("pixelSampleCount")
+        minimumSampledDistinctColorCount = Get-MinimumVisualMetric $visualSmokeEvidenceReport @("sampledDistinctColorCount")
+        minimumScreenshotLuminanceRange = Get-MinimumVisualMetric $visualSmokeEvidenceReport @("luminanceRange")
+        minimumAutomatedContrastRatio = Get-MinimumVisualMetric $visualSmokeEvidenceReport @("themeContrastResult", "minimumContrastRatio")
+    }
+    monitoringEvidence = [ordered]@{
+        provider = [string](Get-JsonPropertyValue $monitoringErrorRoutingReport "provider")
+        eventId = [string](Get-JsonPropertyValue $monitoringErrorRoutingReport "eventId")
+        correlationId = [string](Get-JsonPropertyValue $monitoringErrorRoutingReport "correlationId")
+        baseUrl = [string](Get-JsonPropertyValue $monitoringErrorRoutingReport "baseUrl")
+        checkedAtUtc = $checkedAtUtc
+        structuredLogFile = [string](Get-JsonPropertyValue $structuredLogReport "structuredLogFile")
+        jsonLogLineCount = Get-JsonPropertyValue $structuredLogReport "jsonLogLineCount"
+        matchedMonitoringSmokeLine = [bool](Get-JsonPropertyValue $structuredLogReport "matchedMonitoringSmokeLine")
+    }
+    reviewerQueue = @($reviewerQueue)
+    completionPolicy = "This summary is machine evidence only; all six human evidence templates must still be completed by named reviewers."
+}
+
+$machineEvidenceSummaryPath = Join-Path $resolvedOutputDirectory $machineEvidenceSummaryFile
+$machineEvidenceSummary | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $machineEvidenceSummaryPath
+
 foreach ($template in $preparedTemplates) {
     $source = Join-Path $resolvedTemplateDirectory $template.FileName
     $destination = Join-Path $resolvedOutputDirectory $template.FileName
@@ -380,6 +443,7 @@ $manifest = [ordered]@{
     structuredLogReportPath = $structuredLogReportPath
     reviewerIndexFile = "release-evidence-reviewer-index.md"
     reviewerCompletionFile = $completionLedgerFile
+    machineEvidenceSummaryFile = $machineEvidenceSummaryFile
     preparedTemplates = @($preparedTemplates | ForEach-Object { $_.FileName })
     retainedMachineEvidence = @($retainedMachineEvidence)
     reviewerQueue = @($reviewerQueue)
@@ -416,6 +480,8 @@ This workspace is reviewer preparation only. It is not release approval and it i
 - Production readiness report timestamp: $productionReadinessTimestamp
 
 ## Machine Evidence Inputs
+
+Machine summary: release-evidence-machine-summary.json
 
 | Evidence input | Retained file | Source CI artifact |
 | --- | --- | --- |

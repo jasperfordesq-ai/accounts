@@ -27,6 +27,7 @@ $requiredWorkspaceFiles = @(
         "monitoring-error-routing-report.json",
         "structured-log-report.json",
         "release-evidence-workspace-manifest.json",
+        "release-evidence-machine-summary.json",
         "release-evidence-reviewer-index.md",
         "release-evidence-reviewer-completion.json",
         "release-evidence-reviewer-blockers.md",
@@ -205,10 +206,12 @@ if ([string]::IsNullOrWhiteSpace($ReportPath)) {
 $failures = New-Object System.Collections.Generic.List[string]
 
 $manifestPath = Join-Path $resolvedWorkspace.Path "release-evidence-workspace-manifest.json"
+$machineEvidenceSummaryPath = Join-Path $resolvedWorkspace.Path "release-evidence-machine-summary.json"
 $reviewerIndexPath = Join-Path $resolvedWorkspace.Path "release-evidence-reviewer-index.md"
 $reviewerCompletionPath = Join-Path $resolvedWorkspace.Path "release-evidence-reviewer-completion.json"
 $reviewerBlockersPath = Join-Path $resolvedWorkspace.Path "release-evidence-reviewer-blockers.md"
 $releaseEvidenceVerifierOutputPath = Join-Path $resolvedWorkspace.Path "release-evidence-verifier-output.txt"
+$manifest = $null
 
 if (-not (Test-Path -LiteralPath $manifestPath)) {
     Add-Failure $failures "Workspace must include release-evidence-workspace-manifest.json."
@@ -225,6 +228,10 @@ if (-not (Test-Path -LiteralPath $manifestPath)) {
 
     if ([string](Get-JsonPropertyValue $manifest "reviewerCompletionFile") -ne "release-evidence-reviewer-completion.json") {
         Add-Failure $failures "Workspace manifest reviewerCompletionFile must be release-evidence-reviewer-completion.json."
+    }
+
+    if ([string](Get-JsonPropertyValue $manifest "machineEvidenceSummaryFile") -ne "release-evidence-machine-summary.json") {
+        Add-Failure $failures "Workspace manifest machineEvidenceSummaryFile must be release-evidence-machine-summary.json."
     }
 
     if (-not [string]::IsNullOrWhiteSpace($CommitSha) -and [string](Get-JsonPropertyValue $manifest "commitSha") -ne $CommitSha) {
@@ -329,6 +336,81 @@ if (-not (Test-Path -LiteralPath $manifestPath)) {
     }
 }
 
+if (-not (Test-Path -LiteralPath $machineEvidenceSummaryPath)) {
+    Add-Failure $failures "Workspace must include release-evidence-machine-summary.json."
+} else {
+    $machineEvidenceSummary = Get-Content -LiteralPath $machineEvidenceSummaryPath -Raw | ConvertFrom-Json
+
+    if ([string](Get-JsonPropertyValue $machineEvidenceSummary "status") -ne "pending-human-evidence") {
+        Add-Failure $failures "Machine evidence summary status must be pending-human-evidence."
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($CommitSha) -and [string](Get-JsonPropertyValue (Get-JsonPropertyValue $machineEvidenceSummary "releaseCandidate") "commitSha") -ne $CommitSha) {
+        Add-Failure $failures "Machine evidence summary releaseCandidate.commitSha must match CommitSha."
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($GitHubActionsRunUrl) -and [string](Get-JsonPropertyValue (Get-JsonPropertyValue $machineEvidenceSummary "releaseCandidate") "githubActionsRunUrl") -ne $GitHubActionsRunUrl) {
+        Add-Failure $failures "Machine evidence summary releaseCandidate.githubActionsRunUrl must match GitHubActionsRunUrl."
+    }
+
+    Assert-TextContains ([string](Get-JsonPropertyValue $machineEvidenceSummary "completionPolicy")) "machine evidence only" "release-evidence-machine-summary.json completionPolicy" $failures
+    Assert-TextContains ([string](Get-JsonPropertyValue $machineEvidenceSummary "completionPolicy")) "named reviewers" "release-evidence-machine-summary.json completionPolicy" $failures
+
+    $summaryRetainedMachineEvidence = @((Get-JsonPropertyValue $machineEvidenceSummary "retainedMachineEvidence"))
+    if ($summaryRetainedMachineEvidence.Count -ne $requiredMachineEvidenceFiles.Count) {
+        Add-Failure $failures "Machine evidence summary retainedMachineEvidence must contain exactly $($requiredMachineEvidenceFiles.Count) entries."
+    }
+
+    foreach ($expectedMachineEvidence in $requiredMachineEvidenceProvenance) {
+        $requiredMachineEvidenceFile = $expectedMachineEvidence.FileName
+        $summaryEntry = $summaryRetainedMachineEvidence | Where-Object {
+            [string](Get-JsonPropertyValue $_ "fileName") -eq $requiredMachineEvidenceFile
+        } | Select-Object -First 1
+
+        if ($null -eq $summaryEntry) {
+            Add-Failure $failures "Machine evidence summary retainedMachineEvidence must include $requiredMachineEvidenceFile."
+            continue
+        }
+
+        foreach ($propertyName in @("sourceArtifactName", "sourceArtifactFile", "byteSize", "sha256")) {
+            $summaryValue = [string](Get-JsonPropertyValue $summaryEntry $propertyName)
+            $manifestValue = ""
+            if ($null -ne $manifest) {
+                $manifestEntry = @((Get-JsonPropertyValue $manifest "retainedMachineEvidence")) | Where-Object {
+                    [string](Get-JsonPropertyValue $_ "fileName") -eq $requiredMachineEvidenceFile
+                } | Select-Object -First 1
+                if ($null -ne $manifestEntry) {
+                    $manifestValue = [string](Get-JsonPropertyValue $manifestEntry $propertyName)
+                }
+            }
+
+            if ([string]::IsNullOrWhiteSpace($summaryValue)) {
+                Add-Failure $failures "Machine evidence summary retainedMachineEvidence.$requiredMachineEvidenceFile.$propertyName must be present."
+            } elseif ($null -ne $manifest -and $summaryValue -ne $manifestValue) {
+                Add-Failure $failures "Machine evidence summary retainedMachineEvidence.$requiredMachineEvidenceFile.$propertyName must match the workspace manifest."
+            }
+        }
+    }
+
+    $summaryVisualEvidence = Get-JsonPropertyValue $machineEvidenceSummary "visualEvidence"
+    foreach ($expectedVisualFile in @("visual-smoke-manifest.json", "visual-smoke-evidence-report.json", "accountant-workbench-evidence-report.json")) {
+        $summaryVisualText = $summaryVisualEvidence | ConvertTo-Json -Depth 4
+        Assert-TextContains $summaryVisualText $expectedVisualFile "release-evidence-machine-summary.json visualEvidence" $failures
+    }
+
+    $summaryMonitoringEvidence = Get-JsonPropertyValue $machineEvidenceSummary "monitoringEvidence"
+    foreach ($field in @("provider", "eventId", "correlationId", "baseUrl", "checkedAtUtc", "structuredLogFile")) {
+        if ([string]::IsNullOrWhiteSpace([string](Get-JsonPropertyValue $summaryMonitoringEvidence $field))) {
+            Add-Failure $failures "Machine evidence summary monitoringEvidence.$field must be present."
+        }
+    }
+
+    $summaryReviewerQueue = @((Get-JsonPropertyValue $machineEvidenceSummary "reviewerQueue"))
+    if ($summaryReviewerQueue.Count -ne $requiredReviewerQueue.Count) {
+        Add-Failure $failures "Machine evidence summary reviewerQueue must contain exactly $($requiredReviewerQueue.Count) entries."
+    }
+}
+
 if (-not (Test-Path -LiteralPath $reviewerIndexPath)) {
     Add-Failure $failures "Workspace must include release-evidence-reviewer-index.md."
 } else {
@@ -341,6 +423,7 @@ if (-not (Test-Path -LiteralPath $reviewerIndexPath)) {
         "Reviewer Queue",
         "Reviewer Completion Ledger",
         "release-evidence-reviewer-completion.json",
+        "release-evidence-machine-summary.json",
         "Completion Gate",
         "scripts/verify-release-evidence.ps1"
     )) {
@@ -537,6 +620,7 @@ $verificationReport = [ordered]@{
     releaseEvidenceVerifierOutputPath = $releaseEvidenceVerifierOutputPath
     reviewerCompletionPath = $reviewerCompletionPath
     reviewerBlockersPath = $reviewerBlockersPath
+    machineEvidenceSummaryPath = $machineEvidenceSummaryPath
     workspaceFiles = $workspaceFiles
     requiredWorkspaceFiles = $requiredWorkspaceFiles
     requiredTemplateCount = $requiredTemplates.Count

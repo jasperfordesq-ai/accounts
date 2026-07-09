@@ -2067,6 +2067,36 @@ Release evidence reviewer machine input source provenance:
     artifact name and the workspace verifier failed with the expected
     provenance blocker.
 
+Release evidence reviewer machine summary:
+
+- This slice adds `release-evidence-machine-summary.json` to generated reviewer
+  workspaces. The summary gives reviewers one machine-readable digest of the
+  release candidate identity, retained machine evidence files, source CI
+  artifact provenance, production readiness status/scorecard, visual smoke
+  metrics, monitoring smoke identifiers, structured-log confirmation, and the
+  six-entry reviewer queue.
+- `scripts/verify-release-evidence-workspace.ps1` now requires the summary,
+  checks that the manifest references it, cross-checks the summary's retained
+  machine evidence entries against the manifest, requires monitoring and visual
+  evidence fields to be present, inventories the summary with the rest of the
+  workspace, and still proves release evidence remains blocked before named
+  human sign-off.
+- The expected pre-report workspace inventory is now 19 files: six templates,
+  six retained machine evidence JSONs, the machine summary, and six generated
+  reviewer/release-evidence control files.
+- Verification completed locally:
+  - PowerShell parser checks passed for `scripts/new-release-evidence-workspace.ps1`
+    and `scripts/verify-release-evidence-workspace.ps1`.
+  - `node scripts/verify-ci-actions.mjs` passed.
+  - Backend focused regression passed:
+    `ReleaseEvidenceVerifier_BlocksIncompleteHumanSignoffEvidence`.
+  - A local nested-artifact simulation generated and verified a workspace with
+    `release-evidence-machine-summary.json`, 19 workspace files, six retained
+    machine evidence entries, and no verifier failures.
+  - A tampered-summary simulation changed a retained machine evidence SHA-256
+    value in the summary and the workspace verifier failed with the expected
+    manifest mismatch blocker.
+
 ## What Is Left To Do
 
 Highest-priority next steps:
