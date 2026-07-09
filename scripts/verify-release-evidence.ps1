@@ -833,6 +833,8 @@ function Test-SourceLawEvidence {
     Assert-CompletedTableColumnMatches $Content $requiredSourceLawSourceIds 3 "Guidance wording compared" "^yes$" "yes" $context $Failures
     Assert-CompletedTableColumnMatches $Content $requiredSourceLawSourceIds 4 "Platform impact" "^(no change|reflected\b.*|blocking\b.*)$" "no change, reflected, or blocking" $context $Failures
     Assert-CompletedTableColumnMatches $Content $requiredSourceLawSourceIds 5 "Decision" "^accepted$" "accepted for this release candidate" $context $Failures
+    Assert-CompletedTableColumnMatches $Content $requiredSourceLawSourceIds 6 "Notes" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real retained per-source note or evidence reference" $context $Failures
+    Assert-CompletedTableColumnContainsRowLabel $Content $requiredSourceLawSourceIds 6 "Notes" $context $Failures
 }
 
 $failures = [System.Collections.Generic.List[string]]::new()

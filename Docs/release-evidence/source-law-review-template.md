@@ -28,6 +28,9 @@ current source page has been checked. Use the checked effective date in
 `accepted` in `Decision` only when the source row is accepted for this release
 candidate. The verifier rejects generic `accepted` placeholders in the URL,
 effective-date, guidance-comparison and platform-impact cells.
+Each `Notes` cell must include a retained per-source note or evidence reference
+containing the matching source ID, so source-law review evidence cannot be reused
+against the wrong monitored source row.
 
 ## Required Evidence Pack
 

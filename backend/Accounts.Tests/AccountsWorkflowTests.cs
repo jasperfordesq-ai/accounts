@@ -18334,6 +18334,8 @@ public class AccountsWorkflowTests
         Assert.Contains("Use `yes` for `URL reachable`", sourceLaw);
         Assert.Contains("The verifier rejects generic `accepted` placeholders", sourceLaw);
         Assert.Contains("`no change`, `reflected...`, or `blocking...`", sourceLaw);
+        Assert.Contains("Each `Notes` cell must include", sourceLaw);
+        Assert.Contains("matching source ID", sourceLaw);
 
         var externalRosIxbrl = File.ReadAllText(externalRosIxbrlPath);
         Assert.Contains("External ROS/iXBRL validation", externalRosIxbrl);
@@ -18457,6 +18459,8 @@ public class AccountsWorkflowTests
         Assert.Contains("\"Guidance wording compared\" \"^yes$\"", script);
         Assert.Contains("\"Platform impact\" \"^(no change|reflected\\b.*|blocking\\b.*)$\"", script);
         Assert.Contains("\"Decision\" \"^accepted$\"", script);
+        Assert.Contains("\"Notes\" \"^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+\"", script);
+        Assert.Contains("Assert-CompletedTableColumnContainsRowLabel $Content $requiredSourceLawSourceIds 6 \"Notes\"", script);
         Assert.Contains("Test-ExternalRosIxbrlEvidence", script);
         Assert.Contains("externalRosIxbrlValidation", script);
         Assert.Contains("externalRosIxbrlScenarioCodes", script);

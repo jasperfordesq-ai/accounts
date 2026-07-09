@@ -768,8 +768,8 @@ CI status:
   2026.
 - Green jobs: Workflow Hygiene, Production Compose Config, Frontend, Backend,
   Production Stack Smoke, and CI Machine Evidence Pack.
-- The scorecard exposed by the candidate is now 639/700, with backend statutory/accounting
-  engine at 220/250, frontend accountant workbench at 170/200 and
+- The scorecard exposed by the candidate is now 641/700, with backend statutory/accounting
+  engine at 222/250, frontend accountant workbench at 170/200 and
   security/auth/tenant/platform guardrails at 150/150.
   The typed frontend parser and production-readiness verifier both require CI
   machine evidence, production smoke, readiness verification, visual smoke, release
@@ -934,6 +934,34 @@ No-direct release-candidate identity checks:
     and `npx.cmd tsc --noEmit --incremental false`.
   - `node scripts/verify-ci-actions.mjs` passed after the workflow update.
 
+Backend source-law per-source note evidence checks:
+
+- This slice tightened `scripts/verify-release-evidence.ps1` so every
+  source-law review table row must include a real retained `Notes` value and
+  that note/reference must include the matching monitored source ID.
+- The source-law review template now tells reviewers each `Notes` cell must
+  include a retained per-source note or evidence reference containing the
+  matching source ID, so source-law review evidence cannot be reused against the
+  wrong monitored source row.
+- Verification completed locally:
+  - PowerShell parser check for `scripts\verify-release-evidence.ps1` passed.
+  - Temporary completed release-evidence pack outside the repo passed with
+    source-law notes like `source-law-review-ledger#<source-id>` for every
+    monitored source.
+  - A copied pack with `revenue-accepted-taxonomies` replaced by
+    `wrong-source` in that row's Notes cell failed with the expected source-law
+    row-code verifier error.
+  - Backend focused regression passed 3 tests:
+    `ReleaseEvidenceVerifier_BlocksIncompleteHumanSignoffEvidence`,
+    `ReleaseEvidenceTemplates_CoverHumanVisualAccountantAndProviderSignoffs`,
+    and
+    `ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers`.
+  - Frontend contract/API/render/type checks passed:
+    `node --test tests/production-readiness-contract.test.mjs`,
+    `node scripts/verify-api-client.mjs`,
+    `npx.cmd vitest run tests/render/production-readiness-panel.test.tsx tests/render/production-readiness-workbench.test.tsx`,
+    and `npx.cmd tsc --noEmit --incremental false`.
+
 ## What Is Left To Do
 
 Highest-priority next steps:
@@ -983,8 +1011,8 @@ As of July 8, 2026:
 - Code implementation is roughly 70-75% complete.
 - Production assurance is roughly 60-65% complete.
 - Overall goal is roughly 63-67% complete, with about one third left.
-- The production scorecard is now 639/700: architecture/documentation 99/100,
-  backend statutory/accounting engine 220/250, frontend accountant workbench 170/200,
+- The production scorecard is now 641/700: architecture/documentation 99/100,
+  backend statutory/accounting engine 222/250, frontend accountant workbench 170/200,
   and security/auth/tenant/platform guardrails 150/150.
 - Architecture/documentation is now scored 99/100 in the production scorecard because
   source-law review, release evidence templates, manual handoff evidence, runbook
