@@ -35,6 +35,12 @@ describe("ProductionReadinessPanel", () => {
     expect(screen.getByText("Revenue accepted iXBRL taxonomies")).toBeInTheDocument();
     expect(screen.getByText("Qualified accountant sign-off")).toBeInTheDocument();
     expect(screen.getByText("Named accountant approval recorded against the period.")).toBeInTheDocument();
+    expect(screen.getByText("Human evidence closeout")).toBeInTheDocument();
+    expect(screen.getByText("Complete reviewer templates, verify release evidence, then verify the final artifact pack for the same candidate.")).toBeInTheDocument();
+    expect(screen.getByText("6 templates")).toBeInTheDocument();
+    expect(screen.getByText("scripts/verify-release-evidence.ps1")).toBeInTheDocument();
+    expect(screen.getByText("6 accepted humanEvidenceCompletion rows")).toBeInTheDocument();
+    expect(screen.getByText("scripts/verify-release-artifact-pack.ps1")).toBeInTheDocument();
   });
 });
 

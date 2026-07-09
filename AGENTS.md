@@ -2282,6 +2282,15 @@ Production readiness workbench closeout path:
 - The render regression now asserts that the live workbench shows the verifier,
   report and final artifact-pack handoff steps.
 
+Production readiness dashboard closeout card:
+
+- This slice adds a compact `Human evidence closeout` card to the dashboard production
+  readiness panel, so the first readiness surface also shows the remaining template,
+  release-evidence verifier, `humanEvidenceCompletion`, and final artifact-pack steps.
+- The panel render regression now asserts the dashboard summary exposes
+  `scripts/verify-release-evidence.ps1`, six accepted `humanEvidenceCompletion` rows,
+  and `scripts/verify-release-artifact-pack.ps1`.
+
 ## What Is Left To Do
 
 Highest-priority next steps:

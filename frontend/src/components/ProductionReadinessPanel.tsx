@@ -45,6 +45,8 @@ export function ProductionReadinessPanel({
   const coveredScenarios = report.goldenFilingCorpus.filter((scenario) => scenario.coverageStatus === "covered").length;
   const nextAction = report.assuranceActions?.[0];
   const statusTone = report.overallStatus === "ready" ? "good" : "warn";
+  const pendingHumanEvidenceCount = report.humanReleaseEvidence.filter((item) => item.blocksRelease).length;
+  const humanEvidenceTemplateCount = report.humanReleaseEvidence.length;
 
   return (
     <ReviewPanel
@@ -209,6 +211,26 @@ export function ProductionReadinessPanel({
 
         <div className="min-w-0 space-y-3">
           <div className="min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Human evidence closeout</p>
+                <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">
+                  Complete reviewer templates, verify release evidence, then verify the final artifact pack for the same candidate.
+                </p>
+              </div>
+              <StatusBadge tone={pendingHumanEvidenceCount > 0 ? "bad" : "good"}>
+                {pendingHumanEvidenceCount} pending
+              </StatusBadge>
+            </div>
+            <div className="mt-3 space-y-2 text-xs leading-5">
+              <CloseoutStep label={`${humanEvidenceTemplateCount} templates`} value="Docs/release-evidence/*.md" />
+              <CloseoutStep label="Verifier" value="scripts/verify-release-evidence.ps1" />
+              <CloseoutStep label="Completion" value={`${humanEvidenceTemplateCount} accepted humanEvidenceCompletion rows`} />
+              <CloseoutStep label="Final pack" value="scripts/verify-release-artifact-pack.ps1" />
+            </div>
+          </div>
+
+          <div className="min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
             <div className="flex items-center justify-between gap-2">
               <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Completion tracks</p>
               <StatusBadge tone={report.completionTracks.every((track) => track.status === "complete") ? "good" : "warn"}>
@@ -274,6 +296,15 @@ export function ProductionReadinessPanel({
         </div>
       </div>
     </ReviewPanel>
+  );
+}
+
+function CloseoutStep({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex min-w-0 items-start justify-between gap-2 rounded border border-[var(--border)] bg-[var(--surface-subtle)] px-2 py-1.5">
+      <span className="shrink-0 font-medium text-[var(--foreground)]">{label}</span>
+      <code className="min-w-0 break-all text-right text-[11px] text-[var(--muted-foreground)]">{value}</code>
+    </div>
   );
 }
 
