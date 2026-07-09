@@ -46,8 +46,8 @@ export function ProductionReadinessPanel({
   const nextAction = report.assuranceActions?.[0];
   const statusTone = report.overallStatus === "ready" ? "good" : "warn";
   const humanReleaseEvidence = report.humanReleaseEvidence ?? [];
+  const humanEvidenceCloseoutSteps = report.humanReleaseEvidenceCloseout ?? [];
   const pendingHumanEvidenceCount = humanReleaseEvidence.filter((item) => item.blocksRelease).length;
-  const humanEvidenceTemplateCount = humanReleaseEvidence.length;
 
   return (
     <ReviewPanel
@@ -224,10 +224,9 @@ export function ProductionReadinessPanel({
               </StatusBadge>
             </div>
             <div className="mt-3 space-y-2 text-xs leading-5">
-              <CloseoutStep label={`${humanEvidenceTemplateCount} templates`} value="Docs/release-evidence/*.md" />
-              <CloseoutStep label="Verifier" value="scripts/verify-release-evidence.ps1" />
-              <CloseoutStep label="Completion" value={`${humanEvidenceTemplateCount} accepted humanEvidenceCompletion rows`} />
-              <CloseoutStep label="Final pack" value="scripts/verify-release-artifact-pack.ps1" />
+              {humanEvidenceCloseoutSteps.map((step) => (
+                <CloseoutStep key={step.code} label={step.label} value={step.artifact} detail={step.detail} />
+              ))}
             </div>
           </div>
 
@@ -300,11 +299,14 @@ export function ProductionReadinessPanel({
   );
 }
 
-function CloseoutStep({ label, value }: { label: string; value: string }) {
+function CloseoutStep({ label, value, detail }: { label: string; value: string; detail: string }) {
   return (
-    <div className="flex min-w-0 items-start justify-between gap-2 rounded border border-[var(--border)] bg-[var(--surface-subtle)] px-2 py-1.5">
-      <span className="shrink-0 font-medium text-[var(--foreground)]">{label}</span>
-      <code className="min-w-0 break-all text-right text-[11px] text-[var(--muted-foreground)]">{value}</code>
+    <div className="grid min-w-0 gap-1 rounded border border-[var(--border)] bg-[var(--surface-subtle)] px-2 py-1.5">
+      <div className="flex min-w-0 items-start justify-between gap-2">
+        <span className="shrink-0 font-medium text-[var(--foreground)]">{label}</span>
+        <code className="min-w-0 break-all text-right text-[11px] text-[var(--muted-foreground)]">{value}</code>
+      </div>
+      <p className="text-[11px] leading-4 text-[var(--muted-foreground)]">{detail}</p>
     </div>
   );
 }

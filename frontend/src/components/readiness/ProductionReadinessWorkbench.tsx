@@ -60,32 +60,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
   );
   const pendingHumanEvidenceCount = humanReleaseEvidence.filter((item) => item.blocksRelease).length;
   const humanEvidenceTemplateCount = humanReleaseEvidence.length;
-  const humanEvidenceCloseoutSteps = [
-    {
-      label: "Complete templates",
-      detail: `Complete ${humanEvidenceTemplateCount} retained Markdown templates with named reviewers, UTC timestamps, retained evidence references, accepted decisions and signatures.`,
-      artifact: "Docs/release-evidence/*.md",
-      tone: pendingHumanEvidenceCount === 0 ? "good" : "bad",
-    },
-    {
-      label: "Run release evidence verifier",
-      detail: "Generate the final release evidence report for the exact candidate after the human templates are complete.",
-      artifact: "scripts/verify-release-evidence.ps1",
-      tone: "warn",
-    },
-    {
-      label: "Confirm human completion",
-      detail: `Confirm ${humanEvidenceTemplateCount} accepted humanEvidenceCompletion rows with zero blocking failures.`,
-      artifact: "release-evidence-report.json",
-      tone: "warn",
-    },
-    {
-      label: "Verify final artifact pack",
-      detail: "Run the final pack verifier against the same commit SHA and GitHub Actions run URL.",
-      artifact: "scripts/verify-release-artifact-pack.ps1",
-      tone: "warn",
-    },
-  ] as const;
+  const humanEvidenceCloseoutSteps = report.humanReleaseEvidenceCloseout ?? [];
 
   return (
     <PageShell
@@ -278,10 +253,10 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
       >
         <div className="grid min-w-0 grid-cols-1 gap-3 xl:grid-cols-4">
           {humanEvidenceCloseoutSteps.map((step, index) => (
-            <div key={step.label} className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
+            <div key={step.code} className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
               <div className="flex items-start gap-2">
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface-subtle)] text-xs font-semibold text-[var(--foreground)]">
-                  {index + 1}
+                  {step.sequence}
                 </span>
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-[var(--foreground)]">{step.label}</p>
@@ -289,7 +264,9 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
                 </div>
               </div>
               <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2">
-                <StatusBadge tone={step.tone}>{index === 0 && pendingHumanEvidenceCount > 0 ? `${pendingHumanEvidenceCount} pending` : "Required"}</StatusBadge>
+                <StatusBadge tone={closeoutStepTone(step.blocksRelease, index, pendingHumanEvidenceCount)}>
+                  {index === 0 && pendingHumanEvidenceCount > 0 ? `${pendingHumanEvidenceCount} pending` : "Required"}
+                </StatusBadge>
                 <code className="min-w-0 break-all text-[11px] text-[var(--muted-foreground)]">{step.artifact}</code>
               </div>
             </div>
@@ -2336,6 +2313,16 @@ function ciScopeTone(scope: string): "good" | "warn" | "bad" | "info" | "default
   if (scope === "environment-gated") return "warn";
   if (scope === "manual-release") return "bad";
   return "default";
+}
+
+function closeoutStepTone(
+  blocksRelease: boolean,
+  index: number,
+  pendingHumanEvidenceCount: number,
+): "good" | "warn" | "bad" | "info" | "default" {
+  if (!blocksRelease) return "good";
+  if (index === 0 && pendingHumanEvidenceCount > 0) return "bad";
+  return "warn";
 }
 
 function formatStatus(value: string) {

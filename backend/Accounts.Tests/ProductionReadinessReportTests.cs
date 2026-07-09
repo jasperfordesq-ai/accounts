@@ -1011,6 +1011,20 @@ public class ProductionReadinessReportTests
             item.Code == "visualQa"
             && item.TemplateFile == "visual-qa-signoff-template.md"
             && item.ReleaseManifestCode == "visual-smoke-light-dark");
+        Assert.Equal(
+            new[]
+            {
+                "complete-human-evidence-templates",
+                "run-release-evidence-verifier",
+                "confirm-human-evidence-completion",
+                "verify-release-artifact-pack"
+            },
+            report.HumanReleaseEvidenceCloseout.Select(item => item.Code));
+        Assert.Equal(1, report.HumanReleaseEvidenceCloseout[0].Sequence);
+        Assert.Equal("Docs/release-evidence/*.md", report.HumanReleaseEvidenceCloseout[0].Artifact);
+        Assert.Contains("6 retained Markdown templates", report.HumanReleaseEvidenceCloseout[0].Detail);
+        Assert.Contains("humanEvidenceCompletion", report.HumanReleaseEvidenceCloseout[2].Detail);
+        Assert.Equal("scripts/verify-release-artifact-pack.ps1", report.HumanReleaseEvidenceCloseout[3].Artifact);
 
         var trackCodes = report.CompletionTracks.Select(track => track.Code).ToHashSet(StringComparer.Ordinal);
         var blockerCodes = report.ReleaseBlockerRegister.Select(blocker => blocker.Code).ToHashSet(StringComparer.Ordinal);

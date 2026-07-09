@@ -433,6 +433,43 @@ function humanReleaseEvidence(): ProductionReadinessReport["humanReleaseEvidence
   ];
 }
 
+function humanReleaseEvidenceCloseout(): ProductionReadinessReport["humanReleaseEvidenceCloseout"] {
+  return [
+    {
+      code: "complete-human-evidence-templates",
+      label: "Complete templates",
+      sequence: 1,
+      detail: "Complete 6 retained Markdown templates with named reviewers, UTC timestamps, retained evidence references, accepted decisions and signatures.",
+      artifact: "Docs/release-evidence/*.md",
+      blocksRelease: true,
+    },
+    {
+      code: "run-release-evidence-verifier",
+      label: "Run release evidence verifier",
+      sequence: 2,
+      detail: "Generate release-evidence-report.json for the exact candidate after the human templates are complete.",
+      artifact: "scripts/verify-release-evidence.ps1",
+      blocksRelease: true,
+    },
+    {
+      code: "confirm-human-evidence-completion",
+      label: "Confirm human completion",
+      sequence: 3,
+      detail: "Confirm 6 accepted humanEvidenceCompletion rows with zero blocking failures in release-evidence-report.json.",
+      artifact: "release-evidence-report.json",
+      blocksRelease: true,
+    },
+    {
+      code: "verify-release-artifact-pack",
+      label: "Verify final artifact pack",
+      sequence: 4,
+      detail: "Run the final pack verifier against the same commit SHA and GitHub Actions run URL.",
+      artifact: "scripts/verify-release-artifact-pack.ps1",
+      blocksRelease: true,
+    },
+  ];
+}
+
 function humanEvidenceGate(
   code: string,
   label: string,
@@ -1548,6 +1585,7 @@ function sampleReport(): ProductionReadinessReport {
       },
     ],
     humanReleaseEvidence: humanReleaseEvidence(),
+    humanReleaseEvidenceCloseout: humanReleaseEvidenceCloseout(),
     auditabilityControls: [
       {
         code: "who-changed-what",

@@ -337,6 +337,14 @@ public sealed record HumanReleaseEvidenceGate(
     IReadOnlyList<string> RequiredEvidence,
     string NextAction);
 
+public sealed record HumanReleaseEvidenceCloseoutStep(
+    string Code,
+    string Label,
+    int Sequence,
+    string Detail,
+    string Artifact,
+    bool BlocksRelease);
+
 public sealed record AccountantAcceptanceCriterion(
     string ScenarioCode,
     string Label,
@@ -557,6 +565,7 @@ public sealed record ProductionReadinessReport(
     IReadOnlyList<ReleaseReviewChecklistItem> ReleaseReviewChecklist,
     IReadOnlyList<ReleaseVerificationManifestItem> ReleaseVerificationManifest,
     IReadOnlyList<HumanReleaseEvidenceGate> HumanReleaseEvidence,
+    IReadOnlyList<HumanReleaseEvidenceCloseoutStep> HumanReleaseEvidenceCloseout,
     VisualQaCoverage VisualQaCoverage);
 
 public class ProductionReadinessReportService(AccountsDbContext db)
@@ -584,6 +593,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
         var releaseReviewChecklist = BuildReleaseReviewChecklist(assuranceActions, operationalGates);
         var releaseVerificationManifest = BuildReleaseVerificationManifest();
         var humanReleaseEvidence = BuildHumanReleaseEvidence(releaseReviewChecklist, releaseVerificationManifest);
+        var humanReleaseEvidenceCloseout = BuildHumanReleaseEvidenceCloseout(humanReleaseEvidence);
         var releaseBlockerRegister = BuildReleaseBlockerRegister(
             completionTracks,
             assuranceActions,
@@ -663,6 +673,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             releaseReviewChecklist,
             releaseVerificationManifest,
             humanReleaseEvidence,
+            humanReleaseEvidenceCloseout,
             visualQaCoverage);
     }
 
@@ -2973,6 +2984,45 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "Matched monitoring smoke correlation id"
                 ],
                 "Confirm the controlled monitoring smoke event in the configured provider and retain operator acceptance.")
+        ];
+    }
+
+    private static IReadOnlyList<HumanReleaseEvidenceCloseoutStep> BuildHumanReleaseEvidenceCloseout(
+        IReadOnlyList<HumanReleaseEvidenceGate> humanReleaseEvidence)
+    {
+        var templateCount = humanReleaseEvidence.Count;
+        var pendingCount = humanReleaseEvidence.Count(item => item.BlocksRelease);
+
+        return
+        [
+            new(
+                "complete-human-evidence-templates",
+                "Complete templates",
+                1,
+                $"Complete {templateCount} retained Markdown templates with named reviewers, UTC timestamps, retained evidence references, accepted decisions and signatures.",
+                "Docs/release-evidence/*.md",
+                pendingCount > 0),
+            new(
+                "run-release-evidence-verifier",
+                "Run release evidence verifier",
+                2,
+                "Generate release-evidence-report.json for the exact candidate after the human templates are complete.",
+                "scripts/verify-release-evidence.ps1",
+                true),
+            new(
+                "confirm-human-evidence-completion",
+                "Confirm human completion",
+                3,
+                $"Confirm {templateCount} accepted humanEvidenceCompletion rows with zero blocking failures in release-evidence-report.json.",
+                "release-evidence-report.json",
+                true),
+            new(
+                "verify-release-artifact-pack",
+                "Verify final artifact pack",
+                4,
+                "Run the final pack verifier against the same commit SHA and GitHub Actions run URL.",
+                "scripts/verify-release-artifact-pack.ps1",
+                true)
         ];
     }
 

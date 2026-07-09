@@ -1889,6 +1889,15 @@ export interface HumanReleaseEvidenceGate {
   nextAction: string;
 }
 
+export interface HumanReleaseEvidenceCloseoutStep {
+  code: string;
+  label: string;
+  sequence: number;
+  detail: string;
+  artifact: string;
+  blocksRelease: boolean;
+}
+
 export interface AccountantAcceptanceCriterion {
   scenarioCode: string;
   label: string;
@@ -2139,6 +2148,7 @@ export interface ProductionReadinessReport {
   releaseReviewChecklist: ReleaseReviewChecklistItem[];
   releaseVerificationManifest: ReleaseVerificationManifestItem[];
   humanReleaseEvidence: HumanReleaseEvidenceGate[];
+  humanReleaseEvidenceCloseout: HumanReleaseEvidenceCloseoutStep[];
   visualQaCoverage: VisualQaCoverage;
 }
 
@@ -2256,6 +2266,15 @@ const humanReleaseEvidenceGateSchema = z.object({
   blocksRelease: z.boolean(),
   requiredEvidence: z.array(z.string().min(1)),
   nextAction: z.string().min(1),
+});
+
+const humanReleaseEvidenceCloseoutStepSchema = z.object({
+  code: z.string().min(1),
+  label: z.string().min(1),
+  sequence: z.number().int().positive(),
+  detail: z.string().min(1),
+  artifact: z.string().min(1),
+  blocksRelease: z.boolean(),
 });
 
 const productionReadinessAreaSchema = z.object({
@@ -2750,6 +2769,7 @@ export const productionReadinessReportSchema = z.object({
   releaseReviewChecklist: z.array(releaseReviewChecklistItemSchema),
   releaseVerificationManifest: z.array(releaseVerificationManifestItemSchema),
   humanReleaseEvidence: z.array(humanReleaseEvidenceGateSchema),
+  humanReleaseEvidenceCloseout: z.array(humanReleaseEvidenceCloseoutStepSchema),
   visualQaCoverage: visualQaCoverageSchema,
 });
 
@@ -3105,6 +3125,7 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
   assertProductionScorecard(report);
   assertReleaseVerificationManifest(report);
   assertHumanReleaseEvidence(report);
+  assertHumanReleaseEvidenceCloseout(report);
 
   report.goldenFilingCorpus.forEach((scenario, scenarioIndex) => {
     const evidenceTests = new Set(scenario.evidenceTestNames);
@@ -4843,6 +4864,95 @@ function assertHumanReleaseEvidence(report: ProductionReadinessReport) {
         `Invalid production readiness report contract: humanReleaseEvidence.${itemIndex}.requiredEvidence - at least two retained evidence references are required`,
       );
     }
+  });
+}
+
+function assertHumanReleaseEvidenceCloseout(report: ProductionReadinessReport) {
+  const requiredSteps = [
+    {
+      code: "complete-human-evidence-templates",
+      artifact: "Docs/release-evidence/*.md",
+      detailTerms: ["retained Markdown templates", "named reviewers"],
+    },
+    {
+      code: "run-release-evidence-verifier",
+      artifact: "scripts/verify-release-evidence.ps1",
+      detailTerms: ["release-evidence-report.json", "exact candidate"],
+    },
+    {
+      code: "confirm-human-evidence-completion",
+      artifact: "release-evidence-report.json",
+      detailTerms: ["humanEvidenceCompletion", "zero blocking failures"],
+    },
+    {
+      code: "verify-release-artifact-pack",
+      artifact: "scripts/verify-release-artifact-pack.ps1",
+      detailTerms: ["same commit SHA", "GitHub Actions run URL"],
+    },
+  ];
+  const actualCodes = report.humanReleaseEvidenceCloseout.map((item) => item.code);
+  const missingCodes = requiredSteps.map((step) => step.code).filter((code) => !actualCodes.includes(code));
+  const duplicateCodes = actualCodes.filter((code, index) => actualCodes.indexOf(code) !== index);
+  const templateCount = report.humanReleaseEvidence.length.toString();
+
+  if (missingCodes.length > 0) {
+    throw new Error(
+      `Invalid production readiness report contract: humanReleaseEvidenceCloseout - missing required steps: ${missingCodes.join(", ")}`,
+    );
+  }
+
+  if (duplicateCodes.length > 0) {
+    throw new Error(
+      `Invalid production readiness report contract: humanReleaseEvidenceCloseout - duplicate step codes: ${[...new Set(duplicateCodes)].join(", ")}`,
+    );
+  }
+
+  report.humanReleaseEvidenceCloseout.forEach((step, stepIndex) => {
+    const expected = requiredSteps[stepIndex];
+
+    if (!expected) {
+      throw new Error(
+        `Invalid production readiness report contract: humanReleaseEvidenceCloseout.${stepIndex}.code - unexpected closeout step`,
+      );
+    }
+
+    if (step.code !== expected.code) {
+      throw new Error(
+        `Invalid production readiness report contract: humanReleaseEvidenceCloseout.${stepIndex}.code - steps must remain in release-operator sequence`,
+      );
+    }
+
+    if (step.sequence !== stepIndex + 1) {
+      throw new Error(
+        `Invalid production readiness report contract: humanReleaseEvidenceCloseout.${stepIndex}.sequence - must match release-operator order`,
+      );
+    }
+
+    if (step.artifact !== expected.artifact) {
+      throw new Error(
+        `Invalid production readiness report contract: humanReleaseEvidenceCloseout.${stepIndex}.artifact - must reference ${expected.artifact}`,
+      );
+    }
+
+    if (stepIndex === 0 && !step.detail.includes(templateCount)) {
+      throw new Error(
+        "Invalid production readiness report contract: humanReleaseEvidenceCloseout.0.detail - must include the human evidence template count",
+      );
+    }
+
+    if (stepIndex === 2 && !step.detail.includes(templateCount)) {
+      throw new Error(
+        "Invalid production readiness report contract: humanReleaseEvidenceCloseout.2.detail - must include the humanEvidenceCompletion row count",
+      );
+    }
+
+    expected.detailTerms.forEach((term) => {
+      if (!step.detail.includes(term)) {
+        throw new Error(
+          `Invalid production readiness report contract: humanReleaseEvidenceCloseout.${stepIndex}.detail - must mention ${term}`,
+        );
+      }
+    });
   });
 }
 

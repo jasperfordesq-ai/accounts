@@ -259,6 +259,15 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.equal(visualHumanEvidence?.status, "pending-human-evidence");
   assert.equal(visualHumanEvidence?.blocksRelease, true);
   assert.ok(visualHumanEvidence?.requiredEvidence.some((item) => item.includes("visual-qa-signoff-template.md")));
+  assert.deepEqual(parsed.humanReleaseEvidenceCloseout.map((item) => item.code), [
+    "complete-human-evidence-templates",
+    "run-release-evidence-verifier",
+    "confirm-human-evidence-completion",
+    "verify-release-artifact-pack",
+  ]);
+  assert.equal(parsed.humanReleaseEvidenceCloseout[0].artifact, "Docs/release-evidence/*.md");
+  assert.match(parsed.humanReleaseEvidenceCloseout[2].detail, /6 accepted humanEvidenceCompletion rows/);
+  assert.equal(parsed.humanReleaseEvidenceCloseout[3].artifact, "scripts/verify-release-artifact-pack.ps1");
   assert.equal(parsed.auditEvidenceTimeline[0].code, "data-change-capture");
   assert.equal(parsed.auditEvidenceTimeline[0].capturedWhen, "At every authenticated write before regenerated outputs can be reviewed.");
   assert.equal(parsed.auditEvidenceTimeline[1].blockingGateCodes[0], "generated-output-review");
@@ -973,6 +982,30 @@ test("parseProductionReadinessReport rejects human release evidence manifest dri
   );
 });
 
+test("parseProductionReadinessReport rejects human evidence closeout sequence drift", () => {
+  const payload = sampleReport();
+  payload.humanReleaseEvidenceCloseout = [
+    payload.humanReleaseEvidenceCloseout[1],
+    payload.humanReleaseEvidenceCloseout[0],
+    ...payload.humanReleaseEvidenceCloseout.slice(2),
+  ];
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: humanReleaseEvidenceCloseout\.0\.code - steps must remain in release-operator sequence/,
+  );
+});
+
+test("parseProductionReadinessReport rejects human evidence closeout artifact drift", () => {
+  const payload = sampleReport();
+  payload.humanReleaseEvidenceCloseout[3].artifact = "scripts/manual-final-pack-check.ps1";
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: humanReleaseEvidenceCloseout\.3\.artifact - must reference scripts\/verify-release-artifact-pack\.ps1/,
+  );
+});
+
 function productionScorecard() {
   return {
     currentScore: 698,
@@ -1111,6 +1144,43 @@ function humanReleaseEvidence() {
     humanEvidenceGate("qualifiedAccountantAcceptance", "Qualified-accountant acceptance", "qualified-accountant-acceptance-template.md", "Named qualified accountant", "qualified-accountant-final-signoff", "accountant-final-signoff", "qualified-accountant-final-signoff", "named-accountant-approval-record"),
     humanEvidenceGate("manualHandoffAcceptance", "Manual handoff acceptance", "manual-handoff-acceptance-template.md", "Named manual handoff reviewer", "manual-accountant-acceptance", "golden-corpus-accountant-acceptance", "manual-accountant-acceptance", "signed-golden-corpus-acceptance-note"),
     humanEvidenceGate("monitoringProviderConfirmation", "Monitoring-provider confirmation", "monitoring-provider-confirmation-template.md", "Named release operator", "production-monitoring", "production-smoke-and-backup", "production-stack-smoke", "ci-production-stack-smoke-and-backup-restore"),
+  ];
+}
+
+function humanReleaseEvidenceCloseout() {
+  return [
+    {
+      code: "complete-human-evidence-templates",
+      label: "Complete templates",
+      sequence: 1,
+      detail: "Complete 6 retained Markdown templates with named reviewers, UTC timestamps, retained evidence references, accepted decisions and signatures.",
+      artifact: "Docs/release-evidence/*.md",
+      blocksRelease: true,
+    },
+    {
+      code: "run-release-evidence-verifier",
+      label: "Run release evidence verifier",
+      sequence: 2,
+      detail: "Generate release-evidence-report.json for the exact candidate after the human templates are complete.",
+      artifact: "scripts/verify-release-evidence.ps1",
+      blocksRelease: true,
+    },
+    {
+      code: "confirm-human-evidence-completion",
+      label: "Confirm human completion",
+      sequence: 3,
+      detail: "Confirm 6 accepted humanEvidenceCompletion rows with zero blocking failures in release-evidence-report.json.",
+      artifact: "release-evidence-report.json",
+      blocksRelease: true,
+    },
+    {
+      code: "verify-release-artifact-pack",
+      label: "Verify final artifact pack",
+      sequence: 4,
+      detail: "Run the final pack verifier against the same commit SHA and GitHub Actions run URL.",
+      artifact: "scripts/verify-release-artifact-pack.ps1",
+      blocksRelease: true,
+    },
   ];
 }
 
@@ -2569,6 +2639,7 @@ function sampleReport() {
       },
     ],
     humanReleaseEvidence: humanReleaseEvidence(),
+    humanReleaseEvidenceCloseout: humanReleaseEvidenceCloseout(),
     auditabilityControls: [
       {
         code: "who-changed-what",
