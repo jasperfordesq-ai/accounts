@@ -33,6 +33,28 @@ function Read-JsonFile {
     return Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
 }
 
+function Copy-MachineEvidenceInput {
+    param(
+        [string]$SourcePath,
+        [string]$OutputDirectory,
+        [string]$RequiredFileName,
+        [string]$EvidenceName
+    )
+
+    if ([string]::IsNullOrWhiteSpace($SourcePath) -or -not (Test-Path -LiteralPath $SourcePath -PathType Leaf)) {
+        throw "Machine evidence input '$EvidenceName' is required for reviewer workspace generation."
+    }
+
+    $destinationPath = Join-Path $OutputDirectory $RequiredFileName
+    Copy-Item -LiteralPath $SourcePath -Destination $destinationPath -Force
+
+    [ordered]@{
+        evidenceName = $EvidenceName
+        fileName = $RequiredFileName
+        sourcePath = $SourcePath
+    }
+}
+
 function Get-CurrentCommitSha {
     $sha = (& git -C (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path rev-parse HEAD).Trim()
     if ($LASTEXITCODE -ne 0) {
@@ -166,6 +188,9 @@ $productionReadinessReportPath = Resolve-OptionalPath $ProductionReadinessReport
 $visualSmokeEvidenceReportPath = Resolve-OptionalPath $VisualSmokeEvidenceReportPath
 $monitoringErrorRoutingReportPath = Resolve-OptionalPath $MonitoringErrorRoutingReportPath
 $structuredLogReportPath = Resolve-OptionalPath $StructuredLogReportPath
+$visualSmokeEvidenceDirectory = if ([string]::IsNullOrWhiteSpace($visualSmokeEvidenceReportPath)) { "" } else { Split-Path -Parent $visualSmokeEvidenceReportPath }
+$visualSmokeManifestPath = if ([string]::IsNullOrWhiteSpace($visualSmokeEvidenceDirectory)) { "" } else { Join-Path $visualSmokeEvidenceDirectory "visual-smoke-manifest.json" }
+$accountantWorkbenchEvidenceReportPath = if ([string]::IsNullOrWhiteSpace($visualSmokeEvidenceDirectory)) { "" } else { Join-Path $visualSmokeEvidenceDirectory "accountant-workbench-evidence-report.json" }
 
 $productionReadinessReport = Read-JsonFile $productionReadinessReportPath
 $visualSmokeEvidenceReport = Read-JsonFile $visualSmokeEvidenceReportPath
@@ -176,6 +201,15 @@ $productionReadinessTimestamp = [string](Get-JsonPropertyValue $productionReadin
 $checkedAtUtc = [string](Get-JsonPropertyValue $monitoringErrorRoutingReport "checkedAtUtc")
 
 New-Item -ItemType Directory -Path $resolvedOutputDirectory -Force | Out-Null
+
+$retainedMachineEvidence = @(
+    Copy-MachineEvidenceInput $productionReadinessReportPath $resolvedOutputDirectory "production-readiness-report.json" "Production readiness report"
+    Copy-MachineEvidenceInput $visualSmokeManifestPath $resolvedOutputDirectory "visual-smoke-manifest.json" "Visual smoke manifest"
+    Copy-MachineEvidenceInput $visualSmokeEvidenceReportPath $resolvedOutputDirectory "visual-smoke-evidence-report.json" "Visual smoke evidence report"
+    Copy-MachineEvidenceInput $accountantWorkbenchEvidenceReportPath $resolvedOutputDirectory "accountant-workbench-evidence-report.json" "Accountant workbench evidence report"
+    Copy-MachineEvidenceInput $monitoringErrorRoutingReportPath $resolvedOutputDirectory "monitoring-error-routing-report.json" "Monitoring error routing report"
+    Copy-MachineEvidenceInput $structuredLogReportPath $resolvedOutputDirectory "structured-log-report.json" "Structured log report"
+)
 
 $commonFields = @{
     "Commit SHA" = $CommitSha
@@ -324,6 +358,7 @@ $manifest = [ordered]@{
     reviewerIndexFile = "release-evidence-reviewer-index.md"
     reviewerCompletionFile = $completionLedgerFile
     preparedTemplates = @($preparedTemplates | ForEach-Object { $_.FileName })
+    retainedMachineEvidence = @($retainedMachineEvidence)
     reviewerQueue = @($reviewerQueue)
     humanFieldsLeftBlank = @(
         "reviewer/operator/accountant identity and role",
@@ -359,10 +394,12 @@ This workspace is reviewer preparation only. It is not release approval and it i
 
 ## Machine Evidence Inputs
 
-- Production readiness report: $productionReadinessReportPath
-- Visual smoke evidence report: $visualSmokeEvidenceReportPath
-- Monitoring error routing report: $monitoringErrorRoutingReportPath
-- Structured log report: $structuredLogReportPath
+- Production readiness report: production-readiness-report.json
+- Visual smoke manifest: visual-smoke-manifest.json
+- Visual smoke evidence report: visual-smoke-evidence-report.json
+- Accountant workbench evidence report: accountant-workbench-evidence-report.json
+- Monitoring error routing report: monitoring-error-routing-report.json
+- Structured log report: structured-log-report.json
 
 ## Reviewer Queue
 

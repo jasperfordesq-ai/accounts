@@ -20,6 +20,12 @@ $requiredTemplates = @(
 $requiredWorkspaceFiles = @(
     $requiredTemplates +
     @(
+        "production-readiness-report.json",
+        "visual-smoke-manifest.json",
+        "visual-smoke-evidence-report.json",
+        "accountant-workbench-evidence-report.json",
+        "monitoring-error-routing-report.json",
+        "structured-log-report.json",
         "release-evidence-workspace-manifest.json",
         "release-evidence-reviewer-index.md",
         "release-evidence-reviewer-completion.json",
@@ -66,6 +72,15 @@ $requiredReviewerQueue = @(
         ReviewerRole = "Named release operator"
         SignOffGate = "production-monitoring"
     }
+)
+
+$requiredMachineEvidenceFiles = @(
+    "production-readiness-report.json",
+    "visual-smoke-manifest.json",
+    "visual-smoke-evidence-report.json",
+    "accountant-workbench-evidence-report.json",
+    "monitoring-error-routing-report.json",
+    "structured-log-report.json"
 )
 
 function Add-Failure {
@@ -215,6 +230,21 @@ if (-not (Test-Path -LiteralPath $manifestPath)) {
         Assert-ArrayContains @((Get-JsonPropertyValue $manifest "preparedTemplates")) $template "Workspace manifest preparedTemplates" $failures
     }
 
+    $retainedMachineEvidence = @((Get-JsonPropertyValue $manifest "retainedMachineEvidence"))
+    if ($retainedMachineEvidence.Count -ne $requiredMachineEvidenceFiles.Count) {
+        Add-Failure $failures "Workspace manifest retainedMachineEvidence must contain exactly $($requiredMachineEvidenceFiles.Count) entries."
+    }
+
+    foreach ($requiredMachineEvidenceFile in $requiredMachineEvidenceFiles) {
+        $entry = $retainedMachineEvidence | Where-Object {
+            [string](Get-JsonPropertyValue $_ "fileName") -eq $requiredMachineEvidenceFile
+        } | Select-Object -First 1
+
+        if ($null -eq $entry) {
+            Add-Failure $failures "Workspace manifest retainedMachineEvidence must include $requiredMachineEvidenceFile."
+        }
+    }
+
     $preparedTemplates = @((Get-JsonPropertyValue $manifest "preparedTemplates"))
     if ($preparedTemplates.Count -ne $requiredTemplates.Count) {
         Add-Failure $failures "Workspace manifest preparedTemplates must contain exactly $($requiredTemplates.Count) entries."
@@ -280,6 +310,10 @@ if (-not (Test-Path -LiteralPath $reviewerIndexPath)) {
         Assert-TextContains $reviewerIndex $expected.TemplateFile "release-evidence-reviewer-index.md" $failures
         Assert-TextContains $reviewerIndex $expected.ReviewerRole "release-evidence-reviewer-index.md" $failures
         Assert-TextContains $reviewerIndex $expected.SignOffGate "release-evidence-reviewer-index.md" $failures
+    }
+
+    foreach ($requiredMachineEvidenceFile in $requiredMachineEvidenceFiles) {
+        Assert-TextContains $reviewerIndex $requiredMachineEvidenceFile "release-evidence-reviewer-index.md" $failures
     }
 }
 
@@ -352,6 +386,12 @@ if (-not (Test-Path -LiteralPath $reviewerCompletionPath)) {
 foreach ($template in $requiredTemplates) {
     if (-not (Test-Path -LiteralPath (Join-Path $resolvedWorkspace.Path $template))) {
         Add-Failure $failures "Workspace must include $template."
+    }
+}
+
+foreach ($requiredMachineEvidenceFile in $requiredMachineEvidenceFiles) {
+    if (-not (Test-Path -LiteralPath (Join-Path $resolvedWorkspace.Path $requiredMachineEvidenceFile))) {
+        Add-Failure $failures "Workspace must include retained machine evidence file $requiredMachineEvidenceFile."
     }
 }
 

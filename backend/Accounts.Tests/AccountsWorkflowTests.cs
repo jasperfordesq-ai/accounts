@@ -18463,6 +18463,8 @@ public class AccountsWorkflowTests
         Assert.Contains("release-evidence-reviewer-index.md", runbook);
         Assert.Contains("release-evidence-reviewer-completion.json", runbook);
         Assert.Contains("release-evidence-reviewer-blockers.md", runbook);
+        Assert.Contains("accountant-workbench-evidence-report.json", runbook);
+        Assert.Contains("structured-log-report.json", runbook);
         Assert.Contains("release-evidence-workspace-verification-report.json", runbook);
         Assert.Contains("release-evidence-verifier-output.txt", runbook);
         Assert.Contains("leaves all reviewer identity, decisions, signatures", runbook);
@@ -18484,6 +18486,10 @@ public class AccountsWorkflowTests
         Assert.Contains("reviewerBlockersPath", workspaceVerifier);
         Assert.Contains("workspaceFiles", workspaceVerifier);
         Assert.Contains("requiredWorkspaceFiles", workspaceVerifier);
+        Assert.Contains("requiredMachineEvidenceFiles", workspaceVerifier);
+        Assert.Contains("Workspace manifest retainedMachineEvidence must contain exactly", workspaceVerifier);
+        Assert.Contains("Workspace must include retained machine evidence file", workspaceVerifier);
+        Assert.Contains("accountant-workbench-evidence-report.json", workspaceVerifier);
         Assert.Contains("Workspace file inventory must include", workspaceVerifier);
         Assert.Contains("Workspace file inventory must not include unexpected file", workspaceVerifier);
         Assert.Contains("byteSize", workspaceVerifier);
@@ -18501,6 +18507,10 @@ public class AccountsWorkflowTests
         Assert.Contains("pending-human-evidence", workspaceScript);
         Assert.Contains("humanFieldsLeftBlank", workspaceScript);
         Assert.Contains("reviewerQueue", workspaceScript);
+        Assert.Contains("Copy-MachineEvidenceInput", workspaceScript);
+        Assert.Contains("retainedMachineEvidence", workspaceScript);
+        Assert.Contains("accountant-workbench-evidence-report.json", workspaceScript);
+        Assert.Contains("visual-smoke-manifest.json", workspaceScript);
         Assert.Contains("reviewerCompletionFile", workspaceScript);
         Assert.Contains("release-evidence-reviewer-completion.json", workspaceScript);
         Assert.Contains("completionPolicy", workspaceScript);

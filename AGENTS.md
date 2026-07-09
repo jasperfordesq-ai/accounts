@@ -1991,7 +1991,34 @@ Release evidence reviewer exact workspace inventory:
     `ReleaseEvidenceVerifier_BlocksIncompleteHumanSignoffEvidence`.
   - A local nested-artifact simulation generated and verified a workspace,
     confirmed `workspaceFiles` and `requiredWorkspaceFiles` both contain the
-    same 12 pre-report files, with no missing or unexpected entries.
+    expected pre-report files, with no missing or unexpected entries.
+
+Release evidence reviewer retained machine inputs:
+
+- This slice makes generated reviewer workspaces self-contained for machine
+  evidence review by copying the machine JSON inputs into the workspace:
+  `production-readiness-report.json`, `visual-smoke-manifest.json`,
+  `visual-smoke-evidence-report.json`,
+  `accountant-workbench-evidence-report.json`,
+  `monitoring-error-routing-report.json`, and `structured-log-report.json`.
+- `release-evidence-workspace-manifest.json` now records these retained inputs
+  in `retainedMachineEvidence`, and `release-evidence-reviewer-index.md` points
+  reviewers at the retained filenames rather than ephemeral CI runner paths.
+- `scripts/verify-release-evidence-workspace.ps1` now requires all six retained
+  machine evidence files, checks that the manifest lists them exactly, and adds
+  them to the exact `requiredWorkspaceFiles` inventory. The expected pre-report
+  workspace inventory is now 18 files: six templates, six retained machine
+  evidence JSONs, and six generated reviewer/release-evidence control files.
+- Verification completed locally:
+  - PowerShell parser checks passed for `scripts/new-release-evidence-workspace.ps1`
+    and `scripts/verify-release-evidence-workspace.ps1`.
+  - `node scripts/verify-ci-actions.mjs` passed.
+  - Backend focused regression passed:
+    `ReleaseEvidenceVerifier_BlocksIncompleteHumanSignoffEvidence`.
+  - A local nested-artifact simulation generated and verified a workspace,
+    confirmed `retainedMachineEvidence` contains six entries, confirmed
+    `workspaceFiles` and `requiredWorkspaceFiles` both contain 18 pre-report
+    files, and confirmed no missing or unexpected entries.
 
 ## What Is Left To Do
 
