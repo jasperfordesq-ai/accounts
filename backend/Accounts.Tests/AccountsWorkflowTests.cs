@@ -18338,8 +18338,8 @@ public class AccountsWorkflowTests
         Assert.Contains("The verifier rejects generic `accepted` placeholders", sourceLaw);
         Assert.Contains("exactly `no change`, `reflected`, or `blocking`", sourceLaw);
         Assert.Contains("trailing\nimpact prose such as `reflected in notes`", sourceLaw);
-        Assert.Contains("Each `Notes` cell must include", sourceLaw);
-        Assert.Contains("matching source ID", sourceLaw);
+        Assert.Contains("Each `Notes` cell must be the exact retained per-source review note reference", sourceLaw);
+        Assert.Contains("source-law-review-ledger#<source-id>", sourceLaw);
 
         var externalRosIxbrl = File.ReadAllText(externalRosIxbrlPath);
         Assert.Contains("External ROS/iXBRL validation", externalRosIxbrl);
@@ -18473,7 +18473,8 @@ public class AccountsWorkflowTests
         Assert.Contains("\"Platform impact\" \"^(no change|reflected|blocking)$\" \"exactly no change, reflected, or blocking\"", script);
         Assert.Contains("\"Decision\" \"^accepted$\"", script);
         Assert.Contains("\"Notes\" \"^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+\"", script);
-        Assert.Contains("Assert-CompletedTableColumnContainsRowLabel $Content $requiredSourceLawSourceIds 6 \"Notes\"", script);
+        Assert.Contains("Assert-CompletedTableColumnMatchesSourceLawNote $Content $requiredSourceLawSourceIds 6 \"Notes\"", script);
+        Assert.Contains("source-law-review-ledger#$label", script);
         Assert.Contains("Test-ExternalRosIxbrlEvidence", script);
         Assert.Contains("externalRosIxbrlValidation", script);
         Assert.Contains("externalRosIxbrlScenarioCodes", script);

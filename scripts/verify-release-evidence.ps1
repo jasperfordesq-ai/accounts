@@ -410,6 +410,38 @@ function Assert-CompletedTableColumnMatchesRouteWalkthroughNote {
     }
 }
 
+function Assert-CompletedTableColumnMatchesSourceLawNote {
+    param(
+        [string]$Content,
+        [string[]]$RowLabels,
+        [int]$ColumnIndex,
+        [string]$ColumnLabel,
+        [string]$Context,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    $lines = $Content -split "\r?\n"
+    foreach ($label in $RowLabels) {
+        $escaped = [regex]::Escape($label)
+        $row = $lines | Where-Object { $_ -match "^\|\s*$escaped\s*\|" } | Select-Object -First 1
+        if (-not $row) {
+            continue
+        }
+
+        $cells = @($row.Trim() -split "\|").Where({ $_.Trim().Length -gt 0 })
+        if ($cells.Count -le $ColumnIndex) {
+            Add-Failure $Failures "$Context table row '$label' is missing column '$ColumnLabel'."
+            continue
+        }
+
+        $value = $cells[$ColumnIndex].Trim()
+        $expected = "source-law-review-ledger#$label"
+        if (-not [string]::Equals($value, $expected, [StringComparison]::OrdinalIgnoreCase)) {
+            Add-Failure $Failures "$Context table row '$label' column '$ColumnLabel' must be $expected."
+        }
+    }
+}
+
 function Assert-CompletedTableColumnContainsRowLabel {
     param(
         [string]$Content,
@@ -905,7 +937,7 @@ function Test-SourceLawEvidence {
     Assert-CompletedTableColumnMatches $Content $requiredSourceLawSourceIds 4 "Platform impact" "^(no change|reflected|blocking)$" "exactly no change, reflected, or blocking" $context $Failures
     Assert-CompletedTableColumnMatches $Content $requiredSourceLawSourceIds 5 "Decision" "^accepted$" "accepted for this release candidate" $context $Failures
     Assert-CompletedTableColumnMatches $Content $requiredSourceLawSourceIds 6 "Notes" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real retained per-source note or evidence reference" $context $Failures
-    Assert-CompletedTableColumnContainsRowLabel $Content $requiredSourceLawSourceIds 6 "Notes" $context $Failures
+    Assert-CompletedTableColumnMatchesSourceLawNote $Content $requiredSourceLawSourceIds 6 "Notes" $context $Failures
 }
 
 $failures = [System.Collections.Generic.List[string]]::new()

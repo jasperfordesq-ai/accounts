@@ -29,9 +29,9 @@ exactly `no change`, `reflected`, or `blocking` in `Platform impact`; use
 candidate. The verifier rejects generic `accepted` placeholders, trailing
 impact prose such as `reflected in notes`, and other ambiguous values in the
 URL, effective-date, guidance-comparison and platform-impact cells.
-Each `Notes` cell must include a retained per-source note or evidence reference
-containing the matching source ID, so source-law review evidence cannot be reused
-against the wrong monitored source row.
+Each `Notes` cell must be the exact retained per-source review note reference
+`source-law-review-ledger#<source-id>`, so source-law review evidence cannot be
+reused against the wrong monitored source row.
 
 ## Required Evidence Pack
 
