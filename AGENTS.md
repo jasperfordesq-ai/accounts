@@ -768,7 +768,7 @@ CI status:
   2026.
 - Green jobs: Workflow Hygiene, Production Compose Config, Frontend, Backend,
   Production Stack Smoke, and CI Machine Evidence Pack.
-- The scorecard exposed by the candidate is now 683/700, with backend statutory/accounting
+- At that checkpoint, the scorecard exposed by the candidate was 683/700, with backend statutory/accounting
   engine at 250/250, frontend accountant workbench at 184/200 and
   security/auth/tenant/platform guardrails at 150/150.
   The typed frontend parser and production-readiness verifier both require CI
@@ -1542,12 +1542,35 @@ Frontend accountant-workbench route review-status pack checks:
   `accountant-workbench-evidence-report.json` route acceptance evidence must
   include exact route labels, exact per-route screenshot-review evidence anchors
   and `required-review` status for every visual smoke workbench route.
-- The production scorecard is now 683/700, with frontend accountant workbench at
+- That previous slice moved the production scorecard to 683/700, with frontend accountant workbench at
   184/200.
 - Verification completed locally:
   - PowerShell parser checks for both pack verifiers passed.
   - Temporary visual evidence packs proved both verifiers reject a wrong
     dashboard screenshot-review evidence anchor.
+  - Backend focused regression passed 2 tests:
+    `ReleaseArtifactPackVerifier_RequiresExactOperationalEvidenceReports` and
+    `ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers`.
+  - Frontend contract/API/render/type checks passed:
+    `node --test tests/production-readiness-contract.test.mjs`,
+    `node scripts/verify-api-client.mjs`,
+    `npx.cmd vitest run tests/render/production-readiness-panel.test.tsx tests/render/production-readiness-workbench.test.tsx`,
+    and `npx.cmd tsc --noEmit --incremental false`.
+
+Frontend accountant-workbench route readiness pack checks:
+
+- This slice further tightens `scripts/verify-release-artifact-pack.ps1` and
+  `scripts/verify-ci-machine-evidence-pack.ps1` so retained
+  `accountant-workbench-evidence-report.json` route readiness evidence must
+  include exact screenshot counts, layout-check counts, contrast counts, minimum
+  contrast ratios, `required-review` status and required review-check coverage
+  for every visual smoke workbench route.
+- The production scorecard is now 685/700, with frontend accountant workbench at
+  186/200.
+- Verification completed locally:
+  - PowerShell parser checks for both pack verifiers passed.
+  - Temporary visual evidence packs proved both verifiers reject a wrong
+    dashboard route readiness review status.
   - Backend focused regression passed 2 tests:
     `ReleaseArtifactPackVerifier_RequiresExactOperationalEvidenceReports` and
     `ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers`.
@@ -1606,8 +1629,8 @@ As of July 9, 2026:
 - Code implementation is roughly 70-75% complete.
 - Production assurance is roughly 60-65% complete.
 - Overall goal is roughly 63-67% complete, with about one third left.
-- The production scorecard is now 683/700: architecture/documentation 99/100,
-  backend statutory/accounting engine 250/250, frontend accountant workbench 184/200,
+- The production scorecard is now 685/700: architecture/documentation 99/100,
+  backend statutory/accounting engine 250/250, frontend accountant workbench 186/200,
   and security/auth/tenant/platform guardrails 150/150.
 - Architecture/documentation is now scored 99/100 in the production scorecard because
   source-law review, release evidence templates, manual handoff evidence, runbook

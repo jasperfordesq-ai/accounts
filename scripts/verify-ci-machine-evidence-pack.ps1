@@ -141,6 +141,14 @@ $expectedAccountantWorkbenchRouteAcceptance = @(
     [pscustomobject]@{ routeName = "workbench-preview"; routeKey = "workbenchPreview"; label = "Workbench preview"; expectedText = "Workbench Component Preview" }
 )
 
+$expectedAccountantWorkbenchReviewChecks = @(
+    "accountant-workflow-hierarchy",
+    "table-scanability",
+    "theme-contrast",
+    "mobile-density",
+    "loading-error-empty-states"
+)
+
 function Assert-AccountantWorkbenchRouteAcceptance {
     param(
         [object]$AccountantWorkbench,
@@ -170,6 +178,24 @@ function Assert-AccountantWorkbenchRouteAcceptance {
             }
             if ([string](Get-JsonProperty $readiness @("expectedText")) -ne [string]$expected.expectedText) {
                 Add-Failure $Failures "accountant-workbench-evidence-report.json routeReadiness.$($expected.routeName).expectedText must be $($expected.expectedText)."
+            }
+            if ([int](Get-JsonProperty $readiness @("screenshotCount")) -ne 4) {
+                Add-Failure $Failures "accountant-workbench-evidence-report.json routeReadiness.$($expected.routeName).screenshotCount must be 4."
+            }
+            if ([int](Get-JsonProperty $readiness @("layoutCheckResultCount")) -ne 12) {
+                Add-Failure $Failures "accountant-workbench-evidence-report.json routeReadiness.$($expected.routeName).layoutCheckResultCount must be 12."
+            }
+            if ([int](Get-JsonProperty $readiness @("contrastCheckResultCount")) -ne 4) {
+                Add-Failure $Failures "accountant-workbench-evidence-report.json routeReadiness.$($expected.routeName).contrastCheckResultCount must be 4."
+            }
+            if ([decimal](Get-JsonProperty $readiness @("minimumContrastRatio")) -lt 3.0) {
+                Add-Failure $Failures "accountant-workbench-evidence-report.json routeReadiness.$($expected.routeName).minimumContrastRatio must be at least 3."
+            }
+            if ([string](Get-JsonProperty $readiness @("reviewStatus")) -ne "required-review") {
+                Add-Failure $Failures "accountant-workbench-evidence-report.json routeReadiness.$($expected.routeName).reviewStatus must be required-review."
+            }
+            foreach ($reviewCheck in $expectedAccountantWorkbenchReviewChecks) {
+                Assert-ArrayContains @((Get-JsonProperty $readiness @("requiredReviewChecks"))) $reviewCheck "accountant-workbench-evidence-report.json routeReadiness.$($expected.routeName).requiredReviewChecks" $Failures
             }
         }
 

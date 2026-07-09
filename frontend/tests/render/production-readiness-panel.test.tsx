@@ -40,7 +40,7 @@ describe("ProductionReadinessPanel", () => {
 
 function productionScorecard(): ProductionReadinessReport["productionScorecard"] {
   return {
-    currentScore: 683,
+    currentScore: 685,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete source-law review, named visual QA, monitoring-provider confirmation, manual handoff and qualified-accountant acceptance evidence.",
@@ -100,7 +100,7 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
       {
         code: "frontend-accountant-workbench",
         label: "Frontend accountant workbench",
-        currentScore: 184,
+        currentScore: 186,
         targetScore: 200,
         status: "visual-acceptance-required",
         currentEvidence: [
@@ -115,6 +115,7 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
           "accountant-workbench-evidence-report.json proves route workflow-stage, review-check, expected accountant decision text and qualified-accountant route acceptance coverage.",
           "Release artifact and CI machine evidence pack verifiers require exact accountant-workbench route acceptance names, route keys, expected decision text and per-route acceptance evidence ids for every workbench route.",
           "Release artifact and CI machine evidence pack verifiers require exact accountant-workbench route acceptance labels, screenshot-review evidence anchors and required-review status for every workbench route.",
+          "Release artifact and CI machine evidence pack verifiers require exact accountant-workbench route readiness screenshot counts, layout-check counts, contrast counts, minimum contrast ratios, required-review status and required review checks for every workbench route.",
           "Frontend parser invariants now require the CI machine evidence pack, production smoke, readiness verification, visual smoke and manual release-verification rows before rendering readiness data.",
         ],
         remainingGaps: ["Complete named visual QA review against the screenshot manifest and visual-smoke-evidence-report.json."],
