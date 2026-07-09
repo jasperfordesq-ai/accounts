@@ -1049,6 +1049,10 @@ public class ProductionReadinessReportTests
             evidence.Contains("verify-release-artifact-pack.ps1", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("production-readiness-verification-report.json", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("required default-CI and manual release manifest row", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(scores["security-auth-tenant-platform-guardrails"].CurrentEvidence, evidence =>
+            evidence.Contains("release-evidence-workspace-verification-report.json", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("19-file prepared workspace inventory", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("reviewer handoff", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["security-auth-tenant-platform-guardrails"].RemainingGaps, gap =>
             gap.Contains("release-evidence-report.json", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["frontend-accountant-workbench"].RemainingGaps, gap =>

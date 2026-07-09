@@ -2252,6 +2252,16 @@ Release artifact pack reviewer handoff manifest:
   reviewer blocker summary, and retained verifier output alongside the machine reports,
   completed templates, and workspace control files.
 
+Production readiness report evidence surface:
+
+- This slice updates the production readiness scorecard and frontend readiness fixtures
+  so the security/platform evidence explicitly names the workspace verification report,
+  exact 19-file prepared workspace inventory, and retained reviewer handoff manifest
+  now required by the release artifact pack verifier.
+- The manual release checklist fallback text for `release-artifact-pack` now tells
+  operators to collect workspace verification and reviewer handoff reports alongside
+  machine and human release evidence for the exact candidate.
+
 ## What Is Left To Do
 
 Highest-priority next steps:

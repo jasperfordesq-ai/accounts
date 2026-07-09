@@ -931,8 +931,8 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "Production compose gates enforce immutable images, migrate-only job ordering, demo seed blocking and structured monitoring evidence.",
                     "CI runs scripts/verify-no-direct-filing-submission.ps1 and retains no-direct-filing-submission-report.json, proving final CRO/ROS operations remain recorded workflow states with no outbound submission client wired.",
                     "no-direct-filing-submission-report.json now records release candidate commit/run identity, and the CI machine evidence pack plus release artifact pack reject stale no-direct evidence whose identity does not match the verified candidate.",
-                    "scripts/verify-release-artifact-pack.ps1 validates dependency, production safety, monitoring, structured log, backup/restore, no-direct-submission, production-readiness verification, visual smoke and release-evidence reports together.",
-                    "release-artifact-pack-report.json now records release candidate identity plus per-report SHA-256 and byte-size evidence.",
+                    "scripts/verify-release-artifact-pack.ps1 validates dependency, production safety, monitoring, structured log, backup/restore, no-direct-submission, production-readiness verification, visual smoke, release-evidence, workspace verification and reviewer handoff reports together.",
+                    "release-artifact-pack-report.json now records release candidate identity plus per-report and reviewer-handoff SHA-256/byte-size evidence.",
                     "CI runs scripts/verify-ci-machine-evidence-pack.ps1 and retains ci-machine-evidence-pack-report.json with exact commit/run identity plus SHA-256 inventory for dependency, safety, monitoring, structured log, backup/restore, no-direct, readiness and visual/workbench evidence.",
                     "scripts/verify-production-readiness-report.ps1 now requires default-CI and manual release manifest rows, including the no-direct CRO/ROS control, CI machine evidence pack and release artifact pack, before accepting a captured readiness report.",
                     "scripts/verify-release-artifact-pack.ps1 now rejects release packs unless the retained production-readiness-verification-report.json proves every required default-CI and manual release manifest row.",
@@ -940,6 +940,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "scripts/verify-release-evidence.ps1 now rejects completed human evidence when release candidate identity, UTC timestamps, SHA-256 digests, external iXBRL artifact hashes, or monitoring log confirmation fields are malformed.",
                     "scripts/verify-release-evidence.ps1 emits a consistent releaseCandidate identity for all six human evidence templates, and scripts/verify-release-artifact-pack.ps1 rejects packs whose release-evidence-report.json identity does not match the pack CommitSha and GitHubActionsRunUrl.",
                     "scripts/verify-release-evidence.ps1 now emits SHA-256/byte-size manifest entries for all six human release-evidence templates, and scripts/verify-release-artifact-pack.ps1 requires those completed templates to be retained in the pack with matching hashes.",
+                    "scripts/verify-release-artifact-pack.ps1 independently parses release-evidence-workspace-verification-report.json, requires the same release candidate and exact 19-file prepared workspace inventory, and manifests retained reviewer handoff files with SHA-256/byte-size evidence.",
                     "Monitoring-provider confirmation evidence now requires real provider/event/correlation references, an HTTPS provider base URL, a matched structured-log smoke line and an explicit accepted operator decision."
                 ],
                 [
@@ -2816,7 +2817,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             BlocksRelease: true,
             "release-artifact-pack-report",
             "named-accountant-approval-record",
-            "Run against the collected dependency, production safety, monitoring, log, restore, no-direct, production-readiness, visual, workbench and human release-evidence reports for the exact release candidate."),
+            "Run against the collected dependency, production safety, monitoring, log, restore, no-direct, production-readiness, visual, workbench, human release-evidence, workspace verification and reviewer handoff reports for the exact release candidate."),
         new(
             "postgres-gated-audit-tests",
             "PostgreSQL-gated audit durability tests",
