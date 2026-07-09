@@ -1919,6 +1919,31 @@ Release evidence reviewer completion ledger:
     entries are `pending-human-evidence`, and confirmed the workspace verifier
     report records the ledger path while release evidence remains blocked.
 
+Release evidence reviewer workspace file inventory:
+
+- This slice extends `scripts/verify-release-evidence-workspace.ps1` so
+  `release-evidence-workspace-verification-report.json` includes a
+  `workspaceFiles` inventory for the retained reviewer workspace files created
+  before the verification report is written. Each inventory entry records
+  `fileName`, `byteSize`, and SHA-256 hash.
+- The inventory covers the six prepared Markdown templates,
+  `release-evidence-workspace-manifest.json`,
+  `release-evidence-reviewer-index.md`,
+  `release-evidence-reviewer-completion.json`, the expected failed
+  `release-evidence-report.json`, and `release-evidence-verifier-output.txt`.
+  This makes the reviewer workspace handoff auditable by hash without treating
+  the pending human evidence as release approval.
+- Verification completed locally:
+  - PowerShell parser checks passed for `scripts/new-release-evidence-workspace.ps1`
+    and `scripts/verify-release-evidence-workspace.ps1`.
+  - `node scripts/verify-ci-actions.mjs` passed.
+  - Backend focused regression passed:
+    `ReleaseEvidenceVerifier_BlocksIncompleteHumanSignoffEvidence`.
+  - A local nested-artifact simulation generated and verified a workspace,
+    confirmed `workspaceFiles` contains 11 retained files, and confirmed the
+    ledger, verifier output, and failed release evidence report all have
+    positive byte sizes plus 64-character SHA-256 hashes.
+
 ## What Is Left To Do
 
 Highest-priority next steps:

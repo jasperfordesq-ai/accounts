@@ -109,6 +109,22 @@ function Assert-TextContains {
     }
 }
 
+function Get-FileSha256 {
+    param([string]$Path)
+
+    $stream = [IO.File]::OpenRead($Path)
+    try {
+        $sha = [System.Security.Cryptography.SHA256]::Create()
+        try {
+            return [BitConverter]::ToString($sha.ComputeHash($stream)).Replace("-", "").ToLowerInvariant()
+        } finally {
+            $sha.Dispose()
+        }
+    } finally {
+        $stream.Dispose()
+    }
+}
+
 $resolvedWorkspace = Resolve-Path -LiteralPath $WorkspaceDirectory
 if ([string]::IsNullOrWhiteSpace($ReportPath)) {
     $ReportPath = Join-Path $resolvedWorkspace.Path "release-evidence-report.json"
@@ -332,6 +348,16 @@ if (-not (Test-Path -LiteralPath $ReportPath)) {
     }
 }
 
+$workspaceFiles = @(
+    foreach ($file in Get-ChildItem -LiteralPath $resolvedWorkspace.Path -File | Sort-Object Name) {
+        [ordered]@{
+            fileName = $file.Name
+            byteSize = $file.Length
+            sha256 = Get-FileSha256 $file.FullName
+        }
+    }
+)
+
 $verificationReport = [ordered]@{
     status = if ($failures.Count -eq 0) { "passed" } else { "failed" }
     checkedAtUtc = [DateTimeOffset]::UtcNow.ToString("O")
@@ -339,6 +365,7 @@ $verificationReport = [ordered]@{
     releaseEvidenceReportPath = $ReportPath
     releaseEvidenceVerifierOutputPath = $releaseEvidenceVerifierOutputPath
     reviewerCompletionPath = $reviewerCompletionPath
+    workspaceFiles = $workspaceFiles
     requiredTemplateCount = $requiredTemplates.Count
     failureCount = $failures.Count
     failures = @($failures)

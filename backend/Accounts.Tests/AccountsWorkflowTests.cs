@@ -18476,6 +18476,10 @@ public class AccountsWorkflowTests
         Assert.Contains("release-evidence-verifier-output.txt", workspaceVerifier);
         Assert.Contains("release-evidence-reviewer-index.md", workspaceVerifier);
         Assert.Contains("release-evidence-reviewer-completion.json", workspaceVerifier);
+        Assert.Contains("workspaceFiles", workspaceVerifier);
+        Assert.Contains("byteSize", workspaceVerifier);
+        Assert.Contains("sha256", workspaceVerifier);
+        Assert.Contains("Get-FileSha256", workspaceVerifier);
         Assert.Contains("Reviewer completion ledger entries must contain exactly", workspaceVerifier);
         Assert.Contains("Reviewer completion ledger $($expected.TemplateFile).completed must remain false before named human sign-off.", workspaceVerifier);
         Assert.Contains("Prepared release evidence workspace unexpectedly passed before named human sign-off.", workspaceVerifier);
