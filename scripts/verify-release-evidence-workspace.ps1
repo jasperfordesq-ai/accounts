@@ -153,6 +153,24 @@ function Get-FirstJsonPropertyValue {
     return ""
 }
 
+function Convert-JsonValueToEvidenceString {
+    param($Value)
+
+    if ($null -eq $Value) {
+        return ""
+    }
+
+    if ($Value -is [DateTime]) {
+        return ([DateTimeOffset]$Value).ToUniversalTime().ToString("O")
+    }
+
+    if ($Value -is [DateTimeOffset]) {
+        return $Value.ToUniversalTime().ToString("O")
+    }
+
+    return [string]$Value
+}
+
 function Get-MarkdownFieldValue {
     param(
         [string]$Content,
@@ -509,7 +527,7 @@ function Assert-MonitoringProviderPreparedEvidenceReferences {
     Assert-MarkdownFieldEquals $content "Event id" ([string](Get-JsonPropertyValue $monitoringReport "eventId")) $context $Failures
     Assert-MarkdownFieldEquals $content "Correlation id" ([string](Get-JsonPropertyValue $monitoringReport "correlationId")) $context $Failures
     Assert-MarkdownFieldEquals $content "Base URL" ([string](Get-JsonPropertyValue $monitoringReport "baseUrl")) $context $Failures
-    Assert-MarkdownFieldEquals $content "Checked at UTC" ([string](Get-JsonPropertyValue $monitoringReport "checkedAtUtc")) $context $Failures
+    Assert-MarkdownFieldEquals $content "Checked at UTC" (Convert-JsonValueToEvidenceString (Get-JsonPropertyValue $monitoringReport "checkedAtUtc")) $context $Failures
     Assert-MarkdownFieldEquals $content "Structured log file" ([string](Get-FirstJsonPropertyValue $structuredLogReport @("structuredLogFile", "logFileName"))) $context $Failures
     Assert-MarkdownFieldEquals $content "JSON log line count" ([string](Get-JsonPropertyValue $structuredLogReport "jsonLogLineCount")) $context $Failures
     $matchedMonitoringSmokeLine = if ([bool](Get-JsonPropertyValue $structuredLogReport "matchedMonitoringSmokeLine")) { "yes" } else { "" }
