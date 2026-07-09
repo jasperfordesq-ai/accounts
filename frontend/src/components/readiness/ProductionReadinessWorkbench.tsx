@@ -252,7 +252,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
         actions={<StatusBadge tone={pendingHumanEvidenceCount > 0 ? "bad" : "good"}>{humanEvidenceTemplateCount} gates</StatusBadge>}
       >
         <div className="grid min-w-0 grid-cols-1 gap-3 xl:grid-cols-5">
-          {humanEvidenceCloseoutSteps.map((step, index) => (
+          {humanEvidenceCloseoutSteps.map((step) => (
             <div key={step.code} className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
               <div className="flex items-start gap-2">
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface-subtle)] text-xs font-semibold text-[var(--foreground)]">
