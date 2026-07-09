@@ -17,6 +17,9 @@ real CRO or Revenue filing use.
 Required formats: use the full 40-character commit SHA, the exact
 `https://github.com/.../actions/runs/...` run URL, and UTC timestamps ending in
 `Z` or `+00:00`.
+Accountant name, qualification / professional body, firm / reviewer capacity,
+and qualified accountant signature fields must be real retained evidence values,
+not placeholders such as `accepted`, `none`, `n/a`, `pending`, `todo`, or `tbd`.
 
 ## Required Evidence Pack
 

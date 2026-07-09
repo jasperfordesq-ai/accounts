@@ -862,6 +862,10 @@ function Test-AccountantEvidence {
     Assert-ReleaseIdentityFields $Content $context $Failures
     Assert-UtcTimestampField $Content "Production readiness report timestamp" $context $Failures
     Assert-UtcTimestampField $Content "Review date/time UTC" $context $Failures
+    Assert-FieldMatchesPattern $Content "Accountant name" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real accountant name" $context $Failures
+    Assert-FieldMatchesPattern $Content "Qualification / professional body" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real qualification or professional body" $context $Failures
+    Assert-FieldMatchesPattern $Content "Firm / reviewer capacity" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real firm or reviewer capacity" $context $Failures
+    Assert-FieldMatchesPattern $Content "Qualified accountant signature" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real qualified-accountant signature" $context $Failures
     Assert-NoUncheckedBoxes $Content $context $Failures
     Assert-CheckedDecision $Content "Accepted for real filing preparation subject to external CRO/ROS processes." $context $Failures
     Assert-UncheckedDecision $Content "Rejected; issues below must be remediated and re-reviewed." $context $Failures

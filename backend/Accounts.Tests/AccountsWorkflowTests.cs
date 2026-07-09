@@ -18385,6 +18385,8 @@ public class AccountsWorkflowTests
         Assert.Contains("Direct ROS submission remains unsupported", accountant);
         Assert.Contains("Qualified accountant signature", accountant);
         Assert.Contains("40-character commit SHA", accountant);
+        Assert.Contains("Accountant name, qualification / professional body, firm / reviewer capacity", accountant);
+        Assert.Contains("qualified accountant signature fields must be real retained evidence values", accountant);
         Assert.Contains("Use `accepted` in each scenario review cell", accountant);
         Assert.Contains("`Decision` column only when the whole scenario", accountant);
         Assert.Contains("ambiguous scenario scope acceptance cells", accountant);
@@ -18512,6 +18514,9 @@ public class AccountsWorkflowTests
         Assert.Contains("external-ros-validation-ledger#$label", script);
         Assert.Contains("Assert-CompletedTableColumnMatchesTaxonomyPackageReference $Content $canonicalGoldenCorpusScenarioCodes 3 \"Taxonomy package\"", script);
         Assert.Contains("revenue-taxonomy-package-ledger#$label", script);
+        Assert.Contains("\"Accountant name\" \"^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+\" \"a real accountant name\"", script);
+        Assert.Contains("\"Firm / reviewer capacity\" \"^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+\" \"a real firm or reviewer capacity\"", script);
+        Assert.Contains("\"Qualified accountant signature\" \"^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+\" \"a real qualified-accountant signature\"", script);
         Assert.Contains("Use exactly `none`,", externalRosIxbrl);
         Assert.Contains("`accepted` in the `Decision` column", externalRosIxbrl);
         Assert.Contains("accepted with", externalRosIxbrl);

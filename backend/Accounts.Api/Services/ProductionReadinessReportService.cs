@@ -810,7 +810,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             Category(
                 "backend-statutory-accounting-engine",
                 "Backend statutory/accounting engine",
-                248,
+                250,
                 250,
                 "qualified-accountant-review-required",
                 [
@@ -826,6 +826,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "Qualified-accountant route walkthrough rows now require route-specific accountant-workbench evidence anchors for every accepted route.",
                     "Qualified-accountant route acceptance now requires a real retained workbench evidence reference for every accepted route, tied to accountant-workbench-evidence-report.json.",
                     "Qualified-accountant route walkthrough notes now must match the exact qualified-accountant-route-walkthrough anchor for every accepted route.",
+                    "Qualified-accountant acceptance top-level evidence now rejects placeholder accountant name, qualification, reviewer capacity and signature fields before professional sign-off evidence can pass.",
                     "External ROS/iXBRL validation evidence now has a checked-in template and the release verifier rejects rows without real references, retained taxonomy package references, accepted/remediated warning status and accepted scenario decisions.",
                     "External ROS/iXBRL validation references and retained taxonomy package references now must include the matching golden corpus scenario code before acceptance can pass.",
                     "External ROS/iXBRL validation rows now must match exact retained external validation and taxonomy package ledger anchors for every canonical golden corpus scenario.",
