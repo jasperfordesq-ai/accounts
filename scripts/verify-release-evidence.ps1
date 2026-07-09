@@ -628,7 +628,7 @@ function Test-AccountantEvidence {
     Assert-CompletedTableColumnMatches $Content $canonicalGoldenCorpusScenarioCodes 6 "Decision" "^accepted$" "accepted for this release candidate" $context $Failures
     Assert-CompletedTableColumnMatches $Content $canonicalGoldenCorpusScenarioCodes 7 "Scenario evidence reference" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real retained scenario walkthrough evidence reference" $context $Failures
     Assert-CompletedTableColumnContainsRowLabel $Content $canonicalGoldenCorpusScenarioCodes 7 "Scenario evidence reference" $context $Failures
-    Assert-CompletedTableColumnMatches $Content $requiredRouteCodes 1 "Decision question answered" "^(yes|accepted)$" "yes or accepted" $context $Failures
+    Assert-CompletedTableColumnMatches $Content $requiredRouteCodes 1 "Decision question answered" "^yes$" "exactly yes" $context $Failures
     Assert-CompletedTableColumnMatches $Content $requiredRouteCodes 2 "Evidence accepted" "^accepted$" "accepted" $context $Failures
     Assert-CompletedTableColumnMatches $Content $requiredRouteCodes 3 "Workbench evidence reference" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real retained workbench evidence reference" $context $Failures
     Assert-CompletedTableColumnMatchesRouteReference $Content $requiredRouteCodes 3 "Workbench evidence reference" $context $Failures

@@ -18379,7 +18379,8 @@ public class AccountsWorkflowTests
         Assert.Contains("Use `accepted` in each scenario review cell", accountant);
         Assert.Contains("`Decision` column only when the whole scenario", accountant);
         Assert.Contains("ambiguous scenario scope acceptance cells", accountant);
-        Assert.Contains("Use `yes` or `accepted` for `Decision question answered`", accountant);
+        Assert.Contains("Use exactly `yes` for `Decision question answered`", accountant);
+        Assert.Contains("exact `accepted` in `Evidence accepted`", accountant);
         Assert.Contains("accountant-workbench-evidence-report.json", accountant);
         Assert.Contains("Scenario evidence reference", accountant);
         Assert.Contains("qualified-accountant-walkthrough-ledger#micro-ltd", accountant);
@@ -18541,7 +18542,7 @@ public class AccountsWorkflowTests
         Assert.Contains("\"Decision\" \"^accepted$\"", script);
         Assert.Contains("\"Scenario evidence reference\" \"^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+\"", script);
         Assert.Contains("Assert-CompletedTableColumnContainsRowLabel $Content $canonicalGoldenCorpusScenarioCodes 7 \"Scenario evidence reference\"", script);
-        Assert.Contains("\"Decision question answered\" \"^(yes|accepted)$\"", script);
+        Assert.Contains("\"Decision question answered\" \"^yes$\" \"exactly yes\"", script);
         Assert.Contains("\"Evidence accepted\" \"^accepted$\"", script);
         Assert.Contains("\"Workbench evidence reference\" \"^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+\"", script);
         Assert.Contains("Assert-CompletedTableColumnMatchesRouteReference", script);

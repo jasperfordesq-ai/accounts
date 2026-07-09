@@ -58,13 +58,13 @@ scenario evidence reference must include the matching scenario code.
 
 For each route, confirm the accountant can answer the route decision question using
 the visible evidence and generated artifacts.
-Use `yes` or `accepted` for `Decision question answered`; use `accepted` for
+Use exactly `yes` for `Decision question answered`; use exactly `accepted` for
 `Evidence accepted` only when the route evidence is professionally accepted.
 Record a real retained workbench evidence reference for every accepted route, such as
 `accountant-workbench-evidence-report.json#routeAcceptance.dashboard`; do not use
 `accepted`, `none`, `n/a`, `pending`, `todo`, or `tbd` as the evidence reference.
-The verifier rejects ambiguous route decision/evidence cells; use exact `yes` or
-`accepted` values.
+The verifier rejects ambiguous route decision/evidence cells; use exact `yes` in
+`Decision question answered` and exact `accepted` in `Evidence accepted`.
 The workbench evidence reference must match the route key exactly:
 `accountant-workbench-evidence-report.json#routeAcceptance.<route>`.
 Each route `Notes` cell must include a retained route walkthrough note or

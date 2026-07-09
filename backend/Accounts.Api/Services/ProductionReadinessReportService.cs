@@ -810,7 +810,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             Category(
                 "backend-statutory-accounting-engine",
                 "Backend statutory/accounting engine",
-                232,
+                234,
                 250,
                 "qualified-accountant-review-required",
                 [
@@ -821,7 +821,8 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "scripts/verify-release-evidence.ps1 now rejects qualified-accountant acceptance unless every golden scenario decision and every route evidence acceptance row is explicitly accepted.",
                     "Qualified-accountant acceptance now requires explicit accepted scenario scope cells for outputs, gates, source-law evidence, wording and workbench journey before a scenario decision can pass.",
                     "Qualified-accountant scenario walkthrough rows now require retained scenario-specific evidence references containing the matching golden corpus scenario code.",
-                    "Qualified-accountant route walkthrough rows now require exact yes/accepted decisions and exact accepted evidence cells before route acceptance can pass.",
+                    "Qualified-accountant route walkthrough rows now require exact yes decision-question cells and exact accepted evidence cells before route acceptance can pass.",
+                    "Qualified-accountant route decision-question cells now reject accepted-style ambiguous text so professional evidence acceptance stays in the dedicated evidence column.",
                     "Qualified-accountant route walkthrough rows now require route-specific accountant-workbench evidence anchors for every accepted route.",
                     "Qualified-accountant route acceptance now requires a real retained workbench evidence reference for every accepted route, tied to accountant-workbench-evidence-report.json.",
                     "Qualified-accountant route walkthrough notes now require retained route-specific notes or references containing the matching route code.",
