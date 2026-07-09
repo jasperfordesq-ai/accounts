@@ -691,6 +691,42 @@ function New-EvidenceFileManifestItem {
     }
 }
 
+function New-HumanEvidenceCompletionItem {
+    param(
+        [string]$EvidenceName,
+        [string]$TemplateFile,
+        [string]$RequiredReviewerRole,
+        [string]$SignOffGate,
+        [string]$Content,
+        [System.Collections.Generic.List[string]]$EvidenceFailures
+    )
+
+    $present = Test-Path -LiteralPath $TemplateFile -PathType Leaf
+    $hasContent = -not [string]::IsNullOrWhiteSpace($Content)
+    $identity = Get-ReleaseEvidenceIdentity $Content $EvidenceName
+    $status = "incomplete"
+
+    if (-not $present) {
+        $status = "missing-template"
+    } elseif (-not $hasContent) {
+        $status = "not-started"
+    } elseif ($EvidenceFailures.Count -eq 0) {
+        $status = "accepted"
+    }
+
+    [ordered]@{
+        evidenceName = $EvidenceName
+        templateFile = Split-Path -Leaf $TemplateFile
+        requiredReviewerRole = $RequiredReviewerRole
+        signOffGate = $SignOffGate
+        present = $present
+        hasReleaseIdentity = $null -ne $identity
+        status = $status
+        blockingFailureCount = $EvidenceFailures.Count
+        blockingFailures = $EvidenceFailures.ToArray()
+    }
+}
+
 function Assert-ConsistentReleaseIdentity {
     param(
         [object[]]$Identities,
@@ -1138,28 +1174,57 @@ $evidenceFiles = @(
     New-EvidenceFileManifestItem "monitoringProviderConfirmation" $monitoringPath $monitoring
 )
 
+$visualFailures = [System.Collections.Generic.List[string]]::new()
+$sourceLawFailures = [System.Collections.Generic.List[string]]::new()
+$externalRosIxbrlFailures = [System.Collections.Generic.List[string]]::new()
+$accountantFailures = [System.Collections.Generic.List[string]]::new()
+$manualHandoffFailures = [System.Collections.Generic.List[string]]::new()
+$monitoringFailures = [System.Collections.Generic.List[string]]::new()
+
 if ($visual.Trim().Length -gt 0) {
-    Test-VisualEvidence $visual $failures
+    Test-VisualEvidence $visual $visualFailures
 }
 
 if ($sourceLaw.Trim().Length -gt 0) {
-    Test-SourceLawEvidence $sourceLaw $failures
+    Test-SourceLawEvidence $sourceLaw $sourceLawFailures
 }
 
 if ($accountant.Trim().Length -gt 0) {
-    Test-AccountantEvidence $accountant $failures
+    Test-AccountantEvidence $accountant $accountantFailures
 }
 
 if ($manualHandoff.Trim().Length -gt 0) {
-    Test-ManualHandoffEvidence $manualHandoff $failures
+    Test-ManualHandoffEvidence $manualHandoff $manualHandoffFailures
 }
 
 if ($externalRosIxbrl.Trim().Length -gt 0) {
-    Test-ExternalRosIxbrlEvidence $externalRosIxbrl $failures
+    Test-ExternalRosIxbrlEvidence $externalRosIxbrl $externalRosIxbrlFailures
 }
 
 if ($monitoring.Trim().Length -gt 0) {
-    Test-MonitoringEvidence $monitoring $failures
+    Test-MonitoringEvidence $monitoring $monitoringFailures
+}
+
+$humanEvidenceCompletion = @(
+    New-HumanEvidenceCompletionItem "visualQa" $visualPath "Named visual QA reviewer" "visual-qa-screenshot-review" $visual $visualFailures
+    New-HumanEvidenceCompletionItem "sourceLawReview" $sourceLawPath "Named source-law reviewer plus qualified accountant" "source-law-change-review" $sourceLaw $sourceLawFailures
+    New-HumanEvidenceCompletionItem "externalRosIxbrlValidation" $externalRosIxbrlPath "External ROS/iXBRL validation reviewer" "external-ros-validation-evidence" $externalRosIxbrl $externalRosIxbrlFailures
+    New-HumanEvidenceCompletionItem "qualifiedAccountantAcceptance" $accountantPath "Named qualified accountant" "qualified-accountant-final-signoff" $accountant $accountantFailures
+    New-HumanEvidenceCompletionItem "manualHandoffAcceptance" $manualHandoffPath "Named manual handoff reviewer" "manual-accountant-acceptance" $manualHandoff $manualHandoffFailures
+    New-HumanEvidenceCompletionItem "monitoringProviderConfirmation" $monitoringPath "Named release operator" "production-monitoring" $monitoring $monitoringFailures
+)
+
+foreach ($evidenceFailureList in @(
+    $visualFailures,
+    $sourceLawFailures,
+    $externalRosIxbrlFailures,
+    $accountantFailures,
+    $manualHandoffFailures,
+    $monitoringFailures
+)) {
+    foreach ($failure in $evidenceFailureList) {
+        Add-Failure $failures $failure
+    }
 }
 
 $releaseEvidenceIdentities = @(
@@ -1199,6 +1264,7 @@ $report = [ordered]@{
     }
     evidenceIdentities = @($releaseEvidenceIdentities)
     evidenceFiles = $evidenceFiles
+    humanEvidenceCompletion = $humanEvidenceCompletion
     files = [ordered]@{
         visualQa = $visualPath
         sourceLawReview = $sourceLawPath

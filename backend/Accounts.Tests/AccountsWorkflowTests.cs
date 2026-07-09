@@ -18469,7 +18469,16 @@ public class AccountsWorkflowTests
         Assert.Contains("Get-ReleaseEvidenceIdentity", script);
         Assert.Contains("evidenceIdentityCount", script);
         Assert.Contains("New-EvidenceFileManifestItem", script);
+        Assert.Contains("New-HumanEvidenceCompletionItem", script);
         Assert.Contains("hasReleaseIdentity", script);
+        Assert.Contains("humanEvidenceCompletion", script);
+        Assert.Contains("requiredReviewerRole", script);
+        Assert.Contains("signOffGate", script);
+        Assert.Contains("blockingFailureCount", script);
+        Assert.Contains("blockingFailures", script);
+        Assert.Contains("missing-template", script);
+        Assert.Contains("not-started", script);
+        Assert.Contains("accepted", script);
         Assert.Contains("releaseEvidenceTemplateFiles", script);
         Assert.Contains("Release evidence identity mismatch", script);
         Assert.Contains("GitHub Actions run URL", script);
@@ -18480,6 +18489,8 @@ public class AccountsWorkflowTests
         Assert.Contains("requiredCoverage", script);
         Assert.Contains("Test-SourceLawEvidence", script);
         Assert.Contains("sourceLawReview", script);
+        Assert.Contains("Named source-law reviewer plus qualified accountant", script);
+        Assert.Contains("source-law-change-review", script);
         Assert.Contains("sourceLawSourceIds", script);
         Assert.Contains("requiredSourceLawSourceIds", script);
         Assert.Contains("qualified-accountant-source-law-signoff", script);
@@ -18497,6 +18508,8 @@ public class AccountsWorkflowTests
         Assert.Contains("source-law-review-ledger#$label", script);
         Assert.Contains("Test-ExternalRosIxbrlEvidence", script);
         Assert.Contains("externalRosIxbrlValidation", script);
+        Assert.Contains("External ROS/iXBRL validation reviewer", script);
+        Assert.Contains("external-ros-validation-evidence", script);
         Assert.Contains("externalRosIxbrlScenarioCodes", script);
         Assert.Contains("Generated iXBRL SHA-256", script);
         Assert.Contains("Internal XML checks are not Revenue acceptance evidence", script);
@@ -18528,6 +18541,8 @@ public class AccountsWorkflowTests
         Assert.Contains("small-abridged-ltd", script);
         Assert.Contains("stale non-canonical scenario code", script);
         Assert.Contains("visual-smoke-screenshots", script);
+        Assert.Contains("Named visual QA reviewer", script);
+        Assert.Contains("visual-qa-screenshot-review", script);
         Assert.Contains("visual-smoke-evidence-report.json", script);
         Assert.Contains("accountant-workbench-evidence-report.json", script);
         Assert.Contains("Assert-FieldEquals $Content \"Visual smoke manifest file\" \"visual-smoke-manifest.json\"", script);
@@ -18571,6 +18586,8 @@ public class AccountsWorkflowTests
         Assert.Contains("\"Base URL\" \"^https://.+\"", script);
         Assert.Contains("\"Provider event URL or reference\" \"^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+\"", script);
         Assert.Contains("Accepted as monitoring-provider confirmation evidence for this release candidate.", script);
+        Assert.Contains("Named release operator", script);
+        Assert.Contains("production-monitoring", script);
         Assert.Contains("JSON log line count", script);
         Assert.Contains("Direct CRO submission remains unsupported", script);
         Assert.Contains("Direct ROS submission remains unsupported", script);
@@ -18595,6 +18612,8 @@ public class AccountsWorkflowTests
         Assert.Contains("accepted for this release candidate", script);
         Assert.Contains("Test-ManualHandoffEvidence", script);
         Assert.Contains("manualHandoffAcceptance", script);
+        Assert.Contains("Named manual handoff reviewer", script);
+        Assert.Contains("manual-accountant-acceptance", script);
         Assert.Contains("manualHandoffScenarioCodes", script);
         Assert.Contains("manualHandoffPathCodes", script);
         Assert.Contains("Accepted as manual handoff evidence for this release candidate.", script);
@@ -18610,6 +18629,8 @@ public class AccountsWorkflowTests
         Assert.Contains("\"Reviewer decision\" \"^accepted$\" \"exactly accepted\"", script);
         Assert.Contains("audit-required-without-auditor-report", script);
         Assert.Contains("No PII or client filing data", script);
+        Assert.Contains("Named qualified accountant", script);
+        Assert.Contains("qualified-accountant-final-signoff", script);
         Assert.Contains("Accepted for this release candidate.", script);
         Assert.Contains("Accepted for real filing preparation subject to external CRO/ROS processes.", script);
         Assert.Contains("Release evidence verification failed", script);

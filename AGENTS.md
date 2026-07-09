@@ -165,6 +165,10 @@ Backend/accounting-engine progress:
   for all six human release-evidence templates, and `scripts/verify-release-artifact-pack.ps1`
   rejects release packs unless those completed Markdown templates are retained beside
   `release-evidence-report.json` with matching hashes.
+- `scripts/verify-release-evidence.ps1` now emits `humanEvidenceCompletion` entries
+  for the six human sign-off templates. Each entry records the required reviewer
+  role, sign-off gate, completion status, and template-specific blocking failures
+  while preserving the combined release-blocking failure list.
 - Source-law review now has a checked-in release evidence template covering all 12
   monitored CRO, Revenue, FRC, and Charities Regulator source IDs. The release
   verifier reports those IDs under `sourceLawSourceIds`.
@@ -1758,7 +1762,8 @@ Release artifact runbook manifest alignment:
 Highest-priority next steps:
 
 1. Rerun the full local production gate before release if more code changes land; the
-   current local/CI gate is green on July 9, 2026 for commit `2fd79ca`.
+   latest fully green remote gate before this local slice was July 9, 2026 for commit
+   `1e3ddc2`.
 2. Perform and record human visual review of the generated light/dark desktop/mobile
    visual smoke artifact set; the screenshot manifest now verifies locally, but
    named visual QA sign-off is still required.
@@ -1788,7 +1793,8 @@ Highest-priority next steps:
    verifiers reject stale no-direct evidence.
 9. Run `scripts\verify-release-evidence.ps1` against completed release evidence and
    retain `release-evidence-report.json`; blank templates are intentionally failing
-   evidence until real named reviewers complete them.
+   evidence until real named reviewers complete them, and the report's
+   `humanEvidenceCompletion` entries identify each template-specific blocker.
 10. Continue UI polish route by route, especially any surfaces that still feel too
    card-heavy, too sparse, inconsistent in dark mode, or not dense enough for daily
    accountant use.
