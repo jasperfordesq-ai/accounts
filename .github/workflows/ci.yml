@@ -588,6 +588,7 @@ jobs:
             -CommitSha $env:GITHUB_SHA `
             -GitHubActionsRunUrl $runUrl `
             -ProductionReadinessReportPath (Join-Path $machineEvidenceRoot "production-readiness-report/production-readiness-report.json") `
+            -ProductionReadinessVerificationReportPath (Join-Path $machineEvidenceRoot "production-readiness-report/production-readiness-verification-report.json") `
             -VisualSmokeEvidenceReportPath (Join-Path $machineEvidenceRoot "visual-smoke-screenshots/visual-smoke-evidence-report.json") `
             -MonitoringErrorRoutingReportPath (Join-Path $machineEvidenceRoot "monitoring-error-routing-smoke/monitoring-error-routing-report.json") `
             -StructuredLogReportPath (Join-Path $machineEvidenceRoot "structured-json-log-sample/structured-log-report.json")

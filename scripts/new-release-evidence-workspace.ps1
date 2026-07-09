@@ -4,6 +4,7 @@ param(
     [string]$CommitSha = "",
     [string]$GitHubActionsRunUrl = "",
     [string]$ProductionReadinessReportPath = "",
+    [string]$ProductionReadinessVerificationReportPath = "",
     [string]$VisualSmokeEvidenceReportPath = "",
     [string]$MonitoringErrorRoutingReportPath = "",
     [string]$StructuredLogReportPath = "",
@@ -259,6 +260,7 @@ Assert-CommitSha $CommitSha
 Assert-GitHubActionsRunUrl $GitHubActionsRunUrl
 
 $productionReadinessReportPath = Resolve-OptionalPath $ProductionReadinessReportPath
+$productionReadinessVerificationReportPath = Resolve-OptionalPath $ProductionReadinessVerificationReportPath
 $visualSmokeEvidenceReportPath = Resolve-OptionalPath $VisualSmokeEvidenceReportPath
 $monitoringErrorRoutingReportPath = Resolve-OptionalPath $MonitoringErrorRoutingReportPath
 $structuredLogReportPath = Resolve-OptionalPath $StructuredLogReportPath
@@ -267,6 +269,7 @@ $visualSmokeManifestPath = if ([string]::IsNullOrWhiteSpace($visualSmokeEvidence
 $accountantWorkbenchEvidenceReportPath = if ([string]::IsNullOrWhiteSpace($visualSmokeEvidenceDirectory)) { "" } else { Join-Path $visualSmokeEvidenceDirectory "accountant-workbench-evidence-report.json" }
 
 $productionReadinessReport = Read-JsonFile $productionReadinessReportPath
+$productionReadinessVerificationReport = Read-JsonFile $productionReadinessVerificationReportPath
 $visualSmokeEvidenceReport = Read-JsonFile $visualSmokeEvidenceReportPath
 $monitoringErrorRoutingReport = Read-JsonFile $monitoringErrorRoutingReportPath
 $structuredLogReport = Read-JsonFile $structuredLogReportPath
@@ -278,6 +281,7 @@ New-Item -ItemType Directory -Path $resolvedOutputDirectory -Force | Out-Null
 
 $retainedMachineEvidence = @(
     Copy-MachineEvidenceInput $productionReadinessReportPath $resolvedOutputDirectory "production-readiness-report.json" "Production readiness report" "production-readiness-report" "production-readiness-report.json"
+    Copy-MachineEvidenceInput $productionReadinessVerificationReportPath $resolvedOutputDirectory "production-readiness-verification-report.json" "Production readiness verification report" "production-readiness-report" "production-readiness-verification-report.json"
     Copy-MachineEvidenceInput $visualSmokeManifestPath $resolvedOutputDirectory "visual-smoke-manifest.json" "Visual smoke manifest" "visual-smoke-screenshots" "visual-smoke-manifest.json"
     Copy-MachineEvidenceInput $visualSmokeEvidenceReportPath $resolvedOutputDirectory "visual-smoke-evidence-report.json" "Visual smoke evidence report" "visual-smoke-screenshots" "visual-smoke-evidence-report.json"
     Copy-MachineEvidenceInput $accountantWorkbenchEvidenceReportPath $resolvedOutputDirectory "accountant-workbench-evidence-report.json" "Accountant workbench evidence report" "visual-smoke-screenshots" "accountant-workbench-evidence-report.json"
@@ -399,6 +403,9 @@ $machineEvidenceSummary = [ordered]@{
         scorecardStatus = [string](Get-JsonPathValue $productionReadinessReport @("productionScorecard", "status"))
         currentScore = Get-JsonPathValue $productionReadinessReport @("productionScorecard", "currentScore")
         targetScore = Get-JsonPathValue $productionReadinessReport @("productionScorecard", "targetScore")
+        verificationStatus = [string](Get-JsonPropertyValue $productionReadinessVerificationReport "status")
+        verificationFailureCount = Get-JsonPropertyValue $productionReadinessVerificationReport "failureCount"
+        humanReleaseEvidenceCloseoutStepCodes = @((Get-JsonPathValue $productionReadinessVerificationReport @("requiredCoverage", "humanReleaseEvidenceCloseoutStepCodes")) | ForEach-Object { [string]$_ })
     }
     visualEvidence = [ordered]@{
         manifestFile = "visual-smoke-manifest.json"
@@ -520,6 +527,7 @@ Machine summary: release-evidence-machine-summary.json
 | Evidence input | Retained file | Source CI artifact |
 | --- | --- | --- |
 | Production readiness report | production-readiness-report.json | production-readiness-report / production-readiness-report.json |
+| Production readiness verification report | production-readiness-verification-report.json | production-readiness-report / production-readiness-verification-report.json |
 | Visual smoke manifest | visual-smoke-manifest.json | visual-smoke-screenshots / visual-smoke-manifest.json |
 | Visual smoke evidence report | visual-smoke-evidence-report.json | visual-smoke-screenshots / visual-smoke-evidence-report.json |
 | Accountant workbench evidence report | accountant-workbench-evidence-report.json | visual-smoke-screenshots / accountant-workbench-evidence-report.json |

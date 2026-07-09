@@ -21,6 +21,7 @@ $requiredWorkspaceFiles = @(
     $requiredTemplates +
     @(
         "production-readiness-report.json",
+        "production-readiness-verification-report.json",
         "visual-smoke-manifest.json",
         "visual-smoke-evidence-report.json",
         "accountant-workbench-evidence-report.json",
@@ -77,6 +78,7 @@ $requiredReviewerQueue = @(
 
 $requiredMachineEvidenceFiles = @(
     "production-readiness-report.json",
+    "production-readiness-verification-report.json",
     "visual-smoke-manifest.json",
     "visual-smoke-evidence-report.json",
     "accountant-workbench-evidence-report.json",
@@ -86,6 +88,7 @@ $requiredMachineEvidenceFiles = @(
 
 $requiredMachineEvidenceProvenance = @(
     [pscustomobject]@{ FileName = "production-readiness-report.json"; SourceArtifactName = "production-readiness-report"; SourceArtifactFile = "production-readiness-report.json" },
+    [pscustomobject]@{ FileName = "production-readiness-verification-report.json"; SourceArtifactName = "production-readiness-report"; SourceArtifactFile = "production-readiness-verification-report.json" },
     [pscustomobject]@{ FileName = "visual-smoke-manifest.json"; SourceArtifactName = "visual-smoke-screenshots"; SourceArtifactFile = "visual-smoke-manifest.json" },
     [pscustomobject]@{ FileName = "visual-smoke-evidence-report.json"; SourceArtifactName = "visual-smoke-screenshots"; SourceArtifactFile = "visual-smoke-evidence-report.json" },
     [pscustomobject]@{ FileName = "accountant-workbench-evidence-report.json"; SourceArtifactName = "visual-smoke-screenshots"; SourceArtifactFile = "accountant-workbench-evidence-report.json" },
@@ -396,6 +399,22 @@ if (-not (Test-Path -LiteralPath $machineEvidenceSummaryPath)) {
     foreach ($expectedVisualFile in @("visual-smoke-manifest.json", "visual-smoke-evidence-report.json", "accountant-workbench-evidence-report.json")) {
         $summaryVisualText = $summaryVisualEvidence | ConvertTo-Json -Depth 4
         Assert-TextContains $summaryVisualText $expectedVisualFile "release-evidence-machine-summary.json visualEvidence" $failures
+    }
+
+    $summaryProductionReadiness = Get-JsonPropertyValue $machineEvidenceSummary "productionReadiness"
+    if ([string](Get-JsonPropertyValue $summaryProductionReadiness "verificationStatus") -ne "passed") {
+        Add-Failure $failures "Machine evidence summary productionReadiness.verificationStatus must be passed."
+    }
+    if ([int](Get-JsonPropertyValue $summaryProductionReadiness "verificationFailureCount") -ne 0) {
+        Add-Failure $failures "Machine evidence summary productionReadiness.verificationFailureCount must be zero."
+    }
+    foreach ($closeoutStepCode in @(
+        "complete-human-evidence-templates",
+        "run-release-evidence-verifier",
+        "confirm-human-evidence-completion",
+        "verify-release-artifact-pack"
+    )) {
+        Assert-ArrayContains @((Get-JsonPropertyValue $summaryProductionReadiness "humanReleaseEvidenceCloseoutStepCodes")) $closeoutStepCode "Machine evidence summary productionReadiness.humanReleaseEvidenceCloseoutStepCodes" $failures
     }
 
     $summaryMonitoringEvidence = Get-JsonPropertyValue $machineEvidenceSummary "monitoringEvidence"

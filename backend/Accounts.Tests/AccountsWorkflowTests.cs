@@ -18474,6 +18474,7 @@ public class AccountsWorkflowTests
         Assert.Contains("real filing use stays blocked", runbook, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Prepare release evidence reviewer workspace", workflow);
         Assert.Contains("new-release-evidence-workspace.ps1", workflow);
+        Assert.Contains("ProductionReadinessVerificationReportPath", workflow);
         Assert.Contains("verify-release-evidence-workspace.ps1", workflow);
         Assert.Contains("release-evidence-reviewer-workspace", workflow);
         Assert.Contains("release-evidence-workspace-verification-report.json", workspaceVerifier);
@@ -18493,6 +18494,9 @@ public class AccountsWorkflowTests
         Assert.Contains("Workspace must include release-evidence-machine-summary.json.", workspaceVerifier);
         Assert.Contains("Machine evidence summary retainedMachineEvidence must contain exactly", workspaceVerifier);
         Assert.Contains("Machine evidence summary retainedMachineEvidence.$requiredMachineEvidenceFile.$propertyName must match the workspace manifest.", workspaceVerifier);
+        Assert.Contains("Machine evidence summary productionReadiness.verificationStatus must be passed.", workspaceVerifier);
+        Assert.Contains("Machine evidence summary productionReadiness.verificationFailureCount must be zero.", workspaceVerifier);
+        Assert.Contains("Machine evidence summary productionReadiness.humanReleaseEvidenceCloseoutStepCodes", workspaceVerifier);
         Assert.Contains("Machine evidence summary monitoringEvidence.$field must be present.", workspaceVerifier);
         Assert.Contains("Machine evidence summary monitoringEvidence.jsonLogLineCount must be greater than zero.", workspaceVerifier);
         Assert.Contains("Machine evidence summary monitoringEvidence.matchedMonitoringSmokeLine must be true.", workspaceVerifier);
@@ -18515,6 +18519,7 @@ public class AccountsWorkflowTests
         Assert.Contains("Workspace manifest retainedMachineEvidence.$requiredMachineEvidenceFile.sha256 must be a lowercase 64-character SHA-256 digest.", workspaceVerifier);
         Assert.Contains("Workspace manifest retainedMachineEvidence.$requiredMachineEvidenceFile.byteSize must match the retained file byte size.", workspaceVerifier);
         Assert.Contains("Workspace manifest retainedMachineEvidence.$requiredMachineEvidenceFile.sha256 must match the retained file SHA-256 digest.", workspaceVerifier);
+        Assert.Contains("production-readiness-verification-report.json", workspaceVerifier);
         Assert.Contains("accountant-workbench-evidence-report.json", workspaceVerifier);
         Assert.Contains("Workspace file inventory must include", workspaceVerifier);
         Assert.Contains("Workspace file inventory must not include unexpected file", workspaceVerifier);
@@ -18540,7 +18545,10 @@ public class AccountsWorkflowTests
         Assert.Contains("retainedMachineEvidence", workspaceScript);
         Assert.Contains("sourceArtifactName = $SourceArtifactName", workspaceScript);
         Assert.Contains("sourceArtifactFile = $SourceArtifactFile", workspaceScript);
+        Assert.Contains("ProductionReadinessVerificationReportPath", workspaceScript);
         Assert.Contains("production-readiness-report\" \"production-readiness-report.json", workspaceScript);
+        Assert.Contains("production-readiness-report\" \"production-readiness-verification-report.json", workspaceScript);
+        Assert.Contains("humanReleaseEvidenceCloseoutStepCodes", workspaceScript);
         Assert.Contains("visual-smoke-screenshots\" \"accountant-workbench-evidence-report.json", workspaceScript);
         Assert.Contains("structured-json-log-sample\" \"structured-log-report.json", workspaceScript);
         Assert.Contains("byteSize = $destination.Length", workspaceScript);

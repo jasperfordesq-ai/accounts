@@ -2081,8 +2081,8 @@ Release evidence reviewer machine summary:
   evidence fields to be present, inventories the summary with the rest of the
   workspace, and still proves release evidence remains blocked before named
   human sign-off.
-- The expected pre-report workspace inventory is now 19 files: six templates,
-  six retained machine evidence JSONs, the machine summary, and six generated
+- The expected pre-report workspace inventory is now 20 files: six templates,
+  seven retained machine evidence JSONs, the machine summary, and six generated
   reviewer/release-evidence control files.
 - Verification completed locally:
   - PowerShell parser checks passed for `scripts/new-release-evidence-workspace.ps1`
@@ -2091,7 +2091,7 @@ Release evidence reviewer machine summary:
   - Backend focused regression passed:
     `ReleaseEvidenceVerifier_BlocksIncompleteHumanSignoffEvidence`.
   - A local nested-artifact simulation generated and verified a workspace with
-    `release-evidence-machine-summary.json`, 19 workspace files, six retained
+    `release-evidence-machine-summary.json`, 20 workspace files, seven retained
     machine evidence entries, and no verifier failures.
   - A tampered-summary simulation changed a retained machine evidence SHA-256
     value in the summary and the workspace verifier failed with the expected
@@ -2197,7 +2197,7 @@ Release evidence workspace inventory verification:
   evidence must retain a workspace verification report that names the exact prepared
   reviewer workspace inventory. The verifier now checks
   `release-evidence-workspace-verification-report.json.requiredWorkspaceFiles` for
-  the canonical 19 files: six human templates, six retained machine evidence JSONs,
+  the canonical 20 files: six human templates, seven retained machine evidence JSONs,
   `release-evidence-workspace-manifest.json`,
   `release-evidence-machine-summary.json`, `release-evidence-reviewer-index.md`,
   `release-evidence-reviewer-completion.json`,
@@ -2223,13 +2223,13 @@ Release artifact pack workspace verification parsing:
   trusting its hash entry in `release-evidence-report.json`.
 - The final artifact-pack gate now requires that retained workspace verification
   report to be `passed`, have zero failures, carry the same release candidate
-  identity, and list exactly the canonical 19 prepared workspace files with positive
+  identity, and list exactly the canonical 20 prepared workspace files with positive
   byte sizes and lowercase SHA-256 hashes.
 
 Release artifact pack workspace inventory retention:
 
 - This slice makes `scripts/verify-release-artifact-pack.ps1` require every file named
-  by the canonical 19-file prepared workspace inventory to be retained in the final
+  by the canonical 20-file prepared workspace inventory to be retained in the final
   artifact pack.
 - Immutable machine/reviewer handoff files must retain byte size and SHA-256 matching
   `release-evidence-workspace-verification-report.json`; the six human templates and
@@ -2256,7 +2256,7 @@ Production readiness report evidence surface:
 
 - This slice updates the production readiness scorecard and frontend readiness fixtures
   so the security/platform evidence explicitly names the workspace verification report,
-  exact 19-file prepared workspace inventory, and retained reviewer handoff manifest
+  exact 20-file prepared workspace inventory, and retained reviewer handoff manifest
   now required by the release artifact pack verifier.
 - The manual release checklist fallback text for `release-artifact-pack` now tells
   operators to collect workspace verification and reviewer handoff reports alongside
@@ -2317,6 +2317,23 @@ Production readiness closeout verifier coverage:
   array, while a tampered report whose final closeout artifact pointed away from
   `scripts/verify-release-artifact-pack.ps1` failed with the expected closeout
   artifact error.
+
+Release evidence workspace readiness-verification retention:
+
+- This slice makes `scripts/new-release-evidence-workspace.ps1` retain
+  `production-readiness-verification-report.json` beside the raw
+  `production-readiness-report.json` in reviewer workspaces, and the generated
+  `release-evidence-machine-summary.json` now records the verification status,
+  failure count, and `humanReleaseEvidenceCloseoutStepCodes`.
+- `scripts/verify-release-evidence-workspace.ps1`,
+  `scripts/verify-release-evidence.ps1`, and
+  `scripts/verify-release-artifact-pack.ps1` now treat the prepared reviewer
+  workspace as a canonical 20-file inventory, including the retained readiness
+  verification report with byte-size/SHA-256 provenance.
+- CI workspace preparation now passes `-ProductionReadinessVerificationReportPath`.
+  A local regeneration from green CI run `29048642303` produced a verified workspace
+  with 20 required files, and deleting `production-readiness-verification-report.json`
+  failed with the expected retained-machine-evidence and workspace-inventory blockers.
 
 ## What Is Left To Do
 

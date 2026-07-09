@@ -239,6 +239,7 @@ $expectedReleaseEvidenceWorkspaceInventory = @(
     "manual-handoff-acceptance-template.md",
     "monitoring-provider-confirmation-template.md",
     "production-readiness-report.json",
+    "production-readiness-verification-report.json",
     "visual-smoke-manifest.json",
     "visual-smoke-evidence-report.json",
     "accountant-workbench-evidence-report.json",
