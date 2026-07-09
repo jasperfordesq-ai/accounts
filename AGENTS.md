@@ -1680,13 +1680,35 @@ Frontend accountant-workbench route coverage pack checks:
   `accountant-workbench-evidence-report.json` route readiness and acceptance rows
   must carry the exact route-specific workflow stages, and every route readiness
   row must carry the exact light/dark desktop/mobile theme-viewport coverage.
-- The production scorecard is now 695/700, with frontend accountant workbench at
-  196/200.
+- That previous slice moved the production scorecard to 695/700, with frontend
+  accountant workbench at 196/200.
 - Verification completed locally:
   - PowerShell parser checks for both pack verifiers passed.
   - Temporary visual evidence packs proved both verifiers reject a dashboard route
     with missing `themeViewportCoverage`, wrong workflow stages, or wrong route
     acceptance workflow stages.
+  - Backend focused regression passed 2 tests:
+    `ReleaseArtifactPackVerifier_RequiresExactOperationalEvidenceReports` and
+    `ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers`.
+  - Frontend contract/API/render/type checks passed:
+    `node --test tests/production-readiness-contract.test.mjs`,
+    `node scripts/verify-api-client.mjs`,
+    `npx.cmd vitest run tests/render/production-readiness-panel.test.tsx tests/render/production-readiness-workbench.test.tsx`,
+    and `npx.cmd tsc --noEmit --incremental false`.
+
+Frontend visual-smoke retained PNG pack checks:
+
+- This slice further tightens `scripts/verify-release-artifact-pack.ps1` and
+  `scripts/verify-ci-machine-evidence-pack.ps1` so every
+  `visual-smoke-evidence-report.json` screenshot row must match an actual
+  retained PNG file by screenshot filename, byte size and sha256 checksum.
+- The production scorecard is now 697/700, with frontend accountant workbench at
+  198/200.
+- Verification completed locally:
+  - PowerShell parser checks for both pack verifiers passed.
+  - Temporary visual evidence packs copied the retained PNG set and proved both
+    verifiers reject a missing dashboard screenshot, mismatched dashboard
+    screenshot byte size and mismatched dashboard screenshot checksum.
   - Backend focused regression passed 2 tests:
     `ReleaseArtifactPackVerifier_RequiresExactOperationalEvidenceReports` and
     `ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers`.
@@ -1745,8 +1767,8 @@ As of July 9, 2026:
 - Code implementation is roughly 70-75% complete.
 - Production assurance is roughly 60-65% complete.
 - Overall goal is roughly 63-67% complete, with about one third left.
-- The production scorecard is now 695/700: architecture/documentation 99/100,
-  backend statutory/accounting engine 250/250, frontend accountant workbench 196/200,
+- The production scorecard is now 697/700: architecture/documentation 99/100,
+  backend statutory/accounting engine 250/250, frontend accountant workbench 198/200,
   and security/auth/tenant/platform guardrails 150/150.
 - Architecture/documentation is now scored 99/100 in the production scorecard because
   source-law review, release evidence templates, manual handoff evidence, runbook

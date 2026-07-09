@@ -129,6 +129,32 @@ function Assert-ArrayContainsExactly {
     }
 }
 
+function Find-RetainedVisualSmokeScreenshot {
+    param(
+        [string]$Directory,
+        [string]$FileName,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    if ([string]::IsNullOrWhiteSpace($FileName)) {
+        Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.fileName must be present before retained PNG matching."
+        return ""
+    }
+
+    $matches = @(Get-ChildItem -LiteralPath $Directory -Recurse -File -Filter $FileName)
+    if ($matches.Count -eq 0) {
+        Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.$FileName retained PNG file must be present in the evidence pack."
+        return ""
+    }
+
+    if ($matches.Count -gt 1) {
+        Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.$FileName retained PNG file must be unambiguous in the evidence pack."
+        return ""
+    }
+
+    return $matches[0].FullName
+}
+
 $expectedAccountantWorkbenchWorkflowStages = @(
     "Setup",
     "Import",
@@ -289,6 +315,7 @@ function Assert-AccountantWorkbenchRouteAcceptance {
 function Assert-VisualSmokeDimensionEvidence {
     param(
         [object]$VisualSmoke,
+        [string]$Directory,
         [System.Collections.Generic.List[string]]$Failures
     )
 
@@ -440,6 +467,7 @@ function Assert-VisualSmokeDimensionEvidence {
         $luminanceRange = Get-JsonProperty $screenshot @("luminanceRange")
         $byteSize = Get-JsonProperty $screenshot @("byteSize")
         $sha256 = [string](Get-JsonProperty $screenshot @("sha256"))
+        $fileName = [string](Get-JsonProperty $screenshot @("fileName"))
         $pngIdatByteSize = Get-JsonProperty $screenshot @("pngIdatByteSize")
         $layoutCheckResults = @(Get-JsonProperty $screenshot @("layoutCheckResults"))
         $themeContrastResult = Get-JsonProperty $screenshot @("themeContrastResult")
@@ -461,6 +489,18 @@ function Assert-VisualSmokeDimensionEvidence {
         }
         if ($sha256 -notmatch '^sha256:[0-9a-f]{64}$') {
             Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.sha256 must be a canonical sha256 checksum."
+        }
+        $screenshotPath = Find-RetainedVisualSmokeScreenshot $Directory $fileName $Failures
+        if (-not [string]::IsNullOrWhiteSpace($screenshotPath)) {
+            $screenshotInfo = Get-Item -LiteralPath $screenshotPath
+            if ($null -ne $byteSize -and [int64]$byteSize -ne [int64]$screenshotInfo.Length) {
+                Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.$fileName byteSize must match the retained PNG file."
+            }
+
+            $actualSha256 = "sha256:$(Get-FileSha256 $screenshotPath)"
+            if ($sha256 -match '^sha256:[0-9a-f]{64}$' -and $sha256 -ne $actualSha256) {
+                Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.$fileName sha256 must match the retained PNG file."
+            }
         }
         if ($null -eq $pngIdatByteSize -or [int]$pngIdatByteSize -le 0) {
             Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.pngIdatByteSize must prove retained PNG image data."
@@ -798,7 +838,7 @@ if (-not ($visualSmoke.PSObject.Properties.Name -contains "__missing")) {
     if ([int]$visualSmoke.routeCount -ne 7) {
         Add-Failure $failures "visual-smoke-evidence-report.json routeCount must be 7."
     }
-    Assert-VisualSmokeDimensionEvidence $visualSmoke $failures
+    Assert-VisualSmokeDimensionEvidence $visualSmoke $resolvedDirectory.Path $failures
 }
 
 if (-not ($accountantWorkbench.PSObject.Properties.Name -contains "__missing")) {

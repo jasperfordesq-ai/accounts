@@ -18928,6 +18928,12 @@ public class AccountsWorkflowTests
         Assert.Contains("screenshots.byteSize must prove retained screenshot bytes", machineEvidencePack);
         Assert.Contains("screenshots.sha256 must be a canonical sha256 checksum", script);
         Assert.Contains("screenshots.sha256 must be a canonical sha256 checksum", machineEvidencePack);
+        Assert.Contains("retained PNG file must be present in the evidence pack", script);
+        Assert.Contains("retained PNG file must be present in the evidence pack", machineEvidencePack);
+        Assert.Contains("byteSize must match the retained PNG file", script);
+        Assert.Contains("byteSize must match the retained PNG file", machineEvidencePack);
+        Assert.Contains("sha256 must match the retained PNG file", script);
+        Assert.Contains("sha256 must match the retained PNG file", machineEvidencePack);
         Assert.Contains("screenshots.pngIdatByteSize must prove retained PNG image data", script);
         Assert.Contains("screenshots.pngIdatByteSize must prove retained PNG image data", machineEvidencePack);
         Assert.Contains("routeReadiness.$($expected.routeName).workflowStages", script);
