@@ -586,6 +586,8 @@ function Test-VisualEvidence {
     Assert-CompletedTableColumnMatches $Content $requiredRouteCodes 2 "Desktop dark" "^(pass|accepted)$" "pass or accepted" $context $Failures
     Assert-CompletedTableColumnMatches $Content $requiredRouteCodes 3 "Mobile light" "^(pass|accepted)$" "pass or accepted" $context $Failures
     Assert-CompletedTableColumnMatches $Content $requiredRouteCodes 4 "Mobile dark" "^(pass|accepted)$" "pass or accepted" $context $Failures
+    Assert-CompletedTableColumnMatches $Content $requiredRouteCodes 5 "Notes" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real retained visual evidence note or reference" $context $Failures
+    Assert-CompletedTableColumnContainsRowLabel $Content $requiredRouteCodes 5 "Notes" $context $Failures
 }
 
 function Test-AccountantEvidence {

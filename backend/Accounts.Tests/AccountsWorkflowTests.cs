@@ -18318,6 +18318,8 @@ public class AccountsWorkflowTests
         Assert.Contains("themeContrastResult.minimumContrastRatio", visual);
         Assert.Contains("Use `pass` or `accepted`", visual);
         Assert.Contains("rejects blank, failed, pending, or ambiguous", visual);
+        Assert.Contains("Each route `Notes` cell must include", visual);
+        Assert.Contains("matching route code", visual);
 
         var sourceLaw = File.ReadAllText(sourceLawPath);
         Assert.Contains("source-law-snapshot-fingerprint", sourceLaw);
@@ -18492,6 +18494,8 @@ public class AccountsWorkflowTests
         Assert.Contains("\"Desktop dark\" \"^(pass|accepted)$\"", script);
         Assert.Contains("\"Mobile light\" \"^(pass|accepted)$\"", script);
         Assert.Contains("\"Mobile dark\" \"^(pass|accepted)$\"", script);
+        Assert.Contains("a real retained visual evidence note or reference", script);
+        Assert.Contains("Assert-CompletedTableColumnContainsRowLabel $Content $requiredRouteCodes 5 \"Notes\"", script);
         Assert.Contains("Assert-MinimumDecimalField", script);
         Assert.Contains("integer greater than or equal to $MinimumValue", script);
         Assert.Contains("pngIdatByteSize", script);

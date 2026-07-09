@@ -768,8 +768,8 @@ CI status:
   2026.
 - Green jobs: Workflow Hygiene, Production Compose Config, Frontend, Backend,
   Production Stack Smoke, and CI Machine Evidence Pack.
-- The scorecard exposed by the candidate is now 641/700, with backend statutory/accounting
-  engine at 222/250, frontend accountant workbench at 170/200 and
+- The scorecard exposed by the candidate is now 643/700, with backend statutory/accounting
+  engine at 222/250, frontend accountant workbench at 172/200 and
   security/auth/tenant/platform guardrails at 150/150.
   The typed frontend parser and production-readiness verifier both require CI
   machine evidence, production smoke, readiness verification, visual smoke, release
@@ -962,6 +962,36 @@ Backend source-law per-source note evidence checks:
     `npx.cmd vitest run tests/render/production-readiness-panel.test.tsx tests/render/production-readiness-workbench.test.tsx`,
     and `npx.cmd tsc --noEmit --incremental false`.
 
+Frontend visual QA route-note evidence checks:
+
+- This slice tightened `scripts/verify-release-evidence.ps1` so every visual QA
+  route row must include a real retained `Notes` value and that note/reference
+  must include the matching route code.
+- The visual QA sign-off template now tells reviewers to include a retained
+  visual evidence note or reference containing the matching route code in every
+  route `Notes` cell, so screenshot review notes cannot be reused against the
+  wrong workbench route.
+- The production scorecard is now 643/700, with frontend accountant workbench at
+  172/200.
+- Verification completed locally:
+  - PowerShell parser check for `scripts\verify-release-evidence.ps1` passed.
+  - Temporary completed release-evidence pack outside the repo passed with
+    visual route notes like
+    `visual-smoke-evidence-report.json#routeAcceptance.<route>` for every
+    workbench route.
+  - A copied pack with `production-readiness` replaced by `wrong-route` in that
+    row's Notes cell failed with the expected visual QA row-code verifier error.
+  - Backend focused regression passed 3 tests:
+    `ReleaseEvidenceVerifier_BlocksIncompleteHumanSignoffEvidence`,
+    `ReleaseEvidenceTemplates_CoverHumanVisualAccountantAndProviderSignoffs`,
+    and
+    `ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers`.
+  - Frontend contract/API/render/type checks passed:
+    `node --test tests/production-readiness-contract.test.mjs`,
+    `node scripts/verify-api-client.mjs`,
+    `npx.cmd vitest run tests/render/production-readiness-panel.test.tsx tests/render/production-readiness-workbench.test.tsx`,
+    and `npx.cmd tsc --noEmit --incremental false`.
+
 ## What Is Left To Do
 
 Highest-priority next steps:
@@ -1011,8 +1041,8 @@ As of July 8, 2026:
 - Code implementation is roughly 70-75% complete.
 - Production assurance is roughly 60-65% complete.
 - Overall goal is roughly 63-67% complete, with about one third left.
-- The production scorecard is now 641/700: architecture/documentation 99/100,
-  backend statutory/accounting engine 222/250, frontend accountant workbench 170/200,
+- The production scorecard is now 643/700: architecture/documentation 99/100,
+  backend statutory/accounting engine 222/250, frontend accountant workbench 172/200,
   and security/auth/tenant/platform guardrails 150/150.
 - Architecture/documentation is now scored 99/100 in the production scorecard because
   source-law review, release evidence templates, manual handoff evidence, runbook
