@@ -768,8 +768,8 @@ CI status:
   2026.
 - Green jobs: Workflow Hygiene, Production Compose Config, Frontend, Backend,
   Production Stack Smoke, and CI Machine Evidence Pack.
-- The scorecard exposed by the candidate is now 649/700, with backend statutory/accounting
-  engine at 228/250, frontend accountant workbench at 172/200 and
+- The scorecard exposed by the candidate is now 651/700, with backend statutory/accounting
+  engine at 230/250, frontend accountant workbench at 172/200 and
   security/auth/tenant/platform guardrails at 150/150.
   The typed frontend parser and production-readiness verifier both require CI
   machine evidence, production smoke, readiness verification, visual smoke, release
@@ -1065,8 +1065,8 @@ Backend manual handoff exact decision checks:
   decision text such as `accepted with notes` is rejected, so acceptance
   limitations must live in retained evidence references or notes rather than in
   the decision cell.
-- The production scorecard is now 649/700, with backend statutory/accounting
-  engine at 228/250.
+- That previous slice moved the production scorecard to 649/700, with backend
+  statutory/accounting engine at 228/250.
 - Verification completed locally:
   - PowerShell parser check for `scripts\verify-release-evidence.ps1` passed.
   - Temporary completed release-evidence pack outside the repo passed with exact
@@ -1074,6 +1074,34 @@ Backend manual handoff exact decision checks:
   - A copied pack with the `medium-audit-required` decision set to
     `accepted with notes` failed with the expected manual handoff verifier
     error.
+  - Backend focused regression passed 3 tests:
+    `ReleaseEvidenceVerifier_BlocksIncompleteHumanSignoffEvidence`,
+    `ReleaseEvidenceTemplates_CoverHumanVisualAccountantAndProviderSignoffs`,
+    and
+    `ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers`.
+  - Frontend contract/API/render/type checks passed:
+    `node --test tests/production-readiness-contract.test.mjs`,
+    `node scripts/verify-api-client.mjs`,
+    `npx.cmd vitest run tests/render/production-readiness-panel.test.tsx tests/render/production-readiness-workbench.test.tsx`,
+    and `npx.cmd tsc --noEmit --incremental false`.
+
+Backend external ROS/iXBRL exact decision checks:
+
+- This slice tightened `scripts/verify-release-evidence.ps1` so external
+  validation `Warnings/errors` cells must be exactly `none`, `accepted`, or
+  `remediated`, and scenario `Decision` cells must be exactly `accepted`.
+- The external ROS/iXBRL validation template now tells reviewers that ambiguous
+  warning/error or decision text such as `accepted with notes` is rejected, so
+  limitations must live in retained validation references, reports, or notes.
+- The production scorecard is now 651/700, with backend statutory/accounting
+  engine at 230/250.
+- Verification completed locally:
+  - PowerShell parser check for `scripts\verify-release-evidence.ps1` passed.
+  - Temporary completed release-evidence pack outside the repo passed with exact
+    external validation warning/error statuses and exact accepted decisions.
+  - A copied external ROS/iXBRL pack with the `micro-ltd` `Warnings/errors`
+    value set to `accepted with notes` failed with the expected exact-value
+    verifier error.
   - Backend focused regression passed 3 tests:
     `ReleaseEvidenceVerifier_BlocksIncompleteHumanSignoffEvidence`,
     `ReleaseEvidenceTemplates_CoverHumanVisualAccountantAndProviderSignoffs`,
@@ -1101,8 +1129,8 @@ Highest-priority next steps:
    note is still missing.
 4. Complete and retain external ROS/iXBRL validation references for the exact generated
    artifact hashes; the template and verifier now require accepted rows with real
-   references, hashes, warning/error status, and decisions, but real external
-   validation evidence is still missing.
+   references, hashes, exact warning/error status values, and exact accepted
+   decisions, but real external validation evidence is still missing.
 5. Complete and retain manual handoff acceptance evidence for the `medium-audit-required`
    scenario and unsupported path codes before relying on audit-required or unsupported
    outputs; the template and verifier now require real retained evidence references
@@ -1129,13 +1157,13 @@ Highest-priority next steps:
 
 ## Estimated Completion
 
-As of July 8, 2026:
+As of July 9, 2026:
 
 - Code implementation is roughly 70-75% complete.
 - Production assurance is roughly 60-65% complete.
 - Overall goal is roughly 63-67% complete, with about one third left.
-- The production scorecard is now 649/700: architecture/documentation 99/100,
-  backend statutory/accounting engine 228/250, frontend accountant workbench 172/200,
+- The production scorecard is now 651/700: architecture/documentation 99/100,
+  backend statutory/accounting engine 230/250, frontend accountant workbench 172/200,
   and security/auth/tenant/platform guardrails 150/150.
 - Architecture/documentation is now scored 99/100 in the production scorecard because
   source-law review, release evidence templates, manual handoff evidence, runbook

@@ -28,14 +28,16 @@ Internal XML checks are not Revenue acceptance evidence.
 Required formats: use the full 40-character commit SHA, the exact
 `https://github.com/.../actions/runs/...` run URL, UTC timestamps ending in `Z`
 or `+00:00`, and 64-character SHA-256 digests for every generated iXBRL hash.
-Use a real external validation reference for each scenario. Use `none`,
+Use a real external validation reference for each scenario. Use exactly `none`,
 `accepted`, or `remediated` in the `Warnings/errors` column only when every
-warning or error has been accepted by the reviewer or remediated. Use `accepted`
-in the `Decision` column only when the external reference, artifact hash,
-taxonomy package, and warnings/errors status are accepted for the exact release
-candidate. Record the actual taxonomy package or retained package reference for
-each scenario; do not use `accepted`, `none`, `n/a`, `pending`, `todo`, or `tbd`
-as the taxonomy package.
+warning or error has been accepted by the reviewer or remediated. Use exactly
+`accepted` in the `Decision` column only when the external reference, artifact
+hash, taxonomy package, and warnings/errors status are accepted for the exact
+release candidate. The verifier rejects ambiguous values such as `accepted with
+notes`; retain details in the validation reference, validation report, or notes.
+Record the actual taxonomy package or retained package reference for each
+scenario; do not use `accepted`, `none`, `n/a`, `pending`, `todo`, or `tbd` as
+the taxonomy package.
 Scenario external validation references and retained taxonomy package references
 must include the scenario code, so evidence cannot be reused against the wrong
 golden corpus row.

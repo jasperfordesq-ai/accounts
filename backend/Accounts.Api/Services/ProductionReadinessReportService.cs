@@ -810,7 +810,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             Category(
                 "backend-statutory-accounting-engine",
                 "Backend statutory/accounting engine",
-                228,
+                230,
                 250,
                 "qualified-accountant-review-required",
                 [
@@ -827,6 +827,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "Qualified-accountant route walkthrough notes now require retained route-specific notes or references containing the matching route code.",
                     "External ROS/iXBRL validation evidence now has a checked-in template and the release verifier rejects rows without real references, retained taxonomy package references, accepted/remediated warning status and accepted scenario decisions.",
                     "External ROS/iXBRL validation references and retained taxonomy package references now must include the matching golden corpus scenario code before acceptance can pass.",
+                    "External ROS/iXBRL validation warnings/errors now require exact none, accepted or remediated values, and scenario decisions require exact accepted values before evidence can pass.",
                     "Source-law review evidence now has a checked-in template and the release verifier rejects monitored-source rows without concrete URL reachability, dated or not-dated effective-date review, guidance comparison, platform impact classification and exact accepted decisions.",
                     "Source-law review notes now must include a retained per-source note or evidence reference containing the matching monitored source ID before acceptance can pass.",
                     "Manual handoff acceptance now has a checked-in template and the release verifier rejects audit-required or unsupported-path rows without real evidence references and accepted reviewer decisions.",

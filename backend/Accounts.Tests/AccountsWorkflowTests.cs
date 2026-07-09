@@ -18346,7 +18346,7 @@ public class AccountsWorkflowTests
         Assert.Contains("Use a real external validation reference for each scenario", externalRosIxbrl);
         Assert.Contains("in the `Decision` column only when the external reference", externalRosIxbrl);
         Assert.Contains("Record the actual taxonomy package", externalRosIxbrl);
-        Assert.Contains("as the taxonomy package", externalRosIxbrl);
+        Assert.Contains("the taxonomy package", externalRosIxbrl);
         Assert.Contains("must include the scenario code", externalRosIxbrl);
         Assert.Contains("golden corpus row", externalRosIxbrl);
         Assert.Contains("micro-ltd", externalRosIxbrl);
@@ -18428,6 +18428,7 @@ public class AccountsWorkflowTests
 
         Assert.True(File.Exists(scriptPath), "Release evidence verifier should make completed human sign-off templates machine-checkable.");
         var script = File.ReadAllText(scriptPath);
+        var externalRosIxbrl = File.ReadAllText(Path.Combine(root, "Docs", "release-evidence", "external-ros-ixbrl-validation-template.md"));
 
         Assert.Contains("verify-release-evidence.ps1", runbook);
         Assert.Contains("release-evidence-report.json", runbook);
@@ -18480,7 +18481,12 @@ public class AccountsWorkflowTests
         Assert.Contains("a real retained taxonomy package reference", script);
         Assert.Contains("Assert-CompletedTableColumnContainsRowLabel $Content $canonicalGoldenCorpusScenarioCodes 1 \"External reference\"", script);
         Assert.Contains("Assert-CompletedTableColumnContainsRowLabel $Content $canonicalGoldenCorpusScenarioCodes 3 \"Taxonomy package\"", script);
-        Assert.Contains("\"Warnings/errors\" \"^(none|accepted\\b.*|remediated\\b.*)$\"", script);
+        Assert.Contains("Use exactly `none`,", externalRosIxbrl);
+        Assert.Contains("`accepted` in the `Decision` column", externalRosIxbrl);
+        Assert.Contains("accepted with", externalRosIxbrl);
+        Assert.Contains("retain details in the validation reference", externalRosIxbrl);
+        Assert.Contains("\"Warnings/errors\" \"^(none|accepted|remediated)$\" \"exactly none, accepted, or remediated\"", script);
+        Assert.Contains("\"Decision\" \"^accepted$\" \"exactly accepted for this release candidate\"", script);
         Assert.Contains("micro-ltd", script);
         Assert.Contains("small-abridged-ltd", script);
         Assert.Contains("stale non-canonical scenario code", script);
