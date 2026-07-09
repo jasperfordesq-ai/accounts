@@ -18336,7 +18336,8 @@ public class AccountsWorkflowTests
         Assert.Contains("64-character SHA-256 digest", sourceLaw);
         Assert.Contains("Use `yes` for `URL reachable`", sourceLaw);
         Assert.Contains("The verifier rejects generic `accepted` placeholders", sourceLaw);
-        Assert.Contains("`no change`, `reflected...`, or `blocking...`", sourceLaw);
+        Assert.Contains("exactly `no change`, `reflected`, or `blocking`", sourceLaw);
+        Assert.Contains("trailing\nimpact prose such as `reflected in notes`", sourceLaw);
         Assert.Contains("Each `Notes` cell must include", sourceLaw);
         Assert.Contains("matching source ID", sourceLaw);
 
@@ -18468,7 +18469,7 @@ public class AccountsWorkflowTests
         Assert.Contains("\"URL reachable\" \"^yes$\"", script);
         Assert.Contains("\"Effective date checked\" \"^([0-9]{4}-[0-9]{2}-[0-9]{2}|not dated)$\"", script);
         Assert.Contains("\"Guidance wording compared\" \"^yes$\"", script);
-        Assert.Contains("\"Platform impact\" \"^(no change|reflected\\b.*|blocking\\b.*)$\"", script);
+        Assert.Contains("\"Platform impact\" \"^(no change|reflected|blocking)$\" \"exactly no change, reflected, or blocking\"", script);
         Assert.Contains("\"Decision\" \"^accepted$\"", script);
         Assert.Contains("\"Notes\" \"^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+\"", script);
         Assert.Contains("Assert-CompletedTableColumnContainsRowLabel $Content $requiredSourceLawSourceIds 6 \"Notes\"", script);

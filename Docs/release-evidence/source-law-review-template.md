@@ -24,10 +24,11 @@ content hash.
 Use `yes` for `URL reachable` and `Guidance wording compared` only after the
 current source page has been checked. Use the checked effective date in
 `YYYY-MM-DD` format, or `not dated` when the source has no dated update. Use
-`no change`, `reflected...`, or `blocking...` in `Platform impact`; use
+exactly `no change`, `reflected`, or `blocking` in `Platform impact`; use
 `accepted` in `Decision` only when the source row is accepted for this release
-candidate. The verifier rejects generic `accepted` placeholders in the URL,
-effective-date, guidance-comparison and platform-impact cells.
+candidate. The verifier rejects generic `accepted` placeholders, trailing
+impact prose such as `reflected in notes`, and other ambiguous values in the
+URL, effective-date, guidance-comparison and platform-impact cells.
 Each `Notes` cell must include a retained per-source note or evidence reference
 containing the matching source ID, so source-law review evidence cannot be reused
 against the wrong monitored source row.

@@ -838,7 +838,7 @@ function Test-SourceLawEvidence {
     Assert-CompletedTableColumnMatches $Content $requiredSourceLawSourceIds 1 "URL reachable" "^yes$" "yes" $context $Failures
     Assert-CompletedTableColumnMatches $Content $requiredSourceLawSourceIds 2 "Effective date checked" "^([0-9]{4}-[0-9]{2}-[0-9]{2}|not dated)$" "YYYY-MM-DD or not dated" $context $Failures
     Assert-CompletedTableColumnMatches $Content $requiredSourceLawSourceIds 3 "Guidance wording compared" "^yes$" "yes" $context $Failures
-    Assert-CompletedTableColumnMatches $Content $requiredSourceLawSourceIds 4 "Platform impact" "^(no change|reflected\b.*|blocking\b.*)$" "no change, reflected, or blocking" $context $Failures
+    Assert-CompletedTableColumnMatches $Content $requiredSourceLawSourceIds 4 "Platform impact" "^(no change|reflected|blocking)$" "exactly no change, reflected, or blocking" $context $Failures
     Assert-CompletedTableColumnMatches $Content $requiredSourceLawSourceIds 5 "Decision" "^accepted$" "accepted for this release candidate" $context $Failures
     Assert-CompletedTableColumnMatches $Content $requiredSourceLawSourceIds 6 "Notes" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real retained per-source note or evidence reference" $context $Failures
     Assert-CompletedTableColumnContainsRowLabel $Content $requiredSourceLawSourceIds 6 "Notes" $context $Failures

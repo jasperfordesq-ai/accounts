@@ -20,13 +20,13 @@ describe("ProductionReadinessWorkbench", () => {
     expectText("3 companies");
     expectText("4 periods");
     expect(screen.getByRole("heading", { name: "Production scorecard" })).toBeInTheDocument();
-    expectText("653/700");
+    expectText("655/700");
     expectText("Architecture and documentation");
     expectText("Backend statutory/accounting engine");
     expectText("Frontend accountant workbench");
     expectText("Security/auth/tenant/platform guardrails");
     expectText("99 / 100");
-    expectText("230 / 250");
+    expectText("232 / 250");
     expectText("174 / 200");
     expectText("150 / 150");
     expectText(/Next score gate/);
@@ -284,7 +284,7 @@ describe("ProductionReadinessWorkbench", () => {
 
 function productionScorecard(): ProductionReadinessReport["productionScorecard"] {
   return {
-    currentScore: 653,
+    currentScore: 655,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete source-law review, named visual QA, monitoring-provider confirmation, manual handoff and qualified-accountant acceptance evidence.",
@@ -307,7 +307,7 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
       {
         code: "backend-statutory-accounting-engine",
         label: "Backend statutory/accounting engine",
-        currentScore: 230,
+        currentScore: 232,
         targetScore: 250,
         status: "qualified-accountant-review-required",
         currentEvidence: [
@@ -324,6 +324,7 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
           "External ROS/iXBRL validation and taxonomy references require the matching golden corpus scenario code before acceptance can pass.",
           "External ROS/iXBRL validation warnings/errors require exact none, accepted or remediated values, and scenario decisions require exact accepted values before evidence can pass.",
           "Source-law review evidence has template and verifier checks for concrete URL reachability, dated or not-dated effective-date review, guidance comparison, platform impact classification and exact accepted decisions.",
+          "Source-law review platform impact cells require exact no change, reflected or blocking values before review evidence can pass.",
           "Source-law review notes require retained per-source evidence references containing the matching monitored source ID before acceptance can pass.",
           "Manual handoff acceptance evidence has template and verifier checks for real evidence references and accepted reviewer decisions.",
           "Manual handoff scenario and unsupported-path decisions require exact accepted reviewer decisions before acceptance evidence can pass.",
