@@ -230,11 +230,53 @@ function Get-MinimumVisualMetric {
     return ([Linq.Enumerable]::Min($values)).ToString([Globalization.CultureInfo]::InvariantCulture)
 }
 
+function Get-VisualRouteNames {
+    param($VisualReport)
+
+    $routes = @((Get-JsonPropertyValue $VisualReport "routeCoverage") | ForEach-Object {
+        [string](Get-JsonPropertyValue $_ "routeName")
+    } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+
+    if ($routes.Count -eq 0) {
+        $routes = @((Get-JsonPropertyValue $VisualReport "screenshots") | ForEach-Object {
+            [string](Get-JsonPropertyValue $_ "routeName")
+        } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
+    }
+
+    if ($routes.Count -eq 0) {
+        throw "Visual smoke evidence report must contain routeCoverage or screenshots routeName entries."
+    }
+
+    return @($routes)
+}
+
+function Set-VisualQaRouteReferenceNotes {
+    param(
+        [string]$Content,
+        [string[]]$RouteNames
+    )
+
+    $updated = $Content
+    foreach ($routeName in $RouteNames) {
+        $escaped = [regex]::Escape($routeName)
+        $pattern = "(?m)^(\|\s*$escaped\s*\|\s*[^|]*\|\s*[^|]*\|\s*[^|]*\|\s*[^|]*\|)\s*[^|]*\|$"
+        if (-not [regex]::IsMatch($updated, $pattern)) {
+            throw "Visual QA template is missing route row '$routeName'."
+        }
+
+        $reference = "visual-smoke-evidence-report.json#routeAcceptance.$routeName"
+        $updated = [regex]::Replace($updated, $pattern, "`$1 $reference |")
+    }
+
+    return $updated
+}
+
 function Copy-PreparedTemplate {
     param(
         [string]$TemplatePath,
         [string]$DestinationPath,
-        [hashtable]$Fields
+        [hashtable]$Fields,
+        [string[]]$VisualRouteNames = @()
     )
 
     if ((Test-Path -LiteralPath $DestinationPath) -and -not $Force) {
@@ -244,6 +286,10 @@ function Copy-PreparedTemplate {
     $content = Get-Content -LiteralPath $TemplatePath -Raw
     foreach ($field in $Fields.GetEnumerator()) {
         $content = Set-MarkdownField $content $field.Key ([string]$field.Value)
+    }
+
+    if ((Split-Path -Leaf $DestinationPath) -eq "visual-qa-signoff-template.md") {
+        $content = Set-VisualQaRouteReferenceNotes $content $VisualRouteNames
     }
 
     Set-Content -LiteralPath $DestinationPath -Value $content -NoNewline
@@ -273,6 +319,7 @@ $productionReadinessVerificationReport = Read-JsonFile $productionReadinessVerif
 $visualSmokeEvidenceReport = Read-JsonFile $visualSmokeEvidenceReportPath
 $monitoringErrorRoutingReport = Read-JsonFile $monitoringErrorRoutingReportPath
 $structuredLogReport = Read-JsonFile $structuredLogReportPath
+$visualRouteNames = Get-VisualRouteNames $visualSmokeEvidenceReport
 
 $productionReadinessTimestamp = Convert-JsonValueToEvidenceString (Get-JsonPropertyValue $productionReadinessReport "generatedAt")
 $checkedAtUtc = Convert-JsonValueToEvidenceString (Get-JsonPropertyValue $monitoringErrorRoutingReport "checkedAtUtc")
@@ -440,7 +487,7 @@ $machineEvidenceSummary | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $ma
 foreach ($template in $preparedTemplates) {
     $source = Join-Path $resolvedTemplateDirectory $template.FileName
     $destination = Join-Path $resolvedOutputDirectory $template.FileName
-    Copy-PreparedTemplate $source $destination $template.Fields
+    Copy-PreparedTemplate $source $destination $template.Fields $visualRouteNames
 }
 
 $completionLedgerFile = "release-evidence-reviewer-completion.json"

@@ -18468,7 +18468,7 @@ public class AccountsWorkflowTests
         Assert.Contains("structured-log-report.json", runbook);
         Assert.Contains("release-evidence-workspace-verification-report.json", runbook);
         Assert.Contains("release-evidence-verifier-output.txt", runbook);
-        Assert.Contains("leaves all reviewer identity, decisions, signatures", runbook);
+        Assert.Contains("leaves all reviewer identity, pass/fail decisions, signatures", runbook);
         Assert.Contains("release-evidence-report.json", runbook);
         Assert.Contains("visual-smoke-evidence-report.json", runbook);
         Assert.Contains("real filing use stays blocked", runbook, StringComparison.OrdinalIgnoreCase);
@@ -18500,6 +18500,9 @@ public class AccountsWorkflowTests
         Assert.Contains("Machine evidence summary monitoringEvidence.$field must be present.", workspaceVerifier);
         Assert.Contains("Machine evidence summary monitoringEvidence.jsonLogLineCount must be greater than zero.", workspaceVerifier);
         Assert.Contains("Machine evidence summary monitoringEvidence.matchedMonitoringSmokeLine must be true.", workspaceVerifier);
+        Assert.Contains("Assert-VisualQaPreparedRouteReferences", workspaceVerifier);
+        Assert.Contains("Prepared visual QA template route row $routeName Notes cell must be", workspaceVerifier);
+        Assert.Contains("must leave route pass/fail decision cells blank before named human sign-off", workspaceVerifier);
         Assert.Contains("machineEvidenceSummaryPath", workspaceVerifier);
         Assert.Contains("releaseCandidate", workspaceVerifier);
         Assert.Contains("identityProvided", workspaceVerifier);
@@ -18574,6 +18577,9 @@ public class AccountsWorkflowTests
         Assert.Contains("This workspace is reviewer preparation only.", workspaceScript);
         Assert.Contains("Copy-PreparedTemplate", workspaceScript);
         Assert.Contains("Get-MinimumVisualMetric", workspaceScript);
+        Assert.Contains("Get-VisualRouteNames", workspaceScript);
+        Assert.Contains("Set-VisualQaRouteReferenceNotes", workspaceScript);
+        Assert.Contains("visual-smoke-evidence-report.json#routeAcceptance.$routeName", workspaceScript);
         Assert.Contains("Assert-GitHubActionsRunUrl", workspaceScript);
         Assert.Contains("Refusing to overwrite existing evidence file", workspaceScript);
         Assert.Contains("VisualSmokeEvidenceReportPath", workspaceScript);

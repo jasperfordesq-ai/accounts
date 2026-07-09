@@ -149,6 +149,58 @@ function Assert-TextContains {
     }
 }
 
+function Assert-VisualQaPreparedRouteReferences {
+    param(
+        [string]$WorkspaceDirectory,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    $visualReportPath = Join-Path $WorkspaceDirectory "visual-smoke-evidence-report.json"
+    $visualQaTemplatePath = Join-Path $WorkspaceDirectory "visual-qa-signoff-template.md"
+
+    if (-not (Test-Path -LiteralPath $visualReportPath -PathType Leaf) -or -not (Test-Path -LiteralPath $visualQaTemplatePath -PathType Leaf)) {
+        return
+    }
+
+    $visualReport = Get-Content -LiteralPath $visualReportPath -Raw | ConvertFrom-Json
+    $routeNames = @((Get-JsonPropertyValue $visualReport "routeCoverage") | ForEach-Object {
+        [string](Get-JsonPropertyValue $_ "routeName")
+    } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+
+    if ($routeNames.Count -eq 0) {
+        Add-Failure $Failures "visual-smoke-evidence-report.json routeCoverage must include visual QA route names."
+        return
+    }
+
+    $content = Get-Content -LiteralPath $visualQaTemplatePath -Raw
+    $lines = $content -split "\r?\n"
+    foreach ($routeName in $routeNames) {
+        $escaped = [regex]::Escape($routeName)
+        $row = $lines | Where-Object { $_ -match "^\|\s*$escaped\s*\|" } | Select-Object -First 1
+        if (-not $row) {
+            Add-Failure $Failures "Prepared visual QA template must include route row $routeName."
+            continue
+        }
+
+        $cells = @($row -split "\|")
+        if ($cells.Count -lt 8) {
+            Add-Failure $Failures "Prepared visual QA template route row $routeName must include all decision and notes cells."
+            continue
+        }
+
+        foreach ($decisionIndex in 2..5) {
+            if (-not [string]::IsNullOrWhiteSpace($cells[$decisionIndex])) {
+                Add-Failure $Failures "Prepared visual QA template route row $routeName must leave route pass/fail decision cells blank before named human sign-off."
+            }
+        }
+
+        $expectedReference = "visual-smoke-evidence-report.json#routeAcceptance.$routeName"
+        if ($cells[6].Trim() -ne $expectedReference) {
+            Add-Failure $Failures "Prepared visual QA template route row $routeName Notes cell must be $expectedReference."
+        }
+    }
+}
+
 function Get-FileSha256 {
     param([string]$Path)
 
@@ -437,6 +489,8 @@ if (-not (Test-Path -LiteralPath $machineEvidenceSummaryPath)) {
         Add-Failure $failures "Machine evidence summary reviewerQueue must contain exactly $($requiredReviewerQueue.Count) entries."
     }
 }
+
+Assert-VisualQaPreparedRouteReferences $resolvedWorkspace.Path $failures
 
 if (-not (Test-Path -LiteralPath $reviewerIndexPath)) {
     Add-Failure $failures "Workspace must include release-evidence-reviewer-index.md."

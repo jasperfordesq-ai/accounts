@@ -964,6 +964,10 @@ public class ProductionReadinessReportTests
         Assert.Contains(scores["frontend-accountant-workbench"].CurrentEvidence, evidence =>
             evidence.Contains("Visual QA route notes", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("exact visual-smoke-evidence-report.json routeAcceptance anchor", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(scores["frontend-accountant-workbench"].CurrentEvidence, evidence =>
+            evidence.Contains("Release evidence reviewer workspaces", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("prefill visual QA route note anchors", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("route pass/fail cells blank", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["security-auth-tenant-platform-guardrails"].CurrentEvidence, evidence =>
             evidence.Contains("verify-ci-machine-evidence-pack.ps1", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("PNG viewport dimensions", StringComparison.OrdinalIgnoreCase));

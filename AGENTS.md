@@ -2335,6 +2335,21 @@ Release evidence workspace readiness-verification retention:
   with 20 required files, and deleting `production-readiness-verification-report.json`
   failed with the expected retained-machine-evidence and workspace-inventory blockers.
 
+Visual QA reviewer workspace route anchors:
+
+- This slice makes `scripts/new-release-evidence-workspace.ps1` read the retained
+  `visual-smoke-evidence-report.json` route coverage and prefill each
+  `visual-qa-signoff-template.md` route `Notes` cell with the exact
+  `visual-smoke-evidence-report.json#routeAcceptance.<route>` anchor.
+- `scripts/verify-release-evidence-workspace.ps1` now rejects prepared reviewer
+  workspaces when any visual QA route row is missing the exact routeAcceptance
+  note anchor, or when any route pass/fail decision cell is filled before named
+  human sign-off.
+- This improves the first remaining human-evidence gate without faking approval:
+  reviewers still have to inspect the light/dark desktop/mobile screenshots and
+  enter exact `pass` decisions, reviewer identity, UTC timestamp, decision and
+  signature before `scripts/verify-release-evidence.ps1` can pass.
+
 ## What Is Left To Do
 
 Highest-priority next steps:

@@ -900,6 +900,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "Visual QA sign-off now requires exact pass decisions for every route across desktop light, desktop dark, mobile light and mobile dark captures.",
                     "Visual QA route capture cells now reject accepted-style ambiguous text so reviewer limitations must stay in retained route notes or references.",
                     "Visual QA route notes now must match the exact visual-smoke-evidence-report.json routeAcceptance anchor for every route before sign-off evidence can pass.",
+                    "Release evidence reviewer workspaces now prefill visual QA route note anchors from visual-smoke-evidence-report.json while leaving all route pass/fail cells blank for named human review.",
                     "Visual QA release evidence now requires exact visual-smoke manifest, visual evidence report and accountant workbench evidence report filenames before sign-off evidence can pass.",
                     "Visual QA top-level evidence now rejects placeholder reviewer name, reviewer role and reviewer signature fields before human visual sign-off evidence can pass.",
                     "node scripts/verify-accountant-workbench-evidence.mjs now writes accountant-workbench-evidence-report.json proving route, workflow-stage, theme, viewport, layout-check and review-check coverage.",
