@@ -18468,7 +18468,7 @@ public class AccountsWorkflowTests
         Assert.Contains("structured-log-report.json", runbook);
         Assert.Contains("release-evidence-workspace-verification-report.json", runbook);
         Assert.Contains("release-evidence-verifier-output.txt", runbook);
-        Assert.Contains("leaves all reviewer identity, pass/fail/source-review/professional acceptance decisions, signatures", runbook);
+        Assert.Contains("leaves all reviewer identity, pass/fail/source-review/professional acceptance/manual handoff decisions, signatures", runbook);
         Assert.Contains("release-evidence-report.json", runbook);
         Assert.Contains("visual-smoke-evidence-report.json", runbook);
         Assert.Contains("real filing use stays blocked", runbook, StringComparison.OrdinalIgnoreCase);
@@ -18515,6 +18515,11 @@ public class AccountsWorkflowTests
         Assert.Contains("Prepared external ROS/iXBRL template scenario row $scenarioCode External reference cell must be", workspaceVerifier);
         Assert.Contains("Prepared external ROS/iXBRL template scenario row $scenarioCode Taxonomy package cell must be", workspaceVerifier);
         Assert.Contains("must leave artifact hash, warnings/errors and decision cells blank before named external validation sign-off", workspaceVerifier);
+        Assert.Contains("Assert-ManualHandoffPreparedEvidenceReferences", workspaceVerifier);
+        Assert.Contains("Prepared manual handoff template scenario row $scenarioCode Auditor evidence cell must be", workspaceVerifier);
+        Assert.Contains("Prepared manual handoff template unsupported-path row $pathCode Release evidence reference cell must be", workspaceVerifier);
+        Assert.Contains("must leave scenario decision cells blank before named manual handoff sign-off", workspaceVerifier);
+        Assert.Contains("must leave reviewer decision cells blank before named manual handoff sign-off", workspaceVerifier);
         Assert.Contains("machineEvidenceSummaryPath", workspaceVerifier);
         Assert.Contains("releaseCandidate", workspaceVerifier);
         Assert.Contains("identityProvided", workspaceVerifier);
@@ -18601,6 +18606,12 @@ public class AccountsWorkflowTests
         Assert.Contains("Set-ExternalRosIxbrlScenarioReferences", workspaceScript);
         Assert.Contains("external-ros-validation-ledger#$scenarioCode", workspaceScript);
         Assert.Contains("revenue-taxonomy-package-ledger#$scenarioCode", workspaceScript);
+        Assert.Contains("Set-ManualHandoffScenarioReferences", workspaceScript);
+        Assert.Contains("Set-ManualHandoffUnsupportedPathReferences", workspaceScript);
+        Assert.Contains("signed-auditor-report-evidence#$scenarioCode", workspaceScript);
+        Assert.Contains("manual-handoff-note#$scenarioCode", workspaceScript);
+        Assert.Contains("filing-readiness-snapshot#$scenarioCode", workspaceScript);
+        Assert.Contains("unsupported-path-evidence#$pathCode", workspaceScript);
         Assert.Contains("Set-QualifiedAccountantScenarioReferences", workspaceScript);
         Assert.Contains("Set-QualifiedAccountantRouteReferences", workspaceScript);
         Assert.Contains("qualified-accountant-walkthrough-ledger#$scenarioCode", workspaceScript);

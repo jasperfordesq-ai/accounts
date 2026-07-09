@@ -873,6 +873,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "Manual handoff scenario and unsupported-path decisions now require exact accepted reviewer decisions before acceptance evidence can pass.",
                     "Manual handoff evidence references now must include the matching scenario or unsupported-path code before acceptance can pass.",
                     "Manual handoff evidence rows now must match exact retained auditor-report, handoff-note, readiness-snapshot and unsupported-path anchors before acceptance can pass.",
+                    "Release evidence reviewer workspaces now prefill manual handoff scenario and unsupported-path evidence anchors while leaving scenario and reviewer decision cells blank.",
                     "CI now retains production-readiness-report.json from the live smoke stack, proving the exact source-law snapshot, golden corpus, scorecard and release blockers exposed by the candidate.",
                     "scripts/verify-production-readiness-report.ps1 emits production-readiness-verification-report.json and proves the captured live report has complete source-law, golden-corpus, scorecard, blocker, visual-QA and release-manifest coverage."
                 ],

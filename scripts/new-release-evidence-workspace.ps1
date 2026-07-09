@@ -411,6 +411,50 @@ function Set-ExternalRosIxbrlScenarioReferences {
     return $updated
 }
 
+function Set-ManualHandoffScenarioReferences {
+    param(
+        [string]$Content,
+        [string[]]$ScenarioCodes
+    )
+
+    $updated = $Content
+    foreach ($scenarioCode in $ScenarioCodes) {
+        $escaped = [regex]::Escape($scenarioCode)
+        $pattern = "(?m)^(\|\s*$escaped\s*\|)\s*[^|]*\|\s*[^|]*\|\s*[^|]*\|\s*[^|]*\|$"
+        if (-not [regex]::IsMatch($updated, $pattern)) {
+            throw "Manual handoff acceptance template is missing scenario row '$scenarioCode'."
+        }
+
+        $auditorEvidence = "signed-auditor-report-evidence#$scenarioCode"
+        $handoffNote = "manual-handoff-note#$scenarioCode"
+        $readinessSnapshot = "filing-readiness-snapshot#$scenarioCode"
+        $updated = [regex]::Replace($updated, $pattern, "`$1 $auditorEvidence | $handoffNote | $readinessSnapshot |  |")
+    }
+
+    return $updated
+}
+
+function Set-ManualHandoffUnsupportedPathReferences {
+    param(
+        [string]$Content,
+        [string[]]$PathCodes
+    )
+
+    $updated = $Content
+    foreach ($pathCode in $PathCodes) {
+        $escaped = [regex]::Escape($pathCode)
+        $pattern = "(?m)^(\|\s*$escaped\s*\|)\s*[^|]*\|\s*[^|]*\|$"
+        if (-not [regex]::IsMatch($updated, $pattern)) {
+            throw "Manual handoff acceptance template is missing unsupported-path row '$pathCode'."
+        }
+
+        $reference = "unsupported-path-evidence#$pathCode"
+        $updated = [regex]::Replace($updated, $pattern, "`$1 $reference |  |")
+    }
+
+    return $updated
+}
+
 function Set-SourceLawReviewNoteReferences {
     param(
         [string]$Content,
@@ -440,7 +484,9 @@ function Copy-PreparedTemplate {
         [string[]]$VisualRouteNames = @(),
         [string[]]$SourceLawSourceIds = @(),
         [string[]]$GoldenCorpusScenarioCodes = @(),
-        [string[]]$AccountantWorkbenchRouteNames = @()
+        [string[]]$AccountantWorkbenchRouteNames = @(),
+        [string[]]$ManualHandoffScenarioCodes = @(),
+        [string[]]$ManualHandoffPathCodes = @()
     )
 
     if ((Test-Path -LiteralPath $DestinationPath) -and -not $Force) {
@@ -467,6 +513,11 @@ function Copy-PreparedTemplate {
     if ((Split-Path -Leaf $DestinationPath) -eq "qualified-accountant-acceptance-template.md") {
         $content = Set-QualifiedAccountantScenarioReferences $content $GoldenCorpusScenarioCodes
         $content = Set-QualifiedAccountantRouteReferences $content $AccountantWorkbenchRouteNames
+    }
+
+    if ((Split-Path -Leaf $DestinationPath) -eq "manual-handoff-acceptance-template.md") {
+        $content = Set-ManualHandoffScenarioReferences $content $ManualHandoffScenarioCodes
+        $content = Set-ManualHandoffUnsupportedPathReferences $content $ManualHandoffPathCodes
     }
 
     Set-Content -LiteralPath $DestinationPath -Value $content -NoNewline
@@ -502,6 +553,18 @@ $sourceLawSourceIds = Get-SourceLawSourceIds $productionReadinessReport
 $goldenCorpusScenarioCodes = Get-GoldenCorpusScenarioCodes $productionReadinessReport
 $accountantWorkbenchEvidenceReport = Read-JsonFile $accountantWorkbenchEvidenceReportPath
 $accountantWorkbenchRouteNames = Get-AccountantWorkbenchRouteNames $accountantWorkbenchEvidenceReport
+$manualHandoffScenarioCodes = @(
+    "medium-audit-required"
+)
+$manualHandoffPathCodes = @(
+    "plc-public-company",
+    "unlimited-company",
+    "excluded-regulated-entity",
+    "group-consolidation",
+    "audit-required-without-auditor-report",
+    "complex-corporation-tax",
+    "direct-cro-ros-submission"
+)
 
 $productionReadinessTimestamp = Convert-JsonValueToEvidenceString (Get-JsonPropertyValue $productionReadinessReport "generatedAt")
 $checkedAtUtc = Convert-JsonValueToEvidenceString (Get-JsonPropertyValue $monitoringErrorRoutingReport "checkedAtUtc")
@@ -672,7 +735,7 @@ $machineEvidenceSummary | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $ma
 foreach ($template in $preparedTemplates) {
     $source = Join-Path $resolvedTemplateDirectory $template.FileName
     $destination = Join-Path $resolvedOutputDirectory $template.FileName
-    Copy-PreparedTemplate $source $destination $template.Fields $visualRouteNames $sourceLawSourceIds $goldenCorpusScenarioCodes $accountantWorkbenchRouteNames
+    Copy-PreparedTemplate $source $destination $template.Fields $visualRouteNames $sourceLawSourceIds $goldenCorpusScenarioCodes $accountantWorkbenchRouteNames $manualHandoffScenarioCodes $manualHandoffPathCodes
 }
 
 $completionLedgerFile = "release-evidence-reviewer-completion.json"

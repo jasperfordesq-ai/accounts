@@ -2403,6 +2403,21 @@ Qualified-accountant reviewer workspace anchors:
   artifact hash, warnings/errors, or decision cells are filled before named
   external validation sign-off.
 
+### Manual Handoff Reviewer Workspace Anchors
+
+- `scripts/new-release-evidence-workspace.ps1` now pre-fills the manual handoff
+  `medium-audit-required` scenario row with exact
+  `signed-auditor-report-evidence#medium-audit-required`,
+  `manual-handoff-note#medium-audit-required`, and
+  `filing-readiness-snapshot#medium-audit-required` anchors.
+- It also pre-fills each unsupported-path row with the exact
+  `unsupported-path-evidence#<path-code>` anchor while leaving scenario and
+  reviewer decision cells blank.
+- `scripts/verify-release-evidence-workspace.ps1` now rejects prepared reviewer
+  workspaces when any manual handoff evidence anchor is missing or when scenario
+  or unsupported-path decision cells are filled before named manual handoff
+  sign-off.
+
 ## What Is Left To Do
 
 Highest-priority next steps:

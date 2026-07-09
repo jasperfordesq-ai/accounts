@@ -956,6 +956,10 @@ public class ProductionReadinessReportTests
             && evidence.Contains("exact retained auditor-report", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("unsupported-path anchors", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["backend-statutory-accounting-engine"].CurrentEvidence, evidence =>
+            evidence.Contains("Release evidence reviewer workspaces", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("prefill manual handoff scenario and unsupported-path evidence anchors", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("scenario and reviewer decision cells blank", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(scores["backend-statutory-accounting-engine"].CurrentEvidence, evidence =>
             evidence.Contains("Qualified-accountant scenario walkthrough rows", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("exact qualified-accountant-walkthrough-ledger anchor", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["backend-statutory-accounting-engine"].CurrentEvidence, evidence =>

@@ -96,6 +96,20 @@ $requiredMachineEvidenceProvenance = @(
     [pscustomobject]@{ FileName = "structured-log-report.json"; SourceArtifactName = "structured-json-log-sample"; SourceArtifactFile = "structured-log-report.json" }
 )
 
+$requiredManualHandoffScenarioCodes = @(
+    "medium-audit-required"
+)
+
+$requiredManualHandoffPathCodes = @(
+    "plc-public-company",
+    "unlimited-company",
+    "excluded-regulated-entity",
+    "group-consolidation",
+    "audit-required-without-auditor-report",
+    "complex-corporation-tax",
+    "direct-cro-ros-submission"
+)
+
 function Add-Failure {
     param(
         [System.Collections.Generic.List[string]]$Failures,
@@ -322,6 +336,80 @@ function Assert-ExternalRosIxbrlPreparedEvidenceReferences {
         $expectedTaxonomyReference = "revenue-taxonomy-package-ledger#$scenarioCode"
         if ($cells[4].Trim() -ne $expectedTaxonomyReference) {
             Add-Failure $Failures "Prepared external ROS/iXBRL template scenario row $scenarioCode Taxonomy package cell must be $expectedTaxonomyReference."
+        }
+    }
+}
+
+function Assert-ManualHandoffPreparedEvidenceReferences {
+    param(
+        [string]$WorkspaceDirectory,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    $manualHandoffTemplatePath = Join-Path $WorkspaceDirectory "manual-handoff-acceptance-template.md"
+
+    if (-not (Test-Path -LiteralPath $manualHandoffTemplatePath -PathType Leaf)) {
+        return
+    }
+
+    $content = Get-Content -LiteralPath $manualHandoffTemplatePath -Raw
+    $lines = $content -split "\r?\n"
+
+    foreach ($scenarioCode in $requiredManualHandoffScenarioCodes) {
+        $escaped = [regex]::Escape($scenarioCode)
+        $row = $lines | Where-Object { $_ -match "^\|\s*$escaped\s*\|" } | Select-Object -First 1
+        if (-not $row) {
+            Add-Failure $Failures "Prepared manual handoff template must include scenario row $scenarioCode."
+            continue
+        }
+
+        $cells = @($row -split "\|")
+        if ($cells.Count -lt 7) {
+            Add-Failure $Failures "Prepared manual handoff template scenario row $scenarioCode must include all evidence and decision cells."
+            continue
+        }
+
+        if (-not [string]::IsNullOrWhiteSpace($cells[5])) {
+            Add-Failure $Failures "Prepared manual handoff template scenario row $scenarioCode must leave scenario decision cells blank before named manual handoff sign-off."
+        }
+
+        $expectedAuditorEvidence = "signed-auditor-report-evidence#$scenarioCode"
+        if ($cells[2].Trim() -ne $expectedAuditorEvidence) {
+            Add-Failure $Failures "Prepared manual handoff template scenario row $scenarioCode Auditor evidence cell must be $expectedAuditorEvidence."
+        }
+
+        $expectedHandoffNote = "manual-handoff-note#$scenarioCode"
+        if ($cells[3].Trim() -ne $expectedHandoffNote) {
+            Add-Failure $Failures "Prepared manual handoff template scenario row $scenarioCode Manual handoff note cell must be $expectedHandoffNote."
+        }
+
+        $expectedReadinessSnapshot = "filing-readiness-snapshot#$scenarioCode"
+        if ($cells[4].Trim() -ne $expectedReadinessSnapshot) {
+            Add-Failure $Failures "Prepared manual handoff template scenario row $scenarioCode Filing readiness snapshot cell must be $expectedReadinessSnapshot."
+        }
+    }
+
+    foreach ($pathCode in $requiredManualHandoffPathCodes) {
+        $escaped = [regex]::Escape($pathCode)
+        $row = $lines | Where-Object { $_ -match "^\|\s*$escaped\s*\|" } | Select-Object -First 1
+        if (-not $row) {
+            Add-Failure $Failures "Prepared manual handoff template must include unsupported-path row $pathCode."
+            continue
+        }
+
+        $cells = @($row -split "\|")
+        if ($cells.Count -lt 5) {
+            Add-Failure $Failures "Prepared manual handoff template unsupported-path row $pathCode must include evidence and decision cells."
+            continue
+        }
+
+        if (-not [string]::IsNullOrWhiteSpace($cells[3])) {
+            Add-Failure $Failures "Prepared manual handoff template unsupported-path row $pathCode must leave reviewer decision cells blank before named manual handoff sign-off."
+        }
+
+        $expectedReference = "unsupported-path-evidence#$pathCode"
+        if ($cells[2].Trim() -ne $expectedReference) {
+            Add-Failure $Failures "Prepared manual handoff template unsupported-path row $pathCode Release evidence reference cell must be $expectedReference."
         }
     }
 }
@@ -716,6 +804,7 @@ Assert-VisualQaPreparedRouteReferences $resolvedWorkspace.Path $failures
 Assert-SourceLawPreparedEvidenceReferences $resolvedWorkspace.Path $failures
 Assert-ExternalRosIxbrlPreparedEvidenceReferences $resolvedWorkspace.Path $failures
 Assert-QualifiedAccountantPreparedEvidenceReferences $resolvedWorkspace.Path $failures
+Assert-ManualHandoffPreparedEvidenceReferences $resolvedWorkspace.Path $failures
 
 if (-not (Test-Path -LiteralPath $reviewerIndexPath)) {
     Add-Failure $failures "Workspace must include release-evidence-reviewer-index.md."

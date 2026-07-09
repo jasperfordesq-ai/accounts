@@ -357,6 +357,7 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
           "Manual handoff scenario and unsupported-path decisions require exact accepted reviewer decisions before acceptance evidence can pass.",
           "Manual handoff evidence references require the matching scenario or unsupported-path code before acceptance can pass.",
           "Manual handoff evidence rows must match exact retained auditor-report, handoff-note, readiness-snapshot and unsupported-path anchors before acceptance can pass.",
+          "Release evidence reviewer workspaces now prefill manual handoff scenario and unsupported-path evidence anchors while leaving scenario and reviewer decision cells blank.",
           "CI retains production-readiness-report.json from the live smoke stack with source-law, golden corpus, scorecard and release blocker evidence.",
         ],
         remainingGaps: ["Run and retain verified source-law, qualified-accountant acceptance, external ROS/iXBRL validation, and manual handoff evidence across every canonical golden corpus scenario."],
