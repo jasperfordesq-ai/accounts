@@ -418,6 +418,7 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
           "verify-release-evidence.ps1 emits SHA-256/byte-size manifest entries for all six human release-evidence templates, and verify-release-artifact-pack.ps1 requires those completed templates to be retained in the pack with matching hashes.",
           "verify-release-artifact-pack.ps1 independently parses release-evidence-workspace-verification-report.json, requires the same release candidate and exact 20-file prepared workspace inventory including production-readiness-verification-report.json, and manifests retained reviewer handoff files with SHA-256/byte-size evidence.",
           "Monitoring-provider confirmation evidence requires real provider/event/correlation references, an HTTPS provider base URL, a matched structured-log smoke line and an explicit accepted operator decision.",
+          "Release evidence reviewer workspaces now prefill monitoring provider machine evidence from retained CI smoke/log reports while leaving provider confirmation, operator identity, decision and signature fields blank.",
         ],
         remainingGaps: ["Confirm the controlled monitoring smoke event inside the configured provider and retain the full release-artifact-pack-report.json after release-evidence-report.json is completed with named human sign-offs."],
         completionTrackCodes: ["backend-code"],

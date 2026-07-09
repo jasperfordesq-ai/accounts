@@ -957,7 +957,8 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "scripts/verify-release-evidence.ps1 emits a consistent releaseCandidate identity for all six human evidence templates, and scripts/verify-release-artifact-pack.ps1 rejects packs whose release-evidence-report.json identity does not match the pack CommitSha and GitHubActionsRunUrl.",
                     "scripts/verify-release-evidence.ps1 now emits SHA-256/byte-size manifest entries for all six human release-evidence templates, and scripts/verify-release-artifact-pack.ps1 requires those completed templates to be retained in the pack with matching hashes.",
                     "scripts/verify-release-artifact-pack.ps1 independently parses release-evidence-workspace-verification-report.json, requires the same release candidate and exact 20-file prepared workspace inventory including production-readiness-verification-report.json, and manifests retained reviewer handoff files with SHA-256/byte-size evidence.",
-                    "Monitoring-provider confirmation evidence now requires real provider/event/correlation references, an HTTPS provider base URL, a matched structured-log smoke line and an explicit accepted operator decision."
+                    "Monitoring-provider confirmation evidence now requires real provider/event/correlation references, an HTTPS provider base URL, a matched structured-log smoke line and an explicit accepted operator decision.",
+                    "Release evidence reviewer workspaces now prefill monitoring provider machine evidence from retained CI smoke/log reports while leaving provider confirmation, operator identity, decision and signature fields blank."
                 ],
                 [
                     "Confirm the controlled monitoring smoke event inside the configured provider and retain operator evidence.",

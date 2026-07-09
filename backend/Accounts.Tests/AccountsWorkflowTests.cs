@@ -18520,6 +18520,14 @@ public class AccountsWorkflowTests
         Assert.Contains("Prepared manual handoff template unsupported-path row $pathCode Release evidence reference cell must be", workspaceVerifier);
         Assert.Contains("must leave scenario decision cells blank before named manual handoff sign-off", workspaceVerifier);
         Assert.Contains("must leave reviewer decision cells blank before named manual handoff sign-off", workspaceVerifier);
+        Assert.Contains("Assert-MonitoringProviderPreparedEvidenceReferences", workspaceVerifier);
+        Assert.Contains("$Context $FieldName field must be $Expected.", workspaceVerifier);
+        Assert.Contains("$Context $FieldName field must remain blank before named operator sign-off.", workspaceVerifier);
+        Assert.Contains("\"Provider event URL or reference\"", workspaceVerifier);
+        Assert.Contains("Prepared monitoring-provider template must leave provider confirmation and decision checkboxes unchecked before named operator sign-off.", workspaceVerifier);
+        Assert.Contains("Get-MarkdownFieldValue", workspaceVerifier);
+        Assert.Contains("Assert-MarkdownFieldEquals", workspaceVerifier);
+        Assert.Contains("Assert-MarkdownFieldBlank", workspaceVerifier);
         Assert.Contains("machineEvidenceSummaryPath", workspaceVerifier);
         Assert.Contains("releaseCandidate", workspaceVerifier);
         Assert.Contains("identityProvided", workspaceVerifier);

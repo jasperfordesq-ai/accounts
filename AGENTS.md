@@ -2418,6 +2418,18 @@ Qualified-accountant reviewer workspace anchors:
   or unsupported-path decision cells are filled before named manual handoff
   sign-off.
 
+### Monitoring Provider Reviewer Workspace Evidence
+
+- `scripts/new-release-evidence-workspace.ps1` already pre-fills the monitoring
+  provider template from retained `monitoring-error-routing-report.json` and
+  `structured-log-report.json` machine evidence.
+- `scripts/verify-release-evidence-workspace.ps1` now proves those prepared
+  monitoring provider fields still match the retained CI smoke/log reports.
+- It also rejects prepared reviewer workspaces if operator identity, provider
+  event URL/reference, operator notes, operator signature, or provider
+  confirmation/decision checkboxes are filled before named release-operator
+  sign-off.
+
 ## What Is Left To Do
 
 Highest-priority next steps:

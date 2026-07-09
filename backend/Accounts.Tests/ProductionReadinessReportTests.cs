@@ -1088,6 +1088,10 @@ public class ProductionReadinessReportTests
             && evidence.Contains("20-file prepared workspace inventory", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("production-readiness-verification-report.json", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("reviewer handoff", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(scores["security-auth-tenant-platform-guardrails"].CurrentEvidence, evidence =>
+            evidence.Contains("Release evidence reviewer workspaces", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("prefill monitoring provider machine evidence", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("operator identity, decision and signature fields blank", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["security-auth-tenant-platform-guardrails"].RemainingGaps, gap =>
             gap.Contains("release-evidence-report.json", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["frontend-accountant-workbench"].RemainingGaps, gap =>

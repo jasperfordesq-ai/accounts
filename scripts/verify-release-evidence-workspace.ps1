@@ -137,6 +137,76 @@ function Get-JsonPropertyValue {
     return $property.Value
 }
 
+function Get-FirstJsonPropertyValue {
+    param(
+        $Object,
+        [string[]]$Names
+    )
+
+    foreach ($name in $Names) {
+        $value = Get-JsonPropertyValue $Object $name
+        if ($null -ne $value -and -not [string]::IsNullOrWhiteSpace([string]$value)) {
+            return $value
+        }
+    }
+
+    return ""
+}
+
+function Get-MarkdownFieldValue {
+    param(
+        [string]$Content,
+        [string]$FieldName
+    )
+
+    $escaped = [regex]::Escape($FieldName)
+    $match = [regex]::Match($Content, "(?m)^[`t ]*-?[`t ]*$escaped[`t ]*:[`t ]*(.*)$")
+    if (-not $match.Success) {
+        return $null
+    }
+
+    return $match.Groups[1].Value.Trim()
+}
+
+function Assert-MarkdownFieldEquals {
+    param(
+        [string]$Content,
+        [string]$FieldName,
+        [string]$Expected,
+        [string]$Context,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    $actual = Get-MarkdownFieldValue $Content $FieldName
+    if ($null -eq $actual) {
+        Add-Failure $Failures "$Context must include field $FieldName."
+        return
+    }
+
+    if ($actual -ne $Expected) {
+        Add-Failure $Failures "$Context $FieldName field must be $Expected."
+    }
+}
+
+function Assert-MarkdownFieldBlank {
+    param(
+        [string]$Content,
+        [string]$FieldName,
+        [string]$Context,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    $actual = Get-MarkdownFieldValue $Content $FieldName
+    if ($null -eq $actual) {
+        Add-Failure $Failures "$Context must include field $FieldName."
+        return
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($actual)) {
+        Add-Failure $Failures "$Context $FieldName field must remain blank before named operator sign-off."
+    }
+}
+
 function Assert-ArrayContains {
     param(
         [object[]]$Values,
@@ -411,6 +481,53 @@ function Assert-ManualHandoffPreparedEvidenceReferences {
         if ($cells[2].Trim() -ne $expectedReference) {
             Add-Failure $Failures "Prepared manual handoff template unsupported-path row $pathCode Release evidence reference cell must be $expectedReference."
         }
+    }
+}
+
+function Assert-MonitoringProviderPreparedEvidenceReferences {
+    param(
+        [string]$WorkspaceDirectory,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    $monitoringReportPath = Join-Path $WorkspaceDirectory "monitoring-error-routing-report.json"
+    $structuredLogReportPath = Join-Path $WorkspaceDirectory "structured-log-report.json"
+    $monitoringTemplatePath = Join-Path $WorkspaceDirectory "monitoring-provider-confirmation-template.md"
+
+    if (-not (Test-Path -LiteralPath $monitoringReportPath -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $structuredLogReportPath -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $monitoringTemplatePath -PathType Leaf)) {
+        return
+    }
+
+    $monitoringReport = Get-Content -LiteralPath $monitoringReportPath -Raw | ConvertFrom-Json
+    $structuredLogReport = Get-Content -LiteralPath $structuredLogReportPath -Raw | ConvertFrom-Json
+    $content = Get-Content -LiteralPath $monitoringTemplatePath -Raw
+    $context = "Prepared monitoring-provider template"
+
+    Assert-MarkdownFieldEquals $content "Provider" ([string](Get-JsonPropertyValue $monitoringReport "provider")) $context $Failures
+    Assert-MarkdownFieldEquals $content "Event id" ([string](Get-JsonPropertyValue $monitoringReport "eventId")) $context $Failures
+    Assert-MarkdownFieldEquals $content "Correlation id" ([string](Get-JsonPropertyValue $monitoringReport "correlationId")) $context $Failures
+    Assert-MarkdownFieldEquals $content "Base URL" ([string](Get-JsonPropertyValue $monitoringReport "baseUrl")) $context $Failures
+    Assert-MarkdownFieldEquals $content "Checked at UTC" ([string](Get-JsonPropertyValue $monitoringReport "checkedAtUtc")) $context $Failures
+    Assert-MarkdownFieldEquals $content "Structured log file" ([string](Get-FirstJsonPropertyValue $structuredLogReport @("structuredLogFile", "logFileName"))) $context $Failures
+    Assert-MarkdownFieldEquals $content "JSON log line count" ([string](Get-JsonPropertyValue $structuredLogReport "jsonLogLineCount")) $context $Failures
+    $matchedMonitoringSmokeLine = if ([bool](Get-JsonPropertyValue $structuredLogReport "matchedMonitoringSmokeLine")) { "yes" } else { "" }
+    Assert-MarkdownFieldEquals $content "Matched monitoring smoke line" $matchedMonitoringSmokeLine $context $Failures
+
+    foreach ($humanOnlyField in @(
+        "Operator name",
+        "Operator role",
+        "Confirmation date/time UTC",
+        "Provider event URL or reference",
+        "Operator notes",
+        "Operator signature"
+    )) {
+        Assert-MarkdownFieldBlank $content $humanOnlyField $context $Failures
+    }
+
+    if ([regex]::IsMatch($content, "(?im)^[`t ]*-[`t ]*\[[xX]\]")) {
+        Add-Failure $Failures "Prepared monitoring-provider template must leave provider confirmation and decision checkboxes unchecked before named operator sign-off."
     }
 }
 
@@ -805,6 +922,7 @@ Assert-SourceLawPreparedEvidenceReferences $resolvedWorkspace.Path $failures
 Assert-ExternalRosIxbrlPreparedEvidenceReferences $resolvedWorkspace.Path $failures
 Assert-QualifiedAccountantPreparedEvidenceReferences $resolvedWorkspace.Path $failures
 Assert-ManualHandoffPreparedEvidenceReferences $resolvedWorkspace.Path $failures
+Assert-MonitoringProviderPreparedEvidenceReferences $resolvedWorkspace.Path $failures
 
 if (-not (Test-Path -LiteralPath $reviewerIndexPath)) {
     Add-Failure $failures "Workspace must include release-evidence-reviewer-index.md."
