@@ -244,9 +244,17 @@ function humanReleaseEvidenceFixture() {
 function humanReleaseEvidenceCloseoutFixture() {
   return [
     {
+      code: "pick-up-reviewer-workspace",
+      label: "Pick up reviewer workspace",
+      sequence: 1,
+      detail: "Download the release-evidence-reviewer-workspace artifact and inspect release-evidence-reviewer-index.md, release-evidence-reviewer-completion.json and pending human blocker inventory before assigning reviewers.",
+      artifact: "release-evidence-reviewer-workspace",
+      blocksRelease: true,
+    },
+    {
       code: "complete-human-evidence-templates",
       label: "Complete templates",
-      sequence: 1,
+      sequence: 2,
       detail: "Complete 6 retained Markdown templates with named reviewers, UTC timestamps, retained evidence references, accepted decisions and signatures.",
       artifact: "Docs/release-evidence/*.md",
       blocksRelease: true,
@@ -254,7 +262,7 @@ function humanReleaseEvidenceCloseoutFixture() {
     {
       code: "run-release-evidence-verifier",
       label: "Run release evidence verifier",
-      sequence: 2,
+      sequence: 3,
       detail: "Generate release-evidence-report.json for the exact candidate after the human templates are complete.",
       artifact: "scripts/verify-release-evidence.ps1",
       blocksRelease: true,
@@ -262,7 +270,7 @@ function humanReleaseEvidenceCloseoutFixture() {
     {
       code: "confirm-human-evidence-completion",
       label: "Confirm human completion",
-      sequence: 3,
+      sequence: 4,
       detail: "Confirm 6 accepted humanEvidenceCompletion rows with zero blocking failures in release-evidence-report.json.",
       artifact: "release-evidence-report.json",
       blocksRelease: true,
@@ -270,7 +278,7 @@ function humanReleaseEvidenceCloseoutFixture() {
     {
       code: "verify-release-artifact-pack",
       label: "Verify final artifact pack",
-      sequence: 4,
+      sequence: 5,
       detail: "Run the final pack verifier against the same commit SHA and GitHub Actions run URL.",
       artifact: "scripts/verify-release-artifact-pack.ps1",
       blocksRelease: true,

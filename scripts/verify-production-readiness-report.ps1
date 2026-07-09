@@ -147,26 +147,32 @@ $requiredHumanReleaseEvidenceCodes = @(
 )
 $requiredHumanReleaseEvidenceCloseoutSteps = @(
     [pscustomobject]@{
-        code = "complete-human-evidence-templates"
+        code = "pick-up-reviewer-workspace"
         sequence = 1
+        artifact = "release-evidence-reviewer-workspace"
+        detailTerms = @("release-evidence-reviewer-index.md", "pending human blocker inventory")
+    },
+    [pscustomobject]@{
+        code = "complete-human-evidence-templates"
+        sequence = 2
         artifact = "Docs/release-evidence/*.md"
         detailTerms = @("retained Markdown templates", "named reviewers")
     },
     [pscustomobject]@{
         code = "run-release-evidence-verifier"
-        sequence = 2
+        sequence = 3
         artifact = "scripts/verify-release-evidence.ps1"
         detailTerms = @("release-evidence-report.json", "exact candidate")
     },
     [pscustomobject]@{
         code = "confirm-human-evidence-completion"
-        sequence = 3
+        sequence = 4
         artifact = "release-evidence-report.json"
         detailTerms = @("humanEvidenceCompletion", "zero blocking failures")
     },
     [pscustomobject]@{
         code = "verify-release-artifact-pack"
-        sequence = 4
+        sequence = 5
         artifact = "scripts/verify-release-artifact-pack.ps1"
         detailTerms = @("same commit SHA", "GitHub Actions run URL")
     }
@@ -380,7 +386,7 @@ if ($null -ne $report) {
                 Add-Failure $failures "humanReleaseEvidenceCloseout.$actualCode.detail must mention $detailTerm."
             }
         }
-        if (($index -eq 0 -or $index -eq 2) -and $detail -notlike "*$($requiredHumanReleaseEvidenceCodes.Count)*") {
+        if (($actualCode -eq "complete-human-evidence-templates" -or $actualCode -eq "confirm-human-evidence-completion") -and $detail -notlike "*$($requiredHumanReleaseEvidenceCodes.Count)*") {
             Add-Failure $failures "humanReleaseEvidenceCloseout.$actualCode.detail must mention the six human evidence templates."
         }
     }

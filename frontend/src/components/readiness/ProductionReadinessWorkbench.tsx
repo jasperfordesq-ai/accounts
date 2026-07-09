@@ -251,7 +251,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
         description="The release operator sequence that turns completed human templates into final release-pack evidence for the same candidate."
         actions={<StatusBadge tone={pendingHumanEvidenceCount > 0 ? "bad" : "good"}>{humanEvidenceTemplateCount} gates</StatusBadge>}
       >
-        <div className="grid min-w-0 grid-cols-1 gap-3 xl:grid-cols-4">
+        <div className="grid min-w-0 grid-cols-1 gap-3 xl:grid-cols-5">
           {humanEvidenceCloseoutSteps.map((step, index) => (
             <div key={step.code} className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
               <div className="flex items-start gap-2">
@@ -264,8 +264,8 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
                 </div>
               </div>
               <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2">
-                <StatusBadge tone={closeoutStepTone(step.blocksRelease, index, pendingHumanEvidenceCount)}>
-                  {index === 0 && pendingHumanEvidenceCount > 0 ? `${pendingHumanEvidenceCount} pending` : "Required"}
+                <StatusBadge tone={closeoutStepTone(step, pendingHumanEvidenceCount)}>
+                  {step.code === "pick-up-reviewer-workspace" && pendingHumanEvidenceCount > 0 ? `${pendingHumanEvidenceCount} pending` : "Required"}
                 </StatusBadge>
                 <code className="min-w-0 break-all text-[11px] text-[var(--muted-foreground)]">{step.artifact}</code>
               </div>
@@ -2316,12 +2316,11 @@ function ciScopeTone(scope: string): "good" | "warn" | "bad" | "info" | "default
 }
 
 function closeoutStepTone(
-  blocksRelease: boolean,
-  index: number,
+  step: ProductionReadinessReport["humanReleaseEvidenceCloseout"][number],
   pendingHumanEvidenceCount: number,
 ): "good" | "warn" | "bad" | "info" | "default" {
-  if (!blocksRelease) return "good";
-  if (index === 0 && pendingHumanEvidenceCount > 0) return "bad";
+  if (!step.blocksRelease) return "good";
+  if (step.code === "pick-up-reviewer-workspace" && pendingHumanEvidenceCount > 0) return "bad";
   return "warn";
 }
 

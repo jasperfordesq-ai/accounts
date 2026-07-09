@@ -845,10 +845,11 @@ After workspace verification runs, retain ``release-evidence-reviewer-blockers.m
 
 ## Reviewer Closeout Sequence
 
-1. Complete the six Markdown templates with named reviewer identities, UTC timestamps, retained evidence references, accepted decisions, and signatures.
-2. Run ``scripts/verify-release-evidence.ps1 -EvidenceDirectory <this-workspace> -ReportPath <this-workspace>/release-evidence-report.json`` and retain the passing ``release-evidence-report.json``.
-3. Confirm ``release-evidence-report.json`` has six accepted ``humanEvidenceCompletion`` entries and no blocking failures.
-4. Run ``scripts/verify-release-artifact-pack.ps1`` against the final collected release artifacts for the same commit SHA and GitHub Actions run URL.
+1. Inspect this ``release-evidence-reviewer-workspace`` artifact, ``release-evidence-reviewer-index.md``, ``release-evidence-reviewer-completion.json`` and the pending human blocker inventory before assigning reviewers.
+2. Complete the six Markdown templates with named reviewer identities, UTC timestamps, retained evidence references, accepted decisions, and signatures.
+3. Run ``scripts/verify-release-evidence.ps1 -EvidenceDirectory <this-workspace> -ReportPath <this-workspace>/release-evidence-report.json`` and retain the passing ``release-evidence-report.json``.
+4. Confirm ``release-evidence-report.json`` has six accepted ``humanEvidenceCompletion`` entries and no blocking failures.
+5. Run ``scripts/verify-release-artifact-pack.ps1`` against the final collected release artifacts for the same commit SHA and GitHub Actions run URL.
 
 ## Completion Gate
 

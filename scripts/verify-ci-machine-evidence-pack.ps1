@@ -714,6 +714,7 @@ $requiredHumanReleaseEvidenceCodes = @(
     "monitoringProviderConfirmation"
 )
 $requiredHumanReleaseEvidenceCloseoutStepCodes = @(
+    "pick-up-reviewer-workspace",
     "complete-human-evidence-templates",
     "run-release-evidence-verifier",
     "confirm-human-evidence-completion",

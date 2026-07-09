@@ -260,14 +260,17 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.equal(visualHumanEvidence?.blocksRelease, true);
   assert.ok(visualHumanEvidence?.requiredEvidence.some((item) => item.includes("visual-qa-signoff-template.md")));
   assert.deepEqual(parsed.humanReleaseEvidenceCloseout.map((item) => item.code), [
+    "pick-up-reviewer-workspace",
     "complete-human-evidence-templates",
     "run-release-evidence-verifier",
     "confirm-human-evidence-completion",
     "verify-release-artifact-pack",
   ]);
-  assert.equal(parsed.humanReleaseEvidenceCloseout[0].artifact, "Docs/release-evidence/*.md");
-  assert.match(parsed.humanReleaseEvidenceCloseout[2].detail, /6 accepted humanEvidenceCompletion rows/);
-  assert.equal(parsed.humanReleaseEvidenceCloseout[3].artifact, "scripts/verify-release-artifact-pack.ps1");
+  assert.equal(parsed.humanReleaseEvidenceCloseout[0].artifact, "release-evidence-reviewer-workspace");
+  assert.match(parsed.humanReleaseEvidenceCloseout[0].detail, /pending human blocker inventory/);
+  assert.equal(parsed.humanReleaseEvidenceCloseout[1].artifact, "Docs/release-evidence/*.md");
+  assert.match(parsed.humanReleaseEvidenceCloseout[3].detail, /6 accepted humanEvidenceCompletion rows/);
+  assert.equal(parsed.humanReleaseEvidenceCloseout[4].artifact, "scripts/verify-release-artifact-pack.ps1");
   assert.equal(parsed.auditEvidenceTimeline[0].code, "data-change-capture");
   assert.equal(parsed.auditEvidenceTimeline[0].capturedWhen, "At every authenticated write before regenerated outputs can be reviewed.");
   assert.equal(parsed.auditEvidenceTimeline[1].blockingGateCodes[0], "generated-output-review");
@@ -998,11 +1001,11 @@ test("parseProductionReadinessReport rejects human evidence closeout sequence dr
 
 test("parseProductionReadinessReport rejects human evidence closeout artifact drift", () => {
   const payload = sampleReport();
-  payload.humanReleaseEvidenceCloseout[3].artifact = "scripts/manual-final-pack-check.ps1";
+  payload.humanReleaseEvidenceCloseout[4].artifact = "scripts/manual-final-pack-check.ps1";
 
   assert.throws(
     () => parseProductionReadinessReport(payload),
-    /Invalid production readiness report contract: humanReleaseEvidenceCloseout\.3\.artifact - must reference scripts\/verify-release-artifact-pack\.ps1/,
+    /Invalid production readiness report contract: humanReleaseEvidenceCloseout\.4\.artifact - must reference scripts\/verify-release-artifact-pack\.ps1/,
   );
 });
 
@@ -1157,9 +1160,17 @@ function humanReleaseEvidence() {
 function humanReleaseEvidenceCloseout() {
   return [
     {
+      code: "pick-up-reviewer-workspace",
+      label: "Pick up reviewer workspace",
+      sequence: 1,
+      detail: "Download the release-evidence-reviewer-workspace artifact and inspect release-evidence-reviewer-index.md, release-evidence-reviewer-completion.json and pending human blocker inventory before assigning reviewers.",
+      artifact: "release-evidence-reviewer-workspace",
+      blocksRelease: true,
+    },
+    {
       code: "complete-human-evidence-templates",
       label: "Complete templates",
-      sequence: 1,
+      sequence: 2,
       detail: "Complete 6 retained Markdown templates with named reviewers, UTC timestamps, retained evidence references, accepted decisions and signatures.",
       artifact: "Docs/release-evidence/*.md",
       blocksRelease: true,
@@ -1167,7 +1178,7 @@ function humanReleaseEvidenceCloseout() {
     {
       code: "run-release-evidence-verifier",
       label: "Run release evidence verifier",
-      sequence: 2,
+      sequence: 3,
       detail: "Generate release-evidence-report.json for the exact candidate after the human templates are complete.",
       artifact: "scripts/verify-release-evidence.ps1",
       blocksRelease: true,
@@ -1175,7 +1186,7 @@ function humanReleaseEvidenceCloseout() {
     {
       code: "confirm-human-evidence-completion",
       label: "Confirm human completion",
-      sequence: 3,
+      sequence: 4,
       detail: "Confirm 6 accepted humanEvidenceCompletion rows with zero blocking failures in release-evidence-report.json.",
       artifact: "release-evidence-report.json",
       blocksRelease: true,
@@ -1183,7 +1194,7 @@ function humanReleaseEvidenceCloseout() {
     {
       code: "verify-release-artifact-pack",
       label: "Verify final artifact pack",
-      sequence: 4,
+      sequence: 5,
       detail: "Run the final pack verifier against the same commit SHA and GitHub Actions run URL.",
       artifact: "scripts/verify-release-artifact-pack.ps1",
       blocksRelease: true,

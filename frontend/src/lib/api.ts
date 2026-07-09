@@ -4870,6 +4870,11 @@ function assertHumanReleaseEvidence(report: ProductionReadinessReport) {
 function assertHumanReleaseEvidenceCloseout(report: ProductionReadinessReport) {
   const requiredSteps = [
     {
+      code: "pick-up-reviewer-workspace",
+      artifact: "release-evidence-reviewer-workspace",
+      detailTerms: ["release-evidence-reviewer-index.md", "pending human blocker inventory"],
+    },
+    {
       code: "complete-human-evidence-templates",
       artifact: "Docs/release-evidence/*.md",
       detailTerms: ["retained Markdown templates", "named reviewers"],
@@ -4934,15 +4939,15 @@ function assertHumanReleaseEvidenceCloseout(report: ProductionReadinessReport) {
       );
     }
 
-    if (stepIndex === 0 && !step.detail.includes(templateCount)) {
+    if (step.code === "complete-human-evidence-templates" && !step.detail.includes(templateCount)) {
       throw new Error(
-        "Invalid production readiness report contract: humanReleaseEvidenceCloseout.0.detail - must include the human evidence template count",
+        `Invalid production readiness report contract: humanReleaseEvidenceCloseout.${stepIndex}.detail - must include the human evidence template count`,
       );
     }
 
-    if (stepIndex === 2 && !step.detail.includes(templateCount)) {
+    if (step.code === "confirm-human-evidence-completion" && !step.detail.includes(templateCount)) {
       throw new Error(
-        "Invalid production readiness report contract: humanReleaseEvidenceCloseout.2.detail - must include the humanEvidenceCompletion row count",
+        `Invalid production readiness report contract: humanReleaseEvidenceCloseout.${stepIndex}.detail - must include the humanEvidenceCompletion row count`,
       );
     }
 

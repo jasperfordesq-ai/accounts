@@ -1065,6 +1065,7 @@ if (-not (Test-Path -LiteralPath $machineEvidenceSummaryPath)) {
         Add-Failure $failures "Machine evidence summary productionReadiness.verificationFailureCount must be zero."
     }
     foreach ($closeoutStepCode in @(
+        "pick-up-reviewer-workspace",
         "complete-human-evidence-templates",
         "run-release-evidence-verifier",
         "confirm-human-evidence-completion",
@@ -1118,6 +1119,8 @@ if (-not (Test-Path -LiteralPath $reviewerIndexPath)) {
         "release-evidence-verifier-output.txt",
         "release-evidence-workspace-verification-report.json",
         "Reviewer Closeout Sequence",
+        "release-evidence-reviewer-workspace",
+        "pending human blocker inventory",
         "six accepted ``humanEvidenceCompletion`` entries",
         "scripts/verify-release-artifact-pack.ps1",
         "release-evidence-reviewer-completion.json",

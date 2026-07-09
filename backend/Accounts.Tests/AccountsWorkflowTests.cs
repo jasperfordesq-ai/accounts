@@ -19042,6 +19042,8 @@ public class AccountsWorkflowTests
         Assert.Contains("humanReleaseEvidenceCodes", readinessVerifier);
         Assert.Contains("humanReleaseEvidenceCloseout", readinessVerifier);
         Assert.Contains("humanReleaseEvidenceCloseoutStepCodes", readinessVerifier);
+        Assert.Contains("pick-up-reviewer-workspace", readinessVerifier);
+        Assert.Contains("release-evidence-reviewer-workspace", readinessVerifier);
         Assert.Contains("complete-human-evidence-templates", readinessVerifier);
         Assert.Contains("run-release-evidence-verifier", readinessVerifier);
         Assert.Contains("confirm-human-evidence-completion", readinessVerifier);

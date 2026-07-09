@@ -216,7 +216,7 @@ export function ProductionReadinessPanel({
               <div className="min-w-0">
                 <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Human evidence closeout</p>
                 <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">
-                  Complete reviewer templates, verify release evidence, then verify the final artifact pack for the same candidate.
+                  Pick up the reviewer workspace, complete templates, verify release evidence, then verify the final artifact pack for the same candidate.
                 </p>
               </div>
               <StatusBadge tone={pendingHumanEvidenceCount > 0 ? "bad" : "good"}>

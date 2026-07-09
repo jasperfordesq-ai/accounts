@@ -829,6 +829,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "scripts/verify-release-artifact-pack.ps1 validates the collected release artifact reports and the retained human release-evidence templates as one exact evidence pack with release candidate identity and SHA-256 inventory.",
                     "Production readiness report exposes the six human release-evidence gates with template files, reviewer roles, sign-off gates and required retained evidence.",
                     "Release evidence reviewer workspace verification now inventories pending human-evidence blockers and rejects prepared human templates whose top-level reviewer/accountant identity, signature or acceptance checkbox fields are filled before named human sign-off.",
+                    "Human release-evidence closeout now starts from the prepared release-evidence-reviewer-workspace artifact, its blocker inventory and its retained reviewer handoff files before reviewers complete the six templates.",
                     "CI artifacts now prove production safety, dependency audit, monitoring smoke, structured logs, visual smoke and backup restore drill."
                 ],
                 [
@@ -3003,30 +3004,37 @@ public class ProductionReadinessReportService(AccountsDbContext db)
         return
         [
             new(
+                "pick-up-reviewer-workspace",
+                "Pick up reviewer workspace",
+                1,
+                "Download the release-evidence-reviewer-workspace artifact and inspect release-evidence-reviewer-index.md, release-evidence-reviewer-completion.json and pending human blocker inventory before assigning reviewers.",
+                "release-evidence-reviewer-workspace",
+                pendingCount > 0),
+            new(
                 "complete-human-evidence-templates",
                 "Complete templates",
-                1,
+                2,
                 $"Complete {templateCount} retained Markdown templates with named reviewers, UTC timestamps, retained evidence references, accepted decisions and signatures.",
                 "Docs/release-evidence/*.md",
                 pendingCount > 0),
             new(
                 "run-release-evidence-verifier",
                 "Run release evidence verifier",
-                2,
+                3,
                 "Generate release-evidence-report.json for the exact candidate after the human templates are complete.",
                 "scripts/verify-release-evidence.ps1",
                 true),
             new(
                 "confirm-human-evidence-completion",
                 "Confirm human completion",
-                3,
+                4,
                 $"Confirm {templateCount} accepted humanEvidenceCompletion rows with zero blocking failures in release-evidence-report.json.",
                 "release-evidence-report.json",
                 true),
             new(
                 "verify-release-artifact-pack",
                 "Verify final artifact pack",
-                4,
+                5,
                 "Run the final pack verifier against the same commit SHA and GitHub Actions run URL.",
                 "scripts/verify-release-artifact-pack.ps1",
                 true)

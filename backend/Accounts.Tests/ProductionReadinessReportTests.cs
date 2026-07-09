@@ -1040,6 +1040,7 @@ public class ProductionReadinessReportTests
         Assert.Equal(
             new[]
             {
+                "pick-up-reviewer-workspace",
                 "complete-human-evidence-templates",
                 "run-release-evidence-verifier",
                 "confirm-human-evidence-completion",
@@ -1047,10 +1048,12 @@ public class ProductionReadinessReportTests
             },
             report.HumanReleaseEvidenceCloseout.Select(item => item.Code));
         Assert.Equal(1, report.HumanReleaseEvidenceCloseout[0].Sequence);
-        Assert.Equal("Docs/release-evidence/*.md", report.HumanReleaseEvidenceCloseout[0].Artifact);
-        Assert.Contains("6 retained Markdown templates", report.HumanReleaseEvidenceCloseout[0].Detail);
-        Assert.Contains("humanEvidenceCompletion", report.HumanReleaseEvidenceCloseout[2].Detail);
-        Assert.Equal("scripts/verify-release-artifact-pack.ps1", report.HumanReleaseEvidenceCloseout[3].Artifact);
+        Assert.Equal("release-evidence-reviewer-workspace", report.HumanReleaseEvidenceCloseout[0].Artifact);
+        Assert.Contains("pending human blocker inventory", report.HumanReleaseEvidenceCloseout[0].Detail);
+        Assert.Equal("Docs/release-evidence/*.md", report.HumanReleaseEvidenceCloseout[1].Artifact);
+        Assert.Contains("6 retained Markdown templates", report.HumanReleaseEvidenceCloseout[1].Detail);
+        Assert.Contains("humanEvidenceCompletion", report.HumanReleaseEvidenceCloseout[3].Detail);
+        Assert.Equal("scripts/verify-release-artifact-pack.ps1", report.HumanReleaseEvidenceCloseout[4].Artifact);
 
         var trackCodes = report.CompletionTracks.Select(track => track.Code).ToHashSet(StringComparer.Ordinal);
         var blockerCodes = report.ReleaseBlockerRegister.Select(blocker => blocker.Code).ToHashSet(StringComparer.Ordinal);
