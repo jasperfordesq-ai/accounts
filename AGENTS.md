@@ -1806,6 +1806,8 @@ Human release evidence readiness map:
     `node scripts/verify-api-client.mjs`,
     `npx.cmd vitest run tests/render/production-readiness-panel.test.tsx tests/render/production-readiness-workbench.test.tsx`,
     and `npx.cmd tsc --noEmit --incremental false`.
+- CI is green on July 9, 2026 for the runtime/UI readiness-map slice at commit
+  `13373dd`: `https://github.com/jasperfordesq-ai/accounts/actions/runs/29022858042`.
 
 ## What Is Left To Do
 
@@ -1813,7 +1815,7 @@ Highest-priority next steps:
 
 1. Rerun the full local production gate before release if runtime, script, workflow,
    or template changes land; the latest runtime/script gate is green on July 9, 2026
-   for commit `9a48f5f`.
+   for commit `13373dd`.
 2. Perform and record human visual review of the generated light/dark desktop/mobile
    visual smoke artifact set; the screenshot manifest now verifies locally, but
    named visual QA sign-off is still required.
