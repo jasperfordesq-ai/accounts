@@ -599,6 +599,7 @@ function Test-AccountantEvidence {
     $context = "Qualified-accountant acceptance evidence"
     foreach ($text in $requiredReleaseArtifactNames + @(
         "accountant-workbench-evidence-report.json",
+        "Scenario evidence reference",
         "Workbench evidence reference",
         "Direct CRO submission remains unsupported",
         "Direct ROS submission remains unsupported",
@@ -625,6 +626,8 @@ function Test-AccountantEvidence {
     Assert-CompletedTableColumnMatches $Content $canonicalGoldenCorpusScenarioCodes 4 "Wording" "^accepted$" "accepted" $context $Failures
     Assert-CompletedTableColumnMatches $Content $canonicalGoldenCorpusScenarioCodes 5 "Workbench journey" "^accepted$" "accepted" $context $Failures
     Assert-CompletedTableColumnMatches $Content $canonicalGoldenCorpusScenarioCodes 6 "Decision" "^accepted$" "accepted for this release candidate" $context $Failures
+    Assert-CompletedTableColumnMatches $Content $canonicalGoldenCorpusScenarioCodes 7 "Scenario evidence reference" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real retained scenario walkthrough evidence reference" $context $Failures
+    Assert-CompletedTableColumnContainsRowLabel $Content $canonicalGoldenCorpusScenarioCodes 7 "Scenario evidence reference" $context $Failures
     Assert-CompletedTableColumnMatches $Content $requiredRouteCodes 1 "Decision question answered" "^(yes|accepted)$" "yes or accepted" $context $Failures
     Assert-CompletedTableColumnMatches $Content $requiredRouteCodes 2 "Evidence accepted" "^accepted$" "accepted" $context $Failures
     Assert-CompletedTableColumnMatches $Content $requiredRouteCodes 3 "Workbench evidence reference" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real retained workbench evidence reference" $context $Failures

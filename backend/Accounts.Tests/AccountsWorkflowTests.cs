@@ -18379,6 +18379,9 @@ public class AccountsWorkflowTests
         Assert.Contains("ambiguous scenario scope acceptance cells", accountant);
         Assert.Contains("Use `yes` or `accepted` for `Decision question answered`", accountant);
         Assert.Contains("accountant-workbench-evidence-report.json", accountant);
+        Assert.Contains("Scenario evidence reference", accountant);
+        Assert.Contains("qualified-accountant-walkthrough-ledger#micro-ltd", accountant);
+        Assert.Contains("scenario evidence reference must include the matching scenario code", accountant, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Workbench evidence reference", accountant);
         Assert.Contains("rejects ambiguous route decision/evidence cells", accountant);
         Assert.Contains("must match the route key exactly", accountant);
@@ -18522,6 +18525,8 @@ public class AccountsWorkflowTests
         Assert.Contains("\"Wording\" \"^accepted$\"", script);
         Assert.Contains("\"Workbench journey\" \"^accepted$\"", script);
         Assert.Contains("\"Decision\" \"^accepted$\"", script);
+        Assert.Contains("\"Scenario evidence reference\" \"^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+\"", script);
+        Assert.Contains("Assert-CompletedTableColumnContainsRowLabel $Content $canonicalGoldenCorpusScenarioCodes 7 \"Scenario evidence reference\"", script);
         Assert.Contains("\"Decision question answered\" \"^(yes|accepted)$\"", script);
         Assert.Contains("\"Evidence accepted\" \"^accepted$\"", script);
         Assert.Contains("\"Workbench evidence reference\" \"^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+\"", script);

@@ -40,14 +40,19 @@ professionally accepted for the release candidate. Use `accepted` in the
 `Decision` column only when the whole scenario is professionally accepted for
 this release candidate. The verifier rejects blank, pending, failed, or
 ambiguous scenario scope acceptance cells.
+Record a real retained scenario walkthrough evidence reference for every
+accepted scenario, such as
+`qualified-accountant-walkthrough-ledger#micro-ltd`; do not use `accepted`,
+`none`, `n/a`, `pending`, `todo`, or `tbd` as the evidence reference. Each
+scenario evidence reference must include the matching scenario code.
 
-| Scenario | Outputs | Gates | Source-law evidence | Wording | Workbench journey | Decision |
-| --- | --- | --- | --- | --- | --- | --- |
-| micro-ltd |  |  |  |  |  |  |
-| small-abridged-ltd |  |  |  |  |  |  |
-| dac-small |  |  |  |  |  |  |
-| clg-charity |  |  |  |  |  |  |
-| medium-audit-required |  |  |  |  |  |  |
+| Scenario | Outputs | Gates | Source-law evidence | Wording | Workbench journey | Decision | Scenario evidence reference |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| micro-ltd |  |  |  |  |  |  |  |
+| small-abridged-ltd |  |  |  |  |  |  |  |
+| dac-small |  |  |  |  |  |  |  |
+| clg-charity |  |  |  |  |  |  |  |
+| medium-audit-required |  |  |  |  |  |  |  |
 
 ## Required Route Walkthrough
 
