@@ -346,6 +346,37 @@ function Assert-CompletedTableColumnMatchesRouteReference {
     }
 }
 
+function Assert-CompletedTableColumnContainsRowLabel {
+    param(
+        [string]$Content,
+        [string[]]$RowLabels,
+        [int]$ColumnIndex,
+        [string]$ColumnLabel,
+        [string]$Context,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    $lines = $Content -split "\r?\n"
+    foreach ($label in $RowLabels) {
+        $escaped = [regex]::Escape($label)
+        $row = $lines | Where-Object { $_ -match "^\|\s*$escaped\s*\|" } | Select-Object -First 1
+        if (-not $row) {
+            continue
+        }
+
+        $cells = @($row.Trim() -split "\|").Where({ $_.Trim().Length -gt 0 })
+        if ($cells.Count -le $ColumnIndex) {
+            Add-Failure $Failures "$Context table row '$label' is missing column '$ColumnLabel'."
+            continue
+        }
+
+        $value = $cells[$ColumnIndex].Trim()
+        if ($value.IndexOf($label, [StringComparison]::OrdinalIgnoreCase) -lt 0) {
+            Add-Failure $Failures "$Context table row '$label' column '$ColumnLabel' must include row code '$label'."
+        }
+    }
+}
+
 function Assert-ReleaseIdentityFields {
     param(
         [string]$Content,
@@ -651,6 +682,10 @@ function Test-ManualHandoffEvidence {
     Assert-CompletedTableColumnMatches $Content $requiredManualHandoffScenarioCodes 4 "Decision" "^(accepted|accepted\b.*)$" "accepted for this release candidate" $context $Failures
     Assert-CompletedTableColumnMatches $Content $requiredManualHandoffPathCodes 1 "Release evidence reference" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real unsupported-path evidence reference" $context $Failures
     Assert-CompletedTableColumnMatches $Content $requiredManualHandoffPathCodes 2 "Reviewer decision" "^(accepted|accepted\b.*)$" "accepted" $context $Failures
+    Assert-CompletedTableColumnContainsRowLabel $Content $requiredManualHandoffScenarioCodes 1 "Auditor evidence" $context $Failures
+    Assert-CompletedTableColumnContainsRowLabel $Content $requiredManualHandoffScenarioCodes 2 "Manual handoff note" $context $Failures
+    Assert-CompletedTableColumnContainsRowLabel $Content $requiredManualHandoffScenarioCodes 3 "Filing readiness snapshot" $context $Failures
+    Assert-CompletedTableColumnContainsRowLabel $Content $requiredManualHandoffPathCodes 1 "Release evidence reference" $context $Failures
 }
 
 function Test-ExternalRosIxbrlEvidence {

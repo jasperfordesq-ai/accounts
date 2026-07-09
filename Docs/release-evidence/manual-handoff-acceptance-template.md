@@ -22,6 +22,9 @@ tables; do not use `accepted`, `none`, `n/a`, `pending`, `todo`, or `tbd` as
 stand-ins for evidence references. Use `accepted` in the `Decision` and
 `Reviewer decision` columns only when the reviewer has accepted the retained
 evidence and confirmed the path remains blocked to manual professional ownership.
+Scenario evidence references must include the scenario code, and unsupported-path
+evidence references must include the path code, so retained evidence cannot be
+reused against the wrong manual handoff row.
 
 ## Required Evidence Pack
 
