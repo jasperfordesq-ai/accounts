@@ -40,7 +40,7 @@ describe("ProductionReadinessPanel", () => {
 
 function productionScorecard(): ProductionReadinessReport["productionScorecard"] {
   return {
-    currentScore: 685,
+    currentScore: 687,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete source-law review, named visual QA, monitoring-provider confirmation, manual handoff and qualified-accountant acceptance evidence.",
@@ -100,7 +100,7 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
       {
         code: "frontend-accountant-workbench",
         label: "Frontend accountant workbench",
-        currentScore: 186,
+        currentScore: 188,
         targetScore: 200,
         status: "visual-acceptance-required",
         currentEvidence: [
@@ -116,6 +116,7 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
           "Release artifact and CI machine evidence pack verifiers require exact accountant-workbench route acceptance names, route keys, expected decision text and per-route acceptance evidence ids for every workbench route.",
           "Release artifact and CI machine evidence pack verifiers require exact accountant-workbench route acceptance labels, screenshot-review evidence anchors and required-review status for every workbench route.",
           "Release artifact and CI machine evidence pack verifiers require exact accountant-workbench route readiness screenshot counts, layout-check counts, contrast counts, minimum contrast ratios, required-review status and required review checks for every workbench route.",
+          "Release artifact and CI machine evidence pack verifiers require exact accountant-workbench required coverage for workflow stages, themes, viewports, review checks, layout checks, expected-text checks, layout/contrast evidence and retained visual evidence files.",
           "Frontend parser invariants now require the CI machine evidence pack, production smoke, readiness verification, visual smoke and manual release-verification rows before rendering readiness data.",
         ],
         remainingGaps: ["Complete named visual QA review against the screenshot manifest and visual-smoke-evidence-report.json."],

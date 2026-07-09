@@ -111,6 +111,24 @@ function Assert-ArrayContains {
     }
 }
 
+function Assert-ArrayContainsExactly {
+    param(
+        [object[]]$Values,
+        [string[]]$Expected,
+        [string]$Context,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    $actual = @($Values | ForEach-Object { [string]$_ })
+    if ($actual.Count -ne $Expected.Count) {
+        Add-Failure $Failures "$Context must include exactly $($Expected.Count) item(s)."
+    }
+
+    foreach ($expectedValue in $Expected) {
+        Assert-ArrayContains $actual $expectedValue $Context $Failures
+    }
+}
+
 $expectedAccountantWorkbenchRouteAcceptance = @(
     [pscustomobject]@{ routeName = "dashboard"; routeKey = "dashboard"; label = "Dashboard"; expectedText = "Firm command centre" },
     [pscustomobject]@{ routeName = "production-readiness"; routeKey = "readiness"; label = "Production readiness"; expectedText = "Production Readiness Checklist" },
@@ -121,6 +139,20 @@ $expectedAccountantWorkbenchRouteAcceptance = @(
     [pscustomobject]@{ routeName = "workbench-preview"; routeKey = "workbenchPreview"; label = "Workbench preview"; expectedText = "Workbench Component Preview" }
 )
 
+$expectedAccountantWorkbenchWorkflowStages = @(
+    "Setup",
+    "Import",
+    "Classify",
+    "Year-End",
+    "Statements",
+    "Notes",
+    "Review",
+    "Filing"
+)
+
+$expectedAccountantWorkbenchThemes = @("light", "dark")
+$expectedAccountantWorkbenchViewports = @("desktop", "mobile")
+
 $expectedAccountantWorkbenchReviewChecks = @(
     "accountant-workflow-hierarchy",
     "table-scanability",
@@ -128,6 +160,46 @@ $expectedAccountantWorkbenchReviewChecks = @(
     "mobile-density",
     "loading-error-empty-states"
 )
+
+$expectedAccountantWorkbenchLayoutChecks = @(
+    "browser-console-errors",
+    "page-horizontal-overflow",
+    "visible-text-overlap"
+)
+
+$expectedAccountantWorkbenchExpectedTextChecks = @(
+    "route expected accountant decision text",
+    "visual smoke screenshots carry route expected accountant decision text",
+    "visual smoke routeKey matches planned routeKey",
+    "visual smoke screenshots carry stable routeKey",
+    "visual smoke screenshots carry passed layout check results",
+    "visual smoke screenshots carry passed automated theme contrast results"
+)
+
+$expectedAccountantWorkbenchEvidenceFiles = @(
+    "visual-smoke-manifest.json",
+    "visual-smoke-evidence-report.json",
+    "accountant-workbench-evidence-report.json"
+)
+
+function Assert-AccountantWorkbenchRequiredCoverage {
+    param(
+        [object]$AccountantWorkbench,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    Assert-ArrayContainsExactly @((Get-JsonProperty $AccountantWorkbench @("requiredCoverage", "workflowStages"))) $expectedAccountantWorkbenchWorkflowStages "accountant-workbench-evidence-report.json requiredCoverage.workflowStages" $Failures
+    Assert-ArrayContainsExactly @((Get-JsonProperty $AccountantWorkbench @("requiredCoverage", "themes"))) $expectedAccountantWorkbenchThemes "accountant-workbench-evidence-report.json requiredCoverage.themes" $Failures
+    Assert-ArrayContainsExactly @((Get-JsonProperty $AccountantWorkbench @("requiredCoverage", "viewports"))) $expectedAccountantWorkbenchViewports "accountant-workbench-evidence-report.json requiredCoverage.viewports" $Failures
+    Assert-ArrayContainsExactly @((Get-JsonProperty $AccountantWorkbench @("requiredCoverage", "reviewChecks"))) $expectedAccountantWorkbenchReviewChecks "accountant-workbench-evidence-report.json requiredCoverage.reviewChecks" $Failures
+    Assert-ArrayContainsExactly @((Get-JsonProperty $AccountantWorkbench @("requiredCoverage", "layoutChecks"))) $expectedAccountantWorkbenchLayoutChecks "accountant-workbench-evidence-report.json requiredCoverage.layoutChecks" $Failures
+    Assert-ArrayContainsExactly @((Get-JsonProperty $AccountantWorkbench @("requiredCoverage", "expectedTextChecks"))) $expectedAccountantWorkbenchExpectedTextChecks "accountant-workbench-evidence-report.json requiredCoverage.expectedTextChecks" $Failures
+    Assert-ArrayContainsExactly @((Get-JsonProperty $AccountantWorkbench @("requiredCoverage", "evidenceFiles"))) $expectedAccountantWorkbenchEvidenceFiles "accountant-workbench-evidence-report.json requiredCoverage.evidenceFiles" $Failures
+
+    $expectedLayoutCheckEvidence = $expectedAccountantWorkbenchLayoutChecks | ForEach-Object { "$($_):passed" }
+    Assert-ArrayContainsExactly @((Get-JsonProperty $AccountantWorkbench @("requiredCoverage", "layoutCheckEvidence"))) $expectedLayoutCheckEvidence "accountant-workbench-evidence-report.json requiredCoverage.layoutCheckEvidence" $Failures
+    Assert-ArrayContainsExactly @((Get-JsonProperty $AccountantWorkbench @("requiredCoverage", "contrastCheckEvidence"))) @("theme-contrast:passed", "minimum-ratio:3") "accountant-workbench-evidence-report.json requiredCoverage.contrastCheckEvidence" $Failures
+}
 
 function Assert-AccountantWorkbenchRouteAcceptance {
     param(
@@ -646,6 +718,7 @@ if (-not ($accountantWorkbench.PSObject.Properties.Name -contains "__missing")) 
     if ([string]$accountantWorkbench.requiredCoverage.routeAcceptanceSignOffGate -ne "qualified-accountant-route-acceptance") {
         Add-Failure $failures "accountant-workbench-evidence-report.json requiredCoverage.routeAcceptanceSignOffGate must be qualified-accountant-route-acceptance."
     }
+    Assert-AccountantWorkbenchRequiredCoverage $accountantWorkbench $failures
     foreach ($requiredEvidenceFile in @("visual-smoke-manifest.json", "visual-smoke-evidence-report.json", "accountant-workbench-evidence-report.json")) {
         Assert-ArrayContains @($accountantWorkbench.requiredCoverage.evidenceFiles) $requiredEvidenceFile "accountant-workbench-evidence-report.json requiredCoverage.evidenceFiles" $failures
     }
