@@ -768,8 +768,8 @@ CI status:
   2026.
 - Green jobs: Workflow Hygiene, Production Compose Config, Frontend, Backend,
   Production Stack Smoke, and CI Machine Evidence Pack.
-- The scorecard exposed by the candidate is now 659/700, with backend statutory/accounting
-  engine at 234/250, frontend accountant workbench at 176/200 and
+- The scorecard exposed by the candidate is now 661/700, with backend statutory/accounting
+  engine at 236/250, frontend accountant workbench at 176/200 and
   security/auth/tenant/platform guardrails at 150/150.
   The typed frontend parser and production-readiness verifier both require CI
   machine evidence, production smoke, readiness verification, visual smoke, release
@@ -1204,8 +1204,8 @@ Frontend visual QA exact route-anchor checks:
 - The visual QA sign-off template now tells reviewers to retain the exact
   visual-smoke routeAcceptance anchor for every route, so notes cannot be reused
   against another route.
-- The production scorecard is now 659/700, with frontend accountant workbench at
-  176/200.
+- That previous slice moved the production scorecard to 659/700, with frontend
+  accountant workbench at 176/200.
 - Verification completed locally:
   - PowerShell parser check for `scripts\verify-release-evidence.ps1` passed.
   - Temporary completed release-evidence pack outside the repo passed with exact
@@ -1213,6 +1213,34 @@ Frontend visual QA exact route-anchor checks:
   - A copied visual QA pack with `dashboard` `Notes` set to
     `visual-smoke-evidence-report.json#routeAcceptance.company-detail` failed
     with the expected exact visual QA route-anchor verifier error.
+  - Backend focused regression passed 3 tests:
+    `ReleaseEvidenceVerifier_BlocksIncompleteHumanSignoffEvidence`,
+    `ReleaseEvidenceTemplates_CoverHumanVisualAccountantAndProviderSignoffs`,
+    and
+    `ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers`.
+  - Frontend contract/API/render/type checks passed:
+    `node --test tests/production-readiness-contract.test.mjs`,
+    `node scripts/verify-api-client.mjs`,
+    `npx.cmd vitest run tests/render/production-readiness-panel.test.tsx tests/render/production-readiness-workbench.test.tsx`,
+    and `npx.cmd tsc --noEmit --incremental false`.
+
+Backend qualified-accountant exact route-note anchor checks:
+
+- This slice tightened `scripts/verify-release-evidence.ps1` so
+  qualified-accountant route `Notes` cells must be exactly
+  `qualified-accountant-route-walkthrough#<route>`.
+- The qualified-accountant acceptance template now tells reviewers to retain the
+  exact route walkthrough note anchor for every route, so route notes cannot be
+  reused against another route.
+- The production scorecard is now 661/700, with backend statutory/accounting
+  engine at 236/250.
+- Verification completed locally:
+  - PowerShell parser check for `scripts\verify-release-evidence.ps1` passed.
+  - Temporary completed release-evidence pack outside the repo passed with exact
+    qualified-accountant route note anchors.
+  - A copied qualified-accountant pack with `dashboard` `Notes` set to
+    `qualified-accountant-route-walkthrough#company-detail` failed with the
+    expected exact route-note verifier error.
   - Backend focused regression passed 3 tests:
     `ReleaseEvidenceVerifier_BlocksIncompleteHumanSignoffEvidence`,
     `ReleaseEvidenceTemplates_CoverHumanVisualAccountantAndProviderSignoffs`,
@@ -1273,8 +1301,8 @@ As of July 9, 2026:
 - Code implementation is roughly 70-75% complete.
 - Production assurance is roughly 60-65% complete.
 - Overall goal is roughly 63-67% complete, with about one third left.
-- The production scorecard is now 659/700: architecture/documentation 99/100,
-  backend statutory/accounting engine 234/250, frontend accountant workbench 176/200,
+- The production scorecard is now 661/700: architecture/documentation 99/100,
+  backend statutory/accounting engine 236/250, frontend accountant workbench 176/200,
   and security/auth/tenant/platform guardrails 150/150.
 - Architecture/documentation is now scored 99/100 in the production scorecard because
   source-law review, release evidence templates, manual handoff evidence, runbook

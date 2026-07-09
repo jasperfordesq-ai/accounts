@@ -67,9 +67,8 @@ The verifier rejects ambiguous route decision/evidence cells; use exact `yes` in
 `Decision question answered` and exact `accepted` in `Evidence accepted`.
 The workbench evidence reference must match the route key exactly:
 `accountant-workbench-evidence-report.json#routeAcceptance.<route>`.
-Each route `Notes` cell must include a retained route walkthrough note or
-reference containing the matching route code, for example
-`qualified-accountant-route-walkthrough#dashboard`.
+Each route `Notes` cell must be the exact retained route walkthrough note
+reference `qualified-accountant-route-walkthrough#<route>`.
 
 | Route | Decision question answered | Evidence accepted | Workbench evidence reference | Notes |
 | --- | --- | --- | --- | --- |

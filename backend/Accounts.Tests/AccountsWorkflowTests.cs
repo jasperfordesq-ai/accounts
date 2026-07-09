@@ -18388,8 +18388,8 @@ public class AccountsWorkflowTests
         Assert.Contains("Workbench evidence reference", accountant);
         Assert.Contains("rejects ambiguous route decision/evidence cells", accountant);
         Assert.Contains("must match the route key exactly", accountant);
-        Assert.Contains("Each route `Notes` cell must include", accountant);
-        Assert.Contains("matching route code", accountant);
+        Assert.Contains("Each route `Notes` cell must be the exact retained route walkthrough note", accountant);
+        Assert.Contains("qualified-accountant-route-walkthrough#<route>", accountant);
         Assert.Contains("do not use", accountant, StringComparison.OrdinalIgnoreCase);
 
         var manualHandoff = File.ReadAllText(manualHandoffPath);
@@ -18550,7 +18550,8 @@ public class AccountsWorkflowTests
         Assert.Contains("accountant-workbench-evidence-report.json#routeAcceptance.$label", script);
         Assert.Contains("a real retained workbench evidence reference", script);
         Assert.Contains("a real retained route walkthrough note or reference", script);
-        Assert.Contains("Assert-CompletedTableColumnContainsRowLabel $Content $requiredRouteCodes 4 \"Notes\"", script);
+        Assert.Contains("Assert-CompletedTableColumnMatchesRouteWalkthroughNote $Content $requiredRouteCodes 4 \"Notes\"", script);
+        Assert.Contains("qualified-accountant-route-walkthrough#$label", script);
         Assert.Contains("accepted for this release candidate", script);
         Assert.Contains("Test-ManualHandoffEvidence", script);
         Assert.Contains("manualHandoffAcceptance", script);

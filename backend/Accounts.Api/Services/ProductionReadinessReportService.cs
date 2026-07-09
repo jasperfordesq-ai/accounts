@@ -810,7 +810,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             Category(
                 "backend-statutory-accounting-engine",
                 "Backend statutory/accounting engine",
-                234,
+                236,
                 250,
                 "qualified-accountant-review-required",
                 [
@@ -825,7 +825,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "Qualified-accountant route decision-question cells now reject accepted-style ambiguous text so professional evidence acceptance stays in the dedicated evidence column.",
                     "Qualified-accountant route walkthrough rows now require route-specific accountant-workbench evidence anchors for every accepted route.",
                     "Qualified-accountant route acceptance now requires a real retained workbench evidence reference for every accepted route, tied to accountant-workbench-evidence-report.json.",
-                    "Qualified-accountant route walkthrough notes now require retained route-specific notes or references containing the matching route code.",
+                    "Qualified-accountant route walkthrough notes now must match the exact qualified-accountant-route-walkthrough anchor for every accepted route.",
                     "External ROS/iXBRL validation evidence now has a checked-in template and the release verifier rejects rows without real references, retained taxonomy package references, accepted/remediated warning status and accepted scenario decisions.",
                     "External ROS/iXBRL validation references and retained taxonomy package references now must include the matching golden corpus scenario code before acceptance can pass.",
                     "External ROS/iXBRL validation warnings/errors now require exact none, accepted or remediated values, and scenario decisions require exact accepted values before evidence can pass.",

@@ -40,7 +40,7 @@ describe("ProductionReadinessPanel", () => {
 
 function productionScorecard(): ProductionReadinessReport["productionScorecard"] {
   return {
-    currentScore: 659,
+    currentScore: 661,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete source-law review, named visual QA, monitoring-provider confirmation, manual handoff and qualified-accountant acceptance evidence.",
@@ -63,7 +63,7 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
       {
         code: "backend-statutory-accounting-engine",
         label: "Backend statutory/accounting engine",
-        currentScore: 234,
+        currentScore: 236,
         targetScore: 250,
         status: "qualified-accountant-review-required",
         currentEvidence: [
@@ -76,7 +76,7 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
           "Qualified-accountant route decision-question cells reject accepted-style ambiguous text so professional evidence acceptance stays in the dedicated evidence column.",
           "Qualified-accountant route walkthrough rows require route-specific accountant-workbench evidence anchors for every accepted route.",
           "Qualified-accountant route acceptance requires a real retained workbench evidence reference for every accepted route.",
-          "Qualified-accountant route walkthrough notes require retained route-specific notes or references containing the matching route code.",
+          "Qualified-accountant route walkthrough notes must match the exact qualified-accountant-route-walkthrough anchor for every accepted route.",
           "External ROS/iXBRL validation evidence has template and verifier checks for real references, retained taxonomy package references, accepted/remediated warnings and accepted decisions.",
           "External ROS/iXBRL validation and taxonomy references require the matching golden corpus scenario code before acceptance can pass.",
           "External ROS/iXBRL validation warnings/errors require exact none, accepted or remediated values, and scenario decisions require exact accepted values before evidence can pass.",
