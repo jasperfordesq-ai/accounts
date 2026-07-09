@@ -105,7 +105,7 @@ const share = {
 
 function productionScorecardFixture() {
   return {
-    currentScore: 673,
+    currentScore: 675,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete source-law review, named visual QA, monitoring-provider confirmation, manual handoff and qualified-accountant acceptance evidence.",
@@ -128,7 +128,7 @@ function productionScorecardFixture() {
       {
         code: "backend-statutory-accounting-engine",
         label: "Backend statutory/accounting engine",
-        currentScore: 246,
+        currentScore: 248,
         targetScore: 250,
         status: "qualified-accountant-review-required",
         currentEvidence: [
@@ -150,6 +150,7 @@ function productionScorecardFixture() {
           "Source-law review evidence has template and verifier checks for concrete URL reachability, dated or not-dated effective-date review, guidance comparison, platform impact classification and exact accepted decisions.",
           "Source-law review platform impact cells require exact no change, reflected or blocking values before review evidence can pass.",
           "Source-law review notes must match the exact source-law-review-ledger anchor for every monitored source before acceptance can pass.",
+          "Source-law review top-level evidence requires an exact source-law-snapshot-fingerprint retained evidence anchor plus real reviewer and qualified-accountant identity, signature and sign-off fields before review evidence can pass.",
           "Manual handoff acceptance evidence has template and verifier checks for real evidence references and accepted reviewer decisions.",
           "Manual handoff scenario and unsupported-path decisions require exact accepted reviewer decisions before acceptance evidence can pass.",
           "Manual handoff evidence references require the matching scenario or unsupported-path code before acceptance can pass.",

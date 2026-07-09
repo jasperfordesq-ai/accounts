@@ -1084,7 +1084,14 @@ function Test-SourceLawEvidence {
     Assert-ReleaseIdentityFields $Content $context $Failures
     Assert-UtcTimestampField $Content "Production readiness report timestamp" $context $Failures
     Assert-UtcTimestampField $Content "Review date/time UTC" $context $Failures
+    Assert-FieldMatchesPattern $Content "Source-law snapshot fingerprint" "^source-law-snapshot-fingerprint#[A-Za-z0-9._:-]+$" "an exact source-law-snapshot-fingerprint retained evidence anchor" $context $Failures
     Assert-Sha256Field $Content "Source-law snapshot content hash" $context $Failures
+    Assert-FieldMatchesPattern $Content "Reviewer name" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real reviewer name" $context $Failures
+    Assert-FieldMatchesPattern $Content "Reviewer role" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real reviewer role" $context $Failures
+    Assert-FieldMatchesPattern $Content "Qualified accountant name" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real qualified accountant name" $context $Failures
+    Assert-FieldMatchesPattern $Content "Qualification / professional body" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real qualification or professional body" $context $Failures
+    Assert-FieldMatchesPattern $Content "Reviewer signature" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real reviewer signature" $context $Failures
+    Assert-FieldMatchesPattern $Content "Qualified accountant source-law sign-off" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real qualified-accountant source-law sign-off" $context $Failures
     Assert-NoUncheckedBoxes $Content $context $Failures
     Assert-CheckedDecision $Content "Accepted as source-law review evidence for this release candidate." $context $Failures
     Assert-UncheckedDecision $Content "Rejected; source-law issues below must be remediated and re-reviewed." $context $Failures

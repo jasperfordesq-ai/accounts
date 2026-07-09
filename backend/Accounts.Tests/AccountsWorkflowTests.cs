@@ -18335,6 +18335,9 @@ public class AccountsWorkflowTests
         Assert.Contains("charities-regulator-annual-report", sourceLaw);
         Assert.Contains("Qualified accountant source-law sign-off", sourceLaw);
         Assert.Contains("64-character SHA-256 digest", sourceLaw);
+        Assert.Contains("source-law-snapshot-fingerprint#<snapshot-id>", sourceLaw);
+        Assert.Contains("Reviewer and qualified\naccountant identity", sourceLaw);
+        Assert.Contains("fields must be real retained evidence values", sourceLaw);
         Assert.Contains("Use `yes` for `URL reachable`", sourceLaw);
         Assert.Contains("The verifier rejects generic `accepted` placeholders", sourceLaw);
         Assert.Contains("exactly `no change`, `reflected`, or `blocking`", sourceLaw);
@@ -18477,6 +18480,10 @@ public class AccountsWorkflowTests
         Assert.Contains("sourceLawSourceIds", script);
         Assert.Contains("requiredSourceLawSourceIds", script);
         Assert.Contains("qualified-accountant-source-law-signoff", script);
+        Assert.Contains("\"Source-law snapshot fingerprint\" \"^source-law-snapshot-fingerprint#[A-Za-z0-9._:-]+$\" \"an exact source-law-snapshot-fingerprint retained evidence anchor\"", script);
+        Assert.Contains("\"Reviewer name\" \"^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+\" \"a real reviewer name\"", script);
+        Assert.Contains("\"Qualified accountant name\" \"^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+\" \"a real qualified accountant name\"", script);
+        Assert.Contains("\"Qualified accountant source-law sign-off\" \"^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+\" \"a real qualified-accountant source-law sign-off\"", script);
         Assert.Contains("\"URL reachable\" \"^yes$\"", script);
         Assert.Contains("\"Effective date checked\" \"^([0-9]{4}-[0-9]{2}-[0-9]{2}|not dated)$\"", script);
         Assert.Contains("\"Guidance wording compared\" \"^yes$\"", script);

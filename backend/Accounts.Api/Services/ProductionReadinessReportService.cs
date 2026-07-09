@@ -810,7 +810,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             Category(
                 "backend-statutory-accounting-engine",
                 "Backend statutory/accounting engine",
-                246,
+                248,
                 250,
                 "qualified-accountant-review-required",
                 [
@@ -834,6 +834,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "Source-law review evidence now has a checked-in template and the release verifier rejects monitored-source rows without concrete URL reachability, dated or not-dated effective-date review, guidance comparison, platform impact classification and exact accepted decisions.",
                     "Source-law review platform impact cells now require exact no change, reflected or blocking values before review evidence can pass.",
                     "Source-law review notes now must match the exact source-law-review-ledger anchor for every monitored source before acceptance can pass.",
+                    "Source-law review top-level evidence now requires an exact source-law-snapshot-fingerprint retained evidence anchor plus real reviewer and qualified-accountant identity, signature and sign-off fields before review evidence can pass.",
                     "Manual handoff acceptance now has a checked-in template and the release verifier rejects audit-required or unsupported-path rows without real evidence references and accepted reviewer decisions.",
                     "Manual handoff scenario and unsupported-path decisions now require exact accepted reviewer decisions before acceptance evidence can pass.",
                     "Manual handoff evidence references now must include the matching scenario or unsupported-path code before acceptance can pass.",

@@ -20,13 +20,13 @@ describe("ProductionReadinessWorkbench", () => {
     expectText("3 companies");
     expectText("4 periods");
     expect(screen.getByRole("heading", { name: "Production scorecard" })).toBeInTheDocument();
-    expectText("673/700");
+    expectText("675/700");
     expectText("Architecture and documentation");
     expectText("Backend statutory/accounting engine");
     expectText("Frontend accountant workbench");
     expectText("Security/auth/tenant/platform guardrails");
     expectText("99 / 100");
-    expectText("246 / 250");
+    expectText("248 / 250");
     expectText("178 / 200");
     expectText("150 / 150");
     expectText(/Next score gate/);
@@ -284,7 +284,7 @@ describe("ProductionReadinessWorkbench", () => {
 
 function productionScorecard(): ProductionReadinessReport["productionScorecard"] {
   return {
-    currentScore: 673,
+    currentScore: 675,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete source-law review, named visual QA, monitoring-provider confirmation, manual handoff and qualified-accountant acceptance evidence.",
@@ -307,7 +307,7 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
       {
         code: "backend-statutory-accounting-engine",
         label: "Backend statutory/accounting engine",
-        currentScore: 246,
+        currentScore: 248,
         targetScore: 250,
         status: "qualified-accountant-review-required",
         currentEvidence: [
@@ -329,6 +329,7 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
           "Source-law review evidence has template and verifier checks for concrete URL reachability, dated or not-dated effective-date review, guidance comparison, platform impact classification and exact accepted decisions.",
           "Source-law review platform impact cells require exact no change, reflected or blocking values before review evidence can pass.",
           "Source-law review notes must match the exact source-law-review-ledger anchor for every monitored source before acceptance can pass.",
+          "Source-law review top-level evidence requires an exact source-law-snapshot-fingerprint retained evidence anchor plus real reviewer and qualified-accountant identity, signature and sign-off fields before review evidence can pass.",
           "Manual handoff acceptance evidence has template and verifier checks for real evidence references and accepted reviewer decisions.",
           "Manual handoff scenario and unsupported-path decisions require exact accepted reviewer decisions before acceptance evidence can pass.",
           "Manual handoff evidence references require the matching scenario or unsupported-path code before acceptance can pass.",

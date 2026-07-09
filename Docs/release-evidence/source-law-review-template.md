@@ -21,6 +21,11 @@ Required formats: use the full 40-character commit SHA, the exact
 `https://github.com/.../actions/runs/...` run URL, UTC timestamps ending in `Z`
 or `+00:00`, and a 64-character SHA-256 digest for the source-law snapshot
 content hash.
+`Source-law snapshot fingerprint` must be the exact retained evidence anchor
+`source-law-snapshot-fingerprint#<snapshot-id>`. Reviewer and qualified
+accountant identity, role, qualification, signature, and source-law sign-off
+fields must be real retained evidence values, not placeholders such as
+`accepted`, `none`, `n/a`, `pending`, `todo`, or `tbd`.
 Use `yes` for `URL reachable` and `Guidance wording compared` only after the
 current source page has been checked. Use the checked effective date in
 `YYYY-MM-DD` format, or `not dated` when the source has no dated update. Use

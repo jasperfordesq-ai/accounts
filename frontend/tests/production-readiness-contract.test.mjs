@@ -191,7 +191,7 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.ok(parsed.assurancePacket.evidenceItems.includes("production-readiness-report"));
   assert.ok(parsed.assurancePacket.evidenceItems.includes("production-readiness-verification-report"));
   assert.equal(parsed.assurancePacket.releaseBlockers[0], "Qualified accountant sign-off required");
-  assert.equal(parsed.productionScorecard.currentScore, 673);
+  assert.equal(parsed.productionScorecard.currentScore, 675);
   assert.equal(parsed.productionScorecard.targetScore, 700);
   assert.deepEqual(parsed.productionScorecard.categories.map((category) => category.code), [
     "architecture-documentation",
@@ -199,7 +199,7 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
     "frontend-accountant-workbench",
     "security-auth-tenant-platform-guardrails",
   ]);
-  assert.equal(parsed.productionScorecard.categories[1].currentScore, 246);
+  assert.equal(parsed.productionScorecard.categories[1].currentScore, 248);
   assert.equal(parsed.productionScorecard.categories[1].targetScore, 250);
   assert.ok(parsed.productionScorecard.categories[2].remainingGaps[0].includes("visual QA"));
   assert.ok(parsed.productionScorecard.categories[3].completionTrackCodes.includes("backend-code"));
@@ -843,7 +843,7 @@ test("parseProductionReadinessReport rejects scorecard totals that do not match 
 
   assert.throws(
     () => parseProductionReadinessReport(payload),
-    /Invalid production readiness report contract: productionScorecard\.currentScore - expected 673, received 491/,
+    /Invalid production readiness report contract: productionScorecard\.currentScore - expected 675, received 491/,
   );
 });
 
@@ -940,7 +940,7 @@ test("parseProductionReadinessReport rejects release verification manifest that 
 
 function productionScorecard() {
   return {
-    currentScore: 673,
+    currentScore: 675,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete source-law review, named visual QA, monitoring-provider confirmation, manual handoff and qualified-accountant acceptance evidence.",
@@ -964,7 +964,7 @@ function productionScorecard() {
       {
         code: "backend-statutory-accounting-engine",
         label: "Backend statutory/accounting engine",
-        currentScore: 246,
+        currentScore: 248,
         targetScore: 250,
         status: "qualified-accountant-review-required",
         currentEvidence: [
@@ -986,6 +986,7 @@ function productionScorecard() {
           "Source-law review evidence has template and verifier checks for concrete URL reachability, dated or not-dated effective-date review, guidance comparison, platform impact classification and exact accepted decisions.",
           "Source-law review platform impact cells require exact no change, reflected or blocking values before review evidence can pass.",
           "Source-law review notes must match the exact source-law-review-ledger anchor for every monitored source before acceptance can pass.",
+          "Source-law review top-level evidence requires an exact source-law-snapshot-fingerprint retained evidence anchor plus real reviewer and qualified-accountant identity, signature and sign-off fields before review evidence can pass.",
           "Manual handoff acceptance evidence has template and verifier checks for real evidence references and accepted reviewer decisions.",
           "Manual handoff scenario and unsupported-path decisions require exact accepted reviewer decisions before acceptance evidence can pass.",
           "Manual handoff evidence references require the matching scenario or unsupported-path code before acceptance can pass.",

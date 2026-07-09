@@ -768,8 +768,8 @@ CI status:
   2026.
 - Green jobs: Workflow Hygiene, Production Compose Config, Frontend, Backend,
   Production Stack Smoke, and CI Machine Evidence Pack.
-- The scorecard exposed by the candidate is now 673/700, with backend statutory/accounting
-  engine at 246/250, frontend accountant workbench at 178/200 and
+- The scorecard exposed by the candidate is now 675/700, with backend statutory/accounting
+  engine at 248/250, frontend accountant workbench at 178/200 and
   security/auth/tenant/platform guardrails at 150/150.
   The typed frontend parser and production-readiness verifier both require CI
   machine evidence, production smoke, readiness verification, visual smoke, release
@@ -1411,8 +1411,8 @@ Backend external ROS/iXBRL top-level evidence checks:
 - The external ROS/iXBRL validation template now tells reviewers those
   top-level evidence fields must be real retained evidence values, not
   placeholders.
-- The production scorecard is now 673/700, with backend statutory/accounting
-  engine at 246/250.
+- That previous slice moved the production scorecard to 673/700, with backend
+  statutory/accounting engine at 246/250.
 - Verification completed locally:
   - PowerShell parser check for `scripts\verify-release-evidence.ps1` passed.
   - Temporary completed release-evidence pack outside the repo passed with real
@@ -1420,6 +1420,37 @@ Backend external ROS/iXBRL top-level evidence checks:
   - A copied external ROS/iXBRL pack with `Generated iXBRL artifact name` set to
     `generated-ixbrl-report.txt` failed with the expected retained artifact name
     verifier error.
+  - Backend focused regression passed 3 tests:
+    `ReleaseEvidenceVerifier_BlocksIncompleteHumanSignoffEvidence`,
+    `ReleaseEvidenceTemplates_CoverHumanVisualAccountantAndProviderSignoffs`,
+    and
+    `ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers`.
+  - Frontend contract/API/render/type checks passed:
+    `node --test tests/production-readiness-contract.test.mjs`,
+    `node scripts/verify-api-client.mjs`,
+    `npx.cmd vitest run tests/render/production-readiness-panel.test.tsx tests/render/production-readiness-workbench.test.tsx`,
+    and `npx.cmd tsc --noEmit --incremental false`.
+
+Backend source-law top-level evidence checks:
+
+- This slice tightened `scripts/verify-release-evidence.ps1` so source-law
+  review evidence must retain an exact
+  `source-law-snapshot-fingerprint#<snapshot-id>` evidence anchor.
+- The verifier now rejects placeholder reviewer name, reviewer role, qualified
+  accountant name, professional body, reviewer signature and qualified-accountant
+  source-law sign-off fields.
+- The source-law review template now tells reviewers those top-level fields must
+  be real retained evidence values, not placeholders.
+- The production scorecard is now 675/700, with backend statutory/accounting
+  engine at 248/250.
+- Verification completed locally:
+  - PowerShell parser check for `scripts\verify-release-evidence.ps1` passed.
+  - Temporary completed release-evidence pack outside the repo passed with an
+    exact source-law snapshot fingerprint anchor and real reviewer/accountant
+    identity fields.
+  - A copied source-law pack with `Source-law snapshot fingerprint` set to
+    `source-law-snapshot-fingerprint` failed with the expected exact fingerprint
+    anchor verifier error.
   - Backend focused regression passed 3 tests:
     `ReleaseEvidenceVerifier_BlocksIncompleteHumanSignoffEvidence`,
     `ReleaseEvidenceTemplates_CoverHumanVisualAccountantAndProviderSignoffs`,
@@ -1480,8 +1511,8 @@ As of July 9, 2026:
 - Code implementation is roughly 70-75% complete.
 - Production assurance is roughly 60-65% complete.
 - Overall goal is roughly 63-67% complete, with about one third left.
-- The production scorecard is now 673/700: architecture/documentation 99/100,
-  backend statutory/accounting engine 246/250, frontend accountant workbench 178/200,
+- The production scorecard is now 675/700: architecture/documentation 99/100,
+  backend statutory/accounting engine 248/250, frontend accountant workbench 178/200,
   and security/auth/tenant/platform guardrails 150/150.
 - Architecture/documentation is now scored 99/100 in the production scorecard because
   source-law review, release evidence templates, manual handoff evidence, runbook
