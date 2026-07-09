@@ -768,8 +768,8 @@ CI status:
   2026.
 - Green jobs: Workflow Hygiene, Production Compose Config, Frontend, Backend,
   Production Stack Smoke, and CI Machine Evidence Pack.
-- The scorecard exposed by the candidate is now 633/700, with backend statutory/accounting
-  engine at 214/250, frontend accountant workbench at 170/200 and
+- The scorecard exposed by the candidate is now 635/700, with backend statutory/accounting
+  engine at 216/250, frontend accountant workbench at 170/200 and
   security/auth/tenant/platform guardrails at 150/150.
   The typed frontend parser and production-readiness verifier both require CI
   machine evidence, production smoke, readiness verification, visual smoke, release
@@ -817,6 +817,31 @@ Backend qualified-accountant route walkthrough exact decision checks:
   - Temporary completed release-evidence pack outside the repo passed; a copied
     qualified-accountant pack with `dashboard` route `Evidence accepted` set to
     `accepted with notes` failed with the expected verifier error.
+  - Backend focused regression passed 3 tests:
+    `ReleaseEvidenceVerifier_BlocksIncompleteHumanSignoffEvidence`,
+    `ReleaseEvidenceTemplates_CoverHumanVisualAccountantAndProviderSignoffs`,
+    and
+    `ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers`.
+  - Frontend contract/API/render/type checks passed:
+    `node --test tests/production-readiness-contract.test.mjs`,
+    `node scripts/verify-api-client.mjs`,
+    `npx.cmd vitest run tests/render/production-readiness-panel.test.tsx tests/render/production-readiness-workbench.test.tsx`,
+    and `npx.cmd tsc --noEmit --incremental false`.
+
+Backend qualified-accountant route evidence anchor checks:
+
+- Commit `07dfe28 Require route-specific accountant evidence anchors` tightened
+  `scripts/verify-release-evidence.ps1` so every qualified-accountant route
+  walkthrough row must reference its matching
+  `accountant-workbench-evidence-report.json#routeAcceptance.<route>` anchor.
+- The qualified-accountant acceptance template now tells reviewers the workbench
+  evidence reference must match the route key exactly.
+- Verification completed locally:
+  - PowerShell parser check for `scripts\verify-release-evidence.ps1` passed.
+  - Temporary completed release-evidence pack outside the repo passed; a copied
+    qualified-accountant pack with the `dashboard` row pointing at
+    `accountant-workbench-evidence-report.json#routeAcceptance.company-detail`
+    failed with the expected route-specific verifier error.
   - Backend focused regression passed 3 tests:
     `ReleaseEvidenceVerifier_BlocksIncompleteHumanSignoffEvidence`,
     `ReleaseEvidenceTemplates_CoverHumanVisualAccountantAndProviderSignoffs`,
@@ -876,8 +901,8 @@ As of July 8, 2026:
 - Code implementation is roughly 70-75% complete.
 - Production assurance is roughly 60-65% complete.
 - Overall goal is roughly 63-67% complete, with about one third left.
-- The production scorecard is now 633/700: architecture/documentation 99/100,
-  backend statutory/accounting engine 214/250, frontend accountant workbench 170/200,
+- The production scorecard is now 635/700: architecture/documentation 99/100,
+  backend statutory/accounting engine 216/250, frontend accountant workbench 170/200,
   and security/auth/tenant/platform guardrails 150/150.
 - Architecture/documentation is now scored 99/100 in the production scorecard because
   source-law review, release evidence templates, manual handoff evidence, runbook
