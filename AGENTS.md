@@ -2302,6 +2302,22 @@ Production readiness closeout contract:
   `scripts/verify-release-artifact-pack.ps1` steps. The dashboard and full workbench
   now render those backend-provided steps instead of local hardcoded copies.
 
+Production readiness closeout verifier coverage:
+
+- This slice makes `scripts/verify-production-readiness-report.ps1` validate the
+  `humanReleaseEvidenceCloseout` sequence and emit
+  `requiredCoverage.humanReleaseEvidenceCloseoutStepCodes` beside the six human
+  release-evidence gates.
+- `scripts/verify-ci-machine-evidence-pack.ps1` and
+  `scripts/verify-release-artifact-pack.ps1` now reject stale
+  `production-readiness-verification-report.json` files that do not prove both the
+  six human evidence gate codes and the four closeout step codes.
+- Local checks used the latest green CI `production-readiness-report` artifact from
+  run `29047751811`: the refreshed verifier passed and emitted the closeout coverage
+  array, while a tampered report whose final closeout artifact pointed away from
+  `scripts/verify-release-artifact-pack.ps1` failed with the expected closeout
+  artifact error.
+
 ## What Is Left To Do
 
 Highest-priority next steps:

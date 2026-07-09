@@ -145,6 +145,32 @@ $requiredHumanReleaseEvidenceCodes = @(
     "manualHandoffAcceptance",
     "monitoringProviderConfirmation"
 )
+$requiredHumanReleaseEvidenceCloseoutSteps = @(
+    [pscustomobject]@{
+        code = "complete-human-evidence-templates"
+        sequence = 1
+        artifact = "Docs/release-evidence/*.md"
+        detailTerms = @("retained Markdown templates", "named reviewers")
+    },
+    [pscustomobject]@{
+        code = "run-release-evidence-verifier"
+        sequence = 2
+        artifact = "scripts/verify-release-evidence.ps1"
+        detailTerms = @("release-evidence-report.json", "exact candidate")
+    },
+    [pscustomobject]@{
+        code = "confirm-human-evidence-completion"
+        sequence = 3
+        artifact = "release-evidence-report.json"
+        detailTerms = @("humanEvidenceCompletion", "zero blocking failures")
+    },
+    [pscustomobject]@{
+        code = "verify-release-artifact-pack"
+        sequence = 4
+        artifact = "scripts/verify-release-artifact-pack.ps1"
+        detailTerms = @("same commit SHA", "GitHub Actions run URL")
+    }
+)
 $requiredAssuranceEvidence = @(
     "production-scorecard",
     "production-readiness-report",
@@ -322,6 +348,43 @@ if ($null -ne $report) {
         }
     }
 
+    $humanReleaseEvidenceCloseout = @((Get-JsonProperty $report "humanReleaseEvidenceCloseout"))
+    if ($humanReleaseEvidenceCloseout.Count -ne $requiredHumanReleaseEvidenceCloseoutSteps.Count) {
+        Add-Failure $failures "humanReleaseEvidenceCloseout must include exactly $($requiredHumanReleaseEvidenceCloseoutSteps.Count) release-operator steps."
+    }
+    for ($index = 0; $index -lt $requiredHumanReleaseEvidenceCloseoutSteps.Count; $index++) {
+        $expectedStep = $requiredHumanReleaseEvidenceCloseoutSteps[$index]
+        if ($index -ge $humanReleaseEvidenceCloseout.Count -or $null -eq $humanReleaseEvidenceCloseout[$index]) {
+            Add-Failure $failures "humanReleaseEvidenceCloseout must include step '$($expectedStep.code)' at sequence $($expectedStep.sequence)."
+            continue
+        }
+
+        $actualStep = $humanReleaseEvidenceCloseout[$index]
+        $actualCode = [string](Get-JsonProperty $actualStep "code")
+        if ($actualCode -ne $expectedStep.code) {
+            Add-Failure $failures "humanReleaseEvidenceCloseout.$index.code must be $($expectedStep.code)."
+        }
+        if ([int](Get-JsonProperty $actualStep "sequence") -ne [int]$expectedStep.sequence) {
+            Add-Failure $failures "humanReleaseEvidenceCloseout.$actualCode.sequence must be $($expectedStep.sequence)."
+        }
+        if ([string](Get-JsonProperty $actualStep "artifact") -ne $expectedStep.artifact) {
+            Add-Failure $failures "humanReleaseEvidenceCloseout.$actualCode.artifact must be $($expectedStep.artifact)."
+        }
+        if ((Get-JsonProperty $actualStep "blocksRelease") -ne $true) {
+            Add-Failure $failures "humanReleaseEvidenceCloseout.$actualCode must block release before named sign-off."
+        }
+
+        $detail = [string](Get-JsonProperty $actualStep "detail")
+        foreach ($detailTerm in @($expectedStep.detailTerms)) {
+            if ($detail -notlike "*$detailTerm*") {
+                Add-Failure $failures "humanReleaseEvidenceCloseout.$actualCode.detail must mention $detailTerm."
+            }
+        }
+        if (($index -eq 0 -or $index -eq 2) -and $detail -notlike "*$($requiredHumanReleaseEvidenceCodes.Count)*") {
+            Add-Failure $failures "humanReleaseEvidenceCloseout.$actualCode.detail must mention the six human evidence templates."
+        }
+    }
+
     $visualQa = Get-JsonProperty $report "visualQaCoverage"
     if ($null -eq $visualQa) {
         Add-Failure $failures "visualQaCoverage must be present."
@@ -345,6 +408,7 @@ $evidence = [ordered]@{
         sourceLawSourceIds = $requiredSourceIds
         releaseVerificationManifestCodes = $requiredManifestCodes
         humanReleaseEvidenceCodes = $requiredHumanReleaseEvidenceCodes
+        humanReleaseEvidenceCloseoutStepCodes = @($requiredHumanReleaseEvidenceCloseoutSteps | ForEach-Object { $_.code })
         assuranceEvidenceItems = $requiredAssuranceEvidence
         expectedVisualScreenshotCount = 28
         expectedVisualRouteCount = 7

@@ -1106,6 +1106,12 @@ $requiredReadinessManifestCodes = @(
     "no-direct-cro-ros-submission-control",
     "manual-accountant-acceptance"
 )
+$requiredHumanReleaseEvidenceCloseoutStepCodes = @(
+    "complete-human-evidence-templates",
+    "run-release-evidence-verifier",
+    "confirm-human-evidence-completion",
+    "verify-release-artifact-pack"
+)
 
 $requiredReleaseEvidenceTemplates = @(
     [pscustomobject]@{ evidenceName = "visualQa"; fileName = "visual-qa-signoff-template.md"; requiredReviewerRole = "Named visual QA reviewer"; signOffGate = "visual-qa-screenshot-review" },
@@ -1261,7 +1267,7 @@ if (-not ($productionReadinessVerification.PSObject.Properties.Name -contains "_
     if ([int]$productionReadinessVerification.failureCount -ne 0) {
         Add-Failure $failures "production-readiness-verification-report.json failureCount must be zero."
     }
-    foreach ($coverageProperty in @("categoryCodes", "goldenCorpusScenarioCodes", "sourceLawSourceIds", "releaseVerificationManifestCodes", "assuranceEvidenceItems")) {
+    foreach ($coverageProperty in @("categoryCodes", "goldenCorpusScenarioCodes", "sourceLawSourceIds", "releaseVerificationManifestCodes", "humanReleaseEvidenceCodes", "humanReleaseEvidenceCloseoutStepCodes", "assuranceEvidenceItems")) {
         if ($null -eq $productionReadinessVerification.requiredCoverage.$coverageProperty -or @($productionReadinessVerification.requiredCoverage.$coverageProperty).Count -eq 0) {
             Add-Failure $failures "production-readiness-verification-report.json requiredCoverage.$coverageProperty must be present."
         }
@@ -1271,6 +1277,12 @@ if (-not ($productionReadinessVerification.PSObject.Properties.Name -contains "_
     }
     foreach ($manifestCode in $requiredReadinessManifestCodes) {
         Assert-ArrayContains @($productionReadinessVerification.requiredCoverage.releaseVerificationManifestCodes) $manifestCode "production-readiness-verification-report.json requiredCoverage.releaseVerificationManifestCodes" $failures
+    }
+    foreach ($requiredTemplate in $requiredReleaseEvidenceTemplates) {
+        Assert-ArrayContains @($productionReadinessVerification.requiredCoverage.humanReleaseEvidenceCodes) $requiredTemplate.evidenceName "production-readiness-verification-report.json requiredCoverage.humanReleaseEvidenceCodes" $failures
+    }
+    foreach ($closeoutStepCode in $requiredHumanReleaseEvidenceCloseoutStepCodes) {
+        Assert-ArrayContains @($productionReadinessVerification.requiredCoverage.humanReleaseEvidenceCloseoutStepCodes) $closeoutStepCode "production-readiness-verification-report.json requiredCoverage.humanReleaseEvidenceCloseoutStepCodes" $failures
     }
     if ([int]$productionReadinessVerification.requiredCoverage.expectedVisualScreenshotCount -ne 28) {
         Add-Failure $failures "production-readiness-verification-report.json requiredCoverage.expectedVisualScreenshotCount must be 28."

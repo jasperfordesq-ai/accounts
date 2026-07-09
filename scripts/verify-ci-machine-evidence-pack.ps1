@@ -705,6 +705,20 @@ $failures = [System.Collections.Generic.List[string]]::new()
 $resolvedDirectory = Resolve-Path -LiteralPath $EvidenceDirectory -ErrorAction Stop
 $releaseCommitSha = $CommitSha.Trim()
 $releaseRunUrl = $GitHubActionsRunUrl.Trim()
+$requiredHumanReleaseEvidenceCodes = @(
+    "visualQa",
+    "sourceLawReview",
+    "externalRosIxbrlValidation",
+    "qualifiedAccountantAcceptance",
+    "manualHandoffAcceptance",
+    "monitoringProviderConfirmation"
+)
+$requiredHumanReleaseEvidenceCloseoutStepCodes = @(
+    "complete-human-evidence-templates",
+    "run-release-evidence-verifier",
+    "confirm-human-evidence-completion",
+    "verify-release-artifact-pack"
+)
 
 if ($releaseCommitSha.Length -eq 0) {
     Add-Failure $failures "CommitSha is required for CI machine evidence packs."
@@ -856,6 +870,12 @@ if (-not ($productionReadinessVerification.PSObject.Properties.Name -contains "_
     }
     if ([int](Get-JsonProperty $productionReadinessVerification @("requiredCoverage", "expectedVisualScreenshotCount")) -ne 28) {
         Add-Failure $failures "production-readiness-verification-report.json requiredCoverage.expectedVisualScreenshotCount must be 28."
+    }
+    foreach ($humanEvidenceCode in $requiredHumanReleaseEvidenceCodes) {
+        Assert-ArrayContains @((Get-JsonProperty $productionReadinessVerification @("requiredCoverage", "humanReleaseEvidenceCodes"))) $humanEvidenceCode "production-readiness-verification-report.json requiredCoverage.humanReleaseEvidenceCodes" $failures
+    }
+    foreach ($closeoutStepCode in $requiredHumanReleaseEvidenceCloseoutStepCodes) {
+        Assert-ArrayContains @((Get-JsonProperty $productionReadinessVerification @("requiredCoverage", "humanReleaseEvidenceCloseoutStepCodes"))) $closeoutStepCode "production-readiness-verification-report.json requiredCoverage.humanReleaseEvidenceCloseoutStepCodes" $failures
     }
 }
 
