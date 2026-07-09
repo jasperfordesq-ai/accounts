@@ -1,6 +1,8 @@
 param(
     [string]$RepositoryRoot = (Join-Path $PSScriptRoot ".."),
-    [string]$EvidencePath = ""
+    [string]$EvidencePath = "",
+    [string]$CommitSha = "",
+    [string]$GitHubActionsRunUrl = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -60,6 +62,20 @@ function Assert-DoesNotMatch {
 
 $failures = [System.Collections.Generic.List[string]]::new()
 $resolvedRoot = Resolve-Path -LiteralPath $RepositoryRoot -ErrorAction Stop
+$releaseCommitSha = $CommitSha.Trim()
+$releaseRunUrl = $GitHubActionsRunUrl.Trim()
+
+if ($releaseCommitSha.Length -eq 0) {
+    Add-Failure $failures "CommitSha is required for no-direct filing submission evidence."
+} elseif ($releaseCommitSha -notmatch '^[0-9a-fA-F]{7,40}$') {
+    Add-Failure $failures "CommitSha must be a 7-40 character hexadecimal Git commit SHA."
+}
+
+if ($releaseRunUrl.Length -eq 0) {
+    Add-Failure $failures "GitHubActionsRunUrl is required for no-direct filing submission evidence."
+} elseif ($releaseRunUrl -notmatch '^https://github\.com/.+/actions/runs/[0-9]+') {
+    Add-Failure $failures "GitHubActionsRunUrl must be a GitHub Actions run URL."
+}
 
 $filingWorkflowPath = "backend/Accounts.Api/Endpoints/FilingWorkflowEndpoints.cs"
 $revenueEndpointsPath = "backend/Accounts.Api/Endpoints/RevenueEndpoints.cs"
@@ -171,6 +187,11 @@ $report = [ordered]@{
     status = if ($failures.Count -eq 0) { "passed" } else { "failed" }
     checkedAtUtc = (Get-Date).ToUniversalTime().ToString("o")
     repositoryRoot = $resolvedRoot.Path
+    releaseCandidate = [ordered]@{
+        commitSha = $releaseCommitSha
+        githubActionsRunUrl = $releaseRunUrl
+        identityProvided = ($releaseCommitSha.Length -gt 0 -and $releaseRunUrl.Length -gt 0)
+    }
     files = [ordered]@{
         filingWorkflowEndpoints = Join-Path $resolvedRoot $filingWorkflowPath
         revenueEndpoints = Join-Path $resolvedRoot $revenueEndpointsPath

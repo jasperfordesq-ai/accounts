@@ -159,12 +159,15 @@ The report proves the production compose profile uses CI-promoted images, the mi
 Retain the no-direct filing submission control report for each release candidate:
 
 ```powershell
-.\scripts\verify-no-direct-filing-submission.ps1 -EvidencePath D:\accounts-smoke\no-direct-filing-submission-report.json
+.\scripts\verify-no-direct-filing-submission.ps1 -EvidencePath D:\accounts-smoke\no-direct-filing-submission-report.json -CommitSha <release-commit-sha> -GitHubActionsRunUrl <ci-run-url>
 ```
 
 The report proves final CRO and ROS operations remain recorded workflow states only:
 the API exposes status, payment, download and internal iXBRL validation endpoints, the
 legacy generated marker is blocked with `410 Gone`, and no outbound CRO/ROS submission client or submit route is wired into the release.
+The report also records the release candidate commit SHA and GitHub Actions run URL;
+the CI machine evidence pack and release artifact pack reject stale no-direct evidence
+whose candidate identity does not match the pack being verified.
 CI runs the same verifier in the production stack smoke job and uploads the
 `no-direct-filing-submission-control` artifact for each candidate.
 
@@ -323,7 +326,7 @@ The smoke script checks `/health/ready`, validates browser security headers incl
 
 The HTTPS smoke path also verifies that the login response sets the `accounts_session` and `accounts_csrf` cookies with the `Secure` attribute, so production cookies stay aligned with the ingress contract.
 
-8. Run `scripts\verify-no-direct-filing-submission.ps1` and retain `no-direct-filing-submission-report.json`.
+8. Run `scripts\verify-no-direct-filing-submission.ps1 -CommitSha <release-commit-sha> -GitHubActionsRunUrl <ci-run-url>` and retain `no-direct-filing-submission-report.json`.
 9. Run `scripts\verify-production-readiness-report.ps1 -ReportPath D:\accounts-smoke\production-readiness-report.json -EvidencePath D:\accounts-smoke\production-readiness-verification-report.json` and retain `production-readiness-verification-report.json`.
 10. Complete `Docs/release-evidence/source-law-review-template.md` against the production readiness source-law snapshot, source-law review ledger, and current CRO, Revenue, FRC, and Charities Regulator pages.
 11. Complete `Docs/release-evidence/visual-qa-signoff-template.md` using the CI `visual-smoke-screenshots` artifact, `visual-smoke-manifest.json`, `visual-smoke-evidence-report.json`, and the retained nonblank pixel plus automated contrast metric minima.

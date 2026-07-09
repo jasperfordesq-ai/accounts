@@ -953,6 +953,10 @@ public class ProductionReadinessReportTests
             evidence.Contains("CI", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("no-direct-filing-submission-report.json", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["security-auth-tenant-platform-guardrails"].CurrentEvidence, evidence =>
+            evidence.Contains("no-direct-filing-submission-report.json", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("release candidate commit/run identity", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("stale no-direct evidence", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(scores["security-auth-tenant-platform-guardrails"].CurrentEvidence, evidence =>
             evidence.Contains("verify-release-artifact-pack.ps1", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["security-auth-tenant-platform-guardrails"].CurrentEvidence, evidence =>
             evidence.Contains("SHA-256", StringComparison.OrdinalIgnoreCase));

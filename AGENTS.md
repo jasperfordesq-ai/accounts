@@ -903,6 +903,37 @@ Backend external ROS/iXBRL scenario-code evidence checks:
     `npx.cmd vitest run tests/render/production-readiness-panel.test.tsx tests/render/production-readiness-workbench.test.tsx`,
     and `npx.cmd tsc --noEmit --incremental false`.
 
+No-direct release-candidate identity checks:
+
+- This slice tightened `scripts/verify-no-direct-filing-submission.ps1`
+  so `no-direct-filing-submission-report.json` must record the release candidate
+  commit SHA and GitHub Actions run URL.
+- The production smoke CI job now passes `$env:GITHUB_SHA` and the current Actions
+  run URL into the no-direct verifier before uploading the
+  `no-direct-filing-submission-control` artifact.
+- `scripts/verify-release-artifact-pack.ps1` and
+  `scripts/verify-ci-machine-evidence-pack.ps1` now reject stale no-direct evidence
+  whose release candidate identity is missing or does not match the pack being
+  verified.
+- Verification completed locally:
+  - PowerShell parser checks passed for `scripts\verify-no-direct-filing-submission.ps1`,
+    `scripts\verify-release-artifact-pack.ps1`, and
+    `scripts\verify-ci-machine-evidence-pack.ps1`.
+  - `scripts\verify-no-direct-filing-submission.ps1` passed with a sample commit/run
+    identity and wrote `releaseCandidate` fields into the evidence report.
+  - The same verifier failed without identity with the expected missing `CommitSha`
+    and `GitHubActionsRunUrl` errors.
+  - Backend focused regression passed 3 tests:
+    `NoDirectFilingSubmissionVerifier_ProvesRecordedWorkflowStateOnlyControl`,
+    `ReleaseArtifactPackVerifier_RequiresExactOperationalEvidenceReports`, and
+    `ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers`.
+  - Frontend contract/API/render/type checks passed:
+    `node --test tests/production-readiness-contract.test.mjs`,
+    `node scripts/verify-api-client.mjs`,
+    `npx.cmd vitest run tests/render/production-readiness-panel.test.tsx tests/render/production-readiness-workbench.test.tsx`,
+    and `npx.cmd tsc --noEmit --incremental false`.
+  - `node scripts/verify-ci-actions.mjs` passed after the workflow update.
+
 ## What Is Left To Do
 
 Highest-priority next steps:
@@ -933,8 +964,9 @@ Highest-priority next steps:
    real filing use; the template and verifier now require real provider references,
    an HTTPS provider URL and an accepted operator decision, but real named provider
    confirmation evidence is still missing.
-8. Run `scripts\verify-no-direct-filing-submission.ps1` and retain
-   `no-direct-filing-submission-report.json` with the exact release candidate.
+8. Continue retaining `no-direct-filing-submission-report.json` for every release
+   candidate; the verifier now requires the exact commit/run identity and the pack
+   verifiers reject stale no-direct evidence.
 9. Run `scripts\verify-release-evidence.ps1` against completed release evidence and
    retain `release-evidence-report.json`; blank templates are intentionally failing
    evidence until real named reviewers complete them.

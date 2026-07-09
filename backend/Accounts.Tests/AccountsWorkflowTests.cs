@@ -18555,11 +18555,16 @@ public class AccountsWorkflowTests
 
         Assert.Contains("verify-no-direct-filing-submission.ps1", runbook);
         Assert.Contains("no-direct-filing-submission-report.json", runbook);
+        Assert.Contains("-CommitSha <release-commit-sha>", runbook);
+        Assert.Contains("-GitHubActionsRunUrl <ci-run-url>", runbook);
         Assert.Contains("verify-no-direct-filing-submission.ps1", workflow);
         Assert.Contains("no-direct-filing-submission-control", workflow);
         Assert.Contains("no-direct-filing-submission-report.json", workflow);
+        Assert.Contains("-CommitSha $env:GITHUB_SHA", workflow);
+        Assert.Contains("-GitHubActionsRunUrl $runUrl", workflow);
         Assert.Contains("if-no-files-found: error", workflow);
         Assert.Contains("no outbound CRO/ROS submission client", runbook);
+        Assert.Contains("stale no-direct evidence", runbook);
         Assert.Contains("No direct CRO/ROS submission automation", reportService);
         Assert.Contains("verify-no-direct-filing-submission.ps1", reportService);
         Assert.Contains("recorded workflow states", reportService);
@@ -18572,6 +18577,10 @@ public class AccountsWorkflowTests
         Assert.Contains("\"/cro-status\"", script);
         Assert.Contains("\"/cro-payment\"", script);
         Assert.Contains("\"/validate-ixbrl\"", script);
+        Assert.Contains("releaseCandidate", script);
+        Assert.Contains("identityProvided", script);
+        Assert.Contains("CommitSha is required for no-direct filing submission evidence", script);
+        Assert.Contains("GitHubActionsRunUrl is required for no-direct filing submission evidence", script);
         Assert.Contains("CRO and ROS final submission remain external actions recorded in workflow state.", script);
         Assert.Contains("forbiddenOutboundPatterns", script);
         Assert.Contains("IHttpClientFactory", script);
@@ -18664,6 +18673,12 @@ public class AccountsWorkflowTests
         Assert.Contains("monitoringCorrelationId", script);
         Assert.Contains("backupSha256", script);
         Assert.Contains("allowedRecordedWorkflowRoutes", script);
+        Assert.Contains("no-direct-filing-submission-report.json releaseCandidate.identityProvided must be true", script);
+        Assert.Contains("no-direct-filing-submission-report.json releaseCandidate.commitSha must match CommitSha", script);
+        Assert.Contains("no-direct-filing-submission-report.json releaseCandidate.githubActionsRunUrl must match GitHubActionsRunUrl", script);
+        Assert.Contains("no-direct-filing-submission-report.json releaseCandidate.identityProvided must be true", machineEvidencePack);
+        Assert.Contains("no-direct-filing-submission-report.json releaseCandidate.commitSha must match CommitSha", machineEvidencePack);
+        Assert.Contains("no-direct-filing-submission-report.json releaseCandidate.githubActionsRunUrl must match GitHubActionsRunUrl", machineEvidencePack);
         Assert.Contains("productionScorecard.targetScore must be 700", script);
         Assert.Contains("releaseBlockerRegister", script);
         Assert.Contains("sourceLawSnapshot", script);

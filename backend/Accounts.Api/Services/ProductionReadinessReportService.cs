@@ -884,6 +884,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "Request-scoped EF query filters backstop tenant isolation across company-owned and period-owned child tables.",
                     "Production compose gates enforce immutable images, migrate-only job ordering, demo seed blocking and structured monitoring evidence.",
                     "CI runs scripts/verify-no-direct-filing-submission.ps1 and retains no-direct-filing-submission-report.json, proving final CRO/ROS operations remain recorded workflow states with no outbound submission client wired.",
+                    "no-direct-filing-submission-report.json now records release candidate commit/run identity, and the CI machine evidence pack plus release artifact pack reject stale no-direct evidence whose identity does not match the verified candidate.",
                     "scripts/verify-release-artifact-pack.ps1 validates dependency, production safety, monitoring, structured log, backup/restore, no-direct-submission, production-readiness verification, visual smoke and release-evidence reports together.",
                     "release-artifact-pack-report.json now records release candidate identity plus per-report SHA-256 and byte-size evidence.",
                     "CI runs scripts/verify-ci-machine-evidence-pack.ps1 and retains ci-machine-evidence-pack-report.json with exact commit/run identity plus SHA-256 inventory for dependency, safety, monitoring, structured log, backup/restore, no-direct, readiness and visual/workbench evidence.",

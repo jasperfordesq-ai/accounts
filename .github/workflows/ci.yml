@@ -417,8 +417,11 @@ jobs:
       - name: Verify no-direct filing submission control
         shell: pwsh
         run: |
+          $runUrl = "https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
           ./scripts/verify-no-direct-filing-submission.ps1 `
-            -EvidencePath (Join-Path $env:RUNNER_TEMP "accounts-smoke/no-direct-filing-submission-report.json")
+            -EvidencePath (Join-Path $env:RUNNER_TEMP "accounts-smoke/no-direct-filing-submission-report.json") `
+            -CommitSha $env:GITHUB_SHA `
+            -GitHubActionsRunUrl $runUrl
 
       - name: Verify production readiness report
         shell: pwsh

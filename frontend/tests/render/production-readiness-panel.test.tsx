@@ -112,6 +112,7 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
         currentEvidence: [
           "Auth, tenant and platform release gates are represented in readiness evidence.",
           "CI retains no-direct-filing-submission-report.json for the no-direct CRO/ROS submission verifier.",
+          "no-direct-filing-submission-report.json records release candidate commit/run identity and pack verifiers reject stale no-direct evidence.",
           "Release artifact pack verifier validates operational reports together.",
           "release-artifact-pack-report.json records release candidate identity plus per-report SHA-256 and byte-size evidence.",
           "ci-machine-evidence-pack-report.json records exact commit/run identity plus machine-evidence SHA-256 inventory.",

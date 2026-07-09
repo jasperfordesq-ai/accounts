@@ -444,6 +444,21 @@ if (-not ($noDirectSubmission.PSObject.Properties.Name -contains "__missing")) {
     if ([int]$noDirectSubmission.failureCount -ne 0) {
         Add-Failure $failures "no-direct-filing-submission-report.json failureCount must be zero."
     }
+    if ((Get-JsonProperty $noDirectSubmission @("releaseCandidate", "identityProvided")) -ne $true) {
+        Add-Failure $failures "no-direct-filing-submission-report.json releaseCandidate.identityProvided must be true."
+    }
+    if ($releaseCommitSha.Length -gt 0) {
+        $noDirectCommitSha = [string](Get-JsonProperty $noDirectSubmission @("releaseCandidate", "commitSha"))
+        if (-not [string]::Equals($noDirectCommitSha, $releaseCommitSha, [StringComparison]::OrdinalIgnoreCase)) {
+            Add-Failure $failures "no-direct-filing-submission-report.json releaseCandidate.commitSha must match CommitSha."
+        }
+    }
+    if ($releaseRunUrl.Length -gt 0) {
+        $noDirectRunUrl = [string](Get-JsonProperty $noDirectSubmission @("releaseCandidate", "githubActionsRunUrl"))
+        if (-not [string]::Equals($noDirectRunUrl, $releaseRunUrl, [StringComparison]::OrdinalIgnoreCase)) {
+            Add-Failure $failures "no-direct-filing-submission-report.json releaseCandidate.githubActionsRunUrl must match GitHubActionsRunUrl."
+        }
+    }
     foreach ($route in @('"/cro-status"', '"/cro-payment"', '"/validate-ixbrl"')) {
         Assert-ArrayContains @($noDirectSubmission.allowedRecordedWorkflowRoutes) $route "no-direct-filing-submission-report.json allowedRecordedWorkflowRoutes" $failures
     }
