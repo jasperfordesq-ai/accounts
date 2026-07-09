@@ -383,6 +383,40 @@ function Assert-VisualSmokeDimensionEvidence {
         return
     }
 
+    if (@($screenshots).Count -ne 28) {
+        Add-Failure $Failures "visual-smoke-evidence-report.json screenshots must include exactly 28 retained screenshots."
+    }
+
+    foreach ($expectedRoute in $expectedAccountantWorkbenchRouteAcceptance) {
+        foreach ($theme in $expectedThemes) {
+            foreach ($expectedViewport in $expectedViewports) {
+                $expectedFileName = "$($expectedRoute.routeName)-$theme-$($expectedViewport.name).png"
+                $actualScreenshot = @($screenshots) | Where-Object {
+                    [string](Get-JsonProperty $_ @("routeName")) -eq [string]$expectedRoute.routeName -and
+                    [string](Get-JsonProperty $_ @("theme")) -eq [string]$theme -and
+                    [string](Get-JsonProperty $_ @("viewportName")) -eq [string]$expectedViewport.name
+                } | Select-Object -First 1
+
+                if ($null -eq $actualScreenshot) {
+                    Add-Failure $Failures "visual-smoke-evidence-report.json screenshots must include $($expectedRoute.routeName)/$theme/$($expectedViewport.name)."
+                    continue
+                }
+                if ([string](Get-JsonProperty $actualScreenshot @("routeKey")) -ne [string]$expectedRoute.routeKey) {
+                    Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.$($expectedRoute.routeName).$theme.$($expectedViewport.name).routeKey must be $($expectedRoute.routeKey)."
+                }
+                if ([string](Get-JsonProperty $actualScreenshot @("fileName")) -ne $expectedFileName) {
+                    Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.$($expectedRoute.routeName).$theme.$($expectedViewport.name).fileName must be $expectedFileName."
+                }
+                if ([string](Get-JsonProperty $actualScreenshot @("expectedText")) -ne [string]$expectedRoute.expectedText) {
+                    Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.$($expectedRoute.routeName).$theme.$($expectedViewport.name).expectedText must be $($expectedRoute.expectedText)."
+                }
+                if ([string](Get-JsonProperty $actualScreenshot @("reviewStatus")) -ne "required-review") {
+                    Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.$($expectedRoute.routeName).$theme.$($expectedViewport.name).reviewStatus must be required-review."
+                }
+            }
+        }
+    }
+
     $index = 0
     foreach ($screenshot in @($screenshots)) {
         $viewportName = [string](Get-JsonProperty $screenshot @("viewportName"))

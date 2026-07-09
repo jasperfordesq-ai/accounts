@@ -1612,12 +1612,35 @@ Frontend visual-smoke top-level coverage pack checks:
   themes, viewports, planned viewport dimensions, layout/contrast result counts,
   minimum contrast ratio, retained screenshot byte evidence and per-route
   coverage before the release or CI machine evidence pack can pass.
-- The production scorecard is now 689/700, with frontend accountant workbench at
+- That previous slice moved the production scorecard to 689/700, with frontend accountant workbench at
   190/200.
 - Verification completed locally:
   - PowerShell parser checks for both pack verifiers passed.
   - Temporary visual evidence packs proved both verifiers reject a missing
     top-level `visual-smoke-evidence-report.json` theme value.
+  - Backend focused regression passed 2 tests:
+    `ReleaseArtifactPackVerifier_RequiresExactOperationalEvidenceReports` and
+    `ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers`.
+  - Frontend contract/API/render/type checks passed:
+    `node --test tests/production-readiness-contract.test.mjs`,
+    `node scripts/verify-api-client.mjs`,
+    `npx.cmd vitest run tests/render/production-readiness-panel.test.tsx tests/render/production-readiness-workbench.test.tsx`,
+    and `npx.cmd tsc --noEmit --incremental false`.
+
+Frontend visual-smoke screenshot-matrix pack checks:
+
+- This slice further tightens `scripts/verify-release-artifact-pack.ps1` and
+  `scripts/verify-ci-machine-evidence-pack.ps1` so retained
+  `visual-smoke-evidence-report.json` screenshot rows must include the exact
+  28 route/theme/viewport matrix, with exact route keys, screenshot filenames,
+  expected accountant decision text and `required-review` status for every
+  capture.
+- The production scorecard is now 691/700, with frontend accountant workbench at
+  192/200.
+- Verification completed locally:
+  - PowerShell parser checks for both pack verifiers passed.
+  - Temporary visual evidence packs proved both verifiers reject a wrong
+    dashboard light desktop screenshot filename.
   - Backend focused regression passed 2 tests:
     `ReleaseArtifactPackVerifier_RequiresExactOperationalEvidenceReports` and
     `ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers`.
@@ -1676,8 +1699,8 @@ As of July 9, 2026:
 - Code implementation is roughly 70-75% complete.
 - Production assurance is roughly 60-65% complete.
 - Overall goal is roughly 63-67% complete, with about one third left.
-- The production scorecard is now 689/700: architecture/documentation 99/100,
-  backend statutory/accounting engine 250/250, frontend accountant workbench 190/200,
+- The production scorecard is now 691/700: architecture/documentation 99/100,
+  backend statutory/accounting engine 250/250, frontend accountant workbench 192/200,
   and security/auth/tenant/platform guardrails 150/150.
 - Architecture/documentation is now scored 99/100 in the production scorecard because
   source-law review, release evidence templates, manual handoff evidence, runbook
