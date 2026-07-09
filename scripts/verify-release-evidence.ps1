@@ -820,6 +820,9 @@ function Test-VisualEvidence {
     Assert-FieldEquals $Content "Visual smoke evidence report file" "visual-smoke-evidence-report.json" $context $Failures
     Assert-FieldEquals $Content "Accountant workbench evidence report file" "accountant-workbench-evidence-report.json" $context $Failures
     Assert-UtcTimestampField $Content "Review date/time UTC" $context $Failures
+    Assert-FieldMatchesPattern $Content "Reviewer name" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real visual QA reviewer name" $context $Failures
+    Assert-FieldMatchesPattern $Content "Reviewer role" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real visual QA reviewer role" $context $Failures
+    Assert-FieldMatchesPattern $Content "Reviewer signature" "^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+" "a real visual QA reviewer signature" $context $Failures
     Assert-PositiveIntegerField $Content "Minimum PNG IDAT byte size" $context $Failures
     Assert-PositiveIntegerField $Content "Minimum screenshot pixel sample count" $context $Failures
     Assert-MinimumIntegerField $Content "Minimum sampled distinct color count" 4 $context $Failures

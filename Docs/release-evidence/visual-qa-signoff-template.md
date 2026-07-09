@@ -28,7 +28,9 @@ distinct color count must be at least `4`, luminance range must be at least
 `10`, and minimum automated contrast ratio must be at least `3.0`. The visual
 artifact file fields must be exactly `visual-smoke-manifest.json`,
 `visual-smoke-evidence-report.json`, and
-`accountant-workbench-evidence-report.json`.
+`accountant-workbench-evidence-report.json`. Reviewer name, reviewer role and
+reviewer signature fields must be real retained evidence values, not
+placeholders such as `accepted`, `none`, `n/a`, `pending`, `todo`, or `tbd`.
 
 ## Required Artifact Checks
 

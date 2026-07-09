@@ -18317,6 +18317,7 @@ public class AccountsWorkflowTests
         Assert.Contains("luminanceRange", visual);
         Assert.Contains("themeContrastResult.minimumContrastRatio", visual);
         Assert.Contains("artifact file fields must be exactly", visual);
+        Assert.Contains("Reviewer name, reviewer role and\nreviewer signature fields must be real retained evidence values", visual);
         Assert.Contains("Use exactly `pass`", visual);
         Assert.Contains("rejects", visual);
         Assert.Contains("`accepted`, or other ambiguous", visual);
@@ -18532,6 +18533,9 @@ public class AccountsWorkflowTests
         Assert.Contains("Assert-FieldEquals $Content \"Visual smoke manifest file\" \"visual-smoke-manifest.json\"", script);
         Assert.Contains("Assert-FieldEquals $Content \"Visual smoke evidence report file\" \"visual-smoke-evidence-report.json\"", script);
         Assert.Contains("Assert-FieldEquals $Content \"Accountant workbench evidence report file\" \"accountant-workbench-evidence-report.json\"", script);
+        Assert.Contains("\"Reviewer name\" \"^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+\" \"a real visual QA reviewer name\"", script);
+        Assert.Contains("\"Reviewer role\" \"^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+\" \"a real visual QA reviewer role\"", script);
+        Assert.Contains("\"Reviewer signature\" \"^(?!accepted$|none$|n/a$|pending$|todo$|tbd$).+\" \"a real visual QA reviewer signature\"", script);
         Assert.Contains("screenshot nonblank pixel diversity evidence", script);
         Assert.Contains("Minimum PNG IDAT byte size", script);
         Assert.Contains("Minimum screenshot pixel sample count", script);

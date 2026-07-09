@@ -858,7 +858,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             Category(
                 "frontend-accountant-workbench",
                 "Frontend accountant workbench",
-                178,
+                180,
                 200,
                 "visual-acceptance-required",
                 [
@@ -871,6 +871,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "Visual QA route capture cells now reject accepted-style ambiguous text so reviewer limitations must stay in retained route notes or references.",
                     "Visual QA route notes now must match the exact visual-smoke-evidence-report.json routeAcceptance anchor for every route before sign-off evidence can pass.",
                     "Visual QA release evidence now requires exact visual-smoke manifest, visual evidence report and accountant workbench evidence report filenames before sign-off evidence can pass.",
+                    "Visual QA top-level evidence now rejects placeholder reviewer name, reviewer role and reviewer signature fields before human visual sign-off evidence can pass.",
                     "node scripts/verify-accountant-workbench-evidence.mjs now writes accountant-workbench-evidence-report.json proving route, workflow-stage, theme, viewport, layout-check and review-check coverage.",
                     "scripts/verify-release-artifact-pack.ps1 and scripts/verify-ci-machine-evidence-pack.ps1 reject visual evidence unless every screenshot reports passed console-error, horizontal-overflow, visible-text-overlap and automated theme-contrast smoke checks.",
                     "Visual smoke and accountant-workbench evidence now retain and re-verify each route's expected accountant decision text across light/dark desktop/mobile screenshots.",
