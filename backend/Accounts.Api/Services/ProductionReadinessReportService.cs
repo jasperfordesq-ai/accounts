@@ -858,7 +858,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             Category(
                 "frontend-accountant-workbench",
                 "Frontend accountant workbench",
-                192,
+                194,
                 200,
                 "visual-acceptance-required",
                 [
@@ -877,6 +877,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "Visual smoke and accountant-workbench evidence now retain and re-verify each route's expected accountant decision text across light/dark desktop/mobile screenshots.",
                     "Release artifact and CI machine evidence pack verifiers now require exact visual-smoke top-level themes, viewports, planned viewport dimensions, layout/contrast result counts, minimum contrast ratio, retained screenshot bytes and per-route coverage before retained visual evidence can pass.",
                     "Release artifact and CI machine evidence pack verifiers now require the exact visual-smoke screenshot matrix for every route, theme and viewport, including route keys, file names, expected accountant decision text and required-review status.",
+                    "Release artifact and CI machine evidence pack verifiers now require every visual-smoke screenshot row to retain a positive byte size and canonical sha256:<64 lowercase hex> checksum before retained visual evidence can pass.",
                     "accountant-workbench-evidence-report.json now includes route acceptance rows with stable route keys, expected decision text, blocking status and qualified-accountant route acceptance evidence for every workbench route.",
                     "Release artifact and CI machine evidence pack verifiers now require exact accountant-workbench route acceptance names, route keys, expected decision text and per-route acceptance evidence ids for every workbench route.",
                     "Release artifact and CI machine evidence pack verifiers now require exact accountant-workbench route acceptance labels, screenshot-review evidence anchors and required-review status for every workbench route.",

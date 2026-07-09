@@ -18924,6 +18924,10 @@ public class AccountsWorkflowTests
         Assert.Contains("screenshots.imageWidth must match planned viewport width", machineEvidencePack);
         Assert.Contains("screenshots.minimumViewportHeight must match planned viewport height", script);
         Assert.Contains("screenshots.minimumViewportHeight must match planned viewport height", machineEvidencePack);
+        Assert.Contains("screenshots.byteSize must prove retained screenshot bytes", script);
+        Assert.Contains("screenshots.byteSize must prove retained screenshot bytes", machineEvidencePack);
+        Assert.Contains("screenshots.sha256 must be a canonical sha256 checksum", script);
+        Assert.Contains("screenshots.sha256 must be a canonical sha256 checksum", machineEvidencePack);
         Assert.Contains("screenshots.pngIdatByteSize must prove retained PNG image data", script);
         Assert.Contains("screenshots.pngIdatByteSize must prove retained PNG image data", machineEvidencePack);
         Assert.Contains("screenshots.sampledDistinctColorCount must be at least 4", script);

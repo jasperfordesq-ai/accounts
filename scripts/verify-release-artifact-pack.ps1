@@ -434,6 +434,8 @@ function Assert-VisualSmokeDimensionEvidence {
         $pixelSampleCount = Get-JsonProperty $screenshot @("pixelSampleCount")
         $sampledDistinctColorCount = Get-JsonProperty $screenshot @("sampledDistinctColorCount")
         $luminanceRange = Get-JsonProperty $screenshot @("luminanceRange")
+        $byteSize = Get-JsonProperty $screenshot @("byteSize")
+        $sha256 = [string](Get-JsonProperty $screenshot @("sha256"))
         $pngIdatByteSize = Get-JsonProperty $screenshot @("pngIdatByteSize")
         $layoutCheckResults = @(Get-JsonProperty $screenshot @("layoutCheckResults"))
         $themeContrastResult = Get-JsonProperty $screenshot @("themeContrastResult")
@@ -449,6 +451,12 @@ function Assert-VisualSmokeDimensionEvidence {
         }
         if ($null -eq $minimumViewportHeight -or [int]$minimumViewportHeight -ne [int]$expected.height) {
             Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.minimumViewportHeight must match planned viewport height."
+        }
+        if ($null -eq $byteSize -or [int]$byteSize -le 0) {
+            Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.byteSize must prove retained screenshot bytes."
+        }
+        if ($sha256 -notmatch '^sha256:[0-9a-f]{64}$') {
+            Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.sha256 must be a canonical sha256 checksum."
         }
         if ($null -eq $pngIdatByteSize -or [int]$pngIdatByteSize -le 0) {
             Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.pngIdatByteSize must prove retained PNG image data."
