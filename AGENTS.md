@@ -2149,6 +2149,32 @@ Release evidence workspace-control retention:
   - This is evidence-chain hardening, not a substitute for named human or
     external professional approval.
 
+Release artifact pack workspace-control retention:
+
+- This slice carries the same release evidence workspace-control requirement
+  into the final release artifact pack. `scripts/verify-release-artifact-pack.ps1`
+  now requires `release-evidence-report.json.workspaceControlFiles` to list
+  `release-evidence-workspace-manifest.json`,
+  `release-evidence-machine-summary.json`, and
+  `release-evidence-workspace-verification-report.json`, and checks each
+  retained file's byte size and SHA-256 hash against the report.
+- The release artifact-pack report now includes those retained workspace control
+  files in `requiredFiles` and `evidenceFiles` with
+  `evidenceType: release-evidence-workspace-control`.
+- Verification completed locally:
+  - PowerShell parser check passed for `scripts/verify-release-artifact-pack.ps1`.
+  - `node scripts/verify-ci-actions.mjs` passed.
+  - A reviewer workspace copied from the current generated evidence was rerun
+    through `scripts/verify-release-evidence.ps1` after the workspace
+    verification report existed; artifact-pack verification still failed as
+    expected on incomplete human evidence but had zero workspace-control
+    failures.
+  - Removing `release-evidence-machine-summary.json` from that pack added the
+    expected failure:
+    `Release artifact pack must include retained release evidence workspace control file: release-evidence-machine-summary.json`.
+  - Focused backend regression passed:
+    `ReleaseArtifactPackVerifier_RequiresExactOperationalEvidenceReports`.
+
 ## What Is Left To Do
 
 Highest-priority next steps:

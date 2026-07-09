@@ -18859,7 +18859,10 @@ public class AccountsWorkflowTests
             "visual-smoke-manifest.json",
             "visual-smoke-evidence-report.json",
             "accountant-workbench-evidence-report.json",
-            "release-evidence-report.json"
+            "release-evidence-report.json",
+            "release-evidence-workspace-manifest.json",
+            "release-evidence-machine-summary.json",
+            "release-evidence-workspace-verification-report.json"
         })
         {
             Assert.Contains(evidenceFile, script);
@@ -19130,6 +19133,12 @@ public class AccountsWorkflowTests
         Assert.Contains("evidenceFiles must include retained release evidence template hashes", script);
         Assert.Contains("sha256 must match the retained template file", script);
         Assert.Contains("evidenceType = \"release-evidence-template\"", script);
+        Assert.Contains("Assert-ReleaseEvidenceWorkspaceControlManifest", script);
+        Assert.Contains("workspaceControlFiles must include retained release evidence workspace control hashes", script);
+        Assert.Contains("Release artifact pack must include retained release evidence workspace control file", script);
+        Assert.Contains("releaseEvidenceWorkspaceFiles", script);
+        Assert.Contains("workspaceControlFiles.$($required.fileName).sha256 must match the retained workspace control file", script);
+        Assert.Contains("evidenceType = \"release-evidence-workspace-control\"", script);
         Assert.Contains("evidenceFiles", script);
         Assert.Contains("identityProvided", script);
         Assert.Contains("GitHubActionsRunUrl must be a GitHub Actions run URL", script);

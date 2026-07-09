@@ -745,6 +745,72 @@ function Assert-ReleaseEvidenceTemplateManifest {
     }
 }
 
+function Assert-ReleaseEvidenceWorkspaceControlManifest {
+    param(
+        [object]$ReleaseEvidence,
+        [string]$Directory,
+        [object[]]$RequiredWorkspaceControls,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    if ($ReleaseEvidence.PSObject.Properties.Name -contains "__missing" -or
+        $ReleaseEvidence.PSObject.Properties.Name -contains "__invalid") {
+        return
+    }
+
+    $manifest = @(Get-JsonProperty $ReleaseEvidence @("workspaceControlFiles"))
+    if ($manifest.Count -eq 0) {
+        Add-Failure $Failures "release-evidence-report.json workspaceControlFiles must include retained release evidence workspace control hashes."
+        return
+    }
+
+    foreach ($required in $RequiredWorkspaceControls) {
+        Assert-ArrayContains @((Get-JsonProperty $ReleaseEvidence @("requiredCoverage", "releaseEvidenceWorkspaceFiles"))) $required.fileName "release-evidence-report.json requiredCoverage.releaseEvidenceWorkspaceFiles" $Failures
+
+        $entry = $manifest |
+            Where-Object {
+                [string](Get-JsonProperty $_ @("fileName")) -eq [string]$required.fileName -and
+                [string](Get-JsonProperty $_ @("evidenceName")) -eq [string]$required.evidenceName
+            } |
+            Select-Object -First 1
+
+        if ($null -eq $entry) {
+            Add-Failure $Failures "release-evidence-report.json workspaceControlFiles must include $($required.fileName)."
+            continue
+        }
+
+        if ((Get-JsonProperty $entry @("present")) -ne $true) {
+            Add-Failure $Failures "release-evidence-report.json workspaceControlFiles.$($required.fileName).present must be true."
+        }
+
+        $manifestSha = [string](Get-JsonProperty $entry @("sha256"))
+        if ($manifestSha -notmatch '^[0-9a-f]{64}$') {
+            Add-Failure $Failures "release-evidence-report.json workspaceControlFiles.$($required.fileName).sha256 must be a lowercase SHA-256 hash."
+        }
+
+        $manifestByteSize = Get-JsonProperty $entry @("byteSize")
+        if ($null -eq $manifestByteSize -or [int]$manifestByteSize -le 0) {
+            Add-Failure $Failures "release-evidence-report.json workspaceControlFiles.$($required.fileName).byteSize must be greater than zero."
+        }
+
+        $controlPath = Join-Path $Directory $required.fileName
+        if (-not (Test-Path -LiteralPath $controlPath -PathType Leaf)) {
+            Add-Failure $Failures "Release artifact pack must include retained release evidence workspace control file: $($required.fileName)"
+            continue
+        }
+
+        $controlInfo = Get-Item -LiteralPath $controlPath
+        if ($null -ne $manifestByteSize -and [int64]$manifestByteSize -ne [int64]$controlInfo.Length) {
+            Add-Failure $Failures "release-evidence-report.json workspaceControlFiles.$($required.fileName).byteSize must match the retained workspace control file."
+        }
+
+        $actualSha = Get-FileSha256 $controlPath
+        if ($manifestSha -match '^[0-9a-f]{64}$' -and $manifestSha -ne $actualSha) {
+            Add-Failure $Failures "release-evidence-report.json workspaceControlFiles.$($required.fileName).sha256 must match the retained workspace control file."
+        }
+    }
+}
+
 $failures = [System.Collections.Generic.List[string]]::new()
 $resolvedDirectory = Resolve-Path -LiteralPath $EvidenceDirectory -ErrorAction Stop
 $releaseCommitSha = $CommitSha.Trim()
@@ -800,6 +866,12 @@ $requiredReleaseEvidenceTemplates = @(
     [pscustomobject]@{ evidenceName = "qualifiedAccountantAcceptance"; fileName = "qualified-accountant-acceptance-template.md" },
     [pscustomobject]@{ evidenceName = "manualHandoffAcceptance"; fileName = "manual-handoff-acceptance-template.md" },
     [pscustomobject]@{ evidenceName = "monitoringProviderConfirmation"; fileName = "monitoring-provider-confirmation-template.md" }
+)
+
+$requiredReleaseEvidenceWorkspaceControls = @(
+    [pscustomobject]@{ evidenceName = "releaseEvidenceWorkspaceManifest"; fileName = "release-evidence-workspace-manifest.json" },
+    [pscustomobject]@{ evidenceName = "releaseEvidenceMachineSummary"; fileName = "release-evidence-machine-summary.json" },
+    [pscustomobject]@{ evidenceName = "releaseEvidenceWorkspaceVerificationReport"; fileName = "release-evidence-workspace-verification-report.json" }
 )
 
 $allEvidence = [ordered]@{
@@ -1032,12 +1104,13 @@ if (-not ($releaseEvidence.PSObject.Properties.Name -contains "__missing")) {
             Add-Failure $failures "release-evidence-report.json releaseCandidate.githubActionsRunUrl must match GitHubActionsRunUrl."
         }
     }
-    foreach ($coverageProperty in @("sourceLawSourceIds", "goldenCorpusScenarioCodes", "externalRosIxbrlScenarioCodes", "routeCodes", "manualHandoffScenarioCodes", "manualHandoffPathCodes", "releaseArtifactNames")) {
+    foreach ($coverageProperty in @("sourceLawSourceIds", "goldenCorpusScenarioCodes", "externalRosIxbrlScenarioCodes", "routeCodes", "manualHandoffScenarioCodes", "manualHandoffPathCodes", "releaseArtifactNames", "releaseEvidenceWorkspaceFiles")) {
         if ($null -eq $releaseEvidence.requiredCoverage.$coverageProperty -or @($releaseEvidence.requiredCoverage.$coverageProperty).Count -eq 0) {
             Add-Failure $failures "release-evidence-report.json requiredCoverage.$coverageProperty must be present."
         }
     }
     Assert-ReleaseEvidenceTemplateManifest $releaseEvidence $resolvedDirectory.Path $requiredReleaseEvidenceTemplates $failures
+    Assert-ReleaseEvidenceWorkspaceControlManifest $releaseEvidence $resolvedDirectory.Path $requiredReleaseEvidenceWorkspaceControls $failures
 }
 
 $evidenceFileManifest = @(
@@ -1082,6 +1155,27 @@ $releaseEvidenceTemplateManifest = @(
     }
 )
 
+$releaseEvidenceWorkspaceControlManifest = @(
+    foreach ($control in $requiredReleaseEvidenceWorkspaceControls) {
+        $controlPath = Join-Path $resolvedDirectory.Path $control.fileName
+        if (-not (Test-Path -LiteralPath $controlPath -PathType Leaf)) {
+            continue
+        }
+
+        $fileInfo = Get-Item -LiteralPath $controlPath
+        [ordered]@{
+            fileName = $control.fileName
+            evidenceName = $control.evidenceName
+            evidenceType = "release-evidence-workspace-control"
+            path = $controlPath
+            byteSize = $fileInfo.Length
+            sha256 = Get-FileSha256 $controlPath
+            checkedAtUtc = ""
+            status = "retained"
+        }
+    }
+)
+
 $report = [ordered]@{
     status = if ($failures.Count -eq 0) { "passed" } else { "failed" }
     checkedAtUtc = (Get-Date).ToUniversalTime().ToString("o")
@@ -1091,8 +1185,8 @@ $report = [ordered]@{
         githubActionsRunUrl = $releaseRunUrl
         identityProvided = ($releaseCommitSha.Length -gt 0 -and $releaseRunUrl.Length -gt 0)
     }
-    requiredFiles = @($allEvidence.Keys) + @($requiredReleaseEvidenceTemplates | ForEach-Object { $_.fileName })
-    evidenceFiles = @($evidenceFileManifest) + @($releaseEvidenceTemplateManifest)
+    requiredFiles = @($allEvidence.Keys) + @($requiredReleaseEvidenceTemplates | ForEach-Object { $_.fileName }) + @($requiredReleaseEvidenceWorkspaceControls | ForEach-Object { $_.fileName })
+    evidenceFiles = @($evidenceFileManifest) + @($releaseEvidenceTemplateManifest) + @($releaseEvidenceWorkspaceControlManifest)
     failureCount = $failures.Count
     failures = $failures.ToArray()
 }
