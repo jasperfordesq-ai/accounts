@@ -839,6 +839,23 @@ Run ``scripts/verify-release-evidence.ps1`` again after named reviewers complete
     Set-Content -LiteralPath $Path -Value $content -NoNewline
 }
 
+function New-PendingHumanEvidenceBlockerSummary {
+    param($Report)
+
+    return @((Get-JsonPropertyValue $Report "humanEvidenceCompletion") | ForEach-Object {
+        $blockingFailures = @((Get-JsonPropertyValue $_ "blockingFailures"))
+        [ordered]@{
+            evidenceName = [string](Get-JsonPropertyValue $_ "evidenceName")
+            templateFile = [string](Get-JsonPropertyValue $_ "templateFile")
+            requiredReviewerRole = [string](Get-JsonPropertyValue $_ "requiredReviewerRole")
+            signOffGate = [string](Get-JsonPropertyValue $_ "signOffGate")
+            status = [string](Get-JsonPropertyValue $_ "status")
+            blockingFailureCount = [int](Get-JsonPropertyValue $_ "blockingFailureCount")
+            firstBlockingFailure = if ($blockingFailures.Count -gt 0) { [string]$blockingFailures[0] } else { "" }
+        }
+    })
+}
+
 $resolvedWorkspace = Resolve-Path -LiteralPath $WorkspaceDirectory
 if ([string]::IsNullOrWhiteSpace($ReportPath)) {
     $ReportPath = Join-Path $resolvedWorkspace.Path "release-evidence-report.json"
@@ -853,6 +870,7 @@ $reviewerCompletionPath = Join-Path $resolvedWorkspace.Path "release-evidence-re
 $reviewerBlockersPath = Join-Path $resolvedWorkspace.Path "release-evidence-reviewer-blockers.md"
 $releaseEvidenceVerifierOutputPath = Join-Path $resolvedWorkspace.Path "release-evidence-verifier-output.txt"
 $manifest = $null
+$pendingHumanEvidenceBlockers = @()
 
 if (-not (Test-Path -LiteralPath $manifestPath)) {
     Add-Failure $failures "Workspace must include release-evidence-workspace-manifest.json."
@@ -1228,10 +1246,15 @@ if (-not (Test-Path -LiteralPath $ReportPath)) {
     }
 
     Write-ReviewerBlockerSummary $report $reviewerBlockersPath
+    $pendingHumanEvidenceBlockers = @(New-PendingHumanEvidenceBlockerSummary $report)
 
     foreach ($entry in $completion) {
         if ([string](Get-JsonPropertyValue $entry "status") -ne "incomplete") {
             Add-Failure $failures "Prepared release evidence workspace must keep all human evidence entries incomplete."
+        }
+
+        if ([int](Get-JsonPropertyValue $entry "blockingFailureCount") -le 0) {
+            Add-Failure $failures "Prepared release evidence workspace humanEvidenceCompletion entries must retain at least one blocker before named human sign-off."
         }
     }
 
@@ -1318,6 +1341,7 @@ $verificationReport = [ordered]@{
     workspaceFiles = $workspaceFiles
     requiredWorkspaceFiles = $requiredWorkspaceFiles
     preparedHumanTemplateControls = $preparedHumanTemplateControls
+    pendingHumanEvidenceBlockers = $pendingHumanEvidenceBlockers
     requiredTemplateCount = $requiredTemplates.Count
     failureCount = $failures.Count
     failures = @($failures)

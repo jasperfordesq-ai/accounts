@@ -830,6 +830,43 @@ function Assert-PreparedHumanTemplateControls {
     }
 }
 
+function Assert-PendingHumanEvidenceBlockers {
+    param(
+        $WorkspaceVerificationReport,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    $blockers = @((Get-JsonPropertyValue $WorkspaceVerificationReport "pendingHumanEvidenceBlockers"))
+    if ($blockers.Count -ne $requiredPendingHumanEvidenceBlockers.Count) {
+        Add-Failure $Failures "Release evidence workspace verification report pendingHumanEvidenceBlockers must contain exactly $($requiredPendingHumanEvidenceBlockers.Count) entries."
+    }
+
+    foreach ($expected in $requiredPendingHumanEvidenceBlockers) {
+        $expectedEvidenceName = [string]$expected.EvidenceName
+        $entry = $blockers | Where-Object {
+            [string]::Equals([string](Get-JsonPropertyValue $_ "evidenceName"), $expectedEvidenceName, [StringComparison]::OrdinalIgnoreCase)
+        } | Select-Object -First 1
+
+        if ($null -eq $entry) {
+            Add-Failure $Failures "Release evidence workspace verification report pendingHumanEvidenceBlockers must include $expectedEvidenceName."
+            continue
+        }
+
+        Assert-JsonStringEquals $entry "templateFile" ([string]$expected.TemplateFile) "Release evidence workspace verification report pendingHumanEvidenceBlockers.$expectedEvidenceName" $Failures
+        Assert-JsonStringEquals $entry "requiredReviewerRole" ([string]$expected.RequiredReviewerRole) "Release evidence workspace verification report pendingHumanEvidenceBlockers.$expectedEvidenceName" $Failures
+        Assert-JsonStringEquals $entry "signOffGate" ([string]$expected.SignOffGate) "Release evidence workspace verification report pendingHumanEvidenceBlockers.$expectedEvidenceName" $Failures
+        Assert-JsonStringEquals $entry "status" "incomplete" "Release evidence workspace verification report pendingHumanEvidenceBlockers.$expectedEvidenceName" $Failures
+
+        if ([int](Get-JsonPropertyValue $entry "blockingFailureCount") -le 0) {
+            Add-Failure $Failures "Release evidence workspace verification report pendingHumanEvidenceBlockers.$expectedEvidenceName.blockingFailureCount must be greater than zero."
+        }
+
+        if ([string]::IsNullOrWhiteSpace([string](Get-JsonPropertyValue $entry "firstBlockingFailure"))) {
+            Add-Failure $Failures "Release evidence workspace verification report pendingHumanEvidenceBlockers.$expectedEvidenceName.firstBlockingFailure must be present."
+        }
+    }
+}
+
 function Test-ReleaseWorkspaceControlEvidence {
     param(
         $WorkspaceManifest,
@@ -902,6 +939,7 @@ function Test-ReleaseWorkspaceControlEvidence {
 
         Assert-WorkspaceVerificationInventory $WorkspaceVerificationReport $Failures
         Assert-PreparedHumanTemplateControls $WorkspaceVerificationReport $Failures
+        Assert-PendingHumanEvidenceBlockers $WorkspaceVerificationReport $Failures
     }
 }
 
@@ -1073,6 +1111,15 @@ $requiredReleaseEvidenceTemplateFiles = @(
     "qualified-accountant-acceptance-template.md",
     "manual-handoff-acceptance-template.md",
     "monitoring-provider-confirmation-template.md"
+)
+
+$requiredPendingHumanEvidenceBlockers = @(
+    [pscustomobject]@{ EvidenceName = "visualQa"; TemplateFile = "visual-qa-signoff-template.md"; RequiredReviewerRole = "Named visual QA reviewer"; SignOffGate = "visual-qa-screenshot-review" },
+    [pscustomobject]@{ EvidenceName = "sourceLawReview"; TemplateFile = "source-law-review-template.md"; RequiredReviewerRole = "Named source-law reviewer plus qualified accountant"; SignOffGate = "source-law-change-review" },
+    [pscustomobject]@{ EvidenceName = "externalRosIxbrlValidation"; TemplateFile = "external-ros-ixbrl-validation-template.md"; RequiredReviewerRole = "External ROS/iXBRL validation reviewer"; SignOffGate = "external-ros-validation-evidence" },
+    [pscustomobject]@{ EvidenceName = "qualifiedAccountantAcceptance"; TemplateFile = "qualified-accountant-acceptance-template.md"; RequiredReviewerRole = "Named qualified accountant"; SignOffGate = "qualified-accountant-final-signoff" },
+    [pscustomobject]@{ EvidenceName = "manualHandoffAcceptance"; TemplateFile = "manual-handoff-acceptance-template.md"; RequiredReviewerRole = "Named manual handoff reviewer"; SignOffGate = "manual-accountant-acceptance" },
+    [pscustomobject]@{ EvidenceName = "monitoringProviderConfirmation"; TemplateFile = "monitoring-provider-confirmation-template.md"; RequiredReviewerRole = "Named release operator"; SignOffGate = "production-monitoring" }
 )
 
 $requiredPreparedHumanTemplateControls = @(

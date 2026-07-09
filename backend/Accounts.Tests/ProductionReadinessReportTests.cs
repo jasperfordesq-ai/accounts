@@ -894,6 +894,7 @@ public class ProductionReadinessReportTests
         Assert.Contains(scores["architecture-documentation"].CurrentEvidence, evidence =>
             evidence.Contains("Release evidence reviewer workspace verification", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("inventories", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("pending human-evidence blockers", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("top-level reviewer/accountant identity", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("acceptance checkbox fields", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["architecture-documentation"].RemainingGaps, gap =>

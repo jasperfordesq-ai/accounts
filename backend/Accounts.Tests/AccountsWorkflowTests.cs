@@ -18567,6 +18567,9 @@ public class AccountsWorkflowTests
         Assert.Contains("Reviewer completion ledger $($expected.TemplateFile).completed must remain false before named human sign-off.", workspaceVerifier);
         Assert.Contains("Prepared release evidence workspace unexpectedly passed before named human sign-off.", workspaceVerifier);
         Assert.Contains("Prepared release evidence workspace must keep all human evidence entries incomplete.", workspaceVerifier);
+        Assert.Contains("pendingHumanEvidenceBlockers", workspaceVerifier);
+        Assert.Contains("New-PendingHumanEvidenceBlockerSummary", workspaceVerifier);
+        Assert.Contains("Prepared release evidence workspace humanEvidenceCompletion entries must retain at least one blocker before named human sign-off.", workspaceVerifier);
         Assert.Contains("Workspace manifest reviewerIndexFile must be release-evidence-reviewer-index.md.", workspaceVerifier);
         Assert.Contains("Workspace manifest reviewerCompletionFile must be release-evidence-reviewer-completion.json.", workspaceVerifier);
         Assert.Contains("Workspace manifest reviewerQueue must contain exactly", workspaceVerifier);
@@ -18665,6 +18668,9 @@ public class AccountsWorkflowTests
         Assert.Contains("Assert-PreparedHumanTemplateControls", script);
         Assert.Contains("Release evidence workspace verification report preparedHumanTemplateControls must contain exactly", script);
         Assert.Contains("Assert-JsonStringEquals $entry \"checkboxPolicy\" \"unchecked-before-named-human-signoff\"", script);
+        Assert.Contains("Assert-PendingHumanEvidenceBlockers", script);
+        Assert.Contains("Release evidence workspace verification report pendingHumanEvidenceBlockers must contain exactly", script);
+        Assert.Contains("pendingHumanEvidenceBlockers.$expectedEvidenceName.blockingFailureCount must be greater than zero", script);
         Assert.Contains("unchecked-before-named-human-signoff", script);
         Assert.Contains("release-evidence-machine-summary.json", script);
         Assert.Contains("Assert-MinimumIntegerField", script);
@@ -19260,6 +19266,9 @@ public class AccountsWorkflowTests
         Assert.Contains("Assert-ReleaseEvidenceWorkspacePreparedHumanControls", script);
         Assert.Contains("release-evidence-workspace-verification-report.json preparedHumanTemplateControls must include exactly", script);
         Assert.Contains("preparedHumanTemplateControls.$expectedFile.checkboxPolicy must be unchecked-before-named-human-signoff", script);
+        Assert.Contains("Assert-ReleaseEvidenceWorkspacePendingHumanBlockers", script);
+        Assert.Contains("release-evidence-workspace-verification-report.json pendingHumanEvidenceBlockers must include exactly", script);
+        Assert.Contains("pendingHumanEvidenceBlockers.$expectedEvidenceName.status must be incomplete", script);
         Assert.Contains("Assert-ReleaseEvidenceWorkspaceInventoryRetention", script);
         Assert.Contains("Release artifact pack must retain workspace inventory file", script);
         Assert.Contains("retained workspace inventory file $expectedFile sha256 must match release-evidence-workspace-verification-report.json", script);

@@ -2462,6 +2462,23 @@ Prepared workspace human-control inventory:
   final pack verification, while still leaving the release blocked until real
   named human evidence is supplied.
 
+Prepared workspace pending-human blocker inventory:
+
+- `release-evidence-workspace-verification-report.json` now also includes
+  `pendingHumanEvidenceBlockers`, a six-entry machine-readable summary produced
+  from the intentionally failed prepared `release-evidence-report.json`.
+  Each row records the human evidence gate, template file, required reviewer
+  role, sign-off gate, incomplete status, positive blocker count, and first
+  blocker.
+- `scripts/verify-release-evidence-workspace.ps1` now fails prepared workspaces
+  if any `humanEvidenceCompletion` entry has no blocker before named sign-off.
+- `scripts/verify-release-evidence.ps1` and
+  `scripts/verify-release-artifact-pack.ps1` now reject retained workspace
+  verification reports that do not carry all six pending blocker rows with the
+  expected template, role, sign-off gate, incomplete status, positive blocker
+  count, and first blocker. This gives reviewers and final pack verification the
+  same exact pickup list without treating it as sign-off.
+
 ## What Is Left To Do
 
 Highest-priority next steps:

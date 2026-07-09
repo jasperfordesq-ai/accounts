@@ -1070,6 +1070,7 @@ function Assert-ReleaseEvidenceWorkspaceVerificationReport {
     }
 
     Assert-ReleaseEvidenceWorkspacePreparedHumanControls $WorkspaceVerificationReport $Failures
+    Assert-ReleaseEvidenceWorkspacePendingHumanBlockers $WorkspaceVerificationReport $Failures
 }
 
 function Assert-ReleaseEvidenceWorkspacePreparedHumanControls {
@@ -1103,6 +1104,54 @@ function Assert-ReleaseEvidenceWorkspacePreparedHumanControls {
         }
 
         Assert-ArrayContainsExactly @((Get-JsonProperty $entry @("blankFields"))) @((Get-JsonProperty $expected @("blankFields"))) "release-evidence-workspace-verification-report.json preparedHumanTemplateControls.$expectedFile.blankFields" $Failures
+    }
+}
+
+function Assert-ReleaseEvidenceWorkspacePendingHumanBlockers {
+    param(
+        [object]$WorkspaceVerificationReport,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    $blockers = @((Get-JsonProperty $WorkspaceVerificationReport @("pendingHumanEvidenceBlockers")))
+    if ($blockers.Count -ne $requiredReleaseEvidenceTemplates.Count) {
+        Add-Failure $Failures "release-evidence-workspace-verification-report.json pendingHumanEvidenceBlockers must include exactly $($requiredReleaseEvidenceTemplates.Count) item(s)."
+    }
+
+    foreach ($required in $requiredReleaseEvidenceTemplates) {
+        $expectedEvidenceName = [string](Get-JsonProperty $required @("evidenceName"))
+        $entry = $blockers |
+            Where-Object { [string]::Equals([string](Get-JsonProperty $_ @("evidenceName")), $expectedEvidenceName, [StringComparison]::OrdinalIgnoreCase) } |
+            Select-Object -First 1
+
+        if ($null -eq $entry) {
+            Add-Failure $Failures "release-evidence-workspace-verification-report.json pendingHumanEvidenceBlockers must include $expectedEvidenceName."
+            continue
+        }
+
+        if ([string](Get-JsonProperty $entry @("templateFile")) -ne [string](Get-JsonProperty $required @("fileName"))) {
+            Add-Failure $Failures "release-evidence-workspace-verification-report.json pendingHumanEvidenceBlockers.$expectedEvidenceName.templateFile must match the required template."
+        }
+
+        if ([string](Get-JsonProperty $entry @("requiredReviewerRole")) -ne [string](Get-JsonProperty $required @("requiredReviewerRole"))) {
+            Add-Failure $Failures "release-evidence-workspace-verification-report.json pendingHumanEvidenceBlockers.$expectedEvidenceName.requiredReviewerRole must match the required reviewer role."
+        }
+
+        if ([string](Get-JsonProperty $entry @("signOffGate")) -ne [string](Get-JsonProperty $required @("signOffGate"))) {
+            Add-Failure $Failures "release-evidence-workspace-verification-report.json pendingHumanEvidenceBlockers.$expectedEvidenceName.signOffGate must match the required sign-off gate."
+        }
+
+        if ([string](Get-JsonProperty $entry @("status")) -ne "incomplete") {
+            Add-Failure $Failures "release-evidence-workspace-verification-report.json pendingHumanEvidenceBlockers.$expectedEvidenceName.status must be incomplete."
+        }
+
+        if ([int](Get-JsonProperty $entry @("blockingFailureCount")) -le 0) {
+            Add-Failure $Failures "release-evidence-workspace-verification-report.json pendingHumanEvidenceBlockers.$expectedEvidenceName.blockingFailureCount must be greater than zero."
+        }
+
+        if ([string]::IsNullOrWhiteSpace([string](Get-JsonProperty $entry @("firstBlockingFailure")))) {
+            Add-Failure $Failures "release-evidence-workspace-verification-report.json pendingHumanEvidenceBlockers.$expectedEvidenceName.firstBlockingFailure must be present."
+        }
     }
 }
 
