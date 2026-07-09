@@ -860,7 +860,7 @@ public class ProductionReadinessReportTests
         var report = await new ProductionReadinessReportService(db).GetReportAsync();
 
         Assert.NotNull(report.ProductionScorecard);
-        Assert.Equal(681, report.ProductionScorecard.CurrentScore);
+        Assert.Equal(683, report.ProductionScorecard.CurrentScore);
         Assert.Equal(700, report.ProductionScorecard.TargetScore);
         Assert.Equal("review-required", report.ProductionScorecard.Status);
         Assert.Contains("source-law", report.ProductionScorecard.NextGate, StringComparison.OrdinalIgnoreCase);
@@ -882,7 +882,7 @@ public class ProductionReadinessReportTests
         var scores = categories.ToDictionary(category => category.Code);
         Assert.Equal((99, 100), (scores["architecture-documentation"].CurrentScore, scores["architecture-documentation"].TargetScore));
         Assert.Equal((250, 250), (scores["backend-statutory-accounting-engine"].CurrentScore, scores["backend-statutory-accounting-engine"].TargetScore));
-        Assert.Equal((182, 200), (scores["frontend-accountant-workbench"].CurrentScore, scores["frontend-accountant-workbench"].TargetScore));
+        Assert.Equal((184, 200), (scores["frontend-accountant-workbench"].CurrentScore, scores["frontend-accountant-workbench"].TargetScore));
         Assert.Equal((150, 150), (scores["security-auth-tenant-platform-guardrails"].CurrentScore, scores["security-auth-tenant-platform-guardrails"].TargetScore));
         Assert.Contains(scores["architecture-documentation"].CurrentEvidence, evidence =>
             evidence.Contains("verify-release-evidence.ps1", StringComparison.OrdinalIgnoreCase));
@@ -1063,6 +1063,11 @@ public class ProductionReadinessReportTests
             && evidence.Contains("exact accountant-workbench route acceptance names", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("expected decision text", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("per-route acceptance evidence ids", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(scores["frontend-accountant-workbench"].CurrentEvidence, evidence =>
+            evidence.Contains("Release artifact and CI machine evidence pack verifiers", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("route acceptance labels", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("screenshot-review evidence anchors", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("required-review status", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["frontend-accountant-workbench"].CurrentEvidence, evidence =>
             evidence.Contains("expected accountant decision text", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("light/dark desktop/mobile", StringComparison.OrdinalIgnoreCase));

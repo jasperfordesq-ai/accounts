@@ -132,13 +132,13 @@ function Assert-ArrayContains {
 }
 
 $expectedAccountantWorkbenchRouteAcceptance = @(
-    [pscustomobject]@{ routeName = "dashboard"; routeKey = "dashboard"; expectedText = "Firm command centre" },
-    [pscustomobject]@{ routeName = "production-readiness"; routeKey = "readiness"; expectedText = "Production Readiness Checklist" },
-    [pscustomobject]@{ routeName = "company-detail"; routeKey = "company"; expectedText = "Company command centre" },
-    [pscustomobject]@{ routeName = "period-workspace"; routeKey = "period"; expectedText = "Filing readiness" },
-    [pscustomobject]@{ routeName = "filing-review"; routeKey = "filing"; expectedText = "Filing readiness profile" },
-    [pscustomobject]@{ routeName = "financial-statements"; routeKey = "financialStatements"; expectedText = "Financial Statements" },
-    [pscustomobject]@{ routeName = "workbench-preview"; routeKey = "workbenchPreview"; expectedText = "Workbench Component Preview" }
+    [pscustomobject]@{ routeName = "dashboard"; routeKey = "dashboard"; label = "Dashboard"; expectedText = "Firm command centre" },
+    [pscustomobject]@{ routeName = "production-readiness"; routeKey = "readiness"; label = "Production readiness"; expectedText = "Production Readiness Checklist" },
+    [pscustomobject]@{ routeName = "company-detail"; routeKey = "company"; label = "Company detail"; expectedText = "Company command centre" },
+    [pscustomobject]@{ routeName = "period-workspace"; routeKey = "period"; label = "Period workspace"; expectedText = "Filing readiness" },
+    [pscustomobject]@{ routeName = "filing-review"; routeKey = "filing"; label = "Filing review"; expectedText = "Filing readiness profile" },
+    [pscustomobject]@{ routeName = "financial-statements"; routeKey = "financialStatements"; label = "Financial statements"; expectedText = "Financial Statements" },
+    [pscustomobject]@{ routeName = "workbench-preview"; routeKey = "workbenchPreview"; label = "Workbench preview"; expectedText = "Workbench Component Preview" }
 )
 
 function Assert-AccountantWorkbenchRouteAcceptance {
@@ -182,8 +182,17 @@ function Assert-AccountantWorkbenchRouteAcceptance {
         if ([string](Get-JsonProperty $acceptance @("routeKey")) -ne [string]$expected.routeKey) {
             Add-Failure $Failures "accountant-workbench-evidence-report.json routeAcceptance.$($expected.routeName).routeKey must be $($expected.routeKey)."
         }
+        if ([string](Get-JsonProperty $acceptance @("label")) -ne [string]$expected.label) {
+            Add-Failure $Failures "accountant-workbench-evidence-report.json routeAcceptance.$($expected.routeName).label must be $($expected.label)."
+        }
         if ([string](Get-JsonProperty $acceptance @("expectedText")) -ne [string]$expected.expectedText) {
             Add-Failure $Failures "accountant-workbench-evidence-report.json routeAcceptance.$($expected.routeName).expectedText must be $($expected.expectedText)."
+        }
+        if ([string](Get-JsonProperty $acceptance @("screenshotReviewEvidence")) -ne "$($expected.routeName)-light-dark-desktop-mobile-screenshot-review") {
+            Add-Failure $Failures "accountant-workbench-evidence-report.json routeAcceptance.$($expected.routeName).screenshotReviewEvidence must be $($expected.routeName)-light-dark-desktop-mobile-screenshot-review."
+        }
+        if ([string](Get-JsonProperty $acceptance @("reviewStatus")) -ne "required-review") {
+            Add-Failure $Failures "accountant-workbench-evidence-report.json routeAcceptance.$($expected.routeName).reviewStatus must be required-review."
         }
         foreach ($evidenceId in @(
             "$($expected.routeName)-accountant-route-acceptance-note",
