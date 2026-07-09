@@ -323,6 +323,20 @@ public sealed record ReleaseVerificationManifestItem(
     string ReleaseChecklistEvidenceArtifact,
     string ManualFallback);
 
+public sealed record HumanReleaseEvidenceGate(
+    string Code,
+    string Label,
+    string TemplateFile,
+    string RequiredReviewerRole,
+    string Status,
+    string SignOffGate,
+    string ReleaseChecklistCode,
+    string ReleaseManifestCode,
+    string EvidenceArtifact,
+    bool BlocksRelease,
+    IReadOnlyList<string> RequiredEvidence,
+    string NextAction);
+
 public sealed record AccountantAcceptanceCriterion(
     string ScenarioCode,
     string Label,
@@ -542,6 +556,7 @@ public sealed record ProductionReadinessReport(
     IReadOnlyList<OperationsEvidencePackItem> OperationsEvidencePack,
     IReadOnlyList<ReleaseReviewChecklistItem> ReleaseReviewChecklist,
     IReadOnlyList<ReleaseVerificationManifestItem> ReleaseVerificationManifest,
+    IReadOnlyList<HumanReleaseEvidenceGate> HumanReleaseEvidence,
     VisualQaCoverage VisualQaCoverage);
 
 public class ProductionReadinessReportService(AccountsDbContext db)
@@ -568,6 +583,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
         var operationsEvidencePack = BuildOperationsEvidencePack();
         var releaseReviewChecklist = BuildReleaseReviewChecklist(assuranceActions, operationalGates);
         var releaseVerificationManifest = BuildReleaseVerificationManifest();
+        var humanReleaseEvidence = BuildHumanReleaseEvidence(releaseReviewChecklist, releaseVerificationManifest);
         var releaseBlockerRegister = BuildReleaseBlockerRegister(
             completionTracks,
             assuranceActions,
@@ -646,6 +662,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             operationsEvidencePack,
             releaseReviewChecklist,
             releaseVerificationManifest,
+            humanReleaseEvidence,
             visualQaCoverage);
     }
 
@@ -705,6 +722,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "release-blocker-register",
             "release-review-checklist",
             "release-verification-manifest",
+            "human-release-evidence",
             "accountant-acceptance-criteria",
             "accountant-acceptance-summary",
             "accountant-workflow-walkthrough-protocol",
@@ -798,6 +816,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "Production runbook links release evidence templates for source-law review, visual QA, monitoring provider confirmation and qualified-accountant acceptance.",
                     "scripts/verify-release-evidence.ps1 validates completed release evidence templates before real filing use, including source-law source coverage.",
                     "scripts/verify-release-artifact-pack.ps1 validates the collected release artifact reports and the retained human release-evidence templates as one exact evidence pack with release candidate identity and SHA-256 inventory.",
+                    "Production readiness report exposes the six human release-evidence gates with template files, reviewer roles, sign-off gates and required retained evidence.",
                     "CI artifacts now prove production safety, dependency audit, monitoring smoke, structured logs, visual smoke and backup restore drill."
                 ],
                 [
@@ -886,7 +905,8 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "Release artifact and CI machine evidence pack verifiers now require exact accountant-workbench route readiness screenshot counts, layout-check counts, contrast counts, minimum contrast ratios, required-review status and required review checks for every workbench route.",
                     "Release artifact and CI machine evidence pack verifiers now require exact accountant-workbench route workflow-stage coverage and light/dark desktop/mobile theme-viewport coverage before retained route readiness evidence can pass.",
                     "Release artifact and CI machine evidence pack verifiers now require exact accountant-workbench required coverage for workflow stages, themes, viewports, review checks, layout checks, expected-text checks, layout/contrast evidence and retained visual evidence files.",
-                    "Frontend parser invariants now require the CI machine evidence pack, production smoke, readiness verification, visual smoke and manual release-verification rows before rendering readiness data."
+                    "Frontend parser invariants now require the CI machine evidence pack, production smoke, readiness verification, visual smoke and manual release-verification rows before rendering readiness data.",
+                    "Production readiness workbench now renders the pending human release-evidence reviewer queue with template files, reviewer roles, sign-off gates and next actions."
                 ],
                 [
                     "Complete named visual QA review against the light/dark desktop/mobile screenshot manifest and visual-smoke-evidence-report.json.",
@@ -2820,6 +2840,140 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             "signed-golden-corpus-acceptance-note",
             "A named qualified accountant must review the generated outputs, gates, wording and source-law evidence before any real filing pack is treated as final.")
     ];
+
+    private static IReadOnlyList<HumanReleaseEvidenceGate> BuildHumanReleaseEvidence(
+        IReadOnlyList<ReleaseReviewChecklistItem> releaseReviewChecklist,
+        IReadOnlyList<ReleaseVerificationManifestItem> releaseVerificationManifest)
+    {
+        var checklistByCode = releaseReviewChecklist.ToDictionary(item => item.Code, StringComparer.Ordinal);
+        var manifestByCode = releaseVerificationManifest.ToDictionary(item => item.Code, StringComparer.Ordinal);
+
+        HumanReleaseEvidenceGate Item(
+            string code,
+            string label,
+            string templateFile,
+            string requiredReviewerRole,
+            string signOffGate,
+            string releaseChecklistCode,
+            string releaseManifestCode,
+            IReadOnlyList<string> requiredEvidence,
+            string nextAction)
+        {
+            if (!checklistByCode.TryGetValue(releaseChecklistCode, out var checklistItem))
+                throw new InvalidOperationException($"Human release evidence gate {code} references unknown release checklist item {releaseChecklistCode}.");
+
+            if (!manifestByCode.ContainsKey(releaseManifestCode))
+                throw new InvalidOperationException($"Human release evidence gate {code} references unknown release manifest item {releaseManifestCode}.");
+
+            return new HumanReleaseEvidenceGate(
+                code,
+                label,
+                templateFile,
+                requiredReviewerRole,
+                "pending-human-evidence",
+                signOffGate,
+                releaseChecklistCode,
+                releaseManifestCode,
+                checklistItem.EvidenceArtifact,
+                BlocksRelease: true,
+                requiredEvidence,
+                nextAction);
+        }
+
+        return
+        [
+            Item(
+                "visualQa",
+                "Visual QA sign-off",
+                "visual-qa-signoff-template.md",
+                "Named visual QA reviewer",
+                "visual-qa-screenshot-review",
+                "visual-qa-screenshot-review",
+                "visual-smoke-light-dark",
+                [
+                    "visual-smoke-manifest.json",
+                    "visual-smoke-evidence-report.json",
+                    "accountant-workbench-evidence-report.json",
+                    "Named reviewer pass decisions for every route/theme/viewport capture"
+                ],
+                "Review the retained light/dark desktop/mobile screenshots and complete the visual QA sign-off template."),
+            Item(
+                "sourceLawReview",
+                "Source-law review sign-off",
+                "source-law-review-template.md",
+                "Named source-law reviewer plus qualified accountant",
+                "source-law-change-review",
+                "source-law-change-review",
+                "source-law-change-review",
+                [
+                    "source-law-snapshot-fingerprint",
+                    "source-law-review-ledger",
+                    "Per-source reachability, effective-date and wording impact rows",
+                    "Qualified-accountant source-law sign-off"
+                ],
+                "Compare pinned CRO, Revenue, FRC and Charities Regulator sources, then retain the signed source-law review."),
+            Item(
+                "externalRosIxbrlValidation",
+                "External ROS/iXBRL validation",
+                "external-ros-ixbrl-validation-template.md",
+                "External ROS/iXBRL validation reviewer",
+                "external-ros-validation-evidence",
+                "external-ros-validation-evidence",
+                "external-ros-validation-evidence",
+                [
+                    "External validation provider/reference",
+                    "Generated iXBRL artifact hashes",
+                    "Retained taxonomy package references",
+                    "Accepted/remediated validation rows for every golden scenario"
+                ],
+                "Retain external ROS/iXBRL validation references for the exact generated artifacts."),
+            Item(
+                "qualifiedAccountantAcceptance",
+                "Qualified-accountant acceptance",
+                "qualified-accountant-acceptance-template.md",
+                "Named qualified accountant",
+                "qualified-accountant-final-signoff",
+                "accountant-final-signoff",
+                "qualified-accountant-final-signoff",
+                [
+                    "Named accountant identity and professional body",
+                    "Accepted output/gate/source-law/wording/workbench rows",
+                    "Scenario walkthrough evidence",
+                    "Route acceptance evidence"
+                ],
+                "Walk the golden corpus through the live workflow and retain named professional acceptance."),
+            Item(
+                "manualHandoffAcceptance",
+                "Manual handoff acceptance",
+                "manual-handoff-acceptance-template.md",
+                "Named manual handoff reviewer",
+                "manual-accountant-acceptance",
+                "golden-corpus-accountant-acceptance",
+                "manual-accountant-acceptance",
+                [
+                    "Signed auditor-report evidence",
+                    "Manual handoff note",
+                    "Filing readiness snapshot",
+                    "Unsupported-path evidence references"
+                ],
+                "Retain reviewer acceptance for audit-required and unsupported-path handoff evidence."),
+            Item(
+                "monitoringProviderConfirmation",
+                "Monitoring-provider confirmation",
+                "monitoring-provider-confirmation-template.md",
+                "Named release operator",
+                "production-monitoring",
+                "production-smoke-and-backup",
+                "production-stack-smoke",
+                [
+                    "monitoring-error-routing-report.json",
+                    "structured-log-report.json",
+                    "Provider event URL or reference",
+                    "Matched monitoring smoke correlation id"
+                ],
+                "Confirm the controlled monitoring smoke event in the configured provider and retain operator acceptance.")
+        ];
+    }
 
     private static IReadOnlyList<GoldenFilingCorpusProofPoint> ProofPoints(
         string automatedVerifier,

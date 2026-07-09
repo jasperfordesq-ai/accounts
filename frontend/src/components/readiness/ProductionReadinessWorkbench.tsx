@@ -33,6 +33,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
   const releaseBlockerRegister = report.releaseBlockerRegister ?? [];
   const releaseReviewChecklist = report.releaseReviewChecklist ?? [];
   const releaseVerificationManifest = report.releaseVerificationManifest ?? [];
+  const humanReleaseEvidence = report.humanReleaseEvidence ?? [];
   const sourceLawTraceability = report.sourceLawTraceability ?? [];
   const sourceLawReviewLedger = report.sourceLawReviewLedger ?? [];
   const revenueTaxonomyRanges = report.revenueTaxonomyRanges ?? [];
@@ -182,6 +183,64 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
             </div>
           </div>
         </div>
+      </ReviewPanel>
+
+      <ReviewPanel
+        title="Human release evidence"
+        description="Named reviewer gates that must be completed in the retained release-evidence templates before real filing use."
+        actions={<StatusBadge tone={humanReleaseEvidence.some((item) => item.blocksRelease) ? "bad" : "good"}>{humanReleaseEvidence.filter((item) => item.blocksRelease).length} pending</StatusBadge>}
+      >
+        <DataGrid
+          caption="Human release evidence"
+          filterPlaceholder="Filter human evidence gates"
+          emptyState="No human release evidence gates"
+          columns={["Evidence", "Reviewer", "Template", "Required evidence", "Next action", "Status"]}
+          rows={humanReleaseEvidence.map((item) => ({
+            id: item.code,
+            tone: item.blocksRelease ? "bad" : "good",
+            sortValues: [
+              item.label,
+              item.requiredReviewerRole,
+              item.templateFile,
+              item.requiredEvidence.join(" "),
+              item.nextAction,
+              item.status,
+            ],
+            searchText: [
+              item.code,
+              item.label,
+              item.templateFile,
+              item.requiredReviewerRole,
+              item.status,
+              item.signOffGate,
+              item.releaseChecklistCode,
+              item.releaseManifestCode,
+              item.evidenceArtifact,
+              item.nextAction,
+              ...item.requiredEvidence,
+            ].join(" "),
+            cells: [
+              <div key="evidence" className="min-w-48 whitespace-normal">
+                <p className="font-medium text-[var(--foreground)]">{item.label}</p>
+                <code className="mt-1 block break-all text-[11px] text-[var(--muted-foreground)]">{item.code}</code>
+              </div>,
+              <span key="reviewer" className="min-w-44 whitespace-normal text-[var(--muted-foreground)]">{item.requiredReviewerRole}</span>,
+              <div key="template" className="min-w-48 space-y-1">
+                <code className="block break-all text-[11px] text-[var(--muted-foreground)]">{item.templateFile}</code>
+                <code className="block break-all text-[11px] text-[var(--muted-foreground)]">{item.signOffGate}</code>
+                <code className="block break-all text-[11px] text-[var(--muted-foreground)]">{item.releaseManifestCode}</code>
+              </div>,
+              <CompactList key="required" items={item.requiredEvidence} />,
+              <div key="next" className="min-w-56 whitespace-normal text-xs leading-5 text-[var(--muted-foreground)]">
+                <p>{item.nextAction}</p>
+                <code className="mt-1 block break-all text-[11px]">{item.evidenceArtifact}</code>
+              </div>,
+              <StatusBadge key="status" tone={item.blocksRelease ? "bad" : "good"}>
+                {item.blocksRelease ? "Blocks release" : formatStatus(item.status)}
+              </StatusBadge>,
+            ],
+          }))}
+        />
       </ReviewPanel>
 
       <ReviewPanel

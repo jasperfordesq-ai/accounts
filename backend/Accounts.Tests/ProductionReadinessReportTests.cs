@@ -867,6 +867,7 @@ public class ProductionReadinessReportTests
         Assert.Contains("visual QA", report.ProductionScorecard.NextGate, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("qualified-accountant", report.ProductionScorecard.NextGate, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("production-scorecard", report.AssurancePacket.EvidenceItems);
+        Assert.Contains("human-release-evidence", report.AssurancePacket.EvidenceItems);
 
         var categories = report.ProductionScorecard.Categories;
         Assert.Equal(
@@ -981,6 +982,35 @@ public class ProductionReadinessReportTests
             evidence.Contains("Monitoring-provider confirmation", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("real provider/event/correlation references", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("accepted operator decision", StringComparison.OrdinalIgnoreCase));
+
+        Assert.Equal(
+            new[]
+            {
+                "visualQa",
+                "sourceLawReview",
+                "externalRosIxbrlValidation",
+                "qualifiedAccountantAcceptance",
+                "manualHandoffAcceptance",
+                "monitoringProviderConfirmation"
+            },
+            report.HumanReleaseEvidence.Select(item => item.Code));
+        Assert.All(report.HumanReleaseEvidence, item =>
+        {
+            Assert.Equal("pending-human-evidence", item.Status);
+            Assert.True(item.BlocksRelease);
+            Assert.EndsWith("-template.md", item.TemplateFile, StringComparison.Ordinal);
+            Assert.False(string.IsNullOrWhiteSpace(item.RequiredReviewerRole));
+            Assert.False(string.IsNullOrWhiteSpace(item.SignOffGate));
+            Assert.False(string.IsNullOrWhiteSpace(item.ReleaseChecklistCode));
+            Assert.False(string.IsNullOrWhiteSpace(item.ReleaseManifestCode));
+            Assert.False(string.IsNullOrWhiteSpace(item.EvidenceArtifact));
+            Assert.NotEmpty(item.RequiredEvidence);
+            Assert.False(string.IsNullOrWhiteSpace(item.NextAction));
+        });
+        Assert.Contains(report.HumanReleaseEvidence, item =>
+            item.Code == "visualQa"
+            && item.TemplateFile == "visual-qa-signoff-template.md"
+            && item.ReleaseManifestCode == "visual-smoke-light-dark");
 
         var trackCodes = report.CompletionTracks.Select(track => track.Code).ToHashSet(StringComparer.Ordinal);
         var blockerCodes = report.ReleaseBlockerRegister.Select(blocker => blocker.Code).ToHashSet(StringComparer.Ordinal);

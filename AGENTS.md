@@ -1779,6 +1779,34 @@ Release evidence human completion report:
 - CI is green on July 9, 2026 for the runtime/script slice at commit `9a48f5f`:
   `https://github.com/jasperfordesq-ai/accounts/actions/runs/29020086016`.
 
+Human release evidence readiness map:
+
+- This slice adds `humanReleaseEvidence` to the live production-readiness report
+  and the frontend parser contract. The map exposes all six pending human evidence
+  gates: visual QA, source-law review, external ROS/iXBRL validation,
+  qualified-accountant acceptance, manual handoff acceptance, and monitoring
+  provider confirmation.
+- Each row carries the template file, required reviewer role, sign-off gate,
+  release checklist/manifest references, evidence artifact, required retained
+  evidence, release-blocking status, and next action. `scripts/verify-production-readiness-report.ps1`
+  now rejects captured readiness reports that omit or drift these rows.
+- The production readiness workbench renders the rows as a reviewer queue near the
+  top of the page, so named reviewers can see the exact templates and evidence
+  artifacts still blocking real filing use.
+- The production scorecard remains 698/700; this is coordination and UI evidence,
+  not a substitute for named professional sign-off.
+- Verification completed locally:
+  - PowerShell parser check for `scripts\verify-production-readiness-report.ps1`
+    passed.
+  - Backend focused regression passed:
+    `ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers` and
+    `ReleaseArtifactPackVerifier_RequiresExactOperationalEvidenceReports`.
+  - Frontend parser/API/render/type checks passed:
+    `node --test tests/production-readiness-contract.test.mjs`,
+    `node scripts/verify-api-client.mjs`,
+    `npx.cmd vitest run tests/render/production-readiness-panel.test.tsx tests/render/production-readiness-workbench.test.tsx`,
+    and `npx.cmd tsc --noEmit --incremental false`.
+
 ## What Is Left To Do
 
 Highest-priority next steps:

@@ -137,11 +137,20 @@ $requiredManualManifestCodes = @(
     "no-direct-cro-ros-submission-control",
     "manual-accountant-acceptance"
 )
+$requiredHumanReleaseEvidenceCodes = @(
+    "visualQa",
+    "sourceLawReview",
+    "externalRosIxbrlValidation",
+    "qualifiedAccountantAcceptance",
+    "manualHandoffAcceptance",
+    "monitoringProviderConfirmation"
+)
 $requiredAssuranceEvidence = @(
     "production-scorecard",
     "production-readiness-report",
     "production-readiness-verification-report",
     "release-verification-manifest",
+    "human-release-evidence",
     "release-blocker-register",
     "source-law-snapshot-fingerprint",
     "golden-filing-corpus",
@@ -290,6 +299,29 @@ if ($null -ne $report) {
         }
     }
 
+    $humanReleaseEvidence = @((Get-JsonProperty $report "humanReleaseEvidence"))
+    foreach ($humanEvidenceCode in $requiredHumanReleaseEvidenceCodes) {
+        Assert-ObjectArrayHasCode $humanReleaseEvidence $humanEvidenceCode "humanReleaseEvidence" $failures
+    }
+    foreach ($humanEvidence in $humanReleaseEvidence) {
+        $humanEvidenceCode = [string](Get-JsonProperty $humanEvidence "code")
+        Assert-NonEmptyString (Get-JsonProperty $humanEvidence "templateFile") "humanReleaseEvidence '$humanEvidenceCode' templateFile" $failures
+        Assert-NonEmptyString (Get-JsonProperty $humanEvidence "requiredReviewerRole") "humanReleaseEvidence '$humanEvidenceCode' requiredReviewerRole" $failures
+        Assert-NonEmptyString (Get-JsonProperty $humanEvidence "signOffGate") "humanReleaseEvidence '$humanEvidenceCode' signOffGate" $failures
+        Assert-NonEmptyString (Get-JsonProperty $humanEvidence "releaseChecklistCode") "humanReleaseEvidence '$humanEvidenceCode' releaseChecklistCode" $failures
+        Assert-NonEmptyString (Get-JsonProperty $humanEvidence "releaseManifestCode") "humanReleaseEvidence '$humanEvidenceCode' releaseManifestCode" $failures
+        Assert-NonEmptyString (Get-JsonProperty $humanEvidence "evidenceArtifact") "humanReleaseEvidence '$humanEvidenceCode' evidenceArtifact" $failures
+        if ([string](Get-JsonProperty $humanEvidence "status") -ne "pending-human-evidence") {
+            Add-Failure $failures "humanReleaseEvidence '$humanEvidenceCode' status must be pending-human-evidence before named sign-off."
+        }
+        if ((Get-JsonProperty $humanEvidence "blocksRelease") -ne $true) {
+            Add-Failure $failures "humanReleaseEvidence '$humanEvidenceCode' must block release before named sign-off."
+        }
+        if (@((Get-JsonProperty $humanEvidence "requiredEvidence")).Count -lt 2) {
+            Add-Failure $failures "humanReleaseEvidence '$humanEvidenceCode' must include retained requiredEvidence references."
+        }
+    }
+
     $visualQa = Get-JsonProperty $report "visualQaCoverage"
     if ($null -eq $visualQa) {
         Add-Failure $failures "visualQaCoverage must be present."
@@ -312,6 +344,7 @@ $evidence = [ordered]@{
         goldenCorpusScenarioCodes = $requiredScenarioCodes
         sourceLawSourceIds = $requiredSourceIds
         releaseVerificationManifestCodes = $requiredManifestCodes
+        humanReleaseEvidenceCodes = $requiredHumanReleaseEvidenceCodes
         assuranceEvidenceItems = $requiredAssuranceEvidence
         expectedVisualScreenshotCount = 28
         expectedVisualRouteCount = 7

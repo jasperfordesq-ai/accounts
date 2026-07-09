@@ -1874,6 +1874,21 @@ export interface ReleaseVerificationManifestItem {
   manualFallback: string;
 }
 
+export interface HumanReleaseEvidenceGate {
+  code: string;
+  label: string;
+  templateFile: string;
+  requiredReviewerRole: string;
+  status: string;
+  signOffGate: string;
+  releaseChecklistCode: string;
+  releaseManifestCode: string;
+  evidenceArtifact: string;
+  blocksRelease: boolean;
+  requiredEvidence: string[];
+  nextAction: string;
+}
+
 export interface AccountantAcceptanceCriterion {
   scenarioCode: string;
   label: string;
@@ -2123,6 +2138,7 @@ export interface ProductionReadinessReport {
   operationsEvidencePack: OperationsEvidencePackItem[];
   releaseReviewChecklist: ReleaseReviewChecklistItem[];
   releaseVerificationManifest: ReleaseVerificationManifestItem[];
+  humanReleaseEvidence: HumanReleaseEvidenceGate[];
   visualQaCoverage: VisualQaCoverage;
 }
 
@@ -2225,6 +2241,21 @@ const productionScorecardSchema = z.object({
   status: z.string().min(1),
   nextGate: z.string().min(1),
   categories: z.array(productionScorecardCategorySchema),
+});
+
+const humanReleaseEvidenceGateSchema = z.object({
+  code: z.string().min(1),
+  label: z.string().min(1),
+  templateFile: z.string().regex(/^[a-z0-9-]+-template\.md$/),
+  requiredReviewerRole: z.string().min(1),
+  status: z.string().min(1),
+  signOffGate: z.string().min(1),
+  releaseChecklistCode: z.string().min(1),
+  releaseManifestCode: z.string().min(1),
+  evidenceArtifact: z.string().min(1),
+  blocksRelease: z.boolean(),
+  requiredEvidence: z.array(z.string().min(1)),
+  nextAction: z.string().min(1),
 });
 
 const productionReadinessAreaSchema = z.object({
@@ -2718,6 +2749,7 @@ export const productionReadinessReportSchema = z.object({
   operationsEvidencePack: z.array(operationsEvidencePackItemSchema),
   releaseReviewChecklist: z.array(releaseReviewChecklistItemSchema),
   releaseVerificationManifest: z.array(releaseVerificationManifestItemSchema),
+  humanReleaseEvidence: z.array(humanReleaseEvidenceGateSchema),
   visualQaCoverage: visualQaCoverageSchema,
 });
 
@@ -3072,6 +3104,7 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
   assertReleaseBlockerRegister(report);
   assertProductionScorecard(report);
   assertReleaseVerificationManifest(report);
+  assertHumanReleaseEvidence(report);
 
   report.goldenFilingCorpus.forEach((scenario, scenarioIndex) => {
     const evidenceTests = new Set(scenario.evidenceTestNames);
@@ -4730,6 +4763,87 @@ function assertReleaseVerificationManifest(report: ProductionReadinessReport) {
       `Invalid production readiness report contract: releaseVerificationManifest - missing verification coverage for blocking checklist evidence: ${missingBlockingChecklistEvidence.join(", ")}`,
     );
   }
+}
+
+function assertHumanReleaseEvidence(report: ProductionReadinessReport) {
+  const requiredCodes = [
+    "visualQa",
+    "sourceLawReview",
+    "externalRosIxbrlValidation",
+    "qualifiedAccountantAcceptance",
+    "manualHandoffAcceptance",
+    "monitoringProviderConfirmation",
+  ];
+  const checklistCodes = new Set(report.releaseReviewChecklist.map((item) => item.code));
+  const manifestCodes = new Set(report.releaseVerificationManifest.map((item) => item.code));
+  const checklistByCode = new Map(report.releaseReviewChecklist.map((item) => [item.code, item]));
+  const actualCodes = report.humanReleaseEvidence.map((item) => item.code);
+  const missingCodes = requiredCodes.filter((code) => !actualCodes.includes(code));
+  const duplicateCodes = actualCodes.filter((code, index) => actualCodes.indexOf(code) !== index);
+
+  if (!report.assurancePacket.evidenceItems.includes("human-release-evidence")) {
+    throw new Error(
+      "Invalid production readiness report contract: assurancePacket.evidenceItems - human-release-evidence is required",
+    );
+  }
+
+  if (missingCodes.length > 0) {
+    throw new Error(
+      `Invalid production readiness report contract: humanReleaseEvidence - missing required gates: ${missingCodes.join(", ")}`,
+    );
+  }
+
+  if (duplicateCodes.length > 0) {
+    throw new Error(
+      `Invalid production readiness report contract: humanReleaseEvidence - duplicate gate codes: ${[...new Set(duplicateCodes)].join(", ")}`,
+    );
+  }
+
+  report.humanReleaseEvidence.forEach((item, itemIndex) => {
+    const checklistItem = checklistByCode.get(item.releaseChecklistCode);
+
+    if (!checklistCodes.has(item.releaseChecklistCode)) {
+      throw new Error(
+        `Invalid production readiness report contract: humanReleaseEvidence.${itemIndex}.releaseChecklistCode - must reference a release checklist item`,
+      );
+    }
+
+    if (!manifestCodes.has(item.releaseManifestCode)) {
+      throw new Error(
+        `Invalid production readiness report contract: humanReleaseEvidence.${itemIndex}.releaseManifestCode - must reference a release verification manifest item`,
+      );
+    }
+
+    if (checklistItem && checklistItem.evidenceArtifact !== item.evidenceArtifact) {
+      throw new Error(
+        `Invalid production readiness report contract: humanReleaseEvidence.${itemIndex}.evidenceArtifact - must mirror release checklist evidence`,
+      );
+    }
+
+    if (item.status !== "pending-human-evidence" && item.status !== "accepted") {
+      throw new Error(
+        `Invalid production readiness report contract: humanReleaseEvidence.${itemIndex}.status - must be pending-human-evidence or accepted`,
+      );
+    }
+
+    if (item.blocksRelease && item.status === "accepted") {
+      throw new Error(
+        `Invalid production readiness report contract: humanReleaseEvidence.${itemIndex}.blocksRelease - accepted human evidence cannot still block release`,
+      );
+    }
+
+    if (!item.blocksRelease && item.status !== "accepted") {
+      throw new Error(
+        `Invalid production readiness report contract: humanReleaseEvidence.${itemIndex}.status - non-blocking human evidence must be accepted`,
+      );
+    }
+
+    if (item.requiredEvidence.length < 2) {
+      throw new Error(
+        `Invalid production readiness report contract: humanReleaseEvidence.${itemIndex}.requiredEvidence - at least two retained evidence references are required`,
+      );
+    }
+  });
 }
 
 function assertAssuranceActionsRiskOrder(actions: ProductionReadinessAssuranceAction[]) {

@@ -18825,6 +18825,11 @@ public class AccountsWorkflowTests
         Assert.Contains("productionScorecard.currentScore must equal the sum of category current scores", readinessVerifier);
         Assert.Contains("sourceLawSnapshot.sourceCount must match sources length", readinessVerifier);
         Assert.Contains("releaseVerificationManifest must include verify-release-artifact-pack.ps1", readinessVerifier);
+        Assert.Contains("humanReleaseEvidence", readinessVerifier);
+        Assert.Contains("humanReleaseEvidenceCodes", readinessVerifier);
+        Assert.Contains("human-release-evidence", readinessVerifier);
+        Assert.Contains("visualQa", readinessVerifier);
+        Assert.Contains("monitoringProviderConfirmation", readinessVerifier);
         Assert.Contains("visualQaCoverage.expectedScreenshotCount must be 28", readinessVerifier);
         Assert.Contains("productionSmokeUsesBuildFlag", script);
         Assert.Contains("requiredCoverage", script);

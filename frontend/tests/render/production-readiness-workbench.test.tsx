@@ -125,6 +125,16 @@ describe("ProductionReadinessWorkbench", () => {
     expectText("Frontend lint, type-check and production build");
     expectText("CI machine evidence pack");
     expectText("verify-ci-machine-evidence-pack.ps1");
+    expect(screen.getByRole("heading", { name: "Human release evidence" })).toBeInTheDocument();
+    expect(screen.getByRole("searchbox", { name: "Filter Human release evidence" })).toBeInTheDocument();
+    expectText("Visual QA sign-off");
+    expectText("visual-qa-signoff-template.md");
+    expectText("Named source-law reviewer plus qualified accountant");
+    expectText("external-ros-ixbrl-validation-template.md");
+    expectText("qualified-accountant-acceptance-template.md");
+    expectText("manual-handoff-acceptance-template.md");
+    expectText("monitoring-provider-confirmation-template.md");
+    expectText("Complete and verify visual-qa-signoff-template.md for the exact release candidate.");
     expect(screen.getByRole("heading", { name: "Statutory rules matrix" })).toBeInTheDocument();
     expectText("LTD micro");
     expectText("CLG charity");
@@ -402,6 +412,43 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
   };
 }
 
+function humanReleaseEvidence(): ProductionReadinessReport["humanReleaseEvidence"] {
+  return [
+    humanEvidenceGate("visualQa", "Visual QA sign-off", "visual-qa-signoff-template.md", "Named visual QA reviewer", "visual-qa-screenshot-review", "visual-qa-screenshot-review", "visual-smoke-light-dark", "light-dark-desktop-mobile-screenshot-review"),
+    humanEvidenceGate("sourceLawReview", "Source-law review sign-off", "source-law-review-template.md", "Named source-law reviewer plus qualified accountant", "source-law-change-review", "source-law-change-review", "source-law-change-review", "source-law-change-review-note"),
+    humanEvidenceGate("externalRosIxbrlValidation", "External ROS/iXBRL validation", "external-ros-ixbrl-validation-template.md", "External ROS/iXBRL validation reviewer", "external-ros-validation-evidence", "external-ros-validation-evidence", "external-ros-validation-evidence", "external-ros-validation-reference"),
+    humanEvidenceGate("qualifiedAccountantAcceptance", "Qualified-accountant acceptance", "qualified-accountant-acceptance-template.md", "Named qualified accountant", "qualified-accountant-final-signoff", "accountant-final-signoff", "qualified-accountant-final-signoff", "named-accountant-approval-record"),
+    humanEvidenceGate("manualHandoffAcceptance", "Manual handoff acceptance", "manual-handoff-acceptance-template.md", "Named manual handoff reviewer", "manual-accountant-acceptance", "golden-corpus-accountant-acceptance", "manual-accountant-acceptance", "signed-golden-corpus-acceptance-note"),
+    humanEvidenceGate("monitoringProviderConfirmation", "Monitoring-provider confirmation", "monitoring-provider-confirmation-template.md", "Named release operator", "production-monitoring", "production-smoke-and-backup", "production-stack-smoke", "ci-production-stack-smoke-and-backup-restore"),
+  ];
+}
+
+function humanEvidenceGate(
+  code: string,
+  label: string,
+  templateFile: string,
+  requiredReviewerRole: string,
+  signOffGate: string,
+  releaseChecklistCode: string,
+  releaseManifestCode: string,
+  evidenceArtifact: string,
+): ProductionReadinessReport["humanReleaseEvidence"][number] {
+  return {
+    code,
+    label,
+    templateFile,
+    requiredReviewerRole,
+    status: "pending-human-evidence",
+    signOffGate,
+    releaseChecklistCode,
+    releaseManifestCode,
+    evidenceArtifact,
+    blocksRelease: true,
+    requiredEvidence: [`${templateFile} completed by a named reviewer`, `${evidenceArtifact} retained in the release pack`],
+    nextAction: `Complete and verify ${templateFile} for the exact release candidate.`,
+  };
+}
+
 function sampleReport(): ProductionReadinessReport {
   return {
     generatedAt: "2026-07-03T12:00:00Z",
@@ -542,7 +589,7 @@ function sampleReport(): ProductionReadinessReport {
       visualQaExpectedScreenshots: 28,
       requiredOperationalGates: 1,
       openCriticalActions: 1,
-      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "source-law-review-ledger", "revenue-taxonomy-range-evidence", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "production-audit-evidence-pack", "operations-evidence-pack", "production-readiness-report", "production-readiness-verification-report", "visual-smoke-screenshots", "accountant-workbench-evidence-report", "release-review-checklist", "release-verification-manifest", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "accountant-journey-acceptance-checklist", "accountant-workflow-evidence-pack", "accountant-walkthrough-evidence-matrix", "workbench-visual-acceptance-register", "production-completion-map", "production-scorecard"],
+      evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "source-law-review-ledger", "revenue-taxonomy-range-evidence", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "production-audit-evidence-pack", "operations-evidence-pack", "production-readiness-report", "production-readiness-verification-report", "visual-smoke-screenshots", "accountant-workbench-evidence-report", "release-review-checklist", "release-verification-manifest", "human-release-evidence", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "accountant-journey-acceptance-checklist", "accountant-workflow-evidence-pack", "accountant-walkthrough-evidence-matrix", "workbench-visual-acceptance-register", "production-completion-map", "production-scorecard"],
       releaseBlockers: ["Qualified accountant sign-off required", "Source-law change review required", "External ROS/iXBRL validation required", "Accountant acceptance walkthrough required", "Light/dark visual regression required"],
     },
     productionScorecard: productionScorecard(),
@@ -1490,6 +1537,7 @@ function sampleReport(): ProductionReadinessReport {
         manualFallback: "Run against the collected machine and human release evidence reports for the exact release candidate.",
       },
     ],
+    humanReleaseEvidence: humanReleaseEvidence(),
     auditabilityControls: [
       {
         code: "who-changed-what",
