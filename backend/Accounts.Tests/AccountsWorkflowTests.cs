@@ -18316,6 +18316,7 @@ public class AccountsWorkflowTests
         Assert.Contains("sampledDistinctColorCount", visual);
         Assert.Contains("luminanceRange", visual);
         Assert.Contains("themeContrastResult.minimumContrastRatio", visual);
+        Assert.Contains("artifact file fields must be exactly", visual);
         Assert.Contains("Use exactly `pass`", visual);
         Assert.Contains("rejects", visual);
         Assert.Contains("`accepted`, or other ambiguous", visual);
@@ -18448,6 +18449,7 @@ public class AccountsWorkflowTests
         Assert.Contains("Assert-FilledField", script);
         Assert.Contains("[`t ]*$escaped[`t ]*:", script);
         Assert.Contains("Assert-ReleaseIdentityFields", script);
+        Assert.Contains("Assert-FieldEquals", script);
         Assert.Contains("Assert-UtcTimestampField", script);
         Assert.Contains("Assert-Sha256Field", script);
         Assert.Contains("Assert-PositiveIntegerField", script);
@@ -18504,6 +18506,9 @@ public class AccountsWorkflowTests
         Assert.Contains("visual-smoke-screenshots", script);
         Assert.Contains("visual-smoke-evidence-report.json", script);
         Assert.Contains("accountant-workbench-evidence-report.json", script);
+        Assert.Contains("Assert-FieldEquals $Content \"Visual smoke manifest file\" \"visual-smoke-manifest.json\"", script);
+        Assert.Contains("Assert-FieldEquals $Content \"Visual smoke evidence report file\" \"visual-smoke-evidence-report.json\"", script);
+        Assert.Contains("Assert-FieldEquals $Content \"Accountant workbench evidence report file\" \"accountant-workbench-evidence-report.json\"", script);
         Assert.Contains("screenshot nonblank pixel diversity evidence", script);
         Assert.Contains("Minimum PNG IDAT byte size", script);
         Assert.Contains("Minimum screenshot pixel sample count", script);

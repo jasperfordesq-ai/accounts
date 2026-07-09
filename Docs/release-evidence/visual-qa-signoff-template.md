@@ -25,7 +25,10 @@ Required formats: use the full 40-character commit SHA, the exact
 `Z` or `+00:00`. The first four minimum visual evidence fields must be positive
 integers copied from the retained `visual-smoke-evidence-report.json`; sampled
 distinct color count must be at least `4`, luminance range must be at least
-`10`, and minimum automated contrast ratio must be at least `3.0`.
+`10`, and minimum automated contrast ratio must be at least `3.0`. The visual
+artifact file fields must be exactly `visual-smoke-manifest.json`,
+`visual-smoke-evidence-report.json`, and
+`accountant-workbench-evidence-report.json`.
 
 ## Required Artifact Checks
 

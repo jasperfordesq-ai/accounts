@@ -105,7 +105,7 @@ const share = {
 
 function productionScorecardFixture() {
   return {
-    currentScore: 669,
+    currentScore: 671,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete source-law review, named visual QA, monitoring-provider confirmation, manual handoff and qualified-accountant acceptance evidence.",
@@ -162,7 +162,7 @@ function productionScorecardFixture() {
       {
         code: "frontend-accountant-workbench",
         label: "Frontend accountant workbench",
-        currentScore: 176,
+        currentScore: 178,
         targetScore: 200,
         status: "visual-acceptance-required",
         currentEvidence: [
@@ -172,6 +172,7 @@ function productionScorecardFixture() {
           "Visual QA sign-off requires exact pass decisions for every route across desktop light, desktop dark, mobile light and mobile dark captures.",
           "Visual QA route capture cells reject accepted-style ambiguous text so reviewer limitations must stay in retained route notes or references.",
           "Visual QA route notes must match the exact visual-smoke-evidence-report.json routeAcceptance anchor for every route before sign-off evidence can pass.",
+          "Visual QA release evidence requires exact visual-smoke manifest, visual evidence report and accountant workbench evidence report filenames before sign-off evidence can pass.",
           "accountant-workbench-evidence-report.json proves route workflow-stage, review-check, expected accountant decision text and qualified-accountant route acceptance coverage.",
           "Frontend parser invariants now require the CI machine evidence pack, production smoke, readiness verification, visual smoke and manual release-verification rows before rendering readiness data.",
         ],

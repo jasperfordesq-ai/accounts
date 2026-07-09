@@ -98,6 +98,25 @@ function Assert-FieldMatchesPattern {
     }
 }
 
+function Assert-FieldEquals {
+    param(
+        [string]$Content,
+        [string]$FieldName,
+        [string]$ExpectedValue,
+        [string]$Context,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    $value = Get-FieldValue $Content $FieldName
+    if ($null -eq $value) {
+        return
+    }
+
+    if (-not [string]::Equals($value, $ExpectedValue, [StringComparison]::Ordinal)) {
+        Add-Failure $Failures "$Context field '$FieldName' must be $ExpectedValue."
+    }
+}
+
 function Assert-CommitShaField {
     param(
         [string]$Content,
@@ -797,6 +816,9 @@ function Test-VisualEvidence {
     }
 
     Assert-ReleaseIdentityFields $Content $context $Failures
+    Assert-FieldEquals $Content "Visual smoke manifest file" "visual-smoke-manifest.json" $context $Failures
+    Assert-FieldEquals $Content "Visual smoke evidence report file" "visual-smoke-evidence-report.json" $context $Failures
+    Assert-FieldEquals $Content "Accountant workbench evidence report file" "accountant-workbench-evidence-report.json" $context $Failures
     Assert-UtcTimestampField $Content "Review date/time UTC" $context $Failures
     Assert-PositiveIntegerField $Content "Minimum PNG IDAT byte size" $context $Failures
     Assert-PositiveIntegerField $Content "Minimum screenshot pixel sample count" $context $Failures
