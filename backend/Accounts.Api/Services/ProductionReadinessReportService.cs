@@ -810,7 +810,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             Category(
                 "backend-statutory-accounting-engine",
                 "Backend statutory/accounting engine",
-                238,
+                240,
                 250,
                 "qualified-accountant-review-required",
                 [
@@ -820,7 +820,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "Qualified-accountant acceptance evidence now uses canonical golden corpus scenario codes and the release verifier reports required scenario, route and artifact coverage.",
                     "scripts/verify-release-evidence.ps1 now rejects qualified-accountant acceptance unless every golden scenario decision and every route evidence acceptance row is explicitly accepted.",
                     "Qualified-accountant acceptance now requires explicit accepted scenario scope cells for outputs, gates, source-law evidence, wording and workbench journey before a scenario decision can pass.",
-                    "Qualified-accountant scenario walkthrough rows now require retained scenario-specific evidence references containing the matching golden corpus scenario code.",
+                    "Qualified-accountant scenario walkthrough rows now must match the exact qualified-accountant-walkthrough-ledger anchor for every canonical golden corpus scenario.",
                     "Qualified-accountant route walkthrough rows now require exact yes decision-question cells and exact accepted evidence cells before route acceptance can pass.",
                     "Qualified-accountant route decision-question cells now reject accepted-style ambiguous text so professional evidence acceptance stays in the dedicated evidence column.",
                     "Qualified-accountant route walkthrough rows now require route-specific accountant-workbench evidence anchors for every accepted route.",

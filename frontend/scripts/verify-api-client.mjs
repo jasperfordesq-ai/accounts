@@ -105,7 +105,7 @@ const share = {
 
 function productionScorecardFixture() {
   return {
-    currentScore: 663,
+    currentScore: 665,
     targetScore: 700,
     status: "review-required",
     nextGate: "Complete source-law review, named visual QA, monitoring-provider confirmation, manual handoff and qualified-accountant acceptance evidence.",
@@ -128,7 +128,7 @@ function productionScorecardFixture() {
       {
         code: "backend-statutory-accounting-engine",
         label: "Backend statutory/accounting engine",
-        currentScore: 238,
+        currentScore: 240,
         targetScore: 250,
         status: "qualified-accountant-review-required",
         currentEvidence: [
@@ -136,7 +136,7 @@ function productionScorecardFixture() {
           "Qualified-accountant acceptance evidence uses canonical golden corpus scenario codes.",
           "verify-release-evidence.ps1 rejects qualified-accountant acceptance unless every golden scenario decision and route evidence acceptance row is explicitly accepted.",
           "Qualified-accountant acceptance requires explicit accepted scenario scope cells for outputs, gates, source-law evidence, wording and workbench journey before a scenario decision can pass.",
-          "Qualified-accountant scenario walkthrough rows require retained scenario-specific evidence references containing the matching golden corpus scenario code.",
+          "Qualified-accountant scenario walkthrough rows must match the exact qualified-accountant-walkthrough-ledger anchor for every canonical golden corpus scenario.",
           "Qualified-accountant route walkthrough rows require exact yes decision-question cells and exact accepted evidence cells before route acceptance can pass.",
           "Qualified-accountant route decision-question cells reject accepted-style ambiguous text so professional evidence acceptance stays in the dedicated evidence column.",
           "Qualified-accountant route walkthrough rows require route-specific accountant-workbench evidence anchors for every accepted route.",

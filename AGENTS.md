@@ -768,8 +768,8 @@ CI status:
   2026.
 - Green jobs: Workflow Hygiene, Production Compose Config, Frontend, Backend,
   Production Stack Smoke, and CI Machine Evidence Pack.
-- The scorecard exposed by the candidate is now 663/700, with backend statutory/accounting
-  engine at 238/250, frontend accountant workbench at 176/200 and
+- The scorecard exposed by the candidate is now 665/700, with backend statutory/accounting
+  engine at 240/250, frontend accountant workbench at 176/200 and
   security/auth/tenant/platform guardrails at 150/150.
   The typed frontend parser and production-readiness verifier both require CI
   machine evidence, production smoke, readiness verification, visual smoke, release
@@ -1260,8 +1260,8 @@ Backend source-law exact note-anchor checks:
 - The source-law review template now tells reviewers to retain the exact
   per-source review note anchor for every monitored source, so source-law review
   notes cannot be reused against another source row.
-- The production scorecard is now 663/700, with backend statutory/accounting
-  engine at 238/250.
+- That previous slice moved the production scorecard to 663/700, with backend
+  statutory/accounting engine at 238/250.
 - Verification completed locally:
   - PowerShell parser check for `scripts\verify-release-evidence.ps1` passed.
   - Temporary completed release-evidence pack outside the repo passed with exact
@@ -1269,6 +1269,35 @@ Backend source-law exact note-anchor checks:
   - A copied source-law pack with `revenue-accepted-taxonomies` `Notes` set to
     `source-law-review-ledger#frc-frs-102` failed with the expected exact
     source-law note-anchor verifier error.
+  - Backend focused regression passed 3 tests:
+    `ReleaseEvidenceVerifier_BlocksIncompleteHumanSignoffEvidence`,
+    `ReleaseEvidenceTemplates_CoverHumanVisualAccountantAndProviderSignoffs`,
+    and
+    `ProductionReadinessReport_ExposesGoalScorecardMappedToReleaseBlockers`.
+  - Frontend contract/API/render/type checks passed:
+    `node --test tests/production-readiness-contract.test.mjs`,
+    `node scripts/verify-api-client.mjs`,
+    `npx.cmd vitest run tests/render/production-readiness-panel.test.tsx tests/render/production-readiness-workbench.test.tsx`,
+    and `npx.cmd tsc --noEmit --incremental false`.
+
+Backend qualified-accountant exact scenario-anchor checks:
+
+- This slice tightened `scripts/verify-release-evidence.ps1` so qualified-accountant
+  `Scenario evidence reference` cells must be exactly
+  `qualified-accountant-walkthrough-ledger#<scenario>`.
+- The qualified-accountant acceptance template now tells reviewers to retain the
+  exact scenario walkthrough anchor for every canonical golden corpus scenario,
+  so scenario evidence cannot be reused against another scenario row.
+- The production scorecard is now 665/700, with backend statutory/accounting
+  engine at 240/250.
+- Verification completed locally:
+  - PowerShell parser check for `scripts\verify-release-evidence.ps1` passed.
+  - Temporary completed release-evidence pack outside the repo passed with exact
+    qualified-accountant scenario anchors.
+  - A copied qualified-accountant pack with `micro-ltd`
+    `Scenario evidence reference` set to
+    `qualified-accountant-walkthrough-ledger#small-abridged-ltd` failed with the
+    expected exact scenario-anchor verifier error.
   - Backend focused regression passed 3 tests:
     `ReleaseEvidenceVerifier_BlocksIncompleteHumanSignoffEvidence`,
     `ReleaseEvidenceTemplates_CoverHumanVisualAccountantAndProviderSignoffs`,
@@ -1329,8 +1358,8 @@ As of July 9, 2026:
 - Code implementation is roughly 70-75% complete.
 - Production assurance is roughly 60-65% complete.
 - Overall goal is roughly 63-67% complete, with about one third left.
-- The production scorecard is now 663/700: architecture/documentation 99/100,
-  backend statutory/accounting engine 238/250, frontend accountant workbench 176/200,
+- The production scorecard is now 665/700: architecture/documentation 99/100,
+  backend statutory/accounting engine 240/250, frontend accountant workbench 176/200,
   and security/auth/tenant/platform guardrails 150/150.
 - Architecture/documentation is now scored 99/100 in the production scorecard because
   source-law review, release evidence templates, manual handoff evidence, runbook
