@@ -1854,6 +1854,8 @@ CI release evidence reviewer workspace:
     generated the reviewer workspace and confirmed
     `scripts/verify-release-evidence.ps1` still fails with all six human gates
     incomplete.
+- CI is green on July 9, 2026 for the workflow artifact slice at commit
+  `06f0327`: `https://github.com/jasperfordesq-ai/accounts/actions/runs/29024761644`.
 
 ## What Is Left To Do
 
@@ -1861,7 +1863,7 @@ Highest-priority next steps:
 
 1. Rerun the full local production gate before release if runtime, script, workflow,
    or template changes land; the latest runtime/script gate is green on July 9, 2026
-   for commit `13373dd`.
+   for commit `06f0327`.
 2. Perform and record human visual review of the generated light/dark desktop/mobile
    visual smoke artifact set; the screenshot manifest now verifies locally, but
    named visual QA sign-off is still required.
