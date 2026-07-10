@@ -258,6 +258,8 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.equal(visualHumanEvidence?.releaseManifestCode, "visual-smoke-light-dark");
   assert.equal(visualHumanEvidence?.status, "pending-human-evidence");
   assert.equal(visualHumanEvidence?.blocksRelease, true);
+  assert.ok(visualHumanEvidence?.reviewerPickupFiles.includes("visual-smoke-evidence-report.json"));
+  assert.ok(visualHumanEvidence?.reviewerPickupFiles.includes("release-evidence-reviewer-blockers.md"));
   assert.ok(visualHumanEvidence?.requiredEvidence.some((item) => item.includes("visual-qa-signoff-template.md")));
   assert.deepEqual(parsed.humanReleaseEvidenceCloseout.map((item) => item.code), [
     "pick-up-reviewer-workspace",
@@ -985,6 +987,16 @@ test("parseProductionReadinessReport rejects human release evidence manifest dri
   );
 });
 
+test("parseProductionReadinessReport rejects human release evidence without reviewer pickup files", () => {
+  const payload = sampleReport();
+  payload.humanReleaseEvidence[0].reviewerPickupFiles = payload.humanReleaseEvidence[0].reviewerPickupFiles.filter((item) => item !== "release-evidence-reviewer-blockers.md");
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: humanReleaseEvidence\.0\.reviewerPickupFiles - must include release-evidence-reviewer-blockers\.md/,
+  );
+});
+
 test("parseProductionReadinessReport rejects human evidence closeout sequence drift", () => {
   const payload = sampleReport();
   payload.humanReleaseEvidenceCloseout = [
@@ -1214,9 +1226,24 @@ function humanEvidenceGate(code, label, templateFile, requiredReviewerRole, sign
     releaseManifestCode,
     evidenceArtifact,
     blocksRelease: true,
+    reviewerPickupFiles: reviewerPickupFilesForGate(code, templateFile),
     requiredEvidence: [`${templateFile} completed by a named reviewer`, `${evidenceArtifact} retained in the release pack`],
     nextAction: `Complete and verify ${templateFile} for the exact release candidate.`,
   };
+}
+
+function reviewerPickupFilesForGate(code, templateFile) {
+  const commonBlocker = "release-evidence-reviewer-blockers.md";
+  const filesByCode = {
+    visualQa: [templateFile, "visual-smoke-manifest.json", "visual-smoke-evidence-report.json", "accountant-workbench-evidence-report.json", commonBlocker],
+    sourceLawReview: [templateFile, "production-readiness-report.json", "production-readiness-verification-report.json", commonBlocker],
+    externalRosIxbrlValidation: [templateFile, "production-readiness-report.json", commonBlocker],
+    qualifiedAccountantAcceptance: [templateFile, "production-readiness-report.json", "accountant-workbench-evidence-report.json", commonBlocker],
+    manualHandoffAcceptance: [templateFile, "production-readiness-report.json", commonBlocker],
+    monitoringProviderConfirmation: [templateFile, "monitoring-error-routing-report.json", "structured-log-report.json", commonBlocker],
+  };
+
+  return filesByCode[code] ?? [templateFile, commonBlocker];
 }
 
 function sampleReport() {

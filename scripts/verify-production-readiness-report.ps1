@@ -337,7 +337,8 @@ if ($null -ne $report) {
     }
     foreach ($humanEvidence in $humanReleaseEvidence) {
         $humanEvidenceCode = [string](Get-JsonProperty $humanEvidence "code")
-        Assert-NonEmptyString (Get-JsonProperty $humanEvidence "templateFile") "humanReleaseEvidence '$humanEvidenceCode' templateFile" $failures
+        $templateFile = [string](Get-JsonProperty $humanEvidence "templateFile")
+        Assert-NonEmptyString $templateFile "humanReleaseEvidence '$humanEvidenceCode' templateFile" $failures
         Assert-NonEmptyString (Get-JsonProperty $humanEvidence "requiredReviewerRole") "humanReleaseEvidence '$humanEvidenceCode' requiredReviewerRole" $failures
         Assert-NonEmptyString (Get-JsonProperty $humanEvidence "signOffGate") "humanReleaseEvidence '$humanEvidenceCode' signOffGate" $failures
         Assert-NonEmptyString (Get-JsonProperty $humanEvidence "releaseChecklistCode") "humanReleaseEvidence '$humanEvidenceCode' releaseChecklistCode" $failures
@@ -351,6 +352,13 @@ if ($null -ne $report) {
         }
         if (@((Get-JsonProperty $humanEvidence "requiredEvidence")).Count -lt 2) {
             Add-Failure $failures "humanReleaseEvidence '$humanEvidenceCode' must include retained requiredEvidence references."
+        }
+        $reviewerPickupFiles = @((Get-JsonProperty $humanEvidence "reviewerPickupFiles") | ForEach-Object { [string]$_ })
+        if (-not ($reviewerPickupFiles -contains $templateFile)) {
+            Add-Failure $failures "humanReleaseEvidence '$humanEvidenceCode' reviewerPickupFiles must include its template file."
+        }
+        if (-not ($reviewerPickupFiles -contains "release-evidence-reviewer-blockers.md")) {
+            Add-Failure $failures "humanReleaseEvidence '$humanEvidenceCode' reviewerPickupFiles must include release-evidence-reviewer-blockers.md."
         }
     }
 
@@ -414,6 +422,7 @@ $evidence = [ordered]@{
         sourceLawSourceIds = $requiredSourceIds
         releaseVerificationManifestCodes = $requiredManifestCodes
         humanReleaseEvidenceCodes = $requiredHumanReleaseEvidenceCodes
+        humanReleaseEvidenceReviewerPickupFilePolicy = "Each humanReleaseEvidence row must include reviewerPickupFiles with the gate template and release-evidence-reviewer-blockers.md."
         humanReleaseEvidenceCloseoutStepCodes = @($requiredHumanReleaseEvidenceCloseoutSteps | ForEach-Object { $_.code })
         assuranceEvidenceItems = $requiredAssuranceEvidence
         expectedVisualScreenshotCount = 28

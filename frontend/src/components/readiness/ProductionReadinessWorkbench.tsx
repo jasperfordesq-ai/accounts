@@ -197,7 +197,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
           caption="Human release evidence"
           filterPlaceholder="Filter human evidence gates"
           emptyState="No human release evidence gates"
-          columns={["Evidence", "Reviewer", "Template", "Required evidence", "Next action", "Status"]}
+          columns={["Evidence", "Reviewer", "Template", "Pickup files", "Required evidence", "Next action", "Status"]}
           rows={humanReleaseEvidence.map((item) => ({
             id: item.code,
             tone: item.blocksRelease ? "bad" : "good",
@@ -205,6 +205,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
               item.label,
               item.requiredReviewerRole,
               item.templateFile,
+              item.reviewerPickupFiles.join(" "),
               item.requiredEvidence.join(" "),
               item.nextAction,
               item.status,
@@ -220,6 +221,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
               item.releaseManifestCode,
               item.evidenceArtifact,
               item.nextAction,
+              ...item.reviewerPickupFiles,
               ...item.requiredEvidence,
             ].join(" "),
             cells: [
@@ -233,6 +235,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
                 <code className="block break-all text-[11px] text-[var(--muted-foreground)]">{item.signOffGate}</code>
                 <code className="block break-all text-[11px] text-[var(--muted-foreground)]">{item.releaseManifestCode}</code>
               </div>,
+              <CompactList key="pickup" items={item.reviewerPickupFiles} />,
               <CompactList key="required" items={item.requiredEvidence} />,
               <div key="next" className="min-w-56 whitespace-normal text-xs leading-5 text-[var(--muted-foreground)]">
                 <p>{item.nextAction}</p>

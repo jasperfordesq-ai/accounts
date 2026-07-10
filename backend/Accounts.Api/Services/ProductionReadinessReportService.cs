@@ -334,6 +334,7 @@ public sealed record HumanReleaseEvidenceGate(
     string ReleaseManifestCode,
     string EvidenceArtifact,
     bool BlocksRelease,
+    IReadOnlyList<string> ReviewerPickupFiles,
     IReadOnlyList<string> RequiredEvidence,
     string NextAction);
 
@@ -827,7 +828,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "Production runbook links release evidence templates for source-law review, visual QA, monitoring provider confirmation and qualified-accountant acceptance.",
                     "scripts/verify-release-evidence.ps1 validates completed release evidence templates before real filing use, including source-law source coverage.",
                     "scripts/verify-release-artifact-pack.ps1 validates the collected release artifact reports and the retained human release-evidence templates as one exact evidence pack with release candidate identity and SHA-256 inventory.",
-                    "Production readiness report exposes the six human release-evidence gates with template files, reviewer roles, sign-off gates and required retained evidence.",
+                    "Production readiness report exposes the six human release-evidence gates with template files, reviewer roles, sign-off gates, required retained evidence and per-gate reviewerPickupFiles.",
                     "Release evidence reviewer workspace verification now inventories pending human-evidence blockers and rejects prepared human templates whose top-level reviewer/accountant identity, signature or acceptance checkbox fields are filled before named human sign-off.",
                     "Human release-evidence closeout now starts from the prepared release-evidence-reviewer-workspace artifact, its blocker inventory, its retained reviewer handoff files and assignment-ledger pickup files before reviewers complete the six templates.",
                     "CI artifacts now prove production safety, dependency audit, monitoring smoke, structured logs, visual smoke and backup restore drill."
@@ -2876,6 +2877,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
             string signOffGate,
             string releaseChecklistCode,
             string releaseManifestCode,
+            IReadOnlyList<string> reviewerPickupFiles,
             IReadOnlyList<string> requiredEvidence,
             string nextAction)
         {
@@ -2896,6 +2898,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 releaseManifestCode,
                 checklistItem.EvidenceArtifact,
                 BlocksRelease: true,
+                reviewerPickupFiles,
                 requiredEvidence,
                 nextAction);
         }
@@ -2910,6 +2913,13 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 "visual-qa-screenshot-review",
                 "visual-qa-screenshot-review",
                 "visual-smoke-light-dark",
+                [
+                    "visual-qa-signoff-template.md",
+                    "visual-smoke-manifest.json",
+                    "visual-smoke-evidence-report.json",
+                    "accountant-workbench-evidence-report.json",
+                    "release-evidence-reviewer-blockers.md"
+                ],
                 [
                     "visual-smoke-manifest.json",
                     "visual-smoke-evidence-report.json",
@@ -2926,6 +2936,12 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 "source-law-change-review",
                 "source-law-change-review",
                 [
+                    "source-law-review-template.md",
+                    "production-readiness-report.json",
+                    "production-readiness-verification-report.json",
+                    "release-evidence-reviewer-blockers.md"
+                ],
+                [
                     "source-law-snapshot-fingerprint",
                     "source-law-review-ledger",
                     "Per-source reachability, effective-date and wording impact rows",
@@ -2940,6 +2956,11 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 "external-ros-validation-evidence",
                 "external-ros-validation-evidence",
                 "external-ros-validation-evidence",
+                [
+                    "external-ros-ixbrl-validation-template.md",
+                    "production-readiness-report.json",
+                    "release-evidence-reviewer-blockers.md"
+                ],
                 [
                     "External validation provider/reference",
                     "Generated iXBRL artifact hashes",
@@ -2956,6 +2977,12 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 "accountant-final-signoff",
                 "qualified-accountant-final-signoff",
                 [
+                    "qualified-accountant-acceptance-template.md",
+                    "production-readiness-report.json",
+                    "accountant-workbench-evidence-report.json",
+                    "release-evidence-reviewer-blockers.md"
+                ],
+                [
                     "Named accountant identity and professional body",
                     "Accepted output/gate/source-law/wording/workbench rows",
                     "Scenario walkthrough evidence",
@@ -2971,6 +2998,11 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 "golden-corpus-accountant-acceptance",
                 "manual-accountant-acceptance",
                 [
+                    "manual-handoff-acceptance-template.md",
+                    "production-readiness-report.json",
+                    "release-evidence-reviewer-blockers.md"
+                ],
+                [
                     "Signed auditor-report evidence",
                     "Manual handoff note",
                     "Filing readiness snapshot",
@@ -2985,6 +3017,12 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 "production-monitoring",
                 "production-smoke-and-backup",
                 "production-stack-smoke",
+                [
+                    "monitoring-provider-confirmation-template.md",
+                    "monitoring-error-routing-report.json",
+                    "structured-log-report.json",
+                    "release-evidence-reviewer-blockers.md"
+                ],
                 [
                     "monitoring-error-routing-report.json",
                     "structured-log-report.json",

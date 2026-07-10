@@ -1030,12 +1030,15 @@ public class ProductionReadinessReportTests
             Assert.False(string.IsNullOrWhiteSpace(item.ReleaseChecklistCode));
             Assert.False(string.IsNullOrWhiteSpace(item.ReleaseManifestCode));
             Assert.False(string.IsNullOrWhiteSpace(item.EvidenceArtifact));
+            Assert.Contains(item.TemplateFile, item.ReviewerPickupFiles);
+            Assert.Contains("release-evidence-reviewer-blockers.md", item.ReviewerPickupFiles);
             Assert.NotEmpty(item.RequiredEvidence);
             Assert.False(string.IsNullOrWhiteSpace(item.NextAction));
         });
         Assert.Contains(report.HumanReleaseEvidence, item =>
             item.Code == "visualQa"
             && item.TemplateFile == "visual-qa-signoff-template.md"
+            && item.ReviewerPickupFiles.Contains("visual-smoke-evidence-report.json")
             && item.ReleaseManifestCode == "visual-smoke-light-dark");
         Assert.Equal(
             new[]

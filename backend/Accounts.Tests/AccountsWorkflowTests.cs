@@ -19073,6 +19073,9 @@ public class AccountsWorkflowTests
         Assert.Contains("releaseVerificationManifest must include verify-release-artifact-pack.ps1", readinessVerifier);
         Assert.Contains("humanReleaseEvidence", readinessVerifier);
         Assert.Contains("humanReleaseEvidenceCodes", readinessVerifier);
+        Assert.Contains("humanReleaseEvidenceReviewerPickupFilePolicy", readinessVerifier);
+        Assert.Contains("reviewerPickupFiles must include its template file", readinessVerifier);
+        Assert.Contains("reviewerPickupFiles must include release-evidence-reviewer-blockers.md", readinessVerifier);
         Assert.Contains("humanReleaseEvidenceCloseout", readinessVerifier);
         Assert.Contains("humanReleaseEvidenceCloseoutStepCodes", readinessVerifier);
         Assert.Contains("pick-up-reviewer-workspace", readinessVerifier);

@@ -1885,6 +1885,7 @@ export interface HumanReleaseEvidenceGate {
   releaseManifestCode: string;
   evidenceArtifact: string;
   blocksRelease: boolean;
+  reviewerPickupFiles: string[];
   requiredEvidence: string[];
   nextAction: string;
 }
@@ -2264,6 +2265,7 @@ const humanReleaseEvidenceGateSchema = z.object({
   releaseManifestCode: z.string().min(1),
   evidenceArtifact: z.string().min(1),
   blocksRelease: z.boolean(),
+  reviewerPickupFiles: z.array(z.string().min(1)),
   requiredEvidence: z.array(z.string().min(1)),
   nextAction: z.string().min(1),
 });
@@ -4862,6 +4864,18 @@ function assertHumanReleaseEvidence(report: ProductionReadinessReport) {
     if (item.requiredEvidence.length < 2) {
       throw new Error(
         `Invalid production readiness report contract: humanReleaseEvidence.${itemIndex}.requiredEvidence - at least two retained evidence references are required`,
+      );
+    }
+
+    if (!item.reviewerPickupFiles.includes(item.templateFile)) {
+      throw new Error(
+        `Invalid production readiness report contract: humanReleaseEvidence.${itemIndex}.reviewerPickupFiles - must include the gate template file`,
+      );
+    }
+
+    if (!item.reviewerPickupFiles.includes("release-evidence-reviewer-blockers.md")) {
+      throw new Error(
+        `Invalid production readiness report contract: humanReleaseEvidence.${itemIndex}.reviewerPickupFiles - must include release-evidence-reviewer-blockers.md`,
       );
     }
   });

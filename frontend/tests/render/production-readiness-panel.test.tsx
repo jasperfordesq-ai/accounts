@@ -253,9 +253,24 @@ function humanEvidenceGate(
     releaseManifestCode,
     evidenceArtifact,
     blocksRelease: true,
+    reviewerPickupFiles: reviewerPickupFilesForGate(code, templateFile),
     requiredEvidence: [`${templateFile} completed by a named reviewer`, `${evidenceArtifact} retained in the release pack`],
     nextAction: `Complete and verify ${templateFile} for the exact release candidate.`,
   };
+}
+
+function reviewerPickupFilesForGate(code: string, templateFile: string): string[] {
+  const commonBlocker = "release-evidence-reviewer-blockers.md";
+  const filesByCode: Record<string, string[]> = {
+    visualQa: [templateFile, "visual-smoke-manifest.json", "visual-smoke-evidence-report.json", "accountant-workbench-evidence-report.json", commonBlocker],
+    sourceLawReview: [templateFile, "production-readiness-report.json", "production-readiness-verification-report.json", commonBlocker],
+    externalRosIxbrlValidation: [templateFile, "production-readiness-report.json", commonBlocker],
+    qualifiedAccountantAcceptance: [templateFile, "production-readiness-report.json", "accountant-workbench-evidence-report.json", commonBlocker],
+    manualHandoffAcceptance: [templateFile, "production-readiness-report.json", commonBlocker],
+    monitoringProviderConfirmation: [templateFile, "monitoring-error-routing-report.json", "structured-log-report.json", commonBlocker],
+  };
+
+  return filesByCode[code] ?? [templateFile, commonBlocker];
 }
 
 function sampleReport(): ProductionReadinessReport {
