@@ -952,6 +952,80 @@ function Assert-ReleaseEvidenceHumanCompletionManifest {
     }
 }
 
+function Assert-ReleaseEvidenceProductionScorecardCompletion {
+    param(
+        [object]$ReleaseEvidence,
+        [object[]]$RequiredTemplates,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    if ($ReleaseEvidence.PSObject.Properties.Name -contains "__missing" -or
+        $ReleaseEvidence.PSObject.Properties.Name -contains "__invalid") {
+        return
+    }
+
+    $scorecard = Get-JsonProperty $ReleaseEvidence @("productionScorecardCompletion")
+    if ($null -eq $scorecard) {
+        Add-Failure $Failures "release-evidence-report.json productionScorecardCompletion must be present."
+        return
+    }
+
+    if ([string](Get-JsonProperty $scorecard @("status")) -ne "complete") {
+        Add-Failure $Failures "release-evidence-report.json productionScorecardCompletion.status must be complete."
+    }
+    if ([int](Get-JsonProperty $scorecard @("currentScore")) -ne 700) {
+        Add-Failure $Failures "release-evidence-report.json productionScorecardCompletion.currentScore must be 700."
+    }
+    if ([int](Get-JsonProperty $scorecard @("targetScore")) -ne 700) {
+        Add-Failure $Failures "release-evidence-report.json productionScorecardCompletion.targetScore must be 700."
+    }
+    if ([int](Get-JsonProperty $scorecard @("acceptedHumanEvidenceCount")) -ne $RequiredTemplates.Count) {
+        Add-Failure $Failures "release-evidence-report.json productionScorecardCompletion.acceptedHumanEvidenceCount must equal the required human evidence count."
+    }
+    if ([int](Get-JsonProperty $scorecard @("requiredHumanEvidenceCount")) -ne $RequiredTemplates.Count) {
+        Add-Failure $Failures "release-evidence-report.json productionScorecardCompletion.requiredHumanEvidenceCount must equal the required human evidence count."
+    }
+    if (@((Get-JsonProperty $scorecard @("remainingHumanEvidence"))).Count -ne 0) {
+        Add-Failure $Failures "release-evidence-report.json productionScorecardCompletion.remainingHumanEvidence must be empty."
+    }
+    if ([string](Get-JsonProperty $scorecard @("completionPolicy")) -notlike "*zero blocking failures*") {
+        Add-Failure $Failures "release-evidence-report.json productionScorecardCompletion.completionPolicy must mention zero blocking failures."
+    }
+
+    foreach ($required in $RequiredTemplates) {
+        Assert-ArrayContains @((Get-JsonProperty $scorecard @("acceptedHumanEvidence"))) ([string]$required.evidenceName) "release-evidence-report.json productionScorecardCompletion.acceptedHumanEvidence" $Failures
+    }
+
+    $expectedCategories = @(
+        [pscustomobject]@{ code = "architecture-documentation"; currentScore = 100; targetScore = 100; completionGate = "all-human-release-evidence-accepted" },
+        [pscustomobject]@{ code = "backend-statutory-accounting-engine"; currentScore = 250; targetScore = 250; completionGate = "machine-and-template-verification-complete" },
+        [pscustomobject]@{ code = "frontend-accountant-workbench"; currentScore = 200; targetScore = 200; completionGate = "visual-qa-human-evidence-accepted" },
+        [pscustomobject]@{ code = "security-auth-tenant-platform-guardrails"; currentScore = 150; targetScore = 150; completionGate = "machine-and-template-verification-complete" }
+    )
+
+    $categories = @((Get-JsonProperty $scorecard @("categories")))
+    foreach ($expected in $expectedCategories) {
+        $category = $categories |
+            Where-Object { [string](Get-JsonProperty $_ @("code")) -eq $expected.code } |
+            Select-Object -First 1
+
+        if ($null -eq $category) {
+            Add-Failure $Failures "release-evidence-report.json productionScorecardCompletion.categories must include $($expected.code)."
+            continue
+        }
+
+        if ([int](Get-JsonProperty $category @("currentScore")) -ne $expected.currentScore) {
+            Add-Failure $Failures "release-evidence-report.json productionScorecardCompletion.categories.$($expected.code).currentScore must be $($expected.currentScore)."
+        }
+        if ([int](Get-JsonProperty $category @("targetScore")) -ne $expected.targetScore) {
+            Add-Failure $Failures "release-evidence-report.json productionScorecardCompletion.categories.$($expected.code).targetScore must be $($expected.targetScore)."
+        }
+        if ([string](Get-JsonProperty $category @("completionGate")) -ne $expected.completionGate) {
+            Add-Failure $Failures "release-evidence-report.json productionScorecardCompletion.categories.$($expected.code).completionGate must be $($expected.completionGate)."
+        }
+    }
+}
+
 function Assert-ReleaseEvidenceWorkspaceControlManifest {
     param(
         [object]$ReleaseEvidence,
@@ -1762,6 +1836,7 @@ if (-not ($releaseEvidence.PSObject.Properties.Name -contains "__missing")) {
     }
     Assert-ReleaseEvidenceTemplateManifest $releaseEvidence $resolvedDirectory.Path $requiredReleaseEvidenceTemplates $failures
     Assert-ReleaseEvidenceHumanCompletionManifest $releaseEvidence $requiredReleaseEvidenceTemplates $failures
+    Assert-ReleaseEvidenceProductionScorecardCompletion $releaseEvidence $requiredReleaseEvidenceTemplates $failures
     Assert-ReleaseEvidenceWorkspaceControlManifest $releaseEvidence $resolvedDirectory.Path $requiredReleaseEvidenceWorkspaceControls $failures
     Assert-ReleaseEvidenceMachineSummary $releaseEvidenceMachineSummary $releaseEvidence $resolvedDirectory.Path $releaseCommitSha $releaseRunUrl $failures
     Assert-ReleaseEvidenceWorkspaceVerificationReport $releaseEvidenceWorkspaceVerificationReport $releaseEvidence $releaseCommitSha $releaseRunUrl $expectedReleaseEvidenceWorkspaceInventory $failures

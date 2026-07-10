@@ -2606,6 +2606,24 @@ Reviewer assignment pickup-file guidance:
   `ci-machine-evidence-pack-report.json` when all six reviewer assignment rows
   retain complete pickup-file guidance.
 
+Release evidence scorecard completion proof:
+
+- `scripts/verify-release-evidence.ps1` now writes
+  `productionScorecardCompletion` into `release-evidence-report.json`. With blank
+  reviewer templates it stays `blocked` at 698/700 and lists the six remaining
+  human gates; after real named reviewers complete all six templates and the
+  verifier has zero failures, the same section must prove 700/700 with category
+  scores of 100/100 architecture/documentation, 250/250 backend, 200/200 frontend,
+  and 150/150 security/platform.
+- `scripts/verify-release-artifact-pack.ps1` now rejects final artifact packs whose
+  retained `release-evidence-report.json` lacks that scorecard completion proof,
+  does not list all six accepted human evidence gates, has remaining human evidence,
+  or does not show the final category scores. This makes the last two scorecard
+  points auditable without allowing machine evidence to masquerade as sign-off.
+- The production scorecard remains 698/700 until real named human evidence is
+  supplied; this slice only makes the eventual 700/700 release evidence state
+  explicit and pack-verifiable.
+
 ## What Is Left To Do
 
 Highest-priority next steps:
