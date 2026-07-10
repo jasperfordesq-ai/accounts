@@ -750,6 +750,7 @@ function Assert-WorkspaceVerificationInventory {
             "release-evidence-machine-summary.json",
             "release-evidence-reviewer-index.md",
             "release-evidence-reviewer-completion.json",
+            "release-evidence-reviewer-assignments.json",
             "release-evidence-reviewer-blockers.md",
             "release-evidence-report.json",
             "release-evidence-verifier-output.txt"

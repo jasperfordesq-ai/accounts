@@ -18462,6 +18462,7 @@ public class AccountsWorkflowTests
         Assert.Contains("release-evidence-workspace-manifest.json", runbook);
         Assert.Contains("release-evidence-reviewer-index.md", runbook);
         Assert.Contains("release-evidence-reviewer-completion.json", runbook);
+        Assert.Contains("release-evidence-reviewer-assignments.json", runbook);
         Assert.Contains("release-evidence-reviewer-blockers.md", runbook);
         Assert.Contains("release-evidence-machine-summary.json", runbook);
         Assert.Contains("accountant-workbench-evidence-report.json", runbook);
@@ -18481,6 +18482,7 @@ public class AccountsWorkflowTests
         Assert.Contains("release-evidence-verifier-output.txt", workspaceVerifier);
         Assert.Contains("release-evidence-reviewer-index.md", workspaceVerifier);
         Assert.Contains("release-evidence-reviewer-completion.json", workspaceVerifier);
+        Assert.Contains("release-evidence-reviewer-assignments.json", workspaceVerifier);
         Assert.Contains("release-evidence-reviewer-blockers.md", workspaceVerifier);
         Assert.Contains("Release Evidence Reviewer Blockers", workspaceVerifier);
         Assert.Contains("reviewer-action-required", workspaceVerifier);
@@ -18545,6 +18547,7 @@ public class AccountsWorkflowTests
         Assert.Contains("Release evidence workspace verification report workspaceFiles", script);
         Assert.Contains("release-evidence-reviewer-index.md", script);
         Assert.Contains("release-evidence-reviewer-completion.json", script);
+        Assert.Contains("release-evidence-reviewer-assignments.json", script);
         Assert.Contains("release-evidence-reviewer-blockers.md", script);
         Assert.Contains("release-evidence-verifier-output.txt", script);
         Assert.Contains("Convert-JsonValueToEvidenceString", workspaceScript);
@@ -18565,6 +18568,12 @@ public class AccountsWorkflowTests
         Assert.Contains("Get-FileSha256", workspaceVerifier);
         Assert.Contains("Reviewer completion ledger entries must contain exactly", workspaceVerifier);
         Assert.Contains("Reviewer completion ledger $($expected.TemplateFile).completed must remain false before named human sign-off.", workspaceVerifier);
+        Assert.Contains("Reviewer assignment ledger entries must contain exactly", workspaceVerifier);
+        Assert.Contains("assignmentStatus = \"unassigned\"", workspaceVerifier);
+        Assert.Contains("assignedReviewerName", workspaceVerifier);
+        Assert.Contains("assignedReviewerEmail", workspaceVerifier);
+        Assert.Contains("must be blank before named reviewer routing", workspaceVerifier);
+        Assert.Contains("Workspace manifest reviewerAssignmentFile must be release-evidence-reviewer-assignments.json.", workspaceVerifier);
         Assert.Contains("Prepared release evidence workspace unexpectedly passed before named human sign-off.", workspaceVerifier);
         Assert.Contains("Prepared release evidence workspace must keep all human evidence entries incomplete.", workspaceVerifier);
         Assert.Contains("pendingHumanEvidenceBlockers", workspaceVerifier);
@@ -18578,6 +18587,7 @@ public class AccountsWorkflowTests
         Assert.Contains("pending-human-evidence", workspaceScript);
         Assert.Contains("humanFieldsLeftBlank", workspaceScript);
         Assert.Contains("reviewerQueue", workspaceScript);
+        Assert.Contains("reviewerAssignmentFile", workspaceScript);
         Assert.Contains("machineEvidenceSummaryFile", workspaceScript);
         Assert.Contains("release-evidence-machine-summary.json", workspaceScript);
         Assert.Contains("This summary is machine evidence only", workspaceScript);
@@ -19276,6 +19286,7 @@ public class AccountsWorkflowTests
         Assert.Contains("retained workspace inventory file $expectedFile sha256 must match release-evidence-workspace-verification-report.json", script);
         Assert.Contains("release-evidence-reviewer-index.md", script);
         Assert.Contains("release-evidence-reviewer-completion.json", script);
+        Assert.Contains("release-evidence-reviewer-assignments.json", script);
         Assert.Contains("release-evidence-reviewer-blockers.md", script);
         Assert.Contains("release-evidence-verifier-output.txt", script);
         Assert.Contains("evidenceType = \"release-evidence-workspace-control\"", script);

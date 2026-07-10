@@ -31,6 +31,7 @@ $requiredWorkspaceFiles = @(
         "release-evidence-machine-summary.json",
         "release-evidence-reviewer-index.md",
         "release-evidence-reviewer-completion.json",
+        "release-evidence-reviewer-assignments.json",
         "release-evidence-reviewer-blockers.md",
         "release-evidence-report.json",
         "release-evidence-verifier-output.txt"
@@ -867,6 +868,7 @@ $manifestPath = Join-Path $resolvedWorkspace.Path "release-evidence-workspace-ma
 $machineEvidenceSummaryPath = Join-Path $resolvedWorkspace.Path "release-evidence-machine-summary.json"
 $reviewerIndexPath = Join-Path $resolvedWorkspace.Path "release-evidence-reviewer-index.md"
 $reviewerCompletionPath = Join-Path $resolvedWorkspace.Path "release-evidence-reviewer-completion.json"
+$reviewerAssignmentPath = Join-Path $resolvedWorkspace.Path "release-evidence-reviewer-assignments.json"
 $reviewerBlockersPath = Join-Path $resolvedWorkspace.Path "release-evidence-reviewer-blockers.md"
 $releaseEvidenceVerifierOutputPath = Join-Path $resolvedWorkspace.Path "release-evidence-verifier-output.txt"
 $manifest = $null
@@ -887,6 +889,10 @@ if (-not (Test-Path -LiteralPath $manifestPath)) {
 
     if ([string](Get-JsonPropertyValue $manifest "reviewerCompletionFile") -ne "release-evidence-reviewer-completion.json") {
         Add-Failure $failures "Workspace manifest reviewerCompletionFile must be release-evidence-reviewer-completion.json."
+    }
+
+    if ([string](Get-JsonPropertyValue $manifest "reviewerAssignmentFile") -ne "release-evidence-reviewer-assignments.json") {
+        Add-Failure $failures "Workspace manifest reviewerAssignmentFile must be release-evidence-reviewer-assignments.json."
     }
 
     if ([string](Get-JsonPropertyValue $manifest "machineEvidenceSummaryFile") -ne "release-evidence-machine-summary.json") {
@@ -1114,12 +1120,14 @@ if (-not (Test-Path -LiteralPath $reviewerIndexPath)) {
         "It is not release approval",
         "Reviewer Queue",
         "Reviewer Completion Ledger",
+        "Reviewer Assignment Ledger",
         "Reviewer Handoff Files",
         "release-evidence-reviewer-blockers.md",
         "release-evidence-verifier-output.txt",
         "release-evidence-workspace-verification-report.json",
         "Reviewer Closeout Sequence",
         "release-evidence-reviewer-workspace",
+        "release-evidence-reviewer-assignments.json",
         "pending human blocker inventory",
         "six accepted ``humanEvidenceCompletion`` entries",
         "scripts/verify-release-artifact-pack.ps1",
@@ -1205,6 +1213,69 @@ if (-not (Test-Path -LiteralPath $reviewerCompletionPath)) {
 
         if ([string]::IsNullOrWhiteSpace([string](Get-JsonPropertyValue $entry "humanAction"))) {
             Add-Failure $failures "Reviewer completion ledger $($expected.TemplateFile).humanAction must describe the remaining human-only action."
+        }
+    }
+}
+
+if (-not (Test-Path -LiteralPath $reviewerAssignmentPath)) {
+    Add-Failure $failures "Workspace must include release-evidence-reviewer-assignments.json."
+} else {
+    $assignmentLedger = Get-Content -LiteralPath $reviewerAssignmentPath -Raw | ConvertFrom-Json
+
+    if ([string](Get-JsonPropertyValue $assignmentLedger "status") -ne "pending-human-assignment") {
+        Add-Failure $failures "Reviewer assignment ledger status must be pending-human-assignment."
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($CommitSha) -and [string](Get-JsonPropertyValue (Get-JsonPropertyValue $assignmentLedger "releaseCandidate") "commitSha") -ne $CommitSha) {
+        Add-Failure $failures "Reviewer assignment ledger releaseCandidate.commitSha must match CommitSha."
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($GitHubActionsRunUrl) -and [string](Get-JsonPropertyValue (Get-JsonPropertyValue $assignmentLedger "releaseCandidate") "githubActionsRunUrl") -ne $GitHubActionsRunUrl) {
+        Add-Failure $failures "Reviewer assignment ledger releaseCandidate.githubActionsRunUrl must match GitHubActionsRunUrl."
+    }
+
+    Assert-TextContains ([string](Get-JsonPropertyValue $assignmentLedger "assignmentPolicy")) "routing metadata only" "release-evidence-reviewer-assignments.json assignmentPolicy" $failures
+    Assert-TextContains ([string](Get-JsonPropertyValue $assignmentLedger "assignmentPolicy")) "not evidence acceptance" "release-evidence-reviewer-assignments.json assignmentPolicy" $failures
+
+    $assignmentEntries = @((Get-JsonPropertyValue $assignmentLedger "entries"))
+    if ($assignmentEntries.Count -ne $requiredReviewerQueue.Count) {
+        Add-Failure $failures "Reviewer assignment ledger entries must contain exactly $($requiredReviewerQueue.Count) entries."
+    }
+
+    foreach ($expected in $requiredReviewerQueue) {
+        $entry = $assignmentEntries | Where-Object {
+            [string](Get-JsonPropertyValue $_ "templateFile") -eq $expected.TemplateFile
+        } | Select-Object -First 1
+
+        if ($null -eq $entry) {
+            Add-Failure $failures "Reviewer assignment ledger entries must include $($expected.TemplateFile)."
+            continue
+        }
+
+        $expectedFields = @{
+            evidenceGate = $expected.EvidenceGate
+            requiredReviewerRole = $expected.ReviewerRole
+            signOffGate = $expected.SignOffGate
+            assignmentStatus = "unassigned"
+            escalationOwnerRole = "Release operator"
+        }
+
+        foreach ($propertyName in $expectedFields.Keys) {
+            $actual = [string](Get-JsonPropertyValue $entry $propertyName)
+            $expectedValue = [string]$expectedFields[$propertyName]
+            if ($actual -ne $expectedValue) {
+                Add-Failure $failures "Reviewer assignment ledger $($expected.TemplateFile).$propertyName must be '$expectedValue'."
+            }
+        }
+
+        foreach ($blankField in @("assignedReviewerName", "assignedReviewerEmail", "dueAtUtc")) {
+            if (-not [string]::IsNullOrWhiteSpace([string](Get-JsonPropertyValue $entry $blankField))) {
+                Add-Failure $failures "Reviewer assignment ledger $($expected.TemplateFile).$blankField must be blank before named reviewer routing."
+            }
+        }
+
+        if ([string]::IsNullOrWhiteSpace([string](Get-JsonPropertyValue $entry "humanAction"))) {
+            Add-Failure $failures "Reviewer assignment ledger $($expected.TemplateFile).humanAction must describe the remaining human-only action."
         }
     }
 }
@@ -1334,6 +1405,7 @@ $verificationReport = [ordered]@{
     releaseEvidenceReportPath = $ReportPath
     releaseEvidenceVerifierOutputPath = $releaseEvidenceVerifierOutputPath
     reviewerCompletionPath = $reviewerCompletionPath
+    reviewerAssignmentPath = $reviewerAssignmentPath
     reviewerBlockersPath = $reviewerBlockersPath
     machineEvidenceSummaryPath = $machineEvidenceSummaryPath
     releaseCandidate = [ordered]@{

@@ -766,6 +766,34 @@ $completionLedger = [ordered]@{
 $completionLedgerPath = Join-Path $resolvedOutputDirectory $completionLedgerFile
 $completionLedger | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $completionLedgerPath
 
+$assignmentLedgerFile = "release-evidence-reviewer-assignments.json"
+$assignmentLedger = [ordered]@{
+    status = "pending-human-assignment"
+    generatedAt = [DateTimeOffset]::UtcNow.ToString("O")
+    releaseCandidate = [ordered]@{
+        commitSha = $CommitSha
+        githubActionsRunUrl = $GitHubActionsRunUrl
+    }
+    assignmentPolicy = "Assign a named human owner for each gate before review starts; this ledger is routing metadata only and is not evidence acceptance or professional sign-off."
+    entries = @($reviewerQueue | ForEach-Object {
+        [ordered]@{
+            evidenceGate = $_.EvidenceGate
+            templateFile = $_.TemplateFile
+            requiredReviewerRole = $_.ReviewerRole
+            signOffGate = $_.SignOffGate
+            assignmentStatus = "unassigned"
+            assignedReviewerName = ""
+            assignedReviewerEmail = ""
+            dueAtUtc = ""
+            escalationOwnerRole = "Release operator"
+            humanAction = $_.HumanAction
+        }
+    })
+}
+
+$assignmentLedgerPath = Join-Path $resolvedOutputDirectory $assignmentLedgerFile
+$assignmentLedger | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $assignmentLedgerPath
+
 $manifest = [ordered]@{
     status = "pending-human-evidence"
     generatedAt = [DateTimeOffset]::UtcNow.ToString("O")
@@ -779,6 +807,7 @@ $manifest = [ordered]@{
     structuredLogReportPath = $structuredLogReportPath
     reviewerIndexFile = "release-evidence-reviewer-index.md"
     reviewerCompletionFile = $completionLedgerFile
+    reviewerAssignmentFile = $assignmentLedgerFile
     machineEvidenceSummaryFile = $machineEvidenceSummaryFile
     preparedTemplates = @($preparedTemplates | ForEach-Object { $_.FileName })
     retainedMachineEvidence = @($retainedMachineEvidence)
@@ -839,13 +868,17 @@ $($reviewerRows -join "`n")
 
 Use ``release-evidence-reviewer-completion.json`` as the handoff checklist. It is generated with all six entries in ``pending-human-evidence`` status and must not be treated as approval. The release evidence verifier remains the authority after reviewers complete the Markdown templates.
 
+## Reviewer Assignment Ledger
+
+Use ``release-evidence-reviewer-assignments.json`` to assign named owners and target dates before review starts. It is generated with all six gates in ``unassigned`` status and must not be treated as evidence acceptance, professional sign-off, or release approval.
+
 ## Reviewer Handoff Files
 
 After workspace verification runs, retain ``release-evidence-reviewer-blockers.md``, ``release-evidence-verifier-output.txt``, and ``release-evidence-workspace-verification-report.json`` with this index. These files show why the prepared workspace is still blocked before named human sign-off and preserve the machine-evidence provenance chain reviewers must not overwrite.
 
 ## Reviewer Closeout Sequence
 
-1. Inspect this ``release-evidence-reviewer-workspace`` artifact, ``release-evidence-reviewer-index.md``, ``release-evidence-reviewer-completion.json`` and the pending human blocker inventory before assigning reviewers.
+1. Inspect this ``release-evidence-reviewer-workspace`` artifact, ``release-evidence-reviewer-index.md``, ``release-evidence-reviewer-completion.json``, ``release-evidence-reviewer-assignments.json`` and the pending human blocker inventory before assigning reviewers.
 2. Complete the six Markdown templates with named reviewer identities, UTC timestamps, retained evidence references, accepted decisions, and signatures.
 3. Run ``scripts/verify-release-evidence.ps1 -EvidenceDirectory <this-workspace> -ReportPath <this-workspace>/release-evidence-report.json`` and retain the passing ``release-evidence-report.json``.
 4. Confirm ``release-evidence-report.json`` has six accepted ``humanEvidenceCompletion`` entries and no blocking failures.
@@ -865,5 +898,6 @@ Set-Content -LiteralPath $reviewerIndexPath -Value $indexContent -NoNewline
     manifestPath = $manifestPath
     reviewerIndexPath = $reviewerIndexPath
     reviewerCompletionPath = $completionLedgerPath
+    reviewerAssignmentPath = $assignmentLedgerPath
     preparedTemplateCount = $preparedTemplates.Count
 }

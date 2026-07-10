@@ -249,6 +249,7 @@ $expectedReleaseEvidenceWorkspaceInventory = @(
     "release-evidence-machine-summary.json",
     "release-evidence-reviewer-index.md",
     "release-evidence-reviewer-completion.json",
+    "release-evidence-reviewer-assignments.json",
     "release-evidence-reviewer-blockers.md",
     "release-evidence-report.json",
     "release-evidence-verifier-output.txt"
@@ -1279,6 +1280,7 @@ $requiredReleaseEvidenceWorkspaceControls = @(
 $requiredReleaseEvidenceReviewerHandoffFiles = @(
     [pscustomobject]@{ evidenceName = "releaseEvidenceReviewerIndex"; fileName = "release-evidence-reviewer-index.md" },
     [pscustomobject]@{ evidenceName = "releaseEvidenceReviewerCompletion"; fileName = "release-evidence-reviewer-completion.json" },
+    [pscustomobject]@{ evidenceName = "releaseEvidenceReviewerAssignments"; fileName = "release-evidence-reviewer-assignments.json" },
     [pscustomobject]@{ evidenceName = "releaseEvidenceReviewerBlockers"; fileName = "release-evidence-reviewer-blockers.md" },
     [pscustomobject]@{ evidenceName = "releaseEvidenceVerifierOutput"; fileName = "release-evidence-verifier-output.txt" }
 )

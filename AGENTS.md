@@ -2081,9 +2081,10 @@ Release evidence reviewer machine summary:
   evidence fields to be present, inventories the summary with the rest of the
   workspace, and still proves release evidence remains blocked before named
   human sign-off.
-- The expected pre-report workspace inventory is now 20 files: six templates,
-  seven retained machine evidence JSONs, the machine summary, and six generated
-  reviewer/release-evidence control files.
+- The expected pre-report workspace inventory is now 21 files: six templates,
+  seven retained machine evidence JSONs, the machine summary, and seven generated
+  reviewer/release-evidence control files, including the pending reviewer
+  assignment ledger.
 - Verification completed locally:
   - PowerShell parser checks passed for `scripts/new-release-evidence-workspace.ps1`
     and `scripts/verify-release-evidence-workspace.ps1`.
@@ -2197,10 +2198,11 @@ Release evidence workspace inventory verification:
   evidence must retain a workspace verification report that names the exact prepared
   reviewer workspace inventory. The verifier now checks
   `release-evidence-workspace-verification-report.json.requiredWorkspaceFiles` for
-  the canonical 20 files: six human templates, seven retained machine evidence JSONs,
+  the canonical 21 files: six human templates, seven retained machine evidence JSONs,
   `release-evidence-workspace-manifest.json`,
   `release-evidence-machine-summary.json`, `release-evidence-reviewer-index.md`,
   `release-evidence-reviewer-completion.json`,
+  `release-evidence-reviewer-assignments.json`,
   `release-evidence-reviewer-blockers.md`, the expected
   `release-evidence-report.json`, and `release-evidence-verifier-output.txt`.
 - It also checks `workspaceFiles` includes every required file with a positive byte
@@ -2223,13 +2225,13 @@ Release artifact pack workspace verification parsing:
   trusting its hash entry in `release-evidence-report.json`.
 - The final artifact-pack gate now requires that retained workspace verification
   report to be `passed`, have zero failures, carry the same release candidate
-  identity, and list exactly the canonical 20 prepared workspace files with positive
+  identity, and list exactly the canonical 21 prepared workspace files with positive
   byte sizes and lowercase SHA-256 hashes.
 
 Release artifact pack workspace inventory retention:
 
 - This slice makes `scripts/verify-release-artifact-pack.ps1` require every file named
-  by the canonical 20-file prepared workspace inventory to be retained in the final
+  by the canonical 21-file prepared workspace inventory to be retained in the final
   artifact pack.
 - Immutable machine/reviewer handoff files must retain byte size and SHA-256 matching
   `release-evidence-workspace-verification-report.json`; the six human templates and
@@ -2256,7 +2258,7 @@ Production readiness report evidence surface:
 
 - This slice updates the production readiness scorecard and frontend readiness fixtures
   so the security/platform evidence explicitly names the workspace verification report,
-  exact 20-file prepared workspace inventory, and retained reviewer handoff manifest
+  exact 21-file prepared workspace inventory, and retained reviewer handoff manifest
   now required by the release artifact pack verifier.
 - The manual release checklist fallback text for `release-artifact-pack` now tells
   operators to collect workspace verification and reviewer handoff reports alongside
@@ -2313,7 +2315,7 @@ Production readiness closeout verifier coverage:
 - `scripts/verify-ci-machine-evidence-pack.ps1` and
   `scripts/verify-release-artifact-pack.ps1` now reject stale
   `production-readiness-verification-report.json` files that do not prove both the
-  six human evidence gate codes and the four closeout step codes.
+  six human evidence gate codes and the five closeout step codes.
 - Local checks used the latest green CI `production-readiness-report` artifact from
   run `29047751811`: the refreshed verifier passed and emitted the closeout coverage
   array, while a tampered report whose final closeout artifact pointed away from
@@ -2330,7 +2332,7 @@ Release evidence workspace readiness-verification retention:
 - `scripts/verify-release-evidence-workspace.ps1`,
   `scripts/verify-release-evidence.ps1`, and
   `scripts/verify-release-artifact-pack.ps1` now treat the prepared reviewer
-  workspace as a canonical 20-file inventory, including the retained readiness
+  workspace as a canonical 21-file inventory, including the retained readiness
   verification report with byte-size/SHA-256 provenance.
 - CI workspace preparation now passes `-ProductionReadinessVerificationReportPath`.
   A local regeneration from green CI run `29048642303` produced a verified workspace
@@ -2483,9 +2485,9 @@ Prepared workspace pending-human blocker inventory:
 
 Human evidence closeout workspace pickup:
 
-- Latest verified green release-evidence commit: `a80e41b Inventory pending human
-  evidence blockers`, GitHub Actions run
-  `https://github.com/jasperfordesq-ai/accounts/actions/runs/29057611027`.
+- Latest verified green release-evidence commit before this slice: `529c045 Remove
+  closeout render warning`, GitHub Actions run
+  `https://github.com/jasperfordesq-ai/accounts/actions/runs/29058731379`.
 - `humanReleaseEvidenceCloseout` is now a five-step operator sequence. Step 1 is
   to pick up the prepared `release-evidence-reviewer-workspace` artifact and
   inspect `release-evidence-reviewer-index.md`,
@@ -2496,6 +2498,23 @@ Human evidence closeout workspace pickup:
   pack verifier all require the `pick-up-reviewer-workspace` closeout code before
   template completion, release-evidence verification, six accepted
   `humanEvidenceCompletion` rows and final artifact-pack verification.
+
+Prepared workspace reviewer assignment ledger:
+
+- `scripts/new-release-evidence-workspace.ps1` now emits
+  `release-evidence-reviewer-assignments.json` beside the reviewer index,
+  completion ledger and blocker summary. It starts with all six human evidence
+  gates in `unassigned` status, blank reviewer name/email/due-date fields, and a
+  release-operator escalation owner.
+- `scripts/verify-release-evidence-workspace.ps1` now requires that assignment
+  ledger, proves it is routing metadata only and not evidence acceptance, and
+  records `reviewerAssignmentPath` in
+  `release-evidence-workspace-verification-report.json`.
+- `scripts/verify-release-evidence.ps1` and
+  `scripts/verify-release-artifact-pack.ps1` now require the assignment ledger in
+  the exact prepared-workspace inventory. The final artifact-pack manifest also
+  treats it as a retained `release-evidence-reviewer-handoff` file with byte-size
+  and SHA-256 evidence.
 
 ## What Is Left To Do
 

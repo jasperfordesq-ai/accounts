@@ -1094,7 +1094,8 @@ public class ProductionReadinessReportTests
             && evidence.Contains("required default-CI and manual release manifest row", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["security-auth-tenant-platform-guardrails"].CurrentEvidence, evidence =>
             evidence.Contains("release-evidence-workspace-verification-report.json", StringComparison.OrdinalIgnoreCase)
-            && evidence.Contains("20-file prepared workspace inventory", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("21-file prepared workspace inventory", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("pending reviewer assignment ledger", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("production-readiness-verification-report.json", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("reviewer handoff", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["security-auth-tenant-platform-guardrails"].CurrentEvidence, evidence =>
