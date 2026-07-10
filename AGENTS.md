@@ -2574,6 +2574,11 @@ Reviewer assignment pickup-file guidance:
   `humanReleaseEvidenceReviewerPickupFiles` coverage under `productionReadiness`,
   and both the workspace verifier and final release-evidence verifier reject
   summaries that drop any expected per-gate reviewer pickup file.
+- `scripts/verify-release-artifact-pack.ps1` now independently parses the retained
+  `release-evidence-machine-summary.json`, requiring passed production-readiness
+  verification, zero verification failures, matching release-candidate identity and
+  the full expected `productionReadiness.humanReleaseEvidenceReviewerPickupFiles`
+  map before the final artifact pack can pass.
 - `scripts/new-release-evidence-workspace.ps1` now writes `reviewerPickupFiles`
   into each row of `release-evidence-reviewer-assignments.json`, so every
   unassigned human gate lists the exact retained template, machine-evidence and
