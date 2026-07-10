@@ -1689,11 +1689,32 @@ $releaseEvidenceWorkspaceSummary = [ordered]@{
     reviewerAssignmentInventoryCount = 0
     unassignedReviewerAssignmentCount = 0
     blankReviewerAssignmentFieldCount = 0
+    reviewerAssignmentPickupFileGuidanceCount = 0
 }
 
 if (-not ($releaseEvidenceWorkspaceVerificationReport.PSObject.Properties.Name -contains "__missing") -and
     -not ($releaseEvidenceWorkspaceVerificationReport.PSObject.Properties.Name -contains "__invalid")) {
     $assignmentInventory = @((Get-JsonProperty $releaseEvidenceWorkspaceVerificationReport @("reviewerAssignmentInventory")))
+    $assignmentPickupFileGuidanceCount = @(
+        foreach ($assignment in $assignmentInventory) {
+            $evidenceName = [string](Get-JsonProperty $assignment @("evidenceName"))
+            $required = $requiredReleaseEvidenceTemplates |
+                Where-Object { [string](Get-JsonProperty $_ @("evidenceName")) -eq $evidenceName } |
+                Select-Object -First 1
+
+            if ($null -eq $required) {
+                continue
+            }
+
+            $pickupFiles = @((Get-JsonProperty $assignment @("reviewerPickupFiles")) | ForEach-Object { [string]$_ })
+            $requiredPickupFiles = @((Get-JsonProperty $required @("requiredPickupFiles")) | ForEach-Object { [string]$_ })
+            $missingPickupFiles = @($requiredPickupFiles | Where-Object { -not ($pickupFiles -contains $_) })
+            if ($requiredPickupFiles.Count -gt 0 -and $missingPickupFiles.Count -eq 0) {
+                $assignment
+            }
+        }
+    ).Count
+
     $releaseEvidenceWorkspaceSummary = [ordered]@{
         status = "retained"
         verificationStatus = [string](Get-JsonProperty $releaseEvidenceWorkspaceVerificationReport @("status"))
@@ -1711,6 +1732,7 @@ if (-not ($releaseEvidenceWorkspaceVerificationReport.PSObject.Properties.Name -
             [string]::IsNullOrWhiteSpace([string](Get-JsonProperty $_ @("assignedReviewerEmail"))) -and
             [string]::IsNullOrWhiteSpace([string](Get-JsonProperty $_ @("dueAtUtc")))
         }).Count
+        reviewerAssignmentPickupFileGuidanceCount = $assignmentPickupFileGuidanceCount
     }
 }
 

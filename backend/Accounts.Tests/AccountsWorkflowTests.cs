@@ -19311,6 +19311,7 @@ public class AccountsWorkflowTests
         Assert.Contains("pendingHumanEvidenceBlockerCount", script);
         Assert.Contains("unassignedReviewerAssignmentCount", script);
         Assert.Contains("blankReviewerAssignmentFieldCount", script);
+        Assert.Contains("reviewerAssignmentPickupFileGuidanceCount", script);
         Assert.Contains("Assert-ReleaseEvidenceWorkspaceInventoryRetention", script);
         Assert.Contains("Release artifact pack must retain workspace inventory file", script);
         Assert.Contains("retained workspace inventory file $expectedFile sha256 must match release-evidence-workspace-verification-report.json", script);

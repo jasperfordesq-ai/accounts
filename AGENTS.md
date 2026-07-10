@@ -2549,6 +2549,10 @@ Final release artifact workspace summary:
   release identity, canonical 21-file prepared workspace count,
   prepared-human-control count, six pending human blocker rows and six unassigned
   reviewer assignment rows.
+- `releaseEvidenceWorkspaceSummary` now also records
+  `reviewerAssignmentPickupFileGuidanceCount`, so the final artifact pack summary
+  exposes how many reviewer assignment rows retained the complete per-gate
+  pickup-file guidance already enforced by the workspace verifier.
 - This is final-pack reporting only. It does not change the release blocker: the
   pack still cannot pass until `release-evidence-report.json` contains six accepted
   named human evidence completions with zero blocking failures.
