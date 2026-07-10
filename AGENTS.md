@@ -2524,6 +2524,23 @@ Prepared workspace reviewer assignment ledger:
   `release-evidence-reviewer-assignments.json` has six `unassigned` entries with
   blank reviewer name, reviewer email and due-date fields.
 
+CI machine evidence reviewer-workspace summary:
+
+- Latest verified green release-evidence commit before this slice: `d452d45
+  Inventory reviewer assignments in workspace report`, GitHub Actions run
+  `https://github.com/jasperfordesq-ai/accounts/actions/runs/29060133515`.
+- `scripts/verify-ci-machine-evidence-pack.ps1` now accepts
+  `-ReviewerWorkspaceDirectory`. When CI reruns it after preparing the reviewer
+  workspace, `ci-machine-evidence-pack-report.json` records a `reviewerWorkspace`
+  summary proving the prepared workspace verification report passed, the canonical
+  21-file workspace inventory is present, and all six reviewer assignment rows are
+  still `unassigned` with blank reviewer name/email/due-date fields.
+- Local verification against the downloaded `29060133515` machine artifacts and
+  reviewer workspace passed with `reviewerWorkspace.status = verified`,
+  `requiredWorkspaceFileCount = 21`, `reviewerAssignmentInventoryCount = 6`,
+  `unassignedReviewerAssignmentCount = 6`, and
+  `blankReviewerAssignmentFieldCount = 6`.
+
 ## What Is Left To Do
 
 Highest-priority next steps:

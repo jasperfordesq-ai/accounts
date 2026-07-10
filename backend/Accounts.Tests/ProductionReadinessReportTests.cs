@@ -1083,7 +1083,9 @@ public class ProductionReadinessReportTests
             evidence.Contains("SHA-256", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["security-auth-tenant-platform-guardrails"].CurrentEvidence, evidence =>
             evidence.Contains("verify-ci-machine-evidence-pack.ps1", StringComparison.OrdinalIgnoreCase)
-            && evidence.Contains("ci-machine-evidence-pack-report.json", StringComparison.OrdinalIgnoreCase));
+            && evidence.Contains("ci-machine-evidence-pack-report.json", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("prepared reviewer-workspace summary", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("six unassigned reviewer assignment rows", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["security-auth-tenant-platform-guardrails"].CurrentEvidence, evidence =>
             evidence.Contains("verify-production-readiness-report.ps1", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("no-direct CRO/ROS control", StringComparison.OrdinalIgnoreCase)
@@ -1416,6 +1418,7 @@ public class ProductionReadinessReportTests
             StringProperty(item, "Code") == "ci-machine-evidence-pack"
             && StringProperty(item, "Command").Contains("verify-ci-machine-evidence-pack.ps1", StringComparison.OrdinalIgnoreCase)
             && StringProperty(item, "Command").Contains("ci-machine-evidence-pack-report.json", StringComparison.OrdinalIgnoreCase)
+            && StringProperty(item, "Command").Contains("ReviewerWorkspaceDirectory", StringComparison.OrdinalIgnoreCase)
             && StringProperty(item, "EvidenceArtifact") == "ci-machine-evidence-pack"
             && StringProperty(item, "CiScope") == "default-ci"
             && BooleanProperty(item, "RunsInDefaultCi")

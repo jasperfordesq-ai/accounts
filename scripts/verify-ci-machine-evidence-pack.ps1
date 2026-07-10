@@ -2,7 +2,8 @@ param(
     [string]$EvidenceDirectory = ".",
     [string]$ReportPath = "",
     [string]$CommitSha = "",
-    [string]$GitHubActionsRunUrl = ""
+    [string]$GitHubActionsRunUrl = "",
+    [string]$ReviewerWorkspaceDirectory = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -747,6 +748,39 @@ $requiredJsonFiles = @(
     "accountant-workbench-evidence-report.json"
 )
 
+$requiredReviewerWorkspaceFiles = @(
+    "visual-qa-signoff-template.md",
+    "source-law-review-template.md",
+    "external-ros-ixbrl-validation-template.md",
+    "qualified-accountant-acceptance-template.md",
+    "manual-handoff-acceptance-template.md",
+    "monitoring-provider-confirmation-template.md",
+    "production-readiness-report.json",
+    "production-readiness-verification-report.json",
+    "visual-smoke-manifest.json",
+    "visual-smoke-evidence-report.json",
+    "accountant-workbench-evidence-report.json",
+    "monitoring-error-routing-report.json",
+    "structured-log-report.json",
+    "release-evidence-workspace-manifest.json",
+    "release-evidence-machine-summary.json",
+    "release-evidence-reviewer-index.md",
+    "release-evidence-reviewer-completion.json",
+    "release-evidence-reviewer-assignments.json",
+    "release-evidence-reviewer-blockers.md",
+    "release-evidence-report.json",
+    "release-evidence-verifier-output.txt"
+)
+
+$requiredReviewerAssignmentEvidenceNames = @(
+    "visualQa",
+    "sourceLawReview",
+    "externalRosIxbrlValidation",
+    "qualifiedAccountantAcceptance",
+    "manualHandoffAcceptance",
+    "monitoringProviderConfirmation"
+)
+
 $dependency = Read-JsonEvidence $resolvedDirectory.Path "dependency-audit-report.json" $failures
 $productionSafety = Read-JsonEvidence $resolvedDirectory.Path "production-safety-report.json" $failures
 $monitoring = Read-JsonEvidence $resolvedDirectory.Path "monitoring-error-routing-report.json" $failures
@@ -938,6 +972,110 @@ $evidenceFileManifest = @(
     }
 )
 
+$reviewerWorkspaceSummary = [ordered]@{
+    provided = $false
+    status = "not-provided"
+    workspaceDirectory = ""
+    verificationReportPath = ""
+    verificationStatus = ""
+    failureCount = $null
+    requiredWorkspaceFileCount = 0
+    workspaceFileCount = 0
+    pendingHumanEvidenceBlockerCount = 0
+    reviewerAssignmentInventoryCount = 0
+    unassignedReviewerAssignmentCount = 0
+    blankReviewerAssignmentFieldCount = 0
+}
+
+if ($ReviewerWorkspaceDirectory.Trim().Length -gt 0) {
+    $reviewerWorkspaceSummary["provided"] = $true
+
+    if (-not (Test-Path -LiteralPath $ReviewerWorkspaceDirectory)) {
+        Add-Failure $failures "ReviewerWorkspaceDirectory must exist when provided."
+        $reviewerWorkspaceSummary["status"] = "missing"
+    } else {
+        $resolvedReviewerWorkspace = Resolve-Path -LiteralPath $ReviewerWorkspaceDirectory -ErrorAction Stop
+        $reviewerWorkspaceSummary["workspaceDirectory"] = $resolvedReviewerWorkspace.Path
+        $workspaceVerificationReportPath = Join-Path $resolvedReviewerWorkspace.Path "release-evidence-workspace-verification-report.json"
+        $reviewerWorkspaceSummary["verificationReportPath"] = $workspaceVerificationReportPath
+
+        if (-not (Test-Path -LiteralPath $workspaceVerificationReportPath)) {
+            Add-Failure $failures "Reviewer workspace must include release-evidence-workspace-verification-report.json."
+            $reviewerWorkspaceSummary["status"] = "missing-verification-report"
+        } else {
+            $workspaceVerificationReport = Get-Content -LiteralPath $workspaceVerificationReportPath -Raw | ConvertFrom-Json
+            $requiredWorkspaceFiles = @((Get-JsonProperty $workspaceVerificationReport @("requiredWorkspaceFiles")) | ForEach-Object { [string]$_ })
+            $workspaceFiles = @((Get-JsonProperty $workspaceVerificationReport @("workspaceFiles")))
+            $pendingBlockers = @((Get-JsonProperty $workspaceVerificationReport @("pendingHumanEvidenceBlockers")))
+            $assignmentInventory = @((Get-JsonProperty $workspaceVerificationReport @("reviewerAssignmentInventory")))
+
+            $reviewerWorkspaceSummary["status"] = "verified"
+            $reviewerWorkspaceSummary["verificationStatus"] = [string](Get-JsonProperty $workspaceVerificationReport @("status"))
+            $reviewerWorkspaceSummary["failureCount"] = [int](Get-JsonProperty $workspaceVerificationReport @("failureCount"))
+            $reviewerWorkspaceSummary["requiredWorkspaceFileCount"] = $requiredWorkspaceFiles.Count
+            $reviewerWorkspaceSummary["workspaceFileCount"] = $workspaceFiles.Count
+            $reviewerWorkspaceSummary["pendingHumanEvidenceBlockerCount"] = $pendingBlockers.Count
+            $reviewerWorkspaceSummary["reviewerAssignmentInventoryCount"] = $assignmentInventory.Count
+            $reviewerWorkspaceSummary["unassignedReviewerAssignmentCount"] = @($assignmentInventory | Where-Object { [string](Get-JsonProperty $_ @("assignmentStatus")) -eq "unassigned" }).Count
+            $reviewerWorkspaceSummary["blankReviewerAssignmentFieldCount"] = @($assignmentInventory | Where-Object {
+                [string]::IsNullOrWhiteSpace([string](Get-JsonProperty $_ @("assignedReviewerName"))) -and
+                [string]::IsNullOrWhiteSpace([string](Get-JsonProperty $_ @("assignedReviewerEmail"))) -and
+                [string]::IsNullOrWhiteSpace([string](Get-JsonProperty $_ @("dueAtUtc")))
+            }).Count
+
+            if ([string](Get-JsonProperty $workspaceVerificationReport @("status")) -ne "passed") {
+                Add-Failure $failures "release-evidence-workspace-verification-report.json status must be passed."
+            }
+
+            if ([int](Get-JsonProperty $workspaceVerificationReport @("failureCount")) -ne 0) {
+                Add-Failure $failures "release-evidence-workspace-verification-report.json failureCount must be 0."
+            }
+
+            if ($releaseCommitSha.Length -gt 0 -and [string](Get-JsonProperty $workspaceVerificationReport @("releaseCandidate", "commitSha")) -ne $releaseCommitSha) {
+                Add-Failure $failures "release-evidence-workspace-verification-report.json releaseCandidate.commitSha must match CommitSha."
+            }
+
+            if ($releaseRunUrl.Length -gt 0 -and [string](Get-JsonProperty $workspaceVerificationReport @("releaseCandidate", "githubActionsRunUrl")) -ne $releaseRunUrl) {
+                Add-Failure $failures "release-evidence-workspace-verification-report.json releaseCandidate.githubActionsRunUrl must match GitHubActionsRunUrl."
+            }
+
+            Assert-ArrayContainsExactly $requiredWorkspaceFiles $requiredReviewerWorkspaceFiles "release-evidence-workspace-verification-report.json requiredWorkspaceFiles" $failures
+
+            $workspaceFileNames = @($workspaceFiles | ForEach-Object { [string](Get-JsonProperty $_ @("fileName")) })
+            Assert-ArrayContainsExactly $workspaceFileNames $requiredReviewerWorkspaceFiles "release-evidence-workspace-verification-report.json workspaceFiles" $failures
+
+            if ($pendingBlockers.Count -ne $requiredReviewerAssignmentEvidenceNames.Count) {
+                Add-Failure $failures "release-evidence-workspace-verification-report.json pendingHumanEvidenceBlockers must include six human evidence blockers."
+            }
+
+            if ($assignmentInventory.Count -ne $requiredReviewerAssignmentEvidenceNames.Count) {
+                Add-Failure $failures "release-evidence-workspace-verification-report.json reviewerAssignmentInventory must include six reviewer assignment rows."
+            }
+
+            foreach ($evidenceName in $requiredReviewerAssignmentEvidenceNames) {
+                $assignment = $assignmentInventory | Where-Object {
+                    [string](Get-JsonProperty $_ @("evidenceName")) -eq $evidenceName
+                } | Select-Object -First 1
+
+                if ($null -eq $assignment) {
+                    Add-Failure $failures "release-evidence-workspace-verification-report.json reviewerAssignmentInventory must include $evidenceName."
+                    continue
+                }
+
+                if ([string](Get-JsonProperty $assignment @("assignmentStatus")) -ne "unassigned") {
+                    Add-Failure $failures "release-evidence-workspace-verification-report.json reviewerAssignmentInventory.$evidenceName.assignmentStatus must be unassigned."
+                }
+
+                foreach ($blankField in @("assignedReviewerName", "assignedReviewerEmail", "dueAtUtc")) {
+                    if (-not [string]::IsNullOrWhiteSpace([string](Get-JsonProperty $assignment @($blankField)))) {
+                        Add-Failure $failures "release-evidence-workspace-verification-report.json reviewerAssignmentInventory.$evidenceName.$blankField must be blank before named reviewer routing."
+                    }
+                }
+            }
+        }
+    }
+}
+
 $report = [ordered]@{
     status = if ($failures.Count -eq 0) { "passed" } else { "failed" }
     checkedAtUtc = (Get-Date).ToUniversalTime().ToString("o")
@@ -958,6 +1096,7 @@ $report = [ordered]@{
         "monitoring-provider-confirmation-template.md provider-console confirmation"
     )
     evidenceFiles = $evidenceFileManifest
+    reviewerWorkspace = $reviewerWorkspaceSummary
     failureCount = $failures.Count
     failures = $failures.ToArray()
 }

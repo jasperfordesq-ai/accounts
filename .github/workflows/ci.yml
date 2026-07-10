@@ -599,6 +599,13 @@ jobs:
             -CommitSha $env:GITHUB_SHA `
             -GitHubActionsRunUrl $runUrl
 
+          ./scripts/verify-ci-machine-evidence-pack.ps1 `
+            -EvidenceDirectory $machineEvidenceRoot `
+            -ReportPath (Join-Path $env:RUNNER_TEMP "accounts-ci-machine-evidence-pack/ci-machine-evidence-pack-report.json") `
+            -CommitSha $env:GITHUB_SHA `
+            -GitHubActionsRunUrl $runUrl `
+            -ReviewerWorkspaceDirectory $workspaceRoot
+
       - name: Upload CI machine evidence pack report
         if: always()
         uses: actions/upload-artifact@v7

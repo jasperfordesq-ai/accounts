@@ -240,8 +240,12 @@ Download the `ci-machine-evidence-pack` artifact and keep
 `ci-machine-evidence-pack-report.json` with the candidate evidence. It proves the
 exact commit/run identity and SHA-256 inventory for dependency audit, production
 safety, monitoring smoke, structured logs, backup/restore, no-direct submission,
-production-readiness and visual/workbench evidence. It does not replace the full
-release artifact pack or any named human sign-off template.
+production-readiness and visual/workbench evidence. After the prepared reviewer
+workspace is generated, the CI job reruns the verifier with
+`-ReviewerWorkspaceDirectory` so the retained report also proves the 21-file
+reviewer workspace, passed workspace verification report and six unassigned
+reviewer assignment rows. It does not replace the full release artifact pack or
+any named human sign-off template.
 
 Before completing the visual QA sign-off, verify the CI visual smoke manifest and
 retain the generated evidence report with the screenshot artifact:

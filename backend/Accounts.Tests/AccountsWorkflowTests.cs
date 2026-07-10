@@ -15303,6 +15303,7 @@ public class AccountsWorkflowTests
         Assert.Contains("verify-ci-machine-evidence-pack.ps1", machineEvidenceJob);
         Assert.Contains("-CommitSha $env:GITHUB_SHA", machineEvidenceJob);
         Assert.Contains("-GitHubActionsRunUrl $runUrl", machineEvidenceJob);
+        Assert.Contains("-ReviewerWorkspaceDirectory $workspaceRoot", machineEvidenceJob);
         Assert.Contains("ci-machine-evidence-pack-report.json", machineEvidenceJob);
         Assert.Contains("name: ci-machine-evidence-pack", machineEvidenceJob);
     }
@@ -19009,6 +19010,11 @@ public class AccountsWorkflowTests
         Assert.Contains("no-direct-filing-submission-report.json releaseCandidate.identityProvided must be true", machineEvidencePack);
         Assert.Contains("no-direct-filing-submission-report.json releaseCandidate.commitSha must match CommitSha", machineEvidencePack);
         Assert.Contains("no-direct-filing-submission-report.json releaseCandidate.githubActionsRunUrl must match GitHubActionsRunUrl", machineEvidencePack);
+        Assert.Contains("ReviewerWorkspaceDirectory", machineEvidencePack);
+        Assert.Contains("reviewerWorkspace", machineEvidencePack);
+        Assert.Contains("release-evidence-workspace-verification-report.json reviewerAssignmentInventory must include six reviewer assignment rows", machineEvidencePack);
+        Assert.Contains("release-evidence-workspace-verification-report.json reviewerAssignmentInventory.$evidenceName.assignmentStatus must be unassigned", machineEvidencePack);
+        Assert.Contains("blankReviewerAssignmentFieldCount", machineEvidencePack);
         Assert.Contains("productionScorecard.targetScore must be 700", script);
         Assert.Contains("releaseBlockerRegister", script);
         Assert.Contains("sourceLawSnapshot", script);
