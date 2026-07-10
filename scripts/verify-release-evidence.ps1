@@ -995,17 +995,46 @@ function Test-ReleaseWorkspaceControlEvidence {
 
         Assert-MachineEvidenceEntries (Get-JsonPropertyValue $MachineEvidenceSummary "retainedMachineEvidence") "Release evidence machine summary" $Failures $requiredMachineEvidenceProvenance (Get-JsonPropertyValue $WorkspaceManifest "retainedMachineEvidence") "Release evidence workspace manifest"
 
+        Assert-ContainsText ([string](Get-JsonPropertyValue $MachineEvidenceSummary "completionPolicy")) "machine evidence only" "Release evidence machine summary completionPolicy" $Failures
+        Assert-ContainsText ([string](Get-JsonPropertyValue $MachineEvidenceSummary "completionPolicy")) "named reviewers" "Release evidence machine summary completionPolicy" $Failures
+
         $reviewerQueue = @((Get-JsonPropertyValue $MachineEvidenceSummary "reviewerQueue"))
         if ($reviewerQueue.Count -ne $requiredReviewerQueue.Count) {
             Add-Failure $Failures "Release evidence machine summary reviewerQueue must contain exactly $($requiredReviewerQueue.Count) entries."
         }
 
         $summaryProductionReadiness = Get-JsonPropertyValue $MachineEvidenceSummary "productionReadiness"
+        Assert-JsonStringEquals $summaryProductionReadiness "verificationStatus" "passed" "Release evidence machine summary productionReadiness" $Failures
+        $summaryVerificationFailureCount = Get-JsonPropertyValue $summaryProductionReadiness "verificationFailureCount"
+        if ($null -eq $summaryVerificationFailureCount -or [int]$summaryVerificationFailureCount -ne 0) {
+            Add-Failure $Failures "Release evidence machine summary productionReadiness.verificationFailureCount must be 0."
+        }
+
+        foreach ($closeoutStepCode in $requiredHumanReleaseEvidenceCloseoutStepCodes) {
+            Assert-JsonArrayContains (Get-JsonPropertyValue $summaryProductionReadiness "humanReleaseEvidenceCloseoutStepCodes") $closeoutStepCode "Release evidence machine summary productionReadiness.humanReleaseEvidenceCloseoutStepCodes" $Failures
+        }
+
         $summaryReviewerPickupFilesByEvidence = Get-JsonPropertyValue $summaryProductionReadiness "humanReleaseEvidenceReviewerPickupFiles"
         foreach ($expected in $requiredPendingHumanEvidenceBlockers) {
+            $queueEntry = $reviewerQueue | Where-Object {
+                [string]::Equals([string](Get-JsonPropertyValue $_ "EvidenceName"), [string]$expected.EvidenceName, [StringComparison]::OrdinalIgnoreCase)
+            } | Select-Object -First 1
+
+            if ($null -eq $queueEntry) {
+                Add-Failure $Failures "Release evidence machine summary reviewerQueue must include $($expected.EvidenceName)."
+            } else {
+                Assert-JsonStringEquals $queueEntry "TemplateFile" ([string]$expected.TemplateFile) "Release evidence machine summary reviewerQueue.$($expected.EvidenceName)" $Failures
+                Assert-JsonStringEquals $queueEntry "ReviewerRole" ([string]$expected.RequiredReviewerRole) "Release evidence machine summary reviewerQueue.$($expected.EvidenceName)" $Failures
+                Assert-JsonStringEquals $queueEntry "SignOffGate" ([string]$expected.SignOffGate) "Release evidence machine summary reviewerQueue.$($expected.EvidenceName)" $Failures
+                Assert-ContainsText ([string](Get-JsonPropertyValue $queueEntry "HumanAction")) "record" "Release evidence machine summary reviewerQueue.$($expected.EvidenceName).HumanAction" $Failures
+            }
+
             $summaryReviewerPickupFiles = @((Get-JsonPropertyValue $summaryReviewerPickupFilesByEvidence $expected.EvidenceName) | ForEach-Object { [string]$_ })
             foreach ($requiredPickupFile in @($expected.RequiredPickupFiles)) {
                 Assert-JsonArrayContains $summaryReviewerPickupFiles $requiredPickupFile "Release evidence machine summary productionReadiness.humanReleaseEvidenceReviewerPickupFiles.$($expected.EvidenceName)" $Failures
+                if ($null -ne $queueEntry) {
+                    Assert-JsonArrayContains (Get-JsonPropertyValue $queueEntry "RequiredPickupFiles") $requiredPickupFile "Release evidence machine summary reviewerQueue.$($expected.EvidenceName).RequiredPickupFiles" $Failures
+                }
             }
         }
 
@@ -1309,6 +1338,14 @@ $requiredReviewerQueue = @(
     "qualified-accountant-final-signoff",
     "manual-accountant-acceptance",
     "production-monitoring"
+)
+
+$requiredHumanReleaseEvidenceCloseoutStepCodes = @(
+    "pick-up-reviewer-workspace",
+    "complete-human-evidence-templates",
+    "run-release-evidence-verifier",
+    "confirm-human-evidence-completion",
+    "verify-release-artifact-pack"
 )
 
 $requiredSourceLawSourceIds = @(

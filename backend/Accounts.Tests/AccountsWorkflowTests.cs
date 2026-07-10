@@ -18685,7 +18685,12 @@ public class AccountsWorkflowTests
         Assert.Contains("$Context retainedMachineEvidence must contain exactly", script);
         Assert.Contains("$Context retainedMachineEvidence.$fileName.$propertyName must be $expectedValue", script);
         Assert.Contains("$Context retainedMachineEvidence.$fileName.$propertyName must match $ReferenceContext", script);
+        Assert.Contains("Release evidence machine summary completionPolicy", script);
+        Assert.Contains("Assert-JsonStringEquals $summaryProductionReadiness \"verificationStatus\" \"passed\" \"Release evidence machine summary productionReadiness\"", script);
+        Assert.Contains("Release evidence machine summary productionReadiness.verificationFailureCount must be 0.", script);
+        Assert.Contains("Release evidence machine summary productionReadiness.humanReleaseEvidenceCloseoutStepCodes", script);
         Assert.Contains("Release evidence machine summary productionReadiness.humanReleaseEvidenceReviewerPickupFiles", script);
+        Assert.Contains("Release evidence machine summary reviewerQueue.$($expected.EvidenceName).RequiredPickupFiles", script);
         Assert.Contains("Release evidence machine summary monitoringEvidence.jsonLogLineCount must be greater than zero.", script);
         Assert.Contains("Assert-JsonStringEquals $WorkspaceVerificationReport \"status\" \"passed\" \"Release evidence workspace verification report\"", script);
         Assert.Contains("Release evidence workspace verification report failureCount must be 0.", script);

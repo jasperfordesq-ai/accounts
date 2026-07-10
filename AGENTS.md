@@ -2596,7 +2596,10 @@ Reviewer assignment pickup-file guidance:
   manifest and machine summary to carry the exact seven machine-evidence provenance
   rows, and it rejects completed human release evidence if the machine summary's
   retained evidence byte sizes, hashes, source artifact names or source files drift
-  from `release-evidence-workspace-manifest.json`.
+  from `release-evidence-workspace-manifest.json`. It also requires the machine
+  summary's machine-evidence-only completion policy, passed production-readiness
+  verification, full human evidence closeout step list and six-entry reviewer queue
+  with per-gate pickup files before completed human evidence can pass.
 - `scripts/verify-ci-machine-evidence-pack.ps1` now checks the full expected
   per-gate `reviewerPickupFiles` list, not just the template and blocker summary,
   and records `reviewerAssignmentPickupFileGuidanceCount = 6` in
