@@ -1690,27 +1690,42 @@ $releaseEvidenceWorkspaceSummary = [ordered]@{
     unassignedReviewerAssignmentCount = 0
     blankReviewerAssignmentFieldCount = 0
     reviewerAssignmentPickupFileGuidanceCount = 0
+    reviewerAssignmentPickupFiles = @()
 }
 
 if (-not ($releaseEvidenceWorkspaceVerificationReport.PSObject.Properties.Name -contains "__missing") -and
     -not ($releaseEvidenceWorkspaceVerificationReport.PSObject.Properties.Name -contains "__invalid")) {
     $assignmentInventory = @((Get-JsonProperty $releaseEvidenceWorkspaceVerificationReport @("reviewerAssignmentInventory")))
-    $assignmentPickupFileGuidanceCount = @(
+    $assignmentPickupFileGuidance = @(
         foreach ($assignment in $assignmentInventory) {
             $evidenceName = [string](Get-JsonProperty $assignment @("evidenceName"))
             $required = $requiredReleaseEvidenceTemplates |
                 Where-Object { [string](Get-JsonProperty $_ @("evidenceName")) -eq $evidenceName } |
                 Select-Object -First 1
-
-            if ($null -eq $required) {
-                continue
-            }
-
             $pickupFiles = @((Get-JsonProperty $assignment @("reviewerPickupFiles")) | ForEach-Object { [string]$_ })
-            $requiredPickupFiles = @((Get-JsonProperty $required @("requiredPickupFiles")) | ForEach-Object { [string]$_ })
+            $requiredPickupFiles = if ($null -eq $required) {
+                @()
+            } else {
+                @((Get-JsonProperty $required @("requiredPickupFiles")) | ForEach-Object { [string]$_ })
+            }
             $missingPickupFiles = @($requiredPickupFiles | Where-Object { -not ($pickupFiles -contains $_) })
-            if ($requiredPickupFiles.Count -gt 0 -and $missingPickupFiles.Count -eq 0) {
-                $assignment
+
+            [ordered]@{
+                evidenceName = $evidenceName
+                templateFile = [string](Get-JsonProperty $assignment @("templateFile"))
+                signOffGate = [string](Get-JsonProperty $assignment @("signOffGate"))
+                requiredReviewerRole = [string](Get-JsonProperty $assignment @("requiredReviewerRole"))
+                pickupFileCount = $pickupFiles.Count
+                requiredPickupFileCount = $requiredPickupFiles.Count
+                missingPickupFileCount = $missingPickupFiles.Count
+                reviewerPickupFiles = @($pickupFiles)
+            }
+        }
+    )
+    $assignmentPickupFileGuidanceCount = @(
+        foreach ($pickupGuidance in $assignmentPickupFileGuidance) {
+            if ([int]$pickupGuidance["requiredPickupFileCount"] -gt 0 -and [int]$pickupGuidance["missingPickupFileCount"] -eq 0) {
+                $pickupGuidance
             }
         }
     ).Count
@@ -1733,6 +1748,7 @@ if (-not ($releaseEvidenceWorkspaceVerificationReport.PSObject.Properties.Name -
             [string]::IsNullOrWhiteSpace([string](Get-JsonProperty $_ @("dueAtUtc")))
         }).Count
         reviewerAssignmentPickupFileGuidanceCount = $assignmentPickupFileGuidanceCount
+        reviewerAssignmentPickupFiles = @($assignmentPickupFileGuidance)
     }
 }
 

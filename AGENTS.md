@@ -2553,6 +2553,10 @@ Final release artifact workspace summary:
   `reviewerAssignmentPickupFileGuidanceCount`, so the final artifact pack summary
   exposes how many reviewer assignment rows retained the complete per-gate
   pickup-file guidance already enforced by the workspace verifier.
+- The same summary now includes `reviewerAssignmentPickupFiles`, a per-gate
+  inventory with evidence name, template, sign-off gate, reviewer role,
+  pickup-file count, required pickup-file count, missing pickup-file count and
+  retained reviewer pickup file names.
 - This is final-pack reporting only. It does not change the release blocker: the
   pack still cannot pass until `release-evidence-report.json` contains six accepted
   named human evidence completions with zero blocking failures.

@@ -1086,7 +1086,7 @@ public class ProductionReadinessReportTests
             && evidence.Contains("six pending human blockers", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("six unassigned reviewer assignment rows", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("reviewerAssignmentPickupFileGuidanceCount", StringComparison.OrdinalIgnoreCase)
-            && evidence.Contains("retained pickup files", StringComparison.OrdinalIgnoreCase));
+            && evidence.Contains("reviewerAssignmentPickupFiles", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["security-auth-tenant-platform-guardrails"].CurrentEvidence, evidence =>
             evidence.Contains("verify-ci-machine-evidence-pack.ps1", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("ci-machine-evidence-pack-report.json", StringComparison.OrdinalIgnoreCase)
