@@ -19356,6 +19356,11 @@ public class AccountsWorkflowTests
         Assert.Contains("release-evidence-workspace-verification-report.json reviewerAssignmentInventory must include exactly", script);
         Assert.Contains("reviewerAssignmentInventory.$expectedEvidenceName.assignmentStatus must be unassigned", script);
         Assert.Contains("releaseEvidenceWorkspaceSummary", script);
+        Assert.Contains("releaseEvidenceScorecardSummary", script);
+        Assert.Contains("scorecardStatus", script);
+        Assert.Contains("acceptedHumanEvidenceCount", script);
+        Assert.Contains("remainingHumanEvidenceCount", script);
+        Assert.Contains("categoryScores", script);
         Assert.Contains("pendingHumanEvidenceBlockerCount", script);
         Assert.Contains("unassignedReviewerAssignmentCount", script);
         Assert.Contains("blankReviewerAssignmentFieldCount", script);

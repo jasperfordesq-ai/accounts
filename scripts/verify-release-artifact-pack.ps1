@@ -1944,6 +1944,41 @@ $releaseEvidenceWorkspaceSummary = [ordered]@{
     reviewerAssignmentPickupFiles = @()
 }
 
+$releaseEvidenceScorecardSummary = [ordered]@{
+    status = "missing"
+    scorecardStatus = ""
+    currentScore = $null
+    targetScore = $null
+    acceptedHumanEvidenceCount = 0
+    requiredHumanEvidenceCount = $requiredReleaseEvidenceTemplates.Count
+    remainingHumanEvidenceCount = 0
+    categoryScores = @()
+}
+
+if (-not ($releaseEvidence.PSObject.Properties.Name -contains "__missing") -and
+    -not ($releaseEvidence.PSObject.Properties.Name -contains "__invalid")) {
+    $scorecardCompletion = Get-JsonProperty $releaseEvidence @("productionScorecardCompletion")
+    if ($null -ne $scorecardCompletion) {
+        $releaseEvidenceScorecardSummary = [ordered]@{
+            status = "retained"
+            scorecardStatus = [string](Get-JsonProperty $scorecardCompletion @("status"))
+            currentScore = [int](Get-JsonProperty $scorecardCompletion @("currentScore"))
+            targetScore = [int](Get-JsonProperty $scorecardCompletion @("targetScore"))
+            acceptedHumanEvidenceCount = [int](Get-JsonProperty $scorecardCompletion @("acceptedHumanEvidenceCount"))
+            requiredHumanEvidenceCount = [int](Get-JsonProperty $scorecardCompletion @("requiredHumanEvidenceCount"))
+            remainingHumanEvidenceCount = @((Get-JsonProperty $scorecardCompletion @("remainingHumanEvidence"))).Count
+            categoryScores = @((Get-JsonProperty $scorecardCompletion @("categories")) | ForEach-Object {
+                [ordered]@{
+                    code = [string](Get-JsonProperty $_ @("code"))
+                    currentScore = [int](Get-JsonProperty $_ @("currentScore"))
+                    targetScore = [int](Get-JsonProperty $_ @("targetScore"))
+                    completionGate = [string](Get-JsonProperty $_ @("completionGate"))
+                }
+            })
+        }
+    }
+}
+
 if (-not ($releaseEvidenceWorkspaceVerificationReport.PSObject.Properties.Name -contains "__missing") -and
     -not ($releaseEvidenceWorkspaceVerificationReport.PSObject.Properties.Name -contains "__invalid")) {
     $assignmentInventory = @((Get-JsonProperty $releaseEvidenceWorkspaceVerificationReport @("reviewerAssignmentInventory")))
@@ -2014,6 +2049,7 @@ $report = [ordered]@{
     }
     requiredFiles = @($allEvidence.Keys) + @($requiredReleaseEvidenceTemplates | ForEach-Object { $_.fileName }) + @($requiredReleaseEvidenceWorkspaceControls | ForEach-Object { $_.fileName }) + @($requiredReleaseEvidenceReviewerHandoffFiles | ForEach-Object { $_.fileName })
     evidenceFiles = @($evidenceFileManifest) + @($releaseEvidenceTemplateManifest) + @($releaseEvidenceWorkspaceControlManifest) + @($releaseEvidenceReviewerHandoffManifest)
+    releaseEvidenceScorecardSummary = $releaseEvidenceScorecardSummary
     releaseEvidenceWorkspaceSummary = $releaseEvidenceWorkspaceSummary
     failureCount = $failures.Count
     failures = $failures.ToArray()

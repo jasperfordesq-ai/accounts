@@ -2649,6 +2649,19 @@ Reviewer workspace scorecard-completion closeout:
 - The production scorecard remains 698/700 until real named human/professional
   evidence is supplied.
 
+Release artifact pack scorecard summary:
+
+- `scripts/verify-release-artifact-pack.ps1` now writes
+  `releaseEvidenceScorecardSummary` into `release-artifact-pack-report.json`,
+  copied from `release-evidence-report.json.productionScorecardCompletion`.
+  The summary retains the scorecard status, 700/700 score, accepted/remaining
+  human evidence counts and per-category scores beside the existing workspace
+  summary. This gives release operators a top-level final-score digest in the
+  retained artifact-pack report after the verifier has enforced the detailed
+  `productionScorecardCompletion` ledger.
+- The production scorecard remains 698/700 until real named human/professional
+  evidence is supplied.
+
 ## What Is Left To Do
 
 Highest-priority next steps:

@@ -234,9 +234,12 @@ cross-report checks such as the monitoring smoke correlation id do not match. Th
 generated `release-artifact-pack-report.json` records the release commit, GitHub
 Actions run URL, and a SHA-256/byte-size manifest for each required report and
 retained human release-evidence template. It also records a
-`releaseEvidenceWorkspaceSummary` with the retained workspace verification status,
-21-file prepared workspace count, prepared-human-control count, six pending human
-blocker rows, six unassigned reviewer assignment rows and
+`releaseEvidenceScorecardSummary` copied from
+`release-evidence-report.json.productionScorecardCompletion`, including complete
+700/700 status, accepted/remaining human evidence counts and the final category
+scores, plus a `releaseEvidenceWorkspaceSummary` with the retained workspace
+verification status, 21-file prepared workspace count, prepared-human-control
+count, six pending human blocker rows, six unassigned reviewer assignment rows and
 `reviewerAssignmentPickupFileGuidanceCount` plus the per-gate
 `reviewerAssignmentPickupFiles` inventory for retained pickup-file guidance.
 
