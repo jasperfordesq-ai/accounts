@@ -781,6 +781,15 @@ $requiredReviewerAssignmentEvidenceNames = @(
     "monitoringProviderConfirmation"
 )
 
+$requiredReviewerAssignmentPickupFiles = @{
+    visualQa = @("visual-qa-signoff-template.md", "visual-smoke-manifest.json", "visual-smoke-evidence-report.json", "accountant-workbench-evidence-report.json", "release-evidence-reviewer-blockers.md")
+    sourceLawReview = @("source-law-review-template.md", "production-readiness-report.json", "production-readiness-verification-report.json", "release-evidence-reviewer-blockers.md")
+    externalRosIxbrlValidation = @("external-ros-ixbrl-validation-template.md", "production-readiness-report.json", "release-evidence-reviewer-blockers.md")
+    qualifiedAccountantAcceptance = @("qualified-accountant-acceptance-template.md", "production-readiness-report.json", "accountant-workbench-evidence-report.json", "release-evidence-reviewer-blockers.md")
+    manualHandoffAcceptance = @("manual-handoff-acceptance-template.md", "production-readiness-report.json", "release-evidence-reviewer-blockers.md")
+    monitoringProviderConfirmation = @("monitoring-provider-confirmation-template.md", "monitoring-error-routing-report.json", "structured-log-report.json", "release-evidence-reviewer-blockers.md")
+}
+
 $dependency = Read-JsonEvidence $resolvedDirectory.Path "dependency-audit-report.json" $failures
 $productionSafety = Read-JsonEvidence $resolvedDirectory.Path "production-safety-report.json" $failures
 $monitoring = Read-JsonEvidence $resolvedDirectory.Path "monitoring-error-routing-report.json" $failures
@@ -1022,6 +1031,7 @@ if ($ReviewerWorkspaceDirectory.Trim().Length -gt 0) {
                 [string]::IsNullOrWhiteSpace([string](Get-JsonProperty $_ @("assignedReviewerEmail"))) -and
                 [string]::IsNullOrWhiteSpace([string](Get-JsonProperty $_ @("dueAtUtc")))
             }).Count
+            $reviewerWorkspaceSummary["reviewerAssignmentPickupFileGuidanceCount"] = 0
 
             if ([string](Get-JsonProperty $workspaceVerificationReport @("status")) -ne "passed") {
                 Add-Failure $failures "release-evidence-workspace-verification-report.json status must be passed."
@@ -1072,8 +1082,29 @@ if ($ReviewerWorkspaceDirectory.Trim().Length -gt 0) {
                     }
                 }
 
-                Assert-ArrayContains @((Get-JsonProperty $assignment @("reviewerPickupFiles"))) ([string](Get-JsonProperty $assignment @("templateFile"))) "release-evidence-workspace-verification-report.json reviewerAssignmentInventory.$evidenceName.reviewerPickupFiles" $failures
-                Assert-ArrayContains @((Get-JsonProperty $assignment @("reviewerPickupFiles"))) "release-evidence-reviewer-blockers.md" "release-evidence-workspace-verification-report.json reviewerAssignmentInventory.$evidenceName.reviewerPickupFiles" $failures
+                $reviewerPickupFiles = @((Get-JsonProperty $assignment @("reviewerPickupFiles")) | ForEach-Object { [string]$_ })
+                $requiredPickupFiles = @($requiredReviewerAssignmentPickupFiles[$evidenceName])
+                $hasAllPickupFiles = $true
+                if ($requiredPickupFiles.Count -eq 0) {
+                    $hasAllPickupFiles = $false
+                    Add-Failure $failures "CI machine evidence pack verifier must define reviewer pickup files for $evidenceName."
+                }
+
+                foreach ($requiredPickupFile in $requiredPickupFiles) {
+                    if (-not ($reviewerPickupFiles -contains $requiredPickupFile)) {
+                        $hasAllPickupFiles = $false
+                    }
+
+                    Assert-ArrayContains $reviewerPickupFiles $requiredPickupFile "release-evidence-workspace-verification-report.json reviewerAssignmentInventory.$evidenceName.reviewerPickupFiles" $failures
+                }
+
+                if ($hasAllPickupFiles) {
+                    $reviewerWorkspaceSummary["reviewerAssignmentPickupFileGuidanceCount"] = [int]$reviewerWorkspaceSummary["reviewerAssignmentPickupFileGuidanceCount"] + 1
+                }
+            }
+
+            if ([int]$reviewerWorkspaceSummary["reviewerAssignmentPickupFileGuidanceCount"] -ne $requiredReviewerAssignmentEvidenceNames.Count) {
+                Add-Failure $failures "release-evidence-workspace-verification-report.json reviewerAssignmentInventory must include complete reviewerPickupFiles guidance for all six reviewer assignment rows."
             }
         }
     }

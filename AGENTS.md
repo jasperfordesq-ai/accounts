@@ -2566,6 +2566,11 @@ Reviewer assignment pickup-file guidance:
   and `scripts/verify-ci-machine-evidence-pack.ps1` now reject stale workspace
   verification reports that omit the assignment pickup files. This reduces reviewer
   handoff ambiguity without treating machine evidence as human/professional sign-off.
+- `scripts/verify-ci-machine-evidence-pack.ps1` now checks the full expected
+  per-gate `reviewerPickupFiles` list, not just the template and blocker summary,
+  and records `reviewerAssignmentPickupFileGuidanceCount = 6` in
+  `ci-machine-evidence-pack-report.json` when all six reviewer assignment rows
+  retain complete pickup-file guidance.
 
 ## What Is Left To Do
 

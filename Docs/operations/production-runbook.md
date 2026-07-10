@@ -247,8 +247,9 @@ production-readiness and visual/workbench evidence. After the prepared reviewer
 workspace is generated, the CI job reruns the verifier with
 `-ReviewerWorkspaceDirectory` so the retained report also proves the 21-file
 reviewer workspace, passed workspace verification report and six unassigned
-reviewer assignment rows. It does not replace the full release artifact pack or
-any named human sign-off template.
+reviewer assignment rows with complete per-gate pickup-file guidance recorded as
+`reviewerAssignmentPickupFileGuidanceCount = 6`. It does not replace the full
+release artifact pack or any named human sign-off template.
 
 Before completing the visual QA sign-off, verify the CI visual smoke manifest and
 retain the generated evidence report with the screenshot artifact:

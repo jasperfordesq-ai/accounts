@@ -19023,6 +19023,9 @@ public class AccountsWorkflowTests
         Assert.Contains("reviewerWorkspace", machineEvidencePack);
         Assert.Contains("release-evidence-workspace-verification-report.json reviewerAssignmentInventory must include six reviewer assignment rows", machineEvidencePack);
         Assert.Contains("release-evidence-workspace-verification-report.json reviewerAssignmentInventory.$evidenceName.assignmentStatus must be unassigned", machineEvidencePack);
+        Assert.Contains("requiredReviewerAssignmentPickupFiles", machineEvidencePack);
+        Assert.Contains("reviewerAssignmentPickupFileGuidanceCount", machineEvidencePack);
+        Assert.Contains("release-evidence-workspace-verification-report.json reviewerAssignmentInventory must include complete reviewerPickupFiles guidance for all six reviewer assignment rows.", machineEvidencePack);
         Assert.Contains("blankReviewerAssignmentFieldCount", machineEvidencePack);
         Assert.Contains("productionScorecard.targetScore must be 700", script);
         Assert.Contains("releaseBlockerRegister", script);
