@@ -3,10 +3,12 @@ import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import {
+  ActionLink,
   DataGrid,
   DataTable,
   EvidenceChecklist,
   FilingActionBar,
+  HorizontalScrollRegion,
   IssueDigest,
   LegalSourceList,
   MoneyInput,
@@ -23,6 +25,17 @@ import {
 } from "@/components/workbench";
 
 describe("workbench primitives", () => {
+  it("renders button-styled navigation as one semantic link", () => {
+    render(
+      <ActionLink href="/companies/new" variant="primary">
+        Create company
+      </ActionLink>,
+    );
+
+    expect(screen.getByRole("link", { name: "Create company" })).toHaveAttribute("href", "/companies/new");
+    expect(screen.queryByRole("button", { name: "Create company" })).not.toBeInTheDocument();
+  });
+
   it("renders a stable page shell with back navigation, metadata, actions and constrained content", () => {
     render(
       <PageShell
@@ -385,6 +398,31 @@ describe("workbench primitives", () => {
     expect(screen.queryByText("Micro LTD")).not.toBeInTheDocument();
   });
 
+  it("assigns unique filter controls when two grids share the same caption", () => {
+    render(
+      <>
+        <DataGrid
+          caption="Review queue"
+          filterPlaceholder="Filter first queue"
+          columns={["Company"]}
+          rows={[["Alpha Limited"]]}
+        />
+        <DataGrid
+          caption="Review queue"
+          filterPlaceholder="Filter second queue"
+          columns={["Company"]}
+          rows={[["Bravo Limited"]]}
+        />
+      </>,
+    );
+
+    const filters = screen.getAllByRole("searchbox", { name: "Filter Review queue" });
+    expect(filters).toHaveLength(2);
+    expect(filters[0]).toHaveAttribute("id");
+    expect(filters[1]).toHaveAttribute("id");
+    expect(filters[0].getAttribute("id")).not.toBe(filters[1].getAttribute("id"));
+  });
+
   it("labels each table cell so mobile card rows retain column context", () => {
     const { container } = render(
       <DataTable
@@ -416,7 +454,7 @@ describe("workbench primitives", () => {
               "Review, Filing",
               "filing-review-visual-acceptance-note",
               "Are outputs, gates, wording and evidence readable?",
-              "light desktop, dark desktop, light mobile, dark mobile",
+              "light/dark mobile, tablet and desktop",
               "Block release until accepted.",
             ],
             tone: "warn",
@@ -433,6 +471,28 @@ describe("workbench primitives", () => {
     expect(container.querySelector("th[data-sticky-column='true']")).toHaveTextContent("Route");
     expect(container.querySelector("td[data-sticky-column='true']")).toHaveTextContent("Filing review");
     expect(screen.getByText("Scroll horizontally to review all evidence columns.")).toBeInTheDocument();
+    expect(tableShell).toHaveAttribute("role", "region");
+    expect(tableShell).toHaveAttribute("tabindex", "0");
+    expect(screen.getByText("Scroll horizontally to review all evidence columns.").closest("p"))
+      .toHaveAttribute("data-scroll-instruction", "true");
+  });
+
+  it("wraps retained wide tables in a labelled keyboard-scroll region with a persistent instruction", () => {
+    render(
+      <HorizontalScrollRegion label="Statement values table">
+        <table>
+          <tbody>
+            <tr><td>Turnover</td><td>€120,000</td></tr>
+          </tbody>
+        </table>
+      </HorizontalScrollRegion>,
+    );
+
+    const region = screen.getByRole("region", { name: "Statement values table" });
+    expect(region).toHaveAttribute("tabindex", "0");
+    expect(region).toHaveAttribute("data-horizontal-scroll-region", "true");
+    expect(region).toHaveAttribute("data-sticky-first-column", "true");
+    expect(screen.getByText(/Swipe horizontally, or focus this table/)).toBeVisible();
   });
 
   it("filters dense tables and reports visible row counts", async () => {
@@ -470,6 +530,7 @@ describe("workbench primitives", () => {
       <DataTable
         caption="Accountant filing queue"
         columns={["Company", "Deadline", "Status"]}
+        sortableColumns={[true, true, true]}
         rows={[
           {
             id: "bravo",
@@ -506,6 +567,7 @@ describe("workbench primitives", () => {
         caption="Review urgency queue"
         columns={["Company", "Urgency"]}
         defaultSort={{ columnIndex: 1, direction: "asc" }}
+        sortableColumns={[true, true]}
         rows={[
           {
             id: "ready",
@@ -546,6 +608,31 @@ describe("workbench primitives", () => {
     expect(screen.getByRole("button", { name: "Sort by Deadline" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Sort by Next action" })).not.toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Next action" })).not.toHaveAttribute("aria-sort");
+  });
+
+  it("keeps columns unsortable by default and rejects JSX columns without primitive sort values", () => {
+    const { rerender } = render(
+      <DataTable
+        caption="Default static evidence"
+        columns={["Evidence", "Action"]}
+        rows={[["Retained PDF", "Open"]]}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Sort by Evidence" })).not.toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Evidence" })).not.toHaveAttribute("aria-sort");
+
+    rerender(
+      <DataTable
+        caption="Unsupported JSX evidence"
+        columns={["Evidence", "Action"]}
+        sortableColumns={[true, false]}
+        rows={[[<span key="evidence">Retained PDF</span>, <button key="action">Open</button>]]}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Sort by Evidence" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Sort by Action" })).not.toBeInTheDocument();
   });
 
   it("renders totals, warning cues, and a useful empty state", async () => {

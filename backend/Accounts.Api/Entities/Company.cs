@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Accounts.Api.Entities;
 
 public class Company
@@ -11,7 +13,11 @@ public class Company
     public CompanyType CompanyType { get; set; }
     public DateOnly IncorporationDate { get; set; }
     public int FinancialYearStartMonth { get; set; } = 1;
-    public int ArdMonth { get; set; }
+    /// <summary>
+    /// Exact current Annual Return Date (ARD) shown by the CRO. Legacy month-only records are
+    /// migrated to null and must be confirmed against CORE before deadline calculation can run.
+    /// </summary>
+    public DateOnly? AnnualReturnDate { get; set; }
 
     // Registered office
     public string? RegisteredOfficeAddress1 { get; set; }
@@ -39,7 +45,20 @@ public class Company
     public bool IsCreditInstitution { get; set; }
     public bool IsInsuranceUndertaking { get; set; }
     public bool IsPensionFund { get; set; }
+    public bool IsFifthScheduleEntity { get; set; }
+    public bool IsOtherIneligibleEntity { get; set; }
+    public bool IsFinancialHoldingUndertaking { get; set; }
+    public bool PreparesGroupFinancialStatements { get; set; }
+    public bool IncludedInHigherConsolidatedFinancialStatements { get; set; }
     public bool IsCharitableOrganisation { get; set; }
+
+    // Recoverable quarantine. Detailed immutable evidence is retained separately.
+    public bool IsQuarantined { get; set; }
+    public DateTime? QuarantinedAtUtc { get; set; }
+    public string? QuarantinedByUserId { get; set; }
+    public string? QuarantinedByDisplayName { get; set; }
+    public string? QuarantineReason { get; set; }
+    public string? QuarantineEvidenceSha256 { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
@@ -55,6 +74,8 @@ public class Company
     public List<ShareCapital> ShareCapitals { get; set; } = [];
     public List<FilingDeadline> FilingDeadlines { get; set; } = [];
     public List<FilingHistory> FilingHistories { get; set; } = [];
+    [JsonIgnore]
+    public List<AnnualReturnDateRecord> AnnualReturnDateHistory { get; set; } = [];
     public List<UserCompanyAccess> UserAccesses { get; set; } = [];
     public CharityInfo? CharityInfo { get; set; }
     public Tenant? Tenant { get; set; }

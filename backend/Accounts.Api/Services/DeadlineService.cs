@@ -1,19 +1,32 @@
 using Accounts.Api.Data;
 using Accounts.Api.Entities;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace Accounts.Api.Services;
 
-public class DeadlineService(AccountsDbContext db, AuditService? audit = null, TimeProvider? timeProvider = null)
+public class DeadlineService(
+    AccountsDbContext db,
+    AuditService? audit = null,
+    TimeProvider? timeProvider = null,
+    FilingReleaseGate? releaseGate = null)
 {
+    public const string CroRuleVersion = "CRO-ANNUAL-RETURN-2026-07-10";
+    public const string CroGuidanceUrl = "https://cro.ie/Annual-Return/Filing-an-Annual-Return/";
+    public const string CompaniesActSection347Url = "https://www.irishstatutebook.ie/eli/2014/act/38/section/347/enacted/";
     private static readonly TimeZoneInfo IrelandTimeZone = ResolveIrelandTimeZone();
+    private FilingReleaseGate ReleaseGate => releaseGate ??= new FilingReleaseGate(db);
 
     /// <summary>
-    /// Calculate CRO filing deadline: earlier of (ARD + 56 days) or (FYE + 9 months + 56 days).
-    /// Also calculates charity and revenue deadlines if applicable.
+    /// Calculates and retains the separate CRO ARD, B1 made-up-to date, 56-day delivery date and
+    /// section 347(4) financial-statement age limit. Also calculates charity and Revenue deadlines.
     /// </summary>
     public async Task<List<FilingDeadline>> CalculateDeadlinesAsync(int companyId, int periodId, string? userId = null)
     {
+        await using var concurrencyLease = await new AccountingConcurrencyCoordinator(db)
+            .AcquirePeriodAsync(companyId, periodId);
         var period = await db.AccountingPeriods
             .Include(p => p.Company)
             .Include(p => p.FilingDeadlines)
@@ -28,25 +41,52 @@ public class DeadlineService(AccountsDbContext db, AuditService? audit = null, T
             .Select(DeadlineAuditSnapshot)
             .ToList();
 
-        // CRO deadline: earlier of (ARD + 56 days) or (FYE + 9 months + 56 days)
-        var ardDate = new DateOnly(fye.Year, company.ArdMonth, 1).AddMonths(1).AddDays(-1); // Last day of ARD month
-        if (ardDate <= fye) ardDate = ardDate.AddYears(1); // Next occurrence after FYE
-        var croOption1 = MoveToNextWorkingDay(ardDate.AddDays(56));
-        var croOption2 = MoveToNextWorkingDay(fye.AddMonths(9).AddDays(56));
-        var croDueDate = croOption1 < croOption2 ? croOption1 : croOption2;
+        if (company.AnnualReturnDate is null)
+        {
+            throw new BusinessRuleException(
+                "Confirm the company's exact Annual Return Date against CRO CORE and retain its evidence before calculating filing deadlines.");
+        }
 
-        deadlines.Add(await UpsertDeadline(companyId, periodId, DeadlineType.CRO, croDueDate));
+        var currentArdRecord = await db.AnnualReturnDateRecords
+            .Where(record => record.CompanyId == companyId
+                && record.AnnualReturnDate == company.AnnualReturnDate)
+            .OrderByDescending(record => record.RecordedAtUtc)
+            .FirstOrDefaultAsync();
+        var ardDate = ResolveAnnualReturnDateOccurrence(company.AnnualReturnDate.Value, fye);
+        var financialStatementsLatestMadeUpToDate = fye.AddMonths(9);
+        var returnMadeUpToDate = ardDate <= financialStatementsLatestMadeUpToDate
+            ? ardDate
+            : financialStatementsLatestMadeUpToDate;
+        var croDeliveryDueDate = MoveToNextWorkingDay(returnMadeUpToDate.AddDays(56));
+        var croCalculation = DeadlineCalculation.Cro(
+            companyId,
+            periodId,
+            croDeliveryDueDate,
+            ardDate,
+            currentArdRecord?.Id,
+            returnMadeUpToDate,
+            financialStatementsLatestMadeUpToDate);
 
-        // Revenue CT1 deadline: FYE + 9 months + 23 days (day 23 of 9th month after FYE)
-        var revMonth = fye.AddMonths(9);
-        var revDueDate = new DateOnly(revMonth.Year, revMonth.Month, 23);
-        deadlines.Add(await UpsertDeadline(companyId, periodId, DeadlineType.Revenue, revDueDate));
+        deadlines.Add(await UpsertDeadline(companyId, periodId, DeadlineType.CRO, croCalculation));
+
+        // ROS CT1/balance deadline: the earlier of nine months after period end and day 23
+        // of that month. A period ending early in a month therefore keeps its exact day.
+        var revDueDate = CorporationTaxFilingSupportCalculator.ReturnAndBalanceDueDate(fye);
+        deadlines.Add(await UpsertDeadline(
+            companyId,
+            periodId,
+            DeadlineType.Revenue,
+            DeadlineCalculation.Simple(companyId, periodId, DeadlineType.Revenue, revDueDate)));
 
         // Charity deadline: FYE + 10 months (only if charitable organisation)
         if (company.IsCharitableOrganisation)
         {
             var charityDueDate = fye.AddMonths(10);
-            deadlines.Add(await UpsertDeadline(companyId, periodId, DeadlineType.Charity, charityDueDate));
+            deadlines.Add(await UpsertDeadline(
+                companyId,
+                periodId,
+                DeadlineType.Charity,
+                DeadlineCalculation.Simple(companyId, periodId, DeadlineType.Charity, charityDueDate)));
         }
 
         await db.SaveChangesAsync();
@@ -62,6 +102,7 @@ public class DeadlineService(AccountsDbContext db, AuditService? audit = null, T
                 deadlines.OrderBy(d => d.DeadlineType).Select(DeadlineAuditSnapshot).ToList(),
                 userId);
         }
+        await concurrencyLease.CommitIfOwnedAsync();
         return deadlines;
     }
 
@@ -89,6 +130,83 @@ public class DeadlineService(AccountsDbContext db, AuditService? audit = null, T
     }
 
     /// <summary>
+    /// Records a reviewed deadline override without overwriting the statutory calculation. The
+    /// override is automatically moved to NeedsReview and stops controlling DueDate if its source
+    /// calculation later changes.
+    /// </summary>
+    public async Task<FilingDeadline> RecordManualOverrideAsync(
+        int companyId,
+        int periodId,
+        DeadlineType type,
+        DateOnly overrideDueDate,
+        string? reason,
+        string? evidenceReference,
+        string? evidenceSha256,
+        AuthenticatedUser actor,
+        CancellationToken cancellationToken = default)
+    {
+        var normalizedReason = reason?.Trim();
+        var normalizedReference = evidenceReference?.Trim();
+        var normalizedSha256 = evidenceSha256?.Trim().ToLowerInvariant();
+        if (!Enum.IsDefined(type))
+            throw new BusinessRuleException("Valid deadline type is required.");
+        if (overrideDueDate == default)
+            throw new BusinessRuleException("Override due date is required.");
+        if (string.IsNullOrWhiteSpace(normalizedReason) || normalizedReason.Length is < 20 or > 1000)
+            throw new BusinessRuleException("A specific deadline override reason of 20 to 1000 characters is required.");
+        if (string.IsNullOrWhiteSpace(normalizedReference) || normalizedReference.Length > 300)
+            throw new BusinessRuleException("A retained override evidence reference of 300 characters or fewer is required.");
+        if (normalizedSha256 is null || normalizedSha256.Length != 64 || !normalizedSha256.All(Uri.IsHexDigit))
+            throw new BusinessRuleException("Deadline override evidence SHA-256 must contain exactly 64 hexadecimal characters.");
+
+        await using var concurrencyLease = await new AccountingConcurrencyCoordinator(db)
+            .AcquirePeriodAsync(companyId, periodId, cancellationToken);
+        var deadline = await db.FilingDeadlines.FirstOrDefaultAsync(candidate =>
+                candidate.CompanyId == companyId
+                && candidate.PeriodId == periodId
+                && candidate.DeadlineType == type,
+            cancellationToken)
+            ?? throw new BusinessRuleException("Deadline not found. Calculate deadlines first.");
+        if (deadline.FiledDate is not null)
+            throw new BusinessRuleException("A filed deadline cannot be overridden.");
+        if (string.IsNullOrWhiteSpace(deadline.CalculationFingerprintSha256))
+            throw new BusinessRuleException("Recalculate this deadline before recording an override so its statutory basis is retained.");
+
+        var oldValue = DeadlineAuditSnapshot(deadline);
+        deadline.ManualOverrideStatus = "Active";
+        deadline.ManualOverrideDueDate = overrideDueDate;
+        deadline.ManualOverrideReason = normalizedReason;
+        deadline.ManualOverrideEvidenceReference = normalizedReference;
+        deadline.ManualOverrideEvidenceSha256 = normalizedSha256;
+        deadline.ManualOverrideByUserId = AuthenticatedIdentity.AuditUserId(actor);
+        deadline.ManualOverrideByDisplayName = AuthenticatedIdentity.ReviewerDisplayName(actor);
+        deadline.ManualOverrideAtUtc = UtcNowMicrosecond();
+        deadline.ManualOverrideCalculationFingerprintSha256 = deadline.CalculationFingerprintSha256;
+        deadline.DueDate = overrideDueDate;
+        deadline.IsLate = false;
+        deadline.PenaltyAmount = 0;
+
+        await db.SaveChangesAsync(cancellationToken);
+        if (audit is not null)
+        {
+            await audit.LogAsync(
+                companyId,
+                periodId,
+                nameof(FilingDeadline),
+                deadline.Id,
+                AuditEventCodes.DeadlineOverrideRecorded,
+                oldValue,
+                DeadlineAuditSnapshot(deadline),
+                AuthenticatedIdentity.AuditUserId(actor),
+                actor.TenantId,
+                actorDisplayName: AuthenticatedIdentity.ReviewerDisplayName(actor),
+                cancellationToken: cancellationToken);
+        }
+        await concurrencyLease.CommitIfOwnedAsync(cancellationToken);
+        return deadline;
+    }
+
+    /// <summary>
     /// Mark a period as filed and record in filing history.
     /// </summary>
     public async Task<FilingDeadline> MarkFiledAsync(
@@ -107,6 +225,20 @@ public class DeadlineService(AccountsDbContext db, AuditService? audit = null, T
         var today = CurrentIrelandDate();
         if (filedDate > today)
             throw new BusinessRuleException("Filed date cannot be in the future.");
+
+        var releaseWorkflow = type switch
+        {
+            DeadlineType.CRO => FilingReleaseWorkflow.Cro,
+            DeadlineType.Revenue => FilingReleaseWorkflow.Revenue,
+            DeadlineType.Charity => FilingReleaseWorkflow.Charity,
+            _ => throw new ArgumentOutOfRangeException(nameof(type))
+        };
+        await ReleaseGate.AssertCanRecordFiledAsync(
+            companyId,
+            periodId,
+            releaseWorkflow,
+            filingReference,
+            userId);
 
         var evidenceReference = type switch
         {
@@ -275,16 +407,13 @@ public class DeadlineService(AccountsDbContext db, AuditService? audit = null, T
     public static bool IsIrishPublicHoliday(DateOnly date)
     {
         var year = date.Year;
-        var observedFixedHolidays = new HashSet<DateOnly>
-        {
-            ObservedFixedHoliday(year, 1, 1),
-            ObservedFixedHoliday(year, 3, 17),
-            ObservedFixedHoliday(year, 12, 25),
-            ObservedFixedHoliday(year, 12, 26)
-        };
+        var fixedHolidays = IrishFixedPublicHolidays(year);
+        var brigidHoliday = new DateOnly(year, 2, 1).DayOfWeek == DayOfWeek.Friday
+            ? new DateOnly(year, 2, 1)
+            : FirstMonday(year, 2);
 
-        return observedFixedHolidays.Contains(date)
-            || date == FirstMonday(year, 2)
+        return fixedHolidays.Contains(date)
+            || year >= 2023 && date == brigidHoliday
             || date == EasterSunday(year).AddDays(1)
             || date == FirstMonday(year, 5)
             || date == FirstMonday(year, 6)
@@ -325,57 +454,125 @@ public class DeadlineService(AccountsDbContext db, AuditService? audit = null, T
         return new AuditExemptionJeopardy(lateFilings, isAtRisk, hasLostExemption, warning);
     }
 
-    private async Task<FilingDeadline> UpsertDeadline(int companyId, int periodId, DeadlineType type, DateOnly dueDate)
+    private async Task<FilingDeadline> UpsertDeadline(
+        int companyId,
+        int periodId,
+        DeadlineType type,
+        DeadlineCalculation calculation)
     {
-        if (IsPostgresProvider())
-            return await UpsertDeadlineAtomicallyAsync(companyId, periodId, type, dueDate);
-
-        var existing = await db.FilingDeadlines
-            .FirstOrDefaultAsync(d => d.CompanyId == companyId && d.PeriodId == periodId && d.DeadlineType == type);
-
-        if (existing != null)
+        var existing = db.FilingDeadlines.Local.FirstOrDefault(deadline =>
+            deadline.CompanyId == companyId
+            && deadline.PeriodId == periodId
+            && deadline.DeadlineType == type);
+        existing ??= await db.FilingDeadlines.FirstOrDefaultAsync(deadline =>
+            deadline.CompanyId == companyId
+            && deadline.PeriodId == periodId
+            && deadline.DeadlineType == type);
+        if (existing is not null)
         {
-            existing.DueDate = dueDate;
+            ApplyCalculation(existing, calculation);
             return existing;
         }
 
-        var deadline = new FilingDeadline
+        if (IsPostgresProvider())
+            return await InsertDeadlineAtomicallyAsync(companyId, periodId, type, calculation);
+
+        var created = new FilingDeadline
         {
             CompanyId = companyId,
             PeriodId = periodId,
             DeadlineType = type,
-            DueDate = dueDate
+            CreatedAt = DateTime.UtcNow
         };
-        db.FilingDeadlines.Add(deadline);
-        return deadline;
+        ApplyCalculation(created, calculation);
+        db.FilingDeadlines.Add(created);
+        return created;
     }
 
-    private async Task<FilingDeadline> UpsertDeadlineAtomicallyAsync(int companyId, int periodId, DeadlineType type, DateOnly dueDate)
+    private async Task<FilingDeadline> InsertDeadlineAtomicallyAsync(
+        int companyId,
+        int periodId,
+        DeadlineType type,
+        DeadlineCalculation calculation)
     {
         var deadlineType = type.ToString();
         var createdAt = DateTime.UtcNow;
         await db.Database.ExecuteSqlInterpolatedAsync($"""
-            INSERT INTO filing_deadlines ("CompanyId", "PeriodId", "DeadlineType", "DueDate", "CreatedAt", "IsLate", "PenaltyAmount")
-            VALUES ({companyId}, {periodId}, {deadlineType}, {dueDate}, {createdAt}, FALSE, 0)
+            INSERT INTO filing_deadlines (
+                "CompanyId", "PeriodId", "DeadlineType", "CalculatedDueDate", "DueDate",
+                "AnnualReturnDate", "AnnualReturnDateRecordId", "ReturnMadeUpToDate",
+                "FinancialStatementsLatestMadeUpToDate", "DeliveryDueDate",
+                "MadeUpToDateBroughtForwardForAccountsAge", "CalculationRuleVersion",
+                "CalculationSourceUrl", "CalculationFingerprintSha256", "CreatedAt", "IsLate", "PenaltyAmount")
+            VALUES (
+                {companyId}, {periodId}, {deadlineType}, {calculation.CalculatedDueDate}, {calculation.CalculatedDueDate},
+                {calculation.AnnualReturnDate}, {calculation.AnnualReturnDateRecordId}, {calculation.ReturnMadeUpToDate},
+                {calculation.FinancialStatementsLatestMadeUpToDate}, {calculation.DeliveryDueDate},
+                {calculation.MadeUpToDateBroughtForwardForAccountsAge}, {calculation.RuleVersion},
+                {calculation.SourceUrl}, {calculation.FingerprintSha256}, {createdAt}, FALSE, 0)
             ON CONFLICT ("CompanyId", "PeriodId", "DeadlineType")
-            DO UPDATE SET "DueDate" = EXCLUDED."DueDate"
+            DO UPDATE SET
+                "CalculatedDueDate" = EXCLUDED."CalculatedDueDate",
+                "AnnualReturnDate" = EXCLUDED."AnnualReturnDate",
+                "AnnualReturnDateRecordId" = EXCLUDED."AnnualReturnDateRecordId",
+                "ReturnMadeUpToDate" = EXCLUDED."ReturnMadeUpToDate",
+                "FinancialStatementsLatestMadeUpToDate" = EXCLUDED."FinancialStatementsLatestMadeUpToDate",
+                "DeliveryDueDate" = EXCLUDED."DeliveryDueDate",
+                "MadeUpToDateBroughtForwardForAccountsAge" = EXCLUDED."MadeUpToDateBroughtForwardForAccountsAge",
+                "CalculationRuleVersion" = EXCLUDED."CalculationRuleVersion",
+                "CalculationSourceUrl" = EXCLUDED."CalculationSourceUrl",
+                "CalculationFingerprintSha256" = EXCLUDED."CalculationFingerprintSha256",
+                "ManualOverrideStatus" = CASE
+                    WHEN filing_deadlines."ManualOverrideStatus" = 'Active'
+                         AND filing_deadlines."ManualOverrideCalculationFingerprintSha256" = EXCLUDED."CalculationFingerprintSha256"
+                    THEN 'Active'
+                    WHEN filing_deadlines."ManualOverrideStatus" IS NOT NULL THEN 'NeedsReview'
+                    ELSE NULL
+                END,
+                "DueDate" = CASE
+                    WHEN filing_deadlines."ManualOverrideStatus" = 'Active'
+                         AND filing_deadlines."ManualOverrideCalculationFingerprintSha256" = EXCLUDED."CalculationFingerprintSha256"
+                    THEN filing_deadlines."ManualOverrideDueDate"
+                    ELSE EXCLUDED."CalculatedDueDate"
+                END
             """);
 
-        var tracked = db.FilingDeadlines.Local.FirstOrDefault(d =>
-            d.CompanyId == companyId
-            && d.PeriodId == periodId
-            && d.DeadlineType == type);
+        db.ChangeTracker.Clear();
+        return await db.FilingDeadlines.SingleAsync(deadline =>
+            deadline.CompanyId == companyId
+            && deadline.PeriodId == periodId
+            && deadline.DeadlineType == type);
+    }
 
-        if (tracked is not null)
+    private static void ApplyCalculation(FilingDeadline deadline, DeadlineCalculation calculation)
+    {
+        var overrideRemainsActive = string.Equals(deadline.ManualOverrideStatus, "Active", StringComparison.Ordinal)
+            && string.Equals(
+                deadline.ManualOverrideCalculationFingerprintSha256,
+                calculation.FingerprintSha256,
+                StringComparison.OrdinalIgnoreCase)
+            && deadline.ManualOverrideDueDate is not null;
+        if (!overrideRemainsActive && deadline.ManualOverrideStatus is not null)
+            deadline.ManualOverrideStatus = "NeedsReview";
+
+        deadline.CalculatedDueDate = calculation.CalculatedDueDate;
+        deadline.DueDate = overrideRemainsActive
+            ? deadline.ManualOverrideDueDate!.Value
+            : calculation.CalculatedDueDate;
+        deadline.AnnualReturnDate = calculation.AnnualReturnDate;
+        deadline.AnnualReturnDateRecordId = calculation.AnnualReturnDateRecordId;
+        deadline.ReturnMadeUpToDate = calculation.ReturnMadeUpToDate;
+        deadline.FinancialStatementsLatestMadeUpToDate = calculation.FinancialStatementsLatestMadeUpToDate;
+        deadline.DeliveryDueDate = calculation.DeliveryDueDate;
+        deadline.MadeUpToDateBroughtForwardForAccountsAge = calculation.MadeUpToDateBroughtForwardForAccountsAge;
+        deadline.CalculationRuleVersion = calculation.RuleVersion;
+        deadline.CalculationSourceUrl = calculation.SourceUrl;
+        deadline.CalculationFingerprintSha256 = calculation.FingerprintSha256;
+        if (deadline.FiledDate is not null)
         {
-            tracked.DueDate = dueDate;
-            return tracked;
+            deadline.IsLate = deadline.FiledDate > deadline.DueDate;
+            deadline.PenaltyAmount = deadline.IsLate ? CalculatePenalty(deadline.DueDate, deadline.FiledDate.Value) : 0;
         }
-
-        return await db.FilingDeadlines.SingleAsync(d =>
-            d.CompanyId == companyId
-            && d.PeriodId == periodId
-            && d.DeadlineType == type);
     }
 
     private bool IsPostgresProvider() =>
@@ -384,18 +581,51 @@ public class DeadlineService(AccountsDbContext db, AuditService? audit = null, T
     private static object DeadlineAuditSnapshot(FilingDeadline deadline) => new
     {
         deadline.DeadlineType,
+        deadline.CalculatedDueDate,
         deadline.DueDate,
+        deadline.AnnualReturnDate,
+        deadline.AnnualReturnDateRecordId,
+        deadline.ReturnMadeUpToDate,
+        deadline.FinancialStatementsLatestMadeUpToDate,
+        deadline.DeliveryDueDate,
+        deadline.MadeUpToDateBroughtForwardForAccountsAge,
+        deadline.CalculationRuleVersion,
+        deadline.CalculationSourceUrl,
+        deadline.CalculationFingerprintSha256,
+        deadline.ManualOverrideStatus,
+        deadline.ManualOverrideDueDate,
+        deadline.ManualOverrideReason,
+        deadline.ManualOverrideEvidenceReference,
+        deadline.ManualOverrideEvidenceSha256,
+        deadline.ManualOverrideByUserId,
+        deadline.ManualOverrideByDisplayName,
+        deadline.ManualOverrideAtUtc,
+        deadline.ManualOverrideCalculationFingerprintSha256,
         deadline.FiledDate,
         deadline.FilingReference,
         deadline.IsLate,
         deadline.PenaltyAmount
     };
 
-    private DateOnly CurrentIrelandDate()
+    public DateOnly CurrentIrelandDate()
     {
         var now = (timeProvider ?? TimeProvider.System).GetUtcNow();
         var irishNow = TimeZoneInfo.ConvertTime(now, IrelandTimeZone);
         return DateOnly.FromDateTime(irishNow.DateTime);
+    }
+
+    private DateTime UtcNowMicrosecond()
+    {
+        var utc = (timeProvider ?? TimeProvider.System).GetUtcNow().UtcDateTime;
+        return new DateTime(utc.Ticks - utc.Ticks % 10, DateTimeKind.Utc);
+    }
+
+    public static DateOnly ResolveAnnualReturnDateOccurrence(DateOnly exactAnnualReturnDate, DateOnly periodEnd)
+    {
+        var occurrence = exactAnnualReturnDate;
+        while (occurrence < periodEnd)
+            occurrence = occurrence.AddYears(1);
+        return occurrence;
     }
 
     private static TimeZoneInfo ResolveIrelandTimeZone()
@@ -410,15 +640,32 @@ public class DeadlineService(AccountsDbContext db, AuditService? audit = null, T
         }
     }
 
-    private static DateOnly ObservedFixedHoliday(int year, int month, int day)
+    private static HashSet<DateOnly> IrishFixedPublicHolidays(int year)
     {
-        var date = new DateOnly(year, month, day);
-        return date.DayOfWeek switch
+        var actual = new[]
         {
-            DayOfWeek.Saturday => date.AddDays(2),
-            DayOfWeek.Sunday => date.AddDays(1),
-            _ => date
+            new DateOnly(year, 1, 1),
+            new DateOnly(year, 3, 17),
+            new DateOnly(year, 12, 25),
+            new DateOnly(year, 12, 26)
         };
+        var holidays = actual.ToHashSet();
+        var occupiedWorkingDays = actual
+            .Where(candidate => candidate.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday))
+            .ToHashSet();
+        foreach (var holiday in actual.Where(candidate =>
+                     candidate.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday))
+        {
+            var observed = holiday.AddDays(1);
+            while (observed.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday
+                   || occupiedWorkingDays.Contains(observed))
+            {
+                observed = observed.AddDays(1);
+            }
+            occupiedWorkingDays.Add(observed);
+            holidays.Add(observed);
+        }
+        return holidays;
     }
 
     private static DateOnly FirstMonday(int year, int month)
@@ -455,6 +702,90 @@ public class DeadlineService(AccountsDbContext db, AuditService? audit = null, T
         var day = ((h + l - 7 * m + 114) % 31) + 1;
         return new DateOnly(year, month, day);
     }
+}
+
+internal sealed record DeadlineCalculation(
+    DateOnly CalculatedDueDate,
+    DateOnly? AnnualReturnDate,
+    int? AnnualReturnDateRecordId,
+    DateOnly? ReturnMadeUpToDate,
+    DateOnly? FinancialStatementsLatestMadeUpToDate,
+    DateOnly? DeliveryDueDate,
+    bool? MadeUpToDateBroughtForwardForAccountsAge,
+    string RuleVersion,
+    string? SourceUrl,
+    string FingerprintSha256)
+{
+    public static DeadlineCalculation Cro(
+        int companyId,
+        int periodId,
+        DateOnly calculatedDueDate,
+        DateOnly annualReturnDate,
+        int? annualReturnDateRecordId,
+        DateOnly returnMadeUpToDate,
+        DateOnly financialStatementsLatestMadeUpToDate)
+    {
+        var broughtForward = returnMadeUpToDate < annualReturnDate;
+        const string ruleVersion = DeadlineService.CroRuleVersion;
+        var canonical = string.Join('|',
+            companyId.ToString(CultureInfo.InvariantCulture),
+            periodId.ToString(CultureInfo.InvariantCulture),
+            DeadlineType.CRO.ToString(),
+            calculatedDueDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            annualReturnDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            annualReturnDateRecordId?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
+            returnMadeUpToDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            financialStatementsLatestMadeUpToDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            broughtForward.ToString(CultureInfo.InvariantCulture),
+            ruleVersion,
+            DeadlineService.CroGuidanceUrl,
+            DeadlineService.CompaniesActSection347Url);
+        return new DeadlineCalculation(
+            calculatedDueDate,
+            annualReturnDate,
+            annualReturnDateRecordId,
+            returnMadeUpToDate,
+            financialStatementsLatestMadeUpToDate,
+            calculatedDueDate,
+            broughtForward,
+            ruleVersion,
+            DeadlineService.CroGuidanceUrl,
+            Hash(canonical));
+    }
+
+    public static DeadlineCalculation Simple(
+        int companyId,
+        int periodId,
+        DeadlineType type,
+        DateOnly calculatedDueDate)
+    {
+        var ruleVersion = type switch
+        {
+            DeadlineType.Revenue => "REVENUE-CT1-2026-07-10",
+            DeadlineType.Charity => "CHARITIES-ANNUAL-RETURN-2026-07-10",
+            _ => throw new ArgumentOutOfRangeException(nameof(type))
+        };
+        var canonical = string.Join('|',
+            companyId.ToString(CultureInfo.InvariantCulture),
+            periodId.ToString(CultureInfo.InvariantCulture),
+            type.ToString(),
+            calculatedDueDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            ruleVersion);
+        return new DeadlineCalculation(
+            calculatedDueDate,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            ruleVersion,
+            null,
+            Hash(canonical));
+    }
+
+    private static string Hash(string canonical) =>
+        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
 }
 
 public record AuditExemptionJeopardy(int LateFilingCount, bool IsAtRisk, bool HasLostExemption, string? Warning);

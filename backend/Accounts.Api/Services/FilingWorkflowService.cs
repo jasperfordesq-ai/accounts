@@ -12,8 +12,15 @@ public class FilingWorkflowService(
     IxbrlService ixbrlService,
     AuditService? audit = null,
     ILogger<FilingWorkflowService>? logger = null,
-    FilingReadinessProfileService? readinessProfile = null)
+    FilingReadinessProfileService? readinessProfile = null,
+    FilingReleaseGate? releaseGate = null,
+    CharityReportingService? charityReporting = null,
+    CharityPdfService? charityPdf = null)
 {
+    private FilingReleaseGate ReleaseGate => releaseGate ??= new FilingReleaseGate(db);
+    private CharityReportingService CharityReporting => charityReporting ??= new CharityReportingService(db);
+    private CharityPdfService CharityPdf => charityPdf ??= new CharityPdfService();
+
     public record FilingWorkflowStatus(
         CroFilingStatus Cro,
         RevenueFilingStatus Revenue,
@@ -39,7 +46,10 @@ public class FilingWorkflowService(
         bool IxbrlInternalChecksPassed,
         bool IxbrlValid,
         string? ValidationErrors,
-        string? Ct1Reference
+        string? Ct1Reference,
+        string GenerationSupport,
+        bool ManualHandoffRequired,
+        bool ReviewPrototypeChecksPassed
     );
 
     public record CharityFilingStatus(
@@ -85,7 +95,10 @@ public class FilingWorkflowService(
             InternalIxbrlChecksPassed(rev),
             rev?.IxbrlValidated ?? false,
             rev?.IxbrlValidationErrors,
-            rev?.Ct1Reference
+            rev?.Ct1Reference,
+            RevenueIxbrlGenerationPolicy.FilingReadyGenerationEnabled ? "filing-ready" : "manual-handoff-only",
+            !RevenueIxbrlGenerationPolicy.FilingReadyGenerationEnabled,
+            ReviewPrototypeChecksPassed(rev)
         );
 
         var charityStatus = new CharityFilingStatus(
@@ -161,12 +174,8 @@ public class FilingWorkflowService(
             .FirstOrDefaultAsync(p => p.Id == periodId && p.CompanyId == companyId)
             ?? throw new ResourceNotFoundException($"Period {periodId} not found");
 
-        var pkg = period.CroFilingPackage;
-        if (pkg == null)
-        {
-            pkg = new CroFilingPackage { PeriodId = periodId };
-            db.CroFilingPackages.Add(pkg);
-        }
+        var pkg = period.CroFilingPackage
+            ?? throw new FilingReleaseBlockedException("Generate and retain the CRO filing artifacts before changing final filing state.");
         var oldValue = CroFilingAuditSnapshot(pkg);
         string? coreSubmissionReference = null;
 
@@ -179,15 +188,12 @@ public class FilingWorkflowService(
             if (readinessProfile is not null)
                 await readinessProfile.AssertCanApproveCroPackAsync(companyId, periodId);
 
-            // signing-approval-chain: capture the director/secretary signatories at approval so the
-            // as-filed record retains a recorded signing authority behind the filing.
-            var activeOfficers = await db.CompanyOfficers
-                .Where(o => o.CompanyId == companyId && o.ResignedDate == null)
-                .ToListAsync();
-            pkg.SignedByDirector ??= activeOfficers.FirstOrDefault(o => o.Role == OfficerRole.Director)?.Name;
-            pkg.SignedBySecretary ??= activeOfficers
-                .FirstOrDefault(o => o.Role == OfficerRole.Secretary || o.Role == OfficerRole.CompanySecretary)?.Name;
-            pkg.SignedAt ??= DateTime.UtcNow;
+            await ReleaseGate.BindApprovalAsync(
+                companyId,
+                periodId,
+                FilingReleaseWorkflow.Cro,
+                by!,
+                auditUserId ?? by);
         }
 
         if (status == FilingStatus.Submitted)
@@ -201,6 +207,14 @@ public class FilingWorkflowService(
                 throw new BusinessRuleException("Record the director and company secretary signatories before submitting the CRO filing.");
 
             coreSubmissionReference = NormalizeFilingReference(submissionReference ?? pkg.CroSubmissionReference, "CORE submission reference");
+
+            await ReleaseGate.AssertTransitionAsync(
+                companyId,
+                periodId,
+                FilingReleaseWorkflow.Cro,
+                FilingStatus.Submitted,
+                coreSubmissionReference,
+                auditUserId ?? by);
 
             await statementsService.AssertFinalOutputReadinessAsync(companyId, periodId, "CRO submission");
             if (readinessProfile is not null)
@@ -218,6 +232,13 @@ public class FilingWorkflowService(
             if (!pkg.PaymentCompleted)
                 throw new BusinessRuleException("Confirm CORE payment before marking the CRO filing as accepted.");
             pkg.CroSubmissionReference = NormalizeFilingReference(pkg.CroSubmissionReference, "CORE submission reference");
+            await ReleaseGate.AssertTransitionAsync(
+                companyId,
+                periodId,
+                FilingReleaseWorkflow.Cro,
+                FilingStatus.Accepted,
+                pkg.CroSubmissionReference,
+                auditUserId ?? by);
         }
 
         pkg.FilingStatus = status;
@@ -287,27 +308,36 @@ public class FilingWorkflowService(
     public Task<CroFilingPackage> MarkDocumentGeneratedAsync(int companyId, int periodId, string documentType, string? auditUserId = null) =>
         throw new BusinessRuleException("CRO document readiness is recorded only after the server generates the document. Download the CRO filing pack or signature page again.");
 
-    public async Task<CroFilingPackage> RecordCroDocumentGeneratedAsync(int companyId, int periodId, string documentType, string? auditUserId = null)
+    public async Task<CroFilingPackage> RecordCroDocumentGeneratedAsync(
+        int companyId,
+        int periodId,
+        string documentType,
+        string? auditUserId = null,
+        byte[]? retainedFinalArtifact = null)
     {
         var period = await db.AccountingPeriods
             .Include(p => p.CroFilingPackage)
             .FirstOrDefaultAsync(p => p.Id == periodId && p.CompanyId == companyId)
             ?? throw new ResourceNotFoundException($"Period {periodId} not found");
         var pkg = period.CroFilingPackage;
-        if (pkg == null)
+        var oldValue = pkg is null ? null : CroFilingAuditSnapshot(pkg);
+
+        if (retainedFinalArtifact is null || retainedFinalArtifact.Length == 0)
+            throw new FilingReleaseBlockedException(
+                "CRO document readiness can be recorded only with the exact retained server-generated artifact bytes.");
+
+        var artifactType = documentType switch
         {
-            pkg = new CroFilingPackage { PeriodId = periodId };
-            db.CroFilingPackages.Add(pkg);
-        }
-        var oldValue = CroFilingAuditSnapshot(pkg);
-
-        if (documentType == "accounts") pkg.AccountsPdfGenerated = true;
-        else if (documentType == "signature") pkg.SignaturePageGenerated = true;
-        else throw new BusinessRuleException("Unknown CRO document type.");
-        if (pkg.AccountsPdfGenerated && pkg.SignaturePageGenerated && pkg.FilingStatus == FilingStatus.NotStarted)
-            pkg.FilingStatus = FilingStatus.PackageGenerated;
-
-        await db.SaveChangesAsync();
+            "accounts" => FilingReleaseArtifact.CroAccountsPdf,
+            "signature" => FilingReleaseArtifact.CroSignaturePage,
+            _ => throw new BusinessRuleException("Unknown CRO document type.")
+        };
+        pkg = await ReleaseGate.RecordCroArtifactAsync(
+            companyId,
+            periodId,
+            artifactType,
+            retainedFinalArtifact,
+            auditUserId);
         if (audit is not null)
         {
             await audit.LogAsync(
@@ -335,15 +365,10 @@ public class FilingWorkflowService(
             .FirstOrDefaultAsync(p => p.Id == periodId && p.CompanyId == companyId)
             ?? throw new ResourceNotFoundException($"Period {periodId} not found");
         var pkg = period.RevenueFilingPackage;
-        if (pkg == null)
-        {
-            pkg = new RevenueFilingPackage { PeriodId = periodId };
-            db.RevenueFilingPackages.Add(pkg);
-        }
-        var oldValue = RevenueFilingAuditSnapshot(pkg);
+        var oldValue = pkg is null ? null : RevenueFilingAuditSnapshot(pkg);
 
         // Internal iXBRL validation checks. This is not a substitute for ROS validation.
-        var errors = new List<string>();
+        var errors = new List<string> { RevenueIxbrlGenerationPolicy.ManualHandoffReason };
 
         if (string.IsNullOrWhiteSpace(period.Company.CroNumber))
             errors.Add("Company CRO number is required for iXBRL entity identification");
@@ -361,14 +386,36 @@ public class FilingWorkflowService(
 
         var hasTax = await db.TaxBalances.AnyAsync(t => t.PeriodId == periodId && t.TaxType == TaxType.CorporationTax);
         if (!hasTax) errors.Add("Corporation tax balance not entered");
-
         try
         {
-            var xhtml = Encoding.UTF8.GetString(await ixbrlService.GenerateIxbrlAsync(companyId, periodId));
+            var taxSupport = await new TaxComputationService(db, statementsService).ComputeAsync(companyId, periodId);
+            if (!taxSupport.FinalTaxChargeSupported)
+            {
+                errors.Add(
+                    "Corporation-tax scope is not supported for Revenue handoff: "
+                    + string.Join("; ", taxSupport.BlockingReasons));
+            }
+            if (taxSupport.IsCompleteCt1Return)
+                errors.Add("Tax support contract incorrectly claims to be a complete CT1 return");
+        }
+        catch (Exception ex)
+        {
+            logger?.LogError(ex, "Corporation-tax support validation failed for period {PeriodId}", periodId);
+            errors.Add("Corporation-tax support data could not be validated");
+        }
+
+        byte[]? generatedArtifact = null;
+        try
+        {
+            generatedArtifact = await ixbrlService.GenerateReviewIxbrlAsync(companyId, periodId);
+            var xhtml = Encoding.UTF8.GetString(generatedArtifact);
             if (!xhtml.Contains("<ix:header>") || !xhtml.Contains("xmlns:xbrli="))
                 errors.Add("Generated XHTML is missing required inline XBRL header/resources");
-            if (!xhtml.Contains("External ROS/iXBRL validation remains required"))
-                errors.Add("Generated file must carry the external ROS validation warning");
+            if (!xhtml.Contains("data-generation-support=\"manual-handoff-only\"", StringComparison.Ordinal)
+                || !xhtml.Contains("DRAFT - NOT FOR FILING", StringComparison.Ordinal))
+            {
+                errors.Add("Review prototype is missing the mandatory manual-handoff and draft markers");
+            }
         }
         catch (Exception ex)
         {
@@ -376,11 +423,18 @@ public class FilingWorkflowService(
             errors.Add("iXBRL generation failed. Check server logs and retry.");
         }
 
-        pkg.IxbrlGenerated = !errors.Any(e => e.StartsWith("iXBRL generation failed.", StringComparison.Ordinal));
+        pkg ??= new RevenueFilingPackage { PeriodId = periodId };
+        if (period.RevenueFilingPackage is null)
+            db.RevenueFilingPackages.Add(pkg);
+
+        // The generated bytes are deliberately not retained as a filing artifact. They are an
+        // on-demand review prototype and cannot satisfy the final release gate.
+        pkg.IxbrlGenerated = false;
         pkg.IxbrlValidated = false;
-        pkg.IxbrlValidationErrors = errors.Count > 0
-            ? string.Join("; ", errors)
-            : "Internal checks passed. External ROS/iXBRL validation is still required before Revenue filing.";
+        pkg.ArtifactReleaseCandidate = null;
+        pkg.ApprovedArtifactManifestSha256 = null;
+        pkg.ApprovedReleaseCandidate = null;
+        pkg.IxbrlValidationErrors = string.Join("; ", errors.Distinct(StringComparer.Ordinal));
         if (pkg.FilingStatus == FilingStatus.NotStarted) pkg.FilingStatus = FilingStatus.InProgress;
 
         await db.SaveChangesAsync();
@@ -399,6 +453,92 @@ public class FilingWorkflowService(
         return pkg;
     }
 
+    public async Task<RevenueFilingPackage> RecordExternalRevenueValidationAsync(
+        int companyId,
+        int periodId,
+        string artifactSha256,
+        string externalReference,
+        string? auditUserId = null) =>
+        await ReleaseGate.RecordExternalRevenueValidationAsync(
+            companyId,
+            periodId,
+            artifactSha256,
+            externalReference,
+            auditUserId);
+
+    public async Task<RevenueFilingPackage> UpdateRevenueStatusAsync(
+        int companyId,
+        int periodId,
+        FilingStatus status,
+        string? by = null,
+        string? reason = null,
+        string? filingReference = null,
+        string? auditUserId = null)
+    {
+        var period = await db.AccountingPeriods
+            .Include(p => p.RevenueFilingPackage)
+            .FirstOrDefaultAsync(p => p.Id == periodId && p.CompanyId == companyId)
+            ?? throw new ResourceNotFoundException($"Period {periodId} not found");
+        var package = period.RevenueFilingPackage
+            ?? throw new FilingReleaseBlockedException("Generate and validate the Revenue iXBRL artifact before changing final filing state.");
+        var oldValue = RevenueFilingAuditSnapshot(package);
+
+        if (status == FilingStatus.Approved)
+        {
+            RequireNamedReviewer(by, "approving the Revenue filing artifact");
+            await ReleaseGate.BindApprovalAsync(
+                companyId,
+                periodId,
+                FilingReleaseWorkflow.Revenue,
+                by!,
+                auditUserId ?? by);
+        }
+        else if (status == FilingStatus.Submitted)
+        {
+            var reference = NormalizeFilingReference(filingReference ?? package.Ct1Reference, "Revenue filing reference");
+            await ReleaseGate.AssertTransitionAsync(
+                companyId,
+                periodId,
+                FilingReleaseWorkflow.Revenue,
+                FilingStatus.Submitted,
+                reference,
+                auditUserId ?? by);
+            package.Ct1Reference = reference;
+        }
+        else if (status == FilingStatus.Accepted)
+        {
+            await ReleaseGate.AssertTransitionAsync(
+                companyId,
+                periodId,
+                FilingReleaseWorkflow.Revenue,
+                FilingStatus.Accepted,
+                filingReference ?? package.Ct1Reference,
+                auditUserId ?? by);
+        }
+        else if (status == FilingStatus.CorrectionRequired)
+        {
+            package.IxbrlValidationErrors = string.IsNullOrWhiteSpace(reason)
+                ? "External Revenue correction or remediation is required."
+                : reason.Trim();
+        }
+
+        package.FilingStatus = status;
+        await db.SaveChangesAsync();
+        if (audit is not null)
+        {
+            await audit.LogAsync(
+                companyId,
+                periodId,
+                "RevenueFilingPackage",
+                package.Id,
+                AuditEventCodes.RevenueFilingStatusChanged,
+                oldValue,
+                RevenueFilingAuditSnapshot(package),
+                auditUserId ?? by);
+        }
+        return package;
+    }
+
     public async Task<CharityFilingPackage> RecordCharityReportGeneratedAsync(int companyId, int periodId, string reportType, string? auditUserId = null)
     {
         var period = await db.AccountingPeriods
@@ -411,24 +551,41 @@ public class FilingWorkflowService(
             throw new BusinessRuleException("Charity annual return reports can only be recorded for charitable organisations.");
 
         var pkg = period.CharityFilingPackage;
-        if (pkg == null)
+        var oldValue = pkg is null ? null : CharityFilingAuditSnapshot(pkg);
+        if (pkg is null)
+            throw new BusinessRuleException("Record and accept the trustee-population review before generating charity artifacts.");
+
+        var balanceSheet = await statementsService.GetBalanceSheetAsync(companyId, periodId);
+        var evidence = await CharityReporting.BuildArtifactEvidenceAsync(
+            companyId,
+            periodId,
+            balanceSheet.NetAssets,
+            pkg);
+
+        FilingReleaseArtifact artifactType;
+        byte[] artifact;
+        if (reportType == "sofa")
         {
-            pkg = new CharityFilingPackage { PeriodId = periodId };
-            db.CharityFilingPackages.Add(pkg);
+            artifactType = FilingReleaseArtifact.CharitySofa;
+            artifact = CharityPdf.GenerateSofa(evidence, reviewCopy: false);
         }
-        var oldValue = CharityFilingAuditSnapshot(pkg);
-
-        if (reportType == "sofa") pkg.SofaGenerated = true;
-        else if (reportType is "trustees-report" or "tar") pkg.TrusteesReportGenerated = true;
-        else throw new BusinessRuleException("Unknown charity report type.");
-
-        if (pkg.SofaGenerated && pkg.TrusteesReportGenerated && pkg.FilingStatus == FilingStatus.NotStarted)
+        else if (reportType is "trustees-report" or "tar")
         {
-            pkg.FilingStatus = FilingStatus.PackageGenerated;
-            pkg.Status = FilingPackageStatus.Generated;
+            artifactType = FilingReleaseArtifact.CharityTrusteesReport;
+            artifact = CharityPdf.GenerateTrusteesAnnualReport(evidence, reviewCopy: false);
+        }
+        else
+        {
+            throw new BusinessRuleException("Unknown charity report type.");
         }
 
-        await db.SaveChangesAsync();
+        pkg = await ReleaseGate.RecordCharityArtifactAsync(
+            companyId,
+            periodId,
+            artifactType,
+            artifact,
+            auditUserId,
+            evidence);
         if (audit is not null)
         {
             await audit.LogAsync(
@@ -478,8 +635,12 @@ public class FilingWorkflowService(
         {
             RequireNamedReviewer(by, "approving the Charity annual return pack");
             await AssertCharityAnnualReturnEvidenceAsync(period, pkg);
-            pkg.ApprovedBy = by;
-            pkg.ApprovedAt = DateTime.UtcNow;
+            await ReleaseGate.BindApprovalAsync(
+                companyId,
+                periodId,
+                FilingReleaseWorkflow.Charity,
+                by!,
+                auditUserId ?? by);
         }
 
         if (status == FilingStatus.Submitted)
@@ -490,6 +651,13 @@ public class FilingWorkflowService(
             await statementsService.AssertFinalOutputReadinessAsync(companyId, periodId, "Charity annual return");
 
             var reference = NormalizeFilingReference(annualReturnReference ?? pkg.AnnualReturnReference, "Charity annual return reference");
+            await ReleaseGate.AssertTransitionAsync(
+                companyId,
+                periodId,
+                FilingReleaseWorkflow.Charity,
+                FilingStatus.Submitted,
+                reference,
+                auditUserId ?? by);
             pkg.AnnualReturnReference = reference;
             pkg.SubmittedBy = by;
             pkg.SubmittedAt = DateTime.UtcNow;
@@ -501,6 +669,13 @@ public class FilingWorkflowService(
             if (pkg.FilingStatus != FilingStatus.Submitted)
                 throw new BusinessRuleException("Only a submitted Charity annual return can be marked as accepted.");
             _ = NormalizeFilingReference(pkg.AnnualReturnReference, "Charity annual return reference");
+            await ReleaseGate.AssertTransitionAsync(
+                companyId,
+                periodId,
+                FilingReleaseWorkflow.Charity,
+                FilingStatus.Accepted,
+                pkg.AnnualReturnReference,
+                auditUserId ?? by);
             pkg.AcceptedBy = by;
             pkg.AcceptedAt = DateTime.UtcNow;
             pkg.Status = FilingPackageStatus.Accepted;
@@ -541,6 +716,11 @@ public class FilingWorkflowService(
         pkg.CorrectionDeadline,
         pkg.ApprovedBy,
         pkg.ApprovedAt,
+        pkg.AccountsPdfSha256,
+        pkg.SignaturePageSha256,
+        pkg.ArtifactReleaseCandidate,
+        pkg.ApprovedArtifactManifestSha256,
+        pkg.ApprovedReleaseCandidate,
         pkg.SubmittedBy,
         pkg.SubmittedAt
     };
@@ -551,7 +731,14 @@ public class FilingWorkflowService(
         pkg.IxbrlGenerated,
         pkg.IxbrlValidated,
         pkg.IxbrlValidationErrors,
-        pkg.Ct1Reference
+        pkg.Ct1Reference,
+        pkg.IxbrlSha256,
+        pkg.ArtifactReleaseCandidate,
+        pkg.ApprovedArtifactManifestSha256,
+        pkg.ApprovedReleaseCandidate,
+        pkg.ExternalValidationArtifactSha256,
+        pkg.ExternalValidationReference,
+        pkg.ExternalValidatedAt
     };
 
     private async Task AssertCharityAnnualReturnEvidenceAsync(AccountingPeriod period, CharityFilingPackage pkg)
@@ -581,6 +768,11 @@ public class FilingWorkflowService(
         pkg.CorrectionDeadline,
         pkg.ApprovedBy,
         pkg.ApprovedAt,
+        pkg.SofaSha256,
+        pkg.TrusteesReportSha256,
+        pkg.ArtifactReleaseCandidate,
+        pkg.ApprovedArtifactManifestSha256,
+        pkg.ApprovedReleaseCandidate,
         pkg.SubmittedBy,
         pkg.SubmittedAt,
         pkg.AcceptedBy,
@@ -606,4 +798,11 @@ public class FilingWorkflowService(
     private static bool InternalIxbrlChecksPassed(RevenueFilingPackage? pkg) =>
         pkg?.IxbrlGenerated == true
         && pkg.IxbrlValidationErrors?.StartsWith("Internal checks passed.", StringComparison.Ordinal) == true;
+
+    private static bool ReviewPrototypeChecksPassed(RevenueFilingPackage? pkg) =>
+        pkg?.IxbrlGenerated == false
+        && string.Equals(
+            pkg.IxbrlValidationErrors,
+            RevenueIxbrlGenerationPolicy.ManualHandoffReason,
+            StringComparison.Ordinal);
 }

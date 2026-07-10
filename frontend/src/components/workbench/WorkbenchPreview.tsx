@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import {
   DataGrid,
   EvidenceChecklist,
@@ -23,7 +24,9 @@ import {
 } from "@/components/workbench";
 import { AccountantWorkflowRail } from "@/components/workbench/AccountantWorkflowRail";
 import { DashboardPracticeSummary } from "@/components/dashboard/DashboardPracticeSummary";
+import { ResourceStateNotice } from "@/components/ResourceStateNotice";
 import type { Company, FilingDeadline } from "@/lib/api";
+import type { ResourceState } from "@/lib/resourceState";
 
 const workflowItems = [
   { id: "setup", label: "Setup", detail: "Company identity, officers and filing profile recorded.", state: "done" as const },
@@ -100,7 +103,7 @@ const releaseBlockers = [
     severity: "high",
     riskRank: 7,
     blockingIssue: "Light and dark visual regression review required",
-    evidenceArtifact: "light-dark-desktop-mobile-screenshot-review",
+    evidenceArtifact: "light-dark-mobile-tablet-desktop-screenshot-review",
     nextAction: "Complete seeded production screenshot review for every main route.",
     blocksRelease: true,
   },
@@ -124,7 +127,7 @@ const dashboardCompanies: Company[] = [
     companyType: "Private",
     incorporationDate: "2023-01-01",
     financialYearStartMonth: 1,
-    ardMonth: 9,
+    annualReturnDate: "2026-09-15",
     isGroupMember: false,
     isHolding: false,
     isInvestment: false,
@@ -162,7 +165,7 @@ const dashboardCompanies: Company[] = [
     companyType: "CompanyLimitedByGuarantee",
     incorporationDate: "2022-01-01",
     financialYearStartMonth: 1,
-    ardMonth: 8,
+    annualReturnDate: "2026-08-10",
     isGroupMember: false,
     isHolding: false,
     isInvestment: false,
@@ -200,7 +203,7 @@ const dashboardCompanies: Company[] = [
     companyType: "Private",
     incorporationDate: "2024-01-01",
     financialYearStartMonth: 1,
-    ardMonth: 10,
+    annualReturnDate: "2026-10-31",
     isGroupMember: false,
     isHolding: false,
     isInvestment: false,
@@ -240,6 +243,7 @@ const dashboardDeadlines: Record<number, FilingDeadline | null> = {
     companyId: 101,
     periodId: 201,
     deadlineType: "CRO",
+    calculatedDueDate: "2026-07-10",
     dueDate: "2026-07-10",
     isLate: false,
     penaltyAmount: 0,
@@ -249,6 +253,7 @@ const dashboardDeadlines: Record<number, FilingDeadline | null> = {
     companyId: 102,
     periodId: 202,
     deadlineType: "Revenue",
+    calculatedDueDate: "2026-06-20",
     dueDate: "2026-06-20",
     isLate: true,
     penaltyAmount: 100,
@@ -256,9 +261,51 @@ const dashboardDeadlines: Record<number, FilingDeadline | null> = {
   103: null,
 };
 
-export function WorkbenchPreview() {
+const canonicalVisualStateIds = new Set([
+  "loading",
+  "empty",
+  "maximum-data",
+  "error",
+  "partial-error",
+  "permission-denied",
+  "read-only",
+  "stale",
+  "conflict",
+]);
+
+const maximumDataRows = Array.from({ length: 48 }, (_, index) => ({
+  id: `maximum-data-${index + 1}`,
+  cells: [
+    `Account ${String(index + 1).padStart(3, "0")}`,
+    index % 3 === 0 ? "Imported transaction" : index % 3 === 1 ? "Year-end adjustment" : "Opening balance",
+    <MoneyField key={`maximum-data-amount-${index + 1}`} value={(index + 1) * 137.25} />,
+    index % 4 === 0 ? "Review required" : "Evidence retained",
+  ],
+  searchText: `account ${index + 1} maximum data evidence review`,
+  tone: index % 4 === 0 ? "warn" as const : "good" as const,
+}));
+
+const partialErrorState: ResourceState = {
+  status: "partial-error",
+  error: "The filing readiness profile could not be refreshed.",
+  failedResourceKeys: ["filing-readiness-profile"],
+  hasRetainedData: true,
+};
+
+const staleState: ResourceState = {
+  status: "stale/retrying",
+  error: null,
+  failedResourceKeys: [],
+  hasRetainedData: true,
+};
+
+export function WorkbenchPreview({ canonicalState }: { canonicalState?: string }) {
   const [balanceOutstanding, setBalanceOutstanding] = useState(40000);
   const [dueWithinYear, setDueWithinYear] = useState(10000);
+
+  if (canonicalState && canonicalVisualStateIds.has(canonicalState)) {
+    return <CanonicalVisualState state={canonicalState} />;
+  }
 
   return (
     <PageShell
@@ -396,21 +443,142 @@ export function WorkbenchPreview() {
         <div className="[&>div]:static [&>div]:shadow-none">
           <FilingActionBar>
             <StatusBadge tone="bad">Approval blocked</StatusBadge>
-            <button
-              type="button"
-              className="inline-flex min-h-10 items-center rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 text-sm font-semibold text-[var(--foreground)] shadow-sm transition hover:bg-[var(--surface-subtle)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500"
+            <span
+              aria-label="Record external ROS validation preview"
+              className="inline-flex min-h-10 items-center rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 text-sm font-semibold text-[var(--foreground)] shadow-sm"
             >
               Record external ROS validation
-            </button>
-            <button
-              type="button"
-              className="inline-flex min-h-10 items-center rounded-md border border-emerald-700 bg-emerald-700 px-3 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500"
+            </span>
+            <span
+              aria-label="Mark accountant approved preview"
+              className="inline-flex min-h-10 items-center rounded-md border border-emerald-700 bg-emerald-700 px-3 text-sm font-semibold text-white shadow-sm"
             >
               Mark accountant approved
-            </button>
+            </span>
           </FilingActionBar>
         </div>
       </section>
+    </PageShell>
+  );
+}
+
+function CanonicalVisualState({ state }: { state: string }) {
+  const content = (() => {
+    switch (state) {
+      case "loading":
+        return (
+          <WorkbenchLoadingState
+            title="Loading canonical accountant workspace"
+            description="Preparing deterministic statutory evidence for responsive visual review."
+          />
+        );
+      case "empty":
+        return (
+          <WorkbenchEmptyState
+            title="No canonical accounting records"
+            description="The empty state keeps the next safe accountant action visible without implying that filing evidence exists."
+            actions={(
+              <Link className="text-sm font-semibold text-emerald-700 underline dark:text-emerald-300" href="/companies/new">
+                Start company onboarding
+              </Link>
+            )}
+          />
+        );
+      case "maximum-data":
+        return (
+          <ReviewPanel
+            title="Maximum-data review table"
+            description="Forty-eight deterministic rows exercise dense scanning, internal scrolling and responsive labels."
+            actions={<StatusBadge tone="warn">48 rows</StatusBadge>}
+          >
+            <DataGrid
+              caption="Maximum-data accounting evidence"
+              filterPlaceholder="Filter maximum-data evidence"
+              columns={["Account", "Source", "Amount", "Review state"]}
+              rows={maximumDataRows}
+              totals={["Maximum-data total", "", <MoneyField key="maximum-data-total" value={161406} />, "Human review required"]}
+            />
+          </ReviewPanel>
+        );
+      case "error":
+        return (
+          <WorkbenchErrorState
+            title="Canonical workspace could not be loaded"
+            description="No retained evidence is available. Retry before making an accounting or filing decision."
+            onRetry={() => undefined}
+          />
+        );
+      case "partial-error":
+        return (
+          <ReviewPanel
+            title="Retained evidence with a failed resource"
+            description="Previously loaded figures remain visible but cannot support a new professional confirmation."
+          >
+            <ResourceStateNotice state={partialErrorState} label="Filing evidence" onRetry={() => undefined} />
+            <div className="mt-3 rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-3 text-sm text-[var(--foreground)]">
+              Retained trial-balance total: <MoneyField value={482750} />
+            </div>
+          </ReviewPanel>
+        );
+      case "permission-denied":
+        return (
+          <PermissionDeniedPanel
+            title="Permission denied"
+            description="This role cannot approve statutory outputs or record an external filing outcome."
+            actions={(
+              <Link className="text-sm font-semibold text-amber-900 underline dark:text-amber-100" href="/">
+                Return to permitted work
+              </Link>
+            )}
+          />
+        );
+      case "read-only":
+        return (
+          <ReviewPanel
+            title="Reviewer evidence view"
+            description="The retained working papers remain visible without presenting mutating controls."
+          >
+            <ReadOnlyNotice
+              subject="year-end working papers"
+              detail="A Reviewer can inspect this evidence; editing requires Owner or Accountant access."
+            />
+          </ReviewPanel>
+        );
+      case "stale":
+        return (
+          <ReviewPanel
+            title="Retained statement evidence"
+            description="The prior result stays visible while the latest request is in flight."
+          >
+            <ResourceStateNotice state={staleState} label="statement evidence" />
+            <div className="mt-3 rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-3 text-sm text-[var(--foreground)]">
+              Retained balance-sheet total: <MoneyField value={725000} />
+            </div>
+          </ReviewPanel>
+        );
+      case "conflict":
+        return (
+          <WorkbenchErrorState
+            title="Accounting record changed by another reviewer"
+            description="Reload the latest retained version before retrying; the stale write remains blocked."
+            retryLabel="Reload latest version"
+            onRetry={() => undefined}
+          />
+        );
+      default:
+        return null;
+    }
+  })();
+
+  return (
+    <PageShell
+      title={`Canonical ${state} state`}
+      subtitle="Deterministic visual-QA fixture. This surface demonstrates presentation only and does not record accounting or filing decisions."
+      backHref="/workbench-preview"
+      backLabel="Workbench preview"
+      meta={<StatusBadge tone="warn">Named human review required</StatusBadge>}
+    >
+      {content}
     </PageShell>
   );
 }

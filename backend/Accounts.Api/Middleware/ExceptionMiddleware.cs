@@ -16,23 +16,42 @@ public class ExceptionMiddleware(
         }
         catch (ResourceNotFoundException ex)
         {
-            // Expected business outcome — log at Warning with the correlation id for traceability.
-            logger.LogWarning(ex, "Resource not found handling {Method} {Path} (correlationId {CorrelationId})",
-                context.Request.Method, context.Request.Path, context.TraceIdentifier);
+            LogSafeWarning(logger, "ResourceNotFound", ex, context);
             await WriteErrorAsync(context, 404, ex.Message);
+        }
+        catch (FilingReleaseBlockedException ex)
+        {
+            LogSafeWarning(logger, "FilingReleaseBlocked", ex, context);
+            await WriteErrorAsync(context, StatusCodes.Status409Conflict, ex.Message);
+        }
+        catch (AccountingConcurrencyException ex)
+        {
+            LogSafeWarning(logger, "AccountingConcurrencyConflict", ex, context);
+            if (ex.CurrentETag is not null)
+                context.Response.Headers.ETag = ex.CurrentETag;
+            context.Response.StatusCode = StatusCodes.Status409Conflict;
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsJsonAsync(AccountingConflict.Response(context, ex.CurrentETag));
         }
         catch (BusinessRuleException ex)
         {
-            logger.LogWarning(ex, "Business rule violation handling {Method} {Path} (correlationId {CorrelationId})",
-                context.Request.Method, context.Request.Path, context.TraceIdentifier);
+            LogSafeWarning(logger, "BusinessRuleViolation", ex, context);
             await WriteErrorAsync(context, 400, ex.Message);
         }
         catch (Exception ex)
         {
-            // Unexpected — log at Error with the exception (full detail, server-side only), the request
-            // method/path, and the correlation id so a support ticket can be triaged without a repro.
-            logger.LogError(ex, "Unhandled exception handling {Method} {Path} (correlationId {CorrelationId})",
-                context.Request.Method, context.Request.Path, context.TraceIdentifier);
+            // Exported logs must never carry free-form exception messages, request data, client
+            // identifiers, or secrets. Safe dimensions retain grouping and correlation value.
+            var safe = MonitoringEventSanitizer.Sanitize(
+                ex,
+                new ErrorReportContext(context.Request.Method, context.Request.Path, context.TraceIdentifier));
+            logger.LogError(
+                "Unhandled {ExceptionType} handling {Method} {Path} (correlationId {CorrelationId}, stackFingerprint {StackFingerprint})",
+                safe.ExceptionType,
+                safe.Method,
+                safe.Path,
+                safe.CorrelationId,
+                safe.StackFingerprint);
             errorReporter?.CaptureUnexpectedException(
                 ex,
                 new ErrorReportContext(context.Request.Method, context.Request.Path, context.TraceIdentifier));
@@ -43,6 +62,21 @@ public class ExceptionMiddleware(
             var message = env?.IsDevelopment() == true ? ex.Message : "An internal error occurred. Please try again.";
             await WriteErrorAsync(context, 500, message);
         }
+    }
+
+    private static void LogSafeWarning(ILogger logger, string outcome, Exception exception, HttpContext context)
+    {
+        var safe = MonitoringEventSanitizer.Sanitize(
+            exception,
+            new ErrorReportContext(context.Request.Method, context.Request.Path, context.TraceIdentifier));
+        logger.LogWarning(
+            "{Outcome} {ExceptionType} handling {Method} {Path} (correlationId {CorrelationId}, stackFingerprint {StackFingerprint})",
+            outcome,
+            safe.ExceptionType,
+            safe.Method,
+            safe.Path,
+            safe.CorrelationId,
+            safe.StackFingerprint);
     }
 
     private static async Task WriteErrorAsync(HttpContext context, int statusCode, string message)

@@ -4,14 +4,16 @@ import { Button, Chip, Spinner } from "@heroui/react";
 import { Plus, Trash2 } from "lucide-react";
 
 import type { InventoryItem } from "@/lib/api";
+import { useDestructiveActionConfirmation } from "@/lib/useDestructiveAction";
 
 interface YearEndInventorySectionProps {
+  canWrite?: boolean;
   items: InventoryItem[];
   draft: InventoryItem;
   saving: boolean;
   onDraftChange: (draft: InventoryItem) => void;
   onAdd: () => void;
-  onDelete: (id: number) => void;
+  onDelete: (id: number) => void | Promise<void>;
 }
 
 const inputClass =
@@ -20,6 +22,7 @@ const selectClass =
   "w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors";
 
 export function YearEndInventorySection({
+  canWrite = true,
   items,
   draft,
   saving,
@@ -27,6 +30,8 @@ export function YearEndInventorySection({
   onAdd,
   onDelete,
 }: YearEndInventorySectionProps) {
+  const { requestDestructiveAction, destructiveActionConfirmation } = useDestructiveActionConfirmation();
+
   return (
     <>
       {items.length > 0 && (
@@ -44,24 +49,30 @@ export function YearEndInventorySection({
                 <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                   {formatCurrency(item.value)}
                 </span>
-                <button
+                {canWrite && <button
                   type="button"
-                  onClick={() => item.id && onDelete(item.id)}
+                  onClick={() => item.id && requestDestructiveAction({
+                    recordLabel: `inventory item ${item.description}`,
+                    consequence: `This permanently removes the ${formatCurrency(item.value)} inventory valuation and ${item.valuationMethod} evidence from the year-end record. The removal cannot be undone.`,
+                    onConfirm: () => onDelete(item.id!),
+                    successAnnouncement: `Inventory item ${item.description} was removed.`,
+                  })}
                   className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400"
                   aria-label={`Delete inventory item ${item.description}`}
                 >
                   <Trash2 className="w-4 h-4" />
-                </button>
+                </button>}
               </div>
             </div>
           ))}
         </div>
       )}
 
-      <div className="grid grid-cols-12 gap-3 items-end">
+      {canWrite && <div className="mobile-form-grid grid grid-cols-12 gap-3 items-end">
         <div className="col-span-4">
-          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Description</label>
+          <label htmlFor="inventory-description" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Description</label>
           <input
+            id="inventory-description"
             type="text"
             className={inputClass}
             placeholder="e.g. Finished goods or work in progress"
@@ -71,8 +82,9 @@ export function YearEndInventorySection({
           />
         </div>
         <div className="col-span-3">
-          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Value</label>
+          <label htmlFor="inventory-value" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Value</label>
           <input
+            id="inventory-value"
             type="number"
             className={inputClass}
             placeholder="0.00"
@@ -82,8 +94,9 @@ export function YearEndInventorySection({
           />
         </div>
         <div className="col-span-3">
-          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Valuation Method</label>
+          <label htmlFor="inventory-valuation-method" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Valuation Method</label>
           <select
+            id="inventory-valuation-method"
             className={selectClass}
             value={draft.valuationMethod}
             onChange={(event) => onDraftChange({ ...draft, valuationMethod: event.target.value })}
@@ -107,7 +120,8 @@ export function YearEndInventorySection({
             {saving ? <Spinner size="sm" /> : <><Plus className="w-4 h-4 mr-1" /> Add</>}
           </Button>
         </div>
-      </div>
+      </div>}
+      {destructiveActionConfirmation}
     </>
   );
 }

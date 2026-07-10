@@ -1,15 +1,20 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { parseProductionReadinessReport } from "../src/lib/api.ts";
+import { productionScorecardControls } from "./fixtures/production-scorecard-controls.ts";
 import {
   ACCOUNTANT_WORKFLOW_STAGES,
+  REQUIRED_VISUAL_SMOKE_MATERIAL_ROUTES,
+  REQUIRED_VISUAL_SMOKE_UI_STATES,
+  VISUAL_SMOKE_INVENTORY_VERSION,
+  canonicalUrlTemplateForState,
   expectedVisualSmokeArtifacts,
-  expectedVisualSmokeRouteAudits,
   expectedVisualSmokeScreenshotCount,
   visualSmokeLayoutChecks,
   visualSmokeReviewProtocol,
   visualSmokeReviewChecks,
   visualSmokeRoutes,
+  visualSmokeStateInventory,
   visualSmokeThemes,
   visualSmokeViewports,
 } from "../scripts/visual-smoke-plan.mjs";
@@ -152,7 +157,7 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   );
   assert.equal(parsed.accountantJourneyAcceptanceChecklist[0].signOffGate, "golden-corpus-accountant-acceptance");
   assert.deepEqual(parsed.accountantJourneyAcceptanceChecklist[0].seededScenarioCodes, ["clg-charity", "dac-small", "medium-audit-required", "micro-ltd", "small-abridged-ltd"]);
-  assert.equal(parsed.accountantJourneyAcceptanceChecklist[0].visualArtifactNames.length, 4);
+  assert.equal(parsed.accountantJourneyAcceptanceChecklist[0].visualArtifactNames.length, 6);
   assert.match(parsed.accountantJourneyAcceptanceChecklist[2].acceptanceCriteria[0], /Period workspace/);
   assert.match(
     parsed.accountantJourneyAcceptanceChecklist.find((item) => item.routeCode === "financial-statements")?.acceptanceCriteria[0] ?? "",
@@ -191,8 +196,13 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.ok(parsed.assurancePacket.evidenceItems.includes("production-readiness-report"));
   assert.ok(parsed.assurancePacket.evidenceItems.includes("production-readiness-verification-report"));
   assert.equal(parsed.assurancePacket.releaseBlockers[0], "Qualified accountant sign-off required");
-  assert.equal(parsed.productionScorecard.currentScore, 698);
-  assert.equal(parsed.productionScorecard.targetScore, 700);
+  assert.equal(parsed.productionScorecard.currentScore, 783);
+  assert.equal(parsed.productionScorecard.targetScore, 1000);
+  assert.equal(parsed.productionScorecard.scoreBasis, "independent-audit-control-ledger-v1");
+  assert.equal(parsed.productionScorecard.auditBaselineDate, "2026-07-10");
+  assert.equal(parsed.productionScorecard.auditedCommit, "7ea54cc6d1769ced568ac1568d190cc2bb4b16d1");
+  assert.match(parsed.productionScorecard.evidencePolicy, /exact live candidate report/);
+  assert.match(parsed.productionScorecard.evidencePolicy, /artifact hashes/);
   assert.deepEqual(parsed.productionScorecard.categories.map((category) => category.code), [
     "architecture-documentation",
     "backend-statutory-accounting-engine",
@@ -200,7 +210,12 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
     "security-auth-tenant-platform-guardrails",
   ]);
   assert.equal(parsed.productionScorecard.categories[1].currentScore, 250);
-  assert.equal(parsed.productionScorecard.categories[1].targetScore, 250);
+  assert.equal(parsed.productionScorecard.categories[1].targetScore, 350);
+  assert.equal(parsed.productionScorecard.categories[2].currentScore, 203);
+  assert.equal(parsed.productionScorecard.categories[3].currentScore, 215);
+  assert.ok(parsed.productionScorecard.categories.flatMap((category) => category.controls).some(
+    (control) => control.assuranceClass === "human-external" && !control.passed,
+  ));
   assert.ok(parsed.productionScorecard.categories[2].remainingGaps[0].includes("visual QA"));
   assert.ok(parsed.productionScorecard.categories[3].completionTrackCodes.includes("backend-code"));
   assert.equal(parsed.assuranceActions[0].riskRank, 0);
@@ -287,33 +302,30 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.match(parsed.operationsEvidencePack[5].command, /verify-postgres-backup/);
   assert.equal(parsed.visualQaCoverage.expectedScreenshotCount, expectedVisualSmokeScreenshotCount());
   assert.equal(parsed.visualQaCoverage.manifestFileName, "visual-smoke-manifest.json");
+  assert.equal(parsed.visualQaCoverage.inventoryVersion, "canonical-material-states-v1");
+  assert.equal(parsed.visualQaCoverage.inventoryStateCount, 32);
+  assert.equal(parsed.visualQaCoverage.routeCount, 32);
+  assert.equal(parsed.visualQaCoverage.accountantWorkbenchRouteCount, 7);
+  assert.equal(parsed.visualQaCoverage.stateInventory.length, 32);
+  assert.equal(parsed.visualQaCoverage.semanticDistinctnessRequired, true);
+  assert.deepEqual(parsed.visualQaCoverage.requiredMaterialRoutes, REQUIRED_VISUAL_SMOKE_MATERIAL_ROUTES);
+  assert.deepEqual(parsed.visualQaCoverage.requiredUiStates, REQUIRED_VISUAL_SMOKE_UI_STATES);
   assert.equal(parsed.visualQaCoverage.artifacts.length, expectedVisualSmokeArtifacts().length);
   assert.deepEqual(parsed.visualQaCoverage.reviewChecks, visualSmokeReviewChecks);
-  assert.equal(parsed.visualQaCoverage.reviewProtocol.protocolVersion, "visual-review-v1");
+  assert.equal(parsed.visualQaCoverage.reviewProtocol.protocolVersion, "visual-review-v2-canonical-states");
   assert.equal(parsed.visualQaCoverage.reviewProtocol.reviewerRole, "Design reviewer");
   assert.equal(parsed.visualQaCoverage.reviewProtocol.signOffGate, "visual-qa-screenshot-review");
   assert.match(parsed.visualQaCoverage.reviewProtocol.failurePolicy, /Block release/);
-  assert.match(parsed.visualQaCoverage.reviewProtocol.acceptanceCriteria[0], /light desktop/);
-  assert.deepEqual(parsed.visualQaCoverage.reviewProtocol.requiredEvidence, [
-    "visual-smoke-manifest.json",
-    "visual-smoke-evidence-report.json",
-    "accountant-workbench-evidence-report.json",
-    "28 visual smoke screenshots",
-    "screenshot SHA-256 checksums",
-    "screenshot PNG dimensions",
-    "screenshot nonblank pixel diversity evidence",
-    "per-screenshot automated theme contrast smoke evidence",
-    "route audit summary",
-    "named visual QA reviewer sign-off",
-  ]);
-  assert.deepEqual(parsed.visualQaCoverage.routeAudits, expectedVisualSmokeRouteAudits().map((audit) => ({
-    routeCode: audit.routeName,
-    routeKey: audit.routeKey,
-    label: audit.label,
-    workflowStages: audit.workflowStages,
-    screenshotCount: audit.screenshotCount,
-    reviewStatus: audit.reviewStatus,
-    reviewChecks: audit.reviewChecks,
+  assert.match(parsed.visualQaCoverage.reviewProtocol.acceptanceCriteria[0], /768x1024 tablet/);
+  assert.deepEqual(parsed.visualQaCoverage.reviewProtocol.requiredEvidence, visualSmokeReviewProtocol.requiredEvidence);
+  assert.deepEqual(parsed.visualQaCoverage.routeAudits, visualSmokeRoutes.map((route) => ({
+    routeCode: route.name,
+    routeKey: route.routeKey,
+    label: route.label,
+    workflowStages: route.workflowStages,
+    screenshotCount: visualSmokeThemes.length * visualSmokeViewports.length,
+    reviewStatus: "required-review",
+    reviewChecks: visualSmokeReviewChecks,
   })));
   assert.deepEqual(parsed.visualQaCoverage.themes, visualSmokeThemes);
   assert.deepEqual(parsed.visualQaCoverage.viewports, visualSmokeViewports);
@@ -339,10 +351,16 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
     })),
   );
   assert.deepEqual(parsed.visualQaCoverage.layoutChecks, visualSmokeLayoutChecks);
-  assert.equal(parsed.visualQaCoverage.artifacts[0].artifactPath, "artifacts/visual-smoke/dashboard-light-desktop.png");
-  assert.equal(parsed.visualQaCoverage.artifacts[0].routeKey, "dashboard");
-  assert.equal(parsed.visualQaCoverage.artifacts[0].requiredText, "Firm command centre");
-  assert.deepEqual(parsed.visualQaCoverage.artifacts[0].layoutChecks, ["browser-console-errors", "page-horizontal-overflow", "visible-text-overlap"]);
+  const dashboardDesktopArtifact = parsed.visualQaCoverage.artifacts.find(
+    (artifact) => artifact.stateId === "dashboard"
+      && artifact.theme === "light"
+      && artifact.viewportName === "desktop",
+  );
+  assert.ok(dashboardDesktopArtifact);
+  assert.equal(dashboardDesktopArtifact.artifactPath, "artifacts/visual-smoke/dashboard-light-desktop.png");
+  assert.equal(dashboardDesktopArtifact.routeKey, "dashboard");
+  assert.equal(dashboardDesktopArtifact.requiredText, "Firm command centre");
+  assert.deepEqual(dashboardDesktopArtifact.layoutChecks, ["browser-console-errors", "page-horizontal-overflow", "visible-text-overlap"]);
 });
 
 test("parseProductionReadinessReport rejects missing golden corpus evidence packs", () => {
@@ -450,7 +468,7 @@ test("parseProductionReadinessReport rejects inconsistent production assurance c
 
   assert.throws(
     () => parseProductionReadinessReport(visualPayload),
-    /Invalid production readiness report contract: visualQaCoverage\.expectedScreenshotCount - expected 28, received 7/,
+    /Invalid production readiness report contract: visualQaCoverage\.expectedScreenshotCount - expected 192, received 7/,
   );
 
   const visualAssurancePayload = sampleReport();
@@ -458,7 +476,7 @@ test("parseProductionReadinessReport rejects inconsistent production assurance c
 
   assert.throws(
     () => parseProductionReadinessReport(visualAssurancePayload),
-    /Invalid production readiness report contract: assurancePacket\.visualQaExpectedScreenshots - expected 28, received 99/,
+    /Invalid production readiness report contract: assurancePacket\.visualQaExpectedScreenshots - expected 192, received 99/,
   );
 });
 
@@ -468,7 +486,7 @@ test("parseProductionReadinessReport rejects stale visual route audit counts", (
 
   assert.throws(
     () => parseProductionReadinessReport(payload),
-    /Invalid production readiness report contract: visualQaCoverage\.routeAudits\.0\.screenshotCount - expected 4, received 3/,
+    /Invalid production readiness report contract: visualQaCoverage\.routeAudits\.0\.screenshotCount - expected 6, received 3/,
   );
 });
 
@@ -872,7 +890,62 @@ test("parseProductionReadinessReport rejects scorecard totals that do not match 
 
   assert.throws(
     () => parseProductionReadinessReport(payload),
-    /Invalid production readiness report contract: productionScorecard\.currentScore - expected 698, received 491/,
+    /Invalid production readiness report contract: productionScorecard\.currentScore - expected 783, received 491/,
+  );
+});
+
+test("parseProductionReadinessReport rejects category scores that do not equal passed control weights", () => {
+  const payload = sampleReport();
+  payload.productionScorecard.categories[0].currentScore += 1;
+  payload.productionScorecard.currentScore += 1;
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: productionScorecard\.categories\.0\.currentScore - expected 115, received 116/,
+  );
+});
+
+test("parseProductionReadinessReport rejects a control ledger that no longer totals 1,000 points", () => {
+  const payload = sampleReport();
+  const category = payload.productionScorecard.categories[3];
+  category.controls.at(-1).weight -= 1;
+  category.targetScore -= 1;
+  payload.productionScorecard.targetScore -= 1;
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: productionScorecard\.targetScore - expected 1000, received 999/,
+  );
+});
+
+test("parseProductionReadinessReport rejects open controls without blocking audit item IDs", () => {
+  const payload = sampleReport();
+  const openControl = payload.productionScorecard.categories[1].controls.find((control) => !control.passed);
+  openControl.blockingAuditItemIds = [];
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: productionScorecard\.categories\.1\.controls\.7\.blockingAuditItemIds - open controls require at least one blocking audit item/,
+  );
+});
+
+test("parseProductionReadinessReport rejects scorecard evidence policy without candidate-bound hashes", () => {
+  const payload = sampleReport();
+  payload.productionScorecard.evidencePolicy = "Points are awarded when a reviewer says they pass.";
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: productionScorecard\.evidencePolicy - must tie passed weighted controls and candidate-bound artifact hashes to the exact live candidate report/,
+  );
+});
+
+test("parseProductionReadinessReport rejects control status that disagrees with passed weight state", () => {
+  const payload = sampleReport();
+  payload.productionScorecard.categories[0].controls[0].status = "open";
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: productionScorecard\.categories\.0\.controls\.0\.status - expected passed, received open/,
   );
 });
 
@@ -928,6 +1001,18 @@ test("parseProductionReadinessReport rejects release verification manifests with
   );
 });
 
+test("parseProductionReadinessReport rejects release verification manifests without migration upgrade coverage", () => {
+  const payload = sampleReport();
+  payload.releaseVerificationManifest = payload.releaseVerificationManifest.filter(
+    (item) => item.code !== "postgres-migration-upgrade-gate",
+  );
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: releaseVerificationManifest - missing default CI verification commands: postgres-migration-upgrade-gate/,
+  );
+});
+
 test("parseProductionReadinessReport rejects release verification manifests without no-direct filing control coverage", () => {
   const payload = sampleReport();
   payload.releaseVerificationManifest = payload.releaseVerificationManifest.filter(
@@ -950,6 +1035,19 @@ test("parseProductionReadinessReport rejects malformed CI machine evidence manif
   assert.throws(
     () => parseProductionReadinessReport(payload),
     /Invalid production readiness report contract: releaseVerificationManifest\.ci-machine-evidence-pack - default CI verifier and artifact are required/,
+  );
+});
+
+test("parseProductionReadinessReport rejects malformed migration upgrade manifest rows", () => {
+  const payload = sampleReport();
+  const migrationUpgradeGate = payload.releaseVerificationManifest.find(
+    (item) => item.code === "postgres-migration-upgrade-gate",
+  );
+  migrationUpgradeGate.command = "dotnet test";
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: releaseVerificationManifest\.postgres-migration-upgrade-gate - drift, previous-release upgrade, rollback verifier and artifact are required/,
   );
 });
 
@@ -1023,16 +1121,20 @@ test("parseProductionReadinessReport rejects human evidence closeout artifact dr
 
 function productionScorecard() {
   return {
-    currentScore: 698,
-    targetScore: 700,
-    status: "review-required",
-    nextGate: "Complete source-law review, named visual QA, monitoring-provider confirmation, manual handoff and qualified-accountant acceptance evidence.",
+    currentScore: 783,
+    targetScore: 1000,
+    status: "remediation-required",
+    nextGate: "Close the remaining statutory/tax, visual/accessibility, governance/operations, resilience, maintainability and authentic human/external evidence findings before release.",
+    scoreBasis: "independent-audit-control-ledger-v1",
+    auditBaselineDate: "2026-07-10",
+    auditedCommit: "7ea54cc6d1769ced568ac1568d190cc2bb4b16d1",
+    evidencePolicy: "Points are awarded only by passed weighted controls in this exact live candidate report; machine and human/external controls must retain candidate-bound artifact hashes and accepted evidence before they can pass.",
     categories: [
       {
         code: "architecture-documentation",
         label: "Architecture and documentation",
-        currentScore: 99,
-        targetScore: 100,
+        currentScore: 115,
+        targetScore: 150,
         status: "release-evidence-required",
         currentEvidence: [
           "CLAUDE.md is canonical.",
@@ -1044,12 +1146,13 @@ function productionScorecard() {
         remainingGaps: ["Complete checked-in release evidence templates with named reviewers, including source-law-review-template.md."],
         completionTrackCodes: ["backend-code", "frontend-ui-ux", "frontend-code"],
         releaseBlockerCodes: ["backend-code:source-law-change-review", "frontend-ui-ux:light-dark-visual-regression"],
+        controls: productionScorecardControls("architecture-documentation"),
       },
       {
         code: "backend-statutory-accounting-engine",
         label: "Backend statutory/accounting engine",
         currentScore: 250,
-        targetScore: 250,
+        targetScore: 350,
         status: "qualified-accountant-review-required",
         currentEvidence: [
           "Golden filing corpus covers the production scenarios.",
@@ -1089,20 +1192,21 @@ function productionScorecard() {
           "backend-code:external-ros-validation",
           "backend-code:accountant-acceptance-walkthrough",
         ],
+        controls: productionScorecardControls("backend-statutory-accounting-engine"),
       },
       {
         code: "frontend-accountant-workbench",
         label: "Frontend accountant workbench",
-        currentScore: 199,
-        targetScore: 200,
+        currentScore: 203,
+        targetScore: 250,
         status: "visual-acceptance-required",
         currentEvidence: [
           "Visual smoke plan covers the accountant journey.",
           "visual-smoke-evidence-report.json proves screenshot hash, byte-size, PNG dimension, nonblank pixel diversity, per-screenshot layout-check pass results, automated theme-contrast smoke results and route/theme/viewport coverage.",
           "visual-qa-signoff-template.md and verify-release-evidence.ps1 require reviewers to record visual smoke nonblank pixel and contrast metrics before visual QA evidence can pass.",
-          "Visual QA sign-off requires exact pass decisions for every route across desktop light, desktop dark, mobile light and mobile dark captures.",
+          "Visual QA sign-off requires exact pass decisions for every canonical state across light and dark themes at mobile, tablet and desktop viewports.",
           "Visual QA route capture cells reject accepted-style ambiguous text so reviewer limitations must stay in retained route notes or references.",
-          "Visual QA route notes must match the exact visual-smoke-evidence-report.json routeAcceptance anchor for every route before sign-off evidence can pass.",
+          "Visual QA state notes must match the exact visual-smoke-evidence-report.json routeCoverage anchor for every canonical state before sign-off evidence can pass.",
           "Release evidence reviewer workspaces now prefill visual QA route note anchors from visual-smoke-evidence-report.json while leaving all route pass/fail cells blank for named human review.",
           "Visual QA release evidence requires exact visual-smoke manifest, visual evidence report and accountant workbench evidence report filenames before sign-off evidence can pass.",
           "Visual QA top-level evidence rejects placeholder reviewer name, reviewer role and reviewer signature fields before human visual sign-off evidence can pass.",
@@ -1115,23 +1219,24 @@ function productionScorecard() {
           "Release artifact and CI machine evidence pack verifiers require exact accountant-workbench route acceptance names, route keys, expected decision text and per-route acceptance evidence ids for every workbench route.",
           "Release artifact and CI machine evidence pack verifiers require exact accountant-workbench route acceptance labels, screenshot-review evidence anchors and required-review status for every workbench route.",
           "Release artifact and CI machine evidence pack verifiers require exact accountant-workbench route readiness screenshot counts, layout-check counts, contrast counts, minimum contrast ratios, required-review status and required review checks for every workbench route.",
-          "Release artifact and CI machine evidence pack verifiers require exact accountant-workbench route workflow-stage coverage and light/dark desktop/mobile theme-viewport coverage before retained route readiness evidence can pass.",
+          "Release artifact and CI machine evidence pack verifiers require exact accountant-workbench route workflow-stage coverage and light/dark mobile/tablet/desktop theme-viewport coverage before retained route readiness evidence can pass.",
           "Release artifact and CI machine evidence pack verifiers require exact accountant-workbench required coverage for workflow stages, themes, viewports, review checks, layout checks, expected-text checks, layout/contrast evidence and retained visual evidence files.",
           "Frontend parser invariants now require the CI machine evidence pack, production smoke, readiness verification, visual smoke and manual release-verification rows before rendering readiness data.",
         ],
-        remainingGaps: ["Complete named visual QA review against the light/dark desktop/mobile screenshot manifest and visual-smoke-evidence-report.json."],
+        remainingGaps: ["Complete named visual QA review against the 192-capture light/dark mobile/tablet/desktop canonical state manifest and visual-smoke-evidence-report.json."],
         completionTrackCodes: ["frontend-ui-ux", "frontend-code"],
         releaseBlockerCodes: [
           "frontend-ui-ux:light-dark-visual-regression",
           "frontend-ui-ux:accountant-acceptance-walkthrough",
           "frontend-code:light-dark-visual-regression",
         ],
+        controls: productionScorecardControls("frontend-accountant-workbench"),
       },
       {
         code: "security-auth-tenant-platform-guardrails",
         label: "Security/auth/tenant/platform guardrails",
-        currentScore: 150,
-        targetScore: 150,
+        currentScore: 215,
+        targetScore: 250,
         status: "operator-confirmation-required",
         currentEvidence: [
           "Session, CSRF, tenant and production safety evidence exists.",
@@ -1153,6 +1258,7 @@ function productionScorecard() {
         remainingGaps: ["Confirm the controlled monitoring smoke event inside the configured provider and retain the full release-artifact-pack-report.json after release-evidence-report.json is completed with named human sign-offs."],
         completionTrackCodes: ["backend-code"],
         releaseBlockerCodes: ["backend-code:source-law-change-review", "backend-code:external-ros-validation"],
+        controls: productionScorecardControls("security-auth-tenant-platform-guardrails"),
       },
     ],
   };
@@ -1160,7 +1266,7 @@ function productionScorecard() {
 
 function humanReleaseEvidence() {
   return [
-    humanEvidenceGate("visualQa", "Visual QA sign-off", "visual-qa-signoff-template.md", "Named visual QA reviewer", "visual-qa-screenshot-review", "visual-qa-screenshot-review", "visual-smoke-light-dark", "light-dark-desktop-mobile-screenshot-review"),
+    humanEvidenceGate("visualQa", "Visual QA sign-off", "visual-qa-signoff-template.md", "Named visual QA reviewer", "visual-qa-screenshot-review", "visual-qa-screenshot-review", "visual-smoke-light-dark", "light-dark-mobile-tablet-desktop-screenshot-review"),
     humanEvidenceGate("sourceLawReview", "Source-law review sign-off", "source-law-review-template.md", "Named source-law reviewer plus qualified accountant", "source-law-change-review", "source-law-change-review", "source-law-change-review", "source-law-change-review-note"),
     humanEvidenceGate("externalRosIxbrlValidation", "External ROS/iXBRL validation", "external-ros-ixbrl-validation-template.md", "External ROS/iXBRL validation reviewer", "external-ros-validation-evidence", "external-ros-validation-evidence", "external-ros-validation-evidence", "external-ros-validation-reference"),
     humanEvidenceGate("qualifiedAccountantAcceptance", "Qualified-accountant acceptance", "qualified-accountant-acceptance-template.md", "Named qualified accountant", "qualified-accountant-final-signoff", "accountant-final-signoff", "qualified-accountant-final-signoff", "named-accountant-approval-record"),
@@ -2215,7 +2321,7 @@ function sampleReport() {
         evidenceStage: "visual-qa-evidence",
         status: "in-progress",
         detail: "The accountant journey needs screenshot evidence across light and dark mode.",
-        evidenceRequired: "Light/dark desktop/mobile screenshots for the main workflow routes.",
+        evidenceRequired: "Light/dark mobile/tablet/desktop screenshots for the main workflow routes.",
       },
     ],
     releaseBlockerRegister: [
@@ -2291,12 +2397,12 @@ function sampleReport() {
         severity: "high",
         riskRank: 30,
         blockingIssue: "Light/dark visual regression required",
-        requiredEvidence: "Light/dark desktop/mobile screenshots for the main workflow routes.",
+        requiredEvidence: "Light/dark mobile/tablet/desktop screenshots for the main workflow routes.",
         nextAction: "Review each screenshot route-by-route in light and dark mode.",
         sourceActionCode: "light-dark-visual-regression",
         releaseChecklistCode: "visual-qa-screenshot-review",
         operationalGateCode: "production-ci-gates",
-        evidenceArtifact: "light-dark-desktop-mobile-screenshot-review",
+        evidenceArtifact: "light-dark-mobile-tablet-desktop-screenshot-review",
         blocksRelease: true,
       },
       {
@@ -2323,12 +2429,12 @@ function sampleReport() {
         severity: "high",
         riskRank: 30,
         blockingIssue: "Light/dark visual regression required",
-        requiredEvidence: "Light/dark desktop/mobile screenshots for the main workflow routes.",
+        requiredEvidence: "Light/dark mobile/tablet/desktop screenshots for the main workflow routes.",
         nextAction: "Expand visual regression assertions from screenshot capture into reviewable sign-off.",
         sourceActionCode: "light-dark-visual-regression",
         releaseChecklistCode: "visual-qa-screenshot-review",
         operationalGateCode: "production-ci-gates",
-        evidenceArtifact: "light-dark-desktop-mobile-screenshot-review",
+        evidenceArtifact: "light-dark-mobile-tablet-desktop-screenshot-review",
         blocksRelease: true,
       },
     ],
@@ -2369,7 +2475,7 @@ function sampleReport() {
         status: "in-progress",
         completionCriteria: [
           "Accountant workflow rail is visually coherent across the core journey.",
-          "Light/dark visual regression covers desktop and mobile.",
+          "Light/dark visual regression covers mobile, tablet and desktop.",
           "Dense review workbench surfaces blockers, evidence, sources and next actions without visual clutter.",
         ],
         currentEvidence: [
@@ -2506,11 +2612,11 @@ function sampleReport() {
         required: true,
         status: "in-progress",
         blocksRelease: true,
-        evidenceArtifact: "light-dark-desktop-mobile-screenshot-review",
+        evidenceArtifact: "light-dark-mobile-tablet-desktop-screenshot-review",
         assuranceActionCode: "light-dark-visual-regression",
         operationalGateCode: "production-ci-gates",
         auditEventCodes: [],
-        detail: "Desktop and mobile screenshots in light and dark mode must be reviewed for the accountant workflow before release.",
+        detail: "Mobile, tablet and desktop screenshots in light and dark mode must be reviewed for the accountant workflow before release.",
       },
     ],
     releaseVerificationManifest: [
@@ -2535,7 +2641,7 @@ function sampleReport() {
         runsInDefaultCi: true,
         blocksRelease: true,
         evidenceArtifact: "frontend-test-results",
-        releaseChecklistEvidenceArtifact: "light-dark-desktop-mobile-screenshot-review",
+        releaseChecklistEvidenceArtifact: "light-dark-mobile-tablet-desktop-screenshot-review",
         manualFallback: "Run from frontend/ and retain the unit, render, readiness, proxy, auth and API-client verifier output.",
       },
       {
@@ -2547,19 +2653,19 @@ function sampleReport() {
         runsInDefaultCi: true,
         blocksRelease: true,
         evidenceArtifact: "frontend-build-results",
-        releaseChecklistEvidenceArtifact: "light-dark-desktop-mobile-screenshot-review",
+        releaseChecklistEvidenceArtifact: "light-dark-mobile-tablet-desktop-screenshot-review",
         manualFallback: "Run from frontend/ and retain lint, TypeScript and Next production build output when CI is unavailable.",
       },
       {
         code: "visual-smoke-light-dark",
-        label: "Light/dark desktop/mobile visual smoke",
+        label: "Light/dark mobile/tablet/desktop visual smoke",
         ownerRole: "Engineering",
         command: "node scripts/visual-smoke.mjs; node scripts/verify-visual-smoke-artifacts.mjs --report-path=artifacts/visual-smoke/visual-smoke-evidence-report.json; node scripts/verify-accountant-workbench-evidence.mjs --visual-report=artifacts/visual-smoke/visual-smoke-evidence-report.json --report-path=artifacts/visual-smoke/accountant-workbench-evidence-report.json",
         ciScope: "default-ci",
         runsInDefaultCi: true,
         blocksRelease: true,
         evidenceArtifact: "artifacts/visual-smoke",
-        releaseChecklistEvidenceArtifact: "light-dark-desktop-mobile-screenshot-review",
+        releaseChecklistEvidenceArtifact: "light-dark-mobile-tablet-desktop-screenshot-review",
         manualFallback: "Run visual smoke locally, then retain the manifest verification output and review the generated artifacts manually.",
       },
       {
@@ -2657,6 +2763,18 @@ function sampleReport() {
         evidenceArtifact: "ci-production-stack-smoke-and-backup-restore",
         releaseChecklistEvidenceArtifact: "ci-production-stack-smoke-and-backup-restore",
         manualFallback: "Run the backup verification script after creating a fresh production-shape dump and retain the checksum and restore verification output.",
+      },
+      {
+        code: "postgres-migration-upgrade-gate",
+        label: "PostgreSQL migration drift, upgrade and rollback gate",
+        ownerRole: "Engineering and operations",
+        command: "dotnet ef migrations has-pending-model-changes; dotnet test backend/Accounts.Tests/Accounts.Tests.csproj --configuration Release --filter FullyQualifiedName~MigrationUpgradePostgresTests; pwsh ./scripts/verify-migration-upgrade-evidence.ps1",
+        ciScope: "default-ci",
+        runsInDefaultCi: true,
+        blocksRelease: true,
+        evidenceArtifact: "postgres-migration-upgrade-gate",
+        releaseChecklistEvidenceArtifact: "ci-production-stack-smoke-and-backup-restore",
+        manualFallback: "Retain migration upgrade and rollback evidence beside the encrypted restore drill for the exact candidate.",
       },
       {
         code: "ci-machine-evidence-pack",
@@ -2868,7 +2986,14 @@ function sampleReport() {
       artifactName: "visual-smoke-screenshots",
       enforcement: "ci-production-smoke",
       manifestFileName: "visual-smoke-manifest.json",
+      inventoryVersion: VISUAL_SMOKE_INVENTORY_VERSION,
+      inventoryStateCount: visualSmokeStateInventory.length,
+      routeCount: visualSmokeStateInventory.length,
+      accountantWorkbenchRouteCount: visualSmokeRoutes.length,
       expectedScreenshotCount: expectedVisualSmokeScreenshotCount(),
+      requiredMaterialRoutes: REQUIRED_VISUAL_SMOKE_MATERIAL_ROUTES,
+      requiredUiStates: REQUIRED_VISUAL_SMOKE_UI_STATES,
+      semanticDistinctnessRequired: true,
       layoutChecks: visualSmokeLayoutChecks,
       reviewChecks: visualSmokeReviewChecks,
       reviewProtocol: structuredClone(visualSmokeReviewProtocol),
@@ -2883,23 +3008,51 @@ function sampleReport() {
         workflowStages,
         openFilingTab,
       })),
-      routeAudits: expectedVisualSmokeRouteAudits().map((audit) => ({
-        routeCode: audit.routeName,
-        routeKey: audit.routeKey,
-        label: audit.label,
-        workflowStages: audit.workflowStages,
-        screenshotCount: audit.screenshotCount,
-        reviewStatus: audit.reviewStatus,
-        reviewChecks: audit.reviewChecks,
+      stateInventory: visualSmokeStateInventory.map((state) => ({
+        stateId: state.id,
+        routeName: state.name,
+        routeKey: state.routeKey,
+        label: state.label,
+        description: state.description,
+        materialRoute: state.materialRoute,
+        uiState: state.uiState,
+        canonicalPathTemplate: state.canonicalPathTemplate,
+        canonicalUrlTemplate: canonicalUrlTemplateForState(state),
+        canonicalQuery: state.canonicalQuery,
+        canonicalTabState: state.canonicalTabState,
+        expectedText: state.expectedText,
+        expectedStateText: state.expectedStateText,
+        workflowStages: state.workflowStages,
+        authMode: state.authMode,
+        reviewStatus: state.reviewStatus,
+        openFilingTab: state.openFilingTab,
       })),
-      artifacts: expectedVisualSmokeArtifacts().map(({ routeName, routeKey, theme, viewportName, fileName, artifactPath, expectedText, openFilingTab, reviewStatus, layoutChecks }) => ({
-        routeCode: routeName,
+      routeAudits: visualSmokeRoutes.map((route) => ({
+        routeCode: route.name,
+        routeKey: route.routeKey,
+        label: route.label,
+        workflowStages: route.workflowStages,
+        screenshotCount: visualSmokeThemes.length * visualSmokeViewports.length,
+        reviewStatus: "required-review",
+        reviewChecks: visualSmokeReviewChecks,
+      })),
+      artifacts: expectedVisualSmokeArtifacts().map(({ stateId, routeName, routeKey, materialRoute, uiState, authMode, theme, viewportName, fileName, artifactPath, expectedText, expectedStateText, canonicalUrlTemplate, canonicalQuery, canonicalTabState, openFilingTab, reviewStatus, layoutChecks }) => ({
+        stateId,
+        routeName,
+        routeCode: stateId,
         routeKey,
+        materialRoute,
+        uiState,
+        authMode,
         theme,
         viewportName,
         fileName,
         artifactPath,
         requiredText: expectedText,
+        expectedStateText,
+        canonicalUrlTemplate,
+        canonicalQuery,
+        canonicalTabState,
         openFilingTab,
         reviewStatus,
         layoutChecks,
@@ -3071,7 +3224,7 @@ function journeyAcceptance(routeCode, routeLabel, routeKey, workflowStages, acce
     routeKey,
     workflowStages,
     seededScenarioCodes: ["clg-charity", "dac-small", "medium-audit-required", "micro-ltd", "small-abridged-ltd"],
-    visualArtifactNames: ["dark-desktop", "dark-mobile", "light-desktop", "light-mobile"].map(
+    visualArtifactNames: ["dark-desktop", "dark-mobile", "dark-tablet", "light-desktop", "light-mobile", "light-tablet"].map(
       (suffix) => `${routeCode}-${suffix}.png`,
     ),
     requiredEvidence: [
@@ -3138,13 +3291,13 @@ function workbenchVisualAcceptanceRegister() {
       "filing-review",
       "Filing review",
       ["Review", "Filing"],
-      "Accept the filing review screen only after its evidence checklist, source links, generated outputs and filing-state actions are visually clear in light/dark desktop/mobile screenshots.",
+      "Accept the filing review screen only after its evidence checklist, source links, generated outputs and filing-state actions are visually clear in light/dark mobile/tablet/desktop screenshots.",
     ),
     workbenchVisualAcceptance(
       "production-readiness",
       "Production readiness",
       ["Review", "Filing"],
-      "Accept the production readiness screen only after release blockers, rule coverage, visual QA, operational readiness and accountant review state are visually clear in light/dark desktop/mobile screenshots.",
+      "Accept the production readiness screen only after release blockers, rule coverage, visual QA, operational readiness and accountant review state are visually clear in light/dark mobile/tablet/desktop screenshots.",
     ),
     workbenchVisualAcceptance("workbench-preview", "Workbench preview", ["Setup", "Import", "Classify", "Year-End", "Statements", "Notes", "Review", "Filing"]),
   ];
@@ -3155,23 +3308,17 @@ function workbenchVisualAcceptance(routeCode, routeLabel, workflowStages, nextAc
     routeCode,
     routeLabel,
     workflowStages,
-    acceptanceAreas: [
-      "accountant-workflow-hierarchy",
-      "table-scanability",
-      "theme-contrast",
-      "mobile-density",
-      "loading-error-empty-states",
-    ],
+    acceptanceAreas: visualSmokeReviewChecks,
     screenshotArtifactNames: visualSmokeArtifactsForRoute(routeCode),
     evidenceArtifact: `${routeCode}-visual-acceptance-note`,
     requiredEvidence: [
       "route-state acceptance note",
-      "light/dark desktop/mobile screenshot review",
+      "light/dark mobile/tablet/desktop screenshot review",
       "named visual QA reviewer sign-off",
     ],
     releaseGateCode: "visual-qa-screenshot-review",
     status: "required-review",
-    failurePolicy: "Block release until this accountant workbench route is visually accepted across workflow hierarchy, table scanability, theme contrast, mobile density and route states.",
+    failurePolicy: "Block release until this accountant workbench route is visually accepted across workflow hierarchy, table scanability, theme contrast, responsive density and route states.",
     nextAction: nextAction ?? `Accept the ${routeLabel} route only after its workflow hierarchy, tables, contrast, mobile layout, loading/error/empty states and screenshots are professionally reviewed.`,
   };
 }

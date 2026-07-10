@@ -15,8 +15,10 @@ describe("YearEndPayrollSection", () => {
 
     await user.clear(screen.getByRole("spinbutton", { name: "Number of staff" }));
     await user.type(screen.getByRole("spinbutton", { name: "Number of staff" }), "4");
-    await user.clear(screen.getByRole("spinbutton", { name: "Gross wages" }));
-    await user.type(screen.getByRole("spinbutton", { name: "Gross wages" }), "62000");
+    await user.clear(screen.getByRole("spinbutton", { name: "Employee gross wages excluding director fees" }));
+    await user.type(screen.getByRole("spinbutton", { name: "Employee gross wages excluding director fees" }), "62000");
+    await user.clear(screen.getByRole("spinbutton", { name: "Directors salaries and fees" }));
+    await user.type(screen.getByRole("spinbutton", { name: "Directors salaries and fees" }), "8000");
     await user.clear(screen.getByRole("spinbutton", { name: "Employer PRSI" }));
     await user.type(screen.getByRole("spinbutton", { name: "Employer PRSI" }), "6820");
     await user.clear(screen.getByRole("spinbutton", { name: "Pension contributions" }));
@@ -26,6 +28,7 @@ describe("YearEndPayrollSection", () => {
     expect(screen.getByText(/payroll and staff costs/i)).toBeInTheDocument();
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ staffCount: 4 }));
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ grossWages: 62000 }));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ directorsFees: 8000 }));
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ employerPrsi: 6820 }));
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ pensionContributions: 2400 }));
     expect(onSave).toHaveBeenCalledTimes(1);
@@ -42,6 +45,7 @@ function PayrollHarness({
   const [form, setForm] = useState<PayrollSummary>({
     staffCount: 1,
     grossWages: 100,
+    directorsFees: 0,
     employerPrsi: 10,
     pensionContributions: 5,
   });

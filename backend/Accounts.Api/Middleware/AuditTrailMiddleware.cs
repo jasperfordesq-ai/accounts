@@ -61,20 +61,27 @@ public class AuditTrailMiddleware(RequestDelegate next)
             }
             else
             {
-                await LogApiWriteAsync(
-                    audit,
-                    scopeFactory,
-                    context,
-                    companyId,
-                    periodId,
-                    "ApiWriteSucceeded",
-                    useFreshScope: false,
-                    payload: new
-                    {
-                        method = context.Request.Method,
-                        path = context.Request.Path.Value,
-                        statusCode = context.Response.StatusCode
-                    });
+                var wasIdempotencyReplay = string.Equals(
+                    context.Response.Headers[IdempotencyHttpContract.ReplayedHeader],
+                    "true",
+                    StringComparison.OrdinalIgnoreCase);
+                if (!wasIdempotencyReplay)
+                {
+                    await LogApiWriteAsync(
+                        audit,
+                        scopeFactory,
+                        context,
+                        companyId,
+                        periodId,
+                        "ApiWriteSucceeded",
+                        useFreshScope: false,
+                        payload: new
+                        {
+                            method = context.Request.Method,
+                            path = context.Request.Path.Value,
+                            statusCode = context.Response.StatusCode
+                        });
+                }
 
                 if (transaction is not null)
                 {

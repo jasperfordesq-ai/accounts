@@ -22,7 +22,11 @@ public record AuthenticatedUser(
     int SessionVersion = 1,
     string CsrfToken = "",
     bool MustChangePassword = false,
-    DateTime PasswordLastChangedAt = default)
+    DateTime PasswordLastChangedAt = default,
+    DateTimeOffset? SessionIssuedAtUtc = null,
+    DateTimeOffset? LastActivityAtUtc = null,
+    DateTimeOffset? MfaVerifiedAtUtc = null,
+    string? MfaMethod = null)
 {
     public IReadOnlySet<int> AllowedCompanyIds { get; init; } = AllowedCompanyIds ?? new HashSet<int>();
 }

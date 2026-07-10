@@ -439,19 +439,19 @@ function Assert-VisualQaPreparedRouteReferences {
         }
 
         $cells = @($row -split "\|")
-        if ($cells.Count -lt 8) {
+        if ($cells.Count -lt 10) {
             Add-Failure $Failures "Prepared visual QA template route row $routeName must include all decision and notes cells."
             continue
         }
 
-        foreach ($decisionIndex in 2..5) {
+        foreach ($decisionIndex in 2..7) {
             if (-not [string]::IsNullOrWhiteSpace($cells[$decisionIndex])) {
                 Add-Failure $Failures "Prepared visual QA template route row $routeName must leave route pass/fail decision cells blank before named human sign-off."
             }
         }
 
-        $expectedReference = "visual-smoke-evidence-report.json#routeAcceptance.$routeName"
-        if ($cells[6].Trim() -ne $expectedReference) {
+        $expectedReference = "visual-smoke-evidence-report.json#routeCoverage.$routeName"
+        if ($cells[8].Trim() -ne $expectedReference) {
             Add-Failure $Failures "Prepared visual QA template route row $routeName Notes cell must be $expectedReference."
         }
     }
@@ -674,6 +674,7 @@ function Assert-MonitoringProviderPreparedEvidenceReferences {
 
     $monitoringReport = Get-Content -LiteralPath $monitoringReportPath -Raw | ConvertFrom-Json
     $structuredLogReport = Get-Content -LiteralPath $structuredLogReportPath -Raw | ConvertFrom-Json
+    $clientMonitoringEvent = Get-JsonPropertyValue $monitoringReport "clientEvent"
     $content = Get-Content -LiteralPath $monitoringTemplatePath -Raw
     $context = "Prepared monitoring-provider template"
 
@@ -682,16 +683,27 @@ function Assert-MonitoringProviderPreparedEvidenceReferences {
     Assert-MarkdownFieldEquals $content "Correlation id" ([string](Get-JsonPropertyValue $monitoringReport "correlationId")) $context $Failures
     Assert-MarkdownFieldEquals $content "Base URL" ([string](Get-JsonPropertyValue $monitoringReport "baseUrl")) $context $Failures
     Assert-MarkdownTimestampFieldEquals $content "Checked at UTC" (Convert-JsonValueToEvidenceString (Get-JsonPropertyValue $monitoringReport "checkedAtUtc")) $context $Failures
+    Assert-MarkdownFieldEquals $content "Client event code" ([string](Get-JsonPropertyValue $clientMonitoringEvent "eventCode")) $context $Failures
+    Assert-MarkdownFieldEquals $content "Client event id" ([string](Get-JsonPropertyValue $clientMonitoringEvent "eventId")) $context $Failures
+    Assert-MarkdownFieldEquals $content "Client correlation id" ([string](Get-JsonPropertyValue $clientMonitoringEvent "correlationId")) $context $Failures
+    Assert-MarkdownFieldEquals $content "Client normalized route" ([string](Get-JsonPropertyValue $clientMonitoringEvent "route")) $context $Failures
+    $clientSensitiveInputAbsent = if ([bool](Get-JsonPropertyValue $clientMonitoringEvent "sensitiveInputAbsent")) { "yes" } else { "" }
+    Assert-MarkdownFieldEquals $content "Client sensitive input absent" $clientSensitiveInputAbsent $context $Failures
     Assert-MarkdownFieldEquals $content "Structured log file" ([string](Get-FirstJsonPropertyValue $structuredLogReport @("structuredLogFile", "logFileName"))) $context $Failures
     Assert-MarkdownFieldEquals $content "JSON log line count" ([string](Get-JsonPropertyValue $structuredLogReport "jsonLogLineCount")) $context $Failures
     $matchedMonitoringSmokeLine = if ([bool](Get-JsonPropertyValue $structuredLogReport "matchedMonitoringSmokeLine")) { "yes" } else { "" }
     Assert-MarkdownFieldEquals $content "Matched monitoring smoke line" $matchedMonitoringSmokeLine $context $Failures
+    $matchedClientMonitoringLine = if ([bool](Get-JsonPropertyValue $structuredLogReport "matchedClientMonitoringLine")) { "yes" } else { "" }
+    Assert-MarkdownFieldEquals $content "Matched client monitoring line" $matchedClientMonitoringLine $context $Failures
+    $syntheticSensitiveMarkersAbsent = if ([bool](Get-JsonPropertyValue $structuredLogReport "syntheticSensitiveMarkersAbsent")) { "yes" } else { "" }
+    Assert-MarkdownFieldEquals $content "Synthetic sensitive markers absent" $syntheticSensitiveMarkersAbsent $context $Failures
 
     foreach ($humanOnlyField in @(
         "Operator name",
         "Operator role",
         "Confirmation date/time UTC",
         "Provider event URL or reference",
+        "Client provider event URL or reference",
         "Operator notes",
         "Operator signature"
     )) {
@@ -1080,8 +1092,48 @@ if (-not (Test-Path -LiteralPath $machineEvidenceSummaryPath)) {
         $summaryVisualText = $summaryVisualEvidence | ConvertTo-Json -Depth 4
         Assert-TextContains $summaryVisualText $expectedVisualFile "release-evidence-machine-summary.json visualEvidence" $failures
     }
+    if ([string](Get-JsonPropertyValue $summaryVisualEvidence "inventoryVersion") -ne "canonical-material-states-v1" -or
+        [int](Get-JsonPropertyValue $summaryVisualEvidence "inventoryStateCount") -ne 32 -or
+        [int](Get-JsonPropertyValue $summaryVisualEvidence "routeCount") -ne 32 -or
+        [int](Get-JsonPropertyValue $summaryVisualEvidence "accountantWorkbenchRouteCount") -ne 7 -or
+        [int](Get-JsonPropertyValue $summaryVisualEvidence "screenshotCount") -ne 192 -or
+        [int](Get-JsonPropertyValue $summaryVisualEvidence "expectedScreenshotCount") -ne 192 -or
+        [int](Get-JsonPropertyValue $summaryVisualEvidence "requiredMaterialRouteCount") -ne 18 -or
+        [int](Get-JsonPropertyValue $summaryVisualEvidence "requiredUiStateCount") -ne 9 -or
+        (Get-JsonPropertyValue $summaryVisualEvidence "semanticDistinctnessPassed") -ne $true -or
+        [int](Get-JsonPropertyValue $summaryVisualEvidence "semanticContentHashCount") -lt 32) {
+        Add-Failure $failures "release-evidence-machine-summary.json visualEvidence must retain the canonical 32-state/192-capture semantic-distinctness contract."
+    }
 
     $summaryProductionReadiness = Get-JsonPropertyValue $machineEvidenceSummary "productionReadiness"
+    if ([string](Get-JsonPropertyValue $summaryProductionReadiness "scoreBasis") -ne "independent-audit-control-ledger-v1") {
+        Add-Failure $failures "Machine evidence summary productionReadiness.scoreBasis must be independent-audit-control-ledger-v1."
+    }
+    if ([string](Get-JsonPropertyValue $summaryProductionReadiness "auditBaselineDate") -ne "2026-07-10") {
+        Add-Failure $failures "Machine evidence summary productionReadiness.auditBaselineDate must be 2026-07-10."
+    }
+    if ([string](Get-JsonPropertyValue $summaryProductionReadiness "auditedCommit") -ne "7ea54cc6d1769ced568ac1568d190cc2bb4b16d1") {
+        Add-Failure $failures "Machine evidence summary productionReadiness.auditedCommit must identify the exact independently audited baseline commit."
+    }
+    Assert-TextContains ([string](Get-JsonPropertyValue $summaryProductionReadiness "evidencePolicy")) "exact live candidate" "Machine evidence summary productionReadiness.evidencePolicy" $failures
+    Assert-TextContains ([string](Get-JsonPropertyValue $summaryProductionReadiness "evidencePolicy")) "artifact hashes" "Machine evidence summary productionReadiness.evidencePolicy" $failures
+    if ([int](Get-JsonPropertyValue $summaryProductionReadiness "targetScore") -ne 1000) {
+        Add-Failure $failures "Machine evidence summary productionReadiness.targetScore must be 1000."
+    }
+    $summaryOpenControls = @((Get-JsonPropertyValue $summaryProductionReadiness "openEngineeringOrAssuranceControls"))
+    if ([int](Get-JsonPropertyValue $summaryProductionReadiness "openEngineeringOrAssuranceControlCount") -ne $summaryOpenControls.Count) {
+        Add-Failure $failures "Machine evidence summary productionReadiness.openEngineeringOrAssuranceControlCount must match the open control list."
+    }
+    if ([int](Get-JsonPropertyValue $summaryProductionReadiness "currentScore") -lt 1000 -and $summaryOpenControls.Count -eq 0) {
+        Add-Failure $failures "Machine evidence summary productionReadiness must retain open control IDs while currentScore is below target."
+    }
+    $summaryControlCodes = @((Get-JsonPropertyValue $summaryProductionReadiness "scorecardControlCodes") | ForEach-Object { [string]$_ })
+    if ($summaryControlCodes.Count -eq 0) {
+        Add-Failure $failures "Machine evidence summary productionReadiness.scorecardControlCodes must retain the verified weighted control inventory."
+    }
+    foreach ($openControl in $summaryOpenControls) {
+        Assert-ArrayContains $summaryControlCodes ([string]$openControl) "Machine evidence summary productionReadiness.scorecardControlCodes" $failures
+    }
     if ([string](Get-JsonPropertyValue $summaryProductionReadiness "verificationStatus") -ne "passed") {
         Add-Failure $failures "Machine evidence summary productionReadiness.verificationStatus must be passed."
     }
@@ -1106,18 +1158,31 @@ if (-not (Test-Path -LiteralPath $machineEvidenceSummaryPath)) {
     }
 
     $summaryMonitoringEvidence = Get-JsonPropertyValue $machineEvidenceSummary "monitoringEvidence"
-    foreach ($field in @("provider", "eventId", "correlationId", "baseUrl", "checkedAtUtc")) {
+    foreach ($field in @("provider", "eventId", "correlationId", "baseUrl", "checkedAtUtc", "clientEventCode", "clientEventId", "clientCorrelationId", "clientNormalizedRoute")) {
         if ([string]::IsNullOrWhiteSpace([string](Get-JsonPropertyValue $summaryMonitoringEvidence $field))) {
             Add-Failure $failures "Machine evidence summary monitoringEvidence.$field must be present."
         }
     }
 
-    if ([int](Get-JsonPropertyValue $summaryMonitoringEvidence "jsonLogLineCount") -le 0) {
-        Add-Failure $failures "Machine evidence summary monitoringEvidence.jsonLogLineCount must be greater than zero."
+    if ([int](Get-JsonPropertyValue $summaryMonitoringEvidence "jsonLogLineCount") -lt 2) {
+        Add-Failure $failures "Machine evidence summary monitoringEvidence.jsonLogLineCount must include both controlled monitoring lines."
     }
 
     if ([bool](Get-JsonPropertyValue $summaryMonitoringEvidence "matchedMonitoringSmokeLine") -ne $true) {
         Add-Failure $failures "Machine evidence summary monitoringEvidence.matchedMonitoringSmokeLine must be true."
+    }
+
+    foreach ($field in @("clientSensitiveInputAbsent", "matchedClientMonitoringLine", "syntheticSensitiveMarkersAbsent")) {
+        if ([bool](Get-JsonPropertyValue $summaryMonitoringEvidence $field) -ne $true) {
+            Add-Failure $failures "Machine evidence summary monitoringEvidence.$field must be true."
+        }
+    }
+
+    if ([string](Get-JsonPropertyValue $summaryMonitoringEvidence "clientEventCode") -ne "render-exception") {
+        Add-Failure $failures "Machine evidence summary monitoringEvidence.clientEventCode must be render-exception."
+    }
+    if ([string](Get-JsonPropertyValue $summaryMonitoringEvidence "clientNormalizedRoute") -ne "/companies/{id}/periods/{id}/{redacted}") {
+        Add-Failure $failures "Machine evidence summary monitoringEvidence.clientNormalizedRoute must retain only the controlled route shape."
     }
 
     $summaryReviewerQueue = @((Get-JsonPropertyValue $machineEvidenceSummary "reviewerQueue"))
@@ -1156,7 +1221,7 @@ if (-not (Test-Path -LiteralPath $reviewerIndexPath)) {
         "release-evidence-reviewer-assignments.json",
         "pending human blocker inventory",
         "six accepted ``humanEvidenceCompletion`` entries",
-        "``productionScorecardCompletion`` status ``complete`` at 700/700",
+        "``productionScorecardCompletion`` status ``complete`` at 1,000/1,000",
         "scripts/verify-release-artifact-pack.ps1",
         "release-evidence-reviewer-completion.json",
         "release-evidence-machine-summary.json",

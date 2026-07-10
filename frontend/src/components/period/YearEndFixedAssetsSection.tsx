@@ -4,14 +4,16 @@ import { Button, Chip, Spinner } from "@heroui/react";
 import { Plus, Trash2 } from "lucide-react";
 
 import type { FixedAsset } from "@/lib/api";
+import { useDestructiveActionConfirmation } from "@/lib/useDestructiveAction";
 
 interface YearEndFixedAssetsSectionProps {
+  canWrite?: boolean;
   assets: FixedAsset[];
   draft: FixedAsset;
   saving: boolean;
   onDraftChange: (draft: FixedAsset) => void;
   onAdd: () => void;
-  onDelete: (id: number) => void;
+  onDelete: (id: number) => void | Promise<void>;
 }
 
 const inputClass =
@@ -20,6 +22,7 @@ const selectClass =
   "w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors";
 
 export function YearEndFixedAssetsSection({
+  canWrite = true,
   assets,
   draft,
   saving,
@@ -27,6 +30,8 @@ export function YearEndFixedAssetsSection({
   onAdd,
   onDelete,
 }: YearEndFixedAssetsSectionProps) {
+  const { requestDestructiveAction, destructiveActionConfirmation } = useDestructiveActionConfirmation();
+
   return (
     <>
       {assets.length > 0 && (
@@ -46,31 +51,86 @@ export function YearEndFixedAssetsSection({
                   <span className="text-xs text-gray-400 dark:text-gray-500">
                     Acquired {new Date(asset.acquisitionDate).toLocaleDateString("en-IE")}
                   </span>
+                  {(asset.residualValue ?? 0) > 0 && (
+                    <span className="text-xs text-gray-400 dark:text-gray-500">
+                      Residual {formatCurrency(asset.residualValue ?? 0)}
+                    </span>
+                  )}
+                  {asset.disposalDate && (
+                    <span className="text-xs text-amber-600 dark:text-amber-400">
+                      Disposed {new Date(asset.disposalDate).toLocaleDateString("en-IE")}
+                    </span>
+                  )}
+                  <Chip
+                    variant="soft"
+                    size="sm"
+                    color={asset.capitalAllowanceTreatment === "PlantAndMachinery12Point5" ? "success" : asset.capitalAllowanceTreatment === "Unreviewed" ? "warning" : "default"}
+                  >
+                    Tax: {capitalAllowanceLabel(asset.capitalAllowanceTreatment)}
+                  </Chip>
                 </div>
               </div>
               <div className="flex items-center gap-3">
                 <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                   {formatCurrency(asset.cost)}
                 </span>
-                <button
+                {canWrite && <button
                   type="button"
-                  onClick={() => asset.id && onDelete(asset.id)}
+                  onClick={() => asset.id && requestDestructiveAction({
+                    recordLabel: `fixed asset ${asset.name}`,
+                    consequence: `This permanently removes the ${formatCurrency(asset.cost)} asset, depreciation and capital-allowance evidence from the year-end records. The removal cannot be undone.`,
+                    onConfirm: () => onDelete(asset.id!),
+                    successAnnouncement: `Fixed asset ${asset.name} was removed.`,
+                  })}
                   className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400"
                   aria-label={`Delete asset ${asset.name}`}
                 >
                   <Trash2 className="w-4 h-4" />
-                </button>
+                </button>}
               </div>
             </div>
           ))}
         </div>
       )}
 
-      <div className="space-y-3">
-        <div className="grid grid-cols-12 gap-3 items-end">
+      {canWrite && <div className="space-y-3">
+        <div className="mobile-form-grid grid grid-cols-12 gap-3 items-end">
           <div className="col-span-4">
-            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Asset Name</label>
+            <label htmlFor="fixed-asset-capital-allowance-treatment" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Capital-allowance treatment</label>
+            <select
+              id="fixed-asset-capital-allowance-treatment"
+              className={selectClass}
+              value={draft.capitalAllowanceTreatment}
+              onChange={(event) => onDraftChange({
+                ...draft,
+                capitalAllowanceTreatment: event.target.value as FixedAsset["capitalAllowanceTreatment"],
+              })}
+              aria-label="Capital allowance treatment"
+            >
+              <option value="Unreviewed">Unreviewed - blocks final tax charge</option>
+              <option value="NonQualifying">Non-qualifying</option>
+              <option value="PlantAndMachinery12Point5">Plant and machinery - 12.5%</option>
+              <option value="UnsupportedSpecialScheme">Special scheme - manual tax review</option>
+            </select>
+          </div>
+          <div className="col-span-8">
+            <label htmlFor="fixed-asset-capital-allowance-evidence" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Tax-treatment evidence</label>
             <input
+              id="fixed-asset-capital-allowance-evidence"
+              type="text"
+              className={inputClass}
+              value={draft.capitalAllowanceEvidence ?? ""}
+              onChange={(event) => onDraftChange({ ...draft, capitalAllowanceEvidence: event.target.value })}
+              aria-label="Capital allowance evidence"
+              placeholder="Invoice/use evidence or reason non-qualifying (minimum 20 characters)"
+            />
+          </div>
+        </div>
+        <div className="mobile-form-grid grid grid-cols-12 gap-3 items-end">
+          <div className="col-span-4">
+            <label htmlFor="fixed-asset-name" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Asset Name</label>
+            <input
+              id="fixed-asset-name"
               type="text"
               className={inputClass}
               placeholder="e.g. Company Van"
@@ -80,8 +140,9 @@ export function YearEndFixedAssetsSection({
             />
           </div>
           <div className="col-span-3">
-            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Category</label>
+            <label htmlFor="fixed-asset-category" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Category</label>
             <select
+              id="fixed-asset-category"
               className={selectClass}
               value={draft.category}
               onChange={(event) => onDraftChange({ ...draft, category: event.target.value })}
@@ -97,8 +158,9 @@ export function YearEndFixedAssetsSection({
             </select>
           </div>
           <div className="col-span-2">
-            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Cost</label>
+            <label htmlFor="fixed-asset-cost" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Cost</label>
             <input
+              id="fixed-asset-cost"
               type="number"
               className={inputClass}
               placeholder="0.00"
@@ -108,8 +170,9 @@ export function YearEndFixedAssetsSection({
             />
           </div>
           <div className="col-span-3">
-            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Acquisition Date</label>
+            <label htmlFor="fixed-asset-acquisition-date" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Acquisition Date</label>
             <input
+              id="fixed-asset-acquisition-date"
               type="date"
               className={inputClass}
               value={draft.acquisitionDate}
@@ -118,10 +181,11 @@ export function YearEndFixedAssetsSection({
             />
           </div>
         </div>
-        <div className="grid grid-cols-12 gap-3 items-end">
+        <div className="mobile-form-grid grid grid-cols-12 gap-3 items-end">
           <div className="col-span-3">
-            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Useful Life (years)</label>
+            <label htmlFor="fixed-asset-useful-life" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Useful Life (years)</label>
             <input
+              id="fixed-asset-useful-life"
               type="number"
               className={inputClass}
               value={draft.usefulLifeYears}
@@ -129,9 +193,23 @@ export function YearEndFixedAssetsSection({
               aria-label="Useful life in years"
             />
           </div>
+          <div className="col-span-2">
+            <label htmlFor="fixed-asset-residual-value" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Residual Value</label>
+            <input
+              id="fixed-asset-residual-value"
+              type="number"
+              min="0"
+              step="0.01"
+              className={inputClass}
+              value={draft.residualValue || ""}
+              onChange={(event) => onDraftChange({ ...draft, residualValue: Number(event.target.value) })}
+              aria-label="Asset residual value"
+            />
+          </div>
           <div className="col-span-4">
-            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Depreciation Method</label>
+            <label htmlFor="fixed-asset-depreciation-method" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Depreciation Method</label>
             <select
+              id="fixed-asset-depreciation-method"
               className={selectClass}
               value={draft.depreciationMethod}
               onChange={(event) => onDraftChange({ ...draft, depreciationMethod: event.target.value })}
@@ -142,7 +220,7 @@ export function YearEndFixedAssetsSection({
               <option value="ReducingBalance">Reducing Balance</option>
             </select>
           </div>
-          <div className="col-span-5 flex justify-end">
+          <div className="col-span-3 flex justify-end">
             <Button
               variant="primary"
               size="sm"
@@ -154,9 +232,49 @@ export function YearEndFixedAssetsSection({
             </Button>
           </div>
         </div>
-      </div>
+        <div className="mobile-form-grid grid grid-cols-12 gap-3 items-end">
+          <div className="col-span-3">
+            <label htmlFor="fixed-asset-disposal-date" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Disposal Date (if disposed)</label>
+            <input
+              id="fixed-asset-disposal-date"
+              type="date"
+              className={inputClass}
+              value={draft.disposalDate ?? ""}
+              onChange={(event) => onDraftChange({ ...draft, disposalDate: event.target.value || undefined })}
+              aria-label="Asset disposal date"
+            />
+          </div>
+          <div className="col-span-3">
+            <label htmlFor="fixed-asset-disposal-proceeds" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Disposal Proceeds</label>
+            <input
+              id="fixed-asset-disposal-proceeds"
+              type="number"
+              min="0"
+              step="0.01"
+              className={inputClass}
+              value={draft.disposalProceeds || ""}
+              onChange={(event) => onDraftChange({ ...draft, disposalProceeds: Number(event.target.value) })}
+              aria-label="Asset disposal proceeds"
+              disabled={!draft.disposalDate}
+            />
+          </div>
+          <p className="col-span-6 text-xs text-gray-500 dark:text-gray-400">
+            Disposal proceeds must also be matched to the posted bank transaction so the asset ledger and cash flow reconcile.
+          </p>
+        </div>
+      </div>}
+      {destructiveActionConfirmation}
     </>
   );
+}
+
+function capitalAllowanceLabel(treatment: FixedAsset["capitalAllowanceTreatment"]): string {
+  switch (treatment) {
+    case "PlantAndMachinery12Point5": return "12.5% plant/machinery";
+    case "NonQualifying": return "non-qualifying";
+    case "UnsupportedSpecialScheme": return "manual special scheme";
+    default: return "unreviewed";
+  }
 }
 
 function formatCurrency(amount: number): string {

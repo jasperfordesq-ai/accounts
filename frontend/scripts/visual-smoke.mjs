@@ -1,16 +1,23 @@
+import { createHash } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { chromium, expect } from "@playwright/test";
 import { withScreenshotEvidence } from "./visual-smoke-artifacts.mjs";
 import { findOverlappingTextBlocks, formatLayoutIssues } from "./visual-smoke-layout.mjs";
 import {
   expectedVisualSmokeManifest,
   expectedVisualSmokeRouteAudits,
-  MIN_VISUAL_SMOKE_CONTRAST_RATIO,
+  canonicalUrlTemplateForState,
+  canonicalStateUrlMatches,
+  MIN_LARGE_TEXT_CONTRAST_RATIO,
+  MIN_NORMAL_TEXT_CONTRAST_RATIO,
+  MIN_UI_COMPONENT_CONTRAST_RATIO,
   passedVisualSmokeContrastResult,
   passedVisualSmokeLayoutResults,
+  resolveVisualSmokeStateHref,
   visualSmokeLayoutChecks,
-  visualSmokeRoutes,
+  visualSmokeStateInventory,
   visualSmokeThemes,
   visualSmokeViewports,
 } from "./visual-smoke-plan.mjs";
@@ -186,7 +193,7 @@ async function createSmokeCompany(page) {
       isCreditInstitution: false,
       isInsuranceUndertaking: false,
       isPensionFund: false,
-      isCharitableOrganisation: false,
+      isCharitableOrganisation: true,
     },
   });
 
@@ -218,15 +225,12 @@ async function createSmokeCompany(page) {
 
 async function discoverRoutes(page, baseUrl) {
   await expect(mainText(page, "Production Readiness")).toBeVisible({ timeout: 30_000 });
-  let companyHref = await optionalFirstHref(
+  let periodHref = await optionalFirstHref(page, 'a[href^="/companies/"][href*="/periods/"]');
+  let companyHref = companyHrefFromPeriodHref(periodHref);
+  companyHref ??= await optionalFirstHref(
     page,
     'a[href^="/companies/"]:not([href="/companies/new"]):not([href*="/periods/"])',
   );
-  let periodHref = await optionalFirstHref(page, 'a[href^="/companies/"][href*="/periods/"]');
-
-  if (!companyHref && periodHref) {
-    companyHref = companyHrefFromPeriodHref(periodHref);
-  }
 
   if (!companyHref) {
     const smokeCompany = await createSmokeCompany(page);
@@ -241,11 +245,18 @@ async function discoverRoutes(page, baseUrl) {
   const periodPath = periodPathFromHref(periodHref, baseUrl);
 
   return {
+    login: "/login",
+    changePassword: "/change-password",
     dashboard: "/",
+    onboarding: "/companies/new",
     readiness: "/production-readiness",
     company: companyHref,
-    period: periodHref,
-    filing: periodHref,
+    period: periodPath,
+    filing: periodPath,
+    classification: `${periodPath}/classify`,
+    yearEnd: `${periodPath}/year-end`,
+    notes: `${periodPath}/notes`,
+    charity: `${periodPath}/charity`,
     financialStatements: `${periodPath}/statements`,
     workbenchPreview: "/workbench-preview",
   };
@@ -480,13 +491,19 @@ async function checkNoTextOverlap(page, routeName) {
 }
 
 async function checkThemeContrast(page, routeName) {
-  const result = await page.evaluate((minimumContrastRatio) => {
+  const result = await page.evaluate((minimums) => {
     const root = document.querySelector("main");
     if (!root) {
-      return { sampledTextCount: 0, minimumContrastRatio: 0, failures: ["missing main element"] };
+      return {
+        sampledTextCount: 0,
+        sampledUiComponentCount: 0,
+        minimumContrastRatio: 0,
+        failures: ["missing main element"],
+      };
     }
 
-    const samples = [];
+    const textSamples = [];
+    const uiSamples = [];
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
       acceptNode(node) {
         const text = normalizeText(node.textContent || "");
@@ -494,7 +511,6 @@ async function checkThemeContrast(page, routeName) {
 
         const element = node.parentElement;
         if (!element || !isVisiblyRendered(element)) return NodeFilter.FILTER_REJECT;
-        if (element.closest("a, button, [role='button']")) return NodeFilter.FILTER_REJECT;
         if (["SCRIPT", "STYLE", "NOSCRIPT", "SVG"].includes(element.tagName)) return NodeFilter.FILTER_REJECT;
 
         return NodeFilter.FILTER_ACCEPT;
@@ -507,16 +523,7 @@ async function checkThemeContrast(page, routeName) {
       if (!element) continue;
 
       const text = normalizeText(node.textContent || "");
-      const foreground = parseCssColor(window.getComputedStyle(element).color);
-      const background = effectiveBackgroundFor(element);
-      if (!foreground || !background) continue;
-
-      const ratio = contrastRatio(composite(foreground, background), background);
-      samples.push({
-        label: labelFor(element, text),
-        ratio,
-        text: previewText(text),
-      });
+      recordTextSample(element, text, "rendered text");
     }
 
     for (const element of Array.from(root.querySelectorAll("input, textarea, select"))) {
@@ -524,35 +531,126 @@ async function checkThemeContrast(page, routeName) {
       const text = controlTextFor(element);
       if (text.length < 2) continue;
 
-      const style = window.getComputedStyle(element);
-      const foreground = parseCssColor(style.color);
-      const background = effectiveBackgroundFor(element);
-      if (!foreground || !background) continue;
-
-      const ratio = contrastRatio(composite(foreground, background), background);
-      samples.push({
-        label: labelFor(element, text),
-        ratio,
-        text: previewText(text),
-      });
+      const isPlaceholder = (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement)
+        && !element.value
+        && Boolean(element.placeholder);
+      const foreground = isPlaceholder
+        ? parseCssColor(window.getComputedStyle(element, "::placeholder").color)
+        : undefined;
+      recordTextSample(element, text, isPlaceholder ? "placeholder" : "form value", foreground);
     }
 
-    const failures = samples
-      .filter((sample) => sample.ratio < minimumContrastRatio)
+    const interactiveSelector = [
+      "a[href]",
+      "button",
+      "input",
+      "textarea",
+      "select",
+      "[role='button']",
+      "[role='checkbox']",
+      "[role='radio']",
+      "[role='switch']",
+      "[role='tab']",
+    ].join(",");
+    for (const element of Array.from(root.querySelectorAll(interactiveSelector))) {
+      if (!isVisiblyRendered(element)) continue;
+      recordUiComponentSample(element);
+    }
+
+    const failures = [...textSamples, ...uiSamples]
+      .filter((sample) => sample.ratio < sample.requiredRatio)
       .sort((a, b) => a.ratio - b.ratio)
-      .slice(0, 8)
-      .map((sample) => `${sample.label} ratio=${sample.ratio.toFixed(2)} text="${sample.text}"`);
+      .slice(0, 12)
+      .map((sample) => `${sample.label} ratio=${sample.ratio.toFixed(2)} required=${sample.requiredRatio.toFixed(2)} ${sample.detail}`);
+
+    const allSamples = [...textSamples, ...uiSamples];
+    const normalTextSamples = textSamples.filter((sample) => !sample.largeText);
+    const largeTextSamples = textSamples.filter((sample) => sample.largeText);
 
     return {
-      sampledTextCount: samples.length,
-      minimumContrastRatio: samples.length === 0
+      sampledTextCount: textSamples.length,
+      sampledNormalTextCount: normalTextSamples.length,
+      sampledLargeTextCount: largeTextSamples.length,
+      sampledInteractiveTextCount: textSamples.filter((sample) => sample.interactive).length,
+      sampledPlaceholderCount: textSamples.filter((sample) => sample.source === "placeholder").length,
+      sampledUiComponentCount: uiSamples.length,
+      sampledGradientTextCount: textSamples.filter((sample) => sample.gradientBackground).length,
+      minimumContrastRatio: allSamples.length === 0
         ? 0
-        : Number(Math.min(...samples.map((sample) => sample.ratio)).toFixed(2)),
+        : Number(Math.min(...allSamples.map((sample) => sample.ratio)).toFixed(2)),
+      minimumNormalTextContrastRatio: normalTextSamples.length === 0
+        ? 0
+        : Number(Math.min(...normalTextSamples.map((sample) => sample.ratio)).toFixed(2)),
+      minimumLargeTextContrastRatio: largeTextSamples.length === 0
+        ? minimums.largeText
+        : Number(Math.min(...largeTextSamples.map((sample) => sample.ratio)).toFixed(2)),
+      minimumUiComponentContrastRatio: uiSamples.length === 0
+        ? 0
+        : Number(Math.min(...uiSamples.map((sample) => sample.ratio)).toFixed(2)),
       failures,
     };
 
-    function effectiveBackgroundFor(element) {
-      let background = { r: 255, g: 255, b: 255, a: 1 };
+    function recordTextSample(element, text, source, suppliedForeground) {
+      const style = window.getComputedStyle(element);
+      const foreground = suppliedForeground ?? parseCssColor(style.color);
+      const backgroundResult = effectiveBackgroundsFor(element);
+      if (!foreground || !backgroundResult || backgroundResult.colors.length === 0) return;
+
+      const ratios = backgroundResult.colors.map((background) =>
+        contrastRatio(composite(foreground, background), background));
+      const largeText = isLargeText(style);
+      const requiredRatio = largeText
+        ? minimums.largeText
+        : minimums.normalText;
+      const interactive = Boolean(element.closest("a[href], button, input, textarea, select, [role='button'], [role='tab']"));
+      textSamples.push({
+        label: labelFor(element, text),
+        ratio: Math.min(...ratios),
+        requiredRatio,
+        largeText,
+        interactive,
+        source,
+        gradientBackground: backgroundResult.gradient,
+        detail: `${source} text="${previewText(text)}"`,
+      });
+    }
+
+    function recordUiComponentSample(element) {
+      const style = window.getComputedStyle(element);
+      const outside = effectiveBackgroundsFor(element.parentElement ?? element);
+      if (!outside || outside.colors.length === 0) return;
+
+      const indicators = [];
+      const background = parseCssColor(style.backgroundColor);
+      if (background && background.a > 0.05) {
+        indicators.push(Math.min(...outside.colors.map((color) =>
+          contrastRatio(composite(background, color), color))));
+      }
+
+      const borderWidth = Math.max(
+        Number.parseFloat(style.borderTopWidth) || 0,
+        Number.parseFloat(style.borderRightWidth) || 0,
+        Number.parseFloat(style.borderBottomWidth) || 0,
+        Number.parseFloat(style.borderLeftWidth) || 0,
+      );
+      const border = parseCssColor(style.borderTopColor);
+      if (borderWidth > 0 && style.borderTopStyle !== "none" && border && border.a > 0.05) {
+        indicators.push(Math.min(...outside.colors.map((color) =>
+          contrastRatio(composite(border, color), color))));
+      }
+
+      if (indicators.length === 0) return;
+      uiSamples.push({
+        label: labelFor(element, element.getAttribute("aria-label") || element.textContent || element.tagName),
+        ratio: Math.max(...indicators),
+        requiredRatio: minimums.uiComponent,
+        detail: `UI component${element.matches(":disabled, [aria-disabled='true']") ? " (disabled)" : ""}`,
+      });
+    }
+
+    function effectiveBackgroundsFor(element) {
+      let backgrounds = [{ r: 255, g: 255, b: 255, a: 1 }];
+      let gradient = false;
       const chain = [];
       for (let current = element; current; current = current.parentElement) {
         chain.push(current);
@@ -561,16 +659,29 @@ async function checkThemeContrast(page, routeName) {
 
       for (const current of chain.reverse()) {
         const style = window.getComputedStyle(current);
-        if (style.backgroundImage && style.backgroundImage !== "none") {
-          return null;
-        }
         const color = parseCssColor(style.backgroundColor);
         if (color && color.a > 0) {
-          background = composite(color, background);
+          backgrounds = backgrounds.map((background) => composite(color, background));
+        }
+
+        if (style.backgroundImage && style.backgroundImage !== "none") {
+          const stops = gradientColors(style.backgroundImage);
+          if (stops.length === 0) return null;
+          gradient = true;
+          backgrounds = stops
+            .flatMap((stop) => backgrounds.map((background) => composite(stop, background)))
+            .slice(0, 32);
         }
       }
 
-      return background;
+      return { colors: backgrounds, gradient };
+    }
+
+    function gradientColors(value) {
+      if (!/gradient\(/i.test(value) || /url\(/i.test(value)) return [];
+      return (String(value).match(/rgba?\([^)]*\)/gi) ?? [])
+        .map(parseCssColor)
+        .filter(Boolean);
     }
 
     function composite(foreground, background) {
@@ -610,12 +721,23 @@ async function checkThemeContrast(page, routeName) {
       const parts = normalized.split(/\s+/).filter(Boolean);
       if (parts.length < 3) return null;
 
+      const channel = (part) => part.endsWith("%")
+        ? Number.parseFloat(part) * 2.55
+        : Number.parseFloat(part);
+
       return {
-        r: Number.parseFloat(parts[0]),
-        g: Number.parseFloat(parts[1]),
-        b: Number.parseFloat(parts[2]),
+        r: channel(parts[0]),
+        g: channel(parts[1]),
+        b: channel(parts[2]),
         a: parts.length >= 4 ? Number.parseFloat(parts[3]) : 1,
       };
+    }
+
+    function isLargeText(style) {
+      const size = Number.parseFloat(style.fontSize) || 0;
+      const numericWeight = Number.parseInt(style.fontWeight, 10);
+      const bold = style.fontWeight === "bold" || (!Number.isNaN(numericWeight) && numericWeight >= 700);
+      return size >= 24 || (bold && size >= 18.66);
     }
 
     function isVisiblyRendered(element) {
@@ -656,7 +778,11 @@ async function checkThemeContrast(page, routeName) {
       const normalized = normalizeText(value);
       return normalized.length > 40 ? `${normalized.slice(0, 39)}...` : normalized;
     }
-  }, MIN_VISUAL_SMOKE_CONTRAST_RATIO);
+  }, {
+    normalText: MIN_NORMAL_TEXT_CONTRAST_RATIO,
+    largeText: MIN_LARGE_TEXT_CONTRAST_RATIO,
+    uiComponent: MIN_UI_COMPONENT_CONTRAST_RATIO,
+  });
 
   if (result.sampledTextCount <= 0) {
     throw new Error(`${routeName} had no visible text samples for theme contrast smoke evidence.`);
@@ -668,11 +794,20 @@ async function checkThemeContrast(page, routeName) {
 
   return passedVisualSmokeContrastResult({
     sampledTextCount: result.sampledTextCount,
+    sampledNormalTextCount: result.sampledNormalTextCount,
+    sampledLargeTextCount: result.sampledLargeTextCount,
+    sampledInteractiveTextCount: result.sampledInteractiveTextCount,
+    sampledPlaceholderCount: result.sampledPlaceholderCount,
+    sampledUiComponentCount: result.sampledUiComponentCount,
+    sampledGradientTextCount: result.sampledGradientTextCount,
     minimumContrastRatio: result.minimumContrastRatio,
+    minimumNormalTextContrastRatio: result.minimumNormalTextContrastRatio,
+    minimumLargeTextContrastRatio: result.minimumLargeTextContrastRatio,
+    minimumUiComponentContrastRatio: result.minimumUiComponentContrastRatio,
   });
 }
 
-async function captureRoute({ page, routeName, href, expectedText, outputPath, openFilingTab }) {
+async function captureRoute({ page, state, routeName, href, expectedText, expectedStateText, outputPath }) {
   const routeErrors = [];
   const onConsole = (message) => {
     const text = message.text();
@@ -693,16 +828,23 @@ async function captureRoute({ page, routeName, href, expectedText, outputPath, o
     await page.goto(href, { waitUntil: "domcontentloaded" });
     await page.waitForLoadState("networkidle", { timeout: 30_000 }).catch(() => {});
 
-    if (openFilingTab) {
-      const filingTab = page.getByRole("tab", { name: "Filing" });
-      await expect(filingTab).toBeVisible({ timeout: 30_000 });
-      await filingTab.click();
+    const observedUrl = relativePageUrl(page);
+    if (!canonicalStateUrlMatches(observedUrl, state)) {
+      throw new Error(
+        `${routeName} did not retain its canonical URL state: expected ${state.canonicalPathTemplate} ` +
+        `${JSON.stringify(state.canonicalQuery)}, found ${observedUrl}`,
+      );
     }
 
     await expect(mainText(page, expectedText)).toBeVisible({ timeout: 30_000 });
+    if (expectedStateText !== expectedText) {
+      await expect(mainText(page, expectedStateText)).toBeVisible({ timeout: 30_000 });
+    }
+    const observedTabState = await observeCanonicalTabState(page, state.canonicalTabState, routeName);
     await checkNoPageOverflow(page, routeName);
     await checkNoTextOverlap(page, routeName);
     const themeContrastResult = await checkThemeContrast(page, routeName);
+    const semanticContentEvidence = await readSemanticContentEvidence(page);
     await page.screenshot({ path: outputPath, fullPage: true });
 
     if (routeErrors.length > 0) {
@@ -712,6 +854,9 @@ async function captureRoute({ page, routeName, href, expectedText, outputPath, o
     return {
       layoutCheckResults: passedVisualSmokeLayoutResults(),
       themeContrastResult,
+      observedUrl,
+      observedTabState,
+      ...semanticContentEvidence,
     };
   } finally {
     page.off("console", onConsole);
@@ -739,39 +884,37 @@ async function run() {
         });
         await setTheme(context, theme);
         const page = await context.newPage();
-        await login(page, baseUrl, email, password);
-        const routes = await discoverRoutes(page, baseUrl);
 
-        const routeSpecs = visualSmokeRoutes.map((route) => ({
-          ...route,
-          href: routes[route.routeKey],
-        }));
-
-        for (const spec of routeSpecs) {
-          const fileName = `${safeName(spec.name)}-${theme}-${viewport.name}.png`;
-          const outputPath = path.join(outputDir, fileName);
-          const smokeCheckResults = await captureRoute({
+        const anonymousRouteBases = {
+          login: "/login",
+        };
+        for (const state of visualSmokeStateInventory.filter((item) => item.authMode === "anonymous")) {
+          await captureState({
             page,
-            routeName: `${spec.name}/${theme}/${viewport.name}`,
-            href: toAbsoluteUrl(baseUrl, spec.href),
-            expectedText: spec.expectedText,
-            outputPath,
-            openFilingTab: spec.openFilingTab,
-          });
-          captures.push(await withScreenshotEvidence({
-            routeName: spec.name,
-            routeKey: spec.routeKey,
+            state,
+            routeBases: anonymousRouteBases,
+            baseUrl,
+            outputDir,
             theme,
-            viewportName: viewport.name,
-            fileName,
-            artifactPath: outputPath,
-            expectedText: spec.expectedText,
-            openFilingTab: spec.openFilingTab,
-            reviewStatus: "required-review",
-            layoutChecks: visualSmokeLayoutChecks,
-            layoutCheckResults: smokeCheckResults.layoutCheckResults,
-            themeContrastResult: smokeCheckResults.themeContrastResult,
-          }));
+            viewport,
+            captures,
+          });
+        }
+
+        await login(page, baseUrl, email, password);
+        const routeBases = await discoverRoutes(page, baseUrl);
+
+        for (const state of visualSmokeStateInventory.filter((item) => item.authMode === "authenticated")) {
+          await captureState({
+            page,
+            state,
+            routeBases,
+            baseUrl,
+            outputDir,
+            theme,
+            viewport,
+            captures,
+          });
         }
 
         await context.close();
@@ -788,7 +931,7 @@ async function run() {
     reviewProtocol: manifestTemplate.reviewProtocol,
     routeAudits: expectedVisualSmokeRouteAudits().map((audit) => ({
       ...audit,
-      screenshotCount: captures.filter((capture) => capture.routeName === audit.routeName).length,
+      screenshotCount: captures.filter((capture) => capture.stateId === audit.stateId).length,
     })),
     screenshots: captures,
   };
@@ -799,7 +942,109 @@ async function run() {
   console.log(JSON.stringify({ ok: true, manifestPath, screenshots: captures }, null, 2));
 }
 
-run().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+async function captureState({ page, state, routeBases, baseUrl, outputDir, theme, viewport, captures }) {
+  const canonicalUrl = resolveVisualSmokeStateHref(state, routeBases);
+  const fileName = `${safeName(state.id)}-${theme}-${viewport.name}.png`;
+  const outputPath = path.join(outputDir, fileName);
+  const smokeCheckResults = await captureRoute({
+    page,
+    state,
+    routeName: `${state.id}/${theme}/${viewport.name}`,
+    href: toAbsoluteUrl(baseUrl, canonicalUrl),
+    expectedText: state.expectedText,
+    expectedStateText: state.expectedStateText,
+    outputPath,
+  });
+  captures.push(await withScreenshotEvidence({
+    stateId: state.id,
+    routeName: state.name,
+    routeKey: state.routeKey,
+    materialRoute: state.materialRoute,
+    uiState: state.uiState,
+    authMode: state.authMode,
+    theme,
+    viewportName: viewport.name,
+    fileName,
+    artifactPath: outputPath,
+    expectedText: state.expectedText,
+    expectedStateText: state.expectedStateText,
+    canonicalUrlTemplate: canonicalUrlTemplateForState(state),
+    canonicalUrl,
+    observedUrl: smokeCheckResults.observedUrl,
+    canonicalQuery: state.canonicalQuery,
+    canonicalTabState: state.canonicalTabState,
+    observedTabState: smokeCheckResults.observedTabState,
+    semanticContentSha256: smokeCheckResults.semanticContentSha256,
+    semanticContentByteSize: smokeCheckResults.semanticContentByteSize,
+    openFilingTab: false,
+    reviewStatus: state.reviewStatus,
+    layoutChecks: visualSmokeLayoutChecks,
+    layoutCheckResults: smokeCheckResults.layoutCheckResults,
+    themeContrastResult: smokeCheckResults.themeContrastResult,
+  }));
+}
+
+async function observeCanonicalTabState(page, canonicalTabState, routeName) {
+  if (!canonicalTabState?.kind?.endsWith("-tab")) return null;
+
+  const selectedTab = page.getByRole("tab", { name: canonicalTabState.label, exact: true });
+  await expect(selectedTab).toBeVisible({ timeout: 30_000 });
+  if (await selectedTab.getAttribute("aria-selected") !== "true") {
+    throw new Error(`${routeName} did not select canonical ${canonicalTabState.kind} ${canonicalTabState.id}.`);
+  }
+
+  return {
+    kind: canonicalTabState.kind,
+    id: canonicalTabState.id,
+    label: (await selectedTab.innerText()).replace(/\s+/g, " ").trim(),
+  };
+}
+
+async function readSemanticContentEvidence(page) {
+  const snapshot = await page.locator("main").evaluate((main) => {
+    const normalize = (value) => String(value ?? "").replace(/\s+/g, " ").trim();
+    const selectedTabs = Array.from(main.querySelectorAll('[role="tab"][aria-selected="true"]'))
+      .map((element) => normalize(element.textContent))
+      .filter(Boolean);
+    const headings = Array.from(main.querySelectorAll("h1, h2, h3"))
+      .map((element) => normalize(element.textContent))
+      .filter(Boolean);
+    const controlNames = Array.from(main.querySelectorAll("button, a[href], input, select, textarea"))
+      .map((element) => normalize(
+        element.getAttribute("aria-label")
+        || element.getAttribute("placeholder")
+        || element.textContent
+        || element.tagName,
+      ))
+      .filter(Boolean);
+
+    return {
+      mainText: normalize(main.innerText),
+      selectedTabs,
+      headings,
+      controlNames,
+    };
+  });
+  const serialized = JSON.stringify(snapshot);
+  return {
+    semanticContentSha256: `sha256:${createHash("sha256").update(serialized).digest("hex")}`,
+    semanticContentByteSize: Buffer.byteLength(serialized, "utf8"),
+  };
+}
+
+function relativePageUrl(page) {
+  const url = new URL(page.url());
+  return `${url.pathname}${url.search}`;
+}
+
+export { checkThemeContrast, companyHrefFromPeriodHref, periodPathFromHref, resolveVisualSmokeStateHref };
+
+const invokedAsScript = process.argv[1]
+  && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
+
+if (invokedAsScript) {
+  run().catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
+}

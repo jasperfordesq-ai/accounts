@@ -4,46 +4,157 @@ services:
   db:
     image: postgres:16.4-alpine
     restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    pids_limit: "${DB_PIDS_LIMIT:-256}"
+    mem_limit: "${DB_MEMORY_LIMIT:-1g}"
+    cpus: "${DB_CPU_LIMIT:-1.50}"
+    stop_grace_period: 60s
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        mkdir -p /var/lib/postgresql/tls
+        cp /run/secrets/postgres_server_key /var/lib/postgresql/tls/server.key
+        cp /run/secrets/postgres_server_certificate /var/lib/postgresql/tls/server.crt
+        cp /run/secrets/postgres_ca_certificate /var/lib/postgresql/tls/ca.crt
+        chown -R postgres:postgres /var/lib/postgresql/tls
+        chmod 0700 /var/lib/postgresql/tls
+        chmod 0600 /var/lib/postgresql/tls/server.key
+        chmod 0644 /var/lib/postgresql/tls/server.crt /var/lib/postgresql/tls/ca.crt
+        exec docker-entrypoint.sh postgres \
+          -c ssl=on \
+          -c ssl_cert_file=/var/lib/postgresql/tls/server.crt \
+          -c ssl_key_file=/var/lib/postgresql/tls/server.key \
+          -c ssl_ca_file=/var/lib/postgresql/tls/ca.crt \
+          -c ssl_min_protocol_version=TLSv1.2
     secrets:
       - postgres_password
+      - postgres_server_certificate
+      - postgres_server_key
+      - postgres_ca_certificate
     environment:
       POSTGRES_DB: "${POSTGRES_DB:?set POSTGRES_DB}"
       POSTGRES_USER: "${POSTGRES_USER:?set POSTGRES_USER}"
       POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
     volumes:
       - accounts_production_data:/var/lib/postgresql/data
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m
+      - /var/run/postgresql:rw,noexec,nosuid,nodev,size=16m,uid=70,gid=70
+      - /var/lib/postgresql/tls:rw,noexec,nosuid,nodev,size=8m,uid=0,gid=0
+    networks:
+      - api_db
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      test: ["CMD-SHELL", "PGPASSWORD=\"$$(cat /run/secrets/postgres_password)\" psql \"host=db port=5432 dbname=$$POSTGRES_DB user=$$POSTGRES_USER sslmode=verify-full sslrootcert=/run/secrets/postgres_ca_certificate connect_timeout=5\" -v ON_ERROR_STOP=1 -Atqc 'SELECT 1' | grep -qx 1"]
       interval: 10s
       timeout: 15s
       retries: 12
       start_period: 60s
 
+  database-role-provision:
+    image: postgres:16.4-alpine
+    restart: "no"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 64
+    mem_limit: 128m
+    cpus: "0.25"
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m
+    networks:
+      - api_db
+    secrets:
+      - postgres_password
+      - postgres_application_password
+      - postgres_ca_certificate
+    environment:
+      POSTGRES_DB: "${POSTGRES_DB:?set POSTGRES_DB}"
+      POSTGRES_USER: "${POSTGRES_USER:?set POSTGRES_USER}"
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        app_password="$$(cat /run/secrets/postgres_application_password)"
+        export PGPASSWORD="$$(cat /run/secrets/postgres_password)"
+        psql "host=db port=5432 dbname=$$POSTGRES_DB user=$$POSTGRES_USER sslmode=verify-full sslrootcert=/run/secrets/postgres_ca_certificate" \
+          --set=ON_ERROR_STOP=1 --set=app_password="$$app_password" <<'SQL'
+        SELECT CASE
+          WHEN EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'accounts_api')
+            THEN format('ALTER ROLE %I WITH LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION INHERIT PASSWORD %L', 'accounts_api', :'app_password')
+          ELSE format('CREATE ROLE %I WITH LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION INHERIT PASSWORD %L', 'accounts_api', :'app_password')
+        END \gexec
+        SQL
+    depends_on:
+      db:
+        condition: service_healthy
+
   migrate:
     image: "${ACCOUNTS_API_IMAGE:?set ACCOUNTS_API_IMAGE}"
     command: ["--migrate-only"]
     restart: "no"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: "${MIGRATE_PIDS_LIMIT:-256}"
+    mem_limit: "${MIGRATE_MEMORY_LIMIT:-1g}"
+    cpus: "${MIGRATE_CPU_LIMIT:-1.00}"
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=128m
+    networks:
+      - api_db
+      - api_egress
     secrets:
-      - accounts_connection_string
+      - accounts_migration_connection_string
+      - postgres_ca_certificate
       - auth_session_signing_key
       - audit_integrity_signing_key
+      - database_tenant_context_key
+      - identity_hmac_key
+      - mfa_encryption_key
+      - deadline_provider_token
       - bootstrap_owner_password
     environment:
       ASPNETCORE_ENVIRONMENT: Production
-      ConnectionStrings__DefaultConnection_FILE: /run/secrets/accounts_connection_string
+      FilingRelease__Candidate: "${ACCOUNTS_API_IMAGE:?set ACCOUNTS_API_IMAGE}"
+      ConnectionStrings__DefaultConnection_FILE: /run/secrets/accounts_migration_connection_string
+      DatabaseTenantIsolation__Required: "true"
+      DatabaseTenantIsolation__ApplicationGroupRole: "accounts_api_rls"
+      DatabaseTenantIsolation__ApplicationLoginRole: "accounts_api"
+      DatabaseTenantIsolation__ContextSigningKey_FILE: /run/secrets/database_tenant_context_key
       AuthSession__SigningKey_FILE: /run/secrets/auth_session_signing_key
       AuthSession__SecureCookiesInProduction: "true"
+      AuthSession__IdleTimeoutMinutes: "30"
+      AuthSession__AbsoluteLifetimeMinutes: "480"
+      AuthSession__RecentMfaMinutes: "10"
+      AuthSession__MfaChallengeMinutes: "5"
+      AuthSession__RequirePrivilegedMfa: "true"
+      IdentitySecurity__RequireInProduction: "true"
+      IdentitySecurity__BreachedPasswordCheckEnabled: "true"
+      IdentitySecurity__BreachedPasswordFailClosed: "true"
+      IdentitySecurity__IdentityHmacKey_FILE: /run/secrets/identity_hmac_key
+      IdentitySecurity__ActiveMfaEncryptionKeyId: "${MFA_ENCRYPTION_ACTIVE_KEY_ID:?set MFA_ENCRYPTION_ACTIVE_KEY_ID}"
+      IdentitySecurity__MfaEncryptionKeys__0__KeyId: "${MFA_ENCRYPTION_ACTIVE_KEY_ID:?set MFA_ENCRYPTION_ACTIVE_KEY_ID}"
+      IdentitySecurity__MfaEncryptionKeys__0__EncryptionKey_FILE: /run/secrets/mfa_encryption_key
       AuditIntegrity__ActiveKeyId: "${AUDIT_INTEGRITY_ACTIVE_KEY_ID:?set AUDIT_INTEGRITY_ACTIVE_KEY_ID}"
       AuditIntegrity__SigningKeys__0__KeyId: "${AUDIT_INTEGRITY_ACTIVE_KEY_ID:?set AUDIT_INTEGRITY_ACTIVE_KEY_ID}"
       AuditIntegrity__SigningKeys__0__SigningKey_FILE: /run/secrets/audit_integrity_signing_key
       DatabaseStartup__AutoMigrateOnStartup: "false"
       DatabaseStartup__SeedDemoData: "false"
-      # The api/migrate -> db hop stays on the private compose network (db is never published);
-      # external TLS is terminated at the reverse-proxy ingress (see deploy/caddy). The bundled
-      # postgres image is not configured for TLS, so opt out of the require-TLS-to-db guard for this
-      # deliberately-private link. Override the connection string with SSL Mode=Require (and drop this)
-      # if your Postgres is reachable over an untrusted network.
-      DatabaseStartup__AllowInsecureDatabaseConnection: "true"
+      DatabaseStartup__AllowInsecureDatabaseConnection: "false"
       AllowedHosts: "${ACCOUNTS_ALLOWED_HOSTS:?set ACCOUNTS_ALLOWED_HOSTS};api"
       AllowedOrigins__0: "${ACCOUNTS_ALLOWED_ORIGIN:?set ACCOUNTS_ALLOWED_ORIGIN}"
       RateLimits__TrustForwardedFor: "true"
@@ -59,6 +170,18 @@ services:
       Monitoring__IncludeCorrelationId: "true"
       Monitoring__TracesSampleRate: "${MONITORING_TRACES_SAMPLE_RATE:-0}"
       Monitoring__ErrorSmokeEnabled: "${MONITORING_ERROR_SMOKE_ENABLED:-false}"
+      Monitoring__StructuredLogRetentionDays: "${MONITORING_LOG_RETENTION_DAYS:-90}"
+      Monitoring__ErrorEventRetentionDays: "${MONITORING_ERROR_RETENTION_DAYS:-90}"
+      Monitoring__AlertAcknowledgementMinutes: "${MONITORING_ACKNOWLEDGEMENT_MINUTES:-15}"
+      Monitoring__EscalationMinutes: "${MONITORING_ESCALATION_MINUTES:-30}"
+      Monitoring__OnCallOwner: "${MONITORING_ON_CALL_OWNER:?set MONITORING_ON_CALL_OWNER}"
+      Monitoring__AlertRoute: "${MONITORING_ALERT_ROUTE:?set MONITORING_ALERT_ROUTE}"
+      Monitoring__IncidentRunbookPath: "Docs/operations/monitoring-incident-response.md"
+      DeadlineDelivery__RequireInProduction: "true"
+      DeadlineDelivery__Enabled: "true"
+      DeadlineDelivery__Provider: "Webhook"
+      DeadlineDelivery__ProviderEndpoint: "${DEADLINE_DELIVERY_PROVIDER_ENDPOINT:?set DEADLINE_DELIVERY_PROVIDER_ENDPOINT}"
+      DeadlineDelivery__ProviderToken_FILE: /run/secrets/deadline_provider_token
       BootstrapOwner__Enabled: "true"
       BootstrapOwner__TenantName: "${BOOTSTRAP_TENANT_NAME:?set BOOTSTRAP_TENANT_NAME}"
       BootstrapOwner__TenantSlug: "${BOOTSTRAP_TENANT_SLUG:?set BOOTSTRAP_TENANT_SLUG}"
@@ -67,30 +190,65 @@ services:
       BootstrapOwner__OwnerInitialPassword_FILE: /run/secrets/bootstrap_owner_password
       BootstrapOwner__OwnerMustChangePassword: "${BOOTSTRAP_OWNER_MUST_CHANGE_PASSWORD:-true}"
     depends_on:
-      db:
-        condition: service_healthy
+      database-role-provision:
+        condition: service_completed_successfully
 
   api:
     image: "${ACCOUNTS_API_IMAGE:?set ACCOUNTS_API_IMAGE}"
     restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: "${API_PIDS_LIMIT:-256}"
+    mem_limit: "${API_MEMORY_LIMIT:-1g}"
+    cpus: "${API_CPU_LIMIT:-1.50}"
+    stop_grace_period: 30s
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=256m
+    networks:
+      - api_db
+      - frontend_api
+      - api_egress
     secrets:
-      - accounts_connection_string
+      - accounts_application_connection_string
+      - postgres_ca_certificate
       - auth_session_signing_key
       - audit_integrity_signing_key
+      - database_tenant_context_key
+      - identity_hmac_key
+      - mfa_encryption_key
+      - deadline_provider_token
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:8080
-      ConnectionStrings__DefaultConnection_FILE: /run/secrets/accounts_connection_string
+      FilingRelease__Candidate: "${ACCOUNTS_API_IMAGE:?set ACCOUNTS_API_IMAGE}"
+      ConnectionStrings__DefaultConnection_FILE: /run/secrets/accounts_application_connection_string
+      DatabaseTenantIsolation__Required: "true"
+      DatabaseTenantIsolation__ApplicationGroupRole: "accounts_api_rls"
+      DatabaseTenantIsolation__ApplicationLoginRole: "accounts_api"
+      DatabaseTenantIsolation__ContextSigningKey_FILE: /run/secrets/database_tenant_context_key
       AuthSession__SigningKey_FILE: /run/secrets/auth_session_signing_key
       AuthSession__SecureCookiesInProduction: "true"
+      AuthSession__IdleTimeoutMinutes: "30"
+      AuthSession__AbsoluteLifetimeMinutes: "480"
+      AuthSession__RecentMfaMinutes: "10"
+      AuthSession__MfaChallengeMinutes: "5"
+      AuthSession__RequirePrivilegedMfa: "true"
+      IdentitySecurity__RequireInProduction: "true"
+      IdentitySecurity__BreachedPasswordCheckEnabled: "true"
+      IdentitySecurity__BreachedPasswordFailClosed: "true"
+      IdentitySecurity__IdentityHmacKey_FILE: /run/secrets/identity_hmac_key
+      IdentitySecurity__ActiveMfaEncryptionKeyId: "${MFA_ENCRYPTION_ACTIVE_KEY_ID:?set MFA_ENCRYPTION_ACTIVE_KEY_ID}"
+      IdentitySecurity__MfaEncryptionKeys__0__KeyId: "${MFA_ENCRYPTION_ACTIVE_KEY_ID:?set MFA_ENCRYPTION_ACTIVE_KEY_ID}"
+      IdentitySecurity__MfaEncryptionKeys__0__EncryptionKey_FILE: /run/secrets/mfa_encryption_key
       AuditIntegrity__ActiveKeyId: "${AUDIT_INTEGRITY_ACTIVE_KEY_ID:?set AUDIT_INTEGRITY_ACTIVE_KEY_ID}"
       AuditIntegrity__SigningKeys__0__KeyId: "${AUDIT_INTEGRITY_ACTIVE_KEY_ID:?set AUDIT_INTEGRITY_ACTIVE_KEY_ID}"
       AuditIntegrity__SigningKeys__0__SigningKey_FILE: /run/secrets/audit_integrity_signing_key
       DatabaseStartup__AutoMigrateOnStartup: "false"
       DatabaseStartup__SeedDemoData: "false"
-      # See the migrate service: the api -> db hop stays on the private compose network, so opt out of
-      # the require-TLS-to-db guard for this deliberately-private link (external TLS is at the ingress).
-      DatabaseStartup__AllowInsecureDatabaseConnection: "true"
+      DatabaseStartup__AllowInsecureDatabaseConnection: "false"
       AllowedHosts: "${ACCOUNTS_ALLOWED_HOSTS:?set ACCOUNTS_ALLOWED_HOSTS};api"
       AllowedOrigins__0: "${ACCOUNTS_ALLOWED_ORIGIN:?set ACCOUNTS_ALLOWED_ORIGIN}"
       RateLimits__TrustForwardedFor: "true"
@@ -106,6 +264,18 @@ services:
       Monitoring__IncludeCorrelationId: "true"
       Monitoring__TracesSampleRate: "${MONITORING_TRACES_SAMPLE_RATE:-0}"
       Monitoring__ErrorSmokeEnabled: "${MONITORING_ERROR_SMOKE_ENABLED:-false}"
+      Monitoring__StructuredLogRetentionDays: "${MONITORING_LOG_RETENTION_DAYS:-90}"
+      Monitoring__ErrorEventRetentionDays: "${MONITORING_ERROR_RETENTION_DAYS:-90}"
+      Monitoring__AlertAcknowledgementMinutes: "${MONITORING_ACKNOWLEDGEMENT_MINUTES:-15}"
+      Monitoring__EscalationMinutes: "${MONITORING_ESCALATION_MINUTES:-30}"
+      Monitoring__OnCallOwner: "${MONITORING_ON_CALL_OWNER:?set MONITORING_ON_CALL_OWNER}"
+      Monitoring__AlertRoute: "${MONITORING_ALERT_ROUTE:?set MONITORING_ALERT_ROUTE}"
+      Monitoring__IncidentRunbookPath: "Docs/operations/monitoring-incident-response.md"
+      DeadlineDelivery__RequireInProduction: "true"
+      DeadlineDelivery__Enabled: "true"
+      DeadlineDelivery__Provider: "Webhook"
+      DeadlineDelivery__ProviderEndpoint: "${DEADLINE_DELIVERY_PROVIDER_ENDPOINT:?set DEADLINE_DELIVERY_PROVIDER_ENDPOINT}"
+      DeadlineDelivery__ProviderToken_FILE: /run/secrets/deadline_provider_token
       BootstrapOwner__TenantSlug: "${BOOTSTRAP_TENANT_SLUG:?set BOOTSTRAP_TENANT_SLUG}"
       BootstrapOwner__OwnerEmail: "${BOOTSTRAP_OWNER_EMAIL:?set BOOTSTRAP_OWNER_EMAIL}"
     depends_on:
@@ -121,6 +291,20 @@ services:
   frontend:
     image: "${ACCOUNTS_FRONTEND_IMAGE:?set ACCOUNTS_FRONTEND_IMAGE}"
     restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: "${FRONTEND_PIDS_LIMIT:-256}"
+    mem_limit: "${FRONTEND_MEMORY_LIMIT:-768m}"
+    cpus: "${FRONTEND_CPU_LIMIT:-1.00}"
+    stop_grace_period: 30s
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=128m
+      - /app/.next/cache:rw,noexec,nosuid,nodev,size=128m,uid=1001,gid=1001
+    networks:
+      - frontend_api
     secrets:
       - accounts_api_key
     ports:
@@ -146,6 +330,14 @@ services:
 volumes:
   accounts_production_data:
 
+networks:
+  frontend_api:
+    internal: true
+  api_db:
+    internal: true
+  api_egress:
+    internal: false
+
 # Secret files are bind-mounted read-only into the containers, which run as a
 # non-root user. In plain (non-swarm) docker compose the in-container file keeps
 # the host file permissions, so each *_FILE secret must be readable by that user:
@@ -153,12 +345,30 @@ volumes:
 secrets:
   postgres_password:
     file: "${POSTGRES_PASSWORD_FILE:?set POSTGRES_PASSWORD_FILE}"
-  accounts_connection_string:
-    file: "${ACCOUNTS_CONNECTION_STRING_FILE:?set ACCOUNTS_CONNECTION_STRING_FILE}"
+  postgres_server_certificate:
+    file: "${POSTGRES_SERVER_CERTIFICATE_FILE:?set POSTGRES_SERVER_CERTIFICATE_FILE}"
+  postgres_server_key:
+    file: "${POSTGRES_SERVER_KEY_FILE:?set POSTGRES_SERVER_KEY_FILE}"
+  postgres_ca_certificate:
+    file: "${POSTGRES_CA_CERTIFICATE_FILE:?set POSTGRES_CA_CERTIFICATE_FILE}"
+  accounts_migration_connection_string:
+    file: "${ACCOUNTS_MIGRATION_CONNECTION_STRING_FILE:?set ACCOUNTS_MIGRATION_CONNECTION_STRING_FILE}"
+  accounts_application_connection_string:
+    file: "${ACCOUNTS_APPLICATION_CONNECTION_STRING_FILE:?set ACCOUNTS_APPLICATION_CONNECTION_STRING_FILE}"
+  postgres_application_password:
+    file: "${POSTGRES_APPLICATION_PASSWORD_FILE:?set POSTGRES_APPLICATION_PASSWORD_FILE}"
   auth_session_signing_key:
     file: "${AUTH_SESSION_SIGNING_KEY_FILE:?set AUTH_SESSION_SIGNING_KEY_FILE}"
   audit_integrity_signing_key:
     file: "${AUDIT_INTEGRITY_SIGNING_KEY_FILE:?set AUDIT_INTEGRITY_SIGNING_KEY_FILE}"
+  database_tenant_context_key:
+    file: "${DATABASE_TENANT_CONTEXT_KEY_FILE:?set DATABASE_TENANT_CONTEXT_KEY_FILE}"
+  identity_hmac_key:
+    file: "${IDENTITY_HMAC_KEY_FILE:?set IDENTITY_HMAC_KEY_FILE}"
+  mfa_encryption_key:
+    file: "${MFA_ENCRYPTION_KEY_FILE:?set MFA_ENCRYPTION_KEY_FILE}"
+  deadline_provider_token:
+    file: "${DEADLINE_PROVIDER_TOKEN_FILE:?set DEADLINE_PROVIDER_TOKEN_FILE}"
   accounts_api_key:
     file: "${ACCOUNTS_API_KEY_FILE:?set ACCOUNTS_API_KEY_FILE}"
   bootstrap_owner_password:

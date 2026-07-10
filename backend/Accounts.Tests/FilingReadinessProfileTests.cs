@@ -1,7 +1,9 @@
 using Accounts.Api.Data;
 using Accounts.Api.Entities;
+using Accounts.Api.Rules;
 using Accounts.Api.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Accounts.Tests;
@@ -43,15 +45,19 @@ public class FilingReadinessProfileTests
 
         var profile = await service.GetProfileAsync(period.CompanyId, period.Id);
 
-        Assert.Equal("ready-for-accountant-review", profile.SignOffPacket.State);
-        Assert.Equal("Ready for accountant review", profile.SignOffPacket.StateLabel);
-        Assert.True(profile.SignOffPacket.ReadyForAccountantApproval);
+        Assert.True(
+            profile.BlockingIssues.All(issue => issue.Code != "corporation-tax-scope-required"),
+            string.Join(" | ", profile.BlockingIssues.Select(issue => $"{issue.Code}: {issue.Message}")));
+        Assert.Equal("blocked", profile.SignOffPacket.State);
+        Assert.Equal("Blocked before accountant review", profile.SignOffPacket.StateLabel);
+        Assert.False(profile.SignOffPacket.ReadyForAccountantApproval);
         Assert.False(profile.SignOffPacket.ReadyForExternalFiling);
         Assert.Null(profile.SignOffPacket.ApprovedBy);
         Assert.Contains("approve-cro-pack", profile.SignOffPacket.AllowedNextActions);
         Assert.Contains(profile.SignOffPacket.OpenBlockers, message => message.Contains("named qualified accountant", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(profile.SignOffPacket.OpenBlockers, message => message.Contains("filing-ready iXBRL generation is disabled", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(profile.SignOffPacket.OpenWarnings, message => message.Contains("External ROS/iXBRL validation", StringComparison.OrdinalIgnoreCase));
-        Assert.Contains(profile.SignOffPacket.Steps, step => step.Code == "accountant-approval" && step.State == "blocked");
+        Assert.Contains(profile.SignOffPacket.Steps, step => step.Code == "accountant-approval" && step.State == "pending");
         Assert.Contains(profile.SignOffPacket.Steps, step => step.Code == "external-validation" && step.State == "warning");
         Assert.Contains(
             profile.SignOffPacket.Steps.Single(step => step.Code == "accountant-approval").Sources,
@@ -163,6 +169,42 @@ public class FilingReadinessProfileTests
     }
 
     [Fact]
+    public async Task ReadinessProfile_TurnsUnpostableTaxLedgerIntoEvidenceBlocker()
+    {
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, CompanyType.Private, CompanySizeClass.Small);
+        var bank = new BankAccount { CompanyId = period.CompanyId, Name = "Current", OpeningBalance = 0m };
+        var sales = new AccountCategory
+        {
+            CompanyId = period.CompanyId,
+            Code = "4000",
+            Name = "Sales",
+            Type = AccountCategoryType.Income,
+            TaxTreatment = TaxTreatment.Deductible
+        };
+        db.BankAccounts.Add(bank);
+        db.AccountCategories.Add(sales);
+        await db.SaveChangesAsync();
+        db.ImportedTransactions.Add(new ImportedTransaction
+        {
+            BankAccountId = bank.Id,
+            PeriodId = period.Id,
+            Date = period.PeriodStart.AddMonths(1),
+            Description = "Sale without bank-control setup",
+            Amount = 1_000m,
+            CategoryId = sales.Id
+        });
+        await db.SaveChangesAsync();
+
+        var profile = await new FilingReadinessProfileService(db).GetProfileAsync(period.CompanyId, period.Id);
+
+        var taxEvidence = Assert.Single(profile.RequiredEvidence, item => item.Code == "corporation-tax-scope");
+        Assert.False(taxEvidence.Satisfied);
+        Assert.Contains("bank control account", taxEvidence.Detail, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(profile.BlockingIssues, item => item.Code == "corporation-tax-scope-required");
+    }
+
+    [Fact]
     public async Task RevenueTaxonomySelector_UsesRevenueAcceptedIrishExtension2025ForCurrentPeriods()
     {
         var selection = RevenueIxbrlTaxonomySelector.Select(
@@ -248,7 +290,7 @@ public class FilingReadinessProfileTests
             CroNumber = "123456",
             TaxReference = "1234567A",
             IncorporationDate = new DateOnly(2020, 1, 1),
-            ArdMonth = 9,
+            AnnualReturnDate = new DateOnly(2024, 9, 15),
             IsTrading = true
         };
         db.Companies.Add(company);
@@ -260,36 +302,55 @@ public class FilingReadinessProfileTests
             Company = company,
             PeriodStart = periodStart ?? new DateOnly(2026, 1, 1),
             PeriodEnd = periodEnd ?? new DateOnly(2026, 12, 31),
-            IsFirstYear = false
+            IsFirstYear = true
         };
         db.AccountingPeriods.Add(period);
         await db.SaveChangesAsync();
 
+        var (turnover, balanceSheetTotal, employees) = sizeClass switch
+        {
+            CompanySizeClass.Micro => (800_000m, 400_000m, 8),
+            CompanySizeClass.Small => (1_000_000m, 500_000m, 8),
+            _ => throw new ArgumentOutOfRangeException(nameof(sizeClass), sizeClass, "This readiness fixture supports only micro and small raw statutory inputs.")
+        };
         db.SizeClassifications.Add(new SizeClassification
         {
             PeriodId = period.Id,
-            CalculatedClass = sizeClass,
-            Turnover = 1_000_000m,
-            BalanceSheetTotal = 500_000m,
-            AvgEmployees = 8
-        });
-        db.FilingRegimes.Add(new FilingRegime
-        {
-            PeriodId = period.Id,
-            CanUseMicro = sizeClass == CompanySizeClass.Micro,
-            CanFileAbridged = sizeClass <= CompanySizeClass.Small,
-            AuditExempt = sizeClass <= CompanySizeClass.Small,
-            ElectedRegime = sizeClass switch
-            {
-                CompanySizeClass.Micro => ElectedRegime.Micro,
-                CompanySizeClass.Small => ElectedRegime.SmallAbridged,
-                CompanySizeClass.Medium => ElectedRegime.Medium,
-                _ => ElectedRegime.Full
-            },
-            RequiredStatementsJson = "[]",
-            RequiredNotesJson = "[]"
+            Turnover = turnover,
+            BalanceSheetTotal = balanceSheetTotal,
+            AvgEmployees = employees,
+            ThresholdElectionEffectiveFrom = new DateOnly(2024, 1, 1)
         });
         await db.SaveChangesAsync();
+
+        var classificationService = new SizeClassificationService(
+            db,
+            Options.Create(new SizeThresholdConfig()));
+        await classificationService.ClassifyAsync(company.Id, period.Id, "Automated readiness fixture");
+        await new FilingRegimeService(db).DetermineAsync(
+            company.Id,
+            period.Id,
+            sizeClass == CompanySizeClass.Micro ? ElectedRegime.Micro : null,
+            "Automated readiness fixture");
+
+        await new TaxComputationService(db, new FinancialStatementsService(db)).SaveScopeReviewAsync(
+            company.Id,
+            period.Id,
+            new TaxComputationService.CorporationTaxScopeReviewInput(
+                IsCloseCompany: false,
+                IsServiceCompany: null,
+                HasGroupOrConsortiumRelief: false,
+                HasChargeableGains: false,
+                HasForeignIncomeOrTaxCredits: false,
+                HasExceptedTrade: false,
+                HasOtherReliefsOrSpecialRegimes: false,
+                DeclaredPassiveIncomePresent: false,
+                PassiveIncomeClassificationReviewed: false,
+                LossTreatment: CorporationTaxLossTreatment.NotApplicable,
+                BroughtForwardTradingLoss: 0m,
+                BroughtForwardLossEvidence: null,
+                EvidenceNote: "Automated test scope evidence; not professional acceptance."),
+            "Automated test actor");
 
         return period;
     }

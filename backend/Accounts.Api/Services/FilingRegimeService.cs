@@ -44,18 +44,36 @@ public class FilingRegimeService
 
         var sc = period.SizeClassification
             ?? throw new BusinessRuleException("Size classification must be completed first.");
+        if (string.IsNullOrWhiteSpace(sc.DecisionInputFingerprintSha256)
+            || sc.ThresholdElectionEffectiveFrom is null)
+            throw new BusinessRuleException("Run the statutory size classification against current raw inputs before determining a filing regime.");
+        if (period.Company.IsHolding)
+            throw new BusinessRuleException("Holding-company filing regime requires a retained statutory group-size assessment.");
+        await SizeClassificationService.EnsureDecisionChainCurrentAsync(
+            db,
+            period,
+            sc.ThresholdElectionEffectiveFrom.Value,
+            includeTarget: true);
+        ValidateCurrentOverride(sc);
 
         var company = period.Company;
         var sizeClass = sc.OverrideClass ?? sc.CalculatedClass;
         var oldValue = period.FilingRegime is null ? null : FilingRegimeAuditSnapshot(period.FilingRegime);
 
         // Fifth Schedule ineligible entity check
-        var isIneligible = company.IsListedSecurities || company.IsCreditInstitution
-                        || company.IsInsuranceUndertaking || company.IsPensionFund;
+        var isIneligible = company.CompanyType == CompanyType.PublicLimitedCompany
+                        || company.IsListedSecurities || company.IsCreditInstitution
+                        || company.IsInsuranceUndertaking || company.IsPensionFund
+                        || company.IsFifthScheduleEntity || company.IsOtherIneligibleEntity;
 
         if (isIneligible) sizeClass = CompanySizeClass.Large;
 
-        var microExcluded = isIneligible || company.IsHolding || company.IsInvestment || company.IsSubsidiary;
+        var microExcluded = isIneligible
+                         || company.IsInvestment
+                         || company.IsFinancialHoldingUndertaking
+                         || company.PreparesGroupFinancialStatements
+                         || company.IncludedInHigherConsolidatedFinancialStatements
+                         || company.IsSubsidiary;
         var canUseMicro = sizeClass == CompanySizeClass.Micro && !microExcluded;
         var canFileAbridged = !isIneligible && sizeClass <= CompanySizeClass.Small;
 
@@ -75,6 +93,7 @@ public class FilingRegimeService
 
         // Default regime based on classification
         var regime = electedRegime ?? DetermineDefaultRegime(sizeClass, canUseMicro);
+        AssertElectionCompatible(sizeClass, regime, canUseMicro, canFileAbridged, isIneligible);
 
         var requiredStatements = GetRequiredStatements(regime, sizeClass);
         var requiredNotes = GetRequiredNotes(regime, sizeClass, company);
@@ -127,6 +146,46 @@ public class FilingRegimeService
         };
     }
 
+    public static bool IsElectionCompatible(CompanySizeClass sizeClass, ElectedRegime regime) => regime switch
+    {
+        ElectedRegime.Micro => sizeClass == CompanySizeClass.Micro,
+        ElectedRegime.Small or ElectedRegime.SmallAbridged => sizeClass <= CompanySizeClass.Small,
+        ElectedRegime.Medium => sizeClass == CompanySizeClass.Medium,
+        ElectedRegime.Full => true,
+        _ => false
+    };
+
+    private static void AssertElectionCompatible(
+        CompanySizeClass sizeClass,
+        ElectedRegime regime,
+        bool canUseMicro,
+        bool canFileAbridged,
+        bool isIneligible)
+    {
+        var valid = regime switch
+        {
+            ElectedRegime.Micro => canUseMicro,
+            ElectedRegime.Small => !isIneligible && sizeClass <= CompanySizeClass.Small,
+            ElectedRegime.SmallAbridged => canFileAbridged,
+            ElectedRegime.Medium => !isIneligible && sizeClass == CompanySizeClass.Medium,
+            ElectedRegime.Full => true,
+            _ => false
+        };
+        if (!valid)
+        {
+            throw new BusinessRuleException(
+                $"The {regime} election is incompatible with the current {sizeClass} statutory classification and entity exclusions.");
+        }
+    }
+
+    private static void ValidateCurrentOverride(SizeClassification sc)
+    {
+        if (sc.OverrideClass is null)
+            return;
+        if (!SizeClassificationService.HasCurrentOverrideEvidence(sc))
+            throw new BusinessRuleException("The statutory classification override lacks current authority or retained evidence.");
+    }
+
     public static List<string> GetRequiredStatements(ElectedRegime regime, CompanySizeClass sizeClass)
     {
         return regime switch
@@ -172,64 +231,7 @@ public class FilingRegimeService
     }
 
     private static List<string> GetRequiredNotes(ElectedRegime regime, CompanySizeClass sizeClass, Company company)
-    {
-        var notes = new List<string>();
-
-        // All regimes
-        notes.Add("Accounting policies");
-        notes.Add("Basis of preparation");
-
-        if (regime == ElectedRegime.Micro)
-        {
-            notes.Add("Statement of compliance with FRS 105");
-            notes.Add("Advances, credits and guarantees to directors (if any)");
-            // Micro entities have very limited note requirements
-            return notes;
-        }
-
-        // Small and above
-        notes.Add("Tangible fixed assets");
-        notes.Add("Debtors");
-        notes.Add("Creditors: amounts falling due within one year");
-        notes.Add("Creditors: amounts falling due after more than one year");
-        notes.Add("Share capital");
-        notes.Add("Reserves");
-        notes.Add("Approval of financial statements");
-
-        if (company.IsEmployer)
-        {
-            notes.Add("Staff numbers and costs");
-        }
-
-        notes.Add("Directors' remuneration");
-
-        if (regime == ElectedRegime.SmallAbridged)
-        {
-            // Abridged does not require P&L-related notes for CRO filing
-            return notes;
-        }
-
-        // Full and medium add more notes
-        notes.Add("Turnover analysis");
-        notes.Add("Tax on profit");
-        notes.Add("Dividends");
-
-        if (company.IsGroupMember)
-        {
-            notes.Add("Related party transactions");
-            notes.Add("Ultimate controlling party");
-        }
-
-        if (sizeClass >= CompanySizeClass.Medium)
-        {
-            notes.Add("Financial instruments");
-            notes.Add("Contingent liabilities");
-            notes.Add("Capital commitments");
-            notes.Add("Post balance sheet events");
-        }
-
-        return notes;
-    }
+        => StatutoryNoteCodes.RegimeRequiredCodes(regime, sizeClass, company).ToList();
 
     private static string GenerateSummary(ElectedRegime regime, bool canUseMicro, bool canFileAbridged, bool auditExempt, bool hasLostAuditExemption, int lateCroFilingCount)
     {

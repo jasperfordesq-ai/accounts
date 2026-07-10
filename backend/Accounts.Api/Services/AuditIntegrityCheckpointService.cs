@@ -68,6 +68,19 @@ public class AuditIntegrityCheckpointService(
         int? tenantId = null,
         CancellationToken cancellationToken = default)
     {
+        var companyScope = await db.Companies
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .Where(company => company.Id == companyId)
+            .Select(company => new { company.TenantId })
+            .FirstOrDefaultAsync(cancellationToken)
+            ?? throw new ResourceNotFoundException($"Company {companyId} not found");
+        if (companyScope.TenantId is null)
+            throw new PersistenceOwnershipException(nameof(Company));
+        if (tenantId is not null && tenantId != companyScope.TenantId)
+            throw new PersistenceOwnershipException(nameof(AuditIntegrityCheckpoint));
+        tenantId = companyScope.TenantId;
+
         var activeKey = GetActiveSigningKey();
         var verifier = new AuditIntegrityService(db);
         var report = await verifier.VerifyCompanyAsync(companyId, cancellationToken);

@@ -7,6 +7,8 @@ describe("FilingOutputsPanel", () => {
   it("surfaces filing outputs, checklist progress and regime-gated CRO downloads", () => {
     render(
       <FilingOutputsPanel
+        canRead
+        canGenerate
         filingRegimeReady={false}
         downloadingDocument={null}
         checklist={{
@@ -29,7 +31,7 @@ describe("FilingOutputsPanel", () => {
     const outputReadiness = screen.getByRole("region", { name: "Output readiness" });
     expect(within(outputReadiness).getByText("What can I download now?")).toBeInTheDocument();
     expect(within(outputReadiness).getByText("2 available")).toBeInTheDocument();
-    expect(within(outputReadiness).getByText("AGM Pack, iXBRL Filing")).toBeInTheDocument();
+    expect(within(outputReadiness).getByText("AGM Pack, iXBRL review prototype")).toBeInTheDocument();
     expect(within(outputReadiness).getByText("What is blocked?")).toBeInTheDocument();
     expect(within(outputReadiness).getByText("2 blocked")).toBeInTheDocument();
     expect(within(outputReadiness).getByText("CRO Filing Pack, Signature Page")).toBeInTheDocument();
@@ -47,7 +49,7 @@ describe("FilingOutputsPanel", () => {
     expect(screen.getByText("AGM Pack")).toBeInTheDocument();
     expect(screen.getByText("CRO Filing Pack")).toBeInTheDocument();
     expect(screen.getByText("Signature Page")).toBeInTheDocument();
-    expect(screen.getByText("iXBRL Filing")).toBeInTheDocument();
+    expect(screen.getByText("iXBRL review prototype")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Download CRO PDF" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Download Signature PDF" })).toBeDisabled();
     expect(screen.getAllByText("Filing regime required")).toHaveLength(2);
@@ -68,6 +70,8 @@ describe("FilingOutputsPanel", () => {
 
     render(
       <FilingOutputsPanel
+        canRead
+        canGenerate
         filingRegimeReady
         downloadingDocument={null}
         checklist={completeChecklist()}
@@ -79,7 +83,7 @@ describe("FilingOutputsPanel", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "Download CRO PDF" }));
-    await user.click(screen.getByRole("button", { name: "Download iXBRL" }));
+    await user.click(screen.getByRole("button", { name: "Download draft review XHTML" }));
 
     expect(onDownloadCroFilingPack).toHaveBeenCalledTimes(1);
     expect(onDownloadIxbrl).toHaveBeenCalledTimes(1);

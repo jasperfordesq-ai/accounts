@@ -202,8 +202,8 @@ $expectedAccountantWorkbenchWorkflowStages = @(
 )
 
 $expectedAccountantWorkbenchThemes = @("light", "dark")
-$expectedAccountantWorkbenchViewports = @("desktop", "mobile")
-$expectedAccountantWorkbenchThemeViewportCoverage = @("dark/desktop", "dark/mobile", "light/desktop", "light/mobile")
+$expectedAccountantWorkbenchViewports = @("mobile", "tablet", "desktop")
+$expectedAccountantWorkbenchThemeViewportCoverage = @("dark/desktop", "dark/mobile", "dark/tablet", "light/desktop", "light/mobile", "light/tablet")
 
 $expectedAccountantWorkbenchRouteAcceptance = @(
     [pscustomobject]@{ routeName = "dashboard"; routeKey = "dashboard"; label = "Dashboard"; expectedText = "Firm command centre"; workflowStages = $expectedAccountantWorkbenchWorkflowStages },
@@ -219,8 +219,11 @@ $expectedAccountantWorkbenchReviewChecks = @(
     "accountant-workflow-hierarchy",
     "table-scanability",
     "theme-contrast",
-    "mobile-density",
-    "loading-error-empty-states"
+    "responsive-density",
+    "loading-error-empty-states",
+    "canonical-url-tab-state",
+    "semantic-capture-distinctness",
+    "stale-conflict-states"
 )
 
 $expectedAccountantWorkbenchLayoutChecks = @(
@@ -242,6 +245,24 @@ $expectedAccountantWorkbenchEvidenceFiles = @(
     "visual-smoke-manifest.json",
     "visual-smoke-evidence-report.json",
     "accountant-workbench-evidence-report.json"
+)
+
+$expectedVisualStateIds = @(
+    "login", "password-change", "dashboard", "onboarding", "production-readiness", "company-detail",
+    "period-workspace", "classification", "categorisation", "year-end", "adjustments", "notes", "charity",
+    "financial-statements", "statement-source-trail", "statement-profit-and-loss", "statement-balance-sheet",
+    "statement-tax-computation", "statement-cash-flow", "statement-equity-changes", "statement-directors-report",
+    "filing-review", "workbench-preview", "state-loading", "state-empty", "state-maximum-data", "state-error",
+    "state-partial-error", "state-permission-denied", "state-read-only", "state-stale", "state-conflict"
+)
+$expectedVisualMaterialRoutes = @(
+    "login", "password-change", "onboarding", "classification", "categorisation", "year-end", "adjustments",
+    "notes", "charity", "statement-trial-balance", "statement-source-trail", "statement-profit-and-loss",
+    "statement-balance-sheet", "statement-tax-computation", "statement-cash-flow", "statement-equity-changes",
+    "statement-directors-report", "filing"
+)
+$expectedVisualUiStates = @(
+    "loading", "empty", "maximum-data", "error", "partial-error", "permission-denied", "read-only", "stale", "conflict"
 )
 
 $expectedReleaseEvidenceWorkspaceInventory = @(
@@ -400,14 +421,14 @@ function Assert-AccountantWorkbenchRouteAcceptance {
             }
             Assert-ArrayContainsExactly @($readiness.workflowStages) @($expected.workflowStages) "accountant-workbench-evidence-report.json routeReadiness.$($expected.routeName).workflowStages" $Failures
             Assert-ArrayContainsExactly @($readiness.themeViewportCoverage) $expectedAccountantWorkbenchThemeViewportCoverage "accountant-workbench-evidence-report.json routeReadiness.$($expected.routeName).themeViewportCoverage" $Failures
-            if ([int]$readiness.screenshotCount -ne 4) {
-                Add-Failure $Failures "accountant-workbench-evidence-report.json routeReadiness.$($expected.routeName).screenshotCount must be 4."
+            if ([int]$readiness.screenshotCount -ne 6) {
+                Add-Failure $Failures "accountant-workbench-evidence-report.json routeReadiness.$($expected.routeName).screenshotCount must be 6."
             }
-            if ([int]$readiness.layoutCheckResultCount -ne 12) {
-                Add-Failure $Failures "accountant-workbench-evidence-report.json routeReadiness.$($expected.routeName).layoutCheckResultCount must be 12."
+            if ([int]$readiness.layoutCheckResultCount -ne 18) {
+                Add-Failure $Failures "accountant-workbench-evidence-report.json routeReadiness.$($expected.routeName).layoutCheckResultCount must be 18."
             }
-            if ([int]$readiness.contrastCheckResultCount -ne 4) {
-                Add-Failure $Failures "accountant-workbench-evidence-report.json routeReadiness.$($expected.routeName).contrastCheckResultCount must be 4."
+            if ([int]$readiness.contrastCheckResultCount -ne 6) {
+                Add-Failure $Failures "accountant-workbench-evidence-report.json routeReadiness.$($expected.routeName).contrastCheckResultCount must be 6."
             }
             if ([decimal]$readiness.minimumContrastRatio -lt 3.0) {
                 Add-Failure $Failures "accountant-workbench-evidence-report.json routeReadiness.$($expected.routeName).minimumContrastRatio must be at least 3."
@@ -436,8 +457,8 @@ function Assert-AccountantWorkbenchRouteAcceptance {
             Add-Failure $Failures "accountant-workbench-evidence-report.json routeAcceptance.$($expected.routeName).expectedText must be $($expected.expectedText)."
         }
         Assert-ArrayContainsExactly @($acceptance.workflowStages) @($expected.workflowStages) "accountant-workbench-evidence-report.json routeAcceptance.$($expected.routeName).workflowStages" $Failures
-        if ([string]$acceptance.screenshotReviewEvidence -ne "$($expected.routeName)-light-dark-desktop-mobile-screenshot-review") {
-            Add-Failure $Failures "accountant-workbench-evidence-report.json routeAcceptance.$($expected.routeName).screenshotReviewEvidence must be $($expected.routeName)-light-dark-desktop-mobile-screenshot-review."
+        if ([string]$acceptance.screenshotReviewEvidence -ne "$($expected.routeName)-light-dark-mobile-tablet-desktop-screenshot-review") {
+            Add-Failure $Failures "accountant-workbench-evidence-report.json routeAcceptance.$($expected.routeName).screenshotReviewEvidence must be $($expected.routeName)-light-dark-mobile-tablet-desktop-screenshot-review."
         }
         if ([string]$acceptance.reviewStatus -ne "required-review") {
             Add-Failure $Failures "accountant-workbench-evidence-report.json routeAcceptance.$($expected.routeName).reviewStatus must be required-review."
@@ -465,8 +486,9 @@ function Assert-VisualSmokeDimensionEvidence {
     }
 
     $expectedViewports = @(
-        [pscustomobject]@{ name = "desktop"; width = 1440; height = 1000 },
-        [pscustomobject]@{ name = "mobile"; width = 390; height = 844 }
+        [pscustomobject]@{ name = "mobile"; width = 390; height = 844 },
+        [pscustomobject]@{ name = "tablet"; width = 768; height = 1024 },
+        [pscustomobject]@{ name = "desktop"; width = 1440; height = 1000 }
     )
     $expectedThemes = @("light", "dark")
     $expectedLayoutChecks = @(
@@ -480,14 +502,37 @@ function Assert-VisualSmokeDimensionEvidence {
     Assert-ArrayContainsExactly @((Get-JsonProperty $VisualSmoke @("themes"))) $expectedThemes "visual-smoke-evidence-report.json themes" $Failures
     Assert-ArrayContainsExactly @((Get-JsonProperty $VisualSmoke @("viewports"))) @($expectedViewports | ForEach-Object { $_.name }) "visual-smoke-evidence-report.json viewports" $Failures
 
-    if ([int](Get-JsonProperty $VisualSmoke @("layoutCheckResultCount")) -ne 84) {
-        Add-Failure $Failures "visual-smoke-evidence-report.json layoutCheckResultCount must be 84."
+    if ([string](Get-JsonProperty $VisualSmoke @("inventoryVersion")) -ne "canonical-material-states-v1") {
+        Add-Failure $Failures "visual-smoke-evidence-report.json inventoryVersion must be canonical-material-states-v1."
+    }
+    if ([int](Get-JsonProperty $VisualSmoke @("inventoryStateCount")) -ne 32 -or
+        [int](Get-JsonProperty $VisualSmoke @("routeCount")) -ne 32) {
+        Add-Failure $Failures "visual-smoke-evidence-report.json inventoryStateCount and routeCount must both be 32."
+    }
+    if ([int](Get-JsonProperty $VisualSmoke @("accountantWorkbenchRouteCount")) -ne 7) {
+        Add-Failure $Failures "visual-smoke-evidence-report.json accountantWorkbenchRouteCount must be 7."
+    }
+    if ([int](Get-JsonProperty $VisualSmoke @("screenshotCount")) -ne 192 -or
+        [int](Get-JsonProperty $VisualSmoke @("expectedScreenshotCount")) -ne 192) {
+        Add-Failure $Failures "visual-smoke-evidence-report.json screenshotCount and expectedScreenshotCount must both be 192."
+    }
+    Assert-ArrayContainsExactly @((Get-JsonProperty $VisualSmoke @("requiredMaterialRoutes"))) $expectedVisualMaterialRoutes "visual-smoke-evidence-report.json requiredMaterialRoutes" $Failures
+    Assert-ArrayContainsExactly @((Get-JsonProperty $VisualSmoke @("requiredUiStates"))) $expectedVisualUiStates "visual-smoke-evidence-report.json requiredUiStates" $Failures
+    if ((Get-JsonProperty $VisualSmoke @("semanticDistinctnessPassed")) -ne $true) {
+        Add-Failure $Failures "visual-smoke-evidence-report.json semanticDistinctnessPassed must be true."
+    }
+    if ([int](Get-JsonProperty $VisualSmoke @("semanticContentHashCount")) -lt 32) {
+        Add-Failure $Failures "visual-smoke-evidence-report.json semanticContentHashCount must prove at least 32 distinct canonical states."
+    }
+
+    if ([int](Get-JsonProperty $VisualSmoke @("layoutCheckResultCount")) -ne 576) {
+        Add-Failure $Failures "visual-smoke-evidence-report.json layoutCheckResultCount must be 576."
     }
     if ([string](Get-JsonProperty $VisualSmoke @("layoutChecksPassed")) -ne "True") {
         Add-Failure $Failures "visual-smoke-evidence-report.json layoutChecksPassed must be true."
     }
-    if ([int](Get-JsonProperty $VisualSmoke @("contrastCheckResultCount")) -ne 28) {
-        Add-Failure $Failures "visual-smoke-evidence-report.json contrastCheckResultCount must be 28."
+    if ([int](Get-JsonProperty $VisualSmoke @("contrastCheckResultCount")) -ne 192) {
+        Add-Failure $Failures "visual-smoke-evidence-report.json contrastCheckResultCount must be 192."
     }
     if ([string](Get-JsonProperty $VisualSmoke @("themeContrastChecksPassed")) -ne "True") {
         Add-Failure $Failures "visual-smoke-evidence-report.json themeContrastChecksPassed must be true."
@@ -524,27 +569,34 @@ function Assert-VisualSmokeDimensionEvidence {
     if ($null -eq $routeCoverage -or @($routeCoverage).Count -eq 0) {
         Add-Failure $Failures "visual-smoke-evidence-report.json routeCoverage must be present."
     } else {
-        if (@($routeCoverage).Count -ne $expectedAccountantWorkbenchRouteAcceptance.Count) {
-            Add-Failure $Failures "visual-smoke-evidence-report.json routeCoverage must include exactly 7 route(s)."
+        if (@($routeCoverage).Count -ne $expectedVisualStateIds.Count) {
+            Add-Failure $Failures "visual-smoke-evidence-report.json routeCoverage must include exactly 32 canonical state rows."
         }
-        foreach ($expectedRoute in $expectedAccountantWorkbenchRouteAcceptance) {
-            $actualRoute = @($routeCoverage) | Where-Object { [string](Get-JsonProperty $_ @("routeName")) -eq $expectedRoute.routeName } | Select-Object -First 1
+        Assert-ArrayContainsExactly @($routeCoverage | ForEach-Object { [string](Get-JsonProperty $_ @("stateId")) }) $expectedVisualStateIds "visual-smoke-evidence-report.json routeCoverage.stateId" $Failures
+        foreach ($stateId in $expectedVisualStateIds) {
+            $actualRoute = @($routeCoverage) | Where-Object { [string](Get-JsonProperty $_ @("stateId")) -eq $stateId } | Select-Object -First 1
             if ($null -eq $actualRoute) {
-                Add-Failure $Failures "visual-smoke-evidence-report.json routeCoverage must include $($expectedRoute.routeName)."
+                Add-Failure $Failures "visual-smoke-evidence-report.json routeCoverage must include $stateId."
                 continue
             }
-            if ([string](Get-JsonProperty $actualRoute @("routeKey")) -ne [string]$expectedRoute.routeKey) {
-                Add-Failure $Failures "visual-smoke-evidence-report.json routeCoverage.$($expectedRoute.routeName).routeKey must be $($expectedRoute.routeKey)."
+            if ([string](Get-JsonProperty $actualRoute @("routeName")) -ne $stateId) {
+                Add-Failure $Failures "visual-smoke-evidence-report.json routeCoverage.$stateId.routeName must match stateId."
             }
-            if ([int](Get-JsonProperty $actualRoute @("screenshotCount")) -ne 4) {
-                Add-Failure $Failures "visual-smoke-evidence-report.json routeCoverage.$($expectedRoute.routeName).screenshotCount must be 4."
+            if ([int](Get-JsonProperty $actualRoute @("screenshotCount")) -ne 6) {
+                Add-Failure $Failures "visual-smoke-evidence-report.json routeCoverage.$stateId.screenshotCount must be 6."
             }
             if ([string](Get-JsonProperty $actualRoute @("reviewStatus")) -ne "required-review") {
-                Add-Failure $Failures "visual-smoke-evidence-report.json routeCoverage.$($expectedRoute.routeName).reviewStatus must be required-review."
+                Add-Failure $Failures "visual-smoke-evidence-report.json routeCoverage.$stateId.reviewStatus must be required-review."
             }
             foreach ($reviewCheck in $expectedAccountantWorkbenchReviewChecks) {
-                Assert-ArrayContains @((Get-JsonProperty $actualRoute @("requiredReviewChecks"))) $reviewCheck "visual-smoke-evidence-report.json routeCoverage.$($expectedRoute.routeName).requiredReviewChecks" $Failures
+                Assert-ArrayContains @((Get-JsonProperty $actualRoute @("requiredReviewChecks"))) $reviewCheck "visual-smoke-evidence-report.json routeCoverage.$stateId.requiredReviewChecks" $Failures
             }
+            Assert-NonEmptyString (Get-JsonProperty $actualRoute @("routeKey")) "visual-smoke-evidence-report.json routeCoverage.$stateId.routeKey" $Failures
+            Assert-NonEmptyString (Get-JsonProperty $actualRoute @("uiState")) "visual-smoke-evidence-report.json routeCoverage.$stateId.uiState" $Failures
+            Assert-NonEmptyString (Get-JsonProperty $actualRoute @("canonicalUrlTemplate")) "visual-smoke-evidence-report.json routeCoverage.$stateId.canonicalUrlTemplate" $Failures
+            Assert-NonEmptyString (Get-JsonProperty $actualRoute @("canonicalTabState", "kind")) "visual-smoke-evidence-report.json routeCoverage.$stateId.canonicalTabState.kind" $Failures
+            Assert-NonEmptyString (Get-JsonProperty $actualRoute @("expectedText")) "visual-smoke-evidence-report.json routeCoverage.$stateId.expectedText" $Failures
+            Assert-NonEmptyString (Get-JsonProperty $actualRoute @("expectedStateText")) "visual-smoke-evidence-report.json routeCoverage.$stateId.expectedStateText" $Failures
         }
     }
 
@@ -554,35 +606,29 @@ function Assert-VisualSmokeDimensionEvidence {
         return
     }
 
-    if (@($screenshots).Count -ne 28) {
-        Add-Failure $Failures "visual-smoke-evidence-report.json screenshots must include exactly 28 retained screenshots."
+    if (@($screenshots).Count -ne 192) {
+        Add-Failure $Failures "visual-smoke-evidence-report.json screenshots must include exactly 192 retained screenshots."
     }
 
-    foreach ($expectedRoute in $expectedAccountantWorkbenchRouteAcceptance) {
+    foreach ($stateId in $expectedVisualStateIds) {
         foreach ($theme in $expectedThemes) {
             foreach ($expectedViewport in $expectedViewports) {
-                $expectedFileName = "$($expectedRoute.routeName)-$theme-$($expectedViewport.name).png"
+                $expectedFileName = "$stateId-$theme-$($expectedViewport.name).png"
                 $actualScreenshot = @($screenshots) | Where-Object {
-                    [string](Get-JsonProperty $_ @("routeName")) -eq [string]$expectedRoute.routeName -and
+                    [string](Get-JsonProperty $_ @("stateId")) -eq $stateId -and
                     [string](Get-JsonProperty $_ @("theme")) -eq [string]$theme -and
                     [string](Get-JsonProperty $_ @("viewportName")) -eq [string]$expectedViewport.name
                 } | Select-Object -First 1
 
                 if ($null -eq $actualScreenshot) {
-                    Add-Failure $Failures "visual-smoke-evidence-report.json screenshots must include $($expectedRoute.routeName)/$theme/$($expectedViewport.name)."
+                    Add-Failure $Failures "visual-smoke-evidence-report.json screenshots must include $stateId/$theme/$($expectedViewport.name)."
                     continue
                 }
-                if ([string](Get-JsonProperty $actualScreenshot @("routeKey")) -ne [string]$expectedRoute.routeKey) {
-                    Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.$($expectedRoute.routeName).$theme.$($expectedViewport.name).routeKey must be $($expectedRoute.routeKey)."
-                }
                 if ([string](Get-JsonProperty $actualScreenshot @("fileName")) -ne $expectedFileName) {
-                    Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.$($expectedRoute.routeName).$theme.$($expectedViewport.name).fileName must be $expectedFileName."
-                }
-                if ([string](Get-JsonProperty $actualScreenshot @("expectedText")) -ne [string]$expectedRoute.expectedText) {
-                    Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.$($expectedRoute.routeName).$theme.$($expectedViewport.name).expectedText must be $($expectedRoute.expectedText)."
+                    Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.$stateId.$theme.$($expectedViewport.name).fileName must be $expectedFileName."
                 }
                 if ([string](Get-JsonProperty $actualScreenshot @("reviewStatus")) -ne "required-review") {
-                    Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.$($expectedRoute.routeName).$theme.$($expectedViewport.name).reviewStatus must be required-review."
+                    Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.$stateId.$theme.$($expectedViewport.name).reviewStatus must be required-review."
                 }
             }
         }
@@ -611,6 +657,41 @@ function Assert-VisualSmokeDimensionEvidence {
         $pngIdatByteSize = Get-JsonProperty $screenshot @("pngIdatByteSize")
         $layoutCheckResults = @(Get-JsonProperty $screenshot @("layoutCheckResults"))
         $themeContrastResult = Get-JsonProperty $screenshot @("themeContrastResult")
+        $stateId = [string](Get-JsonProperty $screenshot @("stateId"))
+        $routeName = [string](Get-JsonProperty $screenshot @("routeName"))
+        $materialRoute = Get-JsonProperty $screenshot @("materialRoute")
+        $canonicalUrl = [string](Get-JsonProperty $screenshot @("canonicalUrl"))
+        $observedUrl = [string](Get-JsonProperty $screenshot @("observedUrl"))
+        $semanticContentSha256 = [string](Get-JsonProperty $screenshot @("semanticContentSha256"))
+        $semanticContentByteSize = Get-JsonProperty $screenshot @("semanticContentByteSize")
+
+        if ($stateId -notin $expectedVisualStateIds -or $routeName -ne $stateId) {
+            Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.stateId and routeName must identify one canonical state."
+        }
+        foreach ($field in @("routeKey", "uiState", "authMode", "expectedText", "expectedStateText", "canonicalUrlTemplate")) {
+            Assert-NonEmptyString (Get-JsonProperty $screenshot @($field)) "visual-smoke-evidence-report.json screenshots.$field" $Failures
+        }
+        if ([string](Get-JsonProperty $screenshot @("authMode")) -notin @("anonymous", "authenticated")) {
+            Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.authMode must be anonymous or authenticated."
+        }
+        if ($null -ne $materialRoute -and -not [string]::IsNullOrWhiteSpace([string]$materialRoute) -and [string]$materialRoute -notin $expectedVisualMaterialRoutes) {
+            Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.materialRoute must reference the canonical material-route inventory."
+        }
+        if ($null -eq (Get-JsonProperty $screenshot @("canonicalQuery"))) {
+            Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.canonicalQuery must be present."
+        }
+        foreach ($field in @("kind", "id", "label")) {
+            Assert-NonEmptyString (Get-JsonProperty $screenshot @("canonicalTabState", $field)) "visual-smoke-evidence-report.json screenshots.canonicalTabState.$field" $Failures
+        }
+        if ([string]::IsNullOrWhiteSpace($canonicalUrl) -or $canonicalUrl -ne $observedUrl) {
+            Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.observedUrl must exactly match canonicalUrl."
+        }
+        if ($semanticContentSha256 -notmatch '^sha256:[0-9a-f]{64}$') {
+            Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.semanticContentSha256 must be a canonical sha256 checksum."
+        }
+        if ($null -eq $semanticContentByteSize -or [int]$semanticContentByteSize -le 0) {
+            Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.semanticContentByteSize must be greater than zero."
+        }
 
         if ($null -eq $imageWidth -or [int]$imageWidth -ne [int]$expected.width) {
             Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.imageWidth must match planned viewport width."
@@ -679,11 +760,42 @@ function Assert-VisualSmokeDimensionEvidence {
             if ([int](Get-JsonProperty $themeContrastResult @("failingTextCount")) -ne 0) {
                 Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.themeContrastResult.failingTextCount must be zero."
             }
+            if ($null -eq (Get-JsonProperty $themeContrastResult @("failingUiComponentCount")) -or
+                [int](Get-JsonProperty $themeContrastResult @("failingUiComponentCount")) -ne 0) {
+                Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.themeContrastResult.failingUiComponentCount must be present and zero."
+            }
+            if ([int](Get-JsonProperty $themeContrastResult @("sampledNormalTextCount")) -le 0) {
+                Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.themeContrastResult.sampledNormalTextCount must be greater than zero."
+            }
+            if ([int](Get-JsonProperty $themeContrastResult @("sampledInteractiveTextCount")) -le 0) {
+                Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.themeContrastResult.sampledInteractiveTextCount must be greater than zero."
+            }
+            if ([int](Get-JsonProperty $themeContrastResult @("sampledUiComponentCount")) -le 0) {
+                Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.themeContrastResult.sampledUiComponentCount must be greater than zero."
+            }
             if ([decimal](Get-JsonProperty $themeContrastResult @("minimumContrastRatio")) -lt $minimumContrastRatio) {
                 Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.themeContrastResult.minimumContrastRatio must be at least 3."
             }
             if ([decimal](Get-JsonProperty $themeContrastResult @("requiredMinimumContrastRatio")) -ne $minimumContrastRatio) {
                 Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.themeContrastResult.requiredMinimumContrastRatio must be 3."
+            }
+            if ([decimal](Get-JsonProperty $themeContrastResult @("requiredNormalTextContrastRatio")) -ne 4.5) {
+                Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.themeContrastResult.requiredNormalTextContrastRatio must be 4.5."
+            }
+            if ([decimal](Get-JsonProperty $themeContrastResult @("requiredLargeTextContrastRatio")) -ne 3) {
+                Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.themeContrastResult.requiredLargeTextContrastRatio must be 3."
+            }
+            if ([decimal](Get-JsonProperty $themeContrastResult @("requiredUiComponentContrastRatio")) -ne 3) {
+                Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.themeContrastResult.requiredUiComponentContrastRatio must be 3."
+            }
+            if ([decimal](Get-JsonProperty $themeContrastResult @("minimumNormalTextContrastRatio")) -lt 4.5) {
+                Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.themeContrastResult.minimumNormalTextContrastRatio must be at least 4.5."
+            }
+            if ([decimal](Get-JsonProperty $themeContrastResult @("minimumLargeTextContrastRatio")) -lt 3) {
+                Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.themeContrastResult.minimumLargeTextContrastRatio must be at least 3."
+            }
+            if ([decimal](Get-JsonProperty $themeContrastResult @("minimumUiComponentContrastRatio")) -lt 3) {
+                Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.themeContrastResult.minimumUiComponentContrastRatio must be at least 3."
             }
         }
 
@@ -711,101 +823,115 @@ function Assert-VisualSmokeManifestEvidence {
     if ([string](Get-JsonProperty $VisualManifest @("manifestFileName")) -ne "visual-smoke-manifest.json") {
         Add-Failure $Failures "visual-smoke-manifest.json manifestFileName must be visual-smoke-manifest.json."
     }
-    if ([int](Get-JsonProperty $VisualManifest @("expectedScreenshotCount")) -ne 28) {
-        Add-Failure $Failures "visual-smoke-manifest.json expectedScreenshotCount must be 28."
+    if ([string](Get-JsonProperty $VisualManifest @("inventoryVersion")) -ne "canonical-material-states-v1") {
+        Add-Failure $Failures "visual-smoke-manifest.json inventoryVersion must be canonical-material-states-v1."
+    }
+    if ([int](Get-JsonProperty $VisualManifest @("inventoryStateCount")) -ne 32) {
+        Add-Failure $Failures "visual-smoke-manifest.json inventoryStateCount must be 32."
+    }
+    if ([int](Get-JsonProperty $VisualManifest @("expectedScreenshotCount")) -ne 192) {
+        Add-Failure $Failures "visual-smoke-manifest.json expectedScreenshotCount must be 192."
     }
 
     Assert-ArrayContainsExactly @((Get-JsonProperty $VisualManifest @("layoutChecks"))) $expectedAccountantWorkbenchLayoutChecks "visual-smoke-manifest.json layoutChecks" $Failures
     Assert-ArrayContainsExactly @((Get-JsonProperty $VisualManifest @("reviewChecks"))) $expectedAccountantWorkbenchReviewChecks "visual-smoke-manifest.json reviewChecks" $Failures
+    Assert-ArrayContainsExactly @((Get-JsonProperty $VisualManifest @("themes"))) $expectedAccountantWorkbenchThemes "visual-smoke-manifest.json themes" $Failures
+    Assert-ArrayContainsExactly @((Get-JsonProperty $VisualManifest @("requiredMaterialRoutes"))) $expectedVisualMaterialRoutes "visual-smoke-manifest.json requiredMaterialRoutes" $Failures
+    Assert-ArrayContainsExactly @((Get-JsonProperty $VisualManifest @("requiredUiStates"))) $expectedVisualUiStates "visual-smoke-manifest.json requiredUiStates" $Failures
 
     $routeAudits = @(Get-JsonProperty $VisualManifest @("routeAudits"))
-    if ($routeAudits.Count -ne $expectedAccountantWorkbenchRouteAcceptance.Count) {
-        Add-Failure $Failures "visual-smoke-manifest.json routeAudits must include exactly 7 route(s)."
+    $stateInventory = @(Get-JsonProperty $VisualManifest @("stateInventory"))
+    if ($routeAudits.Count -ne 32 -or $stateInventory.Count -ne 32) {
+        Add-Failure $Failures "visual-smoke-manifest.json routeAudits and stateInventory must each include exactly 32 canonical states."
     }
+    Assert-ArrayContainsExactly @($routeAudits | ForEach-Object { [string](Get-JsonProperty $_ @("stateId")) }) $expectedVisualStateIds "visual-smoke-manifest.json routeAudits.stateId" $Failures
+    Assert-ArrayContainsExactly @($stateInventory | ForEach-Object { [string](Get-JsonProperty $_ @("stateId")) }) $expectedVisualStateIds "visual-smoke-manifest.json stateInventory.stateId" $Failures
 
-    foreach ($expectedRoute in $expectedAccountantWorkbenchRouteAcceptance) {
+    foreach ($stateId in $expectedVisualStateIds) {
         $routeAudit = $routeAudits |
-            Where-Object { [string](Get-JsonProperty $_ @("routeName")) -eq [string]$expectedRoute.routeName } |
+            Where-Object { [string](Get-JsonProperty $_ @("stateId")) -eq $stateId } |
             Select-Object -First 1
 
         if ($null -eq $routeAudit) {
-            Add-Failure $Failures "visual-smoke-manifest.json routeAudits must include $($expectedRoute.routeName)."
+            Add-Failure $Failures "visual-smoke-manifest.json routeAudits must include $stateId."
             continue
         }
 
-        if ([string](Get-JsonProperty $routeAudit @("routeKey")) -ne [string]$expectedRoute.routeKey) {
-            Add-Failure $Failures "visual-smoke-manifest.json routeAudits.$($expectedRoute.routeName).routeKey must be $($expectedRoute.routeKey)."
+        if ([string](Get-JsonProperty $routeAudit @("routeName")) -ne $stateId) {
+            Add-Failure $Failures "visual-smoke-manifest.json routeAudits.$stateId.routeName must match stateId."
         }
-        if ([string](Get-JsonProperty $routeAudit @("label")) -ne [string]$expectedRoute.label) {
-            Add-Failure $Failures "visual-smoke-manifest.json routeAudits.$($expectedRoute.routeName).label must be $($expectedRoute.label)."
-        }
-        Assert-ArrayContainsExactly @((Get-JsonProperty $routeAudit @("workflowStages"))) @($expectedRoute.workflowStages) "visual-smoke-manifest.json routeAudits.$($expectedRoute.routeName).workflowStages" $Failures
-        if ([int](Get-JsonProperty $routeAudit @("screenshotCount")) -ne 4) {
-            Add-Failure $Failures "visual-smoke-manifest.json routeAudits.$($expectedRoute.routeName).screenshotCount must be 4."
+        if ([int](Get-JsonProperty $routeAudit @("screenshotCount")) -ne 6) {
+            Add-Failure $Failures "visual-smoke-manifest.json routeAudits.$stateId.screenshotCount must be 6."
         }
         if ([string](Get-JsonProperty $routeAudit @("reviewStatus")) -ne "required-review") {
-            Add-Failure $Failures "visual-smoke-manifest.json routeAudits.$($expectedRoute.routeName).reviewStatus must be required-review."
+            Add-Failure $Failures "visual-smoke-manifest.json routeAudits.$stateId.reviewStatus must be required-review."
         }
-        Assert-ArrayContainsExactly @((Get-JsonProperty $routeAudit @("reviewChecks"))) $expectedAccountantWorkbenchReviewChecks "visual-smoke-manifest.json routeAudits.$($expectedRoute.routeName).reviewChecks" $Failures
+        Assert-ArrayContainsExactly @((Get-JsonProperty $routeAudit @("reviewChecks"))) $expectedAccountantWorkbenchReviewChecks "visual-smoke-manifest.json routeAudits.$stateId.reviewChecks" $Failures
+        foreach ($field in @("routeKey", "label", "uiState", "canonicalUrlTemplate", "expectedText", "expectedStateText")) {
+            Assert-NonEmptyString (Get-JsonProperty $routeAudit @($field)) "visual-smoke-manifest.json routeAudits.$stateId.$field" $Failures
+        }
+        foreach ($field in @("kind", "id", "label")) {
+            Assert-NonEmptyString (Get-JsonProperty $routeAudit @("canonicalTabState", $field)) "visual-smoke-manifest.json routeAudits.$stateId.canonicalTabState.$field" $Failures
+        }
+        $inventoryRow = $stateInventory | Where-Object { [string](Get-JsonProperty $_ @("stateId")) -eq $stateId } | Select-Object -First 1
+        if ($null -eq $inventoryRow -or
+            ($inventoryRow | ConvertTo-Json -Depth 20 -Compress) -cne ($routeAudit | ConvertTo-Json -Depth 20 -Compress)) {
+            Add-Failure $Failures "visual-smoke-manifest.json stateInventory.$stateId must exactly match routeAudits.$stateId."
+        }
     }
 
     $manifestScreenshots = @(Get-JsonProperty $VisualManifest @("screenshots"))
     $evidenceScreenshots = @(Get-JsonProperty $VisualSmoke @("screenshots"))
-    if ($manifestScreenshots.Count -ne 28) {
-        Add-Failure $Failures "visual-smoke-manifest.json screenshots must include exactly 28 retained screenshots."
+    if ($manifestScreenshots.Count -ne 192) {
+        Add-Failure $Failures "visual-smoke-manifest.json screenshots must include exactly 192 retained screenshots."
     }
 
     $expectedViewports = @(
-        [pscustomobject]@{ name = "desktop"; width = 1440; height = 1000 },
-        [pscustomobject]@{ name = "mobile"; width = 390; height = 844 }
+        [pscustomobject]@{ name = "mobile"; width = 390; height = 844 },
+        [pscustomobject]@{ name = "tablet"; width = 768; height = 1024 },
+        [pscustomobject]@{ name = "desktop"; width = 1440; height = 1000 }
     )
 
-    foreach ($expectedRoute in $expectedAccountantWorkbenchRouteAcceptance) {
+    foreach ($stateId in $expectedVisualStateIds) {
         foreach ($theme in $expectedAccountantWorkbenchThemes) {
             foreach ($expectedViewport in $expectedViewports) {
-                $expectedFileName = "$($expectedRoute.routeName)-$theme-$($expectedViewport.name).png"
+                $expectedFileName = "$stateId-$theme-$($expectedViewport.name).png"
                 $manifestScreenshot = $manifestScreenshots |
                     Where-Object {
-                        [string](Get-JsonProperty $_ @("routeName")) -eq [string]$expectedRoute.routeName -and
+                        [string](Get-JsonProperty $_ @("stateId")) -eq $stateId -and
                         [string](Get-JsonProperty $_ @("theme")) -eq [string]$theme -and
                         [string](Get-JsonProperty $_ @("viewportName")) -eq [string]$expectedViewport.name
                     } |
                     Select-Object -First 1
                 $evidenceScreenshot = $evidenceScreenshots |
                     Where-Object {
-                        [string](Get-JsonProperty $_ @("routeName")) -eq [string]$expectedRoute.routeName -and
+                        [string](Get-JsonProperty $_ @("stateId")) -eq $stateId -and
                         [string](Get-JsonProperty $_ @("theme")) -eq [string]$theme -and
                         [string](Get-JsonProperty $_ @("viewportName")) -eq [string]$expectedViewport.name
                     } |
                     Select-Object -First 1
 
                 if ($null -eq $manifestScreenshot) {
-                    Add-Failure $Failures "visual-smoke-manifest.json screenshots must include $($expectedRoute.routeName)/$theme/$($expectedViewport.name)."
+                    Add-Failure $Failures "visual-smoke-manifest.json screenshots must include $stateId/$theme/$($expectedViewport.name)."
                     continue
                 }
                 if ($null -eq $evidenceScreenshot) {
                     continue
                 }
 
-                if ([string](Get-JsonProperty $manifestScreenshot @("routeKey")) -ne [string]$expectedRoute.routeKey) {
-                    Add-Failure $Failures "visual-smoke-manifest.json screenshots.$($expectedRoute.routeName).$theme.$($expectedViewport.name).routeKey must be $($expectedRoute.routeKey)."
-                }
                 if ([string](Get-JsonProperty $manifestScreenshot @("fileName")) -ne $expectedFileName) {
-                    Add-Failure $Failures "visual-smoke-manifest.json screenshots.$($expectedRoute.routeName).$theme.$($expectedViewport.name).fileName must be $expectedFileName."
+                    Add-Failure $Failures "visual-smoke-manifest.json screenshots.$stateId.$theme.$($expectedViewport.name).fileName must be $expectedFileName."
                 }
                 if ([IO.Path]::GetFileName([string](Get-JsonProperty $manifestScreenshot @("artifactPath"))) -ne $expectedFileName) {
-                    Add-Failure $Failures "visual-smoke-manifest.json screenshots.$($expectedRoute.routeName).$theme.$($expectedViewport.name).artifactPath must end with $expectedFileName."
-                }
-                if ([string](Get-JsonProperty $manifestScreenshot @("expectedText")) -ne [string]$expectedRoute.expectedText) {
-                    Add-Failure $Failures "visual-smoke-manifest.json screenshots.$($expectedRoute.routeName).$theme.$($expectedViewport.name).expectedText must be $($expectedRoute.expectedText)."
+                    Add-Failure $Failures "visual-smoke-manifest.json screenshots.$stateId.$theme.$($expectedViewport.name).artifactPath must end with $expectedFileName."
                 }
                 if ([string](Get-JsonProperty $manifestScreenshot @("reviewStatus")) -ne "required-review") {
-                    Add-Failure $Failures "visual-smoke-manifest.json screenshots.$($expectedRoute.routeName).$theme.$($expectedViewport.name).reviewStatus must be required-review."
+                    Add-Failure $Failures "visual-smoke-manifest.json screenshots.$stateId.$theme.$($expectedViewport.name).reviewStatus must be required-review."
                 }
 
-                foreach ($field in @("fileName", "routeKey", "expectedText", "reviewStatus", "byteSize", "sha256", "imageWidth", "minimumViewportHeight")) {
+                foreach ($field in @("stateId", "routeName", "routeKey", "materialRoute", "uiState", "authMode", "fileName", "expectedText", "expectedStateText", "canonicalUrlTemplate", "canonicalUrl", "observedUrl", "semanticContentSha256", "semanticContentByteSize", "reviewStatus", "byteSize", "sha256", "imageWidth", "minimumViewportHeight")) {
                     if ([string](Get-JsonProperty $manifestScreenshot @($field)) -ne [string](Get-JsonProperty $evidenceScreenshot @($field))) {
-                        Add-Failure $Failures "visual-smoke-manifest.json screenshots.$($expectedRoute.routeName).$theme.$($expectedViewport.name).$field must match visual-smoke-evidence-report.json."
+                        Add-Failure $Failures "visual-smoke-manifest.json screenshots.$stateId.$theme.$($expectedViewport.name).$field must match visual-smoke-evidence-report.json."
                     }
                 }
             }
@@ -819,6 +945,180 @@ function Get-FileSha256 {
     )
 
     return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+}
+
+function Assert-SupplyChainRetainedFile {
+    param(
+        [object]$FileEvidence,
+        [object]$SupplyChainReport,
+        [string]$Context,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    $fileName = [string](Get-JsonProperty $FileEvidence @("fileName"))
+    if ([string]::IsNullOrWhiteSpace($fileName) -or [IO.Path]::GetFileName($fileName) -ne $fileName) {
+        Add-Failure $Failures "$Context fileName must be a safe retained filename."
+        return
+    }
+
+    $supplyChainDirectory = Split-Path -Parent ([string](Get-JsonProperty $SupplyChainReport @("__path")))
+    $path = Join-Path $supplyChainDirectory $fileName
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        Add-Failure $Failures "$Context retained file is missing: $fileName"
+        return
+    }
+
+    $file = Get-Item -LiteralPath $path
+    if ($file.Length -ne [long](Get-JsonProperty $FileEvidence @("byteSize"))) {
+        Add-Failure $Failures "$Context retained byte size does not match $fileName."
+    }
+    if ((Get-FileSha256 $path) -cne [string](Get-JsonProperty $FileEvidence @("sha256"))) {
+        Add-Failure $Failures "$Context retained SHA-256 does not match $fileName."
+    }
+}
+
+function Assert-ContainerSupplyChainEvidence {
+    param(
+        [object]$SupplyChain,
+        [object]$Verification,
+        [string]$ExpectedCommitSha,
+        [string]$ExpectedRunUrl,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    foreach ($evidence in @($SupplyChain, $Verification)) {
+        if ($evidence.PSObject.Properties.Name -contains "__missing" -or
+            $evidence.PSObject.Properties.Name -contains "__invalid") {
+            return
+        }
+    }
+
+    if ([string](Get-JsonProperty $SupplyChain @("promotionMode")) -ne "promoted") {
+        Add-Failure $Failures "container-supply-chain-report.json promotionMode must be promoted."
+    }
+    Assert-Truthy (Get-JsonProperty $SupplyChain @("releaseEligible")) "container-supply-chain-report.json releaseEligible" $Failures
+    foreach ($pathText in @(
+        "policy.buildOncePerComponent",
+        "policy.immutableRegistryDigestsRequired",
+        "policy.scanExactProductionReferences",
+        "policy.githubProvenanceRequired",
+        "policy.productionSmokeMustPullExactDigests",
+        "controls.registryCredentialsAvailable",
+        "controls.backendAndMigrationUseSameDigest",
+        "controls.productionSmokeVerified",
+        "controls.productionSmokeUsedExactDigestReferences"
+    )) {
+        $path = $pathText.Split('.')
+        Assert-Truthy (Get-JsonProperty $SupplyChain $path) "container-supply-chain-report.json $pathText" $Failures
+    }
+    if ((Get-JsonProperty $SupplyChain @("controls", "mutableProductionTagsUsed")) -ne $false -or
+        (Get-JsonProperty $SupplyChain @("controls", "localVerificationTagsUsed")) -ne $false) {
+        Add-Failure $Failures "container-supply-chain-report.json must prove no mutable production or local verification tags were used for promotion."
+    }
+    if ([string](Get-JsonProperty $SupplyChain @("policy", "sbomFormat")) -ne "spdx-json") {
+        Add-Failure $Failures "container-supply-chain-report.json policy.sbomFormat must be spdx-json."
+    }
+    $severities = @((Get-JsonProperty $SupplyChain @("policy", "failOnSeverities")))
+    if ($severities.Count -ne 2 -or -not ($severities -contains "HIGH") -or -not ($severities -contains "CRITICAL")) {
+        Add-Failure $Failures "container-supply-chain-report.json policy.failOnSeverities must contain exactly HIGH and CRITICAL."
+    }
+    if (@((Get-JsonProperty $SupplyChain @("blockingFailures"))).Count -ne 0) {
+        Add-Failure $Failures "container-supply-chain-report.json blockingFailures must be empty for promoted evidence."
+    }
+
+    $candidateCommit = [string](Get-JsonProperty $SupplyChain @("candidate", "commitSha"))
+    $candidateRunUrl = [string](Get-JsonProperty $SupplyChain @("candidate", "githubActionsRunUrl"))
+    if ($candidateCommit -cnotmatch '^[0-9a-f]{40}$') {
+        Add-Failure $Failures "container-supply-chain-report.json candidate.commitSha must be a full lowercase commit SHA."
+    } elseif (-not [string]::IsNullOrWhiteSpace($ExpectedCommitSha) -and $candidateCommit -cne $ExpectedCommitSha) {
+        Add-Failure $Failures "container-supply-chain-report.json candidate.commitSha must match the exact release commit."
+    }
+    if ($candidateRunUrl -notmatch '^https://github\.com/[^/]+/[^/]+/actions/runs/[0-9]+$') {
+        Add-Failure $Failures "container-supply-chain-report.json candidate.githubActionsRunUrl must be an exact GitHub Actions run URL."
+    } elseif (-not [string]::IsNullOrWhiteSpace($ExpectedRunUrl) -and $candidateRunUrl -cne $ExpectedRunUrl) {
+        Add-Failure $Failures "container-supply-chain-report.json candidate.githubActionsRunUrl must match the exact workflow run."
+    }
+
+    $images = @((Get-JsonProperty $SupplyChain @("images")))
+    if ($images.Count -ne 2 -or (@($images | ForEach-Object { [string](Get-JsonProperty $_ @("component")) } | Sort-Object) -join ",") -ne "backend,frontend") {
+        Add-Failure $Failures "container-supply-chain-report.json images must contain exactly backend and frontend."
+    }
+    $exactReferences = [System.Collections.Generic.List[string]]::new()
+    $digests = [System.Collections.Generic.List[string]]::new()
+    $retainedFileNames = [System.Collections.Generic.List[string]]::new()
+    foreach ($image in $images) {
+        $component = [string](Get-JsonProperty $image @("component"))
+        $context = "container-supply-chain-report.json images.$component"
+        $imageName = [string](Get-JsonProperty $image @("imageName"))
+        $digest = [string](Get-JsonProperty $image @("digest"))
+        $exactReference = "$imageName@$digest"
+        $exactReferences.Add($exactReference) | Out-Null
+        $digests.Add($digest) | Out-Null
+        if ($imageName -cnotmatch '^ghcr\.io/[a-z0-9._/-]+$' -or $digest -cnotmatch '^sha256:[0-9a-f]{64}$') {
+            Add-Failure $Failures "$context must identify a lowercase tag-free GHCR image and sha256 digest."
+        }
+        foreach ($property in @("exactDigestReference", "productionSmokeReference")) {
+            if ([string](Get-JsonProperty $image @($property)) -cne $exactReference) {
+                Add-Failure $Failures "$context.$property must equal imageName@digest."
+            }
+        }
+        if ([int](Get-JsonProperty $image @("builtInvocationCount")) -ne 1) {
+            Add-Failure $Failures "$context.builtInvocationCount must be exactly 1."
+        }
+        foreach ($property in @("pushedToRegistry", "pulledForSmoke")) {
+            Assert-Truthy (Get-JsonProperty $image @($property)) "$context.$property" $Failures
+        }
+        if ([string](Get-JsonProperty $image @("scan", "imageReference")) -cne $exactReference -or
+            [string](Get-JsonProperty $image @("scan", "scanner")) -ne "Trivy" -or
+            [int](Get-JsonProperty $image @("scan", "highCriticalVulnerabilityCount")) -ne 0) {
+            Add-Failure $Failures "$context.scan must be a passing zero HIGH/CRITICAL Trivy scan of the exact digest."
+        }
+        Assert-Truthy (Get-JsonProperty $image @("scan", "passed")) "$context.scan.passed" $Failures
+        if ([string](Get-JsonProperty $image @("sbom", "format")) -ne "spdx-json" -or
+            [string](Get-JsonProperty $image @("sbom", "spdxVersion")) -notmatch '^SPDX-') {
+            Add-Failure $Failures "$context.sbom must be SPDX JSON."
+        }
+        Assert-Truthy (Get-JsonProperty $image @("provenance", "attested")) "$context.provenance.attested" $Failures
+        if ([string](Get-JsonProperty $image @("provenance", "attestationUrl")) -notmatch '^https://github\.com/.+/attestations/[0-9]+$') {
+            Add-Failure $Failures "$context.provenance.attestationUrl must be a GitHub attestation URL."
+        }
+        Assert-SupplyChainRetainedFile (Get-JsonProperty $image @("scan", "file")) $SupplyChain "$context.scan" $Failures
+        Assert-SupplyChainRetainedFile (Get-JsonProperty $image @("sbom", "file")) $SupplyChain "$context.sbom" $Failures
+        Assert-SupplyChainRetainedFile (Get-JsonProperty $image @("provenance", "file")) $SupplyChain "$context.provenance" $Failures
+        foreach ($fileKind in @("scan", "sbom", "provenance")) {
+            $retainedFileNames.Add([string](Get-JsonProperty $image @($fileKind, "file", "fileName"))) | Out-Null
+        }
+    }
+    if (@($digests | Select-Object -Unique).Count -ne 2) {
+        Add-Failure $Failures "container-supply-chain-report.json backend and frontend digests must be distinct."
+    }
+    if ($retainedFileNames.Count -ne 6 -or @($retainedFileNames | Select-Object -Unique).Count -ne 6) {
+        Add-Failure $Failures "container-supply-chain-report.json must retain six distinct scan, SBOM and provenance files."
+    }
+
+    if ([string](Get-JsonProperty $Verification @("promotionMode")) -ne "promoted" -or
+        (Get-JsonProperty $Verification @("allowUnpromoted")) -ne $false) {
+        Add-Failure $Failures "container-supply-chain-verification-report.json must be a strict promoted verification."
+    }
+    Assert-Truthy (Get-JsonProperty $Verification @("releaseEligible")) "container-supply-chain-verification-report.json releaseEligible" $Failures
+    if ([string](Get-JsonProperty $Verification @("commitSha")) -cne $candidateCommit -or
+        [string](Get-JsonProperty $Verification @("githubActionsRunUrl")) -cne $candidateRunUrl) {
+        Add-Failure $Failures "container-supply-chain-verification-report.json candidate identity must match the exact release candidate."
+    }
+    $sourcePath = [string](Get-JsonProperty $SupplyChain @("__path"))
+    if ([string](Get-JsonProperty $Verification @("evidenceReport", "fileName")) -ne "container-supply-chain-report.json" -or
+        [long](Get-JsonProperty $Verification @("evidenceReport", "byteSize")) -ne (Get-Item -LiteralPath $sourcePath).Length -or
+        [string](Get-JsonProperty $Verification @("evidenceReport", "sha256")) -cne (Get-FileSha256 $sourcePath)) {
+        Add-Failure $Failures "container-supply-chain-verification-report.json evidenceReport must hash the retained supply-chain report."
+    }
+    $verifiedReferences = @((Get-JsonProperty $Verification @("verifiedImageDigests")) | ForEach-Object { [string]$_ } | Sort-Object)
+    if (($verifiedReferences -join ",") -cne (@($exactReferences | Sort-Object) -join ",")) {
+        Add-Failure $Failures "container-supply-chain-verification-report.json verifiedImageDigests must match both promoted image digests."
+    }
+    $verifiedFiles = @((Get-JsonProperty $Verification @("retainedEvidenceFiles")) | ForEach-Object { [string](Get-JsonProperty $_ @("fileName")) } | Sort-Object)
+    if (($verifiedFiles -join ",") -cne (@($retainedFileNames | Sort-Object) -join ",")) {
+        Add-Failure $Failures "container-supply-chain-verification-report.json retainedEvidenceFiles must match all six retained image evidence files."
+    }
 }
 
 function Assert-ReleaseEvidenceTemplateManifest {
@@ -973,11 +1273,27 @@ function Assert-ReleaseEvidenceProductionScorecardCompletion {
     if ([string](Get-JsonProperty $scorecard @("status")) -ne "complete") {
         Add-Failure $Failures "release-evidence-report.json productionScorecardCompletion.status must be complete."
     }
-    if ([int](Get-JsonProperty $scorecard @("currentScore")) -ne 700) {
-        Add-Failure $Failures "release-evidence-report.json productionScorecardCompletion.currentScore must be 700."
+    if ([int](Get-JsonProperty $scorecard @("currentScore")) -ne 1000) {
+        Add-Failure $Failures "release-evidence-report.json productionScorecardCompletion.currentScore must be 1000."
     }
-    if ([int](Get-JsonProperty $scorecard @("targetScore")) -ne 700) {
-        Add-Failure $Failures "release-evidence-report.json productionScorecardCompletion.targetScore must be 700."
+    if ([int](Get-JsonProperty $scorecard @("targetScore")) -ne 1000) {
+        Add-Failure $Failures "release-evidence-report.json productionScorecardCompletion.targetScore must be 1000."
+    }
+    if ([string](Get-JsonProperty $scorecard @("scoreBasis")) -ne "independent-audit-control-ledger-v1") {
+        Add-Failure $Failures "release-evidence-report.json productionScorecardCompletion.scoreBasis must be independent-audit-control-ledger-v1."
+    }
+    if ([string](Get-JsonProperty $scorecard @("auditedCommit")) -ne "7ea54cc6d1769ced568ac1568d190cc2bb4b16d1") {
+        Add-Failure $Failures "release-evidence-report.json productionScorecardCompletion.auditedCommit must identify the exact independently audited baseline commit."
+    }
+    if ([string](Get-JsonProperty $scorecard @("evidencePolicy")) -notlike "*exact live candidate*" -or
+        [string](Get-JsonProperty $scorecard @("evidencePolicy")) -notlike "*artifact hashes*") {
+        Add-Failure $Failures "release-evidence-report.json productionScorecardCompletion.evidencePolicy must require exact live candidate artifact hashes."
+    }
+    if ([int](Get-JsonProperty $scorecard @("openEngineeringOrAssuranceControlCount")) -ne 0) {
+        Add-Failure $Failures "release-evidence-report.json productionScorecardCompletion.openEngineeringOrAssuranceControlCount must be zero."
+    }
+    if (@((Get-JsonProperty $scorecard @("openEngineeringOrAssuranceControls"))).Count -ne 0) {
+        Add-Failure $Failures "release-evidence-report.json productionScorecardCompletion.openEngineeringOrAssuranceControls must be empty."
     }
     if ([int](Get-JsonProperty $scorecard @("acceptedHumanEvidenceCount")) -ne $RequiredTemplates.Count) {
         Add-Failure $Failures "release-evidence-report.json productionScorecardCompletion.acceptedHumanEvidenceCount must equal the required human evidence count."
@@ -997,10 +1313,10 @@ function Assert-ReleaseEvidenceProductionScorecardCompletion {
     }
 
     $expectedCategories = @(
-        [pscustomobject]@{ code = "architecture-documentation"; currentScore = 100; targetScore = 100; completionGate = "all-human-release-evidence-accepted" },
-        [pscustomobject]@{ code = "backend-statutory-accounting-engine"; currentScore = 250; targetScore = 250; completionGate = "machine-and-template-verification-complete" },
-        [pscustomobject]@{ code = "frontend-accountant-workbench"; currentScore = 200; targetScore = 200; completionGate = "visual-qa-human-evidence-accepted" },
-        [pscustomobject]@{ code = "security-auth-tenant-platform-guardrails"; currentScore = 150; targetScore = 150; completionGate = "machine-and-template-verification-complete" }
+        [pscustomobject]@{ code = "architecture-documentation"; currentScore = 150; targetScore = 150; completionGate = "all-weighted-controls-passed" },
+        [pscustomobject]@{ code = "backend-statutory-accounting-engine"; currentScore = 350; targetScore = 350; completionGate = "all-weighted-controls-passed" },
+        [pscustomobject]@{ code = "frontend-accountant-workbench"; currentScore = 250; targetScore = 250; completionGate = "all-weighted-controls-passed" },
+        [pscustomobject]@{ code = "security-auth-tenant-platform-guardrails"; currentScore = 250; targetScore = 250; completionGate = "all-weighted-controls-passed" }
     )
 
     $categories = @((Get-JsonProperty $scorecard @("categories")))
@@ -1185,6 +1501,33 @@ function Assert-ReleaseEvidenceMachineSummary {
     }
 
     $productionReadiness = Get-JsonProperty $MachineSummary @("productionReadiness")
+    if ([string](Get-JsonProperty $productionReadiness @("scoreBasis")) -ne "independent-audit-control-ledger-v1") {
+        Add-Failure $Failures "release-evidence-machine-summary.json productionReadiness.scoreBasis must be independent-audit-control-ledger-v1."
+    }
+    if ([string](Get-JsonProperty $productionReadiness @("auditBaselineDate")) -ne "2026-07-10") {
+        Add-Failure $Failures "release-evidence-machine-summary.json productionReadiness.auditBaselineDate must be 2026-07-10."
+    }
+    if ([string](Get-JsonProperty $productionReadiness @("auditedCommit")) -ne "7ea54cc6d1769ced568ac1568d190cc2bb4b16d1") {
+        Add-Failure $Failures "release-evidence-machine-summary.json productionReadiness.auditedCommit must identify the exact independently audited baseline commit."
+    }
+    if ([string](Get-JsonProperty $productionReadiness @("evidencePolicy")) -notlike "*exact live candidate*" -or
+        [string](Get-JsonProperty $productionReadiness @("evidencePolicy")) -notlike "*artifact hashes*") {
+        Add-Failure $Failures "release-evidence-machine-summary.json productionReadiness.evidencePolicy must require exact live candidate artifact hashes."
+    }
+    if ([int](Get-JsonProperty $productionReadiness @("targetScore")) -ne 1000) {
+        Add-Failure $Failures "release-evidence-machine-summary.json productionReadiness.targetScore must be 1000."
+    }
+    $openControls = @((Get-JsonProperty $productionReadiness @("openEngineeringOrAssuranceControls")))
+    if ([int](Get-JsonProperty $productionReadiness @("openEngineeringOrAssuranceControlCount")) -ne $openControls.Count) {
+        Add-Failure $Failures "release-evidence-machine-summary.json productionReadiness.openEngineeringOrAssuranceControlCount must match the open control list."
+    }
+    $controlCodes = @((Get-JsonProperty $productionReadiness @("scorecardControlCodes")))
+    if ($controlCodes.Count -eq 0) {
+        Add-Failure $Failures "release-evidence-machine-summary.json productionReadiness.scorecardControlCodes must retain the verified weighted control inventory."
+    }
+    foreach ($openControl in $openControls) {
+        Assert-ArrayContains $controlCodes ([string]$openControl) "release-evidence-machine-summary.json productionReadiness.scorecardControlCodes" $Failures
+    }
     if ([string](Get-JsonProperty $productionReadiness @("verificationStatus")) -ne "passed") {
         Add-Failure $Failures "release-evidence-machine-summary.json productionReadiness.verificationStatus must be passed."
     }
@@ -1521,19 +1864,26 @@ if (($releaseCommitSha.Length -gt 0 -and $releaseRunUrl.Length -eq 0) -or
     Add-Failure $failures "CommitSha and GitHubActionsRunUrl must be provided together when release candidate identity is supplied."
 }
 
-if ($releaseCommitSha.Length -gt 0 -and $releaseCommitSha -notmatch '^[0-9a-fA-F]{7,40}$') {
-    Add-Failure $failures "CommitSha must be a 7-40 character hexadecimal Git commit SHA."
+if ($releaseCommitSha.Length -gt 0 -and $releaseCommitSha -cnotmatch '^[0-9a-f]{40}$') {
+    Add-Failure $failures "CommitSha must be a full lowercase 40-character hexadecimal Git commit SHA."
 }
 
-if ($releaseRunUrl.Length -gt 0 -and $releaseRunUrl -notmatch '^https://github\.com/.+/actions/runs/[0-9]+') {
-    Add-Failure $failures "GitHubActionsRunUrl must be a GitHub Actions run URL."
+if ($releaseRunUrl.Length -gt 0 -and $releaseRunUrl -cnotmatch '^https://github\.com/[^/\s]+/[^/\s]+/actions/runs/[0-9]+$') {
+    Add-Failure $failures "GitHubActionsRunUrl must be an exact GitHub Actions run URL."
 }
 
 $dependency = Read-JsonEvidence $resolvedDirectory.Path "dependency-audit-report.json" $failures
 $productionSafety = Read-JsonEvidence $resolvedDirectory.Path "production-safety-report.json" $failures
+$containerSupplyChain = Read-JsonEvidence $resolvedDirectory.Path "container-supply-chain-report.json" $failures
+$containerSupplyChainVerification = Read-JsonEvidence $resolvedDirectory.Path "container-supply-chain-verification-report.json" $failures
 $monitoring = Read-JsonEvidence $resolvedDirectory.Path "monitoring-error-routing-report.json" $failures
 $structuredLog = Read-JsonEvidence $resolvedDirectory.Path "structured-log-report.json" $failures
+$postgresTls = Read-JsonEvidence $resolvedDirectory.Path "postgres-tls-report.json" $failures
 $restore = Read-JsonEvidence $resolvedDirectory.Path "restore-drill-report.json" $failures
+$capacityProfile = Read-JsonEvidence $resolvedDirectory.Path "capacity-profile-report.json" $failures
+$productionFailover = Read-JsonEvidence $resolvedDirectory.Path "production-failover-report.json" $failures
+$migrationUpgrade = Read-JsonEvidence $resolvedDirectory.Path "migration-upgrade-report.json" $failures
+$migrationUpgradeVerification = Read-JsonEvidence $resolvedDirectory.Path "migration-upgrade-verification-report.json" $failures
 $noDirectSubmission = Read-JsonEvidence $resolvedDirectory.Path "no-direct-filing-submission-report.json" $failures
 $productionReadiness = Read-JsonEvidence $resolvedDirectory.Path "production-readiness-report.json" $failures
 $productionReadinessVerification = Read-JsonEvidence $resolvedDirectory.Path "production-readiness-verification-report.json" $failures
@@ -1555,7 +1905,9 @@ $requiredReadinessManifestCodes = @(
     "ci-machine-evidence-pack",
     "release-artifact-pack",
     "production-stack-smoke",
+    "postgres-transport-tls",
     "backup-restore-drill",
+    "postgres-migration-upgrade-gate",
     "qualified-accountant-final-signoff",
     "source-law-change-review",
     "external-ros-validation-evidence",
@@ -1596,9 +1948,16 @@ $requiredReleaseEvidenceReviewerHandoffFiles = @(
 $allEvidence = [ordered]@{
     "dependency-audit-report.json" = $dependency
     "production-safety-report.json" = $productionSafety
+    "container-supply-chain-report.json" = $containerSupplyChain
+    "container-supply-chain-verification-report.json" = $containerSupplyChainVerification
     "monitoring-error-routing-report.json" = $monitoring
     "structured-log-report.json" = $structuredLog
+    "postgres-tls-report.json" = $postgresTls
     "restore-drill-report.json" = $restore
+    "capacity-profile-report.json" = $capacityProfile
+    "production-failover-report.json" = $productionFailover
+    "migration-upgrade-report.json" = $migrationUpgrade
+    "migration-upgrade-verification-report.json" = $migrationUpgradeVerification
     "no-direct-filing-submission-report.json" = $noDirectSubmission
     "production-readiness-report.json" = $productionReadiness
     "production-readiness-verification-report.json" = $productionReadinessVerification
@@ -1627,27 +1986,102 @@ if (-not ($productionSafety.PSObject.Properties.Name -contains "__missing")) {
     if ([string]$productionSafety.migrationSafety.apiDependsOnMigrate -ne "service_completed_successfully") {
         Add-Failure $failures "production-safety-report.json migrationSafety.apiDependsOnMigrate must be service_completed_successfully."
     }
+    if ([string](Get-JsonProperty $productionSafety @("migrationSafety", "roleProvisionDependsOnDatabase")) -ne "service_healthy") {
+        Add-Failure $failures "production-safety-report.json migrationSafety.roleProvisionDependsOnDatabase must be service_healthy."
+    }
+    if ([string](Get-JsonProperty $productionSafety @("migrationSafety", "migrateDependsOnRoleProvision")) -ne "service_completed_successfully") {
+        Add-Failure $failures "production-safety-report.json migrationSafety.migrateDependsOnRoleProvision must be service_completed_successfully."
+    }
     Assert-Truthy $productionSafety.seedSafety.bootstrapOwnerPasswordOnlyOnMigrate "production-safety-report.json seedSafety.bootstrapOwnerPasswordOnlyOnMigrate" $failures
     if ($productionSafety.workflowSafety.productionSmokeUsesBuildFlag -ne $false) {
         Add-Failure $failures "production-safety-report.json workflowSafety.productionSmokeUsesBuildFlag must be false."
     }
+    Assert-Truthy (Get-JsonProperty $productionSafety @("imageContract", "digestPinned")) "production-safety-report.json imageContract.digestPinned" $failures
+    Assert-Truthy (Get-JsonProperty $productionSafety @("imageContract", "backendAndMigrateSameDigest")) "production-safety-report.json imageContract.backendAndMigrateSameDigest" $failures
+    if ((Get-JsonProperty $productionSafety @("workflowSafety", "productionSmokeBuildCommandsPresent")) -ne $false) {
+        Add-Failure $failures "production-safety-report.json workflowSafety.productionSmokeBuildCommandsPresent must be false."
+    }
+    Assert-Truthy (Get-JsonProperty $productionSafety @("workflowSafety", "productionSmokePullsExactDigests")) "production-safety-report.json workflowSafety.productionSmokePullsExactDigests" $failures
+    Assert-Truthy (Get-JsonProperty $productionSafety @("databaseTransport", "sslEnabled")) "production-safety-report.json databaseTransport.sslEnabled" $failures
+    Assert-Truthy (Get-JsonProperty $productionSafety @("databaseTransport", "serverIdentityVerified")) "production-safety-report.json databaseTransport.serverIdentityVerified" $failures
+    Assert-Truthy (Get-JsonProperty $productionSafety @("databaseTransport", "insecureOverrideDisabled")) "production-safety-report.json databaseTransport.insecureOverrideDisabled" $failures
+    if ([string](Get-JsonProperty $productionSafety @("databaseIsolation", "required")) -ne "true") {
+        Add-Failure $failures "production-safety-report.json databaseIsolation.required must be true."
+    }
+    if ([string](Get-JsonProperty $productionSafety @("databaseIsolation", "applicationLoginRole")) -ne "accounts_api") {
+        Add-Failure $failures "production-safety-report.json databaseIsolation.applicationLoginRole must be accounts_api."
+    }
+    Assert-Truthy (Get-JsonProperty $productionSafety @("databaseIsolation", "applicationAndMigrationCredentialsSeparated")) "production-safety-report.json databaseIsolation.applicationAndMigrationCredentialsSeparated" $failures
+    if ((Get-JsonProperty $productionSafety @("databaseIsolation", "apiHasMigrationCredential")) -ne $false) {
+        Add-Failure $failures "production-safety-report.json databaseIsolation.apiHasMigrationCredential must be false."
+    }
+    Assert-Truthy (Get-JsonProperty $productionSafety @("databaseIsolation", "forcedRlsProvisionedByMigration")) "production-safety-report.json databaseIsolation.forcedRlsProvisionedByMigration" $failures
+    if ([string](Get-JsonProperty $productionSafety @("identitySecurity", "required")) -ne "true" -or
+        [string](Get-JsonProperty $productionSafety @("identitySecurity", "breachedPasswordCheckEnabled")) -ne "true" -or
+        [string](Get-JsonProperty $productionSafety @("identitySecurity", "breachedPasswordFailClosed")) -ne "true" -or
+        [string](Get-JsonProperty $productionSafety @("identitySecurity", "privilegedMfaRequired")) -ne "true") {
+        Add-Failure $failures "production-safety-report.json identitySecurity must require privileged MFA and fail-closed breached-password checks."
+    }
+    if ([string](Get-JsonProperty $productionSafety @("deadlineDelivery", "required")) -ne "true" -or
+        [string](Get-JsonProperty $productionSafety @("deadlineDelivery", "enabled")) -ne "true") {
+        Add-Failure $failures "production-safety-report.json deadlineDelivery must be required and enabled."
+    }
+    Assert-Truthy (Get-JsonProperty $productionSafety @("backupProtection", "encryptedArtifactRequired")) "production-safety-report.json backupProtection.encryptedArtifactRequired" $failures
+    Assert-Truthy (Get-JsonProperty $productionSafety @("backupProtection", "plaintextDumpRetentionForbidden")) "production-safety-report.json backupProtection.plaintextDumpRetentionForbidden" $failures
+    Assert-Truthy (Get-JsonProperty $productionSafety @("backupProtection", "encryptedRestoreDrillRequired")) "production-safety-report.json backupProtection.encryptedRestoreDrillRequired" $failures
 }
+
+Assert-ContainerSupplyChainEvidence $containerSupplyChain $containerSupplyChainVerification $releaseCommitSha $releaseRunUrl $failures
 
 if (-not ($monitoring.PSObject.Properties.Name -contains "__missing")) {
     Assert-NonEmptyString $monitoring.provider "monitoring-error-routing-report.json provider" $failures
     Assert-NonEmptyString $monitoring.eventId "monitoring-error-routing-report.json eventId" $failures
     Assert-NonEmptyString $monitoring.correlationId "monitoring-error-routing-report.json correlationId" $failures
     Assert-NonEmptyString $monitoring.baseUrl "monitoring-error-routing-report.json baseUrl" $failures
+    Assert-NonEmptyString (Get-JsonProperty $monitoring @("clientEvent", "eventId")) "monitoring-error-routing-report.json clientEvent.eventId" $failures
+    Assert-NonEmptyString (Get-JsonProperty $monitoring @("clientEvent", "correlationId")) "monitoring-error-routing-report.json clientEvent.correlationId" $failures
+    if ([string](Get-JsonProperty $monitoring @("clientEvent", "eventCode")) -ne "render-exception") {
+        Add-Failure $failures "monitoring-error-routing-report.json clientEvent.eventCode must be render-exception."
+    }
+    if ([string](Get-JsonProperty $monitoring @("clientEvent", "route")) -ne "/companies/{id}/periods/{id}/{redacted}") {
+        Add-Failure $failures "monitoring-error-routing-report.json clientEvent.route must retain only the controlled route shape."
+    }
+    Assert-Truthy (Get-JsonProperty $monitoring @("clientEvent", "sensitiveInputAbsent")) "monitoring-error-routing-report.json clientEvent.sensitiveInputAbsent" $failures
 }
 
 if (-not ($structuredLog.PSObject.Properties.Name -contains "__missing")) {
-    if ([int]$structuredLog.jsonLogLineCount -le 0) {
-        Add-Failure $failures "structured-log-report.json jsonLogLineCount must be greater than zero."
+    if ([int]$structuredLog.jsonLogLineCount -lt 2) {
+        Add-Failure $failures "structured-log-report.json jsonLogLineCount must include both controlled monitoring lines."
     }
     Assert-Truthy $structuredLog.matchedMonitoringSmokeLine "structured-log-report.json matchedMonitoringSmokeLine" $failures
+    Assert-Truthy (Get-JsonProperty $structuredLog @("matchedClientMonitoringLine")) "structured-log-report.json matchedClientMonitoringLine" $failures
+    Assert-Truthy (Get-JsonProperty $structuredLog @("syntheticSensitiveMarkersAbsent")) "structured-log-report.json syntheticSensitiveMarkersAbsent" $failures
     if (-not [string]::IsNullOrWhiteSpace([string]$monitoring.correlationId) -and
         [string]$structuredLog.monitoringCorrelationId -ne [string]$monitoring.correlationId) {
         Add-Failure $failures "structured-log-report.json monitoringCorrelationId must match monitoring-error-routing-report.json correlationId."
+    }
+    $clientMonitoringCorrelationId = [string](Get-JsonProperty $monitoring @("clientEvent", "correlationId"))
+    if (-not [string]::IsNullOrWhiteSpace($clientMonitoringCorrelationId) -and
+        [string](Get-JsonProperty $structuredLog @("clientMonitoringCorrelationId")) -ne $clientMonitoringCorrelationId) {
+        Add-Failure $failures "structured-log-report.json clientMonitoringCorrelationId must match monitoring-error-routing-report.json clientEvent.correlationId."
+    }
+}
+
+if (-not ($postgresTls.PSObject.Properties.Name -contains "__missing")) {
+    Assert-Truthy (Get-JsonProperty $postgresTls @("runtimeSession", "ssl")) "postgres-tls-report.json runtimeSession.ssl" $failures
+    Assert-Truthy (Get-JsonProperty $postgresTls @("runtimeSession", "hostnameMismatchRejected")) "postgres-tls-report.json runtimeSession.hostnameMismatchRejected" $failures
+    Assert-Truthy (Get-JsonProperty $postgresTls @("certificate", "currentlyValid")) "postgres-tls-report.json certificate.currentlyValid" $failures
+    if ([string](Get-JsonProperty $postgresTls @("connectionPolicy", "sslMode")) -ne "VerifyFull") {
+        Add-Failure $failures "postgres-tls-report.json connectionPolicy.sslMode must be VerifyFull."
+    }
+    if ((Get-JsonProperty $postgresTls @("connectionPolicy", "trustServerCertificate")) -ne $false) {
+        Add-Failure $failures "postgres-tls-report.json connectionPolicy.trustServerCertificate must be false."
+    }
+    if ($releaseCommitSha.Length -gt 0 -and -not [string]::Equals([string](Get-JsonProperty $postgresTls @("releaseCandidate", "commitSha")), $releaseCommitSha, [StringComparison]::OrdinalIgnoreCase)) {
+        Add-Failure $failures "postgres-tls-report.json releaseCandidate.commitSha must match the release-pack commit."
+    }
+    if ($releaseRunUrl.Length -gt 0 -and [string](Get-JsonProperty $postgresTls @("releaseCandidate", "githubActionsRunUrl")) -ne $releaseRunUrl) {
+        Add-Failure $failures "postgres-tls-report.json releaseCandidate.githubActionsRunUrl must match the release-pack run URL."
     }
 }
 
@@ -1664,6 +2098,217 @@ if (-not ($restore.PSObject.Properties.Name -contains "__missing")) {
         if (-not (@($restore.tableChecks) | Where-Object { [string]$_.table -eq $table })) {
             Add-Failure $failures "restore-drill-report.json tableChecks must include $table."
         }
+    }
+    Assert-Truthy (Get-JsonProperty $restore @("backupEncryption", "encrypted")) "restore-drill-report.json backupEncryption.encrypted" $failures
+    Assert-Truthy (Get-JsonProperty $restore @("backupEncryption", "restoredFromEncryptedCopy")) "restore-drill-report.json backupEncryption.restoredFromEncryptedCopy" $failures
+    if ((Get-JsonProperty $restore @("backupEncryption", "plaintextDumpRetained")) -ne $false) {
+        Add-Failure $failures "restore-drill-report.json backupEncryption.plaintextDumpRetained must be false."
+    }
+    if ([string](Get-JsonProperty $restore @("backupEncryption", "algorithm")) -ne "CMS/AES-256-CBC") {
+        Add-Failure $failures "restore-drill-report.json backupEncryption.algorithm must be CMS/AES-256-CBC."
+    }
+    Assert-Truthy (Get-JsonProperty $restore @("auditIntegrityChecks", "passed")) "restore-drill-report.json auditIntegrityChecks.passed" $failures
+    Assert-Truthy (Get-JsonProperty $restore @("recoveryMetrics", "rpoTargetMet")) "restore-drill-report.json recoveryMetrics.rpoTargetMet" $failures
+    Assert-Truthy (Get-JsonProperty $restore @("recoveryMetrics", "rtoTargetMet")) "restore-drill-report.json recoveryMetrics.rtoTargetMet" $failures
+    foreach ($collection in @("schemaChecks", "figureChecks", "fingerprintChecks")) {
+        $checks = @((Get-JsonProperty $restore @($collection)))
+        if ($checks.Count -eq 0 -or @($checks | Where-Object { (Get-JsonProperty $_ @("matched")) -ne $true }).Count -ne 0) {
+            Add-Failure $failures "restore-drill-report.json $collection must contain matched source/restore checks."
+        }
+    }
+}
+
+if (-not ($capacityProfile.PSObject.Properties.Name -contains "__missing")) {
+    if ([string](Get-JsonProperty $capacityProfile @("schemaVersion")) -ne "accounts-capacity-profile-v1" -or
+        [string](Get-JsonProperty $capacityProfile @("profile")) -ne "bounded-production-stack-health-v1") {
+        Add-Failure $failures "capacity-profile-report.json must use the canonical bounded production-stack profile schema."
+    }
+    if ((Get-JsonProperty $capacityProfile @("releaseCandidate", "identityProvided")) -ne $true -or
+        [string](Get-JsonProperty $capacityProfile @("releaseCandidate", "commitSha")) -cne $releaseCommitSha -or
+        [string](Get-JsonProperty $capacityProfile @("releaseCandidate", "githubActionsRunUrl")) -cne $releaseRunUrl) {
+        Add-Failure $failures "capacity-profile-report.json release candidate identity must exactly match the release pack."
+    }
+    if ([string](Get-JsonProperty $capacityProfile @("targetOrigin")) -cne "https://accounts-smoke.local") {
+        Add-Failure $failures "capacity-profile-report.json targetOrigin must be the candidate HTTPS smoke ingress."
+    }
+    if ([int](Get-JsonProperty $capacityProfile @("thresholds", "requests")) -ne 120 -or
+        [int](Get-JsonProperty $capacityProfile @("thresholds", "concurrency")) -ne 12 -or
+        [double](Get-JsonProperty $capacityProfile @("thresholds", "p95Milliseconds")) -ne 1000 -or
+        [double](Get-JsonProperty $capacityProfile @("thresholds", "maximumErrorRatePercent")) -ne 0 -or
+        [double](Get-JsonProperty $capacityProfile @("thresholds", "minimumThroughputPerSecond")) -ne 10 -or
+        [int](Get-JsonProperty $capacityProfile @("thresholds", "timeoutMilliseconds")) -ne 5000) {
+        Add-Failure $failures "capacity-profile-report.json thresholds must preserve the canonical 120-request, 12-concurrency, zero-error bounded profile."
+    }
+    if ([int](Get-JsonProperty $capacityProfile @("requestCount")) -ne 120 -or
+        [int](Get-JsonProperty $capacityProfile @("failedCount")) -ne 0 -or
+        [double](Get-JsonProperty $capacityProfile @("errorRatePercent")) -ne 0 -or
+        [double](Get-JsonProperty $capacityProfile @("p95Milliseconds")) -gt [double](Get-JsonProperty $capacityProfile @("thresholds", "p95Milliseconds")) -or
+        [double](Get-JsonProperty $capacityProfile @("throughputPerSecond")) -lt [double](Get-JsonProperty $capacityProfile @("thresholds", "minimumThroughputPerSecond"))) {
+        Add-Failure $failures "capacity-profile-report.json measurements must satisfy every bounded profile threshold."
+    }
+    $capacityEndpointSeries = @((Get-JsonProperty $capacityProfile @("endpointSeries")))
+    if ($capacityEndpointSeries.Count -ne 2) {
+        Add-Failure $failures "capacity-profile-report.json endpointSeries must contain exactly the two canonical health endpoints."
+    }
+    foreach ($endpoint in @("/health", "/health/ready")) {
+        $endpointRows = @($capacityEndpointSeries | Where-Object { [string](Get-JsonProperty $_ @("endpoint")) -eq $endpoint })
+        if ($endpointRows.Count -ne 1 -or [int](Get-JsonProperty $endpointRows[0] @("count")) -ne 60 -or
+            [int](Get-JsonProperty $endpointRows[0] @("failedCount")) -ne 0 -or
+            [double](Get-JsonProperty $endpointRows[0] @("p95Milliseconds")) -gt 1000) {
+            Add-Failure $failures "capacity-profile-report.json endpointSeries must retain exactly 60 successful threshold-compliant '$endpoint' measurements."
+        }
+    }
+    if (@((Get-JsonProperty $capacityProfile @("failureCodes"))).Count -ne 0 -or
+        @((Get-JsonProperty $capacityProfile @("thresholdFailures"))).Count -ne 0) {
+        Add-Failure $failures "capacity-profile-report.json must contain no failure codes or threshold failures."
+    }
+    foreach ($privacyField in @("requestBodiesSent", "responseBodiesRetained", "authenticationUsed", "clientOrTenantIdentifiersRetained")) {
+        if ((Get-JsonProperty $capacityProfile @("privacy", $privacyField)) -ne $false) {
+            Add-Failure $failures "capacity-profile-report.json privacy.$privacyField must be false."
+        }
+    }
+    $capacityBoundary = [string](Get-JsonProperty $capacityProfile @("scopeBoundary"))
+    foreach ($requiredBoundaryText in @("production-scale financial-write", "document-generation", "host-failover", "named recovery drills")) {
+        if ($capacityBoundary -notlike "*$requiredBoundaryText*") {
+            Add-Failure $failures "capacity-profile-report.json scopeBoundary must preserve the '$requiredBoundaryText' limitation."
+        }
+    }
+}
+
+if (-not ($productionFailover.PSObject.Properties.Name -contains "__missing")) {
+    if ([string](Get-JsonProperty $productionFailover @("schemaVersion")) -ne "accounts-production-failover-v1") {
+        Add-Failure $failures "production-failover-report.json schemaVersion must be accounts-production-failover-v1."
+    }
+    if ([string](Get-JsonProperty $productionFailover @("releaseCandidate", "commitSha")) -cne $releaseCommitSha) {
+        Add-Failure $failures "production-failover-report.json releaseCandidate.commitSha must exactly match the release-pack commit."
+    }
+    if ([string](Get-JsonProperty $productionFailover @("releaseCandidate", "githubActionsRunUrl")) -cne $releaseRunUrl) {
+        Add-Failure $failures "production-failover-report.json releaseCandidate.githubActionsRunUrl must exactly match the release-pack run URL."
+    }
+    if ([string](Get-JsonProperty $productionFailover @("targetOrigin")) -cne "https://accounts-smoke.local") {
+        Add-Failure $failures "production-failover-report.json targetOrigin must be the candidate HTTPS smoke ingress."
+    }
+    if ([int](Get-JsonProperty $productionFailover @("targets", "failureDetectionSeconds")) -ne 30 -or
+        [int](Get-JsonProperty $productionFailover @("targets", "apiRecoverySeconds")) -ne 120 -or
+        [int](Get-JsonProperty $productionFailover @("targets", "databaseRecoverySeconds")) -ne 180) {
+        Add-Failure $failures "production-failover-report.json must retain the canonical 30/120/180-second detection and recovery targets."
+    }
+    if ((Get-JsonProperty $productionFailover @("executionScope", "confirmedEphemeralCandidateStack")) -ne $true -or
+        [string](Get-JsonProperty $productionFailover @("executionScope", "expectedComposeProject")) -cne "accounts-production") {
+        Add-Failure $failures "production-failover-report.json must prove explicit interruption of the accounts-production ephemeral candidate project."
+    }
+    $observedFailoverServices = @((Get-JsonProperty $productionFailover @("executionScope", "observedServices")))
+    if ($observedFailoverServices.Count -ne 2) {
+        Add-Failure $failures "production-failover-report.json executionScope.observedServices must contain exactly the api and db services."
+    }
+    foreach ($serviceName in @("api", "db")) {
+        $serviceRows = @($observedFailoverServices | Where-Object { [string](Get-JsonProperty $_ @("service")) -eq $serviceName })
+        if ($serviceRows.Count -ne 1 -or [string](Get-JsonProperty $serviceRows[0] @("project")) -cne "accounts-production" -or
+            [string](Get-JsonProperty $serviceRows[0] @("state")) -ne "running") {
+            Add-Failure $failures "production-failover-report.json executionScope must contain one running accounts-production/$serviceName service."
+        }
+    }
+
+    $failoverTargets = [ordered]@{
+        "initial-ready" = [ordered]@{ expectedHealthy = $true; timeoutSeconds = 30 }
+        "api-host-failure-detected" = [ordered]@{ expectedHealthy = $false; timeoutSeconds = 30 }
+        "api-host-recovered" = [ordered]@{ expectedHealthy = $true; timeoutSeconds = 120 }
+        "database-failure-detected" = [ordered]@{ expectedHealthy = $false; timeoutSeconds = 30 }
+        "database-recovered" = [ordered]@{ expectedHealthy = $true; timeoutSeconds = 180 }
+    }
+    $failoverObservations = @((Get-JsonProperty $productionFailover @("observations")))
+    if ($failoverObservations.Count -ne $failoverTargets.Count) {
+        Add-Failure $failures "production-failover-report.json observations must contain exactly five failover phases."
+    }
+    foreach ($phaseName in $failoverTargets.Keys) {
+        $phaseRows = @($failoverObservations | Where-Object { [string](Get-JsonProperty $_ @("phase")) -eq $phaseName })
+        if ($phaseRows.Count -ne 1) {
+            Add-Failure $failures "production-failover-report.json observations must contain exactly one '$phaseName' phase."
+            continue
+        }
+
+        $phaseRow = $phaseRows[0]
+        $phaseContract = $failoverTargets[$phaseName]
+        if ((Get-JsonProperty $phaseRow @("expectedHealthy")) -ne $phaseContract.expectedHealthy -or
+            (Get-JsonProperty $phaseRow @("passed")) -ne $true) {
+            Add-Failure $failures "production-failover-report.json phase '$phaseName' must pass with expectedHealthy=$($phaseContract.expectedHealthy)."
+        }
+        $observedStatusCode = Get-JsonProperty $phaseRow @("observedStatusCode")
+        if (($phaseContract.expectedHealthy -and [int]$observedStatusCode -ne 200) -or
+            (-not $phaseContract.expectedHealthy -and $null -ne $observedStatusCode -and [int]$observedStatusCode -eq 200)) {
+            Add-Failure $failures "production-failover-report.json phase '$phaseName' observedStatusCode contradicts expectedHealthy."
+        }
+        $timeoutSeconds = [double]$phaseContract.timeoutSeconds
+        $elapsedMilliseconds = [double](Get-JsonProperty $phaseRow @("elapsedMilliseconds"))
+        if ($timeoutSeconds -le 0 -or $elapsedMilliseconds -lt 0 -or $elapsedMilliseconds -gt ($timeoutSeconds * 1000)) {
+            Add-Failure $failures "production-failover-report.json phase '$phaseName' must complete within its positive target."
+        }
+    }
+
+    if (@((Get-JsonProperty $productionFailover @("failures"))).Count -ne 0) {
+        Add-Failure $failures "production-failover-report.json failures must be empty."
+    }
+    foreach ($privacyField in @("responseBodiesRetained", "authenticationRetained", "tenantOrClientIdentifiersRetained")) {
+        if ((Get-JsonProperty $productionFailover @("privacy", $privacyField)) -ne $false) {
+            Add-Failure $failures "production-failover-report.json privacy.$privacyField must be false."
+        }
+    }
+    $failoverBoundary = [string](Get-JsonProperty $productionFailover @("scopeBoundary"))
+    foreach ($requiredBoundaryText in @("not production host failover", "off-host restore", "RPO/RTO", "named-operator acceptance")) {
+        if ($failoverBoundary -notlike "*$requiredBoundaryText*") {
+            Add-Failure $failures "production-failover-report.json scopeBoundary must preserve the '$requiredBoundaryText' limitation."
+        }
+    }
+}
+
+if (-not ($migrationUpgrade.PSObject.Properties.Name -contains "__missing")) {
+    if ([string](Get-JsonProperty $migrationUpgrade @("database", "previousReleaseMigration")) -ne "20260621123340_AddCroSignatories") {
+        Add-Failure $failures "migration-upgrade-report.json must use the supported previous-release migration floor."
+    }
+    if ([int](Get-JsonProperty $migrationUpgrade @("freshDatabase", "pendingMigrationCount")) -ne 0 -or
+        [int](Get-JsonProperty $migrationUpgrade @("freshDatabase", "appliedMigrationCount")) -ne [int](Get-JsonProperty $migrationUpgrade @("database", "migrationCount"))) {
+        Add-Failure $failures "migration-upgrade-report.json freshDatabase must apply every migration with zero pending migrations."
+    }
+    foreach ($checkName in @("tenant-and-user", "company-and-accounting-period", "financial-rows-and-figures", "filing-snapshots-and-artifacts", "audit-chain-and-checkpoints")) {
+        $checks = @((Get-JsonProperty $migrationUpgrade @("previousReleaseUpgrade", "preservationChecks")) | Where-Object { [string](Get-JsonProperty $_ @("name")) -eq $checkName })
+        if ($checks.Count -ne 1 -or [string](Get-JsonProperty $checks[0] @("status")) -ne "passed" -or
+            [int](Get-JsonProperty $checks[0] @("beforeRowCount")) -le 0 -or
+            [int](Get-JsonProperty $checks[0] @("beforeRowCount")) -ne [int](Get-JsonProperty $checks[0] @("afterRowCount")) -or
+            [string](Get-JsonProperty $checks[0] @("beforeSha256")) -notmatch '^[0-9a-f]{64}$' -or
+            [string](Get-JsonProperty $checks[0] @("beforeSha256")) -cne [string](Get-JsonProperty $checks[0] @("afterSha256"))) {
+            Add-Failure $failures "migration-upgrade-report.json must preserve exact positive '$checkName' row and fingerprint evidence."
+        }
+    }
+    Assert-Truthy (Get-JsonProperty $migrationUpgrade @("previousReleaseUpgrade", "auditChainCryptographicallyValid")) "migration-upgrade-report.json previousReleaseUpgrade.auditChainCryptographicallyValid" $failures
+    foreach ($field in @("failureObserved", "partialSchemaAbsent", "dataPreserved", "migrationHistoryPreserved")) {
+        Assert-Truthy (Get-JsonProperty $migrationUpgrade @("failureRollback", $field)) "migration-upgrade-report.json failureRollback.$field" $failures
+    }
+    if ([int](Get-JsonProperty $migrationUpgrade @("failureRollback", "transactionSuppressedSqlOperationCount")) -ne 0) {
+        Add-Failure $failures "migration-upgrade-report.json failureRollback.transactionSuppressedSqlOperationCount must be zero."
+    }
+    if ([string](Get-JsonProperty $migrationUpgrade @("encryptedRecoveryIntegration", "requiredCompanionReport")) -ne "restore-drill-report.json" -or
+        (Get-JsonProperty $migrationUpgrade @("encryptedRecoveryIntegration", "requiredInSameReleasePack")) -ne $true) {
+        Add-Failure $failures "migration-upgrade-report.json must require the encrypted restore drill in the same evidence pack."
+    }
+    if ($releaseCommitSha.Length -gt 0 -and -not [string]::Equals([string](Get-JsonProperty $migrationUpgrade @("releaseCandidate", "commitSha")), $releaseCommitSha, [StringComparison]::OrdinalIgnoreCase)) {
+        Add-Failure $failures "migration-upgrade-report.json releaseCandidate.commitSha must match the release-pack commit."
+    }
+    if ($releaseRunUrl.Length -gt 0 -and [string](Get-JsonProperty $migrationUpgrade @("releaseCandidate", "gitHubActionsRunUrl")) -ne $releaseRunUrl) {
+        Add-Failure $failures "migration-upgrade-report.json releaseCandidate.gitHubActionsRunUrl must match the release-pack run URL."
+    }
+}
+
+if (-not ($migrationUpgradeVerification.PSObject.Properties.Name -contains "__missing")) {
+    if ([int](Get-JsonProperty $migrationUpgradeVerification @("failureCount")) -ne 0 -or
+        [string](Get-JsonProperty $migrationUpgradeVerification @("previousReleaseMigration")) -ne "20260621123340_AddCroSignatories" -or
+        [string](Get-JsonProperty $migrationUpgradeVerification @("encryptedRecoveryCompanionReport")) -ne "restore-drill-report.json") {
+        Add-Failure $failures "migration-upgrade-verification-report.json must retain a passed supported-floor verification tied to encrypted recovery."
+    }
+    if ($releaseCommitSha.Length -gt 0 -and -not [string]::Equals([string](Get-JsonProperty $migrationUpgradeVerification @("releaseCandidate", "commitSha")), $releaseCommitSha, [StringComparison]::OrdinalIgnoreCase)) {
+        Add-Failure $failures "migration-upgrade-verification-report.json releaseCandidate.commitSha must match the release-pack commit."
+    }
+    if ($releaseRunUrl.Length -gt 0 -and [string](Get-JsonProperty $migrationUpgradeVerification @("releaseCandidate", "gitHubActionsRunUrl")) -ne $releaseRunUrl) {
+        Add-Failure $failures "migration-upgrade-verification-report.json releaseCandidate.gitHubActionsRunUrl must match the release-pack run URL."
     }
 }
 
@@ -1702,8 +2347,14 @@ if (-not ($productionReadiness.PSObject.Properties.Name -contains "__missing")) 
         if ([int]$productionReadiness.productionScorecard.currentScore -le 0) {
             Add-Failure $failures "production-readiness-report.json productionScorecard.currentScore must be greater than zero."
         }
-        if ([int]$productionReadiness.productionScorecard.targetScore -ne 700) {
-            Add-Failure $failures "production-readiness-report.json productionScorecard.targetScore must be 700."
+        if ([int]$productionReadiness.productionScorecard.targetScore -ne 1000) {
+            Add-Failure $failures "production-readiness-report.json productionScorecard.targetScore must be 1000."
+        }
+        if ([string]$productionReadiness.productionScorecard.scoreBasis -ne "independent-audit-control-ledger-v1") {
+            Add-Failure $failures "production-readiness-report.json productionScorecard.scoreBasis must be independent-audit-control-ledger-v1."
+        }
+        if ([string]$productionReadiness.productionScorecard.auditedCommit -ne "7ea54cc6d1769ced568ac1568d190cc2bb4b16d1") {
+            Add-Failure $failures "production-readiness-report.json productionScorecard.auditedCommit must identify the exact independently audited baseline commit."
         }
         foreach ($categoryCode in @("architecture-documentation", "backend-statutory-accounting-engine", "frontend-accountant-workbench", "security-auth-tenant-platform-guardrails")) {
             if (-not (@($productionReadiness.productionScorecard.categories) | Where-Object { [string]$_.code -eq $categoryCode })) {
@@ -1730,6 +2381,12 @@ if (-not ($productionReadinessVerification.PSObject.Properties.Name -contains "_
             Add-Failure $failures "production-readiness-verification-report.json requiredCoverage.$coverageProperty must be present."
         }
     }
+    if ([string]$productionReadinessVerification.requiredCoverage.scoreBasis -ne "independent-audit-control-ledger-v1") {
+        Add-Failure $failures "production-readiness-verification-report.json requiredCoverage.scoreBasis must be independent-audit-control-ledger-v1."
+    }
+    if ([string]$productionReadinessVerification.requiredCoverage.auditedCommit -ne "7ea54cc6d1769ced568ac1568d190cc2bb4b16d1") {
+        Add-Failure $failures "production-readiness-verification-report.json requiredCoverage.auditedCommit must identify the exact independently audited baseline commit."
+    }
     foreach ($scenarioCode in @("micro-ltd", "small-abridged-ltd", "dac-small", "clg-charity", "medium-audit-required")) {
         Assert-ArrayContains @($productionReadinessVerification.requiredCoverage.goldenCorpusScenarioCodes) $scenarioCode "production-readiness-verification-report.json requiredCoverage.goldenCorpusScenarioCodes" $failures
     }
@@ -1742,8 +2399,12 @@ if (-not ($productionReadinessVerification.PSObject.Properties.Name -contains "_
     foreach ($closeoutStepCode in $requiredHumanReleaseEvidenceCloseoutStepCodes) {
         Assert-ArrayContains @($productionReadinessVerification.requiredCoverage.humanReleaseEvidenceCloseoutStepCodes) $closeoutStepCode "production-readiness-verification-report.json requiredCoverage.humanReleaseEvidenceCloseoutStepCodes" $failures
     }
-    if ([int]$productionReadinessVerification.requiredCoverage.expectedVisualScreenshotCount -ne 28) {
-        Add-Failure $failures "production-readiness-verification-report.json requiredCoverage.expectedVisualScreenshotCount must be 28."
+    if ([int]$productionReadinessVerification.requiredCoverage.expectedVisualScreenshotCount -ne 192) {
+        Add-Failure $failures "production-readiness-verification-report.json requiredCoverage.expectedVisualScreenshotCount must be 192."
+    }
+    if ([int]$productionReadinessVerification.requiredCoverage.expectedVisualRouteCount -ne 32 -or
+        [int]$productionReadinessVerification.requiredCoverage.expectedAccountantWorkbenchRouteCount -ne 7) {
+        Add-Failure $failures "production-readiness-verification-report.json must retain 32 canonical visual states and 7 accountant routes."
     }
     if (-not [string]::IsNullOrWhiteSpace([string]$productionReadiness.__path) -and
         -not [string]::IsNullOrWhiteSpace([string]$productionReadinessVerification.reportPath) -and
@@ -1753,11 +2414,12 @@ if (-not ($productionReadinessVerification.PSObject.Properties.Name -contains "_
 }
 
 if (-not ($visualSmoke.PSObject.Properties.Name -contains "__missing")) {
-    if ([int]$visualSmoke.screenshotCount -ne 28 -or [int]$visualSmoke.expectedScreenshotCount -ne 28) {
-        Add-Failure $failures "visual-smoke-evidence-report.json must cover 28 expected screenshots."
+    if ([int](Get-JsonProperty $visualSmoke @("screenshotCount")) -ne 192 -or
+        [int](Get-JsonProperty $visualSmoke @("expectedScreenshotCount")) -ne 192) {
+        Add-Failure $failures "visual-smoke-evidence-report.json must cover 192 expected screenshots."
     }
-    if ([int]$visualSmoke.routeCount -ne 7) {
-        Add-Failure $failures "visual-smoke-evidence-report.json routeCount must be 7."
+    if ([int](Get-JsonProperty $visualSmoke @("routeCount")) -ne 32) {
+        Add-Failure $failures "visual-smoke-evidence-report.json routeCount must be 32."
     }
     Assert-VisualSmokeDimensionEvidence $visualSmoke $resolvedDirectory.Path $failures
 }
@@ -1765,42 +2427,48 @@ if (-not ($visualSmoke.PSObject.Properties.Name -contains "__missing")) {
 Assert-VisualSmokeManifestEvidence $visualManifest $visualSmoke $failures
 
 if (-not ($accountantWorkbench.PSObject.Properties.Name -contains "__missing")) {
-    if ([int]$accountantWorkbench.routeCount -ne 7) {
+    if ([int](Get-JsonProperty $accountantWorkbench @("routeCount")) -ne 7) {
         Add-Failure $failures "accountant-workbench-evidence-report.json routeCount must be 7."
     }
-    if ([int]$accountantWorkbench.screenshotCount -ne 28 -or [int]$accountantWorkbench.expectedScreenshotCount -ne 28) {
-        Add-Failure $failures "accountant-workbench-evidence-report.json must cover 28 expected screenshots."
+    if ([int](Get-JsonProperty $accountantWorkbench @("screenshotCount")) -ne 42 -or
+        [int](Get-JsonProperty $accountantWorkbench @("expectedScreenshotCount")) -ne 42) {
+        Add-Failure $failures "accountant-workbench-evidence-report.json must cover 42 expected accountant-route screenshots."
     }
-    if ([int]$accountantWorkbench.routeAcceptanceCount -ne 7) {
+    if ([int](Get-JsonProperty $accountantWorkbench @("visualSmokeTotalScreenshotCount")) -ne 192 -or
+        [int](Get-JsonProperty $accountantWorkbench @("visualSmokeExpectedScreenshotCount")) -ne 192) {
+        Add-Failure $failures "accountant-workbench-evidence-report.json visual smoke totals must both be 192."
+    }
+    if ([int](Get-JsonProperty $accountantWorkbench @("routeAcceptanceCount")) -ne 7) {
         Add-Failure $failures "accountant-workbench-evidence-report.json routeAcceptanceCount must be 7."
     }
     foreach ($coverageProperty in @("routeCodes", "routeKeys", "workflowStages", "themes", "viewports", "reviewChecks", "layoutChecks", "expectedTextChecks", "routeAcceptanceEvidence", "evidenceFiles")) {
-        if ($null -eq $accountantWorkbench.requiredCoverage.$coverageProperty -or @($accountantWorkbench.requiredCoverage.$coverageProperty).Count -eq 0) {
+        $coverageValue = Get-JsonProperty $accountantWorkbench @("requiredCoverage", $coverageProperty)
+        if ($null -eq $coverageValue -or @($coverageValue).Count -eq 0) {
             Add-Failure $failures "accountant-workbench-evidence-report.json requiredCoverage.$coverageProperty must be present."
         }
     }
-    if ([string]$accountantWorkbench.requiredCoverage.routeAcceptanceSignOffGate -ne "qualified-accountant-route-acceptance") {
+    if ([string](Get-JsonProperty $accountantWorkbench @("requiredCoverage", "routeAcceptanceSignOffGate")) -ne "qualified-accountant-route-acceptance") {
         Add-Failure $failures "accountant-workbench-evidence-report.json requiredCoverage.routeAcceptanceSignOffGate must be qualified-accountant-route-acceptance."
     }
     Assert-AccountantWorkbenchRequiredCoverage $accountantWorkbench $failures
     foreach ($requiredEvidenceFile in @("visual-smoke-manifest.json", "visual-smoke-evidence-report.json", "accountant-workbench-evidence-report.json")) {
-        Assert-ArrayContains @($accountantWorkbench.requiredCoverage.evidenceFiles) $requiredEvidenceFile "accountant-workbench-evidence-report.json requiredCoverage.evidenceFiles" $failures
+        Assert-ArrayContains @((Get-JsonProperty $accountantWorkbench @("requiredCoverage", "evidenceFiles"))) $requiredEvidenceFile "accountant-workbench-evidence-report.json requiredCoverage.evidenceFiles" $failures
     }
-    Assert-ArrayContains @($accountantWorkbench.requiredCoverage.expectedTextChecks) "visual smoke screenshots carry route expected accountant decision text" "accountant-workbench-evidence-report.json requiredCoverage.expectedTextChecks" $failures
-    foreach ($route in @($accountantWorkbench.routeReadiness)) {
-        if ([int]$route.expectedTextEvidenceCount -ne 4) {
-            Add-Failure $failures "accountant-workbench-evidence-report.json routeReadiness.expectedTextEvidenceCount must be 4 for every route."
+    Assert-ArrayContains @((Get-JsonProperty $accountantWorkbench @("requiredCoverage", "expectedTextChecks"))) "visual smoke screenshots carry route expected accountant decision text" "accountant-workbench-evidence-report.json requiredCoverage.expectedTextChecks" $failures
+    foreach ($route in @((Get-JsonProperty $accountantWorkbench @("routeReadiness")))) {
+        if ([int](Get-JsonProperty $route @("expectedTextEvidenceCount")) -ne 6) {
+            Add-Failure $failures "accountant-workbench-evidence-report.json routeReadiness.expectedTextEvidenceCount must be 6 for every route."
         }
     }
-    foreach ($route in @($accountantWorkbench.routeAcceptance)) {
-        Assert-NonEmptyString $route.routeName "accountant-workbench-evidence-report.json routeAcceptance.routeName" $failures
-        Assert-NonEmptyString $route.routeKey "accountant-workbench-evidence-report.json routeAcceptance.routeKey" $failures
-        Assert-NonEmptyString $route.expectedText "accountant-workbench-evidence-report.json routeAcceptance.expectedText" $failures
-        Assert-Truthy $route.blocksRelease "accountant-workbench-evidence-report.json routeAcceptance.blocksRelease" $failures
-        if ([string]$route.signOffGate -ne "qualified-accountant-route-acceptance") {
+    foreach ($route in @((Get-JsonProperty $accountantWorkbench @("routeAcceptance")))) {
+        Assert-NonEmptyString (Get-JsonProperty $route @("routeName")) "accountant-workbench-evidence-report.json routeAcceptance.routeName" $failures
+        Assert-NonEmptyString (Get-JsonProperty $route @("routeKey")) "accountant-workbench-evidence-report.json routeAcceptance.routeKey" $failures
+        Assert-NonEmptyString (Get-JsonProperty $route @("expectedText")) "accountant-workbench-evidence-report.json routeAcceptance.expectedText" $failures
+        Assert-Truthy (Get-JsonProperty $route @("blocksRelease")) "accountant-workbench-evidence-report.json routeAcceptance.blocksRelease" $failures
+        if ([string](Get-JsonProperty $route @("signOffGate")) -ne "qualified-accountant-route-acceptance") {
             Add-Failure $failures "accountant-workbench-evidence-report.json routeAcceptance.signOffGate must be qualified-accountant-route-acceptance."
         }
-        if (-not (@($route.requiredAcceptanceEvidence) | Where-Object { [string]$_ -like "*qualified-accountant-route-acceptance" })) {
+        if (-not (@((Get-JsonProperty $route @("requiredAcceptanceEvidence"))) | Where-Object { [string]$_ -like "*qualified-accountant-route-acceptance" })) {
             Add-Failure $failures "accountant-workbench-evidence-report.json routeAcceptance.requiredAcceptanceEvidence must include qualified-accountant-route-acceptance."
         }
     }

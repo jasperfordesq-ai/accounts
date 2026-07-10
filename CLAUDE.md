@@ -12,7 +12,7 @@ Multi-company web application that replaces the traditional year-end accountant 
 
 ## Tech Stack
 
-- **Backend**: ASP.NET Core (.NET 10) Minimal API + EF Core 9 + PostgreSQL 16.4
+- **Backend**: ASP.NET Core (.NET 10) Minimal API + EF Core 10 + PostgreSQL 16.4
 - **Frontend**: Next.js 16 (App Router) + HeroUI v3 + Tailwind CSS 4
 - **PDF Generation**: QuestPDF (server-side)
 - **iXBRL**: Custom XHTML generator with FRC Irish FRS taxonomy
@@ -24,20 +24,20 @@ Multi-company web application that replaces the traditional year-end accountant 
 ```
 accounts/
 ├── backend/
-│   ├── Accounts.slnx               # XML solution (Api + Tests); used by `dotnet` and CI
+│   ├── Accounts.slnx               # XML solution used for restore/build
 │   ├── Directory.Build.props       # Routes build output to ../.dotnet-artifacts (WDAC workaround)
 │   └── Accounts.Api/
 │       ├── Program.cs              # Minimal API setup, middleware pipeline, core endpoint mappings
-│       ├── Entities/               # 44 entity classes + Enums.cs (incl. Tenant, UserAccount, UserCompanyAccess, CapitalAllowanceClaim)
+│       ├── Entities/               # Accounting, filing, identity, privacy, operations and audit entities
 │       ├── Data/
-│       │   ├── AccountsDbContext.cs       # 43 DbSets, full OnModelCreating config
+│       │   ├── AccountsDbContext.cs       # DbSets, query filters, interceptors and model composition
 │       │   ├── SeedData.cs                # Sample companies + demo tenant/role users (dev only)
 │       │   ├── DesignTimeDbContextFactory.cs
-│       │   └── Migrations/                # 19 EF migrations
-│       ├── Services/               # 35 services (business logic + auth/security)
-│       ├── Middleware/             # 10 middleware (security headers, auth, CSRF, tenant, RBAC, audit, locks)
+│       │   └── Migrations/                # Append-only EF migration history
+│       ├── Services/               # Domain, filing, identity, privacy and operations services
+│       ├── Middleware/             # Security, auth, tenant, CSRF, audit, concurrency and metrics
 │       ├── Rules/                  # Configurable legal thresholds + auth/session/API-access/audit config
-│       └── Endpoints/              # 13 endpoint group files + registration
+│       └── Endpoints/              # Domain-focused endpoint groups + registration
 ├── frontend/
 │   ├── next.config.ts
 │   └── src/
@@ -65,9 +65,9 @@ accounts/
 ## Development Commands
 
 ```bash
-# Backend build + test (solution is Accounts.slnx, the XML solution format)
+# Backend restore/build + executable test gate
 cd backend && dotnet build Accounts.slnx
-cd backend && dotnet test Accounts.slnx        # 507 tests (2 Postgres-only tests skip on InMemory)
+cd backend && dotnet test Accounts.Tests/Accounts.Tests.csproj --configuration Release --no-restore
 
 # Frontend build / lint / unit checks
 cd frontend && npm run build
@@ -94,11 +94,13 @@ dotnet ef migrations add <Name> --output-dir Data/Migrations
 ```
 
 > Build output is routed to `.dotnet-artifacts/` by `backend/Directory.Build.props` because
-> Windows WDAC blocks running DLLs (incl. QuestPDF) from the repo path. CI uses the same `Accounts.slnx`.
+> Windows WDAC blocks running DLLs (incl. QuestPDF) from the repo path. CI restores the solution,
+> builds the API, and invokes `Accounts.Tests.csproj` explicitly so a successful command always
+> represents an executed test run.
 >
 > WDAC still blocks a **freshly rebuilt** `Accounts.Api.dll` at test runtime even under `.dotnet-artifacts/`
 > (error `0x800711C7`) — so after changing backend code, run tests with artifacts redirected outside the
-> repo tree: `dotnet test Accounts.slnx -c Release -p:ArtifactsPath=$env:TEMP/accts-art`. CI (Linux) is
+> repo tree: `dotnet test Accounts.Tests/Accounts.Tests.csproj -c Release -p:ArtifactsPath=$env:TEMP/accts-art`. CI (Linux) is
 > unaffected and remains the source of truth.
 
 ## Database
@@ -109,7 +111,7 @@ dotnet ef migrations add <Name> --output-dir Data/Migrations
 - All enums stored as text (not int) for readability
 - snake_case table names, decimal(18,2) for money
 
-## Entities (44 classes, 43 tables)
+## Domain inventory
 
 | Group | Tables |
 |-------|--------|
@@ -124,7 +126,7 @@ dotnet ef migrations add <Name> --output-dir Data/Migrations
 | Equity | share_capitals |
 | Audit | audit_logs |
 
-## Services (35)
+## Services
 
 Core accounting/statutory services:
 
@@ -143,6 +145,8 @@ Core accounting/statutory services:
 | NotesDisclosureService | Auto-generates regime-aware notes (policies, assets, debtors, creditors, share capital, staff, directors) |
 | DeadlineService / FilingWorkflowService | Filing deadlines (Irish public holidays), CRO/Revenue filing workflow + status gates |
 | DirectorLoanComplianceService / DirectorsReportService / CharityReportingService | s.236 director-loan checks, directors' report, charity/SORP reporting |
+| CorporationTaxFilingSupportService / AccountantWorkingPaperService | Bounded CT filing-support evidence and versioned accountant working papers |
+| ExternalFilingHandoffService | Append-only, hash-bound external handoff preparation/review/revocation; never direct submission |
 
 Auth, security & platform services:
 
@@ -156,10 +160,19 @@ Auth, security & platform services:
 | BootstrapOwnerService / BootstrapOwnerPasswordPolicy | First-run owner/tenant bootstrap from secret config |
 | AuditIntegrityCheckpointService / AuditLogIntegrity | Tamper-evident audit log (signed checkpoints) |
 | ProductionSafetyService | Fail-fast validation that blocks unsafe production startup config |
+| IdentityLifecycleService / MfaService | Invitations, resets, unlock/offboard, encrypted TOTP, recovery codes and replay-resistant terminal tokens |
+| PrivacyGovernanceService | Subject access, erasure/legal-hold workflow and minimised retention evidence |
+| DeadlineReminderService / PlatformMetricsService | Tenant-scoped scheduled delivery, retry/operator queue and PII-safe operational signals |
+| SystemReadinessProbeService | Single-flight cached readiness checks for database, migrations and owner bootstrap |
 
-## API Endpoints (~110 total)
+## API endpoints
 
-### Authentication (4)
+The committed OpenAPI 3.1 contract is the canonical route and transport-schema inventory:
+`backend/Accounts.Api/OpenApi/accounts-api-v1.json`. It currently contains 177 paths and 182
+schemas. `Docs/architecture/generated-api-contracts.md` documents regeneration and frontend drift
+checks; avoid maintaining a second exhaustive hand-written route count here.
+
+### Authentication (representative routes)
 | Method | Path | Description |
 |--------|------|-------------|
 | POST | /api/auth/login | Sign in; sets HTTP-only session + CSRF cookies |
@@ -169,7 +182,7 @@ Auth, security & platform services:
 
 ### Core (Program.cs + PeriodStatusEndpoint)
 
-### Core (14 — Program.cs)
+### Core (representative routes)
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | /health | Health check |
@@ -181,12 +194,12 @@ Auth, security & platform services:
 | GET | /api/companies/{id}/periods/{pid} | Get period |
 | PUT | /api/companies/{id}/periods/{pid}/status | Update period status |
 
-### Classification (4)
+### Classification (representative routes)
 | PUT | .../periods/{pid}/size-classification | Save size data |
 | POST | .../periods/{pid}/classify | Run classification engine |
 | POST/GET | .../periods/{pid}/filing-regime | Determine / Get filing regime |
 
-### Banking & Import (14)
+### Banking & Import (representative routes)
 | GET/POST/PUT/DELETE | .../bank-accounts | Bank account CRUD |
 | POST | .../bank-accounts/{id}/import | CSV import (multipart) |
 | GET | .../periods/{pid}/transactions | List transactions (paginated, filterable) |
@@ -196,10 +209,10 @@ Auth, security & platform services:
 | POST | .../categories/seed | Seed default chart of accounts |
 | GET/POST/DELETE | .../transaction-rules | Transaction rule CRUD |
 
-### Year-End (42)
+### Year-End (representative routes)
 Full CRUD for: debtors, creditors, fixed assets, inventory, loans, director loans, payroll (upsert), tax balances (upsert by type), dividends, share capital. Plus year-end summary, notes CRUD (list, generate, update, add, delete).
 
-### Adjustments & Audit (8)
+### Adjustments & Audit (representative routes)
 | GET/POST | .../adjustments | List / Create manual adjustment |
 | POST | .../adjustments/generate | Auto-generate adjustments |
 | PUT | .../adjustments/{id} | Update adjustment |
@@ -208,24 +221,32 @@ Full CRUD for: debtors, creditors, fixed assets, inventory, loans, director loan
 | GET | .../adjustments/summary | Adjustment summary |
 | GET | .../audit-log | Audit log (paginated) |
 
-### Financial Statements (4)
+### Financial Statements (representative routes)
 | GET | .../statements/trial-balance | Adjusted trial balance |
 | GET | .../statements/profit-and-loss | P&L account |
 | GET | .../statements/balance-sheet | Balance sheet |
 | GET | .../statements/readiness | Completeness + filing readiness score |
 
-### Documents & Revenue (4)
+### Documents & Revenue (representative routes)
 | GET | .../documents/accounts-package | Download accounts PDF |
 | GET | .../revenue/tax-computation | Corporation tax computation |
 | GET | .../revenue/ct1-support | CT1 form support data |
 | GET | .../revenue/ixbrl | Download iXBRL financial statements |
 
-## Frontend Pages (11 routes)
+Additional endpoint groups cover invitation/reset and MFA workflows, Owner identity lifecycle,
+privacy governance, accountant working papers, atomic onboarding, scheduled deadline delivery,
+platform metrics, filing-release evidence and recorded external filing handoffs. `/health/ready`
+uses a cached, fail-closed database/migration/bootstrap probe. Direct CRO/ROS submission endpoints
+and outbound submission clients are intentionally absent.
+
+## Frontend pages
 
 | Route | Purpose |
 |-------|---------|
 | `/login` | Firm staff login (email + password) |
 | `/change-password` | Self-service password change |
+| `/accept-invite`, `/reset-password` | Terminal invitation and password-reset flows |
+| `/settings/users` | Owner-only identity lifecycle and MFA/session administration |
 | `/health`, `/health/ready` | Liveness + readiness probes |
 | `/` | Dashboard — company cards with filing status + quick stats |
 | `/companies/new` | 4-step onboarding wizard (legal, structure, address, officers) |
@@ -236,6 +257,9 @@ Full CRUD for: debtors, creditors, fixed assets, inventory, loans, director loan
 | `.../statements` | Financial statements preview — TB, P&L, BS, Tax Computation in browser |
 | `.../notes` | Notes disclosure management — auto-generate, edit, toggle, add custom |
 | `.../charity` | Charity / SORP reporting workspace |
+| `.../working-papers` | Versioned accountant working-paper generation and review |
+| `/production-readiness` | Restricted machine/human release-evidence workbench |
+| `/workbench-preview` | Design-system and visual-QA preview route |
 
 ## Architecture Patterns
 
@@ -253,10 +277,10 @@ Full CRUD for: debtors, creditors, fixed assets, inventory, loans, director loan
 The platform enforces firm-user identity and tenant isolation as the production access-control foundation.
 
 - **Two guards**: `ApiAccessMiddleware` (service-to-service API key, per-company scope) **and** signed user sessions (`UserSessionMiddleware`). The frontend proxy injects the API key; the browser carries the session cookie.
-- **Sessions**: HTTP-only, `Secure` outside dev, HMAC-SHA256-signed cookie. Payload binds `SessionVersion` + `PasswordLastChangedAt`, so a password change or explicit revoke invalidates all existing sessions. Timing-safe signature comparison.
-- **Passwords**: PBKDF2-SHA256 @ 210k iterations; constant-time verify; account lockout after 5 failures in 15 min; ≥20-char policy with mixed character classes.
+- **Sessions**: HTTP-only, `Secure` outside dev, HMAC-SHA256-signed cookie with idle and absolute expiry. Payload binds `SessionVersion` + `PasswordLastChangedAt`; password change, unlock/offboard actions and explicit revocation invalidate existing sessions. Timing-safe signature comparison and replay-resistant terminal tokens are enforced.
+- **Passwords and MFA**: PBKDF2-SHA256 @ 210k iterations; constant-time verify; compromised-password rejection; account lockout; ≥20-char policy with mixed character classes; encrypted TOTP enrollment, recovery codes and recent-authentication gates for privileged actions.
 - **CSRF**: `CsrfProtectionMiddleware` double-submit — a session-bound token must match both the `X-CSRF-Token` header and the CSRF cookie on every mutating `/api` request.
-- **Tenancy**: every company is `TenantId`-scoped. `TenantAccessMiddleware` returns **404 (not 403)** for cross-tenant company IDs (no existence disclosure) and also honours per-user `UserCompanyAccess`.
+- **Tenancy**: every company is `TenantId`-scoped. `TenantAccessMiddleware` returns **404 (not 403)** for cross-tenant company IDs and honours per-user `UserCompanyAccess`; forced PostgreSQL RLS is the persistence boundary for the least-privileged application login. See `Docs/architecture/database-tenant-isolation.md`.
 - **Roles** (`RoleAuthorizationService`): `Owner` (all), `Accountant` (working papers), `Reviewer` (approve/review/finalise/filing), `Client` (read-only). Backend is the source of truth; the UI only hides ineligible actions.
 - **Audit**: `AuditTrailMiddleware` + tamper-evident `AuditIntegrityCheckpointService` (signed checkpoints). Audit identity comes from the authenticated principal, never caller-supplied names.
 - **Fail-fast**: `ProductionSafetyService.ThrowIfUnsafe()` runs at startup and blocks boot on unsafe config (dev DB password, demo seed, non-HTTPS/localhost origins, wildcard hosts, weak/committed session key, insecure cookies, missing bootstrap-owner secrets, missing production monitoring).
@@ -264,7 +288,7 @@ The platform enforces firm-user identity and tenant isolation as the production 
 ## Production Deployment
 
 - **Stack**: `compose.production.yml` (api + db + frontend) behind a reverse proxy — see `deploy/caddy/Caddyfile.example` for HTTPS ingress.
-- **Secrets via files/env** (never committed): `POSTGRES_PASSWORD_FILE`, `ACCOUNTS_CONNECTION_STRING_FILE`, `AUTH_SESSION_SIGNING_KEY_FILE`, `AUDIT_INTEGRITY_SIGNING_KEY_FILE`, `ACCOUNTS_API_KEY_FILE`/`ACCOUNTS_API_KEY_HASH`, `BOOTSTRAP_OWNER_PASSWORD_FILE`; plus `ACCOUNTS_ALLOWED_HOSTS`, `ACCOUNTS_ALLOWED_ORIGIN`, `TRUST_PROXY_HEADERS`, `MONITORING_ERROR_TRACKING_DSN`, `BOOTSTRAP_TENANT_*`/`BOOTSTRAP_OWNER_*`.
+- **Secrets via files/env** (never committed): separate `POSTGRES_PASSWORD_FILE`/`POSTGRES_APPLICATION_PASSWORD_FILE` credentials, `ACCOUNTS_MIGRATION_CONNECTION_STRING_FILE` (migration job only), `ACCOUNTS_APPLICATION_CONNECTION_STRING_FILE` (least-privileged API only), `DATABASE_TENANT_CONTEXT_KEY_FILE`, `AUTH_SESSION_SIGNING_KEY_FILE`, `AUDIT_INTEGRITY_SIGNING_KEY_FILE`, `IDENTITY_HMAC_KEY_FILE`, `MFA_ENCRYPTION_KEY_FILE`, `DEADLINE_PROVIDER_TOKEN_FILE`, `ACCOUNTS_API_KEY_FILE`/`ACCOUNTS_API_KEY_HASH`, and `BOOTSTRAP_OWNER_PASSWORD_FILE`; plus `ACCOUNTS_ALLOWED_HOSTS`, `ACCOUNTS_ALLOWED_ORIGIN`, `TRUST_PROXY_HEADERS`, `MONITORING_ERROR_TRACKING_DSN`, `MFA_ENCRYPTION_ACTIVE_KEY_ID`, `DEADLINE_DELIVERY_PROVIDER_ENDPOINT`, and `BOOTSTRAP_TENANT_*`/`BOOTSTRAP_OWNER_*`.
 - **Secret file permissions**: containers run as a non-root user and bind-mount the `*_FILE` secrets read-only. In non-swarm `docker compose` the in-container file keeps the host file's mode, so secret files must be readable by that user — keep the secrets directory `0700` and the secret files `0444`.
 - **First run**: `BootstrapOwnerService` creates the initial tenant + Owner from secret config; migrations run as a controlled step (not auto-migrate).
 - **Ops scripts** (`scripts/`): `backup-postgres.ps1`, `restore-postgres.ps1`, `verify-postgres-backup.ps1`, `smoke-production.ps1`, `verify-production-compose-images.ps1`.
@@ -292,19 +316,16 @@ The platform enforces firm-user identity and tenant isolation as the production 
 
 - Windows WDAC blocks running DLLs (incl. QuestPDF.dll) from the repo path — build output is routed to `.dotnet-artifacts/` via `backend/Directory.Build.props`; use DesignTimeDbContextFactory for migrations
 - NuGet SSL intermittent failures — add packages to .csproj directly and restore
-- 2 Postgres-only audit integration tests are skipped under the InMemory provider; they run against a real PostgreSQL service in the CI `Backend` job (`ACCOUNTS_POSTGRES_TEST_CONNECTION`) and in the production-smoke CI job
+- PostgreSQL-required integration suites are release gates, not optional evidence. Set
+  `ACCOUNTS_POSTGRES_TEST_CONNECTION` for the direct test-project command; CI supplies it and also
+  sets the golden-corpus requirement so an environment skip cannot masquerade as a release pass.
 
-## Project Stats
+## Generated/current inventory
 
-| Metric | Count |
-|--------|-------|
-| Backend .cs files | 149 |
-| Entity classes | 44 (+Enums) |
-| Services | 35 |
-| Middleware | 10 |
-| EF migrations | 19 |
-| API endpoints | ~110 |
-| Backend tests | 507 (505 pass, 2 Postgres-only skipped) |
-| Frontend routes | 11 |
-| Frontend .tsx/.ts files | 37 |
-| Docker services | 3 (api + db + frontend) |
+- Transport inventory: committed OpenAPI 3.1 contract (177 paths, 182 schemas at this revision).
+- Database inventory: EF model plus append-only migrations; migration/model drift is tested rather
+  than represented by a manually maintained count.
+- Test inventory: use test-run output and retained CI evidence for the exact candidate; historical
+  counts in handoff logs are not a current release assertion.
+- Runtime topology: PostgreSQL, migrate-only job, least-privileged API, frontend and TLS ingress as
+  defined by `compose.production.yml`.

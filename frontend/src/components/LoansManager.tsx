@@ -1,11 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, Chip, Spinner } from "@heroui/react";
 import { Pencil, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { getLoans, createLoan, updateLoan, deleteLoan, type Loan } from "@/lib/api";
 import { MoneyInput, ReadOnlyNotice } from "@/components/workbench";
+import { ResourceStateNotice } from "@/components/ResourceStateNotice";
+import {
+  INITIAL_RESOURCE_STATE,
+  beginResourceLoad,
+  canUseResourceAsEvidence,
+  completeResourceLoad,
+  failResourceLoad,
+  type ResourceState,
+} from "@/lib/resourceState";
+import { useUnsavedChanges } from "@/lib/useUnsavedChanges";
+import { useDestructiveActionConfirmation } from "@/lib/useDestructiveAction";
 
 const inputClass =
   "w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors";
@@ -40,17 +51,40 @@ export function LoansManager({
   periodEnd,
   canWrite = true,
   onCountChange,
+  onResourceStateChange,
 }: {
   companyId: number;
   periodEnd?: string;
   canWrite?: boolean;
   onCountChange?: (count: number) => void;
+  onResourceStateChange?: (state: ResourceState) => void;
 }) {
   const [loans, setLoans] = useState<Loan[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<Loan>(() => emptyForm(periodEnd));
   const [editingId, setEditingId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const [resourceState, setResourceState] = useState<ResourceState>(INITIAL_RESOURCE_STATE);
+  const { requestDestructiveAction, destructiveActionConfirmation } = useDestructiveActionConfirmation();
+
+  const loanFormDirty = useMemo(() => {
+    const baseline = editingId == null
+      ? emptyForm(periodEnd)
+      : loans.find((loan) => loan.id === editingId) ?? emptyForm(periodEnd);
+    return form.lender !== baseline.lender
+      || form.originalAmount !== baseline.originalAmount
+      || form.balance !== baseline.balance
+      || (form.drawdownDate ?? "") !== (baseline.drawdownDate ?? "")
+      || (form.balanceAsOfDate ?? "") !== (baseline.balanceAsOfDate ?? "")
+      || form.interestRate !== baseline.interestRate
+      || form.isDirectorLoan !== baseline.isDirectorLoan
+      || form.dueWithinYear !== baseline.dueWithinYear;
+  }, [editingId, form, loans, periodEnd]);
+  useUnsavedChanges(loanFormDirty);
+
+  useEffect(() => {
+    onResourceStateChange?.(resourceState);
+  }, [onResourceStateChange, resourceState]);
 
   const publishCount = useCallback(
     (next: Loan[]) => onCountChange?.(next.length),
@@ -59,12 +93,19 @@ export function LoansManager({
 
   const load = useCallback(async () => {
     setLoading(true);
+    setResourceState((current) => beginResourceLoad(current, current.hasRetainedData));
     try {
       const data = await getLoans(companyId);
       setLoans(data);
       publishCount(data);
+      setResourceState(completeResourceLoad(data.length === 0));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to load loans");
+      const message = err instanceof Error ? err.message : "Failed to load loans";
+      setResourceState((current) => failResourceLoad({
+        failedResourceKeys: ["loans"],
+        errors: { loans: message },
+      }, current.hasRetainedData));
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -108,6 +149,7 @@ export function LoansManager({
         const created = await createLoan(companyId, payload);
         const next = [...loans, created];
         setLoans(next);
+        setResourceState(completeResourceLoad(false));
         publishCount(next);
         toast.success("Loan recorded");
       }
@@ -126,21 +168,28 @@ export function LoansManager({
       await deleteLoan(companyId, id);
       const next = loans.filter((l) => l.id !== id);
       setLoans(next);
+      setResourceState(completeResourceLoad(next.length === 0));
       publishCount(next);
       toast.success("Loan removed");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to remove loan");
+      throw err;
     } finally {
       setSaving(false);
     }
   }
 
-  if (loading) {
+  if (loading && !resourceState.hasRetainedData) {
     return <div className="py-6 flex justify-center"><Spinner size="sm" /></div>;
   }
 
+  if (resourceState.status === "error" && !resourceState.hasRetainedData) {
+    return <ResourceStateNotice state={resourceState} label="loan evidence" onRetry={load} compact />;
+  }
+
   return (
-    <div>
+    <div className="space-y-3">
+      <ResourceStateNotice state={resourceState} label="loan evidence" onRetry={load} compact />
       {loans.length > 0 && (
         <div className="space-y-2 mb-4">
           {loans.map((l) => (
@@ -166,7 +215,7 @@ export function LoansManager({
                 <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                   {formatCurrency(l.balance)}
                 </span>
-                {canWrite && (
+                {canWrite && canUseResourceAsEvidence(resourceState) && (
                   <>
                     <button
                       type="button"
@@ -178,7 +227,12 @@ export function LoansManager({
                     </button>
                     <button
                       type="button"
-                      onClick={() => l.id && handleDelete(l.id)}
+                      onClick={() => l.id && requestDestructiveAction({
+                        recordLabel: `loan from ${l.lender}`,
+                        consequence: `This permanently removes the ${formatCurrency(l.balance)} closing loan balance and its retained terms from the company record. The removal cannot be undone.`,
+                        onConfirm: () => handleDelete(l.id!),
+                        successAnnouncement: `Loan from ${l.lender} was removed.`,
+                      })}
                       className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400"
                       aria-label={`Delete loan from ${l.lender}`}
                     >
@@ -194,12 +248,17 @@ export function LoansManager({
 
       {!canWrite ? (
         <ReadOnlyNotice subject="loans" />
+      ) : !canUseResourceAsEvidence(resourceState) ? (
+        <p className="text-sm text-amber-700 dark:text-amber-300">
+          Loan editing is disabled until the failed evidence refresh succeeds.
+        </p>
       ) : (
       <div className="space-y-3">
-        <div className="grid grid-cols-12 gap-3 items-end">
+        <div className="mobile-form-grid grid grid-cols-12 gap-3 items-end">
           <div className="col-span-4">
-            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Lender</label>
+            <label htmlFor="loan-lender" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Lender</label>
             <input
+              id="loan-lender"
               type="text"
               className={inputClass}
               placeholder="e.g. Bank of Ireland"
@@ -223,8 +282,9 @@ export function LoansManager({
             onValueChange={(value) => setForm({ ...form, balance: value })}
           />
           <div className="col-span-2">
-            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Interest %</label>
+            <label htmlFor="loan-interest-rate" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Interest %</label>
             <input
+              id="loan-interest-rate"
               type="number"
               className={inputClass}
               placeholder="0.0"
@@ -234,10 +294,11 @@ export function LoansManager({
             />
           </div>
         </div>
-        <div className="grid grid-cols-12 gap-3 items-end">
+        <div className="mobile-form-grid grid grid-cols-12 gap-3 items-end">
           <div className="col-span-3">
-            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Drawdown Date</label>
+            <label htmlFor="loan-drawdown-date" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Drawdown Date</label>
             <input
+              id="loan-drawdown-date"
               type="date"
               className={inputClass}
               value={form.drawdownDate ?? ""}
@@ -246,8 +307,9 @@ export function LoansManager({
             />
           </div>
           <div className="col-span-3">
-            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Balance As-Of Date</label>
+            <label htmlFor="loan-balance-as-of-date" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Balance As-Of Date</label>
             <input
+              id="loan-balance-as-of-date"
               type="date"
               className={inputClass}
               value={form.balanceAsOfDate ?? ""}
@@ -286,7 +348,7 @@ export function LoansManager({
                 <X className="w-4 h-4 mr-1" /> Cancel
               </Button>
             )}
-            <Button variant="primary" size="sm" onPress={handleSubmit} isDisabled={saving}>
+            <Button variant="primary" size="sm" aria-label={editingId != null ? "Save changes to loan" : "Add Loan"} onPress={handleSubmit} isDisabled={saving}>
               {saving ? <Spinner size="sm" /> : editingId != null
                 ? <>Save changes</>
                 : <><Plus className="w-4 h-4 mr-1" /> Add Loan</>}
@@ -295,6 +357,7 @@ export function LoansManager({
         </div>
       </div>
       )}
+      {destructiveActionConfirmation}
     </div>
   );
 }

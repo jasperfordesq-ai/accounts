@@ -26,6 +26,9 @@ describe("YearEndRelatedPartyTransactionsSection", () => {
     await user.type(screen.getByRole("spinbutton", { name: "Transaction amount" }), "4200");
     await user.click(screen.getByRole("button", { name: "Add related party transaction" }));
     await user.click(screen.getByRole("button", { name: "Delete transaction with Jane Director" }));
+    expect(onDelete).not.toHaveBeenCalled();
+    expect(screen.getByRole("alertdialog", { name: "Remove related-party transaction with Jane Director?" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Remove record" }));
 
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ partyName: "Connected supplier" }));
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ relationship: "Connected Person" }));

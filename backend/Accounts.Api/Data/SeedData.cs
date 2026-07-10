@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Globalization;
 using Accounts.Api.Entities;
+using Accounts.Api.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace Accounts.Api.Data;
@@ -86,7 +87,7 @@ public static class SeedData
             c.CompanyType = CompanyType.CompanyLimitedByGuarantee;
             c.IncorporationDate = new DateOnly(2019, 3, 15);
             c.FinancialYearStartMonth = 1;
-            c.ArdMonth = 6;
+            c.AnnualReturnDate = new DateOnly(2026, 6, 15);
             c.RegisteredOfficeAddress1 = "12 Main Street";
             c.RegisteredOfficeAddress2 = "Market Square";
             c.RegisteredOfficeCity = "Castlebar";
@@ -113,6 +114,7 @@ public static class SeedData
         await EnsureFixedAssetAsync(db, company.Id, "Office Furniture", "Office Equipment", 800m, new DateOnly(2019, 4, 1), 10, DepreciationMethod.StraightLine);
         await EnsureFixedAssetAsync(db, company.Id, "Community Training Projector", "Office Equipment", 1_950m, new DateOnly(2024, 2, 20), 5, DepreciationMethod.StraightLine);
 
+        await EnsurePriorPeriodChronologyAsync(db, company, new DateOnly(2024, 1, 1));
         var period = await EnsurePeriodAsync(db, company.Id, new DateOnly(2024, 1, 1), new DateOnly(2024, 12, 31), PeriodStatus.Review, false);
         var categories = await EnsureCategoriesAsync(db, company.Id);
 
@@ -201,6 +203,7 @@ public static class SeedData
         ]);
         await EnsureReportsAndNotesAsync(db, period.Id, ElectedRegime.Micro, "Green Valley Community Development CLG", "Charity micro CLG showcase");
         await EnsureAuditLogAsync(db, company.Id, period.Id, "SeedData", period.Id, "SeededV2Demo", "Seeded all Green Valley modules for v2 demo.");
+        await FinalisePriorPeriodChronologyAsync(db, company.Id, period.PeriodStart);
 
         return company;
     }
@@ -215,7 +218,7 @@ public static class SeedData
             c.CompanyType = CompanyType.Private;
             c.IncorporationDate = new DateOnly(2018, 9, 1);
             c.FinancialYearStartMonth = 4;
-            c.ArdMonth = 9;
+            c.AnnualReturnDate = new DateOnly(2026, 9, 1);
             c.RegisteredOfficeAddress1 = "Unit 4, Galway Technology Centre";
             c.RegisteredOfficeAddress2 = "Mervue Business Park";
             c.RegisteredOfficeCity = "Galway";
@@ -245,6 +248,7 @@ public static class SeedData
         await EnsureFixedAssetAsync(db, company.Id, "Company Van - Ford Transit", "Motor Vehicles", 28_000m, new DateOnly(2023, 3, 1), 5, DepreciationMethod.ReducingBalance);
         await EnsureLoanAsync(db, company.Id, "Bank of Ireland", 50_000m, 35_000m, 4.5m, false, 10_000m, 25_000m, new DateOnly(2022, 4, 1), new DateOnly(2025, 3, 31));
 
+        await EnsurePriorPeriodChronologyAsync(db, company, new DateOnly(2024, 4, 1));
         var period = await EnsurePeriodAsync(db, company.Id, new DateOnly(2024, 4, 1), new DateOnly(2025, 3, 31), PeriodStatus.Review, false);
         var categories = await EnsureCategoriesAsync(db, company.Id);
 
@@ -298,7 +302,7 @@ public static class SeedData
         await EnsureCreditorAsync(db, period.Id, "Electricity accrual", 420m, CreditorType.Accrual, true, "Metered office estimate.");
         await EnsureCreditorAsync(db, period.Id, "PAYE/PRSI Q4", 6_800m, CreditorType.Tax, true, "PAYE Modernisation balance.");
         await EnsureCreditorAsync(db, period.Id, "VAT return", 3_200m, CreditorType.Tax, true, "Jan-Feb VAT liability.");
-        await EnsureDirectorLoanAsync(db, period.Id, aoife.Id, 15_000m, 5_000m, 8_000m, 12_000m, 5m, 600m, 17_000m, "Repayable on demand; reviewed for s.239 connected lending limits.");
+        await EnsureDirectorLoanAsync(db, period.Id, aoife.Id, 15_000m, 5_000m, 8_000m, 12_000m, 5m, 600m, 20_000m, "Written repayment-on-demand and interest terms retained with the demo agreement.");
         await EnsurePayrollSummaryAsync(db, period.Id, 320_000m, 35_200m, 16_000m, 8);
         await EnsureTaxBalanceAsync(db, period.Id, TaxType.CorporationTax, 18_750m, 15_000m, 3_750m);
         await EnsureTaxBalanceAsync(db, period.Id, TaxType.Vat, 3_200m, 0m, 3_200m);
@@ -320,7 +324,6 @@ public static class SeedData
             new("Depreciation - server and laptop estate", "7000", "0050", 5_600m, AdjustmentSource.Auto, "Annual depreciation for owned computer equipment.", "FRS 102 Section 17", -5_600m, -5_600m, true),
             new("Office insurance prepayment", "1200", "6200", 1_800m, AdjustmentSource.Auto, "Prepaid office insurance recognised as current asset.", "FRS 102 accruals concept", 1_800m, 1_800m, true),
             new("Audit and accounts accrual", "6810", "2100", 3_500m, AdjustmentSource.Auto, "Year-end professional fee accrual.", "FRS 102 accruals concept", -3_500m, 0m, true),
-            new("Entertainment add-back marker", null, null, 2_100m, AdjustmentSource.Manual, "Flag non-deductible entertainment for CT computation.", "TCA 1997 Case I principles", -2_100m, 0m, false),
         ]);
         await EnsureInterrogationDataAsync(db, period.Id,
             postBalanceSheetEvents:
@@ -351,6 +354,7 @@ public static class SeedData
         ]);
         await EnsureReportsAndNotesAsync(db, period.Id, ElectedRegime.SmallAbridged, "Connacht Digital Solutions Limited", "Small company workflow showcase");
         await EnsureAuditLogAsync(db, company.Id, period.Id, "SeedData", period.Id, "SeededV2Demo", "Seeded all Connacht Digital modules for v2 demo.");
+        await FinalisePriorPeriodChronologyAsync(db, company.Id, period.PeriodStart);
 
         return company;
     }
@@ -365,7 +369,7 @@ public static class SeedData
             c.CompanyType = CompanyType.DesignatedActivityCompany;
             c.IncorporationDate = new DateOnly(2010, 1, 20);
             c.FinancialYearStartMonth = 1;
-            c.ArdMonth = 4;
+            c.AnnualReturnDate = new DateOnly(2026, 4, 20);
             c.RegisteredOfficeAddress1 = "Industrial Estate";
             c.RegisteredOfficeAddress2 = "Limerick Road";
             c.RegisteredOfficeCity = "Shannon";
@@ -399,6 +403,7 @@ public static class SeedData
         await EnsureLoanAsync(db, company.Id, "AIB Corporate", 500_000m, 280_000m, 3.8m, false, 60_000m, 220_000m, new DateOnly(2020, 1, 1), new DateOnly(2024, 12, 31));
         await EnsureLoanAsync(db, company.Id, "Enterprise Ireland", 100_000m, 40_000m, 0m, false, 20_000m, 20_000m, new DateOnly(2021, 6, 1), new DateOnly(2024, 12, 31));
 
+        await EnsurePriorPeriodChronologyAsync(db, company, new DateOnly(2024, 1, 1));
         var period = await EnsurePeriodAsync(db, company.Id, new DateOnly(2024, 1, 1), new DateOnly(2024, 12, 31), PeriodStatus.Finalised, false, "Claire Dunne");
         var categories = await EnsureCategoriesAsync(db, company.Id);
 
@@ -514,6 +519,7 @@ public static class SeedData
         ]);
         await EnsureReportsAndNotesAsync(db, period.Id, ElectedRegime.Medium, "Atlantic Manufacturing DAC", "Medium company full compliance showcase");
         await EnsureAuditLogAsync(db, company.Id, period.Id, "SeedData", period.Id, "SeededV2Demo", "Seeded all Atlantic Manufacturing modules for v2 demo.");
+        await FinalisePriorPeriodChronologyAsync(db, company.Id, period.PeriodStart);
 
         return company;
     }
@@ -533,15 +539,52 @@ public static class SeedData
                 LegalName = "Pending Demo Company",
                 CroNumber = croNumber,
                 IncorporationDate = new DateOnly(2020, 1, 1),
-                ArdMonth = 1
+                AnnualReturnDate = null
             };
             db.Companies.Add(company);
         }
 
+        var previousAnnualReturnDate = company.AnnualReturnDate;
         company.TenantId = tenantId;
         company.CroNumber = croNumber;
         configure(company);
-        company.UpdatedAt = DateTime.UtcNow;
+        var updatedAt = DateTime.UtcNow;
+        company.UpdatedAt = updatedAt;
+        if (company.AnnualReturnDate != previousAnnualReturnDate
+            && company.AnnualReturnDate is { } exactArd)
+        {
+            const string actorUserId = "system:demo-seed";
+            const string actorDisplayName = "Demo seed";
+            const string evidenceReference = "DEMO-SEED-CRO-ARD";
+            var record = new AnnualReturnDateRecord
+            {
+                Company = company,
+                PreviousAnnualReturnDate = previousAnnualReturnDate,
+                AnnualReturnDate = exactArd,
+                EffectiveFrom = exactArd,
+                Source = AnnualReturnDateSource.CroRecord,
+                EvidenceReference = evidenceReference,
+                ChangeReason = previousAnnualReturnDate is null
+                    ? "Initial exact demo ARD retained from the seeded CRO fixture."
+                    : "Demo ARD fixture updated to its retained exact CRO date.",
+                RecordedByUserId = actorUserId,
+                RecordedByDisplayName = actorDisplayName,
+                RecordedAtUtc = updatedAt,
+                RecordSha256 = string.Empty
+            };
+            record.RecordSha256 = AnnualReturnDateEvidenceIntegrity.ComputeHash(
+                record.PreviousAnnualReturnDate,
+                record.AnnualReturnDate,
+                record.EffectiveFrom,
+                record.Source,
+                record.EvidenceReference,
+                record.EvidenceSha256,
+                record.ChangeReason,
+                record.RecordedByUserId,
+                record.RecordedByDisplayName,
+                record.RecordedAtUtc);
+            db.AnnualReturnDateRecords.Add(record);
+        }
         FixLegacyDemoEncoding(company);
         await db.SaveChangesAsync();
         return company;
@@ -692,6 +735,57 @@ public static class SeedData
         await db.SaveChangesAsync();
     }
 
+    private static async Task EnsurePriorPeriodChronologyAsync(
+        AccountsDbContext db,
+        Company company,
+        DateOnly currentPeriodStart)
+    {
+        if (currentPeriodStart <= company.IncorporationDate)
+            return;
+
+        var finalPriorEnd = currentPeriodStart.AddDays(-1);
+        var firstPeriodEnd = finalPriorEnd;
+        while (firstPeriodEnd.AddYears(-1) >= company.IncorporationDate)
+            firstPeriodEnd = firstPeriodEnd.AddYears(-1);
+
+        var start = company.IncorporationDate;
+        var end = firstPeriodEnd;
+        var firstYear = true;
+        while (start < currentPeriodStart)
+        {
+            await EnsurePeriodAsync(
+                db,
+                company.Id,
+                start,
+                end,
+                PeriodStatus.Draft,
+                firstYear,
+                null);
+            firstYear = false;
+            start = end.AddDays(1);
+            end = start.AddYears(1).AddDays(-1);
+            if (end > finalPriorEnd)
+                end = finalPriorEnd;
+        }
+    }
+
+    private static async Task FinalisePriorPeriodChronologyAsync(
+        AccountsDbContext db,
+        int companyId,
+        DateOnly currentPeriodStart)
+    {
+        var historicalPeriods = await db.AccountingPeriods
+            .Where(period => period.CompanyId == companyId && period.PeriodEnd < currentPeriodStart)
+            .ToListAsync();
+        foreach (var historicalPeriod in historicalPeriods)
+        {
+            historicalPeriod.Status = PeriodStatus.Filed;
+            historicalPeriod.LockedAt ??= DateTime.UtcNow.AddDays(-30);
+            historicalPeriod.LockedBy = DemoSeedUser;
+        }
+        await db.SaveChangesAsync();
+    }
+
     private static async Task<AccountingPeriod> EnsurePeriodAsync(AccountsDbContext db, int companyId, DateOnly start, DateOnly end, PeriodStatus status, bool isFirstYear, string? lockedBy = null)
     {
         var period = await db.AccountingPeriods.FirstOrDefaultAsync(p => p.CompanyId == companyId && p.PeriodEnd == end);
@@ -817,7 +911,7 @@ public static class SeedData
         }
 
         batch.RowCount = transactions.Length;
-        batch.MatchedCount = transactions.Count(t => t.CategoryCode is not null && !t.IsDuplicate);
+        batch.MatchedCount = transactions.Count(t => t.CategoryCode is not null);
         batch.ImportedAt = DateTime.UtcNow.AddDays(-15);
 
         foreach (var seed in transactions)
@@ -827,26 +921,36 @@ public static class SeedData
                 t.Date == seed.Date &&
                 t.Amount == seed.Amount &&
                 t.Description == seed.Description);
-
-            if (tx is null)
+            var isNew = tx is null;
+            tx ??= new ImportedTransaction
             {
-                tx = new ImportedTransaction
-                {
-                    BankAccountId = bank.Id,
-                    Description = seed.Description,
-                    Date = seed.Date,
-                    Amount = seed.Amount
-                };
-                db.ImportedTransactions.Add(tx);
-            }
+                BankAccountId = bank.Id,
+                Description = seed.Description,
+                Date = seed.Date,
+                Amount = seed.Amount
+            };
+            if (isNew) db.ImportedTransactions.Add(tx);
 
             tx.PeriodId = period.Id;
             tx.ImportBatchId = batch.Id;
             tx.Reference = seed.Reference;
             tx.CategoryId = seed.CategoryCode is not null && categories.TryGetValue(seed.CategoryCode, out var category) ? category.Id : null;
             tx.ConfidenceScore = seed.ConfidenceScore;
-            tx.IsDuplicate = seed.IsDuplicate;
-            tx.ManualOverride = seed.IsDuplicate;
+            if (isNew)
+            {
+                tx.IsDuplicate = false;
+                tx.ManualOverride = false;
+                tx.DuplicateReviewStatus = seed.IsDuplicate
+                    ? DuplicateReviewStatus.Pending
+                    : DuplicateReviewStatus.NotCandidate;
+                tx.DuplicateCandidateKind = seed.IsDuplicate ? DuplicateCandidateKind.LegacyUnverified : null;
+                tx.DuplicateConfidence = seed.IsDuplicate ? 0m : null;
+                tx.DuplicateCandidateReasonsJson = seed.IsDuplicate
+                    ? "[\"Demo seed marks this row as a duplicate review exercise; no discard decision has been made.\"]"
+                    : null;
+                tx.DuplicateMatchedTransactionId = null;
+                tx.DuplicateMatchedSourceRowSha256 = null;
+            }
         }
 
         await db.SaveChangesAsync();
@@ -1043,7 +1147,10 @@ public static class SeedData
 
     private static async Task EnsureDirectorLoanAsync(AccountsDbContext db, int periodId, int directorId, decimal opening, decimal advances, decimal repayments, decimal closing, decimal interestRate, decimal interestCharged, decimal maxBalance, string terms)
     {
-        var loan = await db.DirectorLoans.FirstOrDefaultAsync(d => d.PeriodId == periodId && d.DirectorId == directorId);
+        var period = await db.AccountingPeriods.AsNoTracking().FirstAsync(candidate => candidate.Id == periodId);
+        var loan = await db.DirectorLoans
+            .Include(candidate => candidate.BalanceMovements)
+            .FirstOrDefaultAsync(d => d.PeriodId == periodId && d.DirectorId == directorId);
         if (loan is null)
         {
             loan = new DirectorLoan { PeriodId = periodId, DirectorId = directorId };
@@ -1058,7 +1165,40 @@ public static class SeedData
         loan.InterestCharged = interestCharged;
         loan.MaxBalanceDuringYear = maxBalance;
         loan.IsDocumented = true;
+        loan.CounterpartyType = DirectorLoanCounterpartyType.Director;
+        loan.ArrangementType = DirectorLoanArrangementType.Loan;
+        loan.ArrangementDate = period.PeriodStart;
+        loan.TermsStatus = DirectorLoanTermsStatus.WrittenComplete;
         loan.LoanTerms = terms;
+        loan.ComplianceBasis = DirectorLoanComplianceBasis.Section240BelowTenPercent;
+        loan.RelevantAssetsBasis = DirectorLoanRelevantAssetsBasis.LastLaidEntityFinancialStatements;
+        loan.RelevantAssetsAmount = 500_000m;
+        loan.RelevantAssetsAsOfDate = period.PeriodStart.AddDays(-1);
+        loan.RelevantAssetsReference = "demo:last-laid-entity-financial-statements#net-assets";
+        loan.RelevantAssetsFallReview = DirectorLoanRelevantAssetsFallReview.NoRelevantFall;
+        loan.ReviewDecision = DirectorLoanReviewDecision.Unreviewed;
+        loan.ReviewNote = "Demo statutory evidence is intentionally awaiting a named professional review.";
+        loan.ReviewedBy = null;
+        loan.ReviewerRole = null;
+        loan.ReviewedAtUtc = null;
+        loan.BalanceMovements.Clear();
+        loan.BalanceMovements.AddRange(
+        [
+            new DirectorLoanMovement
+            {
+                MovementDate = period.PeriodStart.AddDays(60),
+                MovementType = DirectorLoanMovementType.Advance,
+                Amount = advances,
+                EvidenceReference = "demo:bank-ledger#director-advance"
+            },
+            new DirectorLoanMovement
+            {
+                MovementDate = period.PeriodStart.AddDays(120),
+                MovementType = DirectorLoanMovementType.Repayment,
+                Amount = repayments,
+                EvidenceReference = "demo:bank-ledger#director-repayment"
+            }
+        ]);
         await db.SaveChangesAsync();
     }
 
@@ -1180,14 +1320,21 @@ public static class SeedData
                 db.Adjustments.Add(adjustment);
             }
 
-            adjustment.DebitCategoryId = seed.DebitCode is not null && categories.TryGetValue(seed.DebitCode, out var debit) ? debit.Id : null;
-            adjustment.CreditCategoryId = seed.CreditCode is not null && categories.TryGetValue(seed.CreditCode, out var credit) ? credit.Id : null;
+            if (seed.DebitCode is null || !categories.TryGetValue(seed.DebitCode, out var debit)
+                || seed.CreditCode is null || !categories.TryGetValue(seed.CreditCode, out var credit))
+                throw new InvalidOperationException($"Demo journal '{seed.Description}' must use two available accounts.");
+            if (seed.Amount <= 0 || debit.Id == credit.Id)
+                throw new InvalidOperationException($"Demo journal '{seed.Description}' must be a positive, balanced two-account posting.");
+
+            adjustment.DebitCategoryId = debit.Id;
+            adjustment.CreditCategoryId = credit.Id;
             adjustment.Amount = seed.Amount;
             adjustment.Source = seed.Source;
             adjustment.Reason = seed.Reason;
             adjustment.LegalBasis = seed.LegalBasis;
-            adjustment.ImpactOnProfit = seed.ImpactOnProfit;
-            adjustment.ImpactOnAssets = seed.ImpactOnAssets;
+            var impact = AdjustmentPostingRules.DeriveImpact(debit, credit, seed.Amount);
+            adjustment.ImpactOnProfit = impact.Profit;
+            adjustment.ImpactOnAssets = impact.Assets;
             adjustment.CreatedBy = DemoSeedUser;
             adjustment.IsAuto = seed.Source == AdjustmentSource.Auto;
             adjustment.ApprovedBy = seed.Approved ? "demo.reviewer@accounts.local" : null;

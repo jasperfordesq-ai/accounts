@@ -1,5 +1,5 @@
 import { Button, Chip, Spinner } from "@heroui/react";
-import { AlertTriangle, CheckCircle2, ClipboardCheck, FileText, Shield, Upload } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ClipboardCheck, FileText, Shield } from "lucide-react";
 import type {
   FilingReadinessProfile,
   FilingReadinessSignOffPacket,
@@ -26,7 +26,10 @@ interface FilingReviewCentreProps {
   filingReadinessProfile: FilingReadinessProfile | null;
   croSubmissionReference: string;
   validatingIxbrl: boolean;
+  canApprove?: boolean;
   canReview?: boolean;
+  canWriteWorkingPapers?: boolean;
+  evidenceAvailable?: boolean;
   onCroSubmissionReferenceChange: (value: string) => void;
   onRunIxbrlChecks: FilingReviewAction;
   onApproveForFiling: FilingReviewAction;
@@ -42,6 +45,9 @@ export function FilingReviewCentre({
   croSubmissionReference,
   validatingIxbrl,
   canReview = true,
+  canApprove = canReview,
+  canWriteWorkingPapers = true,
+  evidenceAvailable = true,
   onCroSubmissionReferenceChange,
   onRunIxbrlChecks,
   onApproveForFiling,
@@ -54,6 +60,9 @@ export function FilingReviewCentre({
   const requiredEvidence = filingReadinessProfile
     ? sortFilingEvidenceByRisk(filingReadinessProfile.requiredEvidence)
     : [];
+  const croActionRequiresApproval = filingStatus != null
+    && ["NotStarted", "InProgress", "PackageGenerated"].includes(filingStatus.cro.status);
+  const canUseCroAction = croActionRequiresApproval ? canApprove : canReview;
 
   return (
     <ReviewPanel
@@ -61,11 +70,11 @@ export function FilingReviewCentre({
       description="Source-backed CRO, Revenue and accountant-review gates for this period."
       actions={
         <div className="flex flex-wrap items-center gap-2">
-          <StatusBadge tone={filingReadinessProfile?.supportedPath ? "good" : "bad"}>
-            {filingReadinessProfile?.supportedPath ? "Supported path" : "Manual handoff"}
+          <StatusBadge tone={evidenceAvailable && filingReadinessProfile?.supportedPath ? "good" : "bad"}>
+            {!evidenceAvailable ? "Evidence unavailable" : filingReadinessProfile?.supportedPath ? "Supported path" : "Manual handoff"}
           </StatusBadge>
           <StatusBadge tone={filingStatus?.readyToFile ? "good" : "warn"}>
-            {filingStatus?.readyToFile ? "Workflow ready" : "Workflow open"}
+            {!evidenceAvailable ? "Confirmation blocked" : filingStatus?.readyToFile ? "Workflow ready" : "Workflow open"}
           </StatusBadge>
         </div>
       }
@@ -148,28 +157,44 @@ export function FilingReviewCentre({
             warnings={filingIssues.warnings}
           />
 
-          <Button
-            variant="outline"
-            size="sm"
-            isDisabled={validatingIxbrl}
-            onPress={() => {
-              void onRunIxbrlChecks();
-            }}
-          >
-            {validatingIxbrl ? (
-              <>
-                <Spinner size="sm" className="mr-2" />
-                Checking...
-              </>
-            ) : (
-              <>
-                <FileText className="w-4 h-4 mr-1" />
-                Run iXBRL Checks
-              </>
-            )}
-          </Button>
+          {filingStatus.revenue.manualHandoffRequired && (
+            <div
+              role="status"
+              className="rounded-md border border-amber-300 bg-amber-50 p-4 text-sm leading-6 text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100"
+            >
+              <p className="font-semibold">Revenue iXBRL requires manual handoff</p>
+              <p className="mt-1">
+                Filing-ready generation is disabled. The downloadable XHTML is an incomplete review
+                prototype only; prepare and validate the final artifact in an approved external tool
+                and retain its evidence.
+              </p>
+            </div>
+          )}
 
-          {shouldShowCroReference(filingStatus.cro.status) && (
+          {canWriteWorkingPapers && (
+            <Button
+              variant="outline"
+              size="sm"
+              isDisabled={validatingIxbrl || !evidenceAvailable}
+              onPress={() => {
+                void onRunIxbrlChecks();
+              }}
+            >
+              {validatingIxbrl ? (
+                <>
+                  <Spinner size="sm" className="mr-2" />
+                  Checking...
+                </>
+              ) : (
+                <>
+                  <FileText className="w-4 h-4 mr-1" />
+                Check draft iXBRL structure
+                </>
+              )}
+            </Button>
+          )}
+
+          {canReview && shouldShowCroReference(filingStatus.cro.status) && (
             <div className="max-w-sm">
               <label htmlFor="cro-submission-reference" className="mb-1 block text-xs font-medium uppercase text-[var(--muted-foreground)]">
                 CORE submission reference
@@ -180,7 +205,7 @@ export function FilingReviewCentre({
                 title="CORE submission reference"
                 value={croSubmissionReference}
                 onChange={(event) => onCroSubmissionReferenceChange(event.target.value)}
-                disabled={filingStatus.cro.status === "Accepted"}
+                disabled={!evidenceAvailable || filingStatus.cro.status === "Accepted"}
                 className="h-9 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 text-sm text-[var(--foreground)] outline-none transition focus:border-[var(--ring)] focus:ring-2 focus:ring-teal-100 disabled:bg-[var(--muted)] disabled:text-[var(--muted-foreground)] dark:focus:ring-teal-900/40"
                 placeholder="CORE-2026-0001"
               />
@@ -196,7 +221,12 @@ export function FilingReviewCentre({
               </StatusBadge>
             }
           >
-            {canReview ? (
+            {!evidenceAvailable ? (
+              <PermissionDeniedPanel
+                title="Required filing evidence unavailable"
+                description="Retry the failed filing resource before recording or refreshing any professional workflow confirmation."
+              />
+            ) : canUseCroAction ? (
               <CroWorkflowActions
                 filingStatus={filingStatus}
                 filingReadinessProfile={filingReadinessProfile}
@@ -209,8 +239,8 @@ export function FilingReviewCentre({
               />
             ) : (
               <PermissionDeniedPanel
-                title="Review permission required"
-                description="Evidence remains visible; ask an Owner or Reviewer to approve, submit, or close the filing workflow."
+                title={croActionRequiresApproval ? "Approval permission required" : "Review permission required"}
+                description="Evidence remains visible; ask an Owner or Reviewer to approve the pack, record an external filing outcome, or close the workflow."
               />
             )}
           </FilingActionBar>
@@ -218,8 +248,12 @@ export function FilingReviewCentre({
       ) : (
         <div className="text-center py-8">
           <Shield className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-          <p className="text-sm text-gray-500 dark:text-gray-400">Filing status is not available yet.</p>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Complete the statements and generate documents first.</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            {evidenceAvailable ? "Filing status is not available yet." : "Filing status evidence failed to load."}
+          </p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+            {evidenceAvailable ? "Complete the statements and generate documents first." : "Retry the failed resource; this is not evidence that filing has not started."}
+          </p>
         </div>
       )}
     </ReviewPanel>
@@ -407,6 +441,9 @@ function externalValidationLedgerDetail(
   if (externalValidationLedgerValue(filingStatus, filingReadinessProfile) === "Evidence open")
     return "External validation remains a retained-evidence gate before real Revenue use.";
 
+  if (filingStatus.revenue.manualHandoffRequired)
+    return "Prepare the complete iXBRL artifact in an approved external tool and retain its ROS validation evidence.";
+
   return "Run internal iXBRL checks and retain external ROS validation evidence.";
 }
 
@@ -435,7 +472,7 @@ function croFilingEvidenceLedgerValue(filingStatus: FilingWorkflowStatus, croSub
     return "Accepted evidence recorded";
 
   if (filingStatus.cro.status === "Submitted")
-    return "Submission reference missing";
+    return "External submission reference missing";
 
   if (filingStatus.cro.status === "Approved")
     return "CORE reference required";
@@ -448,10 +485,10 @@ function croFilingEvidenceLedgerDetail(filingStatus: FilingWorkflowStatus, croSu
     return "External CORE reference is retained against the filing workflow.";
 
   if (filingStatus.cro.status === "Approved")
-    return "Record the external CORE reference before marking the filing submitted.";
+    return "Record the external CORE reference before recording the external submission status.";
 
   if (filingStatus.cro.status === "Submitted")
-    return "Submission is recorded, but the CORE reference still needs evidence.";
+    return "An external submission status is recorded, but its CORE reference still needs evidence.";
 
   return "CRO filing evidence appears as recorded workflow states only.";
 }
@@ -805,8 +842,8 @@ function formatActionLabel(action: string) {
     "generate-cro-accounts-pdf": "Generate CRO accounts PDF",
     "generate-cro-signature-page": "Generate CRO signature page",
     "mark-cro-accepted": "Mark CRO accepted",
-    "mark-cro-submitted": "Mark CRO submitted",
-    "run-internal-ixbrl-checks": "Run internal iXBRL checks",
+    "mark-cro-submitted": "Record external CRO submission",
+    "run-internal-ixbrl-checks": "Check draft iXBRL structure",
   };
 
   return labels[action] ?? actionToTitleCase(action);
@@ -948,11 +985,11 @@ function CroWorkflowActions({
             void onMarkCroSubmitted(trimmedReference);
           }}
         >
-          <Upload className="w-4 h-4 mr-1" /> Mark as Submitted
+          <ClipboardCheck className="w-4 h-4 mr-1" /> Record external submission
         </Button>
         {missingSubmissionReference && (
           <p className="max-w-xl text-xs leading-5 text-[var(--muted-foreground)]">
-            CORE submission reference is required before recording CRO submission.
+            A CORE reference is required before recording an external CRO submission.
           </p>
         )}
       </div>
@@ -963,7 +1000,7 @@ function CroWorkflowActions({
     return (
       <>
         <Chip size="sm" variant="soft" color={filingStatus.cro.paymentCompleted ? "success" : "warning"}>
-          {filingStatus.cro.paymentCompleted ? "CORE payment confirmed" : "Submitted - payment needed"}
+          {filingStatus.cro.paymentCompleted ? "CORE payment confirmed" : "External submission recorded - payment evidence needed"}
         </Chip>
         {!filingStatus.cro.paymentCompleted && (
           <Button
@@ -1115,7 +1152,7 @@ function shouldShowCroReference(status: string) {
 
 function croActionBarStatusLabel(status: FilingWorkflowStatus["cro"]["status"]) {
   if (status === "Approved") return "Approved for external filing";
-  if (status === "Submitted") return "Submission evidence open";
+  if (status === "Submitted") return "External submission evidence open";
   if (status === "Accepted") return "Accepted by CRO";
   if (status === "CorrectionRequired") return "Correction required";
   if (status === "PackageGenerated") return "Pack generated";

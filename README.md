@@ -20,7 +20,7 @@ real-world use until professional review is complete.
 
 ## Tech stack
 
-- **Backend** — ASP.NET Core (.NET 10) Minimal API, EF Core 9, PostgreSQL 16.4, QuestPDF, CsvHelper
+- **Backend** — ASP.NET Core (.NET 10) Minimal API, EF Core 10, PostgreSQL 16.4, QuestPDF, CsvHelper
 - **Frontend** — Next.js 16 (App Router), HeroUI v3, Tailwind CSS 4
 - **Infra** — Docker Compose (local + production), GitHub Actions CI, Caddy reverse-proxy example
 
@@ -37,13 +37,13 @@ Full local instructions, the seeded local admin account, and SDK-only run steps 
 ## Build & test
 
 ```bash
-# Backend (solution is the XML-format Accounts.slnx)
+# Backend (restore/build the solution; execute the test project explicitly)
 cd backend && dotnet build Accounts.slnx
-cd backend && dotnet test  Accounts.slnx
+cd backend && dotnet test Accounts.Tests/Accounts.Tests.csproj --configuration Release --no-restore
 
 # Frontend
 cd frontend && npm ci
-cd frontend && npm run lint && npm run build
+cd frontend && npm test && npm run lint && npm run build
 ```
 
 CI runs all of the above plus production compose validation and a production-stack smoke +

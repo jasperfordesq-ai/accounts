@@ -71,6 +71,21 @@ function Assert-StringArrayContains {
     }
 }
 
+function Assert-StringArrayExactly {
+    param(
+        [object[]]$Actual,
+        [string[]]$Expected,
+        [string]$Context,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    $actualValues = @($Actual | ForEach-Object { [string]$_ })
+    if ($actualValues.Count -ne $Expected.Count -or
+        [string]::Join("`n", $actualValues) -cne [string]::Join("`n", $Expected)) {
+        Add-Failure $Failures "$Context must exactly match: $([string]::Join(', ', $Expected))."
+    }
+}
+
 $failures = [System.Collections.Generic.List[string]]::new()
 
 if (-not (Test-Path -LiteralPath $ReportPath -PathType Leaf)) {
@@ -93,6 +108,13 @@ $requiredCategoryCodes = @(
     "frontend-accountant-workbench",
     "security-auth-tenant-platform-guardrails"
 )
+$requiredCategoryTargetScores = @{
+    "architecture-documentation" = 150
+    "backend-statutory-accounting-engine" = 350
+    "frontend-accountant-workbench" = 250
+    "security-auth-tenant-platform-guardrails" = 250
+}
+$verifiedScorecardControlCodes = @()
 $requiredScenarioCodes = @("micro-ltd", "small-abridged-ltd", "dac-small", "clg-charity", "medium-audit-required")
 $requiredSourceIds = @(
     "cro-financial-statements-requirements",
@@ -103,6 +125,23 @@ $requiredSourceIds = @(
     "frc-frs-105",
     "charities-regulator-annual-report"
 )
+$requiredVisualStateIds = @(
+    "login", "password-change", "dashboard", "onboarding", "production-readiness", "company-detail",
+    "period-workspace", "classification", "categorisation", "year-end", "adjustments", "notes", "charity",
+    "financial-statements", "statement-source-trail", "statement-profit-and-loss", "statement-balance-sheet",
+    "statement-tax-computation", "statement-cash-flow", "statement-equity-changes", "statement-directors-report",
+    "filing-review", "workbench-preview", "state-loading", "state-empty", "state-maximum-data", "state-error",
+    "state-partial-error", "state-permission-denied", "state-read-only", "state-stale", "state-conflict"
+)
+$requiredVisualMaterialRoutes = @(
+    "login", "password-change", "onboarding", "classification", "categorisation", "year-end", "adjustments",
+    "notes", "charity", "statement-trial-balance", "statement-source-trail", "statement-profit-and-loss",
+    "statement-balance-sheet", "statement-tax-computation", "statement-cash-flow", "statement-equity-changes",
+    "statement-directors-report", "filing"
+)
+$requiredVisualUiStates = @(
+    "loading", "empty", "maximum-data", "error", "partial-error", "permission-denied", "read-only", "stale", "conflict"
+)
 $requiredManifestCodes = @(
     "backend-golden-corpus",
     "frontend-workbench-contract",
@@ -112,7 +151,9 @@ $requiredManifestCodes = @(
     "ci-machine-evidence-pack",
     "release-artifact-pack",
     "production-stack-smoke",
+    "postgres-transport-tls",
     "backup-restore-drill",
+    "postgres-migration-upgrade-gate",
     "qualified-accountant-final-signoff",
     "source-law-change-review",
     "external-ros-validation-evidence",
@@ -126,7 +167,9 @@ $requiredDefaultCiManifestCodes = @(
     "visual-smoke-light-dark",
     "production-readiness-report-verification",
     "production-stack-smoke",
+    "postgres-transport-tls",
     "backup-restore-drill",
+    "postgres-migration-upgrade-gate",
     "ci-machine-evidence-pack"
 )
 $requiredManualManifestCodes = @(
@@ -189,6 +232,7 @@ $requiredAssuranceEvidence = @(
     "production-scorecard",
     "production-readiness-report",
     "production-readiness-verification-report",
+    "postgres-migration-upgrade-gate",
     "release-verification-manifest",
     "human-release-evidence",
     "release-blocker-register",
@@ -214,11 +258,26 @@ if ($null -ne $report) {
         if ($currentScore -le 0) {
             Add-Failure $failures "productionScorecard.currentScore must be greater than zero."
         }
-        if ($targetScore -ne 700) {
-            Add-Failure $failures "productionScorecard.targetScore must be 700."
+        if ($targetScore -ne 1000) {
+            Add-Failure $failures "productionScorecard.targetScore must be 1000."
         }
-        if ([string](Get-JsonProperty $scorecard "status") -ne "review-required") {
-            Add-Failure $failures "productionScorecard.status must be review-required."
+        if ([string](Get-JsonProperty $scorecard "status") -ne "remediation-required") {
+            Add-Failure $failures "productionScorecard.status must be remediation-required."
+        }
+        if ([string](Get-JsonProperty $scorecard "scoreBasis") -ne "independent-audit-control-ledger-v1") {
+            Add-Failure $failures "productionScorecard.scoreBasis must be independent-audit-control-ledger-v1."
+        }
+        if ([string](Get-JsonProperty $scorecard "auditBaselineDate") -ne "2026-07-10") {
+            Add-Failure $failures "productionScorecard.auditBaselineDate must be 2026-07-10."
+        }
+        if ([string](Get-JsonProperty $scorecard "auditedCommit") -ne "7ea54cc6d1769ced568ac1568d190cc2bb4b16d1") {
+            Add-Failure $failures "productionScorecard.auditedCommit must identify the exact independently audited baseline commit."
+        }
+        $scorecardEvidencePolicy = [string](Get-JsonProperty $scorecard "evidencePolicy")
+        foreach ($requiredPolicyTerm in @("exact live candidate", "artifact hashes", "human/external")) {
+            if ($scorecardEvidencePolicy -notlike "*$requiredPolicyTerm*") {
+                Add-Failure $failures "productionScorecard.evidencePolicy must mention $requiredPolicyTerm."
+            }
         }
         foreach ($categoryCode in $requiredCategoryCodes) {
             Assert-ObjectArrayHasCode $categories $categoryCode "productionScorecard.categories" $failures
@@ -227,8 +286,66 @@ if ($null -ne $report) {
         $categoryCurrentTotal = 0
         $categoryTargetTotal = 0
         foreach ($category in $categories) {
-            $categoryCurrentTotal += [int](Get-JsonProperty $category "currentScore")
-            $categoryTargetTotal += [int](Get-JsonProperty $category "targetScore")
+            $categoryCode = [string](Get-JsonProperty $category "code")
+            $categoryCurrentScore = [int](Get-JsonProperty $category "currentScore")
+            $categoryTargetScore = [int](Get-JsonProperty $category "targetScore")
+            $controls = @((Get-JsonProperty $category "controls"))
+            $controlCurrentScore = 0
+            $controlTargetScore = 0
+
+            $categoryCurrentTotal += $categoryCurrentScore
+            $categoryTargetTotal += $categoryTargetScore
+
+            if ($requiredCategoryTargetScores.ContainsKey($categoryCode) -and $categoryTargetScore -ne [int]$requiredCategoryTargetScores[$categoryCode]) {
+                Add-Failure $failures "productionScorecard category '$categoryCode' targetScore must be $($requiredCategoryTargetScores[$categoryCode])."
+            }
+            if ($controls.Count -eq 0) {
+                Add-Failure $failures "productionScorecard category '$categoryCode' must include weighted controls."
+            }
+
+            foreach ($control in $controls) {
+                $controlCode = [string](Get-JsonProperty $control "code")
+                $weight = [int](Get-JsonProperty $control "weight")
+                $passed = (Get-JsonProperty $control "passed") -eq $true
+                $assuranceClass = [string](Get-JsonProperty $control "assuranceClass")
+                $status = [string](Get-JsonProperty $control "status")
+                $controlEvidence = @((Get-JsonProperty $control "evidence"))
+                $blockingAuditIds = @((Get-JsonProperty $control "blockingAuditItemIds"))
+
+                $verifiedScorecardControlCodes += "$categoryCode`:$controlCode"
+                if ($weight -le 0) {
+                    Add-Failure $failures "productionScorecard control '$categoryCode/$controlCode' must have a positive weight."
+                }
+                if (-not (@("code", "machine", "human-external") -contains $assuranceClass)) {
+                    Add-Failure $failures "productionScorecard control '$categoryCode/$controlCode' assuranceClass must be code, machine, or human-external."
+                }
+                if (($passed -and $status -ne "passed") -or (-not $passed -and $status -ne "open")) {
+                    Add-Failure $failures "productionScorecard control '$categoryCode/$controlCode' status must agree with passed."
+                }
+                if ($controlEvidence.Count -eq 0) {
+                    Add-Failure $failures "productionScorecard control '$categoryCode/$controlCode' must retain objective evidence."
+                }
+                if (-not $passed -and $blockingAuditIds.Count -eq 0) {
+                    Add-Failure $failures "Open productionScorecard control '$categoryCode/$controlCode' must identify blocking audit item IDs."
+                }
+
+                $controlTargetScore += $weight
+                if ($passed) {
+                    $controlCurrentScore += $weight
+                }
+            }
+
+            if ($controlCurrentScore -ne $categoryCurrentScore) {
+                Add-Failure $failures "productionScorecard category '$categoryCode' currentScore must equal passed control weights."
+            }
+            if ($controlTargetScore -ne $categoryTargetScore) {
+                Add-Failure $failures "productionScorecard category '$categoryCode' targetScore must equal all control weights."
+            }
+            if (($categoryCode -eq "backend-statutory-accounting-engine" -or $categoryCode -eq "security-auth-tenant-platform-guardrails") -and
+                @($controls | Where-Object { (Get-JsonProperty $_ "passed") -ne $true }).Count -gt 0 -and
+                $categoryCurrentScore -eq $categoryTargetScore) {
+                Add-Failure $failures "productionScorecard category '$categoryCode' cannot report full marks while controls remain open."
+            }
         }
         if ($categoryCurrentTotal -ne $currentScore) {
             Add-Failure $failures "productionScorecard.currentScore must equal the sum of category current scores."
@@ -268,8 +385,9 @@ if ($null -ne $report) {
         if ($null -eq (Get-JsonProperty $scenario "evidencePack")) {
             Add-Failure $failures "goldenFilingCorpus scenario '$scenarioCode' must include evidencePack."
         }
-        if ([string](Get-JsonProperty $scenario "coverageStatus") -ne "covered") {
-            Add-Failure $failures "goldenFilingCorpus scenario '$scenarioCode' must be covered."
+        $coverageStatus = [string](Get-JsonProperty $scenario "coverageStatus")
+        if ($coverageStatus -notin @("covered", "machine-covered-review-pending")) {
+            Add-Failure $failures "goldenFilingCorpus scenario '$scenarioCode' must be covered or explicitly machine-covered-review-pending."
         }
     }
 
@@ -328,6 +446,18 @@ if ($null -ne $report) {
     }
     if (-not ($manifest | Where-Object { [string](Get-JsonProperty $_ "command") -like "*verify-release-artifact-pack.ps1*" })) {
         Add-Failure $failures "releaseVerificationManifest must include verify-release-artifact-pack.ps1."
+    }
+    $migrationUpgradeGate = @($manifest | Where-Object { [string](Get-JsonProperty $_ "code") -eq "postgres-migration-upgrade-gate" } | Select-Object -First 1)
+    if ($migrationUpgradeGate.Count -gt 0) {
+        $migrationCommand = [string](Get-JsonProperty $migrationUpgradeGate[0] "command")
+        if ($migrationCommand -notlike "*has-pending-model-changes*" -or
+            $migrationCommand -notlike "*MigrationUpgradePostgresTests*" -or
+            $migrationCommand -notlike "*verify-migration-upgrade-evidence.ps1*") {
+            Add-Failure $failures "releaseVerificationManifest 'postgres-migration-upgrade-gate' must include drift, PostgreSQL upgrade and evidence verification commands."
+        }
+        if ([string](Get-JsonProperty $migrationUpgradeGate[0] "evidenceArtifact") -ne "postgres-migration-upgrade-gate") {
+            Add-Failure $failures "releaseVerificationManifest 'postgres-migration-upgrade-gate' evidenceArtifact must be postgres-migration-upgrade-gate."
+        }
     }
     $ciMachineEvidencePack = @($manifest | Where-Object { [string](Get-JsonProperty $_ "code") -eq "ci-machine-evidence-pack" } | Select-Object -First 1)
     if ($ciMachineEvidencePack.Count -gt 0) {
@@ -411,11 +541,51 @@ if ($null -ne $report) {
     if ($null -eq $visualQa) {
         Add-Failure $failures "visualQaCoverage must be present."
     } else {
-        if ([int](Get-JsonProperty $visualQa "expectedScreenshotCount") -ne 28) {
-            Add-Failure $failures "visualQaCoverage.expectedScreenshotCount must be 28."
+        if ([string](Get-JsonProperty $visualQa "inventoryVersion") -ne "canonical-material-states-v1") {
+            Add-Failure $failures "visualQaCoverage.inventoryVersion must be canonical-material-states-v1."
+        }
+        if ([int](Get-JsonProperty $visualQa "inventoryStateCount") -ne 32 -or
+            [int](Get-JsonProperty $visualQa "routeCount") -ne 32) {
+            Add-Failure $failures "visualQaCoverage inventoryStateCount and routeCount must both be 32."
+        }
+        if ([int](Get-JsonProperty $visualQa "accountantWorkbenchRouteCount") -ne 7) {
+            Add-Failure $failures "visualQaCoverage.accountantWorkbenchRouteCount must be 7."
+        }
+        if ([int](Get-JsonProperty $visualQa "expectedScreenshotCount") -ne 192) {
+            Add-Failure $failures "visualQaCoverage.expectedScreenshotCount must be 192."
         }
         if (@((Get-JsonProperty $visualQa "routes")).Count -ne 7) {
-            Add-Failure $failures "visualQaCoverage.routes must include 7 routes."
+            Add-Failure $failures "visualQaCoverage.routes must include the 7 accountant workbench routes."
+        }
+        $stateInventory = @((Get-JsonProperty $visualQa "stateInventory"))
+        if ($stateInventory.Count -ne 32) {
+            Add-Failure $failures "visualQaCoverage.stateInventory must include 32 canonical state rows."
+        }
+        Assert-StringArrayExactly @($stateInventory | ForEach-Object { Get-JsonProperty $_ "stateId" }) $requiredVisualStateIds "visualQaCoverage.stateInventory.stateId" $failures
+        Assert-StringArrayExactly @((Get-JsonProperty $visualQa "requiredMaterialRoutes")) $requiredVisualMaterialRoutes "visualQaCoverage.requiredMaterialRoutes" $failures
+        Assert-StringArrayExactly @((Get-JsonProperty $visualQa "requiredUiStates")) $requiredVisualUiStates "visualQaCoverage.requiredUiStates" $failures
+        Assert-StringArrayExactly @((Get-JsonProperty $visualQa "themes")) @("light", "dark") "visualQaCoverage.themes" $failures
+        $viewports = @((Get-JsonProperty $visualQa "viewports"))
+        foreach ($viewport in @(
+            [pscustomobject]@{ name = "mobile"; width = 390; height = 844 },
+            [pscustomobject]@{ name = "tablet"; width = 768; height = 1024 },
+            [pscustomobject]@{ name = "desktop"; width = 1440; height = 1000 }
+        )) {
+            $actual = $viewports | Where-Object { [string](Get-JsonProperty $_ "name") -eq $viewport.name } | Select-Object -First 1
+            if ($null -eq $actual -or
+                [int](Get-JsonProperty $actual "width") -ne $viewport.width -or
+                [int](Get-JsonProperty $actual "height") -ne $viewport.height) {
+                Add-Failure $failures "visualQaCoverage.viewports must include $($viewport.name) at $($viewport.width)x$($viewport.height)."
+            }
+        }
+        if ($viewports.Count -ne 3) {
+            Add-Failure $failures "visualQaCoverage.viewports must include exactly mobile, tablet and desktop."
+        }
+        if ((Get-JsonProperty $visualQa "semanticDistinctnessRequired") -ne $true) {
+            Add-Failure $failures "visualQaCoverage.semanticDistinctnessRequired must be true."
+        }
+        if (@((Get-JsonProperty $visualQa "artifacts")).Count -ne 192) {
+            Add-Failure $failures "visualQaCoverage.artifacts must plan all 192 canonical captures."
         }
     }
 }
@@ -426,6 +596,10 @@ $evidence = [ordered]@{
     reportPath = $resolvedReportPath
     requiredCoverage = [ordered]@{
         categoryCodes = $requiredCategoryCodes
+        scoreBasis = "independent-audit-control-ledger-v1"
+        auditBaselineDate = "2026-07-10"
+        auditedCommit = "7ea54cc6d1769ced568ac1568d190cc2bb4b16d1"
+        scorecardControlCodes = @($verifiedScorecardControlCodes | Sort-Object -Unique)
         goldenCorpusScenarioCodes = $requiredScenarioCodes
         sourceLawSourceIds = $requiredSourceIds
         releaseVerificationManifestCodes = $requiredManifestCodes
@@ -434,8 +608,13 @@ $evidence = [ordered]@{
         humanReleaseEvidenceReviewerPickupFiles = $requiredHumanReleaseEvidenceReviewerPickupFiles
         humanReleaseEvidenceCloseoutStepCodes = @($requiredHumanReleaseEvidenceCloseoutSteps | ForEach-Object { $_.code })
         assuranceEvidenceItems = $requiredAssuranceEvidence
-        expectedVisualScreenshotCount = 28
-        expectedVisualRouteCount = 7
+        expectedVisualInventoryVersion = "canonical-material-states-v1"
+        expectedVisualScreenshotCount = 192
+        expectedVisualRouteCount = 32
+        expectedAccountantWorkbenchRouteCount = 7
+        requiredVisualStateIds = $requiredVisualStateIds
+        requiredVisualMaterialRoutes = $requiredVisualMaterialRoutes
+        requiredVisualUiStates = $requiredVisualUiStates
     }
     failureCount = $failures.Count
     failures = $failures.ToArray()

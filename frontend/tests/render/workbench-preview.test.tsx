@@ -25,6 +25,28 @@ describe("WorkbenchPreview", () => {
     expect(screen.getByText("Read-only workflow access")).toBeInTheDocument();
     expect(screen.getByText(/Evidence remains visible; editing requires Owner or Accountant access/i)).toBeInTheDocument();
     expect(screen.getByText("Filing action bar")).toBeInTheDocument();
+    expect(screen.getByLabelText("Record external ROS validation preview").tagName).toBe("SPAN");
+    expect(screen.getByLabelText("Mark accountant approved preview").tagName).toBe("SPAN");
+    expect(screen.queryByRole("button", { name: /Mark accountant approved/i })).not.toBeInTheDocument();
     expect(screen.getByText("EUR 125,000")).toBeInTheDocument();
+  });
+
+  it.each([
+    ["loading", "Canonical loading state", "Loading canonical accountant workspace"],
+    ["empty", "Canonical empty state", "No canonical accounting records"],
+    ["maximum-data", "Canonical maximum-data state", "Maximum-data review table"],
+    ["error", "Canonical error state", "Canonical workspace could not be loaded"],
+    ["partial-error", "Canonical partial-error state", "Filing evidence unavailable"],
+    ["permission-denied", "Canonical permission-denied state", "Permission denied"],
+    ["read-only", "Canonical read-only state", "Read-only workflow access"],
+    ["stale", "Canonical stale state", "Refreshing statement evidence; retained data may be stale."],
+    ["conflict", "Canonical conflict state", "Accounting record changed by another reviewer"],
+  ])("renders the deterministic %s visual-QA state", (state, title, expectedStateText) => {
+    render(<WorkbenchPreview canonicalState={state} />);
+
+    expect(screen.getByRole("heading", { name: title })).toBeInTheDocument();
+    expect(screen.getByText(expectedStateText)).toBeInTheDocument();
+    expect(screen.getByText("Named human review required")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Workbench preview" })).toHaveAttribute("href", "/workbench-preview");
   });
 });

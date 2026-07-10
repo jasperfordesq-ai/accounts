@@ -5,6 +5,35 @@ import { FilingReviewCentre } from "@/components/period/FilingReviewCentre";
 import type { FilingReadinessProfile, FilingWorkflowStatus } from "@/lib/api";
 
 describe("FilingReviewCentre", () => {
+  it("blocks professional workflow confirmations when required filing evidence failed", () => {
+    const onApproveForFiling = vi.fn();
+    render(
+      <FilingReviewCentre
+        filingStatus={sampleWorkflowStatus({ readyToFile: true })}
+        filingReadinessProfile={sampleReadinessProfile({ supportedPath: true, manualProfessionalReviewRequired: false })}
+        croSubmissionReference=""
+        validatingIxbrl={false}
+        evidenceAvailable={false}
+        onCroSubmissionReferenceChange={vi.fn()}
+        onRunIxbrlChecks={vi.fn()}
+        onApproveForFiling={onApproveForFiling}
+        onMarkCroSubmitted={vi.fn()}
+        onConfirmCroPayment={vi.fn()}
+        onMarkCroAccepted={vi.fn()}
+        onRecordCroSendBack={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Evidence unavailable")).toBeInTheDocument();
+    expect(screen.getByText("Confirmation blocked")).toBeInTheDocument();
+    expect(screen.getByText("Required filing evidence unavailable")).toBeInTheDocument();
+    expect(screen.getByText(/Retry the failed filing resource/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Check draft iXBRL structure/ })).toBeDisabled();
+    expect(screen.getByText("Revenue iXBRL requires manual handoff")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Approve for Filing/i })).not.toBeInTheDocument();
+    expect(onApproveForFiling).not.toHaveBeenCalled();
+  });
+
   it("opens with a filing decision centre for blockers, ready evidence and next action", () => {
     render(
       <FilingReviewCentre
@@ -215,7 +244,7 @@ describe("FilingReviewCentre", () => {
     expect(advisoryEvidence.compareDocumentPosition(completedEvidence) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it("passes the CORE reference when marking an approved filing as submitted", async () => {
+  it("passes the CORE reference when recording an approved filing with the keyboard", async () => {
     const user = userEvent.setup();
     const onReferenceChange = vi.fn();
     const onMarkSubmitted = vi.fn();
@@ -244,13 +273,15 @@ describe("FilingReviewCentre", () => {
 
     expect(screen.getByRole("textbox", { name: "CORE submission reference" })).toHaveValue(" CORE-2026-0007 ");
 
-    await user.click(screen.getByRole("button", { name: /Mark as Submitted/i }));
+    const submit = screen.getByRole("button", { name: /Record external submission/i });
+    submit.focus();
+    await user.keyboard("{Enter}");
 
     expect(onReferenceChange).not.toHaveBeenCalled();
     expect(onMarkSubmitted).toHaveBeenCalledWith("CORE-2026-0007");
   });
 
-  it("blocks marking a CRO filing as submitted until a CORE reference is recorded", () => {
+  it("blocks recording an external CRO submission until a CORE reference is recorded", () => {
     const onMarkSubmitted = vi.fn();
 
     render(
@@ -276,8 +307,8 @@ describe("FilingReviewCentre", () => {
     );
 
     expect(screen.getByRole("textbox", { name: "CORE submission reference" })).toHaveValue("   ");
-    expect(screen.getByRole("button", { name: /Mark as Submitted/i })).toBeDisabled();
-    expect(screen.getByText("CORE submission reference is required before recording CRO submission.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Record external submission/i })).toBeDisabled();
+    expect(screen.getByText("A CORE reference is required before recording an external CRO submission.")).toBeInTheDocument();
     expect(onMarkSubmitted).not.toHaveBeenCalled();
   });
 
@@ -522,10 +553,13 @@ function sampleWorkflowStatus({
     },
     revenue: {
       status: "ReadyForReview",
-      ixbrlReady: true,
-      ixbrlInternalChecksPassed: true,
+      ixbrlReady: false,
+      ixbrlInternalChecksPassed: false,
       ixbrlValid: false,
-      validationErrors: "Internal checks passed. External ROS/iXBRL validation is still required.",
+      validationErrors: "Revenue filing-ready iXBRL generation is disabled.",
+      generationSupport: "manual-handoff-only",
+      manualHandoffRequired: true,
+      reviewPrototypeChecksPassed: true,
     },
     charity: {
       status: "NotStarted",
@@ -567,6 +601,9 @@ function sampleReadinessProfile({
     accountantReviewState: "Qualified accountant review required",
     directCroSubmissionSupported: false,
     directRosSubmissionSupported: false,
+    revenueIxbrlGenerationSupported: false,
+    revenueManualHandoffRequired: true,
+    revenueGenerationSupportReason: "Revenue filing-ready iXBRL generation is disabled.",
     revenueTaxonomy: revenueTaxonomy ?? {
       taxonomyKey: "ie-2025-frs-102",
       taxonomyDate: "2025",

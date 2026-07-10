@@ -24,6 +24,9 @@ describe("YearEndInventorySection", () => {
     await user.selectOptions(screen.getByRole("combobox", { name: "Valuation method" }), "WeightedAverage");
     await user.click(screen.getByRole("button", { name: "Add inventory item" }));
     await user.click(screen.getByRole("button", { name: "Delete inventory item Finished goods" }));
+    expect(onDelete).not.toHaveBeenCalled();
+    expect(screen.getByRole("alertdialog", { name: "Remove inventory item Finished goods?" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Remove record" }));
 
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ description: "Work in progress" }));
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ value: 2150 }));

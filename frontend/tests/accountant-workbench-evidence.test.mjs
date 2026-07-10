@@ -5,11 +5,16 @@ import path from "node:path";
 import { describe, it } from "node:test";
 import {
   ACCOUNTANT_WORKFLOW_STAGES,
+  expectedAccountantWorkbenchScreenshotCount,
+  expectedVisualSmokeArtifacts,
+  expectedVisualSmokeRouteAudits,
+  expectedVisualSmokeScreenshotCount,
   MIN_VISUAL_SMOKE_CONTRAST_RATIO,
-  visualSmokeContrastCheck,
+  passedVisualSmokeContrastResult,
   visualSmokeLayoutChecks,
   visualSmokeReviewChecks,
   visualSmokeRoutes,
+  visualSmokeStateInventory,
   visualSmokeThemes,
   visualSmokeViewports,
 } from "../scripts/visual-smoke-plan.mjs";
@@ -33,7 +38,10 @@ describe("accountant workbench evidence report", () => {
       assert.equal(result.status, "passed");
       assert.equal(result.evidenceReportFileName, "accountant-workbench-evidence-report.json");
       assert.equal(result.routeCount, 7);
-      assert.equal(result.screenshotCount, 28);
+      assert.equal(result.screenshotCount, expectedAccountantWorkbenchScreenshotCount());
+      assert.equal(result.expectedScreenshotCount, expectedAccountantWorkbenchScreenshotCount());
+      assert.equal(result.visualSmokeTotalScreenshotCount, expectedVisualSmokeScreenshotCount());
+      assert.equal(result.visualSmokeExpectedScreenshotCount, expectedVisualSmokeScreenshotCount());
       assert.deepEqual(result.requiredCoverage.workflowStages, ACCOUNTANT_WORKFLOW_STAGES);
       assert.deepEqual(result.requiredCoverage.routeCodes, visualSmokeRoutes.map((route) => route.name));
       assert.deepEqual(result.requiredCoverage.reviewChecks, visualSmokeReviewChecks);
@@ -51,7 +59,7 @@ describe("accountant workbench evidence report", () => {
       assert.equal(result.requiredCoverage.routeAcceptanceSignOffGate, "qualified-accountant-route-acceptance");
       assert.ok(result.requiredCoverage.evidenceFiles.includes("visual-smoke-evidence-report.json"));
       assert.ok(result.requiredCoverage.evidenceFiles.includes("accountant-workbench-evidence-report.json"));
-      assert.equal(result.routeReadiness.find((route) => route.routeName === "filing-review")?.screenshotCount, 4);
+      assert.equal(result.routeReadiness.find((route) => route.routeName === "filing-review")?.screenshotCount, 6);
       assert.equal(
         result.routeReadiness.find((route) => route.routeName === "filing-review")?.layoutCheckResultCount,
         visualSmokeThemes.length * visualSmokeViewports.length * visualSmokeLayoutChecks.length,
@@ -80,7 +88,7 @@ describe("accountant workbench evidence report", () => {
             "production-readiness-visual-smoke-screenshots-reviewed",
             "production-readiness-qualified-accountant-route-acceptance",
           ],
-          screenshotReviewEvidence: "production-readiness-light-dark-desktop-mobile-screenshot-review",
+          screenshotReviewEvidence: "production-readiness-light-dark-mobile-tablet-desktop-screenshot-review",
           signOffGate: "qualified-accountant-route-acceptance",
           reviewStatus: "required-review",
           blocksRelease: true,
@@ -96,8 +104,10 @@ describe("accountant workbench evidence report", () => {
     const dir = await mkTempDir();
     const visualReportPath = path.join(dir, "visual-smoke-evidence-report.json");
     const report = visualSmokeReport();
-    report.screenshots[0].themeContrastResult = {
-      ...report.screenshots[0].themeContrastResult,
+    const screenshot = report.screenshots.find((item) =>
+      item.routeName === "dashboard" && item.theme === "light" && item.viewportName === "desktop");
+    screenshot.themeContrastResult = {
+      ...screenshot.themeContrastResult,
       status: "failed",
     };
 
@@ -118,7 +128,8 @@ describe("accountant workbench evidence report", () => {
     const dir = await mkTempDir();
     const visualReportPath = path.join(dir, "visual-smoke-evidence-report.json");
     const report = visualSmokeReport();
-    report.routeCoverage[0].requiredReviewChecks = report.routeCoverage[0].requiredReviewChecks.filter(
+    const coverage = report.routeCoverage.find((item) => item.routeName === "dashboard");
+    coverage.requiredReviewChecks = coverage.requiredReviewChecks.filter(
       (check) => check !== "table-scanability",
     );
 
@@ -160,8 +171,8 @@ describe("accountant workbench evidence report", () => {
     const dir = await mkTempDir();
     const visualReportPath = path.join(dir, "visual-smoke-evidence-report.json");
     const report = visualSmokeReport();
-    report.routeCoverage[0].routeKey = "wrong-dashboard-key";
-    report.screenshots[0].routeKey = "wrong-dashboard-key";
+    report.routeCoverage.find((item) => item.routeName === "dashboard").routeKey = "wrong-dashboard-key";
+    report.screenshots.find((item) => item.routeName === "dashboard").routeKey = "wrong-dashboard-key";
 
     await writeFile(visualReportPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
 
@@ -180,7 +191,8 @@ describe("accountant workbench evidence report", () => {
     const dir = await mkTempDir();
     const visualReportPath = path.join(dir, "visual-smoke-evidence-report.json");
     const report = visualSmokeReport();
-    report.screenshots[0].expectedText = "Wrong route heading";
+    report.screenshots.find((item) =>
+      item.routeName === "dashboard" && item.theme === "light" && item.viewportName === "desktop").expectedText = "Wrong route heading";
 
     await writeFile(visualReportPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
 
@@ -199,7 +211,9 @@ describe("accountant workbench evidence report", () => {
     const dir = await mkTempDir();
     const visualReportPath = path.join(dir, "visual-smoke-evidence-report.json");
     const report = visualSmokeReport();
-    report.screenshots[0].layoutCheckResults = report.screenshots[0].layoutCheckResults.filter(
+    const screenshot = report.screenshots.find((item) =>
+      item.routeName === "dashboard" && item.theme === "light" && item.viewportName === "desktop");
+    screenshot.layoutCheckResults = screenshot.layoutCheckResults.filter(
       (result) => result.check !== "page-horizontal-overflow",
     );
 
@@ -220,25 +234,25 @@ function visualSmokeReport() {
   return {
     ok: true,
     status: "passed",
-    routeCount: visualSmokeRoutes.length,
-    screenshotCount: visualSmokeRoutes.length * visualSmokeThemes.length * visualSmokeViewports.length,
-    expectedScreenshotCount: visualSmokeRoutes.length * visualSmokeThemes.length * visualSmokeViewports.length,
-    routeCoverage: visualSmokeRoutes.map((route) => ({
-      routeName: route.name,
-      routeKey: route.routeKey,
+    routeCount: visualSmokeStateInventory.length,
+    screenshotCount: expectedVisualSmokeScreenshotCount(),
+    expectedScreenshotCount: expectedVisualSmokeScreenshotCount(),
+    routeCoverage: expectedVisualSmokeRouteAudits().map((state) => ({
+      stateId: state.stateId,
+      routeName: state.routeName,
+      routeKey: state.routeKey,
       screenshotCount: visualSmokeThemes.length * visualSmokeViewports.length,
       requiredReviewChecks: visualSmokeReviewChecks,
       reviewStatus: "required-review",
     })),
-    screenshots: visualSmokeRoutes.flatMap((route) =>
-      visualSmokeThemes.flatMap((theme) =>
-        visualSmokeViewports.map((viewport) => ({
-          routeName: route.name,
-          routeKey: route.routeKey,
-          theme,
-          viewportName: viewport.name,
-          fileName: `${route.name}-${theme}-${viewport.name}.png`,
-          expectedText: route.expectedText,
+    screenshots: expectedVisualSmokeArtifacts().map((artifact) => ({
+          stateId: artifact.stateId,
+          routeName: artifact.routeName,
+          routeKey: artifact.routeKey,
+          theme: artifact.theme,
+          viewportName: artifact.viewportName,
+          fileName: artifact.fileName,
+          expectedText: artifact.expectedText,
           byteSize: 128,
           sha256: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
           reviewStatus: "required-review",
@@ -247,18 +261,16 @@ function visualSmokeReport() {
             status: "passed",
             evidence: `${check} passed`,
           })),
-          themeContrastResult: {
-            check: visualSmokeContrastCheck,
-            status: "passed",
-            minimumContrastRatio: MIN_VISUAL_SMOKE_CONTRAST_RATIO,
-            requiredMinimumContrastRatio: MIN_VISUAL_SMOKE_CONTRAST_RATIO,
+          themeContrastResult: passedVisualSmokeContrastResult({
             sampledTextCount: 12,
-            failingTextCount: 0,
-            evidence: "theme contrast passed",
-          },
+            sampledNormalTextCount: 8,
+            sampledLargeTextCount: 1,
+            sampledInteractiveTextCount: 3,
+            sampledPlaceholderCount: 1,
+            sampledUiComponentCount: 4,
+            sampledGradientTextCount: 1,
+          }),
         })),
-      ),
-    ),
   };
 }
 

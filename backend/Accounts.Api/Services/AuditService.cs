@@ -1,5 +1,6 @@
 using Accounts.Api.Data;
 using Accounts.Api.Entities;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using System.Collections.Concurrent;
@@ -9,7 +10,7 @@ using System.Text.Json.Serialization;
 
 namespace Accounts.Api.Services;
 
-public class AuditService(AccountsDbContext db)
+public class AuditService(AccountsDbContext db, IHttpContextAccessor? httpContextAccessor = null)
 {
     private const string NpgsqlProviderName = "Npgsql.EntityFrameworkCore.PostgreSQL";
     private const int CompanyAuditChainLockFamily = 200_014_001;
@@ -44,7 +45,19 @@ public class AuditService(AccountsDbContext db)
         CancellationToken cancellationToken = default)
     {
         var auditCancellationToken = durableAudit ? CancellationToken.None : cancellationToken;
-        var chainLock = ChainLocks.GetOrAdd(ChainLockKey(companyId, tenantId), _ => new SemaphoreSlim(1, 1));
+        var ambientUser = httpContextAccessor?.HttpContext is { } httpContext
+            ? AuthContext.GetUser(httpContext)
+            : null;
+        if (ambientUser is not null && tenantId is not null && ambientUser.TenantId != tenantId)
+            throw new PersistenceOwnershipException(nameof(AuditLog));
+        tenantId ??= ambientUser?.TenantId;
+        userId ??= ambientUser is null ? null : AuthenticatedIdentity.AuditUserId(ambientUser);
+        actorDisplayName ??= ambientUser is null ? null : AuthenticatedIdentity.ReviewerDisplayName(ambientUser);
+        requestId ??= httpContextAccessor?.HttpContext is { } requestContext
+            ? GetRequestId(requestContext)
+            : null;
+        var resolvedTenantId = await ResolveTenantIdAsync(companyId, tenantId, auditCancellationToken);
+        var chainLock = ChainLocks.GetOrAdd(ChainLockKey(companyId, resolvedTenantId), _ => new SemaphoreSlim(1, 1));
         await chainLock.WaitAsync(auditCancellationToken);
         try
         {
@@ -52,7 +65,7 @@ public class AuditService(AccountsDbContext db)
                 db.ChangeTracker.Clear();
 
             await using var distributedTransaction = await BeginDistributedChainTransactionAsync(auditCancellationToken);
-            await AcquireDistributedChainLockAsync(companyId, tenantId, auditCancellationToken);
+            await AcquireDistributedChainLockAsync(companyId, resolvedTenantId, auditCancellationToken);
 
             var entry = new AuditLog
             {
@@ -64,13 +77,13 @@ public class AuditService(AccountsDbContext db)
                 OldValueJson = oldValue != null ? SerializeAuditPayload(oldValue) : null,
                 NewValueJson = newValue != null ? SerializeAuditPayload(newValue) : null,
                 UserId = Normalize(userId, MaxUserIdLength),
-                TenantId = tenantId,
+                TenantId = resolvedTenantId,
                 RequestId = Normalize(requestId, MaxRequestIdLength),
                 ActorDisplayName = Normalize(actorDisplayName, MaxActorDisplayNameLength),
                 Timestamp = AuditTimestampUtc()
             };
 
-            var previousHash = await GetPreviousIntegrityHashAsync(companyId, tenantId, auditCancellationToken);
+            var previousHash = await GetPreviousIntegrityHashAsync(companyId, resolvedTenantId, auditCancellationToken);
             entry.PreviousIntegrityHash = previousHash;
             entry.IntegrityHash = AuditLogIntegrity.ComputeHash(entry);
 
@@ -83,6 +96,29 @@ public class AuditService(AccountsDbContext db)
         {
             chainLock.Release();
         }
+    }
+
+    private async Task<int?> ResolveTenantIdAsync(
+        int? companyId,
+        int? suppliedTenantId,
+        CancellationToken cancellationToken)
+    {
+        if (companyId is null)
+            return suppliedTenantId;
+
+        var company = await db.Companies
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .Where(candidate => candidate.Id == companyId)
+            .Select(candidate => new { candidate.TenantId })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (company is null)
+            return suppliedTenantId;
+
+        if (suppliedTenantId is not null && suppliedTenantId != company.TenantId)
+            throw new PersistenceOwnershipException(nameof(Company));
+
+        return company.TenantId;
     }
 
     private async Task<IDbContextTransaction?> BeginDistributedChainTransactionAsync(CancellationToken cancellationToken)
@@ -161,6 +197,14 @@ public class AuditService(AccountsDbContext db)
             return null;
 
         return trimmed.Length <= maxLength ? trimmed : trimmed[..maxLength];
+    }
+
+    private static string? GetRequestId(HttpContext context)
+    {
+        var correlationId = context.Request.Headers["X-Correlation-ID"].FirstOrDefault();
+        if (!string.IsNullOrWhiteSpace(correlationId)) return correlationId;
+        var requestId = context.Request.Headers["X-Request-ID"].FirstOrDefault();
+        return string.IsNullOrWhiteSpace(requestId) ? context.TraceIdentifier : requestId;
     }
 
     private static string SerializeAuditPayload(object value)

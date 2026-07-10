@@ -1,5 +1,6 @@
 "use client";
 
+import type { Key } from "react";
 import { Button, Card, Chip, TabsRoot, TabList, Tab, TabPanel } from "@heroui/react";
 import {
   AlertTriangle,
@@ -23,9 +24,17 @@ import type {
   ProfitAndLoss,
   StatementSourceSummary,
   TaxComputation,
+  CorporationTaxFilingSupportResponse,
   TrialBalanceLine,
 } from "@/lib/api";
-import { PageShell, StatusBadge, WorkbenchErrorState } from "@/components/workbench";
+import { CorporationTaxFilingSupportPanel } from "@/components/period/CorporationTaxFilingSupportPanel";
+import { ActionLink, HorizontalScrollRegion, PageShell, StatusBadge, WorkbenchErrorState } from "@/components/workbench";
+import { ResourceStateNotice } from "@/components/ResourceStateNotice";
+import type { ResourceState } from "@/lib/resourceState";
+import {
+  FINANCIAL_STATEMENT_TAB_ID_SET,
+  type FinancialStatementTabId,
+} from "@/lib/statementTabs";
 
 interface FinancialStatementsWorkbenchProps {
   company: Company | null;
@@ -33,15 +42,22 @@ interface FinancialStatementsWorkbenchProps {
   companyId: string;
   periodId: string;
   error: string | null;
+  shellState?: ResourceState;
+  statementState?: ResourceState;
   trialBalance: TrialBalanceLine[] | null;
   pnl: ProfitAndLoss | null;
   bs: BalanceSheet | null;
   tax: TaxComputation | null;
+  taxFilingSupport?: CorporationTaxFilingSupportResponse | null;
   cashFlow: CashFlowStatement | null;
   equity: EquityChanges | null;
   directorsReport: DirectorsReportData | null;
   sources: StatementSourceSummary[] | null;
   onRetry: () => void;
+  onRetryStatements?: () => void | Promise<void>;
+  canViewWorkingPapers?: boolean;
+  selectedStatementTab?: FinancialStatementTabId;
+  onStatementTabChange?: (tab: FinancialStatementTabId) => void;
 }
 
 /** Format a number as EUR accounting style: negative in parentheses */
@@ -70,15 +86,22 @@ export function FinancialStatementsWorkbench({
   companyId,
   periodId,
   error,
+  shellState,
+  statementState,
   trialBalance,
   pnl,
   bs,
   tax,
+  taxFilingSupport = null,
   cashFlow,
   equity,
   directorsReport,
   sources,
   onRetry,
+  onRetryStatements,
+  canViewWorkingPapers = false,
+  selectedStatementTab,
+  onStatementTabChange,
 }: FinancialStatementsWorkbenchProps) {
   if (error && !company) {
     return (
@@ -100,17 +123,47 @@ export function FinancialStatementsWorkbench({
       backLabel="Back to Period Workspace"
       meta={<StatementsMeta trialBalance={trialBalance} bs={bs} sources={sources} />}
       actions={
-        <Button variant="outline" size="sm" className="no-print" onPress={() => window.print()}>
-          <Printer className="h-4 w-4" />
-          Print
-        </Button>
+        <div className="flex flex-wrap gap-2 no-print">
+          {canViewWorkingPapers && (
+            <ActionLink href={`/companies/${companyId}/periods/${periodId}/working-papers`} variant="outline" size="sm">
+              <FileText className="h-4 w-4" />
+              Accountant working papers
+            </ActionLink>
+          )}
+          <Button variant="outline" size="sm" onPress={() => window.print()}>
+            <Printer className="h-4 w-4" />
+            Print
+          </Button>
+        </div>
       }
     >
+      {shellState && <ResourceStateNotice state={shellState} label="statement company and period context" onRetry={onRetry} />}
+      {statementState && <ResourceStateNotice state={statementState} label="financial statement evidence" onRetry={onRetryStatements} />}
 {/* Tabs */}
-<TabsRoot>
+<p
+  id="financial-statements-tab-help"
+  role="note"
+  aria-label="Financial statements tab navigation instructions"
+  className="no-print mb-2 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-medium text-sky-900 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100"
+>
+  Swipe to reveal more statement tabs. Use Left and Right Arrow keys to move between tabs.
+</p>
+<TabsRoot
+  {...(selectedStatementTab
+    ? {
+        selectedKey: selectedStatementTab,
+        onSelectionChange: (key: Key) => {
+          const tab = String(key) as FinancialStatementTabId;
+          if (FINANCIAL_STATEMENT_TAB_ID_SET.has(tab)) onStatementTabChange?.(tab);
+        },
+      }
+    : {})}
+>
   <TabList
     aria-label="Financial statements tabs"
-    className="flex gap-1 border-b border-gray-200 dark:border-neutral-700 mb-6 no-print overflow-x-auto"
+    aria-describedby="financial-statements-tab-help"
+    data-overflow-tablist="true"
+    className="mb-6 flex max-w-full gap-1 overflow-x-auto overscroll-x-contain whitespace-nowrap border-b border-gray-200 no-print dark:border-neutral-700"
   >
     <Tab
       id="trial-balance"
@@ -181,8 +234,9 @@ export function FinancialStatementsWorkbench({
       </Card.Header>
       <Card.Content>
         {trialBalance ? (
-          <div className="overflow-x-auto -mx-1">
-            <table className="w-full text-sm border border-gray-200 dark:border-neutral-700 rounded-lg overflow-hidden" role="table">
+          <>
+            <HorizontalScrollRegion label="Trial balance table" className="-mx-1">
+            <table className="min-w-[44rem] w-full text-sm border border-gray-200 dark:border-neutral-700 rounded-lg overflow-hidden" role="table">
               <caption className="sr-only">Trial Balance</caption>
               <thead>
                 <tr className="bg-gray-50 dark:bg-neutral-800 border-b border-gray-200 dark:border-neutral-700 text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">
@@ -233,6 +287,7 @@ export function FinancialStatementsWorkbench({
                 </tr>
               </tfoot>
             </table>
+            </HorizontalScrollRegion>
             {/* Balance check */}
             {(() => {
               const totalDebit = trialBalance.reduce(
@@ -261,9 +316,9 @@ export function FinancialStatementsWorkbench({
                 </div>
               );
             })()}
-          </div>
+          </>
         ) : (
-          <EmptyState message="Trial balance data is not available yet." />
+          <EmptyState message="Trial balance data is not available yet." resourceKey="trial-balance" resourceState={statementState} onRetry={onRetryStatements} />
         )}
       </Card.Content>
     </Card>
@@ -280,8 +335,8 @@ export function FinancialStatementsWorkbench({
       </Card.Header>
       <Card.Content>
         {sources && sources.length > 0 ? (
-          <div className="overflow-x-auto -mx-1">
-            <table className="w-full text-xs border border-gray-200 dark:border-neutral-700 rounded-lg overflow-hidden" role="table">
+          <HorizontalScrollRegion label="Statement source trail table" className="-mx-1">
+            <table className="min-w-[70rem] w-full text-xs border border-gray-200 dark:border-neutral-700 rounded-lg overflow-hidden" role="table">
               <caption className="sr-only">Statement source trail</caption>
               <thead>
                 <tr className="bg-gray-50 dark:bg-neutral-800 border-b border-gray-200 dark:border-neutral-700 text-gray-600 dark:text-gray-400 uppercase">
@@ -328,9 +383,9 @@ export function FinancialStatementsWorkbench({
                 ))}
               </tbody>
             </table>
-          </div>
+          </HorizontalScrollRegion>
         ) : (
-          <EmptyState message="No statement source data is available yet." />
+          <EmptyState message="No statement source data is available yet." resourceKey="sources" resourceState={statementState} onRetry={onRetryStatements} />
         )}
       </Card.Content>
     </Card>
@@ -360,6 +415,7 @@ export function FinancialStatementsWorkbench({
               bold
               highlight
             />
+            <StatementRow label="Other Income" amount={pnl.otherIncome} />
             <div className="pt-2">
               <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
                 Overheads
@@ -392,7 +448,7 @@ export function FinancialStatementsWorkbench({
             {pnl.yearEndAdjustments.length > 0 && (
               <div className="pt-2">
                 <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
-                  Unposted Year-End Adjustments
+                  Posted Year-End Journal Evidence
                 </p>
                 {pnl.yearEndAdjustments.map((adj, idx) => (
                   <StatementRow
@@ -428,7 +484,7 @@ export function FinancialStatementsWorkbench({
             />
           </div>
         ) : (
-          <EmptyState message="Profit and loss data is not available yet." />
+          <EmptyState message="Profit and loss data is not available yet." resourceKey="pnl" resourceState={statementState} onRetry={onRetryStatements} />
         )}
       </Card.Content>
     </Card>
@@ -603,6 +659,13 @@ export function FinancialStatementsWorkbench({
                 amount={-Math.abs(bs.capitalAndReserves.dividendsPaid)}
                 indent
               />
+              {bs.capitalAndReserves.otherReserveMovements !== 0 && (
+                <StatementRow
+                  label="Other posted reserve movements"
+                  amount={bs.capitalAndReserves.otherReserveMovements}
+                  indent
+                />
+              )}
               <StatementRow
                 label="Retained earnings (derived)"
                 amount={bs.capitalAndReserves.retainedEarnings}
@@ -649,7 +712,7 @@ export function FinancialStatementsWorkbench({
             </div>
           </div>
         ) : (
-          <EmptyState message="Balance sheet data is not available yet." />
+          <EmptyState message="Balance sheet data is not available yet." resourceKey="balance-sheet" resourceState={statementState} onRetry={onRetryStatements} />
         )}
       </Card.Content>
     </Card>
@@ -659,14 +722,34 @@ export function FinancialStatementsWorkbench({
   <TabPanel id="tax-computation">
     <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
       <Card.Header>
-        <Card.Title>Corporation Tax Computation</Card.Title>
+        <Card.Title>Corporation Tax Support Data</Card.Title>
         <Card.Description>
-          Irish corporation tax calculation for the period
+          Bounded working-paper calculation only - never a complete CT1 return
         </Card.Description>
       </Card.Header>
       <Card.Content>
         {tax ? (
           <div className="max-w-lg mx-auto space-y-1">
+            <div
+              role="status"
+              className={`mb-4 rounded-lg border px-4 py-3 text-sm ${tax.finalTaxChargeSupported
+                ? "border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100"
+                : "border-red-300 bg-red-50 text-red-950 dark:border-red-800 dark:bg-red-950/30 dark:text-red-100"}`}
+            >
+              <p className="font-semibold">
+                {tax.finalTaxChargeSupported
+                  ? "Simple-scope machine checks passed - qualified review still required"
+                  : "Final tax charge and Revenue-ready handoff blocked"}
+              </p>
+              <p className="mt-1">
+                This output is support data, not a CT1 return. The platform does not submit it to Revenue.
+              </p>
+              {tax.blockingReasons.length > 0 && (
+                <ul className="mt-2 list-disc space-y-1 pl-5">
+                  {tax.blockingReasons.map((reason) => <li key={reason}>{reason}</li>)}
+                </ul>
+              )}
+            </div>
             <StatementRow
               label="Accounting Profit"
               amount={tax.accountingProfit}
@@ -699,8 +782,19 @@ export function FinancialStatementsWorkbench({
             )}
 
             <Divider />
+            <p className="pt-2 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+              Taxable streams and loss movement
+            </p>
+            <StatementRow label="Trading profit before loss relief" amount={tax.tradingProfitBeforeLossRelief} />
+            <StatementRow label="Brought-forward trading loss" amount={-tax.broughtForwardTradingLoss} />
+            <StatementRow label="Trading loss used" amount={-tax.tradingLossUsed} />
+            <StatementRow label="Trading profit after supported relief" amount={tax.tradingProfitAfterLossRelief} bold />
+            <StatementRow label="Passive / non-trading income" amount={tax.passiveNonTradingIncome} />
+            <StatementRow label="Current-period trading loss" amount={tax.tradingLossAvailable} />
+            <StatementRow label="Closing trading-loss support ledger" amount={tax.tradingLossCarriedForward} />
+            <Divider />
             <StatementRow
-              label="Taxable Profit"
+              label="Indicative Taxable Profit"
               amount={tax.taxableProfit}
               bold
               highlight
@@ -711,19 +805,19 @@ export function FinancialStatementsWorkbench({
                 Corporation Tax
               </p>
               <StatementRow
-                label="Tax at 12.5% (trading)"
+                label="Indicative tax at 12.5% (trading)"
                 amount={tax.corporationTaxAt125}
                 indent
               />
               <StatementRow
-                label="Tax at 25% (non-trading)"
+                label="Indicative tax at 25% (non-trading)"
                 amount={tax.corporationTaxAt25}
                 indent
               />
             </div>
             <Divider />
             <StatementRow
-              label="Total Corporation Tax"
+              label="Indicative Corporation Tax"
               amount={tax.totalCorporationTax}
               bold
             />
@@ -747,10 +841,30 @@ export function FinancialStatementsWorkbench({
                 </p>
               </div>
             )}
+            <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-xs text-gray-700 dark:border-neutral-700 dark:bg-neutral-800/60 dark:text-gray-300">
+              <p className="font-semibold">Official scope references</p>
+              <ul className="mt-2 space-y-1">
+                {tax.sources.map((source) => (
+                  <li key={source.code}>
+                    <a className="text-emerald-700 underline dark:text-emerald-300" href={source.url} target="_blank" rel="noreferrer">
+                      {source.title}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 font-mono text-[10px] break-all">Calculation SHA-256: {tax.calculationSha256}</p>
+            </div>
           </div>
         ) : (
-          <EmptyState message="Tax computation data is not available yet." />
+          <EmptyState message="Tax computation data is not available yet." resourceKey="tax" resourceState={statementState} onRetry={onRetryStatements} />
         )}
+        <div className="mt-8 border-t border-gray-200 pt-6 dark:border-neutral-700">
+          <CorporationTaxFilingSupportPanel
+            companyId={Number(companyId)}
+            periodId={Number(periodId)}
+            response={taxFilingSupport}
+          />
+        </div>
       </Card.Content>
     </Card>
   </TabPanel>
@@ -773,7 +887,7 @@ export function FinancialStatementsWorkbench({
             ))}
             <Divider />
             <StatementRow label="Cash Generated from Operations" amount={cashFlow.cashFromOperations} bold highlight />
-            <StatementRow label="Tax Paid" amount={-Math.abs(cashFlow.taxPaid)} />
+            <StatementRow label="Tax Paid / (Refunded)" amount={-cashFlow.taxPaid} />
             <Divider />
             <StatementRow label="Net Cash from Operating Activities" amount={cashFlow.netCashFromOperating} bold highlight />
 
@@ -793,6 +907,12 @@ export function FinancialStatementsWorkbench({
             <StatementRow label="Loan Repayments" amount={-Math.abs(cashFlow.loanRepayments)} indent />
             <StatementRow label="Loan Drawdowns" amount={cashFlow.loanDrawdowns} indent />
             <StatementRow label="Dividends Paid" amount={-Math.abs(cashFlow.dividendsPaid)} indent />
+            {cashFlow.shareIssues !== 0 && (
+              <StatementRow label="Cash proceeds from share issues" amount={cashFlow.shareIssues} indent />
+            )}
+            {cashFlow.otherFinancing !== 0 && (
+              <StatementRow label="Other financing cash flows" amount={cashFlow.otherFinancing} indent />
+            )}
             <Divider />
             <StatementRow label="Net Cash from Financing Activities" amount={cashFlow.netCashFromFinancing} bold />
 
@@ -803,7 +923,7 @@ export function FinancialStatementsWorkbench({
             <StatementRow label="Closing Cash" amount={cashFlow.closingCash} bold highlight />
           </div>
         ) : (
-          <EmptyState message="Cash flow data is not available yet." />
+          <EmptyState message="Cash flow data is not available yet." resourceKey="cash-flow" resourceState={statementState} onRetry={onRetryStatements} />
         )}
       </Card.Content>
     </Card>
@@ -820,12 +940,12 @@ export function FinancialStatementsWorkbench({
       </Card.Header>
       <Card.Content>
         {equity ? (
-          <div className="overflow-x-auto -mx-1">
-            <table className="w-full text-sm border border-gray-200 dark:border-neutral-700 rounded-lg overflow-hidden" role="table">
+          <HorizontalScrollRegion label="Statement of changes in equity table" className="-mx-1">
+            <table className="min-w-[42rem] w-full text-sm border border-gray-200 dark:border-neutral-700 rounded-lg overflow-hidden" role="table">
               <caption className="sr-only">Statement of Changes in Equity</caption>
               <thead>
                 <tr className="bg-gray-50 dark:bg-neutral-800 border-b border-gray-200 dark:border-neutral-700 text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">
-                  <th scope="col" className="text-left px-4 py-2.5 w-[40%]"></th>
+                  <th scope="col" className="text-left px-4 py-2.5 w-[40%]">Movement</th>
                   <th scope="col" className="text-right px-4 py-2.5 w-[20%]">Share Capital</th>
                   <th scope="col" className="text-right px-4 py-2.5 w-[20%]">Retained Earnings</th>
                   <th scope="col" className="text-right px-4 py-2.5 w-[20%]">Total</th>
@@ -850,6 +970,14 @@ export function FinancialStatementsWorkbench({
                   <td className="px-4 py-2.5 text-right font-mono text-red-700 dark:text-red-400">{equity.dividendsPaid !== 0 ? eur(-Math.abs(equity.dividendsPaid)) : eur(0)}</td>
                   <td className="px-4 py-2.5 text-right font-mono text-red-700 dark:text-red-400">{equity.dividendsPaid !== 0 ? eur(-Math.abs(equity.dividendsPaid)) : eur(0)}</td>
                 </tr>
+                {equity.otherReserveMovements !== 0 && (
+                  <tr className="border-b border-gray-100 dark:border-neutral-800">
+                    <td className="px-4 py-2.5 text-gray-700 dark:text-gray-300">Other Posted Reserve Movements</td>
+                    <td className="px-4 py-2.5 text-right font-mono text-gray-400 dark:text-gray-500">-</td>
+                    <td className="px-4 py-2.5 text-right font-mono text-gray-900 dark:text-gray-100">{eur(equity.otherReserveMovements)}</td>
+                    <td className="px-4 py-2.5 text-right font-mono text-gray-900 dark:text-gray-100">{eur(equity.otherReserveMovements)}</td>
+                  </tr>
+                )}
                 {equity.sharesIssued !== 0 && (
                   <tr className="border-b border-gray-100 dark:border-neutral-800">
                     <td className="px-4 py-2.5 text-gray-700 dark:text-gray-300">Shares Issued</td>
@@ -868,9 +996,9 @@ export function FinancialStatementsWorkbench({
                 </tr>
               </tfoot>
             </table>
-          </div>
+          </HorizontalScrollRegion>
         ) : (
-          <EmptyState message="Equity changes data is not available yet." />
+          <EmptyState message="Equity changes data is not available yet." resourceKey="equity" resourceState={statementState} onRetry={onRetryStatements} />
         )}
       </Card.Content>
     </Card>
@@ -914,24 +1042,48 @@ export function FinancialStatementsWorkbench({
             {/* Directors */}
             <div>
               <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">Directors</h3>
-              <ul className="list-disc list-inside space-y-1">
-                {directorsReport.directorNames.map((name, idx) => (
-                  <li key={idx} className="text-sm text-gray-700 dark:text-gray-300">{name}</li>
+              <ul className="space-y-2">
+                {directorsReport.directorServicePeriods.map((director) => (
+                  <li key={`${director.name}-${director.appointedDate}`} className="text-sm text-gray-700 dark:text-gray-300">
+                    <span className="font-medium">{director.name}</span>
+                    <span className="block text-xs text-gray-500 dark:text-gray-400">
+                      Served from {new Date(director.appointedDate).toLocaleDateString("en-IE")}
+                      {director.resignedDate ? ` to ${new Date(director.resignedDate).toLocaleDateString("en-IE")}` : " and remained in office at period end"}
+                    </span>
+                  </li>
                 ))}
               </ul>
+              {!directorsReport.officerTimelineComplete && (
+                <p role="status" className="mt-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200">
+                  Officer appointment dates are incomplete. Final directors&apos; report output is blocked.
+                </p>
+              )}
               {directorsReport.secretaryName && (
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
                   Company Secretary: {directorsReport.secretaryName}
+                  {directorsReport.secretaryServicePeriod
+                    ? ` (from ${new Date(directorsReport.secretaryServicePeriod.appointedDate).toLocaleDateString("en-IE")})`
+                    : ""}
                 </p>
               )}
             </div>
 
             {/* Principal Activities */}
             <div>
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">Principal Activities</h3>
-              <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Principal Activities</h3>
+                <Chip size="sm" variant="soft" color={directorsReport.principalActivitiesReviewed ? "success" : "warning"}>
+                  {directorsReport.principalActivitiesReviewed ? "Reviewed" : "Review required"}
+                </Chip>
+              </div>
+              <p className={`text-sm whitespace-pre-wrap ${directorsReport.principalActivitiesReviewed ? "text-gray-700 dark:text-gray-300" : "text-amber-800 dark:text-amber-300"}`}>
                 {directorsReport.principalActivities}
               </p>
+              {directorsReport.principalActivitiesReviewedBy && directorsReport.principalActivitiesReviewedAt && (
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Reviewed by {directorsReport.principalActivitiesReviewedBy} on {new Date(directorsReport.principalActivitiesReviewedAt).toLocaleString("en-IE")}.
+                </p>
+              )}
             </div>
 
             {/* Results and Dividends */}
@@ -959,6 +1111,11 @@ export function FinancialStatementsWorkbench({
                 </p>
               </div>
             )}
+            {!directorsReport.postBalanceSheetEventsReviewed && (
+              <p role="status" className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200">
+                A no-events statement has not been emitted because the post-balance-sheet review is incomplete.
+              </p>
+            )}
 
             {/* Going Concern */}
             {directorsReport.goingConcernStatement && (
@@ -979,9 +1136,14 @@ export function FinancialStatementsWorkbench({
                 </p>
               </div>
             )}
+            {directorsReport.auditInformationEvidenceRequired && !directorsReport.auditInformationEvidenceRecorded && (
+              <p role="status" className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-800 dark:bg-red-950/30 dark:text-red-200">
+                Relevant audit information wording is withheld until the directors&apos; explicit reviewed evidence is retained.
+              </p>
+            )}
           </div>
         ) : (
-          <EmptyState message="Directors' report data is not available yet." />
+          <EmptyState message="Directors' report data is not available yet." resourceKey="directors-report" resourceState={statementState} onRetry={onRetryStatements} />
         )}
       </Card.Content>
     </Card>
@@ -1067,7 +1229,26 @@ function Divider({ double = false }: { double?: boolean }) {
   );
 }
 
-function EmptyState({ message }: { message: string }) {
+function EmptyState({
+  message,
+  resourceKey,
+  resourceState,
+  onRetry,
+}: {
+  message: string;
+  resourceKey?: string;
+  resourceState?: ResourceState;
+  onRetry?: () => void | Promise<void>;
+}) {
+  if (resourceKey && resourceState?.failedResourceKeys.includes(resourceKey)) {
+    return (
+      <ResourceStateNotice
+        state={{ ...resourceState, hasRetainedData: false, status: "error" }}
+        label={`${resourceKey.replaceAll("-", " ")} evidence`}
+        onRetry={onRetry}
+      />
+    );
+  }
   return (
     <div className="text-center py-12">
       <FileText className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />

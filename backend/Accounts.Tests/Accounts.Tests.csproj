@@ -27,5 +27,10 @@
 
   <ItemGroup>
     <None Update="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Fixtures\golden-corpus-independent-v1.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Fixtures\golden-corpus-reconciled-small-v1.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Fixtures\corporation-tax-independent-v1.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Fixtures\corporation-tax-filing-support-independent-v1.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Fixtures\director-loan-compliance-independent-v1.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

@@ -25,6 +25,9 @@ describe("YearEndContingentLiabilitiesSection", () => {
     await user.selectOptions(screen.getByRole("combobox", { name: "Contingency likelihood" }), "Possible");
     await user.click(screen.getByRole("button", { name: "Add contingent liability" }));
     await user.click(screen.getByRole("button", { name: "Delete contingency Pending supplier claim" }));
+    expect(onDelete).not.toHaveBeenCalled();
+    expect(screen.getByRole("alertdialog", { name: "Remove contingent liability Pending supplier claim?" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Remove record" }));
 
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ description: "Product warranty exposure" }));
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ nature: "Warranty" }));

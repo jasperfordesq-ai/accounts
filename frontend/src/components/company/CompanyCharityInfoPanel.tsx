@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@heroui/react";
+import { Button, Spinner } from "@heroui/react";
 import { Heart, Pencil, Plus, Save, X } from "lucide-react";
 import type { ReactNode } from "react";
 import type { CharityInfo } from "@/lib/api";
@@ -30,6 +30,13 @@ export function CompanyCharityInfoPanel({
   onFormChange,
 }: CompanyCharityInfoPanelProps) {
   const statusTone = charityInfo ? "info" : "warn";
+  const governanceEvidenceReady = Boolean(
+    charityInfo?.governanceCodeCompliant !== null
+    && charityInfo?.governanceEvidenceReference
+    && charityInfo?.governanceReviewedBy
+    && charityInfo?.governanceReviewedAtUtc
+    && charityInfo?.governanceEvidenceArtifactSha256,
+  );
 
   return (
     <ReviewPanel
@@ -38,8 +45,13 @@ export function CompanyCharityInfoPanel({
       actions={
         <>
           <StatusBadge tone={statusTone}>
-            {charityInfo ? `Tier ${charityInfo.sorpTier}` : "Not recorded"}
+            {charityInfo ? "Charity profile recorded" : "Not recorded"}
           </StatusBadge>
+          {charityInfo && (
+            <StatusBadge tone={governanceEvidenceReady ? "good" : "warn"}>
+              {governanceEvidenceReady ? "Governance evidence retained" : "Governance evidence required"}
+            </StatusBadge>
+          )}
           {!canWrite && <StatusBadge>Read only</StatusBadge>}
           {canWrite && !editing && charityInfo && (
             <Button variant="outline" size="sm" onPress={onStartEdit} aria-label="Edit charity reporting">
@@ -72,13 +84,29 @@ function CharitySummary({ charityInfo }: { charityInfo: CharityInfo }) {
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <SummaryBlock label="Charity Number" value={charityInfo.charityNumber || "-"} />
-        <SummaryBlock label="SORP Tier" value={`Tier ${charityInfo.sorpTier}`} />
+        <SummaryBlock label="Charity legal form" value={charityInfo.charityType || "Not answered"} />
         <SummaryBlock label="Gross Income" value={<MoneyField value={charityInfo.grossIncome} />} />
         <SummaryBlock
           label="Governance Code"
-          value={charityInfo.governanceCodeCompliant ? "Governance confirmed" : "Not confirmed"}
-          tone={charityInfo.governanceCodeCompliant ? "good" : "warn"}
+          value={charityInfo.governanceCodeCompliant === null
+            ? "Answer required"
+            : charityInfo.governanceCodeCompliant ? "Yes" : "No"}
+          tone={charityInfo.governanceCodeCompliant === null ? "warn" : "good"}
         />
+      </div>
+
+      <div className="rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-3 text-sm">
+        <p className="font-semibold text-[var(--foreground)]">Period-specific SORP decision</p>
+        <p className="mt-1 text-[var(--muted-foreground)]">
+          Framework, tier and automated-support eligibility are decided for each accounting period from its start date,
+          legal form and annual gross income. They are not user-selectable company facts.
+        </p>
+        {charityInfo.governanceEvidenceReference && (
+          <p className="mt-2 text-[var(--foreground)]">
+            Governance evidence: {charityInfo.governanceEvidenceReference}
+            {charityInfo.governanceReviewedBy ? ` - reviewed by ${charityInfo.governanceReviewedBy}` : ""}
+          </p>
+        )}
       </div>
 
       {(charityInfo.charitableObjectives || charityInfo.principalActivities) && (
@@ -128,7 +156,7 @@ function CharityEditForm({
 }) {
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_12rem_10rem]">
+      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_12rem_14rem]">
         <TextField
           label="Charity number"
           value={charityForm.charityNumber || ""}
@@ -139,17 +167,11 @@ function CharityEditForm({
           value={charityForm.grossIncome}
           onChange={(value) => onChange({ ...charityForm, grossIncome: value })}
         />
-        <label className="block text-xs font-semibold uppercase text-[var(--muted-foreground)]">
-          SORP tier
-          <select
-            value={charityForm.sorpTier}
-            onChange={(event) => onChange({ ...charityForm, sorpTier: Number(event.target.value) })}
-            className="mt-1 min-h-10 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 text-sm normal-case text-[var(--foreground)] outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500"
-          >
-            <option value={1}>Tier 1</option>
-            <option value={2}>Tier 2</option>
-          </select>
-        </label>
+        <TextField
+          label="Charity legal form"
+          value={charityForm.charityType || ""}
+          onChange={(value) => onChange({ ...charityForm, charityType: value })}
+        />
       </div>
 
       <TextareaField
@@ -163,12 +185,41 @@ function CharityEditForm({
         onChange={(value) => onChange({ ...charityForm, principalActivities: value })}
       />
 
-      <div className="grid gap-3 rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-3 lg:grid-cols-3">
-        <CheckboxField
-          label="Governance Code compliant"
-          checked={charityForm.governanceCodeCompliant}
-          onChange={(checked) => onChange({ ...charityForm, governanceCodeCompliant: checked })}
+      <div className="space-y-3 rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-3">
+        <label className="block text-xs font-semibold uppercase text-[var(--muted-foreground)]">
+          Has the charity complied with the Charities Governance Code?
+          <select
+            value={charityForm.governanceCodeCompliant === null ? "" : charityForm.governanceCodeCompliant ? "yes" : "no"}
+            onChange={(event) => onChange({
+              ...charityForm,
+              governanceCodeCompliant: event.target.value === "" ? null : event.target.value === "yes",
+            })}
+            className="mt-1 min-h-10 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 text-sm normal-case text-[var(--foreground)] outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500"
+          >
+            <option value="">Select an explicit answer</option>
+            <option value="yes">Yes</option>
+            <option value="no">No</option>
+          </select>
+        </label>
+        <TextareaField
+          label="Governance review note"
+          value={charityForm.governanceCodeNote || ""}
+          onChange={(value) => onChange({ ...charityForm, governanceCodeNote: value })}
         />
+        <TextField
+          label="Governance evidence reference"
+          value={charityForm.governanceEvidenceReference || ""}
+          onChange={(value) => onChange({ ...charityForm, governanceEvidenceReference: value })}
+        />
+        <EvidenceFileField charityForm={charityForm} onChange={onChange} />
+        {charityForm.governanceEvidenceArtifactSha256 && !charityForm.governanceEvidenceArtifact && (
+          <p className="text-xs text-emerald-700 dark:text-emerald-300">
+            Existing retained artifact: {charityForm.governanceEvidenceArtifactSha256.slice(0, 16)}...
+          </p>
+        )}
+      </div>
+
+      <div className="grid gap-3 rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-3 lg:grid-cols-2">
         <CheckboxField
           label="Trustee remuneration paid"
           checked={charityForm.trusteeRemunerationPaid}
@@ -203,8 +254,8 @@ function CharityEditForm({
           Cancel
         </Button>
         <Button variant="primary" size="sm" onPress={onSave} isDisabled={saving} aria-label="Save charity reporting">
-          <Save className="h-3.5 w-3.5" />
-          {saving ? "Saving..." : "Save Charity Reporting"}
+          {saving ? <Spinner size="sm" /> : <Save className="h-3.5 w-3.5" />}
+          Save Charity Reporting
         </Button>
       </div>
     </div>
@@ -223,7 +274,7 @@ function EmptyCharityState({
       <Heart className="mx-auto h-9 w-9 text-[var(--muted-foreground)]" />
       <p className="mt-3 text-sm font-medium text-[var(--foreground)]">No charity information recorded</p>
       <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-        Record charity number, SORP tier and governance confirmations before filing review.
+        Record the charity number, legal form, annual income and retained governance review evidence before filing review.
       </p>
       {canWrite && (
         <Button variant="primary" size="sm" onPress={onStartEdit} className="mt-4" aria-label="Add charity reporting">
@@ -232,6 +283,40 @@ function EmptyCharityState({
         </Button>
       )}
     </div>
+  );
+}
+
+function EvidenceFileField({
+  charityForm,
+  onChange,
+}: {
+  charityForm: CharityInfo;
+  onChange: (value: CharityInfo) => void;
+}) {
+  const readFile = async (file?: File) => {
+    if (!file) {
+      onChange({ ...charityForm, governanceEvidenceArtifact: undefined });
+      return;
+    }
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    let binary = "";
+    for (const byte of bytes) binary += String.fromCharCode(byte);
+    onChange({ ...charityForm, governanceEvidenceArtifact: btoa(binary) });
+  };
+
+  return (
+    <label className="block text-xs font-semibold uppercase text-[var(--muted-foreground)]">
+      Governance review artifact
+      <input
+        type="file"
+        accept=".pdf,.png,.jpg,.jpeg,.txt,.doc,.docx"
+        onChange={(event) => void readFile(event.target.files?.[0])}
+        className="mt-1 block min-h-10 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm normal-case text-[var(--foreground)] file:mr-3 file:rounded file:border-0 file:bg-emerald-700 file:px-3 file:py-1 file:text-xs file:font-semibold file:text-white"
+      />
+      <span className="mt-1 block font-normal normal-case text-[var(--muted-foreground)]">
+        Retained with a SHA-256 hash and the signed-in reviewer identity and UTC review time.
+      </span>
+    </label>
   );
 }
 

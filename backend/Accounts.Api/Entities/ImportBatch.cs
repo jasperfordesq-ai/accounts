@@ -10,6 +10,10 @@ public class ImportBatch
     public DateTime ImportedAt { get; set; } = DateTime.UtcNow;
     public int RowCount { get; set; }
     public int MatchedCount { get; set; }
+    public string? SourceFileSha256 { get; set; }
+    public long? SourceFileBytes { get; set; }
+    public string? SourceHeaderJson { get; set; }
+    public string? ImportWarningsJson { get; set; }
 
     // Navigation
     [JsonIgnore]

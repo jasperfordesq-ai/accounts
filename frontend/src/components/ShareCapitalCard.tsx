@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Card, Button, Chip, Spinner,
 } from "@heroui/react";
@@ -10,6 +10,17 @@ import {
   getShareCapital, createShareCapital, updateShareCapital, deleteShareCapital, type ShareCapital,
 } from "@/lib/api";
 import { MoneyInput, ReadOnlyNotice } from "@/components/workbench";
+import { ResourceStateNotice } from "@/components/ResourceStateNotice";
+import {
+  INITIAL_RESOURCE_STATE,
+  beginResourceLoad,
+  canUseResourceAsEvidence,
+  completeResourceLoad,
+  failResourceLoad,
+  type ResourceState,
+} from "@/lib/resourceState";
+import { useUnsavedChanges } from "@/lib/useUnsavedChanges";
+import { useDestructiveActionConfirmation } from "@/lib/useDestructiveAction";
 
 const inputClass =
   "w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors";
@@ -45,13 +56,35 @@ export function ShareCapitalCard({
   const [form, setForm] = useState<ShareCapital>(emptyForm);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const [resourceState, setResourceState] = useState<ResourceState>(INITIAL_RESOURCE_STATE);
+  const { requestDestructiveAction, destructiveActionConfirmation } = useDestructiveActionConfirmation();
+
+  const shareCapitalFormDirty = useMemo(() => {
+    const baseline = editingId == null
+      ? emptyForm
+      : shares.find((share) => share.id === editingId) ?? emptyForm;
+    return form.shareClass !== baseline.shareClass
+      || form.nominalValue !== baseline.nominalValue
+      || form.numberIssued !== baseline.numberIssued
+      || form.isFullyPaid !== baseline.isFullyPaid
+      || (form.issueDate ?? "") !== (baseline.issueDate ?? "");
+  }, [editingId, form, shares]);
+  useUnsavedChanges(shareCapitalFormDirty);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setResourceState((current) => beginResourceLoad(current, current.hasRetainedData));
     try {
-      setShares(await getShareCapital(companyId));
+      const data = await getShareCapital(companyId);
+      setShares(data);
+      setResourceState(completeResourceLoad(data.length === 0));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to load share capital");
+      const message = err instanceof Error ? err.message : "Failed to load share capital";
+      setResourceState((current) => failResourceLoad({
+        failedResourceKeys: ["share-capital"],
+        errors: { "share-capital": message },
+      }, current.hasRetainedData));
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -88,6 +121,7 @@ export function ShareCapitalCard({
       } else {
         const created = await createShareCapital(companyId, payload);
         setShares((prev) => [...prev, created]);
+        setResourceState(completeResourceLoad(false));
         toast.success("Share capital recorded");
       }
       setEditingId(null);
@@ -103,10 +137,13 @@ export function ShareCapitalCard({
     setSaving(true);
     try {
       await deleteShareCapital(companyId, id);
-      setShares((prev) => prev.filter((s) => s.id !== id));
+      const next = shares.filter((share) => share.id !== id);
+      setShares(next);
+      setResourceState(completeResourceLoad(next.length === 0));
       toast.success("Share capital removed");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to remove share capital");
+      throw err;
     } finally {
       setSaving(false);
     }
@@ -126,9 +163,10 @@ export function ShareCapitalCard({
         )}
       </Card.Header>
       <Card.Content>
-        {loading ? (
+        <ResourceStateNotice state={resourceState} label="share capital evidence" onRetry={load} compact />
+        {loading && !resourceState.hasRetainedData ? (
           <div className="py-6 flex justify-center"><Spinner size="sm" /></div>
-        ) : (
+        ) : resourceState.status === "error" && !resourceState.hasRetainedData ? null : (
           <>
             {shares.length > 0 ? (
               <div className="space-y-2 mb-4">
@@ -157,7 +195,7 @@ export function ShareCapitalCard({
                       <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                         {formatCurrency(s.totalValue)}
                       </span>
-                      {canWrite && (
+                      {canWrite && canUseResourceAsEvidence(resourceState) && (
                         <>
                           <button
                             type="button"
@@ -169,7 +207,12 @@ export function ShareCapitalCard({
                           </button>
                           <button
                             type="button"
-                            onClick={() => s.id && handleDelete(s.id)}
+                            onClick={() => s.id && requestDestructiveAction({
+                              recordLabel: `${s.shareClass} share issue`,
+                              consequence: `This permanently removes ${s.numberIssued.toLocaleString("en-IE")} issued shares at ${formatCurrency(s.nominalValue)} nominal value from the retained capital record. The removal cannot be undone.`,
+                              onConfirm: () => handleDelete(s.id!),
+                              successAnnouncement: `${s.shareClass} share issue was removed.`,
+                            })}
                             className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400"
                             aria-label={`Delete ${s.shareClass} share capital`}
                           >
@@ -190,12 +233,17 @@ export function ShareCapitalCard({
 
             {!canWrite ? (
               <ReadOnlyNotice subject="share capital" />
+            ) : !canUseResourceAsEvidence(resourceState) ? (
+              <p className="text-sm text-amber-700 dark:text-amber-300">
+                Share-capital editing is disabled until the failed evidence refresh succeeds.
+              </p>
             ) : (
             <>
-            <div className="grid grid-cols-12 gap-3 items-end">
+            <div className="mobile-form-grid grid grid-cols-12 gap-3 items-end">
               <div className="col-span-3">
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Share Class</label>
+                <label htmlFor="share-class" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Share Class</label>
                 <select
+                  id="share-class"
                   className={inputClass}
                   value={form.shareClass}
                   onChange={(e) => setForm({ ...form, shareClass: e.target.value })}
@@ -209,8 +257,9 @@ export function ShareCapitalCard({
                 </select>
               </div>
               <div className="col-span-2">
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Number Issued</label>
+                <label htmlFor="shares-number-issued" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Number Issued</label>
                 <input
+                  id="shares-number-issued"
                   type="number"
                   className={inputClass}
                   placeholder="0"
@@ -227,8 +276,9 @@ export function ShareCapitalCard({
                 onValueChange={(value) => setForm({ ...form, nominalValue: value })}
               />
               <div className="col-span-2">
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Issue Date</label>
+                <label htmlFor="share-issue-date" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Issue Date</label>
                 <input
+                  id="share-issue-date"
                   type="date"
                   className={inputClass}
                   value={form.issueDate ?? ""}
@@ -262,6 +312,7 @@ export function ShareCapitalCard({
                 <Button
                   variant="primary"
                   size="sm"
+                  aria-label={editingId != null ? "Save changes to share issue" : "Issue Shares"}
                   onPress={handleSubmit}
                   isDisabled={saving}
                 >
@@ -276,6 +327,7 @@ export function ShareCapitalCard({
           </>
         )}
       </Card.Content>
+      {destructiveActionConfirmation}
     </Card>
   );
 }

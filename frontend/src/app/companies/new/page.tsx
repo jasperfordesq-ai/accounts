@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Button,
   Card,
@@ -13,10 +12,12 @@ import {
 } from "@heroui/react";
 import { Building2, ChevronLeft, ChevronRight, Plus, Trash2, Users, Check } from "lucide-react";
 import { toast } from "sonner";
-import { createCompany, createOfficer, type Officer } from "@/lib/api";
+import { onboardCompany } from "@/lib/api";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { useAuth } from "@/components/AuthProvider";
 import { validateStep } from "@/lib/validation";
+import { useGuardedRouter, useUnsavedChanges } from "@/lib/useUnsavedChanges";
+import { useDestructiveActionConfirmation } from "@/lib/useDestructiveAction";
 
 const COMPANY_TYPES = [
   { value: "Private", label: "Private Company Limited by Shares" },
@@ -39,7 +40,7 @@ const MONTHS = [
   "July", "August", "September", "October", "November", "December",
 ];
 
-const STEP_LABELS = ["Legal Details", "Structure", "Address & Periods", "Officers"];
+const STEP_LABELS = ["Legal Details", "Structure", "Address & Opening Setup", "Officers"];
 
 interface OfficerEntry {
   name: string;
@@ -50,12 +51,13 @@ const selectClass =
   "w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors";
 
 export default function NewCompanyPage() {
-  const router = useRouter();
+  const router = useGuardedRouter();
   const { isOwner, loading: authLoading } = useAuth();
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { requestDestructiveAction, destructiveActionConfirmation } = useDestructiveActionConfirmation();
 
   // Step 1: Legal Details
   const [legalName, setLegalName] = useState("");
@@ -64,6 +66,7 @@ export default function NewCompanyPage() {
   const [taxReference, setTaxReference] = useState("");
   const [companyType, setCompanyType] = useState("Private");
   const [incorporationDate, setIncorporationDate] = useState("");
+  const idempotencyKey = useRef<string | null>(null);
 
   // Step 2: Structure
   const [isTrading, setIsTrading] = useState(true);
@@ -91,12 +94,67 @@ export default function NewCompanyPage() {
   const [county, setCounty] = useState("");
   const [eircode, setEircode] = useState("");
   const [financialYearStartMonth, setFinancialYearStartMonth] = useState(1);
-  const [ardMonth, setArdMonth] = useState(12);
+  const [annualReturnDate, setAnnualReturnDate] = useState("");
+  const [annualReturnDateEvidenceReference, setAnnualReturnDateEvidenceReference] = useState("");
+  const [firstPeriodEnd, setFirstPeriodEnd] = useState("");
+  const [bankAccountName, setBankAccountName] = useState("Main Current Account");
+  const [bankIban, setBankIban] = useState("");
+  const [openingBalance, setOpeningBalance] = useState("0.00");
 
   // Step 4: Officers
   const [officers, setOfficers] = useState<OfficerEntry[]>([
     { name: "", role: "Director" },
   ]);
+
+  const hasOnboardingDraft = useMemo(() =>
+    legalName !== ""
+    || tradingName !== ""
+    || croNumber !== ""
+    || taxReference !== ""
+    || companyType !== "Private"
+    || incorporationDate !== ""
+    || !isTrading
+    || isDormant
+    || isGroupMember
+    || isHolding
+    || isInvestment
+    || isSubsidiary
+    || isVatRegistered
+    || isEmployer
+    || hasStock
+    || ownsAssets
+    || hasBorrowings
+    || hasDirectorLoans
+    || isListedSecurities
+    || isCreditInstitution
+    || isInsuranceUndertaking
+    || isPensionFund
+    || isCharitableOrganisation
+    || address1 !== ""
+    || address2 !== ""
+    || city !== ""
+    || county !== ""
+    || eircode !== ""
+    || financialYearStartMonth !== 1
+    || annualReturnDate !== ""
+    || annualReturnDateEvidenceReference !== ""
+    || firstPeriodEnd !== ""
+    || bankAccountName !== "Main Current Account"
+    || bankIban !== ""
+    || openingBalance !== "0.00"
+    || officers.length !== 1
+    || officers[0]?.name !== ""
+    || officers[0]?.role !== "Director",
+  [
+    address1, address2, annualReturnDate, annualReturnDateEvidenceReference, bankAccountName, bankIban, city, companyType,
+    county, croNumber, eircode, financialYearStartMonth, firstPeriodEnd, hasBorrowings,
+    hasDirectorLoans, hasStock, incorporationDate, isCharitableOrganisation,
+    isCreditInstitution, isDormant, isEmployer, isGroupMember, isHolding,
+    isInsuranceUndertaking, isInvestment, isListedSecurities, isPensionFund,
+    isSubsidiary, isTrading, isVatRegistered, legalName, officers, openingBalance,
+    ownsAssets, taxReference, tradingName,
+  ]);
+  useUnsavedChanges(hasOnboardingDraft);
 
   useEffect(() => {
     if (!authLoading && !isOwner) {
@@ -130,7 +188,20 @@ export default function NewCompanyPage() {
     if (step === 0) {
       Object.assign(stepData, { legalName, tradingName, croNumber, taxReference, companyType, incorporationDate });
     } else if (step === 2) {
-      Object.assign(stepData, { address1, address2, city, county, eircode });
+      Object.assign(stepData, {
+        address1,
+        address2,
+        city,
+        county,
+        eircode,
+        incorporationDate,
+        annualReturnDate,
+        annualReturnDateEvidenceReference,
+        firstPeriodEnd,
+        bankAccountName,
+        bankIban,
+        openingBalance,
+      });
     }
     const errors = validateStep(step, stepData);
     if (Object.keys(errors).length > 0) {
@@ -149,52 +220,112 @@ export default function NewCompanyPage() {
       return;
     }
 
+    const legalErrors = validateStep(0, {
+      legalName,
+      tradingName,
+      croNumber,
+      taxReference,
+      companyType,
+      incorporationDate,
+    });
+    if (Object.keys(legalErrors).length > 0) {
+      setFieldErrors(legalErrors);
+      setStep(0);
+      return;
+    }
+    const setupErrors = validateStep(2, {
+      address1,
+      address2,
+      city,
+      county,
+      eircode,
+      incorporationDate,
+      annualReturnDate,
+      annualReturnDateEvidenceReference,
+      firstPeriodEnd,
+      bankAccountName,
+      bankIban,
+      openingBalance,
+    });
+    if (Object.keys(setupErrors).length > 0) {
+      setFieldErrors(setupErrors);
+      setStep(2);
+      return;
+    }
+
     setSaving(true);
     setError(null);
     try {
-      const company = await createCompany({
-        legalName,
-        tradingName: tradingName || undefined,
-        croNumber: croNumber || undefined,
-        taxReference: taxReference || undefined,
-        companyType,
-        incorporationDate: incorporationDate || new Date().toISOString().split("T")[0],
-        financialYearStartMonth,
-        ardMonth,
-        registeredOfficeAddress1: address1 || undefined,
-        registeredOfficeAddress2: address2 || undefined,
-        registeredOfficeCity: city || undefined,
-        registeredOfficeCounty: county || undefined,
-        registeredOfficeEircode: eircode || undefined,
-        isTrading,
-        isDormant,
-        isGroupMember,
-        isHolding,
-        isInvestment,
-        isSubsidiary,
-        isVatRegistered,
-        isEmployer,
-        hasStock,
-        ownsAssets,
-        hasBorrowings,
-        hasDirectorLoans,
-        isListedSecurities,
-        isCreditInstitution,
-        isInsuranceUndertaking,
-        isPensionFund,
-        isCharitableOrganisation,
-      });
-
       const validOfficers = officers.filter((o) => o.name.trim().length > 0);
-      for (const officer of validOfficers) {
-        await createOfficer(company.id, {
-          name: officer.name,
-          role: officer.role,
-        } as Officer);
+      const parsedOpeningBalance = Number(openingBalance);
+      if (validOfficers.length === 0) {
+        setFieldErrors({ officers: "At least one officer is required" });
+        setError("At least one officer is required");
+        setSaving(false);
+        return;
       }
+      if (!idempotencyKey.current) {
+        idempotencyKey.current = globalThis.crypto?.randomUUID?.()
+          ?? `onboard-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      }
+      const outcome = await onboardCompany({
+        company: {
+          legalName,
+          tradingName: tradingName || undefined,
+          croNumber: croNumber || undefined,
+          taxReference: taxReference || undefined,
+          companyType,
+          incorporationDate,
+          financialYearStartMonth,
+          annualReturnDate,
+          annualReturnDateEffectiveFrom: annualReturnDate,
+          annualReturnDateSource: "CroRecord",
+          annualReturnDateEvidenceReference,
+          registeredOfficeAddress1: address1 || undefined,
+          registeredOfficeAddress2: address2 || undefined,
+          registeredOfficeCity: city || undefined,
+          registeredOfficeCounty: county || undefined,
+          registeredOfficeEircode: eircode || undefined,
+          isTrading,
+          isDormant,
+          isGroupMember,
+          isHolding,
+          isInvestment,
+          isSubsidiary,
+          isVatRegistered,
+          isEmployer,
+          hasStock,
+          ownsAssets,
+          hasBorrowings,
+          hasDirectorLoans,
+          isListedSecurities,
+          isCreditInstitution,
+          isInsuranceUndertaking,
+          isPensionFund,
+          isCharitableOrganisation,
+        },
+        officers: validOfficers.map((officer) => ({
+          name: officer.name.trim(),
+          role: officer.role,
+        })),
+        firstPeriod: {
+          periodStart: incorporationDate,
+          periodEnd: firstPeriodEnd,
+          isFirstYear: true,
+          memberAuditNoticeReceived: false,
+          goingConcernConfirmed: true,
+        },
+        openingBankAccount: {
+          name: bankAccountName.trim(),
+          iban: bankIban.trim() || undefined,
+          currency: "EUR",
+          openingBalance: parsedOpeningBalance,
+          openingBalanceDate: parsedOpeningBalance === 0 ? undefined : incorporationDate,
+        },
+      }, idempotencyKey.current);
 
-      toast.success(`${legalName} created successfully`);
-      router.push(`/companies/${company.id}`);
+      toast.success(`${outcome.companyLegalName} and its opening records were created successfully`);
+      router.pushAfterSave(`/companies/${outcome.companyId}`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to create company";
       setError(msg);
@@ -291,9 +422,10 @@ export default function NewCompanyPage() {
                     placeholder="e.g. Acme Trading Limited"
                     autoFocus
                     aria-invalid={!!fieldErrors.legalName}
+                    aria-describedby={fieldErrors.legalName ? "legal-name-error" : undefined}
                   />
                 </TextField>
-                {fieldErrors.legalName && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{fieldErrors.legalName}</p>}
+                {fieldErrors.legalName && <p id="legal-name-error" role="alert" className="text-xs text-red-600 dark:text-red-400 mt-1">{fieldErrors.legalName}</p>}
               </div>
 
               <TextField fullWidth>
@@ -314,9 +446,10 @@ export default function NewCompanyPage() {
                       onChange={(e) => { setCroNumber(e.target.value); setFieldErrors((p) => { const n = {...p}; delete n.croNumber; return n; }); }}
                       placeholder="e.g. 123456"
                       aria-invalid={!!fieldErrors.croNumber}
+                      aria-describedby={fieldErrors.croNumber ? "cro-number-error" : undefined}
                     />
                   </TextField>
-                  {fieldErrors.croNumber && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{fieldErrors.croNumber}</p>}
+                  {fieldErrors.croNumber && <p id="cro-number-error" role="alert" className="text-xs text-red-600 dark:text-red-400 mt-1">{fieldErrors.croNumber}</p>}
                 </div>
 
                 <div>
@@ -327,18 +460,20 @@ export default function NewCompanyPage() {
                       onChange={(e) => { setTaxReference(e.target.value); setFieldErrors((p) => { const n = {...p}; delete n.taxReference; return n; }); }}
                       placeholder="e.g. 1234567T"
                       aria-invalid={!!fieldErrors.taxReference}
+                      aria-describedby={fieldErrors.taxReference ? "tax-reference-error" : undefined}
                     />
                   </TextField>
-                  {fieldErrors.taxReference && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{fieldErrors.taxReference}</p>}
+                  {fieldErrors.taxReference && <p id="tax-reference-error" role="alert" className="text-xs text-red-600 dark:text-red-400 mt-1">{fieldErrors.taxReference}</p>}
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  <label htmlFor="company-type" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                     Company Type
                   </label>
                   <select
+                    id="company-type"
                     value={companyType}
                     onChange={(e) => setCompanyType(e.target.value)}
                     className={selectClass}
@@ -355,15 +490,21 @@ export default function NewCompanyPage() {
 
                 <div>
                   <TextField fullWidth>
-                    <Label>Incorporation Date</Label>
+                    <Label>Incorporation Date *</Label>
                     <Input
                       type="date"
                       value={incorporationDate}
-                      onChange={(e) => { setIncorporationDate(e.target.value); setFieldErrors((p) => { const n = {...p}; delete n.incorporationDate; return n; }); }}
+                      onChange={(e) => {
+                        const nextDate = e.target.value;
+                        setIncorporationDate(nextDate);
+                        setFirstPeriodEnd(suggestedFirstPeriodEnd(nextDate));
+                        setFieldErrors((p) => { const n = {...p}; delete n.incorporationDate; return n; });
+                      }}
                       aria-invalid={!!fieldErrors.incorporationDate}
+                      aria-describedby={fieldErrors.incorporationDate ? "incorporation-date-error" : undefined}
                     />
                   </TextField>
-                  {fieldErrors.incorporationDate && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{fieldErrors.incorporationDate}</p>}
+                  {fieldErrors.incorporationDate && <p id="incorporation-date-error" role="alert" className="text-xs text-red-600 dark:text-red-400 mt-1">{fieldErrors.incorporationDate}</p>}
                 </div>
               </div>
             </>
@@ -377,12 +518,12 @@ export default function NewCompanyPage() {
                   Trading Status
                 </h3>
                 <div className="grid grid-cols-2 gap-3">
-                  <Checkbox isSelected={isTrading} onChange={setIsTrading}>
+                  <OnboardingCheckbox isSelected={isTrading} onChange={setIsTrading}>
                     Currently Trading
-                  </Checkbox>
-                  <Checkbox isSelected={isDormant} onChange={setIsDormant}>
+                  </OnboardingCheckbox>
+                  <OnboardingCheckbox isSelected={isDormant} onChange={setIsDormant}>
                     Dormant
-                  </Checkbox>
+                  </OnboardingCheckbox>
                 </div>
                 {isTrading && isDormant && (
                   <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
@@ -396,18 +537,18 @@ export default function NewCompanyPage() {
                   Group Structure
                 </h3>
                 <div className="grid grid-cols-2 gap-3">
-                  <Checkbox isSelected={isGroupMember} onChange={setIsGroupMember}>
+                  <OnboardingCheckbox isSelected={isGroupMember} onChange={setIsGroupMember}>
                     Group Member
-                  </Checkbox>
-                  <Checkbox isSelected={isHolding} onChange={setIsHolding}>
+                  </OnboardingCheckbox>
+                  <OnboardingCheckbox isSelected={isHolding} onChange={setIsHolding}>
                     Holding Company
-                  </Checkbox>
-                  <Checkbox isSelected={isInvestment} onChange={setIsInvestment}>
+                  </OnboardingCheckbox>
+                  <OnboardingCheckbox isSelected={isInvestment} onChange={setIsInvestment}>
                     Investment Company
-                  </Checkbox>
-                  <Checkbox isSelected={isSubsidiary} onChange={setIsSubsidiary}>
+                  </OnboardingCheckbox>
+                  <OnboardingCheckbox isSelected={isSubsidiary} onChange={setIsSubsidiary}>
                     Subsidiary
-                  </Checkbox>
+                  </OnboardingCheckbox>
                 </div>
               </div>
 
@@ -416,15 +557,15 @@ export default function NewCompanyPage() {
                   Registrations
                 </h3>
                 <div className="grid grid-cols-2 gap-3">
-                  <Checkbox isSelected={isVatRegistered} onChange={setIsVatRegistered}>
+                  <OnboardingCheckbox isSelected={isVatRegistered} onChange={setIsVatRegistered}>
                     VAT Registered
-                  </Checkbox>
-                  <Checkbox isSelected={isEmployer} onChange={setIsEmployer}>
+                  </OnboardingCheckbox>
+                  <OnboardingCheckbox isSelected={isEmployer} onChange={setIsEmployer}>
                     Employer (PAYE Registered)
-                  </Checkbox>
-                  <Checkbox isSelected={isCharitableOrganisation} onChange={setIsCharitableOrganisation}>
+                  </OnboardingCheckbox>
+                  <OnboardingCheckbox isSelected={isCharitableOrganisation} onChange={setIsCharitableOrganisation}>
                     Registered Charity
-                  </Checkbox>
+                  </OnboardingCheckbox>
                 </div>
               </div>
 
@@ -433,18 +574,18 @@ export default function NewCompanyPage() {
                   Balance Sheet Items
                 </h3>
                 <div className="grid grid-cols-2 gap-3">
-                  <Checkbox isSelected={hasStock} onChange={setHasStock}>
+                  <OnboardingCheckbox isSelected={hasStock} onChange={setHasStock}>
                     Has Stock / Inventory
-                  </Checkbox>
-                  <Checkbox isSelected={ownsAssets} onChange={setOwnsAssets}>
+                  </OnboardingCheckbox>
+                  <OnboardingCheckbox isSelected={ownsAssets} onChange={setOwnsAssets}>
                     Owns Fixed Assets
-                  </Checkbox>
-                  <Checkbox isSelected={hasBorrowings} onChange={setHasBorrowings}>
+                  </OnboardingCheckbox>
+                  <OnboardingCheckbox isSelected={hasBorrowings} onChange={setHasBorrowings}>
                     Has Borrowings
-                  </Checkbox>
-                  <Checkbox isSelected={hasDirectorLoans} onChange={setHasDirectorLoans}>
+                  </OnboardingCheckbox>
+                  <OnboardingCheckbox isSelected={hasDirectorLoans} onChange={setHasDirectorLoans}>
                     Has Director Loans
-                  </Checkbox>
+                  </OnboardingCheckbox>
                 </div>
               </div>
 
@@ -456,18 +597,18 @@ export default function NewCompanyPage() {
                   If any apply, the company is ineligible for micro/small exemptions and must file full accounts.
                 </p>
                 <div className="grid grid-cols-2 gap-3">
-                  <Checkbox isSelected={isListedSecurities} onChange={setIsListedSecurities}>
+                  <OnboardingCheckbox isSelected={isListedSecurities} onChange={setIsListedSecurities}>
                     Listed Securities (regulated market)
-                  </Checkbox>
-                  <Checkbox isSelected={isCreditInstitution} onChange={setIsCreditInstitution}>
+                  </OnboardingCheckbox>
+                  <OnboardingCheckbox isSelected={isCreditInstitution} onChange={setIsCreditInstitution}>
                     Credit Institution
-                  </Checkbox>
-                  <Checkbox isSelected={isInsuranceUndertaking} onChange={setIsInsuranceUndertaking}>
+                  </OnboardingCheckbox>
+                  <OnboardingCheckbox isSelected={isInsuranceUndertaking} onChange={setIsInsuranceUndertaking}>
                     Insurance Undertaking
-                  </Checkbox>
-                  <Checkbox isSelected={isPensionFund} onChange={setIsPensionFund}>
+                  </OnboardingCheckbox>
+                  <OnboardingCheckbox isSelected={isPensionFund} onChange={setIsPensionFund}>
                     Pension / Investment Fund
-                  </Checkbox>
+                  </OnboardingCheckbox>
                 </div>
                 {(isListedSecurities || isCreditInstitution || isInsuranceUndertaking || isPensionFund) && (
                   <div className="mt-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-400">
@@ -513,10 +654,11 @@ export default function NewCompanyPage() {
                 </TextField>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  <label htmlFor="registered-office-county" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                     County
                   </label>
                   <select
+                    id="registered-office-county"
                     value={county}
                     onChange={(e) => setCounty(e.target.value)}
                     className={selectClass}
@@ -538,22 +680,57 @@ export default function NewCompanyPage() {
                       onChange={(e) => { setEircode(e.target.value); setFieldErrors((p) => { const n = {...p}; delete n.eircode; return n; }); }}
                       placeholder="e.g. D02 AF30"
                       aria-invalid={!!fieldErrors.eircode}
+                      aria-describedby={fieldErrors.eircode ? "eircode-error" : undefined}
                     />
                   </TextField>
-                  {fieldErrors.eircode && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{fieldErrors.eircode}</p>}
+                  {fieldErrors.eircode && <p id="eircode-error" role="alert" className="text-xs text-red-600 dark:text-red-400 mt-1">{fieldErrors.eircode}</p>}
                 </div>
               </div>
 
               <div className="border-t border-gray-200 dark:border-neutral-700 pt-5 mt-5">
                 <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
-                  Financial Periods
+                  First Accounting Period
                 </h3>
+                <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+                  The first period begins on the incorporation date and is created atomically with the company.
+                </p>
+                <div className="mb-4 grid grid-cols-2 gap-4">
+                  <TextField fullWidth>
+                    <Label>Period Start</Label>
+                    <Input type="date" value={incorporationDate} readOnly aria-label="First period start" />
+                  </TextField>
+                  <div>
+                    <TextField fullWidth>
+                      <Label>Period End *</Label>
+                      <Input
+                        type="date"
+                        value={firstPeriodEnd}
+                        onChange={(event) => {
+                          setFirstPeriodEnd(event.target.value);
+                          setFieldErrors((current) => {
+                            const next = { ...current };
+                            delete next.firstPeriodEnd;
+                            return next;
+                          });
+                        }}
+                        aria-invalid={!!fieldErrors.firstPeriodEnd}
+                        aria-describedby={fieldErrors.firstPeriodEnd ? "first-period-end-error" : undefined}
+                      />
+                    </TextField>
+                    {fieldErrors.firstPeriodEnd && (
+                      <p id="first-period-end-error" role="alert" className="mt-1 text-xs text-red-600 dark:text-red-400">
+                        {fieldErrors.firstPeriodEnd}
+                      </p>
+                    )}
+                  </div>
+                </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                    <label htmlFor="financial-year-start-month" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                       Financial Year Start Month
                     </label>
                     <select
+                      id="financial-year-start-month"
                       value={financialYearStartMonth}
                       onChange={(e) => setFinancialYearStartMonth(Number(e.target.value))}
                       className={selectClass}
@@ -567,20 +744,106 @@ export default function NewCompanyPage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                      ARD Month (Annual Return Date)
+                    <label htmlFor="annual-return-date" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Exact Annual Return Date (ARD) *
                     </label>
-                    <select
-                      value={ardMonth}
-                      onChange={(e) => setArdMonth(Number(e.target.value))}
+                    <input
+                      id="annual-return-date"
+                      type="date"
+                      value={annualReturnDate}
+                      onChange={(event) => {
+                        setAnnualReturnDate(event.target.value);
+                        setFieldErrors((current) => {
+                          const next = { ...current };
+                          delete next.annualReturnDate;
+                          return next;
+                        });
+                      }}
                       className={selectClass}
-                      aria-label="Annual return date month"
-                      title="Annual return date month"
-                    >
-                      {MONTHS.map((m, i) => (
-                        <option key={m} value={i + 1}>{m}</option>
-                      ))}
-                    </select>
+                      aria-label="Exact Annual Return Date from CRO CORE"
+                      aria-invalid={!!fieldErrors.annualReturnDate}
+                      aria-describedby={fieldErrors.annualReturnDate ? "annual-return-date-error" : undefined}
+                    />
+                    {fieldErrors.annualReturnDate && (
+                      <p id="annual-return-date-error" role="alert" className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.annualReturnDate}</p>
+                    )}
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <label htmlFor="annual-return-date-evidence" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    CRO evidence reference *
+                  </label>
+                  <input
+                    id="annual-return-date-evidence"
+                    value={annualReturnDateEvidenceReference}
+                    onChange={(event) => {
+                      setAnnualReturnDateEvidenceReference(event.target.value);
+                      setFieldErrors((current) => {
+                        const next = { ...current };
+                        delete next.annualReturnDateEvidenceReference;
+                        return next;
+                      });
+                    }}
+                    maxLength={300}
+                    placeholder="CORE lookup, CRO extract, or retained workpaper reference"
+                    className={selectClass}
+                    aria-label="Annual Return Date evidence reference"
+                    aria-invalid={!!fieldErrors.annualReturnDateEvidenceReference}
+                    aria-describedby={fieldErrors.annualReturnDateEvidenceReference ? "annual-return-date-evidence-error" : undefined}
+                  />
+                  {fieldErrors.annualReturnDateEvidenceReference && (
+                    <p id="annual-return-date-evidence-error" role="alert" className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.annualReturnDateEvidenceReference}</p>
+                  )}
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    Enter the exact date shown by CRO CORE. The platform will not infer a day from a month.
+                  </p>
+                </div>
+              </div>
+
+              <div className="border-t border-gray-200 pt-5 dark:border-neutral-700">
+                <h3 className="mb-1 text-sm font-semibold text-gray-700 dark:text-gray-300">
+                  Opening Bank & Chart of Accounts
+                </h3>
+                <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+                  A complete default chart of accounts and this opening bank account are created in the same transaction.
+                </p>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <TextField fullWidth>
+                      <Label>Bank Account Name *</Label>
+                      <Input
+                        value={bankAccountName}
+                        onChange={(event) => {
+                          setBankAccountName(event.target.value);
+                          setFieldErrors((current) => {
+                            const next = { ...current };
+                            delete next.bankAccountName;
+                            return next;
+                          });
+                        }}
+                        aria-invalid={!!fieldErrors.bankAccountName}
+                        aria-describedby={fieldErrors.bankAccountName ? "bank-account-name-error" : undefined}
+                      />
+                    </TextField>
+                    {fieldErrors.bankAccountName && (
+                      <p id="bank-account-name-error" role="alert" className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.bankAccountName}</p>
+                    )}
+                  </div>
+                  <TextField fullWidth>
+                    <Label>IBAN</Label>
+                    <Input value={bankIban} onChange={(event) => setBankIban(event.target.value)} />
+                  </TextField>
+                  <TextField fullWidth>
+                    <Label>Opening Balance (EUR)</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={openingBalance}
+                      onChange={(event) => setOpeningBalance(event.target.value)}
+                    />
+                  </TextField>
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300">
+                    Non-zero opening balances are dated at the first-period start. The server rejects any partial setup.
                   </div>
                 </div>
               </div>
@@ -606,10 +869,11 @@ export default function NewCompanyPage() {
                       />
                     </TextField>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      <label htmlFor={`officer-${index}-role`} className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Role
                       </label>
                       <select
+                        id={`officer-${index}-role`}
                         value={officer.role}
                         onChange={(e) => updateOfficer(index, "role", e.target.value)}
                         className={selectClass}
@@ -628,7 +892,12 @@ export default function NewCompanyPage() {
                       variant="ghost"
                       size="sm"
                       isIconOnly
-                      onPress={() => removeOfficer(index)}
+                      onPress={() => requestDestructiveAction({
+                        recordLabel: `onboarding officer ${officer.name || index + 1}`,
+                        consequence: `This removes the unsaved ${officer.role} entry from the onboarding draft. The officer will not be created with the company.`,
+                        onConfirm: () => removeOfficer(index),
+                        successAnnouncement: `Onboarding officer ${officer.name || index + 1} was removed from the draft.`,
+                      })}
                       aria-label={`Remove officer ${officer.name || index + 1}`}
                     >
                       <Trash2 className="w-4 h-4 text-red-500" />
@@ -692,6 +961,36 @@ export default function NewCompanyPage() {
           )}
         </Card.Footer>
       </Card>
+      {destructiveActionConfirmation}
     </div>
   );
+}
+
+function OnboardingCheckbox({
+  isSelected,
+  onChange,
+  children,
+}: {
+  isSelected: boolean;
+  onChange: (selected: boolean) => void;
+  children: ReactNode;
+}) {
+  return (
+    <Checkbox isSelected={isSelected} onChange={onChange}>
+      <Checkbox.Content>
+        <Checkbox.Control>
+          <Checkbox.Indicator />
+        </Checkbox.Control>
+        <Label>{children}</Label>
+      </Checkbox.Content>
+    </Checkbox>
+  );
+}
+
+function suggestedFirstPeriodEnd(incorporationDate: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(incorporationDate)) return "";
+  const [year, month, day] = incorporationDate.split("-").map(Number);
+  const end = new Date(Date.UTC(year + 1, month - 1, day));
+  end.setUTCDate(end.getUTCDate() - 1);
+  return end.toISOString().slice(0, 10);
 }

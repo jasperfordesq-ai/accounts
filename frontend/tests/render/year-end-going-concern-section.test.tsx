@@ -28,7 +28,7 @@ describe("YearEndGoingConcernSection", () => {
 
     const note = screen.getByRole("textbox", { name: "Going concern note" });
     await user.type(note, "Cash runway depends on renewed facility.");
-    await user.click(screen.getByRole("button", { name: "Save Going Concern" }));
+    await user.click(screen.getByRole("button", { name: "Save going concern assessment" }));
 
     expect(onConfirmedChange).toHaveBeenCalledWith(false);
     expect(onNoteChange).toHaveBeenCalledWith("Cash runway depends on renewed facility.");

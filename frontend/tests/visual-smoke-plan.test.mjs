@@ -3,199 +3,182 @@ import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
 import {
   ACCOUNTANT_WORKFLOW_STAGES,
+  accountantWorkbenchRoutes,
+  canonicalStateUrlMatches,
+  canonicalUrlTemplateForState,
+  expectedAccountantWorkbenchScreenshotCount,
+  expectedVisualSmokeArtifacts,
+  expectedVisualSmokeManifest,
+  expectedVisualSmokeRouteAudits,
+  expectedVisualSmokeScreenshotCount,
+  MIN_LARGE_TEXT_CONTRAST_RATIO,
+  MIN_NORMAL_TEXT_CONTRAST_RATIO,
+  MIN_UI_COMPONENT_CONTRAST_RATIO,
+  REQUIRED_VISUAL_SMOKE_MATERIAL_ROUTES,
+  REQUIRED_VISUAL_SMOKE_UI_STATES,
+  resolveVisualSmokeStateHref,
   VISUAL_SMOKE_ARTIFACT_NAME,
+  VISUAL_SMOKE_INVENTORY_VERSION,
   visualSmokeLayoutChecks,
-  visualSmokeReviewProtocol,
   visualSmokeReviewChecks,
-  visualSmokeRoutes,
+  visualSmokeReviewProtocol,
+  visualSmokeStateInventory,
   visualSmokeThemes,
   visualSmokeViewports,
-  expectedVisualSmokeScreenshotCount,
-  expectedVisualSmokeArtifacts,
-  expectedVisualSmokeRouteAudits,
-  expectedVisualSmokeManifest,
-  MIN_VISUAL_SMOKE_CONTRAST_RATIO,
-  passedVisualSmokeContrastResult,
-  passedVisualSmokeLayoutResults,
-  visualSmokeContrastCheck,
 } from "../scripts/visual-smoke-plan.mjs";
 
-describe("visual smoke plan", () => {
-  it("covers the accountant workbench routes in light/dark desktop/mobile", () => {
+describe("canonical visual smoke plan", () => {
+  it("derives 192 captures from 32 canonical states, two themes and three exact viewports", () => {
     assert.equal(VISUAL_SMOKE_ARTIFACT_NAME, "visual-smoke-screenshots");
+    assert.equal(VISUAL_SMOKE_INVENTORY_VERSION, "canonical-material-states-v1");
+    assert.equal(visualSmokeStateInventory.length, 32);
     assert.deepEqual(visualSmokeThemes, ["light", "dark"]);
-    assert.deepEqual(ACCOUNTANT_WORKFLOW_STAGES, [
-      "Setup",
-      "Import",
-      "Classify",
-      "Year-End",
-      "Statements",
-      "Notes",
-      "Review",
-      "Filing",
+    assert.deepEqual(visualSmokeViewports, [
+      { name: "mobile", width: 390, height: 844 },
+      { name: "tablet", width: 768, height: 1024 },
+      { name: "desktop", width: 1440, height: 1000 },
     ]);
+    assert.equal(expectedVisualSmokeScreenshotCount(), 32 * 2 * 3);
+    assert.equal(expectedVisualSmokeArtifacts().length, expectedVisualSmokeScreenshotCount());
+    assert.equal(accountantWorkbenchRoutes.length, 7);
+    assert.equal(expectedAccountantWorkbenchScreenshotCount(), 7 * 2 * 3);
     assert.deepEqual(visualSmokeLayoutChecks, [
       "browser-console-errors",
       "page-horizontal-overflow",
       "visible-text-overlap",
     ]);
-    assert.equal(visualSmokeContrastCheck, "theme-contrast");
-    assert.equal(MIN_VISUAL_SMOKE_CONTRAST_RATIO, 3);
-    assert.deepEqual(visualSmokeReviewChecks, [
-      "accountant-workflow-hierarchy",
-      "table-scanability",
-      "theme-contrast",
-      "mobile-density",
-      "loading-error-empty-states",
-    ]);
-    assert.deepEqual(visualSmokeReviewProtocol, {
-      protocolVersion: "visual-review-v1",
-      reviewerRole: "Design reviewer",
-      status: "required-review",
-      signOffGate: "visual-qa-screenshot-review",
-      failurePolicy: "Block release if any accountant workbench route has console errors, horizontal overflow, visible text overlap, inaccessible contrast, unreadable table density, or unresolved light/dark/mobile defects.",
-      acceptanceCriteria: [
-        "Every configured route is captured in light desktop, dark desktop, light mobile and dark mobile.",
-        "No browser console errors, horizontal overflow or visible text overlap are present.",
-        "Accountant workflow hierarchy, table scanability, theme contrast, mobile density and route states are professionally acceptable.",
-        "A named visual QA reviewer records screenshot-manifest acceptance before real filing release.",
-      ],
-      requiredEvidence: [
-        "visual-smoke-manifest.json",
-        "visual-smoke-evidence-report.json",
-        "accountant-workbench-evidence-report.json",
-        "28 visual smoke screenshots",
-        "screenshot SHA-256 checksums",
-        "screenshot PNG dimensions",
-        "screenshot nonblank pixel diversity evidence",
-        "per-screenshot automated theme contrast smoke evidence",
-        "route audit summary",
-        "named visual QA reviewer sign-off",
-      ],
-    });
-    assert.deepEqual(
-      visualSmokeViewports.map(({ name, width, height }) => ({ name, width, height })),
-      [
-        { name: "desktop", width: 1440, height: 1000 },
-        { name: "mobile", width: 390, height: 844 },
-      ],
-    );
-    assert.equal(expectedVisualSmokeScreenshotCount(), 28);
-    assert.equal(expectedVisualSmokeArtifacts().length, 28);
-    assert.deepEqual(expectedVisualSmokeArtifacts()[0], {
-      routeName: "dashboard",
-      routeKey: "dashboard",
-      theme: "light",
-      viewportName: "desktop",
-      fileName: "dashboard-light-desktop.png",
-      artifactPath: "artifacts/visual-smoke/dashboard-light-desktop.png",
-      expectedText: "Firm command centre",
-      openFilingTab: false,
-      reviewStatus: "required-review",
-      layoutChecks: visualSmokeLayoutChecks,
-      layoutCheckResults: passedVisualSmokeLayoutResults(),
-      themeContrastResult: passedVisualSmokeContrastResult(),
-    });
-    assert.equal(
-      expectedVisualSmokeArtifacts().at(-1)?.artifactPath,
-      "artifacts/visual-smoke/workbench-preview-dark-mobile.png",
-    );
-    assert.equal(expectedVisualSmokeArtifacts().at(-1)?.routeKey, "workbenchPreview");
-    assert.deepEqual(expectedVisualSmokeRouteAudits()[0], {
-      routeName: "dashboard",
-      routeKey: "dashboard",
-      label: "Dashboard",
-      workflowStages: ACCOUNTANT_WORKFLOW_STAGES,
-      screenshotCount: 4,
-      reviewStatus: "required-review",
-      reviewChecks: visualSmokeReviewChecks,
-    });
-    assert.deepEqual(expectedVisualSmokeManifest(), {
-      artifactName: VISUAL_SMOKE_ARTIFACT_NAME,
-      manifestFileName: "visual-smoke-manifest.json",
-      expectedScreenshotCount: 28,
-      layoutChecks: visualSmokeLayoutChecks,
-      reviewChecks: visualSmokeReviewChecks,
-      reviewProtocol: visualSmokeReviewProtocol,
-      routeAudits: expectedVisualSmokeRouteAudits(),
-      screenshots: expectedVisualSmokeArtifacts(),
-    });
+    assert.equal(MIN_NORMAL_TEXT_CONTRAST_RATIO, 4.5);
+    assert.equal(MIN_LARGE_TEXT_CONTRAST_RATIO, 3);
+    assert.equal(MIN_UI_COMPONENT_CONTRAST_RATIO, 3);
+  });
+
+  it("covers every named material route, all eight statement tabs and every exceptional state", () => {
+    const materialRoutes = new Set(visualSmokeStateInventory.map((state) => state.materialRoute).filter(Boolean));
+    const uiStates = new Set(visualSmokeStateInventory.map((state) => state.uiState));
+
+    for (const requiredRoute of REQUIRED_VISUAL_SMOKE_MATERIAL_ROUTES) {
+      assert.ok(materialRoutes.has(requiredRoute), `missing material route ${requiredRoute}`);
+    }
+    for (const requiredState of REQUIRED_VISUAL_SMOKE_UI_STATES) {
+      assert.ok(uiStates.has(requiredState), `missing UI state ${requiredState}`);
+    }
 
     assert.deepEqual(
-      visualSmokeRoutes.map((route) => route.name),
+      visualSmokeStateInventory
+        .filter((state) => state.canonicalTabState.kind === "statement-tab")
+        .map((state) => state.canonicalTabState.id),
       [
-        "dashboard",
-        "production-readiness",
-        "company-detail",
-        "period-workspace",
-        "filing-review",
-        "financial-statements",
-        "workbench-preview",
+        "trial-balance",
+        "sources",
+        "pnl",
+        "balance-sheet",
+        "tax-computation",
+        "cash-flow",
+        "equity-changes",
+        "directors-report",
       ],
     );
-    assert.equal(visualSmokeRoutes.find((route) => route.name === "filing-review")?.openFilingTab, true);
     assert.deepEqual(
-      visualSmokeRoutes.find((route) => route.name === "period-workspace")?.workflowStages,
-      ACCOUNTANT_WORKFLOW_STAGES,
-    );
-    assert.deepEqual(
-      [...new Set(visualSmokeRoutes.flatMap((route) => route.workflowStages))].sort(),
+      [...new Set(accountantWorkbenchRoutes.flatMap((route) => route.workflowStages))].sort(),
       [...ACCOUNTANT_WORKFLOW_STAGES].sort(),
-    );
-    assert.ok(
-      visualSmokeRoutes.every((route) => route.workflowStages.length > 0),
-      "every visual smoke route must state the accountant workflow stages it proves",
-    );
-    assert.equal(
-      visualSmokeRoutes.find((route) => route.name === "company-detail")?.expectedText,
-      "Company command centre",
-    );
-    assert.equal(
-      visualSmokeRoutes.find((route) => route.name === "period-workspace")?.expectedText,
-      "Filing readiness",
-    );
-    assert.equal(
-      visualSmokeRoutes.find((route) => route.name === "financial-statements")?.expectedText,
-      "Financial Statements",
-    );
-    assert.deepEqual(
-      visualSmokeRoutes.find((route) => route.name === "financial-statements")?.workflowStages,
-      ["Statements"],
-    );
-    assert.ok(
-      expectedVisualSmokeArtifacts().some(
-        (artifact) =>
-          artifact.routeName === "financial-statements"
-          && artifact.routeKey === "financialStatements"
-          && artifact.artifactPath === "artifacts/visual-smoke/financial-statements-light-desktop.png",
-      ),
-    );
-    assert.equal(
-      visualSmokeRoutes.find((route) => route.name === "workbench-preview")?.expectedText,
-      "Workbench Component Preview",
     );
   });
 
-  it("discovers dashboard period workspace links before creating fallback smoke data", async () => {
-    const script = await readFile(new URL("../scripts/visual-smoke.mjs", import.meta.url), "utf8");
-    const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+  it("records canonical URL/tab, expected text and pending human-review evidence per state", () => {
+    const artifacts = expectedVisualSmokeArtifacts();
+    const login = artifacts[0];
+    const filing = artifacts.find((artifact) =>
+      artifact.stateId === "filing-review" && artifact.theme === "light" && artifact.viewportName === "mobile");
+    const directors = artifacts.find((artifact) =>
+      artifact.stateId === "statement-directors-report" && artifact.theme === "dark" && artifact.viewportName === "tablet");
 
-    assert.match(script, /withScreenshotEvidence/);
-    assert.match(script, /function companyHrefFromPeriodHref/);
-    assert.match(script, /writeFile/);
-    assert.match(script, /visual-smoke-manifest\.json/);
-    assert.match(script, /routeAudits/);
-    assert.match(script, /reviewProtocol/);
-    assert.match(script, /Firm command centre/);
-    assert.doesNotMatch(script, /mainText\(page, "Dashboard", \{ exact: true \}\)/);
-    assert.match(script, /a\[href\^="\/companies\/"\]\[href\*="\/periods\/"\]/);
-    assert.match(script, /Company command centre/);
-    assert.doesNotMatch(script, /mainText\(page, "Accounting Periods"\)/);
+    assert.deepEqual(login, {
+      stateId: "login",
+      routeName: "login",
+      routeKey: "login",
+      materialRoute: "login",
+      uiState: "populated",
+      authMode: "anonymous",
+      theme: "light",
+      viewportName: "mobile",
+      fileName: "login-light-mobile.png",
+      artifactPath: "artifacts/visual-smoke/login-light-mobile.png",
+      expectedText: "Sign in",
+      expectedStateText: "Sign in",
+      canonicalUrlTemplate: "/login",
+      canonicalQuery: {},
+      canonicalTabState: { kind: "route", id: "default", label: "No tab selection" },
+      openFilingTab: false,
+      reviewStatus: "required-review",
+      layoutChecks: visualSmokeLayoutChecks,
+      layoutCheckResults: artifacts[0].layoutCheckResults,
+      themeContrastResult: artifacts[0].themeContrastResult,
+    });
+    assert.equal(filing?.canonicalUrlTemplate, "/companies/{companyId}/periods/{periodId}?tab=filing");
+    assert.deepEqual(filing?.canonicalTabState, { kind: "period-tab", id: "filing", label: "Filing" });
+    assert.equal(filing?.expectedStateText, "Filing readiness profile");
+    assert.equal(directors?.expectedStateText, "Directors' Report");
+    assert.equal(directors?.reviewStatus, "required-review");
+  });
+
+  it("makes canonical inventory identity and route-state URLs deterministic", () => {
+    const ids = visualSmokeStateInventory.map((state) => state.id);
+    const semanticPlanKeys = visualSmokeStateInventory.map((state) => JSON.stringify({
+      url: canonicalUrlTemplateForState(state),
+      tab: state.canonicalTabState,
+      uiState: state.uiState,
+      expectedStateText: state.expectedStateText,
+    }));
+    assert.equal(new Set(ids).size, ids.length, "state IDs must be unique");
+    assert.equal(new Set(semanticPlanKeys).size, semanticPlanKeys.length, "planned semantic states must be unique");
+
+    const filing = visualSmokeStateInventory.find((state) => state.id === "filing-review");
+    const period = visualSmokeStateInventory.find((state) => state.id === "period-workspace");
+    const bases = {
+      period: "/companies/41/periods/52?tab=filing&unexpected=deep-link",
+      filing: "/companies/41/periods/52?tab=filing&unexpected=deep-link",
+    };
+
+    assert.equal(resolveVisualSmokeStateHref(period, bases), "/companies/41/periods/52");
+    assert.equal(resolveVisualSmokeStateHref(filing, bases), "/companies/41/periods/52?tab=filing");
+    assert.equal(canonicalStateUrlMatches("/companies/41/periods/52", period), true);
+    assert.equal(canonicalStateUrlMatches("/companies/41/periods/52?tab=filing", period), false);
+    assert.equal(canonicalStateUrlMatches("/companies/41/periods/52?tab=filing", filing), true);
+  });
+
+  it("builds a manifest directly from the inventory and keeps human review blocked", () => {
+    const manifest = expectedVisualSmokeManifest();
+    assert.equal(manifest.inventoryVersion, VISUAL_SMOKE_INVENTORY_VERSION);
+    assert.equal(manifest.inventoryStateCount, visualSmokeStateInventory.length);
+    assert.equal(manifest.expectedScreenshotCount, 192);
+    assert.deepEqual(manifest.requiredMaterialRoutes, REQUIRED_VISUAL_SMOKE_MATERIAL_ROUTES);
+    assert.deepEqual(manifest.requiredUiStates, REQUIRED_VISUAL_SMOKE_UI_STATES);
+    assert.deepEqual(manifest.stateInventory, expectedVisualSmokeRouteAudits());
+    assert.equal(manifest.routeAudits.length, visualSmokeStateInventory.length);
+    assert.equal(manifest.routeAudits.every((audit) => audit.screenshotCount === 6), true);
+    assert.equal(manifest.screenshots.length, 192);
+    assert.equal(visualSmokeReviewProtocol.status, "required-review");
+    assert.ok(visualSmokeReviewChecks.includes("canonical-url-tab-state"));
+    assert.ok(visualSmokeReviewChecks.includes("semantic-capture-distinctness"));
+    assert.ok(visualSmokeReviewProtocol.requiredEvidence.includes("192 canonical material-state screenshots"));
+    assert.ok(visualSmokeReviewProtocol.requiredEvidence.includes("named visual QA reviewer sign-off"));
+  });
+
+  it("strips discovered deep-link queries before creating canonical period and filing states", async () => {
+    const script = await readFile(new URL("../scripts/visual-smoke.mjs", import.meta.url), "utf8");
+    const { periodPathFromHref } = await import("../scripts/visual-smoke.mjs");
+
+    assert.equal(
+      periodPathFromHref("/companies/41/periods/52?tab=filing", "https://accounts.example"),
+      "/companies/41/periods/52",
+    );
+    assert.match(script, /period:\s*periodPath/);
+    assert.match(script, /filing:\s*periodPath/);
+    assert.match(script, /resolveVisualSmokeStateHref/);
+    assert.doesNotMatch(script, /filingTab\.click\(\)/);
     assert.ok(
       script.indexOf("companyHrefFromPeriodHref") < script.indexOf("createSmokeCompany(page)"),
       "existing dashboard period links must be resolved before fallback smoke company creation",
     );
-    assert.equal(packageJson.scripts["test:visual:verify"], "node scripts/verify-visual-smoke-artifacts.mjs");
-    assert.equal(packageJson.scripts["test:visual:workbench"], "node scripts/verify-accountant-workbench-evidence.mjs");
   });
 });

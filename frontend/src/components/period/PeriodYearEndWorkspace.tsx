@@ -1,8 +1,8 @@
 "use client";
 
-import { Button, Card, Chip, ProgressBar, ProgressBarFill, ProgressBarTrack } from "@heroui/react";
+import { Card, Chip, ProgressBar, ProgressBarFill, ProgressBarTrack } from "@heroui/react";
 import { ArrowRight, BarChart3 } from "lucide-react";
-import Link from "next/link";
+import { ActionLink } from "@/components/workbench";
 
 import type { YearEndSummary } from "@/lib/api";
 
@@ -23,12 +23,10 @@ export function PeriodYearEndWorkspace({ yearEnd, questionnaireHref }: PeriodYea
                 Walk through all 9 sections to capture debtors, creditors, assets, payroll, tax, and more.
               </p>
             </div>
-            <Link href={questionnaireHref}>
-              <Button variant="primary">
-                Open Year-End Questionnaire
-                <ArrowRight className="ml-1.5 h-4 w-4" />
-              </Button>
-            </Link>
+            <ActionLink href={questionnaireHref} variant="primary" size="md">
+              Open Year-End Questionnaire
+              <ArrowRight className="ml-1.5 h-4 w-4" />
+            </ActionLink>
           </div>
         </Card.Content>
       </Card>

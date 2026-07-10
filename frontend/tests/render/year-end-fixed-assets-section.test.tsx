@@ -30,6 +30,9 @@ describe("YearEndFixedAssetsSection", () => {
     await user.selectOptions(screen.getByRole("combobox", { name: "Depreciation method" }), "ReducingBalance");
     await user.click(screen.getByRole("button", { name: "Add asset" }));
     await user.click(screen.getByRole("button", { name: "Delete asset Company van" }));
+    expect(onDelete).not.toHaveBeenCalled();
+    expect(screen.getByRole("alertdialog", { name: "Remove fixed asset Company van?" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Remove record" }));
 
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ name: "Laptop fleet" }));
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ category: "IT" }));
@@ -55,9 +58,11 @@ function FixedAssetHarness({
     name: "",
     category: "Equipment",
     cost: 0,
+    residualValue: 0,
     acquisitionDate: "",
     usefulLifeYears: 5,
     depreciationMethod: "StraightLine",
+    capitalAllowanceTreatment: "Unreviewed",
   });
 
   function handleChange(nextDraft: FixedAsset) {
@@ -72,9 +77,12 @@ function FixedAssetHarness({
         name: "Company van",
         category: "Vehicles",
         cost: 24500,
+        residualValue: 2500,
         acquisitionDate: "2026-02-15",
         usefulLifeYears: 5,
         depreciationMethod: "StraightLine",
+        capitalAllowanceTreatment: "PlantAndMachinery12Point5",
+        capitalAllowanceEvidence: "Invoice and trade-use evidence retained.",
       }]}
       draft={draft}
       saving={false}

@@ -1,14 +1,12 @@
 "use client";
 
-import { useId, useMemo, useState, type ReactNode } from "react";
+import { useId, useState, type MouseEventHandler, type ReactNode } from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
-  ArrowDown,
   ArrowLeft,
+  ArrowLeftRight,
   ArrowRight,
-  ArrowUp,
-  ArrowUpDown,
   CheckCircle2,
   Circle,
   CircleAlert,
@@ -22,17 +20,23 @@ import {
   LockKeyhole,
   RefreshCw,
 } from "lucide-react";
+import { useUnsavedChanges } from "@/lib/useUnsavedChanges";
+
+export {
+  DataGrid,
+  DataTable,
+  HorizontalScrollRegion,
+} from "@/components/workbench/DataGrid";
+export type {
+  DataGridProps,
+  DataTableRichRow,
+  DataTableRow,
+  DataTableSortState,
+  HorizontalScrollRegionProps,
+} from "@/components/workbench/DataGrid";
 
 type WorkflowState = "done" | "active" | "blocked" | "todo";
 type Tone = "default" | "good" | "warn" | "bad" | "info";
-type DataTableRowTone = Tone;
-type DataTableSortDirection = "asc" | "desc";
-type DataTableSortValue = string | number | null | undefined;
-
-export interface DataTableSortState {
-  columnIndex: number;
-  direction: DataTableSortDirection;
-}
 
 export interface PageShellProps {
   title: string;
@@ -169,25 +173,15 @@ export interface MoneyInputProps {
   allowNegative?: boolean;
 }
 
-export interface DataTableRichRow {
-  id?: string | number;
-  cells: ReactNode[];
-  searchText?: string;
-  tone?: DataTableRowTone;
-  sortValues?: DataTableSortValue[];
-}
-
-export type DataTableRow = ReactNode[] | DataTableRichRow;
-
-export interface DataGridProps {
-  columns: string[];
-  rows: DataTableRow[];
-  caption?: string;
-  filterPlaceholder?: string;
-  emptyState?: ReactNode;
-  totals?: ReactNode[];
-  defaultSort?: DataTableSortState | null;
-  sortableColumns?: boolean[];
+export interface ActionLinkProps {
+  href: string;
+  children: ReactNode;
+  variant?: "primary" | "secondary" | "outline" | "ghost";
+  size?: "sm" | "md";
+  className?: string;
+  ariaCurrent?: "page" | "step";
+  ariaLabel?: string;
+  onClick?: MouseEventHandler<HTMLAnchorElement>;
 }
 
 const toneClasses: Record<Tone, string> = {
@@ -208,6 +202,41 @@ const iconToneClasses: Record<Tone, string> = {
 
 export function WorkbenchShell({ children }: { children: ReactNode }) {
   return <div className="min-w-0 space-y-6 text-[var(--foreground)]">{children}</div>;
+}
+
+const actionLinkVariantClasses = {
+  primary: "border-emerald-700 bg-emerald-700 text-white hover:bg-emerald-800 dark:border-emerald-600 dark:bg-emerald-600 dark:hover:bg-emerald-500",
+  secondary: "border-[var(--border)] bg-[var(--surface-strong)] text-[var(--foreground)] hover:border-[var(--ring)]",
+  outline: "border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] hover:border-[var(--ring)] hover:bg-[var(--surface-subtle)]",
+  ghost: "border-transparent bg-transparent text-[var(--foreground)] hover:bg-[var(--surface-subtle)]",
+} satisfies Record<NonNullable<ActionLinkProps["variant"]>, string>;
+
+const actionLinkSizeClasses = {
+  sm: "min-h-8 px-3 text-xs",
+  md: "min-h-10 px-4 text-sm",
+} satisfies Record<NonNullable<ActionLinkProps["size"]>, string>;
+
+export function ActionLink({
+  href,
+  children,
+  variant = "outline",
+  size = "sm",
+  className = "",
+  ariaCurrent,
+  ariaLabel,
+  onClick,
+}: ActionLinkProps) {
+  return (
+    <Link
+      href={href}
+      aria-current={ariaCurrent}
+      aria-label={ariaLabel}
+      onClick={onClick}
+      className={`inline-flex items-center justify-center gap-2 rounded-md border font-semibold shadow-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 ${actionLinkVariantClasses[variant]} ${actionLinkSizeClasses[size]} ${className}`}
+    >
+      {children}
+    </Link>
+  );
 }
 
 export function WorkbenchHeader({
@@ -365,7 +394,7 @@ export function WorkbenchEmptyState({ title, description, actions }: WorkbenchEm
 
 export function PermissionDeniedPanel({
   title = "Permission denied",
-  description = "You do not have permission to approve or submit this accounting workflow.",
+  description = "You do not have permission to approve this accounting workflow or record an external filing outcome.",
   actions,
 }: PermissionDeniedPanelProps) {
   return (
@@ -416,13 +445,28 @@ const workflowStateClasses: Record<WorkflowState, string> = {
 };
 
 export function WorkflowRail({ items, title = "Accounting Workflow" }: { items: WorkflowItem[]; title?: string }) {
+  const railInstanceId = useId();
+  const railCueId = `${railInstanceId}-scroll-cue`;
+
   return (
     <nav aria-label={title} className="mb-6 min-w-0 max-w-full overflow-hidden rounded-md border border-[var(--border)] bg-[var(--surface)]">
       <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] px-4 py-3">
         <h2 className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">{title}</h2>
         <span className="text-xs text-[var(--muted-foreground)]">{items.length} stages</span>
       </div>
-      <div className="min-w-0 max-w-full overflow-x-auto">
+      <p id={railCueId} className="flex items-center gap-2 border-b border-[var(--border)] bg-sky-50 px-4 py-2 text-xs font-medium text-sky-900 dark:bg-sky-950/40 dark:text-sky-100">
+        <ArrowLeftRight aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+        Swipe horizontally, or focus the workflow stages and use the arrow keys.
+      </p>
+      <div
+        className="min-w-0 max-w-full overflow-x-auto overscroll-x-contain focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-emerald-500"
+        role="region"
+        aria-label={`${title} stages`}
+        aria-describedby={railCueId}
+        tabIndex={0}
+        data-horizontal-scroll-region="true"
+        data-sticky-first-column="false"
+      >
         <ol className="grid w-max min-w-full auto-cols-[minmax(9rem,1fr)] grid-flow-col divide-x divide-[var(--border)]">
           {items.map((item) => (
             <li key={item.id ?? item.label} className="min-w-0">
@@ -962,256 +1006,6 @@ function formatLegalSourceDate(value: string) {
   }).format(date);
 }
 
-export function DataTable({
-  ...props
-}: DataGridProps) {
-  return <DataGridBase {...props} surfaceClassName="workbench-data-table" />;
-}
-
-export function DataGrid({
-  ...props
-}: DataGridProps) {
-  return <DataGridBase {...props} surfaceClassName="workbench-data-grid" />;
-}
-
-function DataGridBase({
-  columns,
-  rows,
-  caption,
-  filterPlaceholder,
-  emptyState = "No rows to show",
-  totals,
-  defaultSort = null,
-  sortableColumns,
-  surfaceClassName,
-}: DataGridProps & { surfaceClassName: string }) {
-  const isColumnSortable = (columnIndex: number) => sortableColumns?.[columnIndex] ?? true;
-  const [filter, setFilter] = useState("");
-  const [sortState, setSortState] = useState<DataTableSortState | null>(
-    defaultSort && isColumnSortable(defaultSort.columnIndex) ? defaultSort : null,
-  );
-  const normalizedRows = useMemo(() => rows.map(normalizeDataTableRow), [rows]);
-  const normalizedFilter = filter.trim().toLowerCase();
-  const visibleRows = useMemo(() => {
-    const filteredRows = normalizedFilter
-      ? normalizedRows.filter((row) => row.searchText.toLowerCase().includes(normalizedFilter))
-      : normalizedRows;
-
-    if (!sortState) return filteredRows;
-
-    return [...filteredRows].sort((left, right) => {
-      const comparison = compareDataTableSortValues(
-        left.sortValues[sortState.columnIndex],
-        right.sortValues[sortState.columnIndex],
-      );
-      return sortState.direction === "asc" ? comparison : -comparison;
-    });
-  }, [normalizedFilter, normalizedRows, sortState]);
-  const tableLabel = caption ?? "Workbench data table";
-  const showFilter = Boolean(filterPlaceholder);
-  const toggleSort = (columnIndex: number) => {
-    if (!isColumnSortable(columnIndex)) return;
-
-    setSortState((current) => {
-      if (current?.columnIndex !== columnIndex) {
-        return { columnIndex, direction: "asc" };
-      }
-
-      return {
-        columnIndex,
-        direction: current.direction === "asc" ? "desc" : "asc",
-      };
-    });
-  };
-
-  return (
-    <div className="min-w-0 space-y-3">
-      {showFilter && (
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <label className="sr-only" htmlFor={filterId(tableLabel)}>
-            Filter {tableLabel}
-          </label>
-          <input
-            id={filterId(tableLabel)}
-            type="search"
-            value={filter}
-            onChange={(event) => setFilter(event.target.value)}
-            placeholder={filterPlaceholder}
-            aria-label={`Filter ${tableLabel}`}
-            className="min-h-10 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 text-sm text-[var(--foreground)] outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 sm:max-w-xs"
-          />
-          <p className="text-xs font-medium text-[var(--muted-foreground)]">
-            {visibleRows.length} of {normalizedRows.length} rows
-          </p>
-        </div>
-      )}
-      <div
-        className={`${surfaceClassName} min-w-0 overflow-x-auto rounded-md border border-[var(--border)] bg-[var(--surface)]`}
-        data-responsive="card"
-        data-scroll-affordance="true"
-        data-sticky-first-column="true"
-        data-workbench-table-shell="true"
-        aria-describedby={`${filterId(tableLabel)}-scroll-cue`}
-      >
-      <p id={`${filterId(tableLabel)}-scroll-cue`} className="sr-only">
-        Scroll horizontally to review all evidence columns.
-      </p>
-      <table className="min-w-full border-collapse text-left text-sm" aria-label={tableLabel}>
-        {caption && <caption className="sr-only">{caption}</caption>}
-        <thead className="bg-[var(--surface-subtle)] text-xs font-semibold uppercase text-[var(--muted-foreground)]">
-          <tr>
-            {columns.map((column, columnIndex) => {
-              const isSorted = sortState?.columnIndex === columnIndex;
-              const isSortable = isColumnSortable(columnIndex);
-              return (
-                <th
-                  key={column}
-                  aria-sort={isSortable ? (isSorted ? (sortState.direction === "asc" ? "ascending" : "descending") : "none") : undefined}
-                  data-sticky-column={columnIndex === 0 ? "true" : undefined}
-                  className="whitespace-nowrap border-b border-[var(--border)] px-4 py-3"
-                >
-                  {isSortable ? (
-                    <button
-                      type="button"
-                      aria-label={`Sort by ${column}`}
-                      onClick={() => toggleSort(columnIndex)}
-                      className="inline-flex min-h-7 items-center gap-1.5 rounded-sm text-left font-semibold uppercase text-[var(--muted-foreground)] transition hover:text-[var(--foreground)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500"
-                    >
-                      <span>{column}</span>
-                      <SortIcon direction={isSorted ? sortState.direction : null} />
-                    </button>
-                  ) : (
-                    <span className="inline-flex min-h-7 items-center text-left font-semibold uppercase text-[var(--muted-foreground)]">
-                      {column}
-                    </span>
-                  )}
-                </th>
-              );
-            })}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-[var(--border)]">
-          {visibleRows.map((row, rowIndex) => (
-            <tr
-              key={row.id ?? rowIndex}
-              data-tone={row.tone}
-              className={`hover:bg-[var(--surface-subtle)] ${dataTableRowToneClass(row.tone)}`}
-            >
-              {row.cells.map((cell, cellIndex) => (
-                <td
-                  key={cellIndex}
-                  data-label={columns[cellIndex] ?? ""}
-                  data-sticky-column={cellIndex === 0 ? "true" : undefined}
-                  className="px-4 py-3 align-top text-[var(--foreground)]"
-                >
-                  {cell}
-                </td>
-              ))}
-            </tr>
-          ))}
-          {visibleRows.length === 0 && (
-            <tr>
-              <td colSpan={columns.length} className="px-4 py-6 text-center text-sm text-[var(--muted-foreground)]">
-                {emptyState}
-              </td>
-            </tr>
-          )}
-        </tbody>
-        {totals && (
-          <tfoot className="border-t border-[var(--border)] bg-[var(--surface-subtle)] text-sm font-semibold text-[var(--foreground)]">
-            <tr>
-              {totals.map((cell, cellIndex) => (
-                <td
-                  key={cellIndex}
-                  data-label={columns[cellIndex] ?? ""}
-                  data-sticky-column={cellIndex === 0 ? "true" : undefined}
-                  className="px-4 py-3 align-top"
-                >
-                  {cell}
-                </td>
-              ))}
-            </tr>
-          </tfoot>
-        )}
-      </table>
-      </div>
-    </div>
-  );
-}
-
-function SortIcon({ direction }: { direction: DataTableSortDirection | null }) {
-  if (direction === "asc") {
-    return <ArrowUp aria-hidden="true" className="h-3.5 w-3.5" />;
-  }
-
-  if (direction === "desc") {
-    return <ArrowDown aria-hidden="true" className="h-3.5 w-3.5" />;
-  }
-
-  return <ArrowUpDown aria-hidden="true" className="h-3.5 w-3.5 opacity-60" />;
-}
-
-function normalizeDataTableRow(row: DataTableRow, rowIndex: number): Required<DataTableRichRow> {
-  if (Array.isArray(row)) {
-    const fallbackId = row.map(cellText).join("|");
-    return {
-      id: `row-${rowIndex}-${fallbackId || "legacy"}`,
-      cells: row,
-      searchText: row.map(cellText).join(" "),
-      tone: "default",
-      sortValues: row.map(cellText),
-    };
-  }
-
-  const fallbackId = row.cells.map(cellText).join("|");
-  return {
-    id: row.id ?? `row-${rowIndex}-${fallbackId || "rich"}`,
-    cells: row.cells,
-    searchText: row.searchText ?? row.cells.map(cellText).join(" "),
-    tone: row.tone ?? "default",
-    sortValues: row.sortValues ?? row.cells.map(cellText),
-  };
-}
-
-function compareDataTableSortValues(left: DataTableSortValue, right: DataTableSortValue) {
-  if (left === right) return 0;
-  if (left === null || left === undefined || left === "") return 1;
-  if (right === null || right === undefined || right === "") return -1;
-  if (typeof left === "number" && typeof right === "number") return left - right;
-
-  return String(left).localeCompare(String(right), "en-IE", {
-    numeric: true,
-    sensitivity: "base",
-  });
-}
-
-function cellText(cell: ReactNode): string {
-  if (cell === null || cell === undefined || typeof cell === "boolean") return "";
-  if (typeof cell === "string" || typeof cell === "number" || typeof cell === "bigint") {
-    return String(cell);
-  }
-  return "";
-}
-
-function dataTableRowToneClass(tone: DataTableRowTone) {
-  switch (tone) {
-    case "good":
-      return "border-l-4 border-l-emerald-400";
-    case "warn":
-      return "border-l-4 border-l-amber-400 bg-amber-50/35 dark:bg-amber-950/20";
-    case "bad":
-      return "border-l-4 border-l-red-400 bg-red-50/35 dark:bg-red-950/20";
-    case "info":
-      return "border-l-4 border-l-sky-400";
-    default:
-      return "";
-  }
-}
-
-function filterId(label: string) {
-  return `filter-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "table"}`;
-}
-
 export function MoneyField({ value }: { value: number | null | undefined }) {
   if (value === null || value === undefined) return <span className="text-[var(--muted-foreground)]">-</span>;
   return (
@@ -1238,7 +1032,11 @@ export function MoneyInput({
   const hintId = hint ? `${inputId}-hint` : undefined;
   const [isFocused, setIsFocused] = useState(false);
   const [draft, setDraft] = useState(() => formatMoneyInputValue(value));
-  const displayValue = isFocused ? draft : formatMoneyInputValue(value);
+  const hasUncommittedMoneyDraft = parseMoneyInputDraft(draft, allowNegative) === null;
+  const displayValue = isFocused || hasUncommittedMoneyDraft
+    ? draft
+    : formatMoneyInputValue(value);
+  useUnsavedChanges(hasUncommittedMoneyDraft);
 
   return (
     <div className={className}>
@@ -1267,7 +1065,9 @@ export function MoneyInput({
           data-money-input="true"
           className="min-w-0 bg-transparent px-3 py-2 text-sm tabular-nums text-[var(--foreground)] outline-none placeholder:text-[var(--muted-foreground)] disabled:cursor-not-allowed"
           onFocus={() => {
-            setDraft(formatMoneyInputValue(value));
+            setDraft((current) => parseMoneyInputDraft(current, allowNegative) === null
+              ? current
+              : formatMoneyInputValue(value));
             setIsFocused(true);
           }}
           onBlur={() => {

@@ -14,6 +14,8 @@ interface YearEndQuestionnaireSectionProps {
   review?: YearEndReviewConfirmation;
   onConfirmReview?: () => void;
   reviewSaving?: boolean;
+  reviewDisabled?: boolean;
+  reviewDisabledReason?: string;
   children: ReactNode;
   defaultOpen?: boolean;
 }
@@ -26,21 +28,29 @@ export function YearEndQuestionnaireSection({
   review,
   onConfirmReview,
   reviewSaving,
+  reviewDisabled = false,
+  reviewDisabledReason,
   children,
   defaultOpen = false,
 }: YearEndQuestionnaireSectionProps) {
   const [open, setOpen] = useState(defaultOpen);
+  const [hasOpened, setHasOpened] = useState(defaultOpen);
   const reactId = useId();
   const panelId = `year-end-section-${reactId.replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const isReviewed = review?.confirmed === true;
-  const isComplete = completed || isReviewed;
+  const isComplete = !reviewDisabled && (completed || isReviewed);
+
+  const toggleOpen = () => {
+    if (!open) setHasOpened(true);
+    setOpen((current) => !current);
+  };
 
   return (
     <Card className="bg-white dark:bg-neutral-900 shadow-sm border border-gray-200 dark:border-neutral-700">
       <button
         type="button"
         className="w-full text-left px-6 py-4 flex items-center gap-4 hover:bg-gray-50/50 dark:hover:bg-neutral-800/50 transition-colors"
-        onClick={() => setOpen((value) => !value)}
+        onClick={toggleOpen}
         aria-expanded={open}
         aria-controls={panelId}
         aria-label={`${open ? "Collapse" : "Expand"} ${title} section`}
@@ -55,8 +65,8 @@ export function YearEndQuestionnaireSection({
               <CheckCircle2 className="w-4 h-4 text-emerald-500" />
             )}
             {onConfirmReview && (
-              <Chip size="sm" color={isReviewed ? "success" : "warning"} variant="soft">
-                {isReviewed ? "Reviewed" : "Needs review"}
+              <Chip size="sm" color={reviewDisabled ? "danger" : isReviewed ? "success" : "warning"} variant="soft">
+                {reviewDisabled ? "Evidence unavailable" : isReviewed ? "Reviewed" : "Needs review"}
               </Chip>
             )}
           </div>
@@ -68,11 +78,12 @@ export function YearEndQuestionnaireSection({
           <ChevronRight className="w-5 h-5 text-gray-400 dark:text-gray-500 shrink-0" />
         )}
       </button>
-      {open && (
+      {hasOpened && (
         <div
           id={panelId}
           role="region"
           aria-label={`${title} review evidence`}
+          hidden={!open}
           className="animate-slide-down px-6 pb-6 border-t border-gray-100 dark:border-neutral-700 pt-4"
         >
           {children}
@@ -80,8 +91,15 @@ export function YearEndQuestionnaireSection({
             <div className="mt-5 flex flex-col gap-3 rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm dark:border-neutral-700 dark:bg-neutral-800/60 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="font-medium text-slate-800 dark:text-slate-100">
-                  {isReviewed ? "Section review confirmed" : "Review this section before final accounts"}
+                  {reviewDisabled
+                    ? "Confirmation blocked until evidence is available"
+                    : isReviewed
+                      ? "Section review confirmed"
+                      : "Review this section before final accounts"}
                 </p>
+                {reviewDisabled && reviewDisabledReason && (
+                  <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">{reviewDisabledReason}</p>
+                )}
                 {isReviewed && review?.confirmedBy && (
                   <p className="text-xs text-slate-500 dark:text-slate-400">
                     Confirmed by {review.confirmedBy}
@@ -93,7 +111,7 @@ export function YearEndQuestionnaireSection({
                 size="sm"
                 variant={isReviewed ? "outline" : "primary"}
                 onPress={onConfirmReview}
-                isDisabled={reviewSaving}
+                isDisabled={reviewSaving || reviewDisabled}
               >
                 {reviewSaving ? <Spinner size="sm" /> : <CheckCircle2 className="w-4 h-4 mr-1" />}
                 {isReviewed ? "Refresh confirmation" : "Confirm reviewed"}

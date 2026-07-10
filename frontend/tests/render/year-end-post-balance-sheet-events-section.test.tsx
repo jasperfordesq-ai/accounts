@@ -25,6 +25,9 @@ describe("YearEndPostBalanceSheetEventsSection", () => {
     await user.click(screen.getByRole("checkbox", { name: "Adjusting" }));
     await user.click(screen.getByRole("button", { name: "Add post-balance sheet event" }));
     await user.click(screen.getByRole("button", { name: "Delete event Major contract signed" }));
+    expect(onDelete).not.toHaveBeenCalled();
+    expect(screen.getByRole("alertdialog", { name: "Remove post-balance-sheet event Major contract signed?" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Remove record" }));
 
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ description: "Customer insolvency" }));
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ eventDate: "2026-05-15" }));

@@ -67,20 +67,24 @@ $releaseRunUrl = $GitHubActionsRunUrl.Trim()
 
 if ($releaseCommitSha.Length -eq 0) {
     Add-Failure $failures "CommitSha is required for no-direct filing submission evidence."
-} elseif ($releaseCommitSha -notmatch '^[0-9a-fA-F]{7,40}$') {
-    Add-Failure $failures "CommitSha must be a 7-40 character hexadecimal Git commit SHA."
+} elseif ($releaseCommitSha -cnotmatch '^[0-9a-f]{40}$') {
+    Add-Failure $failures "CommitSha must be a full lowercase 40-character hexadecimal Git commit SHA."
 }
 
 if ($releaseRunUrl.Length -eq 0) {
     Add-Failure $failures "GitHubActionsRunUrl is required for no-direct filing submission evidence."
-} elseif ($releaseRunUrl -notmatch '^https://github\.com/.+/actions/runs/[0-9]+') {
-    Add-Failure $failures "GitHubActionsRunUrl must be a GitHub Actions run URL."
+} elseif ($releaseRunUrl -cnotmatch '^https://github\.com/[^/\s]+/[^/\s]+/actions/runs/[0-9]+$') {
+    Add-Failure $failures "GitHubActionsRunUrl must be an exact GitHub Actions run URL."
 }
 
 $filingWorkflowPath = "backend/Accounts.Api/Endpoints/FilingWorkflowEndpoints.cs"
 $revenueEndpointsPath = "backend/Accounts.Api/Endpoints/RevenueEndpoints.cs"
 $filingServicePath = "backend/Accounts.Api/Services/FilingWorkflowService.cs"
 $readinessReportPath = "backend/Accounts.Api/Services/ProductionReadinessReportService.cs"
+$readinessReleaseCatalogPath = "backend/Accounts.Api/Services/ProductionReadinessReleaseCatalog.cs"
+$ixbrlServicePath = "backend/Accounts.Api/Services/IxbrlService.cs"
+$releaseGatePath = "backend/Accounts.Api/Services/FilingReleaseGate.cs"
+$externalHandoffServicePath = "backend/Accounts.Api/Services/ExternalFilingHandoffService.cs"
 $filingReviewCentrePath = "frontend/src/components/period/FilingReviewCentre.tsx"
 $periodPagePath = "frontend/src/app/companies/[companyId]/periods/[periodId]/page.tsx"
 $apiClientPath = "frontend/src/lib/api.ts"
@@ -88,7 +92,9 @@ $apiClientPath = "frontend/src/lib/api.ts"
 $filingWorkflow = Read-RepoFile $resolvedRoot $filingWorkflowPath $failures
 $revenueEndpoints = Read-RepoFile $resolvedRoot $revenueEndpointsPath $failures
 $filingService = Read-RepoFile $resolvedRoot $filingServicePath $failures
-$readinessReport = Read-RepoFile $resolvedRoot $readinessReportPath $failures
+$readinessReport = (Read-RepoFile $resolvedRoot $readinessReportPath $failures) + "`n" +
+    (Read-RepoFile $resolvedRoot $readinessReleaseCatalogPath $failures)
+$ixbrlService = Read-RepoFile $resolvedRoot $ixbrlServicePath $failures
 $filingReviewCentre = Read-RepoFile $resolvedRoot $filingReviewCentrePath $failures
 $periodPage = Read-RepoFile $resolvedRoot $periodPagePath $failures
 $apiClient = Read-RepoFile $resolvedRoot $apiClientPath $failures
@@ -122,9 +128,18 @@ foreach ($text in @(
     'MapGet("/tax-computation"',
     'MapGet("/ct1-support"',
     'MapGet("/ixbrl"',
-    "GenerateFinalIxbrlAsync"
+    'MapGet("/ixbrl/final"',
+    "FilingReleaseArtifact.RevenueIxbrl"
 )) {
     Assert-ContainsText $revenueEndpoints $text "Revenue endpoints" $failures
+}
+
+foreach ($text in @(
+    "GenerateFinalIxbrlAsync",
+    "GetFinalArtifactAsync",
+    "FilingReleaseArtifact.RevenueIxbrl"
+)) {
+    Assert-ContainsText $ixbrlService $text "Final iXBRL service" $failures
 }
 
 foreach ($text in @(
@@ -149,7 +164,10 @@ foreach ($text in @(
 $operationalBackendFiles = @(
     "backend/Accounts.Api/Endpoints/FilingWorkflowEndpoints.cs",
     "backend/Accounts.Api/Endpoints/RevenueEndpoints.cs",
-    "backend/Accounts.Api/Services/FilingWorkflowService.cs"
+    "backend/Accounts.Api/Services/FilingWorkflowService.cs",
+    "backend/Accounts.Api/Services/IxbrlService.cs",
+    "backend/Accounts.Api/Services/FilingReleaseGate.cs",
+    "backend/Accounts.Api/Services/ExternalFilingHandoffService.cs"
 )
 
 $forbiddenOutboundPatterns = @(
@@ -197,6 +215,10 @@ $report = [ordered]@{
         revenueEndpoints = Join-Path $resolvedRoot $revenueEndpointsPath
         filingWorkflowService = Join-Path $resolvedRoot $filingServicePath
         productionReadinessReport = Join-Path $resolvedRoot $readinessReportPath
+        productionReadinessReleaseCatalog = Join-Path $resolvedRoot $readinessReleaseCatalogPath
+        finalIxbrlService = Join-Path $resolvedRoot $ixbrlServicePath
+        filingReleaseGate = Join-Path $resolvedRoot $releaseGatePath
+        externalFilingHandoffService = Join-Path $resolvedRoot $externalHandoffServicePath
         filingReviewCentre = Join-Path $resolvedRoot $filingReviewCentrePath
         periodWorkspace = Join-Path $resolvedRoot $periodPagePath
         frontendApiClient = Join-Path $resolvedRoot $apiClientPath

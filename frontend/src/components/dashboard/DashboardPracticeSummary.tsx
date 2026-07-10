@@ -1,12 +1,14 @@
 import { CalendarClock, UserRound } from "lucide-react";
 import type { ReactNode } from "react";
-import type { Company, FilingDeadline } from "@/lib/api";
+import type { Company, DashboardDeadlineState, FilingDeadline } from "@/lib/api";
 import { formatDateIE } from "@/lib/format";
 import { MetricStrip, ReviewPanel, StatusBadge } from "@/components/workbench";
 
 interface DashboardPracticeSummaryProps {
   companies: Company[];
   deadlines: Record<number, FilingDeadline | null>;
+  deadlineUnavailableCompanyIds?: number[];
+  deadlineStates?: Record<number, DashboardDeadlineState>;
   today?: string;
 }
 
@@ -15,6 +17,8 @@ type SummaryTone = "default" | "good" | "warn" | "bad";
 export function DashboardPracticeSummary({
   companies,
   deadlines,
+  deadlineUnavailableCompanyIds = [],
+  deadlineStates = {},
   today,
 }: DashboardPracticeSummaryProps) {
   const todayDate = parseDate(today) ?? new Date();
@@ -25,9 +29,16 @@ export function DashboardPracticeSummary({
   );
   const tradingCompanies = companies.filter((company) => company.isTrading).length;
   const dormantCompanies = companies.filter((company) => company.isDormant).length;
-  const deadlinePressure = Object.values(deadlines).filter((deadline): deadline is FilingDeadline =>
-    deadlineStatus(deadline, todayDate).tone !== "good",
-  ).length;
+  const unavailableDeadlineCount = Math.max(
+    deadlineUnavailableCompanyIds.length,
+    Object.values(deadlineStates).filter((state) => state === "unavailable").length,
+  );
+  const hasAuthoritativeStates = Object.keys(deadlineStates).length > 0;
+  const deadlinePressure = hasAuthoritativeStates
+    ? Object.values(deadlineStates).filter((state) => state === "unavailable" || state === "overdue" || state === "due-soon").length
+    : unavailableDeadlineCount + Object.values(deadlines).filter((deadline): deadline is FilingDeadline =>
+      deadlineStatus(deadline, todayDate).tone !== "good",
+    ).length;
   const assignedReviewers = companies.filter((company) => company.assignedReviewerName?.trim()).length;
   const unassignedReviewers = totalCompanies - assignedReviewers;
   const nearestDeadline = Object.values(deadlines)
@@ -86,9 +97,15 @@ export function DashboardPracticeSummary({
           />
           <SummaryItem
             label="Nearest filing gate"
-            value={nearestDeadline ? formatDeadline(nearestDeadline) : "No deadline calculated"}
-            detail="Next statutory filing date visible on the dashboard."
-            tone={nearestDeadline ? deadlineStatus(nearestDeadline, todayDate).tone : "warn"}
+            value={nearestDeadline
+              ? formatDeadline(nearestDeadline)
+              : unavailableDeadlineCount > 0
+                ? "Deadline evidence unavailable"
+                : "No deadline calculated"}
+            detail={unavailableDeadlineCount > 0
+              ? `${unavailableDeadlineCount} deadline resource${unavailableDeadlineCount === 1 ? "" : "s"} failed; retry before relying on filing pressure.`
+              : "Next statutory filing date visible on the dashboard."}
+            tone={nearestDeadline ? deadlineStatus(nearestDeadline, todayDate).tone : unavailableDeadlineCount > 0 ? "bad" : "warn"}
             icon={<CalendarClock className="h-4 w-4" />}
           />
         </div>

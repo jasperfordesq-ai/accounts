@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "privacy-incident-exercise-v1",
+  "status": "engineering-passed-release-blocked",
+  "exerciseKind": "synthetic-tabletop",
+  "releaseCandidate": "cccccccccccccccccccccccccccccccccccccccc",
+  "environment": "production-like-ci",
+  "scenarioSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "detectedAtUtc": "2026-07-10T12:00:00Z",
+  "notificationRoutedAtUtc": "2026-07-10T12:02:00Z",
+  "containedAtUtc": "2026-07-10T12:05:00Z",
+  "evidencePreservedAtUtc": "2026-07-10T12:07:00Z",
+  "recoveryVerifiedAtUtc": "2026-07-10T12:20:00Z",
+  "reviewedAtUtc": "2026-07-10T12:30:00Z",
+  "notificationDecision": "named-controller-review-required-no-synthetic-notification",
+  "evidenceManifestSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "reviewDecision": "accepted",
+  "usedSyntheticDataOnly": true,
+  "tenantIsolationVerified": true,
+  "auditIntegrityVerified": true,
+  "financialIntegrityVerified": true,
+  "providerOrRegulatorContacted": false,
+  "containsClientData": false,
+  "releaseBlockers": [
+    "No real privacy incident is represented by this synthetic exercise.",
+    "A named controller or DPO must make any live notification decision.",
+    "A named operator must accept production-like incident evidence for the exact release."
+  ]
+}

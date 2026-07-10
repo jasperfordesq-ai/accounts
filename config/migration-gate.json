@@ -1,0 +1,23 @@
+{
+  "formatVersion": 1,
+  "previousReleaseMigration": "20260621123340_AddCroSignatories",
+  "supportedUpgradeFloorBasis": "Newest migration committed to the integration branch before the active production-readiness hardening migration series.",
+  "databaseEngine": "PostgreSQL 16.4",
+  "dotnetSdkVersion": "10.0.103",
+  "entityFrameworkToolVersion": "10.0.9",
+  "entityFrameworkPackageVersion": "10.0.9",
+  "npgsqlProviderVersion": "10.0.2",
+  "rollbackPolicy": "transactional-per-migration",
+  "requiredPreservationChecks": [
+    "tenant-and-user",
+    "company-and-accounting-period",
+    "financial-rows-and-figures",
+    "filing-snapshots-and-artifacts",
+    "audit-chain-and-checkpoints"
+  ],
+  "requiredEvidenceFiles": [
+    "migration-upgrade-report.json",
+    "migration-upgrade-verification-report.json",
+    "restore-drill-report.json"
+  ]
+}

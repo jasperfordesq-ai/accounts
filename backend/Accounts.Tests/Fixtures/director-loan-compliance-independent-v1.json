@@ -1,0 +1,64 @@
+{
+  "fixtureVersion": "director-loan-compliance-independent-v1",
+  "preparedFrom": [
+    "Companies Act 2014 sections 202, 203, 236, 238 to 245, 307 and 308"
+  ],
+  "independentQualifiedAccountantReview": "pending-qualified-accountant",
+  "reviewWarning": "Machine expectations are not professional acceptance. A named qualified accountant must independently review the figures, statutory interpretation and wording before release use.",
+  "scenarios": [
+    {
+      "code": "section240-zero-relevant-assets",
+      "relevantAssets": 0.00,
+      "maximumExposure": 1.00,
+      "expectedStrictlyBelow": false
+    },
+    {
+      "code": "section240-negative-relevant-assets",
+      "relevantAssets": -1000.00,
+      "maximumExposure": 1.00,
+      "expectedStrictlyBelow": false
+    },
+    {
+      "code": "section240-one-cent-below-boundary",
+      "relevantAssets": 100000.00,
+      "maximumExposure": 9999.99,
+      "expectedStrictlyBelow": true
+    },
+    {
+      "code": "section240-exact-boundary",
+      "relevantAssets": 100000.00,
+      "maximumExposure": 10000.00,
+      "expectedStrictlyBelow": false
+    },
+    {
+      "code": "section236-written-complete",
+      "termsStatus": "WrittenComplete",
+      "expectedPresumedInterest": 0.00
+    },
+    {
+      "code": "section236-not-written-dated-movements",
+      "termsStatus": "NotWritten",
+      "openingBalance": 1000.00,
+      "movements": [
+        { "date": "2026-07-01", "type": "Advance", "amount": 1000.00 },
+        { "date": "2026-10-01", "type": "Repayment", "amount": 500.00 }
+      ],
+      "annualAppropriateRatePercent": 5.00,
+      "expectedPresumedInterest": 68.90
+    },
+    {
+      "code": "section243-intra-group",
+      "counterpartyType": "GroupCompany",
+      "complianceBasis": "Section243IntraGroup",
+      "expectedAcceptedWithEvidence": true
+    },
+    {
+      "code": "section242-valid-sap-timing",
+      "declarationDate": "2026-01-10",
+      "resolutionDate": "2026-01-20",
+      "activityStartDate": "2026-02-01",
+      "croFilingDate": "2026-02-20",
+      "expectedAcceptedWithEvidence": true
+    }
+  ]
+}

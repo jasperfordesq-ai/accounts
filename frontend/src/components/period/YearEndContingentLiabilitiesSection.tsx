@@ -4,14 +4,16 @@ import { Button, Chip, Spinner } from "@heroui/react";
 import { Plus, Trash2 } from "lucide-react";
 
 import type { ContingentLiability } from "@/lib/api";
+import { useDestructiveActionConfirmation } from "@/lib/useDestructiveAction";
 
 interface YearEndContingentLiabilitiesSectionProps {
+  canWrite?: boolean;
   contingencies: ContingentLiability[];
   draft: ContingentLiability;
   saving: boolean;
   onDraftChange: (draft: ContingentLiability) => void;
   onAdd: () => void;
-  onDelete: (id: number) => void;
+  onDelete: (id: number) => void | Promise<void>;
 }
 
 const inputClass =
@@ -20,6 +22,7 @@ const selectClass =
   "w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors";
 
 export function YearEndContingentLiabilitiesSection({
+  canWrite = true,
   contingencies,
   draft,
   saving,
@@ -27,6 +30,8 @@ export function YearEndContingentLiabilitiesSection({
   onAdd,
   onDelete,
 }: YearEndContingentLiabilitiesSectionProps) {
+  const { requestDestructiveAction, destructiveActionConfirmation } = useDestructiveActionConfirmation();
+
   return (
     <>
       {contingencies.length > 0 && (
@@ -55,24 +60,30 @@ export function YearEndContingentLiabilitiesSection({
                     {formatCurrency(contingency.estimatedAmount)}
                   </span>
                 )}
-                <button
+                {canWrite && <button
                   type="button"
-                  onClick={() => contingency.id && onDelete(contingency.id)}
+                  onClick={() => contingency.id && requestDestructiveAction({
+                    recordLabel: `contingent liability ${contingency.description}`,
+                    consequence: `This permanently removes the ${contingency.likelihood.toLowerCase()} ${contingency.nature} disclosure${contingency.estimatedAmount ? ` (${formatCurrency(contingency.estimatedAmount)})` : ""}. The removal cannot be undone.`,
+                    onConfirm: () => onDelete(contingency.id!),
+                    successAnnouncement: `Contingent liability ${contingency.description} was removed.`,
+                  })}
                   className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400"
                   aria-label={`Delete contingency ${contingency.description}`}
                 >
                   <Trash2 className="w-4 h-4" />
-                </button>
+                </button>}
               </div>
             </div>
           ))}
         </div>
       )}
 
-      <div className="grid grid-cols-12 gap-3 items-end">
+      {canWrite && <div className="mobile-form-grid grid grid-cols-12 gap-3 items-end">
         <div className="col-span-4">
-          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Description</label>
+          <label htmlFor="contingency-description" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Description</label>
           <input
+            id="contingency-description"
             type="text"
             className={inputClass}
             placeholder="e.g. Pending legal claim"
@@ -82,8 +93,9 @@ export function YearEndContingentLiabilitiesSection({
           />
         </div>
         <div className="col-span-2">
-          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Nature</label>
+          <label htmlFor="contingency-nature" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Nature</label>
           <select
+            id="contingency-nature"
             className={selectClass}
             value={draft.nature}
             onChange={(event) => onDraftChange({ ...draft, nature: event.target.value })}
@@ -98,8 +110,9 @@ export function YearEndContingentLiabilitiesSection({
           </select>
         </div>
         <div className="col-span-2">
-          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Est. Amount</label>
+          <label htmlFor="contingency-estimated-amount" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Est. Amount</label>
           <input
+            id="contingency-estimated-amount"
             type="number"
             className={inputClass}
             placeholder="0.00"
@@ -109,8 +122,9 @@ export function YearEndContingentLiabilitiesSection({
           />
         </div>
         <div className="col-span-2">
-          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Likelihood</label>
+          <label htmlFor="contingency-likelihood" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Likelihood</label>
           <select
+            id="contingency-likelihood"
             className={selectClass}
             value={draft.likelihood}
             onChange={(event) => onDraftChange({ ...draft, likelihood: event.target.value })}
@@ -134,7 +148,8 @@ export function YearEndContingentLiabilitiesSection({
             {saving ? <Spinner size="sm" /> : <><Plus className="w-4 h-4 mr-1" /> Add</>}
           </Button>
         </div>
-      </div>
+      </div>}
+      {destructiveActionConfirmation}
     </>
   );
 }

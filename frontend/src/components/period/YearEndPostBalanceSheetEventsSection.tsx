@@ -4,20 +4,23 @@ import { Button, Chip, Spinner } from "@heroui/react";
 import { Plus, Trash2 } from "lucide-react";
 
 import type { PostBalanceSheetEvent } from "@/lib/api";
+import { useDestructiveActionConfirmation } from "@/lib/useDestructiveAction";
 
 interface YearEndPostBalanceSheetEventsSectionProps {
+  canWrite?: boolean;
   events: PostBalanceSheetEvent[];
   draft: PostBalanceSheetEvent;
   saving: boolean;
   onDraftChange: (draft: PostBalanceSheetEvent) => void;
   onAdd: () => void;
-  onDelete: (id: number) => void;
+  onDelete: (id: number) => void | Promise<void>;
 }
 
 const inputClass =
   "w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors";
 
 export function YearEndPostBalanceSheetEventsSection({
+  canWrite = true,
   events,
   draft,
   saving,
@@ -25,6 +28,8 @@ export function YearEndPostBalanceSheetEventsSection({
   onAdd,
   onDelete,
 }: YearEndPostBalanceSheetEventsSectionProps) {
+  const { requestDestructiveAction, destructiveActionConfirmation } = useDestructiveActionConfirmation();
+
   return (
     <>
       {events.length > 0 && (
@@ -50,23 +55,29 @@ export function YearEndPostBalanceSheetEventsSection({
                   )}
                 </div>
               </div>
-              <button
+              {canWrite && <button
                 type="button"
-                onClick={() => event.id && onDelete(event.id)}
+                onClick={() => event.id && requestDestructiveAction({
+                  recordLabel: `post-balance-sheet event ${event.description}`,
+                  consequence: `This permanently removes the ${event.isAdjusting ? "adjusting" : "non-adjusting"} event dated ${new Date(event.eventDate).toLocaleDateString("en-IE")} and its financial-impact evidence. The removal cannot be undone.`,
+                  onConfirm: () => onDelete(event.id!),
+                  successAnnouncement: `Post-balance-sheet event ${event.description} was removed.`,
+                })}
                 className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400"
                 aria-label={`Delete event ${event.description}`}
               >
                 <Trash2 className="w-4 h-4" />
-              </button>
+              </button>}
             </div>
           ))}
         </div>
       )}
 
-      <div className="grid grid-cols-12 gap-3 items-end">
+      {canWrite && <div className="mobile-form-grid grid grid-cols-12 gap-3 items-end">
         <div className="col-span-4">
-          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Description</label>
+          <label htmlFor="post-balance-sheet-event-description" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Description</label>
           <input
+            id="post-balance-sheet-event-description"
             type="text"
             className={inputClass}
             placeholder="e.g. Major contract signed"
@@ -76,8 +87,9 @@ export function YearEndPostBalanceSheetEventsSection({
           />
         </div>
         <div className="col-span-2">
-          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Date</label>
+          <label htmlFor="post-balance-sheet-event-date" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Date</label>
           <input
+            id="post-balance-sheet-event-date"
             type="date"
             className={inputClass}
             value={draft.eventDate}
@@ -86,8 +98,9 @@ export function YearEndPostBalanceSheetEventsSection({
           />
         </div>
         <div className="col-span-2">
-          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Financial Impact</label>
+          <label htmlFor="post-balance-sheet-event-impact" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Financial Impact</label>
           <input
+            id="post-balance-sheet-event-impact"
             type="number"
             className={inputClass}
             placeholder="0.00"
@@ -120,7 +133,8 @@ export function YearEndPostBalanceSheetEventsSection({
             {saving ? <Spinner size="sm" /> : <><Plus className="w-4 h-4 mr-1" /> Add</>}
           </Button>
         </div>
-      </div>
+      </div>}
+      {destructiveActionConfirmation}
     </>
   );
 }

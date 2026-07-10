@@ -2,6 +2,7 @@ using Accounts.Api.Data;
 using Accounts.Api.Entities;
 using Accounts.Api.Rules;
 using Accounts.Api.Services;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -22,7 +23,7 @@ public static class BankingEndpoints
             return Results.Ok(await db.BankAccounts.Where(b => b.CompanyId == companyId).ToListAsync());
         });
 
-        banks.MapPost("/", async (int companyId, BankAccount input, HttpContext context, ApiAccessService apiAccess, AccountsDbContext db, AccountingWriteGuard writeGuard) =>
+        banks.MapPost("/", async (int companyId, BankAccountInput input, HttpContext context, ApiAccessService apiAccess, AccountsDbContext db, AccountingWriteGuard writeGuard, AuditService audit) =>
         {
             if (!await CompanyEndpointAccess.CanAccessCompanyAsync(context, db, companyId))
                 return Results.NotFound();
@@ -37,13 +38,17 @@ public static class BankingEndpoints
             if (await writeGuard.BlockIfCompanyAccountingLockedAsync(companyId, effectiveDate) is { } blocked)
                 return blocked;
 
-            input.CompanyId = companyId;
-            db.BankAccounts.Add(input);
+            var bank = input.ToEntity(companyId);
+            db.BankAccounts.Add(bank);
             await db.SaveChangesAsync();
-            return Results.Created($"/api/companies/{companyId}/bank-accounts/{input.Id}", input);
+            await DomainAuditCoverage.LogAsync(
+                audit, context, companyId, null, nameof(BankAccount), bank.Id,
+                AuditEventCodes.BankAccountCreated, null, DomainAuditCoverage.BankSnapshot(bank),
+                context.RequestAborted);
+            return Results.Created($"/api/companies/{companyId}/bank-accounts/{bank.Id}", bank);
         });
 
-        banks.MapPut("/{id:int}", async (int companyId, int id, BankAccount input, HttpContext context, ApiAccessService apiAccess, AccountsDbContext db, AccountingWriteGuard writeGuard) =>
+        banks.MapPut("/{id:int}", async (int companyId, int id, BankAccountInput input, HttpContext context, ApiAccessService apiAccess, AccountsDbContext db, AccountingWriteGuard writeGuard, AuditService audit) =>
         {
             if (!await CompanyEndpointAccess.CanAccessCompanyAsync(context, db, companyId))
                 return Results.NotFound();
@@ -57,22 +62,44 @@ public static class BankingEndpoints
             if (BankingEndpointInputs.ValidateBankAccount(input) is { } validationProblem)
                 return validationProblem;
 
+            var normalizedCurrency = BankingEndpointInputs.NormalizeCurrency(input.Currency);
+            var identityChanged = !string.Equals(bank.Name, input.Name!.Trim(), StringComparison.Ordinal)
+                || !string.Equals(bank.Iban, input.Iban, StringComparison.Ordinal)
+                || !string.Equals(bank.Currency, normalizedCurrency, StringComparison.Ordinal);
+            if (identityChanged)
+            {
+                var hasRetainedImportEvidence = await db.ImportBatches.AnyAsync(batch => batch.BankAccountId == id)
+                    || await db.ImportedTransactions.AnyAsync(transaction => transaction.BankAccountId == id);
+                if (hasRetainedImportEvidence)
+                {
+                    return Results.Conflict(new
+                    {
+                        error = "Bank account name, IBAN and currency cannot change after import evidence is retained. Create a new bank account for a changed identity or currency."
+                    });
+                }
+            }
+
             var existingEffectiveDate = bank.OpeningBalance == 0 ? DateOnly.MaxValue : bank.OpeningBalanceDate;
             var inputEffectiveDate = input.OpeningBalance == 0 ? DateOnly.MaxValue : input.OpeningBalanceDate;
             var effectiveDate = BankingEndpointInputs.Earliest(existingEffectiveDate, inputEffectiveDate);
             if (await writeGuard.BlockIfCompanyAccountingLockedAsync(companyId, effectiveDate) is { } blocked)
                 return blocked;
 
-            bank.Name = input.Name;
-            bank.Iban = input.Iban;
-            bank.Currency = input.Currency;
+            var oldValue = DomainAuditCoverage.BankSnapshot(bank);
+            bank.Name = input.Name!.Trim();
+            bank.Iban = string.IsNullOrWhiteSpace(input.Iban) ? null : input.Iban.Trim();
+            bank.Currency = normalizedCurrency;
             bank.OpeningBalance = input.OpeningBalance;
             bank.OpeningBalanceDate = input.OpeningBalanceDate;
             await db.SaveChangesAsync();
+            await DomainAuditCoverage.LogAsync(
+                audit, context, companyId, null, nameof(BankAccount), bank.Id,
+                AuditEventCodes.BankAccountUpdated, oldValue, DomainAuditCoverage.BankSnapshot(bank),
+                context.RequestAborted);
             return Results.Ok(bank);
         });
 
-        banks.MapDelete("/{id:int}", async (int companyId, int id, HttpContext context, ApiAccessService apiAccess, AccountsDbContext db, AccountingWriteGuard writeGuard) =>
+        banks.MapDelete("/{id:int}", async (int companyId, int id, HttpContext context, ApiAccessService apiAccess, AccountsDbContext db, AccountingWriteGuard writeGuard, AuditService audit) =>
         {
             if (!await CompanyEndpointAccess.CanAccessCompanyAsync(context, db, companyId))
                 return Results.NotFound();
@@ -83,12 +110,27 @@ public static class BankingEndpoints
             if (EndpointRequestAuthorization.AuthorizeCurrentRequest(context, apiAccess) is { } denied)
                 return denied;
 
+            var hasRetainedImportEvidence = await db.ImportBatches.AnyAsync(batch => batch.BankAccountId == id)
+                || await db.ImportedTransactions.AnyAsync(transaction => transaction.BankAccountId == id);
+            if (hasRetainedImportEvidence)
+            {
+                return Results.Conflict(new
+                {
+                    error = "A bank account with retained import evidence cannot be deleted. Keep the account so its source rows and review decisions remain auditable."
+                });
+            }
+
             var effectiveDate = bank.OpeningBalance == 0 ? DateOnly.MaxValue : bank.OpeningBalanceDate;
             if (await writeGuard.BlockIfCompanyAccountingLockedAsync(companyId, effectiveDate) is { } blocked)
                 return blocked;
 
+            var oldValue = DomainAuditCoverage.BankSnapshot(bank);
             db.BankAccounts.Remove(bank);
             await db.SaveChangesAsync();
+            await DomainAuditCoverage.LogAsync(
+                audit, context, companyId, null, nameof(BankAccount), id,
+                AuditEventCodes.BankAccountDeleted, oldValue, null,
+                context.RequestAborted);
             return Results.NoContent();
         });
 
@@ -104,6 +146,12 @@ public static class BankingEndpoints
 
         transactions.MapPost("/bulk-categorise", BulkCategoriseTransactionsEndpointAsync);
 
+        transactions.MapGet("/duplicate-review", GetDuplicateReviewQueueEndpointAsync);
+
+        transactions.MapPost("/{id:int}/duplicate-review", DecideDuplicateReviewEndpointAsync);
+
+        transactions.MapPost("/duplicate-review/batches/{importBatchId:int}", DecideDuplicateReviewBatchEndpointAsync);
+
         // Categories
         var categories = app.MapGroup("/api/companies/{companyId:int}/categories").WithTags("Categories");
 
@@ -118,7 +166,7 @@ public static class BankingEndpoints
                 .ToListAsync());
         });
 
-        categories.MapPost("/seed", async (int companyId, HttpContext context, ApiAccessService apiAccess, AccountsDbContext db, CategoryService service) =>
+        categories.MapPost("/seed", async (int companyId, HttpContext context, ApiAccessService apiAccess, AccountsDbContext db, CategoryService service, AuditService audit) =>
         {
             if (!await CompanyEndpointAccess.CanAccessCompanyAsync(context, db, companyId))
                 return Results.NotFound();
@@ -126,11 +174,22 @@ public static class BankingEndpoints
             if (EndpointRequestAuthorization.AuthorizeCurrentRequest(context, apiAccess) is { } denied)
                 return denied;
 
+            var existingIds = await db.AccountCategories
+                .Where(category => category.CompanyId == companyId)
+                .Select(category => category.Id)
+                .ToArrayAsync(context.RequestAborted);
             var cats = await service.SeedDefaultCategoriesAsync(companyId);
+            foreach (var category in cats.Where(category => category.CompanyId == companyId && !existingIds.Contains(category.Id)))
+            {
+                await DomainAuditCoverage.LogAsync(
+                    audit, context, companyId, null, nameof(AccountCategory), category.Id,
+                    AuditEventCodes.AccountCategoriesSeeded, null, DomainAuditCoverage.CategorySnapshot(category),
+                    context.RequestAborted);
+            }
             return Results.Ok(cats);
         });
 
-        categories.MapPost("/", async (int companyId, AccountCategory input, HttpContext context, ApiAccessService apiAccess, AccountsDbContext db) =>
+        categories.MapPost("/", async (int companyId, AccountCategoryInput input, HttpContext context, ApiAccessService apiAccess, AccountsDbContext db, AuditService audit) =>
         {
             if (!await CompanyEndpointAccess.CanAccessCompanyAsync(context, db, companyId))
                 return Results.NotFound();
@@ -138,12 +197,17 @@ public static class BankingEndpoints
             if (EndpointRequestAuthorization.AuthorizeCurrentRequest(context, apiAccess) is { } denied)
                 return denied;
 
-            if (await CategoryInputs.ValidateAndNormalizeAsync(db, companyId, input) is { } validationProblem)
+            if (await CategoryInputs.ValidateAsync(db, companyId, input) is { } validationProblem)
                 return validationProblem;
 
-            db.AccountCategories.Add(input);
+            var category = input.ToEntity(companyId);
+            db.AccountCategories.Add(category);
             await db.SaveChangesAsync();
-            return Results.Created($"/api/companies/{companyId}/categories/{input.Id}", input);
+            await DomainAuditCoverage.LogAsync(
+                audit, context, companyId, null, nameof(AccountCategory), category.Id,
+                AuditEventCodes.AccountCategoryCreated, null, DomainAuditCoverage.CategorySnapshot(category),
+                context.RequestAborted);
+            return Results.Created($"/api/companies/{companyId}/categories/{category.Id}", category);
         });
 
         // Transaction Rules
@@ -161,7 +225,7 @@ public static class BankingEndpoints
                 .ToListAsync());
         });
 
-        rules.MapPost("/", async (int companyId, TransactionRuleInput input, HttpContext context, ApiAccessService apiAccess, AccountsDbContext db) =>
+        rules.MapPost("/", async (int companyId, TransactionRuleInput input, HttpContext context, ApiAccessService apiAccess, AccountsDbContext db, AuditService audit) =>
         {
             if (!await CompanyEndpointAccess.CanAccessCompanyAsync(context, db, companyId))
                 return Results.NotFound();
@@ -175,10 +239,14 @@ public static class BankingEndpoints
             var rule = TransactionRuleInputs.ToEntity(companyId, input);
             db.TransactionRules.Add(rule);
             await db.SaveChangesAsync();
+            await DomainAuditCoverage.LogAsync(
+                audit, context, companyId, null, nameof(TransactionRule), rule.Id,
+                AuditEventCodes.TransactionRuleCreated, null, DomainAuditCoverage.RuleSnapshot(rule),
+                context.RequestAborted);
             return Results.Created($"/api/companies/{companyId}/transaction-rules/{rule.Id}", rule);
         });
 
-        rules.MapDelete("/{id:int}", async (int companyId, int id, HttpContext context, ApiAccessService apiAccess, AccountsDbContext db) =>
+        rules.MapDelete("/{id:int}", async (int companyId, int id, HttpContext context, ApiAccessService apiAccess, AccountsDbContext db, AuditService audit) =>
         {
             if (!await CompanyEndpointAccess.CanAccessCompanyAsync(context, db, companyId))
                 return Results.NotFound();
@@ -189,8 +257,13 @@ public static class BankingEndpoints
             if (EndpointRequestAuthorization.AuthorizeCurrentRequest(context, apiAccess) is { } denied)
                 return denied;
 
+            var oldValue = DomainAuditCoverage.RuleSnapshot(rule);
             db.TransactionRules.Remove(rule);
             await db.SaveChangesAsync();
+            await DomainAuditCoverage.LogAsync(
+                audit, context, companyId, null, nameof(TransactionRule), id,
+                AuditEventCodes.TransactionRuleDeleted, oldValue, null,
+                context.RequestAborted);
             return Results.NoContent();
         });
     }
@@ -222,6 +295,8 @@ public static class BankingEndpoints
 
         if (PeriodLocked(period.Status, period.LockedAt))
             return LockedCategorisationResult();
+        if (txn.IsDuplicate)
+            return Results.Conflict(new { error = "A discarded duplicate row cannot be categorised. Reopen its duplicate decision first." });
 
         if (!await CategoryAvailableToCompanyAsync(db, companyId, input.CategoryId))
             return Results.BadRequest(new { error = "Category is not available for this company." });
@@ -238,6 +313,7 @@ public static class BankingEndpoints
             oldValue,
             TransactionCategorisationSnapshot(txn),
             AuthenticatedIdentity.AuditUserId(user));
+        await HydrateAvailableCategoriesAsync(db, companyId, [txn]);
         return Results.Ok(txn);
     }
 
@@ -251,7 +327,9 @@ public static class BankingEndpoints
         bool? uncategorised,
         int? categoryId,
         int? bankAccountId,
-        string? search)
+        string? search,
+        string? sortBy = null,
+        string? sortDirection = null)
     {
         if (!await CompanyEndpointAccess.CanAccessCompanyAsync(context, db, companyId))
             return Results.NotFound();
@@ -259,8 +337,14 @@ public static class BankingEndpoints
         if (await ValidateTransactionReadPeriodAsync(db, companyId, periodId) is { } blocked)
             return blocked;
 
-        var query = db.ImportedTransactions
+        var periodQuery = db.ImportedTransactions
             .Where(t => t.PeriodId == periodId && t.BankAccount.CompanyId == companyId && !t.IsDuplicate);
+
+        var periodTotal = await periodQuery.CountAsync();
+        var periodUncategorised = await periodQuery.CountAsync(t => t.CategoryId == null);
+        var periodCategorised = periodTotal - periodUncategorised;
+
+        var query = periodQuery;
 
         if (uncategorised == true)
             query = query.Where(t => t.CategoryId == null);
@@ -278,18 +362,57 @@ public static class BankingEndpoints
         // pageSize cannot pull every row into memory (a memory/DoS vector). Cap at 200 per page.
         const int maxPageSize = 200;
         var safePageSize = Math.Clamp(pageSize ?? 50, 1, maxPageSize);
-        var safePage = Math.Max(page ?? 1, 1);
 
         var total = await query.CountAsync();
-        var items = await query
-            .OrderByDescending(t => t.Date)
+        var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)safePageSize));
+        var safePage = Math.Min(Math.Max(page ?? 1, 1), totalPages);
+        var normalisedSortBy = sortBy?.Trim().ToLowerInvariant() switch
+        {
+            "description" => "description",
+            "amount" => "amount",
+            "confidence" => "confidence",
+            _ => "date"
+        };
+        var normalisedSortDirection = string.Equals(sortDirection, "asc", StringComparison.OrdinalIgnoreCase)
+            ? "asc"
+            : "desc";
+
+        var orderedQuery = (normalisedSortBy, normalisedSortDirection) switch
+        {
+            ("date", "asc") => query.OrderBy(t => t.Date).ThenBy(t => t.Id),
+            ("description", "asc") => query.OrderBy(t => t.Description).ThenBy(t => t.Id),
+            ("description", "desc") => query.OrderByDescending(t => t.Description).ThenByDescending(t => t.Id),
+            ("amount", "asc") => query.OrderBy(t => t.Amount).ThenBy(t => t.Id),
+            ("amount", "desc") => query.OrderByDescending(t => t.Amount).ThenByDescending(t => t.Id),
+            ("confidence", "asc") => query.OrderBy(t => t.ConfidenceScore).ThenBy(t => t.Id),
+            ("confidence", "desc") => query.OrderByDescending(t => t.ConfidenceScore).ThenByDescending(t => t.Id),
+            _ => query.OrderByDescending(t => t.Date).ThenByDescending(t => t.Id)
+        };
+
+        var items = await orderedQuery
             .Skip((safePage - 1) * safePageSize)
             .Take(safePageSize)
             .ToListAsync();
 
         await HydrateAvailableCategoriesAsync(db, companyId, items);
-
-        return Results.Ok(new { total, items, page = safePage, pageSize = safePageSize });
+        return Results.Ok(new
+        {
+            total,
+            items,
+            page = safePage,
+            pageSize = safePageSize,
+            totalPages,
+            hasPreviousPage = safePage > 1,
+            hasNextPage = safePage < totalPages,
+            sortBy = normalisedSortBy,
+            sortDirection = normalisedSortDirection,
+            aggregates = new
+            {
+                total = periodTotal,
+                categorised = periodCategorised,
+                uncategorised = periodUncategorised
+            }
+        });
     }
 
     public static async Task<IResult> BulkCategoriseTransactionsEndpointAsync(
@@ -330,6 +453,8 @@ public static class BankingEndpoints
 
         if (PeriodLocked(period.Status, period.LockedAt))
             return LockedCategorisationResult();
+        if (txns.Any(transaction => transaction.IsDuplicate))
+            return Results.Conflict(new { error = "Discarded duplicate rows cannot be bulk-categorised. Reopen their duplicate decisions first." });
 
         if (!await CategoryAvailableToCompanyAsync(db, companyId, input.CategoryId))
             return Results.BadRequest(new { error = "Category is not available for this company." });
@@ -399,7 +524,9 @@ public static class BankingEndpoints
         AuditService auditService,
         IOptions<ImportLimitConfig> importLimits,
         AccountsDbContext db,
-        ApiAccessService apiAccess)
+        ApiAccessService apiAccess,
+        [FromServices] AccountingConcurrencyCoordinator? concurrency = null,
+        [FromServices] IdempotencyService? idempotency = null)
     {
         if (!await CompanyEndpointAccess.CanAccessCompanyAsync(request.HttpContext, db, companyId))
             return Results.NotFound(new { error = "Bank account or accounting period not found for this company." });
@@ -417,8 +544,6 @@ public static class BankingEndpoints
             return denied;
 
         var user = AuthContext.RequireUser(request.HttpContext);
-        if (period.Status is PeriodStatus.Finalised or PeriodStatus.Filed || period.LockedAt is not null)
-            return Results.Conflict(new { error = "Accounting period is locked. Reopen the period before importing transactions." });
 
         if (!request.HasFormContentType) return Results.BadRequest(new { error = "Expected multipart form data" });
         IFormCollection form;
@@ -452,28 +577,247 @@ public static class BankingEndpoints
         if (!string.IsNullOrWhiteSpace(file.ContentType) && !limits.AllowedContentTypes.Contains(file.ContentType, StringComparer.OrdinalIgnoreCase))
             return Results.BadRequest(new { error = $"Unsupported upload content type '{file.ContentType}'. Upload a CSV export from the bank." });
 
-        ImportService.ImportResult result;
         try
         {
-            using var stream = file.OpenReadStream();
-            result = await importService.ImportCsvAsync(companyId, bankAccountId, periodId, stream, file.FileName);
+            byte[] sourceBytes;
+            await using (var source = file.OpenReadStream())
+            {
+                using var buffer = new MemoryStream();
+                await source.CopyToAsync(buffer, request.HttpContext.RequestAborted);
+                sourceBytes = buffer.ToArray();
+            }
+
+            var normalizedFilename = Path.GetFileName(file.FileName).Trim();
+            var sourceFileSha256 = DuplicateCandidateDetector.ComputeSourceFileSha256(sourceBytes);
+            concurrency ??= new AccountingConcurrencyCoordinator(db);
+            idempotency ??= new IdempotencyService(db);
+            var command = await IdempotencyHttpContract.ExecuteAsync(
+                request.HttpContext,
+                idempotency,
+                user,
+                IdempotencyOperations.BankImport,
+                new
+                {
+                    companyId,
+                    bankAccountId,
+                    periodId,
+                    SourceFilename = normalizedFilename,
+                    SourceFileSha256 = sourceFileSha256,
+                    SourceFileBytes = sourceBytes.LongLength
+                },
+                async cancellationToken =>
+                {
+                    await using var concurrencyLease = await concurrency.AcquirePeriodAsync(
+                        companyId,
+                        periodId,
+                        cancellationToken);
+                    var lockedPeriod = await db.AccountingPeriods
+                        .AsNoTracking()
+                        .Where(item => item.Id == periodId && item.CompanyId == companyId)
+                        .Select(item => new { item.Status, item.LockedAt })
+                        .SingleAsync(cancellationToken);
+                    if (lockedPeriod.Status is PeriodStatus.Finalised or PeriodStatus.Filed || lockedPeriod.LockedAt is not null)
+                        throw new PeriodLockedForImportException();
+
+                    using var stream = new MemoryStream(sourceBytes, writable: false);
+                    var result = await importService.ImportCsvAsync(
+                        companyId,
+                        bankAccountId,
+                        periodId,
+                        stream,
+                        normalizedFilename,
+                        cancellationToken: cancellationToken);
+                    var auditEntityType = result.ImportBatchId is null ? "BankAccount" : "ImportBatch";
+                    var auditEntityId = result.ImportBatchId ?? bankAccountId;
+                    var auditAction = result.ImportBatchId is null
+                        ? AuditEventCodes.BankCsvImportAttemptRejected
+                        : AuditEventCodes.BankCsvImported;
+                    await auditService.LogAsync(companyId, periodId, auditEntityType, auditEntityId, auditAction, null, new
+                    {
+                        result.ImportBatchId,
+                        result.SourceFilename,
+                        result.SourceFileSha256,
+                        result.SourceFileBytes,
+                        result.TotalRows,
+                        result.ImportedRows,
+                        result.DuplicateCandidates,
+                        result.AutoCategorised,
+                        WarningCount = result.Warnings.Count,
+                        result.Warnings
+                    },
+                        AuthenticatedIdentity.AuditUserId(user),
+                        requestId: request.HttpContext.TraceIdentifier,
+                        actorDisplayName: AuthenticatedIdentity.ReviewerDisplayName(user),
+                        cancellationToken: cancellationToken);
+                    await concurrencyLease.CommitIfOwnedAsync(cancellationToken);
+                    return new IdempotencyOperationOutcome<ImportService.ImportResult>(
+                        result,
+                        auditEntityType,
+                        auditEntityId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                });
+            if (command.Error is not null)
+                return command.Error;
+            return IdempotencyHttpContract.JsonResult(command.Execution!);
+        }
+        catch (PeriodLockedForImportException)
+        {
+            return Results.Conflict(new { error = "Accounting period is locked. Reopen the period before importing transactions." });
         }
         catch (BusinessRuleException ex)
         {
             return Results.BadRequest(new { error = ex.Message });
         }
+    }
 
-        await auditService.LogAsync(companyId, periodId, "ImportBatch", bankAccountId, "BankCsvImported", null, new
+    private sealed class PeriodLockedForImportException()
+        : BusinessRuleException("Accounting period is locked. Reopen the period before importing transactions.");
+
+    private static async Task<IResult> GetDuplicateReviewQueueEndpointAsync(
+        int companyId,
+        int periodId,
+        int? page,
+        int? pageSize,
+        int? batchPage,
+        int? batchPageSize,
+        HttpContext context,
+        AccountsDbContext db,
+        [FromServices] DuplicateReviewService? service = null)
+    {
+        if (!await CompanyEndpointAccess.CanAccessCompanyAsync(context, db, companyId))
+            return Results.NotFound();
+
+        try
         {
-            file.FileName,
-            file.Length,
-            result.TotalRows,
-            result.ImportedRows,
-            result.DuplicatesSkipped,
-            result.AutoCategorised,
-            WarningCount = result.Warnings.Count
-        }, AuthenticatedIdentity.AuditUserId(user));
-        return Results.Ok(result);
+            service ??= new DuplicateReviewService(
+                db,
+                new AuditService(db),
+                new AccountingConcurrencyCoordinator(db));
+            return Results.Ok(await service.GetQueueAsync(
+                companyId,
+                periodId,
+                page ?? 1,
+                pageSize ?? 50,
+                batchPage ?? 1,
+                batchPageSize ?? 10,
+                context.RequestAborted));
+        }
+        catch (ResourceNotFoundException)
+        {
+            return Results.NotFound();
+        }
+        catch (BusinessRuleException exception)
+        {
+            return Results.BadRequest(new { error = exception.Message });
+        }
+    }
+
+    private static async Task<IResult> DecideDuplicateReviewEndpointAsync(
+        int companyId,
+        int periodId,
+        int id,
+        DuplicateReviewDecisionInput input,
+        HttpContext context,
+        ApiAccessService apiAccess,
+        AccountsDbContext db,
+        [FromServices] DuplicateReviewService? service = null)
+    {
+        if (!await CompanyEndpointAccess.CanAccessCompanyAsync(context, db, companyId))
+            return Results.NotFound();
+        if (EndpointRequestAuthorization.AuthorizeCurrentRequest(context, apiAccess) is { } denied)
+            return denied;
+
+        try
+        {
+            service ??= new DuplicateReviewService(
+                db,
+                new AuditService(db),
+                new AccountingConcurrencyCoordinator(db));
+            var result = await service.DecideAsync(
+                companyId,
+                periodId,
+                id,
+                input.Decision,
+                input.Reason ?? string.Empty,
+                input.ExpectedStatus,
+                input.ExpectedDecisionVersion,
+                AuthContext.RequireUser(context),
+                context.TraceIdentifier,
+                context.RequestAborted);
+            return Results.Ok(result);
+        }
+        catch (ResourceNotFoundException)
+        {
+            return Results.NotFound();
+        }
+        catch (BusinessRuleException exception)
+        {
+            return Results.BadRequest(new { error = exception.Message });
+        }
+        catch (AccountingConcurrencyException exception)
+        {
+            return Results.Conflict(new
+            {
+                error = exception.Message,
+                code = exception.Code,
+                reloadRequired = true,
+                reconcileRequired = true
+            });
+        }
+    }
+
+    private static async Task<IResult> DecideDuplicateReviewBatchEndpointAsync(
+        int companyId,
+        int periodId,
+        int importBatchId,
+        DuplicateReviewBatchDecisionInput input,
+        HttpContext context,
+        ApiAccessService apiAccess,
+        AccountsDbContext db,
+        [FromServices] DuplicateReviewService? service = null)
+    {
+        if (!await CompanyEndpointAccess.CanAccessCompanyAsync(context, db, companyId))
+            return Results.NotFound();
+        if (EndpointRequestAuthorization.AuthorizeCurrentRequest(context, apiAccess) is { } denied)
+            return denied;
+
+        try
+        {
+            service ??= new DuplicateReviewService(
+                db,
+                new AuditService(db),
+                new AccountingConcurrencyCoordinator(db));
+            var result = await service.DecideExactReimportBatchAsync(
+                companyId,
+                periodId,
+                importBatchId,
+                input.Decision,
+                input.Reason ?? string.Empty,
+                input.ExpectedStatus,
+                input.ExpectedCandidateCount,
+                input.ExpectedDecisionToken ?? string.Empty,
+                AuthContext.RequireUser(context),
+                context.TraceIdentifier,
+                context.RequestAborted);
+            return Results.Ok(result);
+        }
+        catch (ResourceNotFoundException)
+        {
+            return Results.NotFound();
+        }
+        catch (BusinessRuleException exception)
+        {
+            return Results.BadRequest(new { error = exception.Message });
+        }
+        catch (AccountingConcurrencyException exception)
+        {
+            return Results.Conflict(new
+            {
+                error = exception.Message,
+                code = exception.Code,
+                reloadRequired = true,
+                reconcileRequired = true
+            });
+        }
     }
 
     private static async Task<IResult?> ValidateTransactionReadPeriodAsync(
@@ -530,6 +874,7 @@ public static class BankingEndpoints
         txn.ManualOverride,
         txn.ConfidenceScore
     };
+
 }
 
 public record CategoriseInput(int CategoryId);
@@ -539,10 +884,17 @@ public record TransactionPeriodState(PeriodStatus Status, DateTime? LockedAt);
 
 public static class BankingEndpointInputs
 {
-    public static IResult? ValidateBankAccount(BankAccount input)
+    public static IResult? ValidateBankAccount(BankAccountInput input)
     {
         if (string.IsNullOrWhiteSpace(input.Name))
             return Results.BadRequest(new { error = "Bank account name is required." });
+        if (input.Name.Trim().Length > 200)
+            return Results.BadRequest(new { error = "Bank account name must be 200 characters or fewer." });
+        if (input.Iban?.Trim().Length > 34)
+            return Results.BadRequest(new { error = "IBAN must be 34 characters or fewer." });
+        var currency = NormalizeCurrency(input.Currency);
+        if (currency.Length != 3 || currency.Any(character => character is < 'A' or > 'Z'))
+            return Results.BadRequest(new { error = "Currency must be a three-letter ISO currency code." });
         if (input.OpeningBalance != 0 && input.OpeningBalanceDate is null)
             return Results.BadRequest(new { error = "Opening balance date is required when an opening balance is entered." });
 
@@ -557,14 +909,14 @@ public static class BankingEndpointInputs
             (null, { } value) => value,
             ({ } a, { } b) => a <= b ? a : b
         };
+
+    public static string NormalizeCurrency(string? currency) =>
+        string.IsNullOrWhiteSpace(currency) ? "EUR" : currency.Trim().ToUpperInvariant();
 }
 
 public static class CategoryInputs
 {
-    // data-input-validation-breadth: the category create bound the raw entity, so a client could
-    // over-post Id/IsSystem (claiming a privileged system category) and supply an empty/over-long Code
-    // or Name, or a ParentId from another company. Validate and normalise before persisting.
-    public static async Task<IResult?> ValidateAndNormalizeAsync(AccountsDbContext db, int companyId, AccountCategory input)
+    public static async Task<IResult?> ValidateAsync(AccountsDbContext db, int companyId, AccountCategoryInput input)
     {
         var errors = new Dictionary<string, string[]>();
         var code = input.Code?.Trim() ?? "";
@@ -585,15 +937,41 @@ public static class CategoryInputs
         if (errors.Count > 0)
             return Results.ValidationProblem(errors);
 
-        // Ignore client-supplied identity and the system flag (over-posting / privilege escalation).
+        return null;
+    }
+
+    // Kept for direct domain-test compatibility. HTTP endpoints bind AccountCategoryInput and never
+    // expose this entity-normalisation overload as a request contract.
+    public static async Task<IResult?> ValidateAndNormalizeAsync(AccountsDbContext db, int companyId, AccountCategory input)
+    {
+        AccountCategoryInput request = input;
+        if (await ValidateAsync(db, companyId, request) is { } invalid)
+            return invalid;
+
         input.Id = 0;
         input.IsSystem = false;
         input.CompanyId = companyId;
-        input.Code = code;
-        input.Name = name;
+        input.Code = request.Code!.Trim();
+        input.Name = request.Name!.Trim();
+        input.Children = [];
+        input.Transactions = [];
+        input.Rules = [];
         return null;
     }
 }
+
+public sealed record DuplicateReviewDecisionInput(
+    DuplicateReviewStatus Decision,
+    string? Reason,
+    DuplicateReviewStatus ExpectedStatus,
+    int ExpectedDecisionVersion);
+
+public sealed record DuplicateReviewBatchDecisionInput(
+    DuplicateReviewStatus Decision,
+    string? Reason,
+    DuplicateReviewStatus ExpectedStatus,
+    int ExpectedCandidateCount,
+    string? ExpectedDecisionToken);
 
 public static class TransactionRuleInputs
 {

@@ -1,38 +1,37 @@
 using System.Text;
 using System.Globalization;
+using System.Diagnostics;
 using Accounts.Api.Data;
 using Accounts.Api.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace Accounts.Api.Services;
 
-public class IxbrlService(AccountsDbContext db, FinancialStatementsService statementsService)
+public class IxbrlService(
+    AccountsDbContext db,
+    FinancialStatementsService statementsService,
+    FilingReleaseGate? releaseGate = null,
+    PlatformMetrics? platformMetrics = null)
 {
     public virtual async Task<byte[]> GenerateFinalIxbrlAsync(int companyId, int periodId)
     {
-        var periodBelongsToCompany = await db.AccountingPeriods
-            .AsNoTracking()
-            .AnyAsync(p => p.Id == periodId && p.CompanyId == companyId);
-        if (!periodBelongsToCompany)
-            throw new ResourceNotFoundException($"Period {periodId} not found");
+        var artifact = await (releaseGate ?? new FilingReleaseGate(db))
+            .GetFinalArtifactAsync(companyId, periodId, FilingReleaseArtifact.RevenueIxbrl);
+        return artifact.Content;
+    }
 
-        var blockers = (await statementsService.GetFinalOutputReadinessBlockersAsync(companyId, periodId)).Take(9).ToList();
-        var package = await db.RevenueFilingPackages
-            .AsNoTracking()
-            .FirstOrDefaultAsync(p => p.PeriodId == periodId);
-
-        if (!InternalIxbrlChecksPassed(package))
-            blockers.Add("Internal iXBRL checks have not passed");
-
-        blockers = blockers.Distinct().ToList();
-        if (blockers.Count > 0)
-            throw new BusinessRuleException(
-                $"Cannot generate final iXBRL until readiness blockers are resolved: {string.Join("; ", blockers)}");
-
+    public virtual async Task<byte[]> GenerateReviewIxbrlAsync(int companyId, int periodId)
+    {
+        // The only platform-produced Revenue document is deliberately a review prototype.
+        // GenerateIxbrlAsync applies the conspicuous marker at the source so no caller can
+        // obtain an unmarked version by bypassing this convenience method.
         return await GenerateIxbrlAsync(companyId, periodId);
     }
 
     public virtual async Task<byte[]> GenerateIxbrlAsync(int companyId, int periodId)
+        => await TrackDocumentAsync(() => GenerateIxbrlCoreAsync(companyId, periodId));
+
+    private async Task<byte[]> GenerateIxbrlCoreAsync(int companyId, int periodId)
     {
         var period = await db.AccountingPeriods
             .Include(p => p.Company)
@@ -55,9 +54,8 @@ public class IxbrlService(AccountsDbContext db, FinancialStatementsService state
 
         // Prior-year comparatives (BL-08). ROS/CRO reject a single-year instance; the filed iXBRL
         // must carry a comparative column tagged against prior-period contexts.
-        var priorPeriod = await db.AccountingPeriods
-            .Where(p => p.CompanyId == period.CompanyId && p.PeriodEnd < period.PeriodStart)
-            .OrderByDescending(p => p.PeriodEnd)
+        var priorPeriod = await PeriodChronologyService
+            .PriorPeriodQuery(db, period.CompanyId, period.PeriodStart)
             .FirstOrDefaultAsync();
         FinancialStatementsService.BalanceSheet? priorBs = null;
         FinancialStatementsService.ProfitAndLoss? priorPl = null;
@@ -87,6 +85,7 @@ public class IxbrlService(AccountsDbContext db, FinancialStatementsService state
         sb.AppendLine("<style>body { font-family: Arial, sans-serif; font-size: 10pt; margin: 40px; } table { border-collapse: collapse; width: 100%; } td, th { padding: 4px 8px; } .amount { text-align: right; } .bold { font-weight: bold; } h1, h2, h3 { margin-top: 20px; }</style>");
         sb.AppendLine("</head>");
         sb.AppendLine("<body>");
+        sb.AppendLine("<div role=\"status\" data-artifact-status=\"draft-not-for-filing\" data-generation-support=\"manual-handoff-only\" style=\"border:3px solid #b91c1c;background:#fee2e2;color:#7f1d1d;padding:12px;margin-bottom:18px;text-align:center;font-weight:bold;font-size:16pt\">DRAFT - NOT FOR FILING - INCOMPLETE REVIEW PROTOTYPE</div>");
 
         // Hidden XBRL context
         sb.AppendLine("<ix:header>");
@@ -122,7 +121,7 @@ public class IxbrlService(AccountsDbContext db, FinancialStatementsService state
         // Company info
         sb.AppendLine($"<h1>{Escape(company.LegalName)}</h1>");
         sb.AppendLine($"<h2>Financial Statements for the year ended {period.PeriodEnd:dd MMMM yyyy}</h2>");
-        sb.AppendLine("<p><strong>Internal validation note:</strong> this inline XBRL file is generated from the platform's mapped accounts data. External ROS/iXBRL validation remains required before Revenue filing.</p>");
+        sb.AppendLine($"<p><strong>Manual handoff required:</strong> {Escape(RevenueIxbrlGenerationPolicy.ManualHandoffReason)}</p>");
         if (!string.IsNullOrEmpty(company.CroNumber))
             sb.AppendLine($"<p>Company Registration Number: <ix:nonNumeric name=\"ie-common:CompanyRegistrationNumber\" contextRef=\"instant\">{Escape(company.CroNumber)}</ix:nonNumeric></p>");
 
@@ -158,20 +157,8 @@ public class IxbrlService(AccountsDbContext db, FinancialStatementsService state
         AddIxbrlRow(sb, "Shareholders' funds", "core:ShareholderFunds", rbs.ShareholdersFunds, true, priorAmount: rpbs?.ShareholdersFunds);
         sb.AppendLine("</table>");
 
-        // filing-ixbrl-regime-taxonomy-branch: a micro (FRS 105) or abridged company does NOT publish a
-        // profit and loss account — these are balance-sheet-led statements, and publishing a full public
-        // P&L for Micro/Abridged is illegal. Only Small / Medium / Full (and an undetermined regime, which
-        // defaults to the full statutory presentation) include the P&L. [HUMAN DECISION flagged: the exact
-        // FRS-105 vs FRS-102 taxonomy/schemaRef switch is handled by filing-ixbrl-namespace-taxonomy-pin
-        // and needs the real FRC Irish taxonomy release — the schemaRef here is not yet branched.]
-        var electedRegime = period.FilingRegime?.ElectedRegime;
-        var omitProfitAndLoss = electedRegime is ElectedRegime.Micro or ElectedRegime.SmallAbridged;
-        if (omitProfitAndLoss)
-        {
-            sb.AppendLine($"<p>No profit and loss account is published with these {(electedRegime == ElectedRegime.Micro ? "micro (FRS 105)" : "abridged")} financial statements.</p>");
-        }
-        else
-        {
+        // Revenue receives private filing data. CRO Micro/abridgement presentation exemptions must
+        // never remove Revenue-required P&L or Detailed P&L facts from the review prototype.
         // P&L
         sb.AppendLine("<h2>Profit and Loss Account</h2>");
         sb.AppendLine($"<p>for the year ended {period.PeriodEnd:dd MMMM yyyy}</p>");
@@ -193,7 +180,6 @@ public class IxbrlService(AccountsDbContext db, FinancialStatementsService state
         AddIxbrlRow(sb, "Tax on profit", "core:TaxTaxCreditOnProfitOrLossOnOrdinaryActivities", -rpl.TaxCharge, contextRef: "current", priorAmount: rppl != null ? -rppl.TaxCharge : null, priorContextRef: "prior");
         AddIxbrlRow(sb, "Profit for the year", "core:ProfitLossForPeriod", rpl.ProfitAfterTax, bold: true, contextRef: "current", priorAmount: rppl?.ProfitAfterTax, priorContextRef: "prior");
         sb.AppendLine("</table>");
-        }
 
         sb.AppendLine("</body>");
         sb.AppendLine("</html>");
@@ -274,6 +260,23 @@ public class IxbrlService(AccountsDbContext db, FinancialStatementsService state
     }
 
     private static string Escape(string s) => System.Security.SecurityElement.Escape(s) ?? s;
+
+    private async Task<byte[]> TrackDocumentAsync(Func<Task<byte[]>> action)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        var succeeded = false;
+        try
+        {
+            var result = await action();
+            succeeded = true;
+            return result;
+        }
+        finally
+        {
+            try { platformMetrics?.RecordDocument(DocumentMetricKind.Ixbrl, succeeded, stopwatch.Elapsed); }
+            catch { /* Telemetry must never change iXBRL generation behavior. */ }
+        }
+    }
 
     private static bool InternalIxbrlChecksPassed(Accounts.Api.Entities.RevenueFilingPackage? package) =>
         package?.IxbrlGenerated == true

@@ -5,6 +5,7 @@ import { Button, Spinner } from "@heroui/react";
 import type { TaxBalance } from "@/lib/api";
 
 interface YearEndTaxBalancesSectionProps {
+  canWrite?: boolean;
   forms: Record<string, TaxBalance>;
   savingKey: string | null;
   onFormChange: (taxType: string, balance: TaxBalance) => void;
@@ -21,6 +22,7 @@ const inputClass =
   "w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors";
 
 export function YearEndTaxBalancesSection({
+  canWrite = true,
   forms,
   savingKey,
   onFormChange,
@@ -38,10 +40,11 @@ export function YearEndTaxBalancesSection({
         return (
           <div key={key}>
             <h4 className="text-sm font-medium text-gray-800 dark:text-gray-200 mb-3">{label}</h4>
-            <div className="grid grid-cols-12 gap-3 items-end">
+            {canWrite ? <div className="mobile-form-grid grid grid-cols-12 gap-3 items-end">
               <div className="col-span-3">
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Liability</label>
+                <label htmlFor={`tax-${key}-liability`} className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Liability</label>
                 <input
+                  id={`tax-${key}-liability`}
                   type="number"
                   className={inputClass}
                   placeholder="0.00"
@@ -53,8 +56,9 @@ export function YearEndTaxBalancesSection({
                 />
               </div>
               <div className="col-span-3">
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Paid</label>
+                <label htmlFor={`tax-${key}-paid`} className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Paid</label>
                 <input
+                  id={`tax-${key}-paid`}
                   type="number"
                   className={inputClass}
                   placeholder="0.00"
@@ -66,8 +70,9 @@ export function YearEndTaxBalancesSection({
                 />
               </div>
               <div className="col-span-3">
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Balance</label>
+                <label htmlFor={`tax-${key}-balance`} className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Balance</label>
                 <input
+                  id={`tax-${key}-balance`}
                   type="number"
                   className={inputClass}
                   placeholder="0.00"
@@ -90,7 +95,13 @@ export function YearEndTaxBalancesSection({
                   {isSaving ? <Spinner size="sm" /> : "Save"}
                 </Button>
               </div>
-            </div>
+            </div> : (
+              <dl className="grid grid-cols-3 gap-3 text-sm text-gray-700 dark:text-gray-300">
+                <div><dt className="text-xs text-gray-500">Liability</dt><dd>{form.liability}</dd></div>
+                <div><dt className="text-xs text-gray-500">Paid</dt><dd>{form.paid}</dd></div>
+                <div><dt className="text-xs text-gray-500">Balance</dt><dd>{form.balance}</dd></div>
+              </dl>
+            )}
           </div>
         );
       })}

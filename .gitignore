@@ -31,6 +31,7 @@ appsettings.Development.json
 .dotnet-sdk/
 artifacts_*/
 frontend/artifacts/
+tmp/
 .tmp-*/
 *-probe/
 .codex-*/
@@ -38,6 +39,8 @@ frontend/artifacts/
 *.dll
 *.exe
 *.pdb
+TestResults/
+*.trx
 
 # Database backups
 backups/

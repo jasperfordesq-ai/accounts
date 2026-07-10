@@ -32,7 +32,7 @@ describe("CompanyIdentityEditPanel", () => {
     fireEvent.change(screen.getByLabelText("Legal Name"), { target: { value: "Atlantic Advisory Limited" } });
     fireEvent.change(screen.getByLabelText("Company Type"), { target: { value: "CompanyLimitedByGuarantee" } });
     fireEvent.click(screen.getByLabelText("Is Dormant"));
-    fireEvent.click(screen.getByRole("button", { name: "Save company changes" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save Changes to company" }));
     fireEvent.click(screen.getByRole("button", { name: "Cancel company editing" }));
 
     expect(onFormChange).toHaveBeenCalledWith({ ...form, legalName: "Atlantic Advisory Limited" });
@@ -53,8 +53,8 @@ describe("CompanyIdentityEditPanel", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: "Save company changes" })).toBeDisabled();
-    expect(screen.getByText("Saving...")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save Changes to company" })).toBeDisabled();
+    expect(screen.getByText("Save Changes")).toBeInTheDocument();
     expect(screen.getByText("Draft changes")).toBeInTheDocument();
   });
 });

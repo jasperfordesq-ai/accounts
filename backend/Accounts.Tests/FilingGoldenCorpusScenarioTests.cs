@@ -1,8 +1,15 @@
 using System.Text;
 using Accounts.Api.Data;
+using Accounts.Api.Endpoints;
 using Accounts.Api.Entities;
+using Accounts.Api.Rules;
 using Accounts.Api.Services;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using QuestPDF.Infrastructure;
 using UglyToad.PdfPig;
 using Xunit;
@@ -20,14 +27,8 @@ public class FilingGoldenCorpusScenarioTests
     public async Task GoldenCorpus_MicroLtd_EmitsAccountsIxbrlTaxNotesReadinessAndSignatoryGates()
     {
         await using var db = CreateDbContext();
-        var period = await SeedBasicScenarioAsync(
-            db,
-            "Example Micro Limited",
-            CompanyType.Private,
-            CompanySizeClass.Micro,
-            ElectedRegime.Micro,
-            auditExempt: true,
-            charity: false);
+        var scenario = GoldenCorpusFixture.Scenario("micro-ltd");
+        var period = await SeedBasicScenarioAsync(db, scenario);
 
         var statements = new FinancialStatementsService(db);
         var documents = new DocumentGeneratorService(db, statements);
@@ -48,8 +49,9 @@ public class FilingGoldenCorpusScenarioTests
         Assert.Contains("Example Micro Limited", accountsText, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("STATEMENT REQUIRED BY SECTION 280D", accountsText, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("FRS 105", accountsText, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("Turnover", accountsText, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("Cost of sales", accountsText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PROFIT AND LOSS ACCOUNT", accountsText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Turnover", accountsText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Cost of sales", accountsText, StringComparison.OrdinalIgnoreCase);
 
         Assert.True(croPack.Length > 1_000);
         Assert.Equal("%PDF", Encoding.ASCII.GetString(croPack, 0, 4));
@@ -68,12 +70,16 @@ public class FilingGoldenCorpusScenarioTests
 
         AssertWellFormedXml(ixbrl);
         Assert.Contains("Example Micro Limited", ixbrl);
-        Assert.Contains("No profit and loss account is published with these micro (FRS 105) financial statements.", ixbrl);
-        Assert.DoesNotContain("core:TurnoverGrossRevenue", ixbrl);
+        Assert.Contains("DRAFT - NOT FOR FILING - INCOMPLETE REVIEW PROTOTYPE", ixbrl);
+        Assert.Contains("data-generation-support=\"manual-handoff-only\"", ixbrl);
+        Assert.Contains("core:TurnoverGrossRevenue", ixbrl);
 
-        Assert.Equal(62.50m, tax.TotalCorporationTax);
+        Assert.Equal(scenario.WorkflowFacts.ExpectedCorporationTax, tax.TotalCorporationTax);
         Assert.Contains(notes, n => n.Title == "Accounting Policies" && n.IsIncluded);
         Assert.True(profile.SupportedPath);
+        Assert.False(profile.RevenueIxbrlGenerationSupported);
+        Assert.True(profile.RevenueManualHandoffRequired);
+        Assert.Contains(profile.BlockingIssues, issue => issue.Code == "ixbrl-generation-manual-handoff");
         Assert.Equal(CompanySizeClass.Micro, profile.SizeClass);
         Assert.Equal(ElectedRegime.Micro, profile.ElectedRegime);
         Assert.True(profile.AuditExempt);
@@ -86,35 +92,32 @@ public class FilingGoldenCorpusScenarioTests
         Assert.Contains(profile.RequiredEvidence, e => e.Code == "cro-signatories" && e.Satisfied);
         Assert.Contains(profile.RequiredEvidence, e => e.Code == "accountant-review" && !e.Satisfied);
         Assert.Contains(profile.RequiredEvidence, e => e.Code == "external-ros-validation" && !e.Satisfied);
+        Assert.Contains(profile.BlockingIssues, issue => issue.Code == "ixbrl-generation-manual-handoff");
         Assert.DoesNotContain("mark-cro-submitted", profile.AllowedNextActions);
         Assert.Equal("blocked", profile.SignOffPacket.State);
 
-        await MarkGeneratedReviewedAndExternallyValidatedAsync(db, period, includeCharityReports: false);
+        await RecordGeneratedMachineArtifactsAsync(db, period);
 
         var approvedProfile = await new FilingReadinessProfileService(db).GetProfileAsync(period.CompanyId, period.Id);
         Assert.Contains(approvedProfile.RequiredEvidence, e => e.Code == "cro-accounts-pdf" && e.Satisfied);
         Assert.Contains(approvedProfile.RequiredEvidence, e => e.Code == "cro-signature-page" && e.Satisfied);
         Assert.Contains(approvedProfile.RequiredEvidence, e => e.Code == "cro-signatories" && e.Satisfied);
-        Assert.Contains(approvedProfile.RequiredEvidence, e => e.Code == "accountant-review" && e.Satisfied);
-        Assert.Contains(approvedProfile.RequiredEvidence, e => e.Code == "external-ros-validation" && e.Satisfied);
-        Assert.Equal("ready-for-external-filing", approvedProfile.SignOffPacket.State);
-        Assert.True(approvedProfile.SignOffPacket.ReadyForExternalFiling);
-        Assert.Contains("mark-cro-submitted", approvedProfile.AllowedNextActions);
+        Assert.Contains(approvedProfile.RequiredEvidence, e => e.Code == "accountant-review" && !e.Satisfied);
+        Assert.Contains(approvedProfile.RequiredEvidence, e => e.Code == "external-ros-validation" && !e.Satisfied);
+        Assert.Equal("blocked", approvedProfile.SignOffPacket.State);
+        Assert.False(approvedProfile.SignOffPacket.ReadyForExternalFiling);
+        Assert.Contains(approvedProfile.BlockingIssues, issue => issue.Code == "ixbrl-generation-manual-handoff");
+        Assert.Contains("approve-cro-pack", approvedProfile.AllowedNextActions);
+        Assert.DoesNotContain("mark-cro-submitted", approvedProfile.AllowedNextActions);
     }
 
     [Fact]
     public async Task GoldenCorpus_DacSmall_EmitsAccountsIxbrlAndSourceBackedReadiness()
     {
         await using var db = CreateDbContext();
-        var period = await SeedBasicScenarioAsync(
-            db,
-            "Atlantic Manufacturing DAC",
-            CompanyType.DesignatedActivityCompany,
-            CompanySizeClass.Small,
-            ElectedRegime.Small,
-            auditExempt: true,
-            charity: false);
-        await MarkGeneratedReviewedAndExternallyValidatedAsync(db, period, includeCharityReports: false);
+        var scenario = GoldenCorpusFixture.Scenario("dac-small");
+        var period = await SeedBasicScenarioAsync(db, scenario);
+        await RecordGeneratedMachineArtifactsAsync(db, period);
 
         var statements = new FinancialStatementsService(db);
         var pdf = await new DocumentGeneratorService(db, statements).GenerateAccountsPackageAsync(period.CompanyId, period.Id);
@@ -131,39 +134,38 @@ public class FilingGoldenCorpusScenarioTests
         AssertWellFormedXml(ixbrl);
         Assert.Contains("Atlantic Manufacturing DAC", ixbrl);
         Assert.Contains("bus:EntityCurrentLegalOrRegisteredName", ixbrl);
-        Assert.Equal(62.50m, tax.TotalCorporationTax);
+        Assert.Contains("data-generation-support=\"manual-handoff-only\"", ixbrl);
+        Assert.Equal(scenario.WorkflowFacts.ExpectedCorporationTax, tax.TotalCorporationTax);
         Assert.Contains(notes, n => n.Title == "Accounting Policies" && n.IsIncluded);
         Assert.True(profile.SupportedPath);
+        Assert.False(profile.RevenueIxbrlGenerationSupported);
+        Assert.True(profile.RevenueManualHandoffRequired);
         Assert.Equal(CompanyType.DesignatedActivityCompany, profile.CompanyType);
         Assert.Equal(CompanySizeClass.Small, profile.SizeClass);
         Assert.Equal(ElectedRegime.Small, profile.ElectedRegime);
         Assert.True(profile.AuditExempt);
         Assert.False(profile.ManualProfessionalReviewRequired);
         Assert.DoesNotContain(profile.BlockingIssues, issue => issue.Code.Contains("unsupported", StringComparison.OrdinalIgnoreCase));
-        Assert.Contains(profile.RequiredEvidence, e => e.Code == "accountant-review" && e.Satisfied);
+        Assert.Contains(profile.RequiredEvidence, e => e.Code == "accountant-review" && !e.Satisfied);
         Assert.Contains(profile.RequiredEvidence, e => e.Code == "cro-signatories" && e.Satisfied);
-        Assert.Contains(profile.RequiredEvidence, e => e.Code == "external-ros-validation" && e.Satisfied);
+        Assert.Contains(profile.RequiredEvidence, e => e.Code == "external-ros-validation" && !e.Satisfied);
+        Assert.Contains(profile.BlockingIssues, issue => issue.Code == "ixbrl-generation-manual-handoff");
         Assert.Contains(profile.SourceReferences, s => s.SourceId == IrishStatutoryRuleSources.CroFinancialStatementsRequirements.SourceId);
         Assert.Contains(profile.SourceReferences, s => s.SourceId == IrishStatutoryRuleSources.FrcFrs102.SourceId);
         Assert.Contains(profile.SourceReferences, s => s.SourceId == IrishStatutoryRuleSources.RevenueAcceptedTaxonomies.SourceId);
-        Assert.Equal("ready-for-external-filing", profile.SignOffPacket.State);
-        Assert.True(profile.SignOffPacket.ReadyForExternalFiling);
-        Assert.Contains("mark-cro-submitted", profile.AllowedNextActions);
+        Assert.Equal("blocked", profile.SignOffPacket.State);
+        Assert.False(profile.SignOffPacket.ReadyForExternalFiling);
+        Assert.Contains("approve-cro-pack", profile.AllowedNextActions);
+        Assert.DoesNotContain("mark-cro-submitted", profile.AllowedNextActions);
     }
 
     [Fact]
     public async Task GoldenCorpus_ClgCharity_EmitsAccountsIxbrlAndSourceBackedCharityReadiness()
     {
         await using var db = CreateDbContext();
-        var period = await SeedBasicScenarioAsync(
-            db,
-            "Dublin Community Support CLG",
-            CompanyType.CompanyLimitedByGuarantee,
-            CompanySizeClass.Small,
-            ElectedRegime.Small,
-            auditExempt: true,
-            charity: true);
-        await MarkGeneratedReviewedAndExternallyValidatedAsync(db, period, includeCharityReports: true);
+        var scenario = GoldenCorpusFixture.Scenario("clg-charity");
+        var period = await SeedBasicScenarioAsync(db, scenario);
+        await RecordGeneratedMachineArtifactsAsync(db, period);
 
         var statements = new FinancialStatementsService(db);
         var pdf = await new DocumentGeneratorService(db, statements).GenerateAccountsPackageAsync(period.CompanyId, period.Id);
@@ -179,20 +181,25 @@ public class FilingGoldenCorpusScenarioTests
         Assert.Contains("Community support and education.", pdfText, StringComparison.OrdinalIgnoreCase);
         AssertWellFormedXml(ixbrl);
         Assert.Contains("Dublin Community Support CLG", ixbrl);
-        Assert.Equal(62.50m, tax.TotalCorporationTax);
+        Assert.Contains("data-generation-support=\"manual-handoff-only\"", ixbrl);
+        Assert.Equal(scenario.WorkflowFacts.ExpectedCorporationTax, tax.TotalCorporationTax);
         Assert.Contains(notes, n => n.Title == "Accounting Policies" && n.IsIncluded);
         Assert.True(profile.SupportedPath);
+        Assert.False(profile.RevenueIxbrlGenerationSupported);
+        Assert.True(profile.RevenueManualHandoffRequired);
         Assert.False(profile.ManualProfessionalReviewRequired);
         Assert.DoesNotContain(profile.BlockingIssues, issue => issue.Code.Contains("charity", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(profile.RequiredEvidence, e => e.Code == "charity-number" && e.Satisfied);
-        Assert.Contains(profile.RequiredEvidence, e => e.Code == "charity-reports" && e.Satisfied);
+        Assert.Contains(profile.RequiredEvidence, e => e.Code == "charity-reports" && !e.Satisfied);
         Assert.Contains(profile.SourceReferences, s => s.SourceId == IrishStatutoryRuleSources.CroGuaranteeCompany.SourceId);
         Assert.Contains(profile.SourceReferences, s => s.SourceId == IrishStatutoryRuleSources.CharitiesRegulatorAnnualReport.SourceId);
-        Assert.Equal("ready-for-external-filing", profile.SignOffPacket.State);
-        Assert.True(profile.SignOffPacket.ReadyForExternalFiling);
-        Assert.Equal("Qualified Accountant", profile.SignOffPacket.ApprovedBy);
+        Assert.Contains(profile.BlockingIssues, issue => issue.Code == "ixbrl-generation-manual-handoff");
+        Assert.Equal("blocked", profile.SignOffPacket.State);
+        Assert.False(profile.SignOffPacket.ReadyForExternalFiling);
+        Assert.Null(profile.SignOffPacket.ApprovedBy);
+        Assert.Contains(profile.RequiredEvidence, e => e.Code == "accountant-review" && !e.Satisfied);
         var charityStep = Assert.Single(profile.SignOffPacket.Steps, step => step.Code == "charity-reporting");
-        Assert.Equal("complete", charityStep.State);
+        Assert.Equal("blocked", charityStep.State);
         Assert.Contains(charityStep.Sources, s => s.SourceId == IrishStatutoryRuleSources.CharitiesRegulatorAnnualReport.SourceId);
     }
 
@@ -200,14 +207,8 @@ public class FilingGoldenCorpusScenarioTests
     public async Task GoldenCorpus_SmallAbridgedLtd_EmitsFullAccountsAbridgedCroPackIxbrlAndReadiness()
     {
         await using var db = CreateDbContext();
-        var period = await SeedBasicScenarioAsync(
-            db,
-            "Connacht Digital Solutions Limited",
-            CompanyType.Private,
-            CompanySizeClass.Small,
-            ElectedRegime.SmallAbridged,
-            auditExempt: true,
-            charity: false);
+        var scenario = GoldenCorpusFixture.Scenario("small-abridged-ltd");
+        var period = await SeedBasicScenarioAsync(db, scenario);
 
         var statements = new FinancialStatementsService(db);
         var documents = new DocumentGeneratorService(db, statements);
@@ -216,7 +217,7 @@ public class FilingGoldenCorpusScenarioTests
         var signaturePage = await documents.GenerateSignaturePageAsync(period.CompanyId, period.Id);
         var ixbrl = Encoding.UTF8.GetString(await new IxbrlService(db, statements).GenerateIxbrlAsync(period.CompanyId, period.Id));
 
-        await MarkGeneratedReviewedAndExternallyValidatedAsync(db, period, includeCharityReports: false);
+        await RecordGeneratedMachineArtifactsAsync(db, period);
         var profile = await new FilingReadinessProfileService(db).GetProfileAsync(period.CompanyId, period.Id);
         var tax = await new TaxComputationService(db, statements).ComputeAsync(period.CompanyId, period.Id);
         var notes = await db.NotesDisclosures.Where(n => n.PeriodId == period.Id && n.IsIncluded).ToListAsync();
@@ -247,10 +248,12 @@ public class FilingGoldenCorpusScenarioTests
 
         AssertWellFormedXml(ixbrl);
         Assert.Contains("Connacht Digital Solutions Limited", ixbrl);
-        Assert.Contains("No profit and loss account is published with these abridged financial statements.", ixbrl);
-        Assert.DoesNotContain("core:TurnoverGrossRevenue", ixbrl);
+        Assert.Contains("DRAFT - NOT FOR FILING - INCOMPLETE REVIEW PROTOTYPE", ixbrl);
+        Assert.Contains("core:TurnoverGrossRevenue", ixbrl);
 
         Assert.True(profile.SupportedPath);
+        Assert.False(profile.RevenueIxbrlGenerationSupported);
+        Assert.True(profile.RevenueManualHandoffRequired);
         Assert.Equal(CompanySizeClass.Small, profile.SizeClass);
         Assert.Equal(ElectedRegime.SmallAbridged, profile.ElectedRegime);
         Assert.True(profile.AuditExempt);
@@ -262,11 +265,13 @@ public class FilingGoldenCorpusScenarioTests
         Assert.Contains(profile.SourceReferences, s => s.SourceId == IrishStatutoryRuleSources.CroFinancialStatementsRequirements.SourceId);
         Assert.Contains(profile.SourceReferences, s => s.SourceId == IrishStatutoryRuleSources.FrcFrs102.SourceId);
         Assert.Contains(profile.SourceReferences, s => s.SourceId == IrishStatutoryRuleSources.RevenueAcceptedTaxonomies.SourceId);
-        Assert.Equal("ready-for-external-filing", profile.SignOffPacket.State);
+        Assert.Contains(profile.BlockingIssues, issue => issue.Code == "ixbrl-generation-manual-handoff");
+        Assert.Equal("blocked", profile.SignOffPacket.State);
         Assert.Contains(profile.SignOffPacket.Steps, step => step.Code == "statutory-basis" && step.Detail.Contains("abridgement", StringComparison.OrdinalIgnoreCase));
-        Assert.Contains("mark-cro-submitted", profile.AllowedNextActions);
+        Assert.Contains("approve-cro-pack", profile.AllowedNextActions);
+        Assert.DoesNotContain("mark-cro-submitted", profile.AllowedNextActions);
 
-        Assert.Equal(62.50m, tax.TotalCorporationTax);
+        Assert.Equal(scenario.WorkflowFacts.ExpectedCorporationTax, tax.TotalCorporationTax);
         Assert.Contains(notes, n => n.Title == "Accounting Policies" && n.IsIncluded);
     }
 
@@ -274,15 +279,8 @@ public class FilingGoldenCorpusScenarioTests
     public async Task GoldenCorpus_MediumAuditRequired_BlocksFinalOutputsAndRequiresManualHandoffUntilAuditorEvidence()
     {
         await using var db = CreateDbContext();
-        var period = await SeedBasicScenarioAsync(
-            db,
-            "Midlands Manufacturing Limited",
-            CompanyType.Private,
-            CompanySizeClass.Medium,
-            ElectedRegime.Medium,
-            auditExempt: false,
-            charity: false);
-        await MarkGeneratedReviewedAndExternallyValidatedAsync(db, period, includeCharityReports: false);
+        var scenario = GoldenCorpusFixture.Scenario("medium-audit-required");
+        var period = await SeedBasicScenarioAsync(db, scenario, finalise: false);
 
         var statements = new FinancialStatementsService(db);
         var profile = await new FilingReadinessProfileService(db).GetProfileAsync(period.CompanyId, period.Id);
@@ -292,6 +290,9 @@ public class FilingGoldenCorpusScenarioTests
             new DocumentGeneratorService(db, statements).GenerateAccountsPackageAsync(period.CompanyId, period.Id));
 
         Assert.True(profile.SupportedPath);
+        Assert.False(profile.RevenueIxbrlGenerationSupported);
+        Assert.True(profile.RevenueManualHandoffRequired);
+        Assert.Contains(profile.BlockingIssues, issue => issue.Code == "ixbrl-generation-manual-handoff");
         Assert.Equal(CompanySizeClass.Medium, profile.SizeClass);
         Assert.Equal(ElectedRegime.Medium, profile.ElectedRegime);
         Assert.False(profile.AuditExempt);
@@ -308,7 +309,7 @@ public class FilingGoldenCorpusScenarioTests
         Assert.Contains(profile.SourceReferences, s => s.SourceId == "cro-auditors-report" && s.Url.EndsWith("/auditors-report/"));
         Assert.Contains(profile.SourceReferences, s => s.SourceId == IrishStatutoryRuleSources.RevenueIxbrlContents.SourceId);
         Assert.Contains(profile.SourceReferences, s => s.SourceId == IrishStatutoryRuleSources.FrcFrs102.SourceId);
-        Assert.Equal(62.50m, tax.TotalCorporationTax);
+        Assert.Equal(scenario.WorkflowFacts.ExpectedCorporationTax, tax.TotalCorporationTax);
         Assert.Contains(notes, n => n.Title == "Turnover" && n.IsIncluded);
         Assert.Contains(notes, n => n.Title == "Tax on Profit on Ordinary Activities" && n.IsIncluded);
         Assert.Contains("auditor", error.Message, StringComparison.OrdinalIgnoreCase);
@@ -321,36 +322,19 @@ public class FilingGoldenCorpusScenarioTests
         Assert.Contains(auditorStep.Sources, s => s.SourceId == IrishStatutoryRuleSources.CroAuditorsReport.SourceId);
         Assert.Contains(profile.SignOffPacket.OpenBlockers, message => message.Contains("signed auditor report", StringComparison.OrdinalIgnoreCase));
 
-        period.AuditorsReportReceived = true;
-        period.AuditorsReportReference = "AUD-2026-MIDLANDS-001";
-        await db.SaveChangesAsync();
-
-        var unblockedProfile = await new FilingReadinessProfileService(db).GetProfileAsync(period.CompanyId, period.Id);
-        var satisfiedAuditEvidence = Assert.Single(unblockedProfile.RequiredEvidence, e => e.Code == "audit-report");
-        Assert.True(satisfiedAuditEvidence.Satisfied);
-        Assert.Contains("AUD-2026-MIDLANDS-001", satisfiedAuditEvidence.Detail);
-        Assert.DoesNotContain(unblockedProfile.BlockingIssues, issue => issue.Code == "auditor-handoff-required");
-        var unblockedAuditorStep = Assert.Single(unblockedProfile.SignOffPacket.Steps, step => step.Code == "auditor-handoff");
-        Assert.Equal("complete", unblockedAuditorStep.State);
-        Assert.Contains("AUD-2026-MIDLANDS-001", unblockedAuditorStep.Detail);
-
-        var documents = new DocumentGeneratorService(db, statements);
-        var pdf = await documents.GenerateAccountsPackageAsync(period.CompanyId, period.Id);
-        var pdfText = ExtractPdfText(pdf);
-        Assert.True(pdf.Length > 1_000);
-        Assert.Equal("%PDF", Encoding.ASCII.GetString(pdf, 0, 4));
-        Assert.Contains("Midlands Manufacturing Limited", pdfText, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("INDEPENDENT AUDITOR'S REPORT", pdfText, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("AUD-2026-MIDLANDS-001", pdfText, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("PROFIT AND LOSS ACCOUNT", pdfText, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("CASH FLOW STATEMENT", pdfText, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("STATEMENT OF CHANGES IN EQUITY", pdfText, StringComparison.OrdinalIgnoreCase);
-
         var ixbrl = Encoding.UTF8.GetString(await new IxbrlService(db, statements).GenerateIxbrlAsync(period.CompanyId, period.Id));
         AssertWellFormedXml(ixbrl);
-        Assert.Contains("Midlands Manufacturing Limited", ixbrl);
-        Assert.Contains("core:TurnoverGrossRevenue", ixbrl);
-        Assert.Contains("core:ProfitLossOnOrdinaryActivitiesBeforeTax", ixbrl);
+        foreach (var phrase in scenario.ExpectedIxbrlPhrases)
+            Assert.Contains(phrase, ixbrl, StringComparison.OrdinalIgnoreCase);
+
+        // A machine test cannot manufacture a signed auditor opinion. The audited scenario is
+        // deliberately retained as a negative path until genuine evidence is supplied.
+        var retainedPeriod = await db.AccountingPeriods.AsNoTracking().SingleAsync(item => item.Id == period.Id);
+        Assert.False(retainedPeriod.AuditorsReportReceived);
+        Assert.Null(retainedPeriod.AuditorsReportReference);
+        Assert.Null(retainedPeriod.AuditorsReportArtifact);
+        Assert.Null(retainedPeriod.AuditorsReportSha256);
+        Assert.Null(await db.CroFilingPackages.AsNoTracking().SingleOrDefaultAsync(item => item.PeriodId == period.Id));
     }
 
     private static AccountsDbContext CreateDbContext()
@@ -361,14 +345,10 @@ public class FilingGoldenCorpusScenarioTests
         return new AccountsDbContext(options);
     }
 
-    private static async Task<AccountingPeriod> SeedBasicScenarioAsync(
+    internal static async Task<AccountingPeriod> SeedBasicScenarioAsync(
         AccountsDbContext db,
-        string legalName,
-        CompanyType companyType,
-        CompanySizeClass sizeClass,
-        ElectedRegime regime,
-        bool auditExempt,
-        bool charity)
+        GoldenCorpusScenario scenario,
+        bool finalise = true)
     {
         var tenant = new Tenant { Name = "Golden Corpus Firm", Slug = Guid.NewGuid().ToString("N") };
         db.Tenants.Add(tenant);
@@ -377,14 +357,14 @@ public class FilingGoldenCorpusScenarioTests
         var company = new Company
         {
             TenantId = tenant.Id,
-            LegalName = legalName,
-            CompanyType = companyType,
+            LegalName = scenario.LegalName,
+            CompanyType = scenario.ParsedCompanyType,
             CroNumber = Guid.NewGuid().ToString("N")[..8],
             TaxReference = "1234567A",
-            IncorporationDate = new DateOnly(2022, 1, 1),
-            ArdMonth = 9,
+            IncorporationDate = scenario.PriorYear.PeriodStart,
+            AnnualReturnDate = new DateOnly(2024, 9, 15),
             IsTrading = true,
-            IsCharitableOrganisation = charity,
+            IsCharitableOrganisation = scenario.IsCharity,
             RegisteredOfficeAddress1 = "1 Statutory Street",
             RegisteredOfficeCity = "Dublin",
             RegisteredOfficeCounty = "Dublin"
@@ -398,17 +378,17 @@ public class FilingGoldenCorpusScenarioTests
                 CompanyId = company.Id,
                 Name = "Aisling Director",
                 Role = OfficerRole.Director,
-                AppointedDate = new DateOnly(2022, 1, 1)
+                AppointedDate = scenario.PriorYear.PeriodStart
             },
             new CompanyOfficer
             {
                 CompanyId = company.Id,
                 Name = "Brian Secretary",
                 Role = OfficerRole.Secretary,
-                AppointedDate = new DateOnly(2022, 1, 1)
+                AppointedDate = scenario.PriorYear.PeriodStart
             });
 
-        if (charity)
+        if (scenario.IsCharity)
         {
             db.CharityInfos.Add(new CharityInfo
             {
@@ -422,24 +402,42 @@ public class FilingGoldenCorpusScenarioTests
             });
         }
 
-        var period = new AccountingPeriod
+        var priorPeriod = new AccountingPeriod
         {
             CompanyId = company.Id,
             Company = company,
-            PeriodStart = new DateOnly(2026, 1, 1),
-            PeriodEnd = new DateOnly(2026, 12, 31),
-            IsFirstYear = false
+            PeriodStart = scenario.PriorYear.PeriodStart,
+            PeriodEnd = scenario.PriorYear.PeriodEnd,
+            IsFirstYear = true
         };
-        db.AccountingPeriods.Add(period);
+        db.AccountingPeriods.Add(priorPeriod);
         await db.SaveChangesAsync();
+        await SaveClassificationInputsThroughEndpointAsync(
+            db,
+            tenant.Id,
+            company.Id,
+            priorPeriod.Id,
+            scenario.PriorYear);
+        var classificationService = new SizeClassificationService(
+            db,
+            Options.Create(new SizeThresholdConfig()));
+        await classificationService.ClassifyAsync(company.Id, priorPeriod.Id);
+
+        var period = await new PeriodChronologyService(db).CreateAsync(new AccountingPeriod
+        {
+            CompanyId = company.Id,
+            PeriodStart = scenario.CurrentYear.PeriodStart,
+            PeriodEnd = scenario.CurrentYear.PeriodEnd,
+            IsFirstYear = false
+        });
 
         var bankCategory = AddCategory(db, company.Id, "1400", "Bank Current Account", AccountCategoryType.Asset);
-        var incomeCategory = AddCategory(db, company.Id, "4000", charity ? "Donations and grants" : "Sales / Revenue", AccountCategoryType.Income);
-        var shareCapitalCategory = companyType == CompanyType.CompanyLimitedByGuarantee
+        var incomeCategory = AddCategory(db, company.Id, "4000", scenario.IsCharity ? "Donations and grants" : "Sales / Revenue", AccountCategoryType.Income);
+        var shareCapitalCategory = scenario.ParsedCompanyType == CompanyType.CompanyLimitedByGuarantee
             ? null
             : AddCategory(db, company.Id, "3000", "Share Capital", AccountCategoryType.Equity);
 
-        var openingShareCapital = companyType == CompanyType.CompanyLimitedByGuarantee ? 0m : 100m;
+        var openingShareCapital = scenario.WorkflowFacts.OpeningShareCapital;
         if (openingShareCapital > 0)
         {
             db.ShareCapitals.Add(new ShareCapital
@@ -451,17 +449,13 @@ public class FilingGoldenCorpusScenarioTests
                 TotalValue = openingShareCapital,
                 IssueDate = period.PeriodStart
             });
-            db.OpeningBalances.Add(new OpeningBalance
-            {
-                PeriodId = period.Id,
-                AccountCategoryId = shareCapitalCategory!.Id,
-                Credit = openingShareCapital,
-                SourceNote = "Issued ordinary share capital at period start.",
-                EnteredBy = "Accounts reviewer",
-                Reviewed = true,
-                ReviewedBy = "Accounts reviewer",
-                ReviewedAt = DateTime.UtcNow
-            });
+            await UpsertOpeningBalanceThroughEndpointAsync(
+                db,
+                tenant.Id,
+                company.Id,
+                period.Id,
+                shareCapitalCategory!.Id,
+                openingShareCapital);
         }
 
         var bankAccount = new BankAccount
@@ -478,52 +472,64 @@ public class FilingGoldenCorpusScenarioTests
         {
             BankAccountId = bankAccount.Id,
             PeriodId = period.Id,
-            Date = new DateOnly(2026, 3, 1),
-            Description = charity ? "Community grant receipt" : "Customer receipt",
-            Amount = 500m,
+            Date = scenario.CurrentYear.PeriodStart.AddMonths(2),
+            Description = scenario.IsCharity ? "Community grant receipt" : "Customer receipt",
+            Amount = scenario.WorkflowFacts.CashReceipt,
             CategoryId = incomeCategory.Id
         });
-        db.SizeClassifications.Add(new SizeClassification
+        await SaveClassificationInputsThroughEndpointAsync(
+            db,
+            tenant.Id,
+            company.Id,
+            period.Id,
+            scenario.CurrentYear);
+        await db.SaveChangesAsync();
+        var automatedReviewInputs = new (string SectionKey, string Note)[]
         {
-            PeriodId = period.Id,
-            CalculatedClass = sizeClass,
-            Turnover = sizeClass == CompanySizeClass.Medium ? 18_000_000m : 500m,
-            BalanceSheetTotal = sizeClass == CompanySizeClass.Medium ? 8_000_000m : 500m,
-            AvgEmployees = sizeClass == CompanySizeClass.Medium ? 120 : 2
-        });
-        db.FilingRegimes.Add(new FilingRegime
+            ("adjustments", "Automated nil-position workflow input; not independent review evidence."),
+            ("debtors", "Automated nil-position workflow input; not independent review evidence."),
+            ("creditors", "Automated nil-position workflow input; not independent review evidence."),
+            ("inventory", "Automated nil-position workflow input; not independent review evidence."),
+            ("payroll", "Automated nil-position workflow input; not independent review evidence."),
+            ("tax", "Automated nil-position workflow input; not independent review evidence."),
+            ("dividends", "Automated nil-position workflow input; not independent review evidence."),
+            ("post-balance-sheet-events", "Automated nil-position workflow input; not independent review evidence."),
+            ("related-parties", "Automated nil-position workflow input; not independent review evidence."),
+            ("contingent-liabilities", "Automated nil-position workflow input; not independent review evidence."),
+            ("going-concern", "Automated nil-position workflow input; not independent review evidence."),
+            (
+                DirectorsReportService.PrincipalActivitiesReviewKey,
+                scenario.IsCharity
+                    ? "Community support and education."
+                    : "The principal activity is the provision of professional services."),
+            (
+                DirectorsReportService.AuditInformationReviewKey,
+                "Automated workflow fixture only; no signed director or auditor evidence is represented by this test input."),
+            (
+                "note-directors-remuneration",
+                "Automated workflow fixture amount €0.00; this is not an independently reviewed remuneration disclosure."),
+            (
+                "note-financial-instruments",
+                "Automated workflow fixture disclosure; no human financial-instruments approval is represented."),
+            (
+                "note-capital-commitments",
+                "Automated workflow fixture amount €0.00; no retained human confirmation is represented."),
+            (
+                "note-deferred-tax",
+                "Automated workflow fixture disclosure; no human deferred-tax approval is represented.")
+        };
+        foreach (var (sectionKey, note) in automatedReviewInputs)
         {
-            PeriodId = period.Id,
-            CanUseMicro = regime == ElectedRegime.Micro,
-            CanFileAbridged = regime is ElectedRegime.Micro or ElectedRegime.SmallAbridged,
-            AuditExempt = auditExempt,
-            ElectedRegime = regime,
-            RequiredStatementsJson = "[]",
-            RequiredNotesJson = "[]"
-        });
-        db.Adjustments.Add(new Adjustment
-        {
-            PeriodId = period.Id,
-            Description = "No year-end adjustment required",
-            Amount = 0m,
-            ImpactOnProfit = 0m,
-            Source = AdjustmentSource.Manual,
-            CreatedBy = "Accounts reviewer",
-            ApprovedBy = "Accounts reviewer",
-            ApprovedAt = DateTime.UtcNow
-        });
-        db.YearEndReviewConfirmations.AddRange(
-            NilReview(period.Id, "debtors"),
-            NilReview(period.Id, "creditors"),
-            NilReview(period.Id, "payroll"),
-            NilReview(period.Id, "tax"),
-            NilReview(period.Id, "dividends"),
-            NilReview(period.Id, "post-balance-sheet-events"),
-            NilReview(period.Id, "related-parties"),
-            NilReview(period.Id, "contingent-liabilities"),
-            NilReview(period.Id, "going-concern"));
+            await RecordYearEndReviewThroughEndpointAsync(
+                db,
+                tenant.Id,
+                company.Id,
+                period.Id,
+                sectionKey,
+                note);
+        }
 
-        if (charity)
+        if (scenario.IsCharity)
         {
             db.FundBalances.Add(new FundBalance
             {
@@ -531,53 +537,246 @@ public class FilingGoldenCorpusScenarioTests
                 FundName = "Unrestricted funds",
                 FundType = "Unrestricted",
                 OpeningBalance = 0m,
-                IncomingResources = 500m,
+                IncomingResources = scenario.WorkflowFacts.CashReceipt,
                 ResourcesExpended = 0m,
-                ClosingBalance = 500m
+                ClosingBalance = scenario.WorkflowFacts.ExpectedNetAssets
             });
         }
 
         await db.SaveChangesAsync();
+        var classification = await classificationService.ClassifyAsync(company.Id, period.Id);
+        Assert.Equal(scenario.ParsedSizeClass, classification.CalculatedClass);
+        var filingRequirements = await new FilingRegimeService(db)
+            .DetermineAsync(company.Id, period.Id, scenario.ParsedRegime);
+        Assert.Equal(scenario.ParsedRegime, filingRequirements.Regime);
+        Assert.Equal(scenario.ParsedSizeClass <= CompanySizeClass.Small, filingRequirements.AuditExempt);
         await new NotesDisclosureService(db).GenerateNotesAsync(company.Id, period.Id);
+        if (finalise)
+            await FinaliseThroughEndpointAsync(db, tenant.Id, period, scenario.CurrentYear.PeriodEnd.AddDays(-16));
         _ = bankCategory;
         return period;
     }
 
-    private static async Task MarkGeneratedReviewedAndExternallyValidatedAsync(
+    internal static async Task RecordGeneratedMachineArtifactsAsync(
         AccountsDbContext db,
-        AccountingPeriod period,
-        bool includeCharityReports)
+        AccountingPeriod period)
     {
-        db.CroFilingPackages.Add(new CroFilingPackage
+        var statements = new FinancialStatementsService(db);
+        var documents = new DocumentGeneratorService(db, statements);
+        var workflow = new FilingWorkflowService(
+            db,
+            statements,
+            new IxbrlService(db, statements),
+            releaseGate: new FilingReleaseGate(db, "golden-corpus-machine-candidate"));
+        var accounts = await documents.GenerateCroFilingPackAsync(period.CompanyId, period.Id);
+        var signaturePage = await documents.GenerateSignaturePageAsync(period.CompanyId, period.Id);
+
+        await workflow.RecordCroDocumentGeneratedAsync(
+            period.CompanyId,
+            period.Id,
+            "accounts",
+            "golden-corpus-machine",
+            accounts);
+        var package = await workflow.RecordCroDocumentGeneratedAsync(
+            period.CompanyId,
+            period.Id,
+            "signature",
+            "golden-corpus-machine",
+            signaturePage);
+
+        Assert.Equal(FilingReleaseGate.ComputeSha256(accounts), package.AccountsPdfSha256);
+        Assert.Equal(FilingReleaseGate.ComputeSha256(signaturePage), package.SignaturePageSha256);
+        Assert.Null(package.SignedByDirector);
+        Assert.Null(package.SignedBySecretary);
+        Assert.Null(package.SignedAt);
+    }
+
+    internal static async Task FinaliseThroughEndpointAsync(
+        AccountsDbContext db,
+        int tenantId,
+        AccountingPeriod period,
+        DateOnly approvalDate)
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Method = HttpMethods.Put;
+        context.Request.Path = $"/api/companies/{period.CompanyId}/periods/{period.Id}/status";
+        context.Request.Headers[IdempotencyHttpContract.RequestHeader] =
+            $"golden-finalise-{period.CompanyId}-{period.Id}-{Guid.NewGuid():N}";
+        context.Items[AuthContext.ItemKey] = new AuthenticatedUser(
+            100,
+            tenantId,
+            "Golden Corpus Firm",
+            "fixture-owner@example.invalid",
+            "Automated corpus actor",
+            "Owner");
+
+        var result = await PeriodStatusEndpoint.UpdateAsync(
+            period.CompanyId,
+            period.Id,
+            new PeriodStatusUpdate(PeriodStatus.Finalised, null, null, approvalDate),
+            db,
+            new AuditService(db),
+            new FinancialStatementsService(db),
+            context,
+            new ApiAccessService(
+                Options.Create(new ApiAccessConfig { Enabled = false }),
+                new TestEnvironment()));
+
+        var statusCode = Assert.IsAssignableFrom<IStatusCodeHttpResult>(result).StatusCode
+            ?? StatusCodes.Status200OK;
+        Assert.Equal(StatusCodes.Status200OK, statusCode);
+        Assert.Equal(approvalDate, period.ApprovalDate);
+        Assert.Equal(PeriodStatus.Finalised, period.Status);
+    }
+
+    internal static async Task ApproveAdjustmentsThroughEndpointAsync(
+        AccountsDbContext db,
+        int tenantId,
+        int companyId,
+        int periodId)
+    {
+        var ids = await db.Adjustments
+            .Where(item => item.PeriodId == periodId && item.ApprovedAt == null)
+            .Select(item => item.Id)
+            .ToListAsync();
+        foreach (var id in ids)
         {
-            PeriodId = period.Id,
-            AccountsPdfGenerated = true,
-            SignaturePageGenerated = true,
-            FilingStatus = FilingStatus.Approved,
-            ApprovedBy = "Qualified Accountant",
-            ApprovedAt = DateTime.UtcNow,
-            SignedByDirector = "Aisling Director",
-            SignedBySecretary = "Brian Secretary",
-            SignedAt = DateTime.UtcNow
-        });
-        db.RevenueFilingPackages.Add(new RevenueFilingPackage
-        {
-            PeriodId = period.Id,
-            IxbrlGenerated = true,
-            IxbrlValidated = true,
-            IxbrlValidationErrors = "Internal checks passed. External ROS/iXBRL validation is still required before Revenue filing."
-        });
-        if (includeCharityReports)
-        {
-            db.CharityFilingPackages.Add(new CharityFilingPackage
-            {
-                PeriodId = period.Id,
-                SofaGenerated = true,
-                TrusteesReportGenerated = true,
-                FilingStatus = FilingStatus.ReadyForReview
-            });
+            var context = new DefaultHttpContext();
+            context.Request.Method = HttpMethods.Post;
+            context.Request.Path = $"/api/companies/{companyId}/periods/{periodId}/adjustments/{id}/approve";
+            context.Items[AuthContext.ItemKey] = new AuthenticatedUser(
+                101,
+                tenantId,
+                "Golden Corpus Firm",
+                "fixture-reviewer@example.invalid",
+                "Automated corpus reviewer",
+                "Reviewer");
+            var result = await AdjustmentEndpoints.ApproveAdjustmentEndpointAsync(
+                companyId,
+                periodId,
+                id,
+                db,
+                new AuditService(db),
+                context,
+                new ApiAccessService(
+                    Options.Create(new ApiAccessConfig { Enabled = false }),
+                    new TestEnvironment()));
+            var statusCode = Assert.IsAssignableFrom<IStatusCodeHttpResult>(result).StatusCode
+                ?? StatusCodes.Status200OK;
+            Assert.Equal(StatusCodes.Status200OK, statusCode);
         }
-        await db.SaveChangesAsync();
+    }
+
+    internal static async Task SaveClassificationInputsThroughEndpointAsync(
+        AccountsDbContext db,
+        int tenantId,
+        int companyId,
+        int periodId,
+        GoldenCorpusYear inputs)
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Method = HttpMethods.Put;
+        context.Request.Path = $"/api/companies/{companyId}/periods/{periodId}/size-classification";
+        context.Items[AuthContext.ItemKey] = new AuthenticatedUser(
+            102,
+            tenantId,
+            "Golden Corpus Firm",
+            "fixture-accountant@example.invalid",
+            "Automated corpus accountant",
+            "Accountant");
+        var result = await ClassificationEndpoints.SaveSizeClassificationEndpointAsync(
+            companyId,
+            periodId,
+            new SizeClassificationInput(
+                inputs.Turnover,
+                inputs.BalanceSheetTotal,
+                inputs.AverageEmployees,
+                PriorYearClass: null),
+            db,
+            new AuditService(db),
+            context,
+            new ApiAccessService(
+                Options.Create(new ApiAccessConfig { Enabled = false }),
+                new TestEnvironment()));
+        var statusCode = Assert.IsAssignableFrom<IStatusCodeHttpResult>(result).StatusCode
+            ?? StatusCodes.Status200OK;
+        Assert.Equal(StatusCodes.Status200OK, statusCode);
+    }
+
+    private static async Task UpsertOpeningBalanceThroughEndpointAsync(
+        AccountsDbContext db,
+        int tenantId,
+        int companyId,
+        int periodId,
+        int categoryId,
+        decimal credit)
+    {
+        var context = AutomatedWorkflowContext(
+            tenantId,
+            "Accountant",
+            $"/api/companies/{companyId}/periods/{periodId}/opening-balances/{categoryId}");
+        var result = await YearEndEndpoints.UpsertOpeningBalanceEndpointAsync(
+            companyId,
+            periodId,
+            categoryId,
+            new OpeningBalanceInput(
+                Debit: 0m,
+                Credit: credit,
+                SourceNote: "Automated corpus opening-share input; not human acceptance evidence.",
+                EnteredBy: "Ignored payload identity",
+                Reviewed: true),
+            db,
+            new AuditService(db),
+            context);
+        var statusCode = Assert.IsAssignableFrom<IStatusCodeHttpResult>(result).StatusCode
+            ?? StatusCodes.Status200OK;
+        Assert.Equal(StatusCodes.Status200OK, statusCode);
+    }
+
+    private static async Task RecordYearEndReviewThroughEndpointAsync(
+        AccountsDbContext db,
+        int tenantId,
+        int companyId,
+        int periodId,
+        string sectionKey,
+        string note)
+    {
+        var context = AutomatedWorkflowContext(
+            tenantId,
+            "Reviewer",
+            $"/api/companies/{companyId}/periods/{periodId}/year-end-reviews/{sectionKey}");
+        var result = await YearEndEndpoints.UpdateYearEndReviewEndpointAsync(
+            companyId,
+            periodId,
+            sectionKey,
+            new YearEndReviewInput(
+                Confirmed: true,
+                ConfirmedBy: "Ignored payload identity",
+                Note: note),
+            db,
+            new AuditService(db),
+            context);
+        var statusCode = Assert.IsAssignableFrom<IStatusCodeHttpResult>(result).StatusCode
+            ?? StatusCodes.Status200OK;
+        Assert.Equal(StatusCodes.Status200OK, statusCode);
+    }
+
+    private static DefaultHttpContext AutomatedWorkflowContext(
+        int tenantId,
+        string role,
+        string path)
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Method = HttpMethods.Put;
+        context.Request.Path = path;
+        context.Items[AuthContext.ItemKey] = new AuthenticatedUser(
+            103,
+            tenantId,
+            "Golden Corpus Firm",
+            "fixture-workflow@example.invalid",
+            "Automated corpus workflow actor (not human acceptance)",
+            role);
+        return context;
     }
 
     private static AccountCategory AddCategory(
@@ -600,15 +799,6 @@ public class FilingGoldenCorpusScenarioTests
         return category;
     }
 
-    private static YearEndReviewConfirmation NilReview(int periodId, string sectionKey) => new()
-    {
-        PeriodId = periodId,
-        SectionKey = sectionKey,
-        Confirmed = true,
-        ConfirmedBy = "Accounts reviewer",
-        Note = "Nil position reviewed."
-    };
-
     private static void AssertWellFormedXml(string xhtml)
     {
         var settings = new System.Xml.XmlReaderSettings { DtdProcessing = System.Xml.DtdProcessing.Ignore };
@@ -624,5 +814,13 @@ public class FilingGoldenCorpusScenarioTests
         foreach (var page in document.GetPages())
             sb.Append(' ').Append(string.Join(' ', page.GetWords().Select(w => w.Text)));
         return sb.ToString();
+    }
+
+    private sealed class TestEnvironment : IHostEnvironment
+    {
+        public string EnvironmentName { get; set; } = Environments.Development;
+        public string ApplicationName { get; set; } = "Accounts.Tests";
+        public string ContentRootPath { get; set; } = AppContext.BaseDirectory;
+        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
     }
 }

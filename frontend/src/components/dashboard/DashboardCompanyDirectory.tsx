@@ -2,14 +2,16 @@
 
 import Link from "next/link";
 import { ArrowRight, Building2, CalendarClock, Plus, UserRound } from "lucide-react";
-import type { Company, FilingDeadline } from "@/lib/api";
+import type { Company, DashboardDeadlineState, FilingDeadline } from "@/lib/api";
 import { formatCompanyType, formatDateIE } from "@/lib/format";
 import { DataGrid, ReviewPanel, StatusBadge, WorkbenchEmptyState } from "@/components/workbench";
 
 interface DashboardCompanyDirectoryProps {
   companies: Company[];
   deadlines: Record<number, FilingDeadline | null>;
-  isOwner: boolean;
+  deadlineUnavailableCompanyIds?: number[];
+  deadlineStates?: Record<number, DashboardDeadlineState>;
+  canCreateCompany: boolean;
   today?: string;
 }
 
@@ -32,12 +34,21 @@ interface DirectoryRow {
 export function DashboardCompanyDirectory({
   companies,
   deadlines,
-  isOwner,
+  deadlineUnavailableCompanyIds = [],
+  deadlineStates = {},
+  canCreateCompany,
   today,
 }: DashboardCompanyDirectoryProps) {
   const todayDate = parseDate(today) ?? new Date();
+  const unavailableDeadlineIds = new Set(deadlineUnavailableCompanyIds);
   const rows = companies
-    .map((company) => buildDirectoryRow(company, deadlines[company.id] ?? null, todayDate))
+    .map((company) => buildDirectoryRow(
+      company,
+      deadlines[company.id] ?? null,
+      todayDate,
+      unavailableDeadlineIds.has(company.id),
+      deadlineStates[company.id],
+    ))
     .sort(compareDirectoryRows);
 
   if (rows.length === 0) {
@@ -45,7 +56,7 @@ export function DashboardCompanyDirectory({
       <WorkbenchEmptyState
         title="No companies available"
         description="Add the first company before preparing year-end accounts."
-        actions={isOwner ? <AddCompanyLink /> : undefined}
+        actions={canCreateCompany ? <AddCompanyLink /> : undefined}
       />
     );
   }
@@ -54,10 +65,11 @@ export function DashboardCompanyDirectory({
     <ReviewPanel
       title="Company directory"
       description="Dense company navigation with statutory status, filing pressure, reviewer ownership and the next workspace action."
-      actions={isOwner ? <AddCompanyLink /> : undefined}
+      actions={canCreateCompany ? <AddCompanyLink /> : undefined}
     >
       <DataGrid
         caption="Company directory"
+        mobilePresentation="cards"
         filterPlaceholder="Filter companies, deadlines, reviewers or status"
         emptyState="No matching companies"
         columns={["Company", "Activity", "Periods", "Deadline", "Reviewer", "Next action"]}
@@ -135,15 +147,21 @@ function ReviewerCell({ label }: { label: string }) {
   );
 }
 
-function buildDirectoryRow(company: Company, deadline: FilingDeadline | null, today: Date): DirectoryRow {
+function buildDirectoryRow(
+  company: Company,
+  deadline: FilingDeadline | null,
+  today: Date,
+  deadlineUnavailable = false,
+  authoritativeState?: DashboardDeadlineState,
+): DirectoryRow {
   const period = latestPeriod(company);
-  const deadlineState = deadlineStatus(deadline, today);
+  const deadlineState = deadlineStatus(deadline, today, deadlineUnavailable, authoritativeState);
   const activity = activityStatus(company);
 
   return {
     company,
     deadline,
-    deadlineLabel: formatDeadline(deadline),
+    deadlineLabel: formatDeadline(deadline, deadlineUnavailable, authoritativeState),
     deadlineState: deadlineState.label,
     deadlineTone: deadlineState.tone,
     activityLabel: activity.label,
@@ -186,7 +204,19 @@ function activityStatus(company: Company): { label: string; tone: DirectoryTone 
   return { label: "Review activity", tone: "warn" };
 }
 
-function deadlineStatus(deadline: FilingDeadline | null, today: Date): { label: string; tone: DirectoryTone } {
+function deadlineStatus(
+  deadline: FilingDeadline | null,
+  today: Date,
+  unavailable = false,
+  authoritativeState?: DashboardDeadlineState,
+): { label: string; tone: DirectoryTone } {
+  if (unavailable || authoritativeState === "unavailable") return { label: "Unavailable", tone: "bad" };
+  if (authoritativeState === "not-applicable") return { label: "Not applicable", tone: "default" };
+  if (authoritativeState === "not-configured") return { label: "Not configured", tone: "warn" };
+  if (authoritativeState === "overdue") return { label: "Overdue", tone: "bad" };
+  if (authoritativeState === "due-soon") return { label: "Due soon", tone: "warn" };
+  if (authoritativeState === "scheduled") return { label: "On track", tone: "good" };
+  if (authoritativeState === "filed") return { label: "Filed", tone: "good" };
   if (!deadline) return { label: "Not scheduled", tone: "warn" };
 
   const dueDate = parseDate(deadline.dueDate);
@@ -198,7 +228,13 @@ function deadlineStatus(deadline: FilingDeadline | null, today: Date): { label: 
   return { label: "On track", tone: "good" };
 }
 
-function formatDeadline(deadline: FilingDeadline | null) {
+function formatDeadline(deadline: FilingDeadline | null, unavailable = false, authoritativeState?: DashboardDeadlineState) {
+  if (unavailable || authoritativeState === "unavailable") return "Deadline evidence unavailable";
+  if (authoritativeState === "not-applicable") return "No accounting period exists";
+  if (authoritativeState === "not-configured") return "Deadline calculation required";
+  if (authoritativeState === "filed" && deadline?.filedDate) {
+    return `${deadline.deadlineType} filed ${formatDateIE(deadline.filedDate)}`;
+  }
   if (!deadline) return "No deadline calculated";
   return `${deadline.deadlineType} due ${formatDateIE(deadline.dueDate)}`;
 }

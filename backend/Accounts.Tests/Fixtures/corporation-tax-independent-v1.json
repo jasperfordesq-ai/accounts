@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "fixtureId": "irish-corporation-tax-support-v1",
+  "expectationDerivation": "Fixed arithmetic prepared outside TaxComputationService and reconciled by taxable stream.",
+  "independentReviewStatus": "pending-qualified-accountant",
+  "scenarios": [
+    {
+      "code": "signed-reversals-passive-directors",
+      "accountingProfit": 55000.00,
+      "passiveNonTradingIncome": 4000.00,
+      "signedNonDeductibleAdjustment": 1000.00,
+      "tradingProfitBeforeLossRelief": 52000.00,
+      "tradingProfitAfterLossRelief": 52000.00,
+      "corporationTaxAt125": 6500.00,
+      "corporationTaxAt25": 1000.00,
+      "totalCorporationTax": 7500.00,
+      "grossEmployeeWages": 40000.00,
+      "directorsFees": 8000.00
+    },
+    {
+      "code": "wear-and-tear-and-disposal-balancing",
+      "accountingProfit": 50000.00,
+      "wearAndTearAllowance": 1000.00,
+      "balancingAllowance": 1000.00,
+      "balancingCharge": 1500.00,
+      "tradingProfitBeforeLossRelief": 49500.00,
+      "corporationTaxAt125": 6187.50,
+      "totalCorporationTax": 6187.50
+    },
+    {
+      "code": "two-period-loss-carry-forward",
+      "lossArisingFirstPeriod": 10000.00,
+      "secondPeriodProfitBeforeLoss": 6000.00,
+      "lossUsedSecondPeriod": 6000.00,
+      "closingLossSecondPeriod": 4000.00,
+      "secondPeriodCorporationTax": 0.00
+    }
+  ]
+}

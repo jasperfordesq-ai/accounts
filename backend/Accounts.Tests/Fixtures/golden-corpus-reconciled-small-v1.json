@@ -1,0 +1,130 @@
+{
+  "schemaVersion": 1,
+  "fixtureId": "irish-statutory-golden-corpus-reconciled-small-v1",
+  "scenarioCode": "small-abridged-ltd",
+  "expectationDerivation": "Double-entry expectations were derived independently from the production services: opening equity plus bank movements must equal closing cash, each non-cash journal has equal debit and credit, profit rolls into retained earnings, and current plus long-term liabilities reconcile to the retained loan schedule.",
+  "independentReviewStatus": "pending-qualified-accountant",
+  "externalValidationStatus": "pending-real-ros-validator",
+  "company": {
+    "legalName": "Connacht Reconciled Manufacturing Limited",
+    "croNumber": "778899",
+    "taxReference": "1234567A"
+  },
+  "periods": [
+    {
+      "code": "prior",
+      "periodStart": "2024-01-01",
+      "periodEnd": "2024-12-31",
+      "turnoverSizeInput": 1400000.00,
+      "balanceSheetSizeInput": 720000.00,
+      "averageEmployees": 4,
+      "closingInventory": 800.00,
+      "corporationTaxLiability": 500.00,
+      "corporationTaxPaid": 400.00,
+      "dividendPaid": 300.00
+    },
+    {
+      "code": "current",
+      "periodStart": "2025-01-01",
+      "periodEnd": "2025-12-31",
+      "turnoverSizeInput": 1500000.00,
+      "balanceSheetSizeInput": 760000.00,
+      "averageEmployees": 5,
+      "closingInventory": 600.00,
+      "corporationTaxLiability": 600.00,
+      "corporationTaxPaid": 500.00,
+      "dividendPaid": 400.00
+    }
+  ],
+  "openingEquity": {
+    "shareCapital": 100.00,
+    "retainedEarnings": 900.00,
+    "bank": 1000.00
+  },
+  "fixedAsset": {
+    "name": "Production computer",
+    "category": "Computer Equipment",
+    "cost": 1200.00,
+    "residualValue": 200.00,
+    "acquisitionDate": "2024-01-01",
+    "disposalDate": "2025-06-30",
+    "disposalProceeds": 700.00,
+    "usefulLifeYears": 5
+  },
+  "transactions": [
+    { "periodCode": "prior", "date": "2024-02-01", "description": "Sales receipts", "amount": 10000.00, "categoryCode": "4000" },
+    { "periodCode": "prior", "date": "2024-03-01", "description": "Inventory purchases", "amount": -4000.00, "categoryCode": "5000" },
+    { "periodCode": "prior", "date": "2024-04-01", "description": "Interest paid", "amount": -100.00, "categoryCode": "6900" },
+    { "periodCode": "prior", "date": "2024-01-01", "description": "Computer acquisition", "amount": -1200.00, "categoryCode": "0050" },
+    { "periodCode": "prior", "date": "2024-10-01", "description": "Dividend paid", "amount": -300.00, "categoryCode": "3200" },
+    { "periodCode": "prior", "date": "2024-11-01", "description": "Corporation tax paid", "amount": -400.00, "categoryCode": "2400" },
+    { "periodCode": "current", "date": "2025-02-01", "description": "Sales receipts", "amount": 12000.00, "categoryCode": "4000" },
+    { "periodCode": "current", "date": "2025-03-01", "description": "Inventory purchases", "amount": -5000.00, "categoryCode": "5000" },
+    { "periodCode": "current", "date": "2025-04-01", "description": "Interest paid", "amount": -120.00, "categoryCode": "6900" },
+    { "periodCode": "current", "date": "2025-06-30", "description": "Computer disposal proceeds", "amount": 700.00, "categoryCode": "0050" },
+    { "periodCode": "current", "date": "2025-10-01", "description": "Dividend paid", "amount": -400.00, "categoryCode": "3200" },
+    { "periodCode": "current", "date": "2025-11-01", "description": "Corporation tax paid", "amount": -500.00, "categoryCode": "2400" },
+    { "periodCode": "current", "date": "2025-05-01", "description": "Deposit interest received", "amount": 400.00, "categoryCode": "4200" },
+    { "periodCode": "current", "date": "2025-08-31", "description": "Gross payroll paid", "amount": -1000.00, "categoryCode": "6000" },
+    { "periodCode": "current", "date": "2025-08-31", "description": "Employer PRSI paid", "amount": -110.00, "categoryCode": "6010" },
+    { "periodCode": "current", "date": "2025-08-31", "description": "Employer pension paid", "amount": -50.00, "categoryCode": "6020" },
+    { "periodCode": "current", "date": "2025-01-15", "description": "Bank loan current tranche", "amount": 1000.00, "categoryCode": "2600" },
+    { "periodCode": "current", "date": "2025-01-15", "description": "Bank loan long-term tranche", "amount": 1000.00, "categoryCode": "2700" },
+    { "periodCode": "current", "date": "2025-09-30", "description": "Bank loan current-tranche repayment", "amount": -500.00, "categoryCode": "2600" }
+  ],
+  "payroll": {
+    "grossWages": 1000.00,
+    "directorsFees": 0.00,
+    "employerPrsi": 110.00,
+    "pensionContributions": 50.00,
+    "staffCount": 5
+  },
+  "loan": {
+    "lender": "Synthetic Bank plc",
+    "originalAmount": 2000.00,
+    "closingBalance": 1500.00,
+    "drawdownDate": "2025-01-15",
+    "balanceAsOfDate": "2025-12-31",
+    "interestRate": 4.50,
+    "dueWithinYear": 500.00,
+    "dueAfterYear": 1000.00
+  },
+  "manualAdjustment": {
+    "description": "Accrued accountancy fee",
+    "debitCategoryCode": "6810",
+    "creditCategoryCode": "2100",
+    "amount": 125.55,
+    "reason": "Invoice received after the reporting date",
+    "accountingStandard": "FRS 102 accruals concept"
+  },
+  "expected": {
+    "priorTurnover": 10000.00,
+    "priorCostOfSales": 3200.00,
+    "priorProfitAfterTax": 6000.00,
+    "priorStock": 800.00,
+    "priorFixedAssets": 1000.00,
+    "priorCash": 5000.00,
+    "priorNetAssets": 6700.00,
+    "currentTurnover": 12000.00,
+    "currentPassiveIncome": 400.00,
+    "currentPayrollExpense": 1160.00,
+    "currentCostOfSales": 5200.00,
+    "currentLoanInterestAccrual": 67.50,
+    "currentInterestPayable": 187.50,
+    "currentProfitAfterTax": 4826.95,
+    "currentStock": 600.00,
+    "currentFixedAssets": 0.00,
+    "currentCash": 12420.00,
+    "currentLoanDueWithinYear": 500.00,
+    "currentLoanDueAfterYear": 1000.00,
+    "currentNetAssets": 11126.95,
+    "currentOpeningCash": 5000.00,
+    "currentNetIncreaseInCash": 7420.00,
+    "currentClosingCash": 12420.00,
+    "currentTaxCharge": 600.00,
+    "currentTaxCreditors": 200.00,
+    "currentDividendPaid": 400.00,
+    "currentOpeningRetainedEarnings": 6600.00,
+    "currentClosingRetainedEarnings": 11026.95
+  }
+}

@@ -1,5 +1,6 @@
 using Accounts.Api.Data;
 using Accounts.Api.Entities;
+using Accounts.Api.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace Accounts.Api.Middleware;
@@ -30,12 +31,18 @@ public class PeriodLockMiddleware(RequestDelegate next)
 
         if (lockedPeriod.Status is PeriodStatus.Finalised or PeriodStatus.Filed || lockedPeriod.LockedAt is not null)
         {
+            if (await IdempotencyReplayPreflight.IsCompletedCandidateAsync(context, db, context.RequestAborted))
+            {
+                await next(context);
+                return;
+            }
+
             context.Response.StatusCode = StatusCodes.Status409Conflict;
             context.Response.ContentType = "application/json";
-            await context.Response.WriteAsJsonAsync(new
-            {
-                error = "Accounting period is locked. Reopen the period before changing accounting data."
-            });
+            var etag = context.Items.TryGetValue(PeriodConcurrencyMiddleware.InitialETagItemKey, out var value)
+                ? value as string
+                : null;
+            await context.Response.WriteAsJsonAsync(AccountingConflict.Response(context, etag));
             return;
         }
 

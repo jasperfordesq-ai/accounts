@@ -12,6 +12,8 @@ export interface FilingOutputChecklist {
 }
 
 interface FilingOutputsPanelProps {
+  canRead?: boolean;
+  canGenerate?: boolean;
   filingRegimeReady: boolean;
   downloadingDocument: string | null;
   checklist: FilingOutputChecklist;
@@ -31,6 +33,8 @@ const checklistLabels: { key: keyof FilingOutputChecklist; label: string }[] = [
 ];
 
 export function FilingOutputsPanel({
+  canRead = false,
+  canGenerate = false,
   filingRegimeReady,
   downloadingDocument,
   checklist,
@@ -47,20 +51,24 @@ export function FilingOutputsPanel({
   const openChecklistCount = checklistLabels.length - completeCount;
   const anyDownloadInProgress = downloadingDocument !== null;
   const outputStates = [
-    { title: "AGM Pack", isBlocked: anyDownloadInProgress },
-    { title: "CRO Filing Pack", isBlocked: anyDownloadInProgress || !filingRegimeReady },
-    { title: "Signature Page", isBlocked: anyDownloadInProgress || !filingRegimeReady },
-    { title: "iXBRL Filing", isBlocked: anyDownloadInProgress },
+    { title: "AGM Pack", isBlocked: !canRead || anyDownloadInProgress },
+    { title: "CRO Filing Pack", isBlocked: !canGenerate || anyDownloadInProgress || !filingRegimeReady },
+    { title: "Signature Page", isBlocked: !canGenerate || anyDownloadInProgress || !filingRegimeReady },
+    { title: "iXBRL review prototype", isBlocked: !canRead || anyDownloadInProgress },
   ];
   const availableOutputs = outputStates.filter((output) => !output.isBlocked).map((output) => output.title);
   const blockedOutputs = outputStates.filter((output) => output.isBlocked).map((output) => output.title);
-  const nextOutputGate = anyDownloadInProgress
-    ? "Wait for the current output to finish preparing"
-    : !filingRegimeReady
-      ? "Complete filing regime before CRO downloads"
-      : completeCount === checklistLabels.length
-        ? "All filing outputs are available for review"
-        : "Complete open filing checklist items before final use";
+  const nextOutputGate = !canRead
+    ? "Read access is required to inspect filing outputs"
+    : anyDownloadInProgress
+      ? "Wait for the current output to finish preparing"
+      : !canGenerate
+        ? "Owner or Accountant access is required to generate the CRO filing pack and signature page"
+        : !filingRegimeReady
+          ? "Complete filing regime before CRO downloads"
+          : completeCount === checklistLabels.length
+            ? "All filing outputs are available for review"
+            : "Complete open filing checklist items before final use";
 
   return (
     <ReviewPanel
@@ -89,6 +97,7 @@ export function FilingOutputsPanel({
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <OutputDownloadTile
+              canDownload={canRead}
               title="AGM Pack"
               description="Full statutory accounts for AGM approval"
               buttonLabel="Download AGM PDF"
@@ -97,6 +106,7 @@ export function FilingOutputsPanel({
               onDownload={onDownloadAgmPack}
             />
             <OutputDownloadTile
+              canDownload={canGenerate}
               title="CRO Filing Pack"
               description="Abridged accounts for CRO filing"
               buttonLabel="Download CRO PDF"
@@ -106,6 +116,7 @@ export function FilingOutputsPanel({
               onDownload={onDownloadCroFilingPack}
             />
             <OutputDownloadTile
+              canDownload={canGenerate}
               title="Signature Page"
               description="Typeset signatures for CRO (s.347)"
               buttonLabel="Download Signature PDF"
@@ -115,10 +126,11 @@ export function FilingOutputsPanel({
               onDownload={onDownloadSignaturePage}
             />
             <OutputDownloadTile
-              title="iXBRL Filing"
-              description="For Revenue Online Service (ROS) submission"
-              buttonLabel="Download iXBRL"
-              isLoading={downloadingDocument === "iXBRL filing"}
+              canDownload={canRead}
+              title="iXBRL review prototype"
+              description="Incomplete draft for accountant review only; filing-ready generation is disabled and requires manual handoff"
+              buttonLabel="Download draft review XHTML"
+              isLoading={downloadingDocument === "draft iXBRL review prototype"}
               isDisabled={anyDownloadInProgress}
               onDownload={onDownloadIxbrl}
             />
@@ -261,6 +273,7 @@ function formatOutputCount(count: number, label: string) {
 }
 
 function OutputDownloadTile({
+  canDownload,
   title,
   description,
   buttonLabel,
@@ -269,6 +282,7 @@ function OutputDownloadTile({
   gateLabel,
   onDownload,
 }: {
+  canDownload: boolean;
   title: string;
   description: string;
   buttonLabel: string;
@@ -291,18 +305,20 @@ function OutputDownloadTile({
           <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">{description}</p>
         </div>
       </div>
-      <Button
-        variant="outline"
-        size="sm"
-        isDisabled={isDisabled}
-        className="mt-auto w-fit"
-        onPress={() => {
-          void onDownload();
-        }}
-      >
-        {isLoading ? <Spinner size="sm" className="mr-2" /> : <Download className="mr-1 h-4 w-4" />}
-        {isLoading ? "Preparing..." : buttonLabel}
-      </Button>
+      {canDownload && (
+        <Button
+          variant="outline"
+          size="sm"
+          isDisabled={isDisabled}
+          className="mt-auto w-fit"
+          onPress={() => {
+            void onDownload();
+          }}
+        >
+          {isLoading ? <Spinner size="sm" className="mr-2" /> : <Download className="mr-1 h-4 w-4" />}
+          {isLoading ? "Preparing..." : buttonLabel}
+        </Button>
+      )}
     </div>
   );
 }

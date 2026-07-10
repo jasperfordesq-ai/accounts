@@ -4,6 +4,7 @@ import {
   validateStep,
   companyLegalSchema,
   companyAddressSchema,
+  companyOnboardingSetupSchema,
   officerSchema,
 } from "../src/lib/validation.ts";
 
@@ -44,6 +45,15 @@ test("validateStep(0) rejects a future incorporation date", () => {
   assert.ok(errors.incorporationDate, "expected an incorporationDate error");
 });
 
+test("validateStep(0) requires an explicit incorporation date", () => {
+  const errors = validateStep(0, {
+    legalName: "Valid Name Ltd",
+    companyType: "Private",
+    incorporationDate: "",
+  });
+  assert.equal(errors.incorporationDate, "Incorporation date is required");
+});
+
 test("validateStep(2) rejects a malformed Eircode but accepts a valid one", () => {
   const bad = validateStep(2, { eircode: "!!notaneircode!!" });
   assert.ok(bad.eircode, "expected an eircode error");
@@ -65,4 +75,31 @@ test("companyLegalSchema caps the legal name length", () => {
 
 test("companyAddressSchema accepts an empty address (all fields optional)", () => {
   assert.doesNotThrow(() => companyAddressSchema.parse({}));
+});
+
+test("companyOnboardingSetupSchema requires a valid first period and opening bank", () => {
+  assert.throws(() => companyOnboardingSetupSchema.parse({
+    incorporationDate: "2025-01-01",
+    annualReturnDate: "",
+    annualReturnDateEvidenceReference: "",
+    firstPeriodEnd: "",
+    bankAccountName: "",
+    openingBalance: "not-money",
+  }));
+  assert.doesNotThrow(() => companyOnboardingSetupSchema.parse({
+    incorporationDate: "2025-01-01",
+    annualReturnDate: "2025-07-01",
+    annualReturnDateEvidenceReference: "CRO-CORE-ARD-2025",
+    firstPeriodEnd: "2025-12-31",
+    bankAccountName: "Main Current Account",
+    openingBalance: "100.00",
+  }));
+  assert.throws(() => companyOnboardingSetupSchema.parse({
+    incorporationDate: "2025-01-01",
+    annualReturnDate: "2024-12-31",
+    annualReturnDateEvidenceReference: "CRO-CORE-ARD-INVALID",
+    firstPeriodEnd: "2025-12-31",
+    bankAccountName: "Main Current Account",
+    openingBalance: "100.00",
+  }), /Annual Return Date cannot be before incorporation/);
 });

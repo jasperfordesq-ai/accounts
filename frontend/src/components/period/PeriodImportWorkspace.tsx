@@ -1,10 +1,12 @@
 "use client";
 
-import { useRef, useState, type ChangeEvent, type DragEvent, type ReactNode } from "react";
+import { cloneElement, useId, useRef, useState, type ChangeEvent, type DragEvent, type ReactElement, type ReactNode } from "react";
 import { Button, Card, Chip, Spinner } from "@heroui/react";
-import Link from "next/link";
 import { ArrowRight, CheckCircle2, HelpCircle, Scale, Settings, Trash2, Upload } from "lucide-react";
 import type { AccountingPeriod, AccountCategory, BankAccount, OpeningBalance } from "@/lib/api";
+import { ActionLink, ReadOnlyNotice } from "@/components/workbench";
+import { DuplicateReviewPanel } from "@/components/period/DuplicateReviewPanel";
+import { useDestructiveActionConfirmation } from "@/lib/useDestructiveAction";
 
 interface BankAccountForm {
   name: string;
@@ -23,11 +25,19 @@ interface OpeningBalanceForm {
 
 interface ImportResult {
   rowsImported: number;
-  duplicatesSkipped: number;
+  duplicateCandidates: number;
   autoCategorised: number;
+  importBatchId?: number;
+  sourceFilename: string;
+  sourceFileSha256: string;
+  sourceFileBytes: number;
+  warnings: string[];
 }
 
 interface PeriodImportWorkspaceProps {
+  companyId: number;
+  periodId: number;
+  canWrite?: boolean;
   classificationHref: string;
   period: AccountingPeriod | null;
   bankAccounts: BankAccount[];
@@ -54,9 +64,13 @@ interface PeriodImportWorkspaceProps {
   onDeleteOpeningBalance: (categoryId: number) => void | Promise<void>;
   onSelectBankAccount: (bankAccountId: number | "") => void;
   onUploadFile: (file: File) => void | Promise<void>;
+  onDuplicateDecisionRecorded?: () => void | Promise<void>;
 }
 
 export function PeriodImportWorkspace({
+  companyId,
+  periodId,
+  canWrite = true,
   classificationHref,
   period,
   bankAccounts,
@@ -83,9 +97,11 @@ export function PeriodImportWorkspace({
   onDeleteOpeningBalance,
   onSelectBankAccount,
   onUploadFile,
+  onDuplicateDecisionRecorded,
 }: PeriodImportWorkspaceProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
+  const { requestDestructiveAction, destructiveActionConfirmation } = useDestructiveActionConfirmation();
 
   function handleFileInputChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -103,6 +119,7 @@ export function PeriodImportWorkspace({
 
   return (
     <div className="space-y-6">
+      {!canWrite && <ReadOnlyNotice subject="period imports and opening balances" />}
       <Card className="shadow-sm border border-blue-200 dark:border-blue-800 bg-blue-50/30 dark:bg-blue-900/10">
         <Card.Content className="p-4">
           <div className="flex items-center justify-between">
@@ -115,12 +132,10 @@ export function PeriodImportWorkspace({
                 </p>
               </div>
             </div>
-            <Link href={classificationHref}>
-              <Button variant="outline" size="sm">
-                Classify Company Size
-                <ArrowRight className="w-4 h-4 ml-1.5" />
-              </Button>
-            </Link>
+            <ActionLink href={classificationHref}>
+              Classify Company Size
+              <ArrowRight className="w-4 h-4 ml-1.5" />
+            </ActionLink>
           </div>
         </Card.Content>
       </Card>
@@ -134,14 +149,16 @@ export function PeriodImportWorkspace({
                 {bankAccounts.length} bank account{bankAccounts.length !== 1 ? "s" : ""} linked for import and reconciliation.
               </Card.Description>
             </div>
-            <Button variant="outline" size="sm" onPress={onToggleBankForm}>
-              {showBankForm ? "Cancel" : "Add Bank Account"}
-            </Button>
+            {canWrite && (
+              <Button id="period-add-bank-account-toggle" variant="outline" size="sm" onPress={onToggleBankForm}>
+                {showBankForm ? "Cancel" : "Add Bank Account"}
+              </Button>
+            )}
           </div>
         </Card.Header>
         <Card.Content>
           <div className="space-y-4">
-            {showBankForm && (
+            {canWrite && showBankForm && (
               <div className="rounded-md border border-gray-200 bg-gray-50 p-4 dark:border-neutral-700 dark:bg-neutral-800/40">
                 <div className="grid gap-3 md:grid-cols-5">
                   <BankFormField label="Account name">
@@ -190,7 +207,7 @@ export function PeriodImportWorkspace({
                   </BankFormField>
                 </div>
                 <div className="mt-3 flex justify-end">
-                  <Button variant="primary" size="sm" onPress={onCreateBankAccount} isDisabled={savingBankAccount}>
+                  <Button variant="primary" size="sm" aria-label="Save bank account" onPress={onCreateBankAccount} isDisabled={savingBankAccount}>
                     {savingBankAccount ? <Spinner size="sm" /> : "Save Bank Account"}
                   </Button>
                 </div>
@@ -228,9 +245,9 @@ export function PeriodImportWorkspace({
                       <MobileField label="Import target" className="md:col-span-2 md:text-right">
                         {selectedBankAccountId === bankAccount.id ? (
                           <Chip color="success" variant="soft" size="sm">Selected</Chip>
-                        ) : (
+                        ) : canWrite ? (
                           <Button variant="ghost" size="sm" onPress={() => onSelectBankAccount(bankAccount.id)}>Use</Button>
-                        )}
+                        ) : null}
                       </MobileField>
                     </div>
                   ))}
@@ -252,9 +269,11 @@ export function PeriodImportWorkspace({
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">No categories configured. Seed the default Irish chart of accounts.</p>
                 </div>
               </div>
-              <Button variant="outline" size="sm" onPress={onSeedCategories}>
-                Seed Categories
-              </Button>
+              {canWrite && (
+                <Button variant="outline" size="sm" onPress={onSeedCategories}>
+                  Seed Categories
+                </Button>
+              )}
             </div>
           </Card.Content>
         </Card>
@@ -275,7 +294,7 @@ export function PeriodImportWorkspace({
           </div>
         </Card.Header>
         <Card.Content>
-          <div className="grid gap-3 md:grid-cols-5">
+          {canWrite && <div className="grid gap-3 md:grid-cols-5">
             <BankFormField label="Account" className="md:col-span-2">
               <select
                 value={openingBalanceForm.categoryId}
@@ -317,12 +336,12 @@ export function PeriodImportWorkspace({
                 placeholder="Prior accounts / TB"
               />
             </BankFormField>
-          </div>
-          <div className="mt-3 flex justify-end">
-            <Button variant="primary" size="sm" onPress={onSaveOpeningBalance} isDisabled={savingOpeningBalance || categories.length === 0}>
+          </div>}
+          {canWrite && <div className="mt-3 flex justify-end">
+            <Button variant="primary" size="sm" aria-label="Save Reviewed Balance — opening evidence" onPress={onSaveOpeningBalance} isDisabled={savingOpeningBalance || categories.length === 0}>
               {savingOpeningBalance ? <Spinner size="sm" /> : "Save Reviewed Balance"}
             </Button>
-          </div>
+          </div>}
 
           <div className="mt-4 overflow-hidden rounded-md border border-gray-200 dark:border-neutral-700">
             <div className="hidden grid-cols-12 gap-2 bg-gray-50 px-4 py-2 text-xs font-semibold uppercase text-gray-500 dark:bg-neutral-800 dark:text-gray-400 md:grid">
@@ -354,11 +373,18 @@ export function PeriodImportWorkspace({
                       {balance.reviewed ? "Reviewed" : "Unreviewed"}{balance.sourceNote ? ` - ${balance.sourceNote}` : ""}
                     </span>
                   </MobileField>
-                  <MobileField label="Action" className="md:col-span-1 md:text-right">
-                    <Button variant="ghost" size="sm" onPress={() => onDeleteOpeningBalance(balance.accountCategoryId)} isDisabled={deletingOpeningCategoryId === balance.accountCategoryId}>
-                      {deletingOpeningCategoryId === balance.accountCategoryId ? <Spinner size="sm" /> : <Trash2 className="h-4 w-4" />}
-                    </Button>
-                  </MobileField>
+                  {canWrite && (
+                    <MobileField label="Action" className="md:col-span-1 md:text-right">
+                      <Button variant="ghost" size="sm" isIconOnly aria-label={`Delete opening balance for ${balance.accountCategory.name}`} onPress={() => requestDestructiveAction({
+                        recordLabel: `opening balance for ${balance.accountCategory.name}`,
+                        consequence: `This permanently removes the reviewed ${balance.accountCategory.code} opening balance (${balance.debit ? `debit ${formatCurrency(balance.debit)}` : `credit ${formatCurrency(balance.credit ?? 0)}`}) and its source evidence. Final outputs may stop balancing.`,
+                        onConfirm: () => onDeleteOpeningBalance(balance.accountCategoryId),
+                        successAnnouncement: `Opening balance for ${balance.accountCategory.name} was removed.`,
+                      })} isDisabled={deletingOpeningCategoryId === balance.accountCategoryId}>
+                        {deletingOpeningCategoryId === balance.accountCategoryId ? <Spinner size="sm" /> : <Trash2 className="h-4 w-4" />}
+                      </Button>
+                    </MobileField>
+                  )}
                 </div>
               ))
             )}
@@ -372,7 +398,7 @@ export function PeriodImportWorkspace({
           <Card.Description>Upload bank statements in CSV format (AIB, BOI, Revolut, Stripe)</Card.Description>
         </Card.Header>
         <Card.Content>
-          <div className="mb-4">
+          {canWrite ? <><div className="mb-4">
             <label htmlFor="bank-account-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
               Import into bank account
             </label>
@@ -445,7 +471,11 @@ export function PeriodImportWorkspace({
                 </p>
               </>
             )}
-          </div>
+          </div></> : (
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Imported transaction evidence remains visible elsewhere in the period workspace. Uploading requires Owner or Accountant access.
+            </p>
+          )}
 
           {uploadError && (
             <div className="mt-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-400 animate-fade-in">
@@ -464,13 +494,25 @@ export function PeriodImportWorkspace({
             <div className="space-y-3 animate-fade-in">
               <div className="flex items-center gap-3 text-sm text-emerald-700 dark:text-emerald-400">
                 <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-500" />
-                <span className="font-medium">Import completed successfully</span>
+                <span className="font-medium">{uploadResult.warnings.length > 0 ? "Import completed with retained warnings" : "Import completed successfully"}</span>
               </div>
               <div className="grid grid-cols-3 gap-4">
                 <ImportMetric tone="emerald" value={uploadResult.rowsImported} label="Rows Imported" />
-                <ImportMetric tone="gray" value={uploadResult.duplicatesSkipped} label="Duplicates Skipped" />
+                <ImportMetric tone="gray" value={uploadResult.duplicateCandidates} label="Needs Duplicate Review" />
                 <ImportMetric tone="blue" value={uploadResult.autoCategorised} label="Auto-Categorised" />
               </div>
+              <p className="break-words text-xs text-gray-500 dark:text-gray-400">
+                {uploadResult.importBatchId ? `Batch #${uploadResult.importBatchId} · ` : ""}{uploadResult.sourceFilename} · {uploadResult.sourceFileBytes.toLocaleString("en-IE")} bytes · SHA-256 <span className="font-mono" title={uploadResult.sourceFileSha256}>{uploadResult.sourceFileSha256.slice(0, 12)}…</span>
+              </p>
+              {uploadResult.warnings.length > 0 && (
+                <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
+                  <p className="font-semibold">{uploadResult.warnings.length} import warning{uploadResult.warnings.length === 1 ? "" : "s"} retained with this batch</p>
+                  <ul className="mt-1 list-disc space-y-1 pl-5">
+                    {uploadResult.warnings.slice(0, 20).map((warning, index) => <li key={`${index}-${warning}`}>{warning}</li>)}
+                  </ul>
+                  {uploadResult.warnings.length > 20 && <p className="mt-2 font-medium">Showing the first 20 warnings; {uploadResult.warnings.length - 20} more are retained with the batch evidence.</p>}
+                </div>
+              )}
             </div>
           ) : (
             <div className="flex items-center gap-3 text-sm text-gray-500 dark:text-gray-400">
@@ -480,6 +522,16 @@ export function PeriodImportWorkspace({
           )}
         </Card.Content>
       </Card>
+
+      <DuplicateReviewPanel
+        companyId={companyId}
+        periodId={periodId}
+        canWrite={canWrite}
+        periodLocked={period?.lockedAt != null || period?.status === "Finalised" || period?.status === "Filed"}
+        refreshToken={uploadResult}
+        onDecisionRecorded={onDuplicateDecisionRecorded}
+      />
+      {destructiveActionConfirmation}
     </div>
   );
 }
@@ -491,12 +543,15 @@ function BankFormField({
 }: {
   label: string;
   className?: string;
-  children: ReactNode;
+  children: ReactElement<{ id?: string }>;
 }) {
+  const generatedId = useId();
+  const controlId = children.props.id ?? `${generatedId}-control`;
+
   return (
     <div className={className}>
-      <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">{label}</label>
-      {children}
+      <label htmlFor={controlId} className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">{label}</label>
+      {cloneElement(children, { id: controlId })}
     </div>
   );
 }

@@ -39,29 +39,7 @@ public static class AdjustmentEndpoints
         // Audit log
         var auditGroup = app.MapGroup("/api/companies/{companyId:int}/audit-log").WithTags("Audit");
 
-        auditGroup.MapGet("/", async (int companyId, AccountsDbContext db, HttpContext context, int? periodId, int? page, int? pageSize) =>
-        {
-            if (!await CompanyEndpointAccess.CanAccessCompanyAsync(context, db, companyId))
-                return Results.NotFound();
-
-            if (RequireAuditEvidenceAccess(context) is { } denied)
-                return denied;
-
-            var query = db.AuditLogs.Where(a => a.CompanyId == companyId);
-            if (periodId.HasValue) query = query.Where(a => a.PeriodId == periodId);
-            var pageNumber = Math.Max(page ?? 1, 1);
-            var take = NormalizeAuditPageSize(pageSize);
-            var total = await query.CountAsync();
-            var skip = ((long)pageNumber - 1) * take;
-            var items = skip >= total
-                ? new List<AuditLog>()
-                : await query
-                    .OrderByDescending(a => a.Timestamp)
-                    .Skip((int)skip)
-                    .Take(take)
-                    .ToListAsync();
-            return Results.Ok(new { total, items });
-        });
+        auditGroup.MapGet("/", GetAuditLogEndpointAsync);
 
         auditGroup.MapGet("/integrity", async (int companyId, AuditIntegrityService integrity, AccountsDbContext db, HttpContext context) =>
         {
@@ -116,6 +94,50 @@ public static class AdjustmentEndpoints
 
             var verification = await checkpoints.VerifyLatestCompanyCheckpointAsync(companyId);
             return Results.Ok(verification);
+        });
+    }
+
+    public static async Task<IResult> GetAuditLogEndpointAsync(
+        int companyId,
+        AccountsDbContext db,
+        HttpContext context,
+        int? periodId,
+        int? page,
+        int? pageSize)
+    {
+        if (!await CompanyEndpointAccess.CanAccessCompanyAsync(context, db, companyId))
+            return Results.NotFound();
+
+        if (RequireAuditEvidenceAccess(context) is { } denied)
+            return denied;
+
+        var query = db.AuditLogs.Where(a => a.CompanyId == companyId);
+        if (periodId.HasValue)
+            query = query.Where(a => a.PeriodId == periodId);
+
+        var take = NormalizeAuditPageSize(pageSize);
+        var total = await query.CountAsync();
+        var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)take));
+        var pageNumber = Math.Min(Math.Max(page ?? 1, 1), totalPages);
+        var skip = ((long)pageNumber - 1) * take;
+        var items = skip >= total
+            ? new List<AuditLog>()
+            : await query
+                .OrderByDescending(a => a.Timestamp)
+                .ThenByDescending(a => a.Id)
+                .Skip((int)skip)
+                .Take(take)
+                .ToListAsync();
+
+        return Results.Ok(new
+        {
+            total,
+            items,
+            page = pageNumber,
+            pageSize = take,
+            totalPages,
+            hasPreviousPage = pageNumber > 1,
+            hasNextPage = pageNumber < totalPages
         });
     }
 
@@ -223,6 +245,7 @@ public static class AdjustmentEndpoints
             return validationProblem;
 
         var adjustment = AdjustmentInputs.ToManualAdjustment(input, periodId, user, DateTime.UtcNow);
+        await AdjustmentPostingRules.ApplyDerivedImpactAsync(db, adjustment, context.RequestAborted);
         db.Adjustments.Add(adjustment);
         await db.SaveChangesAsync();
         await audit.LogAsync(
@@ -264,6 +287,7 @@ public static class AdjustmentEndpoints
 
         var oldValue = AdjustmentSnapshot(item);
         AdjustmentInputs.ApplyInput(item, input);
+        await AdjustmentPostingRules.ApplyDerivedImpactAsync(db, item, context.RequestAborted);
         item.ApprovedBy = null;
         item.ApprovedAt = null;
 
@@ -439,8 +463,14 @@ public static class AdjustmentInputs
         if (string.IsNullOrWhiteSpace(input.Description))
             return Results.BadRequest(new { error = "Adjustment description is required." });
 
-        if (input.DebitCategoryId is null && input.CreditCategoryId is null)
-            return Results.BadRequest(new { error = "Select at least one debit or credit category." });
+        if (input.Amount <= 0)
+            return Results.BadRequest(new { error = "Journal amount must be greater than zero." });
+
+        if (input.DebitCategoryId is null || input.CreditCategoryId is null)
+            return Results.BadRequest(new { error = "Select both a debit account and a credit account." });
+
+        if (input.DebitCategoryId == input.CreditCategoryId)
+            return Results.BadRequest(new { error = "The debit and credit accounts must be different." });
 
         var categoryIds = new[] { input.DebitCategoryId, input.CreditCategoryId }
             .OfType<int>()
@@ -474,8 +504,10 @@ public static class AdjustmentInputs
         adjustment.Amount = input.Amount;
         adjustment.Reason = string.IsNullOrWhiteSpace(input.Reason) ? null : input.Reason.Trim();
         adjustment.LegalBasis = string.IsNullOrWhiteSpace(input.LegalBasis) ? null : input.LegalBasis.Trim();
-        adjustment.ImpactOnProfit = input.ImpactOnProfit;
-        adjustment.ImpactOnAssets = input.ImpactOnAssets;
+        // Impact fields supplied by a browser are deliberately ignored. The endpoint derives both
+        // values from the persisted account types immediately before saving the balanced journal.
+        adjustment.ImpactOnProfit = 0m;
+        adjustment.ImpactOnAssets = 0m;
     }
 }
 

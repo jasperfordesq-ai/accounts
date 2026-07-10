@@ -11,7 +11,12 @@ public class CompanyInput
     public Accounts.Api.Entities.CompanyType CompanyType { get; set; }
     public DateOnly IncorporationDate { get; set; }
     public int FinancialYearStartMonth { get; set; } = 1;
-    public int ArdMonth { get; set; }
+    public DateOnly? AnnualReturnDate { get; set; }
+    public DateOnly? AnnualReturnDateEffectiveFrom { get; set; }
+    public Accounts.Api.Entities.AnnualReturnDateSource? AnnualReturnDateSource { get; set; }
+    public string? AnnualReturnDateEvidenceReference { get; set; }
+    public string? AnnualReturnDateEvidenceSha256 { get; set; }
+    public string? AnnualReturnDateChangeReason { get; set; }
     public string? RegisteredOfficeAddress1 { get; set; }
     public string? RegisteredOfficeAddress2 { get; set; }
     public string? RegisteredOfficeCity { get; set; }
@@ -33,6 +38,11 @@ public class CompanyInput
     public bool IsCreditInstitution { get; set; }
     public bool IsInsuranceUndertaking { get; set; }
     public bool IsPensionFund { get; set; }
+    public bool IsFifthScheduleEntity { get; set; }
+    public bool IsOtherIneligibleEntity { get; set; }
+    public bool IsFinancialHoldingUndertaking { get; set; }
+    public bool PreparesGroupFinancialStatements { get; set; }
+    public bool IncludedInHigherConsolidatedFinancialStatements { get; set; }
     public bool IsCharitableOrganisation { get; set; }
 }
 
@@ -69,8 +79,10 @@ public static class EndpointInputs
             errors["incorporationDate"] = ["Incorporation date is required."];
         if (input.FinancialYearStartMonth is < 1 or > 12)
             errors["financialYearStartMonth"] = ["Financial year start month must be between 1 and 12."];
-        if (input.ArdMonth is < 1 or > 12)
-            errors["ardMonth"] = ["Annual return date month must be between 1 and 12."];
+        if (input.AnnualReturnDate is null || input.AnnualReturnDate == default)
+            errors["annualReturnDate"] = ["Exact Annual Return Date is required."];
+        else if (input.IncorporationDate != default && input.AnnualReturnDate < input.IncorporationDate)
+            errors["annualReturnDate"] = ["Annual Return Date cannot be before incorporation."];
         if (!string.IsNullOrWhiteSpace(input.CroNumber) && input.CroNumber.Length > 20)
             errors["croNumber"] = ["CRO number must be 20 characters or fewer."];
 
@@ -165,7 +177,6 @@ public static class EndpointInputs
         company.CompanyType = input.CompanyType;
         company.IncorporationDate = input.IncorporationDate;
         company.FinancialYearStartMonth = input.FinancialYearStartMonth;
-        company.ArdMonth = input.ArdMonth;
         company.RegisteredOfficeAddress1 = TrimToNull(input.RegisteredOfficeAddress1);
         company.RegisteredOfficeAddress2 = TrimToNull(input.RegisteredOfficeAddress2);
         company.RegisteredOfficeCity = TrimToNull(input.RegisteredOfficeCity);
@@ -187,6 +198,11 @@ public static class EndpointInputs
         company.IsCreditInstitution = input.IsCreditInstitution;
         company.IsInsuranceUndertaking = input.IsInsuranceUndertaking;
         company.IsPensionFund = input.IsPensionFund;
+        company.IsFifthScheduleEntity = input.IsFifthScheduleEntity;
+        company.IsOtherIneligibleEntity = input.IsOtherIneligibleEntity;
+        company.IsFinancialHoldingUndertaking = input.IsFinancialHoldingUndertaking;
+        company.PreparesGroupFinancialStatements = input.PreparesGroupFinancialStatements;
+        company.IncludedInHigherConsolidatedFinancialStatements = input.IncludedInHigherConsolidatedFinancialStatements;
         company.IsCharitableOrganisation = input.IsCharitableOrganisation;
         company.UpdatedAt = DateTime.UtcNow;
     }
@@ -220,4 +236,12 @@ public static class EndpointInputs
     };
 
     private static string? TrimToNull(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    public static AnnualReturnDateChangeInput ToAnnualReturnDateChange(CompanyInput input) => new(
+        input.AnnualReturnDate,
+        input.AnnualReturnDateEffectiveFrom,
+        input.AnnualReturnDateSource,
+        input.AnnualReturnDateEvidenceReference,
+        input.AnnualReturnDateEvidenceSha256,
+        input.AnnualReturnDateChangeReason);
 }

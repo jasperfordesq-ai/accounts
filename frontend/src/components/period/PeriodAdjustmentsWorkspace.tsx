@@ -5,8 +5,11 @@ import { Calculator, CheckCircle2, RefreshCw } from "lucide-react";
 import type { ReactNode } from "react";
 
 import type { Adjustment, AdjustmentSummary } from "@/lib/api";
+import { ReadOnlyNotice } from "@/components/workbench";
 
 interface PeriodAdjustmentsWorkspaceProps {
+  canWrite?: boolean;
+  canApprove?: boolean;
   adjustments: Adjustment[];
   adjSummary: AdjustmentSummary | null;
   loadingAdjustments: boolean;
@@ -22,6 +25,8 @@ interface PeriodAdjustmentsWorkspaceProps {
 }
 
 export function PeriodAdjustmentsWorkspace({
+  canWrite = false,
+  canApprove = false,
   adjustments,
   adjSummary,
   loadingAdjustments,
@@ -37,6 +42,14 @@ export function PeriodAdjustmentsWorkspace({
 }: PeriodAdjustmentsWorkspaceProps) {
   return (
     <div className="space-y-6">
+      {!canWrite && (
+        <ReadOnlyNotice
+          subject="period adjustments"
+          detail={canApprove
+            ? "You can inspect the retained entries and approve pending adjustments; generating or editing entries requires Owner or Accountant access."
+            : undefined}
+        />
+      )}
       <Card className="shadow-sm border border-gray-200 bg-white dark:border-neutral-700 dark:bg-neutral-900">
         <Card.Header>
           <Card.Title className="text-gray-900 dark:text-gray-100">Period Adjustments</Card.Title>
@@ -46,7 +59,7 @@ export function PeriodAdjustmentsWorkspace({
         </Card.Header>
         <Card.Content>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <Button variant="primary" onPress={onGenerateAdjustments} isDisabled={generatingAdj}>
+            {canWrite && <Button variant="primary" onPress={onGenerateAdjustments} isDisabled={generatingAdj}>
               {generatingAdj ? (
                 <>
                   <Spinner size="sm" className="mr-2" />
@@ -58,7 +71,7 @@ export function PeriodAdjustmentsWorkspace({
                   Generate Adjustments
                 </>
               )}
-            </Button>
+            </Button>}
             <Button variant="ghost" size="sm" onPress={onRefreshAdjustments} isDisabled={loadingAdjustments}>
               <RefreshCw className={`mr-1 h-4 w-4 ${loadingAdjustments ? "animate-spin" : ""}`} />
               Refresh
@@ -94,13 +107,16 @@ export function PeriodAdjustmentsWorkspace({
             <div className="py-8 text-center">
               <Calculator className="mx-auto mb-3 h-10 w-10 text-gray-300 dark:text-gray-600" />
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                No adjustments yet. Click &ldquo;Generate Adjustments&rdquo; to create them.
+                {canWrite
+                  ? "No adjustments yet. Use Generate Adjustments to create them."
+                  : "No adjustment evidence has been recorded for this period."}
               </p>
             </div>
           ) : (
             <div className="space-y-3">
               {adjustments.map((adjustment) => (
                 <AdjustmentReviewCard
+                  canApprove={canApprove}
                   key={adjustment.id}
                   adjustment={adjustment}
                   approvingId={approvingId}
@@ -247,16 +263,18 @@ function FilterField({ label, children }: { label: string; children: ReactNode }
 }
 
 function AdjustmentReviewCard({
+  canApprove,
   adjustment,
   approvingId,
   onApproveAdjustment,
 }: {
+  canApprove: boolean;
   adjustment: Adjustment;
   approvingId: number | null;
   onApproveAdjustment: (adjustmentId: number) => void | Promise<void>;
 }) {
   return (
-    <Card className="border border-gray-100 bg-white dark:border-neutral-700 dark:bg-neutral-900">
+    <Card id={`adjustment-review-${adjustment.id}`} tabIndex={-1} className="border border-gray-100 bg-white outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-neutral-700 dark:bg-neutral-900">
       <Card.Content className="p-4">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div className="min-w-0 flex-1">
@@ -284,11 +302,12 @@ function AdjustmentReviewCard({
               </p>
             )}
           </div>
-          {!adjustment.approvedBy && (
+          {canApprove && !adjustment.approvedBy && (
             <div className="shrink-0">
               <Button
                 variant="outline"
                 size="sm"
+                aria-label={`Approve ${adjustment.description} adjustment`}
                 onPress={() => onApproveAdjustment(adjustment.id)}
                 isDisabled={approvingId === adjustment.id}
               >

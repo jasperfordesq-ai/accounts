@@ -111,7 +111,7 @@ public sealed class FilingGoldenPathPostgresIntegrationTests : IAsyncLifetime
             CroNumber = Guid.NewGuid().ToString("N")[..12],
             CompanyType = CompanyType.Private,
             IncorporationDate = new DateOnly(2025, 1, 1),
-            ArdMonth = 9,
+            AnnualReturnDate = new DateOnly(2024, 9, 15),
             IsTrading = true,
             RegisteredOfficeAddress1 = "1 Main Street",
             RegisteredOfficeCity = "Dublin",
@@ -157,24 +157,28 @@ public sealed class FilingGoldenPathPostgresIntegrationTests : IAsyncLifetime
             OpeningBalanceDate = period.PeriodStart
         };
         db.BankAccounts.Add(bank);
-        db.SizeClassifications.Add(new SizeClassification
-        {
-            PeriodId = periodId,
-            Turnover = 500m,
-            BalanceSheetTotal = 600m,
-            AvgEmployees = 1
-        });
         await db.SaveChangesAsync();
+        await FilingGoldenCorpusScenarioTests.SaveClassificationInputsThroughEndpointAsync(
+            db,
+            tenant.Id,
+            companyId,
+            periodId,
+            new GoldenCorpusYear(
+                new DateOnly(2025, 1, 1),
+                new DateOnly(2025, 12, 31),
+                500m,
+                600m,
+                1));
 
         db.OpeningBalances.Add(new OpeningBalance
         {
             PeriodId = periodId,
             AccountCategoryId = Cat("3000"),
             Credit = 100m,
-            SourceNote = "Share capital subscribed at incorporation",
-            EnteredBy = "Accounts reviewer",
+            SourceNote = "Automated corpus share-capital input; not human acceptance evidence.",
+            EnteredBy = "Automated corpus fixture",
             Reviewed = true,
-            ReviewedBy = "Accounts reviewer",
+            ReviewedBy = "Automated test fixture (not human acceptance)",
             ReviewedAt = DateTime.UtcNow
         });
         db.TransactionRules.Add(new TransactionRule
@@ -195,6 +199,7 @@ public sealed class FilingGoldenPathPostgresIntegrationTests : IAsyncLifetime
 
         // --- Year-end questionnaire: nil positions confirmed ------------------------------------
         db.YearEndReviewConfirmations.AddRange(
+            NilReview(periodId, "adjustments"),
             NilReview(periodId, "debtors"), NilReview(periodId, "creditors"),
             NilReview(periodId, "payroll"), NilReview(periodId, "tax"),
             NilReview(periodId, "dividends"), NilReview(periodId, "post-balance-sheet-events"),
@@ -207,26 +212,17 @@ public sealed class FilingGoldenPathPostgresIntegrationTests : IAsyncLifetime
             .ClassifyAsync(companyId, periodId);
         var regime = await new FilingRegimeService(db).DetermineAsync(companyId, periodId, ElectedRegime.Micro);
         await new AdjustmentService(db).GenerateAutoAdjustmentsAsync(companyId, periodId);
-        if (!await db.Adjustments.AnyAsync(a => a.PeriodId == periodId))
-        {
-            db.Adjustments.Add(new Adjustment
-            {
-                PeriodId = periodId,
-                Description = "No year-end adjustment required",
-                Amount = 0m,
-                ImpactOnProfit = 0m,
-                Source = AdjustmentSource.Manual,
-                CreatedBy = "Accounts reviewer"
-            });
-            await db.SaveChangesAsync();
-        }
-        foreach (var adj in await db.Adjustments.Where(a => a.PeriodId == periodId && a.ApprovedAt == null).ToListAsync())
-        {
-            adj.ApprovedBy = "Accounts reviewer";
-            adj.ApprovedAt = DateTime.UtcNow;
-        }
-        await db.SaveChangesAsync();
+        await FilingGoldenCorpusScenarioTests.ApproveAdjustmentsThroughEndpointAsync(
+            db,
+            tenant.Id,
+            companyId,
+            periodId);
         await new NotesDisclosureService(db).GenerateNotesAsync(companyId, periodId);
+        await FilingGoldenCorpusScenarioTests.FinaliseThroughEndpointAsync(
+            db,
+            tenant.Id,
+            period,
+            new DateOnly(2025, 12, 15));
 
         // --- Statements balance, then final outputs emit ----------------------------------------
         var statements = new FinancialStatementsService(db);
@@ -259,8 +255,8 @@ public sealed class FilingGoldenPathPostgresIntegrationTests : IAsyncLifetime
         PeriodId = periodId,
         SectionKey = sectionKey,
         Confirmed = true,
-        ConfirmedBy = "Accounts reviewer",
-        Note = "Nil position reviewed."
+        ConfirmedBy = "Automated test fixture (not human acceptance)",
+        Note = "Automated nil-position workflow input; not independent review evidence."
     };
 
     private sealed class PostgresFactAttribute : FactAttribute

@@ -6,7 +6,10 @@ using Microsoft.Extensions.Options;
 
 namespace Accounts.Api.Services;
 
-public class BootstrapOwnerService(AccountsDbContext db, IOptions<BootstrapOwnerConfig> options)
+public class BootstrapOwnerService(
+    AccountsDbContext db,
+    IOptions<BootstrapOwnerConfig> options,
+    IPasswordSafetyService? passwordSafety = null)
 {
     public async Task EnsureAsync(CancellationToken cancellationToken = default)
     {
@@ -21,6 +24,14 @@ public class BootstrapOwnerService(AccountsDbContext db, IOptions<BootstrapOwner
         var ownerPassword = Required(config.OwnerInitialPassword, "BootstrapOwner:OwnerInitialPassword");
         if (BootstrapOwnerPasswordPolicy.Validate(ownerPassword) is { } passwordFailure)
             throw new InvalidOperationException($"{passwordFailure}.");
+        if (passwordSafety is not null)
+        {
+            var safety = await passwordSafety.CheckAsync(ownerPassword, cancellationToken);
+            if (safety.Status == PasswordSafetyStatus.Breached)
+                throw new InvalidOperationException("BootstrapOwner:OwnerInitialPassword appears in a known breach.");
+            if (safety.Status == PasswordSafetyStatus.Unavailable)
+                throw new InvalidOperationException("Bootstrap owner password safety validation is unavailable.");
+        }
 
         var tenant = await db.Tenants.SingleOrDefaultAsync(t => t.Slug == tenantSlug, cancellationToken);
         var existingOwnerEmailUser = await db.UserAccounts

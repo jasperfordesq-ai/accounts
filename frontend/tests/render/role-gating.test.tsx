@@ -57,7 +57,7 @@ describe("role gating (canWrite=false)", () => {
       />,
     );
 
-    expect(await screen.findByText(/read-only access to director loans/i)).toBeInTheDocument();
+    expect(await screen.findByText(/read-only access to director-loan evidence/i)).toBeInTheDocument();
     expect(screen.getByRole("status", { name: /read-only workflow access/i })).toBeInTheDocument();
     expect(screen.getByText(/Evidence remains visible; editing requires Owner or Accountant access/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /add director loan/i })).toBeNull();

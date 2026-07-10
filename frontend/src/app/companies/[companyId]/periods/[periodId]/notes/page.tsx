@@ -11,7 +11,6 @@ import {
 import {
   ArrowLeft,
   RefreshCw,
-  AlertTriangle,
   CheckCircle2,
   FileText,
   Plus,
@@ -27,6 +26,7 @@ import {
   getPeriod,
   getNotes,
   generateNotes,
+  saveYearEndReviewConfirmation,
   updateNote,
   createNote,
   deleteNote,
@@ -35,12 +35,34 @@ import {
   type NotesDisclosure,
 } from "@/lib/api";
 import { useUnsavedChanges } from "@/lib/useUnsavedChanges";
+import { useDestructiveActionConfirmation } from "@/lib/useDestructiveAction";
+import { ResourceStateNotice } from "@/components/ResourceStateNotice";
+import { useAuth } from "@/components/AuthProvider";
+import { ReadOnlyNotice } from "@/components/workbench";
+import {
+  INITIAL_RESOURCE_STATE,
+  beginResourceLoad,
+  canUseResourceAsEvidence,
+  completeResourceLoad,
+  failResourceLoad,
+  loadResourceGroup,
+  shouldRenderResourceEmpty,
+  type ResourceState,
+} from "@/lib/resourceState";
 
 const inputClass =
   "w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-colors";
 
 const textareaClass =
   "w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 resize-y transition-colors";
+
+const MANUAL_REVIEW_KEYS: Record<string, string> = {
+  "DIRECTOR-REMUNERATION": "note-directors-remuneration",
+  "ULTIMATE-CONTROLLING-PARTY": "note-ultimate-controlling-party",
+  "FINANCIAL-INSTRUMENTS": "note-financial-instruments",
+  "CAPITAL-COMMITMENTS": "note-capital-commitments",
+  "DEFERRED-TAX": "note-deferred-tax",
+};
 
 export default function NotesPage({
   params,
@@ -50,14 +72,17 @@ export default function NotesPage({
   const { companyId, periodId } = use(params);
   const cId = Number(companyId);
   const pId = Number(periodId);
+  const { canWriteWorkingPapers } = useAuth();
 
   const [company, setCompany] = useState<Company | null>(null);
   const [period, setPeriod] = useState<AccountingPeriod | null>(null);
   const [notes, setNotes] = useState<NotesDisclosure[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [shellState, setShellState] = useState<ResourceState>(INITIAL_RESOURCE_STATE);
+  const [notesState, setNotesState] = useState<ResourceState>(INITIAL_RESOURCE_STATE);
   const [generating, setGenerating] = useState(false);
   const [savingIds, setSavingIds] = useState<Set<number>>(new Set());
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const { requestDestructiveAction, destructiveActionConfirmation } = useDestructiveActionConfirmation();
 
   // New note form state
   const [showNewForm, setShowNewForm] = useState(false);
@@ -67,33 +92,57 @@ export default function NotesPage({
 
   // Local edits tracking (noteId -> edited content)
   const [editedContent, setEditedContent] = useState<Record<number, string>>({});
+  const [reviewDrafts, setReviewDrafts] = useState<Record<string, string>>({});
+  const [savingReviewCode, setSavingReviewCode] = useState<string | null>(null);
 
-  // Warn user before leaving with unsaved edits (shared guard, see useUnsavedChanges).
-  const hasUnsavedEdits = useMemo(() => Object.keys(editedContent).length > 0, [editedContent]);
+  const hasUnsavedEdits = useMemo(() => {
+    const noteEditsDirty = Object.entries(editedContent).some(([noteId, content]) =>
+      content !== (notes.find((note) => note.id === Number(noteId))?.content ?? ""));
+    const reviewEditsDirty = Object.entries(reviewDrafts).some(([code, content]) =>
+      content !== (notes.find((note) => note.code === code)?.content ?? ""));
+    const newNoteDirty = showNewForm && (newTitle !== "" || newContent !== "");
+    return noteEditsDirty || reviewEditsDirty || newNoteDirty;
+  }, [editedContent, newContent, newTitle, notes, reviewDrafts, showNewForm]);
   useUnsavedChanges(hasUnsavedEdits);
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [companyData, periodData] = await Promise.all([
-        getCompany(cId),
-        getPeriod(cId, pId),
-      ]);
-      setCompany(companyData);
-      setPeriod(periodData);
+  const loadShell = useCallback(async (onlyKeys?: string[]) => {
+    const loaders = {
+      company: () => getCompany(cId),
+      period: () => getPeriod(cId, pId),
+    };
+    const keys = (onlyKeys ?? Object.keys(loaders)) as Array<keyof typeof loaders>;
+    setShellState((current) => beginResourceLoad(current, current.hasRetainedData));
+    const result = await loadResourceGroup(loaders, keys);
+    if (result.values.company) setCompany(result.values.company);
+    if (result.values.period) setPeriod(result.values.period);
+    if (result.failedResourceKeys.length === 0) {
+      setShellState(completeResourceLoad(false));
+      return;
+    }
+    setShellState((current) => failResourceLoad({
+      failedResourceKeys: result.failedResourceKeys,
+      errors: result.errors,
+    }, current.hasRetainedData || Object.keys(result.values).length > 0));
+  }, [cId, pId]);
 
-      try {
-        const notesData = await getNotes(cId, pId);
-        setNotes(notesData);
-      } catch {
-        setNotes([]);
-      }
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to load data");
-    } finally {
-      setLoading(false);
+  const loadNotes = useCallback(async () => {
+    setNotesState((current) => beginResourceLoad(current, current.hasRetainedData));
+    try {
+      const notesData = await getNotes(cId, pId);
+      setNotes(notesData);
+      setNotesState(completeResourceLoad(notesData.length === 0));
+    } catch (loadError) {
+      const message = loadError instanceof Error ? loadError.message : "Failed to load notes";
+      setNotesState((current) => failResourceLoad({
+        failedResourceKeys: ["notes"],
+        errors: { notes: message },
+      }, current.hasRetainedData));
     }
   }, [cId, pId]);
+
+  const loadData = useCallback(async () => {
+    await Promise.all([loadShell(), loadNotes()]);
+  }, [loadNotes, loadShell]);
 
   useEffect(() => {
     loadData();
@@ -104,6 +153,7 @@ export default function NotesPage({
     try {
       const generatedNotes = await generateNotes(cId, pId);
       setNotes(generatedNotes);
+      setNotesState(completeResourceLoad(generatedNotes.length === 0));
       setEditedContent({});
       toast.success(`Generated ${generatedNotes.length} note${generatedNotes.length !== 1 ? "s" : ""}`);
     } catch (err) {
@@ -171,7 +221,9 @@ export default function NotesPage({
     setDeletingId(noteId);
     try {
       await deleteNote(cId, pId, noteId);
-      setNotes((prev) => prev.filter((n) => n.id !== noteId));
+      const nextNotes = notes.filter((note) => note.id !== noteId);
+      setNotes(nextNotes);
+      setNotesState(completeResourceLoad(nextNotes.length === 0));
       setEditedContent((prev) => {
         const next = { ...prev };
         delete next[noteId];
@@ -180,6 +232,7 @@ export default function NotesPage({
       toast.success("Note deleted");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to delete note");
+      throw err;
     } finally {
       setDeletingId(null);
     }
@@ -201,6 +254,7 @@ export default function NotesPage({
         isIncluded: true,
       });
       setNotes((prev) => [...prev, created]);
+      setNotesState(completeResourceLoad(false));
       setNewTitle("");
       setNewContent("");
       setShowNewForm(false);
@@ -212,21 +266,44 @@ export default function NotesPage({
     }
   }
 
-  if (loading) {
+  async function handleSaveManualReview(note: NotesDisclosure) {
+    if (!note.code || !MANUAL_REVIEW_KEYS[note.code]) return;
+    const disclosure = (reviewDrafts[note.code] ?? note.content ?? "").trim();
+    if (!disclosure) {
+      toast.error("Enter the reviewed disclosure wording before recording manual evidence");
+      return;
+    }
+    setSavingReviewCode(note.code);
+    try {
+      await saveYearEndReviewConfirmation(cId, pId, MANUAL_REVIEW_KEYS[note.code], {
+        confirmed: true,
+        note: disclosure,
+      });
+      const regenerated = await generateNotes(cId, pId);
+      setNotes(regenerated);
+      setReviewDrafts((current) => {
+        const next = { ...current };
+        delete next[note.code!];
+        return next;
+      });
+      toast.success("Retained manual-review evidence recorded and checklist regenerated");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to record manual-review evidence");
+    } finally {
+      setSavingReviewCode(null);
+    }
+  }
+
+  if (shellState.status === "loading" && !shellState.hasRetainedData) {
     return <PeriodWorkspaceSkeleton />;
   }
 
-  if (!company) {
+  if (!company || !period) {
     return (
       <div className="max-w-2xl mx-auto">
         <Card className="border border-red-200 dark:border-red-800 bg-white dark:bg-neutral-900">
           <Card.Content className="text-center py-8">
-            <AlertTriangle className="w-10 h-10 text-red-500 mx-auto mb-3" />
-            <p className="text-red-700 dark:text-red-400 font-medium">Failed to load company data</p>
-            <Button variant="outline" className="mt-4" onPress={loadData}>
-              <RefreshCw className="w-4 h-4 mr-1" />
-              Retry
-            </Button>
+            <ResourceStateNotice state={shellState} label="company and period context" onRetry={() => loadShell(shellState.failedResourceKeys)} />
           </Card.Content>
         </Card>
       </div>
@@ -248,6 +325,13 @@ export default function NotesPage({
           { label: "Notes" },
         ]}
       />
+
+      <div className="mb-4 space-y-3">
+        <ResourceStateNotice state={shellState} label="company and period context" onRetry={() => loadShell(shellState.failedResourceKeys)} />
+        <ResourceStateNotice state={notesState} label="notes evidence" onRetry={loadNotes} />
+      </div>
+
+      {!canWriteWorkingPapers && <ReadOnlyNotice subject="financial-statement notes" />}
 
       {/* Header */}
       <div className="mb-6">
@@ -275,10 +359,10 @@ export default function NotesPage({
         <Card.Content className="p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Button
+              {canWriteWorkingPapers && <Button
                 variant="primary"
                 onPress={handleGenerateNotes}
-                isDisabled={generating}
+                isDisabled={generating || !canUseResourceAsEvidence(notesState)}
               >
                 {generating ? (
                   <>
@@ -291,23 +375,24 @@ export default function NotesPage({
                     Generate Auto-Notes
                   </>
                 )}
-              </Button>
-              <Button
+              </Button>}
+              {canWriteWorkingPapers && <Button
                 variant="outline"
                 size="sm"
                 onPress={() => setShowNewForm(true)}
+                isDisabled={!canUseResourceAsEvidence(notesState)}
               >
                 <Plus className="w-4 h-4 mr-1" />
                 Add Custom Note
-              </Button>
+              </Button>}
               <Button
                 variant="ghost"
                 size="sm"
                 onPress={loadData}
-                isDisabled={loading}
+                isDisabled={notesState.status === "loading" || notesState.status === "stale/retrying"}
               >
                 <RefreshCw
-                  className={`w-4 h-4 mr-1 ${loading ? "animate-spin" : ""}`}
+                  className={`w-4 h-4 mr-1 ${notesState.status === "loading" || notesState.status === "stale/retrying" ? "animate-spin" : ""}`}
                 />
                 Refresh
               </Button>
@@ -325,7 +410,7 @@ export default function NotesPage({
       </Card>
 
       {/* New Note Form */}
-      {showNewForm && (
+      {canWriteWorkingPapers && showNewForm && (
         <Card className="shadow-sm border border-emerald-200 dark:border-emerald-800 bg-emerald-50/20 dark:bg-emerald-900/10 mb-6 animate-fade-in">
           <Card.Header>
             <Card.Title>Add Custom Note</Card.Title>
@@ -368,6 +453,7 @@ export default function NotesPage({
                 <Button
                   variant="primary"
                   size="sm"
+                  aria-label="Create note"
                   onPress={handleCreateNote}
                   isDisabled={creatingNote || !newTitle.trim()}
                 >
@@ -398,7 +484,7 @@ export default function NotesPage({
       )}
 
       {/* Notes List */}
-      {sortedNotes.length === 0 ? (
+      {shouldRenderResourceEmpty(notesState) ? (
         <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
           <Card.Content className="text-center py-12">
             <FileText className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
@@ -411,7 +497,7 @@ export default function NotesPage({
             </p>
           </Card.Content>
         </Card>
-      ) : (
+      ) : sortedNotes.length > 0 ? (
         <div className="space-y-4">
           {sortedNotes.map((note) => {
             const noteId = note.id!;
@@ -441,6 +527,11 @@ export default function NotesPage({
                           {note.title}
                         </h3>
                         <div className="flex items-center gap-2 mt-0.5">
+                          {note.code && (
+                            <Chip size="sm" variant="soft" color="default">
+                              {note.code}
+                            </Chip>
+                          )}
                           {note.isRequired && (
                             <Chip
                               size="sm"
@@ -459,12 +550,31 @@ export default function NotesPage({
                           >
                             {note.isIncluded ? "Included" : "Excluded"}
                           </Chip>
+                          {note.checklistState && (
+                            <Chip
+                              size="sm"
+                              variant="soft"
+                              color={
+                                note.checklistState === "Required"
+                                  ? "success"
+                                  : note.checklistState === "NotApplicable"
+                                    ? "default"
+                                    : "warning"
+                              }
+                            >
+                              {note.checklistState === "NotApplicable"
+                                ? "Not applicable"
+                                : note.checklistState === "ExplicitReview"
+                                  ? "Explicit review"
+                                  : "Required"}
+                            </Chip>
+                          )}
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
+                    {canWriteWorkingPapers && <div className="flex items-center gap-2 shrink-0">
                       {/* Inclusion toggle */}
-                      <label className="flex items-center gap-2 cursor-pointer">
+                      {!note.isRequired && <label className="flex items-center gap-2 cursor-pointer">
                         <input
                           type="checkbox"
                           checked={note.isIncluded}
@@ -476,13 +586,20 @@ export default function NotesPage({
                         <span className="text-xs text-gray-500 dark:text-gray-400">
                           Include
                         </span>
-                      </label>
+                      </label>}
                       {/* Delete */}
                       {!note.isRequired && (
                         <Button
                           variant="ghost"
                           size="sm"
-                          onPress={() => handleDeleteNote(noteId)}
+                          isIconOnly
+                          aria-label={`Delete ${note.title} note`}
+                          onPress={() => requestDestructiveAction({
+                            recordLabel: `note "${note.title}"`,
+                            consequence: `This permanently removes the note text${note.isIncluded ? " currently included in the financial statements" : ""} and its retained review state. The removal cannot be undone.`,
+                            onConfirm: () => handleDeleteNote(noteId),
+                            successAnnouncement: `Note ${note.title} was removed.`,
+                          })}
                           isDisabled={isDeleting}
                         >
                           {isDeleting ? (
@@ -492,25 +609,71 @@ export default function NotesPage({
                           )}
                         </Button>
                       )}
-                    </div>
+                    </div>}
                   </div>
 
                   {/* Content editor */}
-                  <textarea
-                    value={currentContent}
-                    onChange={(e) =>
-                      setEditedContent((prev) => ({
-                        ...prev,
-                        [noteId]: e.target.value,
-                      }))
-                    }
-                    rows={4}
-                    className={textareaClass}
-                    placeholder="Enter note content..."
-                  />
+                  {canWriteWorkingPapers && !note.isRequired ? (
+                    <textarea
+                      aria-label={`Edit ${note.title} disclosure content`}
+                      value={currentContent}
+                      onChange={(e) =>
+                        setEditedContent((prev) => ({
+                          ...prev,
+                          [noteId]: e.target.value,
+                        }))
+                      }
+                      rows={4}
+                      className={textareaClass}
+                      placeholder="Enter note content..."
+                    />
+                  ) : (
+                    <p className="whitespace-pre-wrap text-sm leading-6 text-gray-700 dark:text-gray-300">
+                      {currentContent || (
+                        note.checklistState === "NotApplicable"
+                          ? "No disclosure is rendered because this checklist item is not applicable."
+                          : "This checklist item is waiting for retained review evidence or source data."
+                      )}
+                    </p>
+                  )}
+
+                  {note.reviewEvidence && (
+                    <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+                      Review evidence: {note.reviewEvidence}
+                    </p>
+                  )}
+
+                  {canWriteWorkingPapers && note.code && MANUAL_REVIEW_KEYS[note.code] && (
+                    <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50/70 p-3 dark:border-amber-900 dark:bg-amber-950/20">
+                      <p className="mb-2 text-xs font-semibold text-amber-900 dark:text-amber-200">
+                        Manual disclosure handoff
+                      </p>
+                      <textarea
+                        aria-label={`Record reviewed wording for ${note.title}`}
+                        value={reviewDrafts[note.code] ?? note.content ?? ""}
+                        onChange={(event) => setReviewDrafts((current) => ({
+                          ...current,
+                          [note.code!]: event.target.value,
+                        }))}
+                        rows={3}
+                        className={textareaClass}
+                        placeholder="Paste the disclosure wording reviewed against retained working papers"
+                      />
+                      <Button
+                        className="mt-2"
+                        variant="outline"
+                        size="sm"
+                        aria-label={`Record review evidence for ${note.title}`}
+                        onPress={() => handleSaveManualReview(note)}
+                        isDisabled={savingReviewCode === note.code}
+                      >
+                        {savingReviewCode === note.code ? <Spinner size="sm" /> : "Record review evidence"}
+                      </Button>
+                    </div>
+                  )}
 
                   {/* Save button - only visible when edits exist */}
-                  {hasLocalEdits && (
+                  {canWriteWorkingPapers && hasLocalEdits && (
                     <div className="mt-2 flex items-center gap-2">
                       <Button
                         variant="primary"
@@ -554,7 +717,8 @@ export default function NotesPage({
             );
           })}
         </div>
-      )}
+      ) : null}
+      {destructiveActionConfirmation}
     </div>
   );
 }

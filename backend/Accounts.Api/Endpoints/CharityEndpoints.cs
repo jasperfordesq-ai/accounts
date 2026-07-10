@@ -23,6 +23,15 @@ public static class CharityEndpoints
 
         companyGroup.MapPut("/info", SaveCharityInfoEndpointAsync);
 
+        periodGroup.MapGet("/sorp-decision", async (int companyId, int periodId, CharityReportingService service, AccountsDbContext db, HttpContext context) =>
+        {
+            if (!await CompanyEndpointAccess.CanAccessCompanyPeriodAsync(context, db, companyId, periodId))
+                return Results.NotFound();
+            return Results.Ok(await service.GetSorpDecisionAsync(companyId, periodId));
+        });
+
+        periodGroup.MapPut("/trustee-review", RecordTrusteeReviewEndpointAsync);
+
         periodGroup.MapGet("/sofa", async (int companyId, int periodId, CharityReportingService service, AccountsDbContext db, HttpContext context) =>
         {
             if (!await CompanyEndpointAccess.CanAccessCompanyPeriodAsync(context, db, companyId, periodId))
@@ -53,6 +62,12 @@ public static class CharityEndpoints
             return Results.Ok(tar);
         });
 
+        periodGroup.MapGet("/artifacts/status", GetArtifactStatusEndpointAsync);
+        periodGroup.MapGet("/sofa/review-pdf", DownloadSofaReviewEndpointAsync);
+        periodGroup.MapGet("/trustees-report/review-pdf", DownloadTrusteesReportReviewEndpointAsync);
+        periodGroup.MapGet("/sofa/final", DownloadSofaFinalEndpointAsync);
+        periodGroup.MapGet("/trustees-report/final", DownloadTrusteesReportFinalEndpointAsync);
+
         periodGroup.MapGet("/funds", ListFundBalancesEndpointAsync);
 
         periodGroup.MapPost("/funds", CreateFundBalanceEndpointAsync);
@@ -64,7 +79,7 @@ public static class CharityEndpoints
 
     public static async Task<IResult> SaveCharityInfoEndpointAsync(
         int companyId,
-        CharityInfo input,
+        CharityInfoInput input,
         CharityReportingService service,
         AccountingWriteGuard writeGuard,
         AuditService audit,
@@ -81,15 +96,33 @@ public static class CharityEndpoints
         if (await writeGuard.BlockIfCompanyMasterDataLockedAsync(companyId) is { } blocked)
             return blocked;
 
+        if (input.GovernanceEvidenceArtifact is { Length: > 5 * 1024 * 1024 })
+            return Results.BadRequest(new { error = "Governance evidence artifacts must not exceed 5 MB." });
+
+        if (input.GovernanceCodeCompliant is null)
+            return Results.BadRequest(new { error = "Answer the Charities Governance Code question explicitly." });
+        if (string.IsNullOrWhiteSpace(input.GovernanceEvidenceReference))
+            return Results.BadRequest(new { error = "A governance evidence reference is required." });
+        if (input.GovernanceCodeCompliant == false && string.IsNullOrWhiteSpace(input.GovernanceCodeNote))
+            return Results.BadRequest(new { error = "Explain the governance position when compliance is answered No." });
+
         var existing = await db.CharityInfos
             .AsNoTracking()
             .FirstOrDefaultAsync(c => c.CompanyId == companyId);
+        var retainedEvidenceStillApplies = existing is not null
+            && !string.IsNullOrWhiteSpace(existing.GovernanceEvidenceArtifactSha256)
+            && existing.GovernanceCodeCompliant == input.GovernanceCodeCompliant
+            && string.Equals(existing.GovernanceCodeNote, input.GovernanceCodeNote, StringComparison.Ordinal)
+            && string.Equals(existing.GovernanceEvidenceReference, input.GovernanceEvidenceReference, StringComparison.Ordinal);
+        if (input.GovernanceEvidenceArtifact is not { Length: > 0 } && !retainedEvidenceStillApplies)
+            return Results.BadRequest(new { error = "A retained governance evidence artifact is required for this answer." });
         var oldValue = existing is null ? null : CharityInfoSnapshot(existing);
-        input.Id = 0;
-        input.CompanyId = companyId;
-        input.CreatedAt = DateTime.UtcNow;
-        var result = await service.SaveCharityInfoAsync(companyId, input);
+        var charityInfo = input.ToEntity(companyId);
         var user = AuthContext.RequireUser(context);
+        var result = await service.SaveCharityInfoAsync(
+            companyId,
+            charityInfo,
+            AuthenticatedIdentity.ReviewerDisplayName(user));
         await audit.LogAsync(
             companyId,
             null,
@@ -101,6 +134,186 @@ public static class CharityEndpoints
             AuthenticatedIdentity.AuditUserId(user));
 
         return Results.Ok(result);
+    }
+
+    public static async Task<IResult> RecordTrusteeReviewEndpointAsync(
+        int companyId,
+        int periodId,
+        CharityTrusteeReviewInput input,
+        CharityReportingService service,
+        AccountsDbContext db,
+        AuditService audit,
+        HttpContext context,
+        ApiAccessService apiAccess)
+    {
+        if (!await CompanyEndpointAccess.CanAccessCompanyPeriodAsync(context, db, companyId, periodId))
+            return Results.NotFound();
+        if (EndpointRequestAuthorization.AuthorizeCurrentRequest(context, apiAccess) is { } denied)
+            return denied;
+        if (input.EvidenceArtifact is { Length: > 5 * 1024 * 1024 })
+            return Results.BadRequest(new { error = "Trustee-review evidence artifacts must not exceed 5 MB." });
+
+        var user = AuthContext.RequireUser(context);
+        var package = await service.RecordTrusteeReviewAsync(
+            companyId,
+            periodId,
+            input.Accepted,
+            input.EvidenceReference,
+            input.EvidenceArtifact,
+            AuthenticatedIdentity.ReviewerDisplayName(user));
+        await audit.LogAsync(
+            companyId,
+            periodId,
+            "CharityFilingPackage",
+            package.Id,
+            "CharityTrusteePopulationReviewed",
+            null,
+            new
+            {
+                package.TrusteeReviewAccepted,
+                package.TrusteeReviewReference,
+                package.TrusteeReviewedBy,
+                package.TrusteeReviewedAtUtc,
+                package.TrusteeReviewArtifactSha256,
+                package.TrusteePopulationSha256
+            },
+            AuthenticatedIdentity.AuditUserId(user));
+        return Results.Ok(package);
+    }
+
+    public static async Task<IResult> GetArtifactStatusEndpointAsync(
+        int companyId,
+        int periodId,
+        CharityReportingService service,
+        AccountsDbContext db,
+        HttpContext context)
+    {
+        if (!await CompanyEndpointAccess.CanAccessCompanyPeriodAsync(context, db, companyId, periodId))
+            return Results.NotFound();
+
+        var package = await db.CharityFilingPackages
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.PeriodId == periodId);
+        var decision = await service.GetSorpDecisionAsync(companyId, periodId);
+        return Results.Ok(new
+        {
+            decision,
+            package = package is null ? null : new
+            {
+                package.FilingStatus,
+                package.SofaGenerated,
+                package.TrusteesReportGenerated,
+                package.SofaSha256,
+                package.TrusteesReportSha256,
+                package.ArtifactReleaseCandidate,
+                package.ArtifactSourceFingerprintSha256,
+                package.SorpFrameworkCode,
+                package.SorpTier,
+                package.SofaBasis,
+                package.CharityNumberSnapshot,
+                package.SofaClosingFunds,
+                package.BalanceSheetNetAssets,
+                package.ReconciliationDifference,
+                package.ReconciledAtUtc,
+                package.TrusteeReviewAccepted,
+                package.TrusteeReviewReference,
+                package.TrusteeReviewedBy,
+                package.TrusteeReviewedAtUtc,
+                package.TrusteeReviewArtifactSha256,
+                package.TrusteePopulationSha256,
+                package.ManualProfessionalHandoffReason,
+                package.ApprovedBy,
+                package.ApprovedAt,
+                package.ApprovedArtifactManifestSha256,
+                package.ApprovedReleaseCandidate
+            }
+        });
+    }
+
+    public static Task<IResult> DownloadSofaReviewEndpointAsync(
+        int companyId,
+        int periodId,
+        CharityReportingService reporting,
+        CharityPdfService pdf,
+        FinancialStatementsService statements,
+        AccountsDbContext db,
+        HttpContext context) =>
+        DownloadReviewEndpointAsync(companyId, periodId, true, reporting, pdf, statements, db, context);
+
+    public static Task<IResult> DownloadTrusteesReportReviewEndpointAsync(
+        int companyId,
+        int periodId,
+        CharityReportingService reporting,
+        CharityPdfService pdf,
+        FinancialStatementsService statements,
+        AccountsDbContext db,
+        HttpContext context) =>
+        DownloadReviewEndpointAsync(companyId, periodId, false, reporting, pdf, statements, db, context);
+
+    public static async Task<IResult> DownloadSofaFinalEndpointAsync(
+        int companyId,
+        int periodId,
+        FilingReleaseGate gate,
+        AccountsDbContext db,
+        HttpContext context) =>
+        await DownloadFinalEndpointAsync(companyId, periodId, FilingReleaseArtifact.CharitySofa, gate, db, context);
+
+    public static async Task<IResult> DownloadTrusteesReportFinalEndpointAsync(
+        int companyId,
+        int periodId,
+        FilingReleaseGate gate,
+        AccountsDbContext db,
+        HttpContext context) =>
+        await DownloadFinalEndpointAsync(companyId, periodId, FilingReleaseArtifact.CharityTrusteesReport, gate, db, context);
+
+    private static async Task<IResult> DownloadReviewEndpointAsync(
+        int companyId,
+        int periodId,
+        bool sofa,
+        CharityReportingService reporting,
+        CharityPdfService pdf,
+        FinancialStatementsService statements,
+        AccountsDbContext db,
+        HttpContext context)
+    {
+        if (!await CompanyEndpointAccess.CanAccessCompanyPeriodAsync(context, db, companyId, periodId))
+            return Results.NotFound();
+
+        var package = await db.CharityFilingPackages.FirstOrDefaultAsync(p => p.PeriodId == periodId);
+        if (package is null)
+            throw new BusinessRuleException("Record and accept the trustee-population review before downloading review PDFs.");
+        var balanceSheet = await statements.GetBalanceSheetAsync(companyId, periodId);
+        var evidence = await reporting.BuildArtifactEvidenceAsync(companyId, periodId, balanceSheet.NetAssets, package);
+        var bytes = sofa
+            ? pdf.GenerateSofa(evidence, reviewCopy: true)
+            : pdf.GenerateTrusteesAnnualReport(evidence, reviewCopy: true);
+        return Results.File(
+            bytes,
+            "application/pdf",
+            sofa
+                ? $"REVIEW_NOT_FOR_FILING_charity_sofa_{periodId}.pdf"
+                : $"REVIEW_NOT_FOR_FILING_trustees_annual_report_{periodId}.pdf");
+    }
+
+    private static async Task<IResult> DownloadFinalEndpointAsync(
+        int companyId,
+        int periodId,
+        FilingReleaseArtifact artifactType,
+        FilingReleaseGate gate,
+        AccountsDbContext db,
+        HttpContext context)
+    {
+        if (!await CompanyEndpointAccess.CanAccessCompanyPeriodAsync(context, db, companyId, periodId))
+            return Results.NotFound();
+
+        var artifact = await gate.GetFinalArtifactAsync(
+            companyId,
+            periodId,
+            artifactType,
+            AuthenticatedIdentity.AuditUserId(AuthContext.RequireUser(context)));
+        context.Response.Headers["X-Artifact-Sha256"] = artifact.Sha256;
+        context.Response.Headers["X-Release-Candidate"] = artifact.ReleaseCandidate;
+        return Results.File(artifact.Content, artifact.MediaType, artifact.FileName);
     }
 
     public static async Task<IResult> ListFundBalancesEndpointAsync(
@@ -123,7 +336,7 @@ public static class CharityEndpoints
     public static async Task<IResult> CreateFundBalanceEndpointAsync(
         int companyId,
         int periodId,
-        FundBalance input,
+        FundBalanceInput input,
         AccountsDbContext db,
         AuditService audit,
         HttpContext context,
@@ -142,27 +355,29 @@ public static class CharityEndpoints
             return invalid;
 
         var user = AuthContext.RequireUser(context);
-        PrepareFundBalance(input, periodId);
-        db.FundBalances.Add(input);
+        var fund = input.ToEntity(periodId);
+        PrepareFundBalance(fund, input);
+        db.FundBalances.Add(fund);
+        await InvalidateCharityPackageAsync(db, periodId);
         await db.SaveChangesAsync();
         await audit.LogAsync(
             companyId,
             periodId,
             "FundBalance",
-            input.Id,
+            fund.Id,
             AuditEventCodes.FundBalanceCreated,
             null,
-            FundBalanceSnapshot(input),
+            FundBalanceSnapshot(fund),
             AuthenticatedIdentity.AuditUserId(user));
 
-        return Results.Created($"/api/companies/{companyId}/periods/{periodId}/charity/funds/{input.Id}", input);
+        return Results.Created($"/api/companies/{companyId}/periods/{periodId}/charity/funds/{fund.Id}", fund);
     }
 
     public static async Task<IResult> UpdateFundBalanceEndpointAsync(
         int companyId,
         int periodId,
         int id,
-        FundBalance input,
+        FundBalanceInput input,
         AccountsDbContext db,
         AuditService audit,
         HttpContext context,
@@ -186,6 +401,7 @@ public static class CharityEndpoints
         var user = AuthContext.RequireUser(context);
         var oldValue = FundBalanceSnapshot(item);
         ApplyFundBalance(item, input);
+        await InvalidateCharityPackageAsync(db, periodId);
         await db.SaveChangesAsync();
         await audit.LogAsync(
             companyId,
@@ -224,6 +440,7 @@ public static class CharityEndpoints
         var user = AuthContext.RequireUser(context);
         var oldValue = FundBalanceSnapshot(item);
         db.FundBalances.Remove(item);
+        await InvalidateCharityPackageAsync(db, periodId);
         await db.SaveChangesAsync();
         await audit.LogAsync(
             companyId,
@@ -256,14 +473,12 @@ public static class CharityEndpoints
             : null;
     }
 
-    private static void PrepareFundBalance(FundBalance fund, int periodId)
+    private static void PrepareFundBalance(FundBalance fund, FundBalanceInput input)
     {
-        fund.Id = 0;
-        fund.PeriodId = periodId;
-        fund.ClosingBalance = CalculateClosingBalance(fund);
+        fund.ClosingBalance = CalculateClosingBalance(input);
     }
 
-    private static IResult? ValidateFundBalanceInput(FundBalance fund)
+    private static IResult? ValidateFundBalanceInput(FundBalanceInput fund)
     {
         if (string.IsNullOrWhiteSpace(fund.FundName))
             return Results.BadRequest(new { error = "Fund name is required." });
@@ -274,7 +489,7 @@ public static class CharityEndpoints
         return null;
     }
 
-    private static void ApplyFundBalance(FundBalance target, FundBalance input)
+    private static void ApplyFundBalance(FundBalance target, FundBalanceInput input)
     {
         target.FundName = input.FundName;
         target.FundType = input.FundType;
@@ -287,8 +502,15 @@ public static class CharityEndpoints
         target.Notes = input.Notes;
     }
 
-    private static decimal CalculateClosingBalance(FundBalance fund) =>
+    private static decimal CalculateClosingBalance(FundBalanceInput fund) =>
         fund.OpeningBalance + fund.IncomingResources - fund.ResourcesExpended + fund.Transfers + fund.GainsLosses;
+
+    private static async Task InvalidateCharityPackageAsync(AccountsDbContext db, int periodId)
+    {
+        var package = await db.CharityFilingPackages.FirstOrDefaultAsync(p => p.PeriodId == periodId);
+        if (package is not null)
+            CharityReportingService.InvalidateArtifacts(package);
+    }
 
     private static object CharityInfoSnapshot(CharityInfo info) => new
     {
@@ -302,6 +524,10 @@ public static class CharityEndpoints
         info.PrincipalActivities,
         info.GovernanceCodeCompliant,
         info.GovernanceCodeNote,
+        info.GovernanceEvidenceReference,
+        info.GovernanceReviewedBy,
+        info.GovernanceReviewedAtUtc,
+        info.GovernanceEvidenceArtifactSha256,
         info.HasInternationalTransfers,
         info.InternationalTransferDetails,
         info.TrusteeRemunerationPaid,

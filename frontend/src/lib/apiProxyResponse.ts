@@ -5,6 +5,7 @@ const passThroughHeaders = [
   "content-disposition",
   "content-language",
   "content-type",
+  "etag",
   "expires",
   "last-modified",
   "pragma",

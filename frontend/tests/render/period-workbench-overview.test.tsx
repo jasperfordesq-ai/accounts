@@ -147,7 +147,7 @@ function sampleCompany(): Company {
     companyType: "Private",
     incorporationDate: "2024-01-01",
     financialYearStartMonth: 1,
-    ardMonth: 9,
+    annualReturnDate: "2026-09-15",
     isGroupMember: false,
     isHolding: false,
     isInvestment: false,
@@ -251,6 +251,9 @@ function sampleFilingStatus(): FilingWorkflowStatus {
       ixbrlReady: false,
       ixbrlInternalChecksPassed: false,
       ixbrlValid: false,
+      generationSupport: "manual-handoff-only",
+      manualHandoffRequired: true,
+      reviewPrototypeChecksPassed: false,
     },
     charity: {
       status: "NotStarted",
@@ -274,6 +277,9 @@ function sampleFilingReadinessProfile(): FilingReadinessProfile {
     accountantReviewState: "Not approved",
     directCroSubmissionSupported: false,
     directRosSubmissionSupported: false,
+    revenueIxbrlGenerationSupported: false,
+    revenueManualHandoffRequired: true,
+    revenueGenerationSupportReason: "Revenue filing-ready iXBRL generation is disabled.",
     revenueTaxonomy: {
       taxonomyKey: "IE-FRS-102-2025",
       taxonomyDate: "2025",

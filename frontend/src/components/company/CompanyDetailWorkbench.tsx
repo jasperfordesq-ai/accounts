@@ -1,6 +1,6 @@
 "use client";
 
-import { Pencil, Trash2 } from "lucide-react";
+import { Archive, Pencil } from "lucide-react";
 import { Button } from "@heroui/react";
 import type { CharityInfo, Company, Officer } from "@/lib/api";
 import { ConfirmModal } from "@/components/ConfirmModal";
@@ -10,12 +10,16 @@ import { CompanyIdentityEditPanel, type CompanyEditFormValues } from "@/componen
 import { CompanyOfficersPanel } from "@/components/company/CompanyOfficersPanel";
 import { CompanyPeriodsWorkbench } from "@/components/company/CompanyPeriodsWorkbench";
 import { CompanyStatutoryProfile } from "@/components/company/CompanyStatutoryProfile";
+import { CompanyAnnualReturnDatePanel } from "@/components/company/CompanyAnnualReturnDatePanel";
 import { CompanyWorkspaceOverview } from "@/components/company/CompanyWorkspaceOverview";
-import { PageShell, StatusBadge } from "@/components/workbench";
+import { PageShell, ReadOnlyNotice, StatusBadge } from "@/components/workbench";
+import { ResourceStateNotice } from "@/components/ResourceStateNotice";
+import type { ResourceState } from "@/lib/resourceState";
 
 interface CompanyDetailWorkbenchProps {
   company: Company;
   canWriteWorkingPapers: boolean;
+  canDeleteCompany: boolean;
   editing: boolean;
   editForm: CompanyEditFormValues;
   savingCompany: boolean;
@@ -27,16 +31,23 @@ interface CompanyDetailWorkbenchProps {
   editingOfficerId: number | null;
   editOfficerName: string;
   editOfficerRole: string;
+  editOfficerAppointedDate?: string;
+  editOfficerResignedDate?: string;
   savingOfficer: boolean;
   showAddOfficer: boolean;
   newOfficerName: string;
   newOfficerRole: string;
+  newOfficerAppointedDate?: string;
   charityInfo: CharityInfo | null;
+  charityResourceState?: ResourceState;
+  onRetryCharity?: () => void | Promise<void>;
   charityForm: CharityInfo;
   editingCharity: boolean;
   savingCharity: boolean;
   showDeleteModal: boolean;
   deleting: boolean;
+  quarantineConfirmation: string;
+  quarantineReason: string;
   onStartEditCompany: () => void;
   onEditFormChange: (form: CompanyEditFormValues) => void;
   onSaveCompany: () => void;
@@ -44,6 +55,8 @@ interface CompanyDetailWorkbenchProps {
   onDeleteCompanyRequest: () => void;
   onConfirmDeleteCompany: () => void;
   onCancelDeleteCompany: () => void;
+  onQuarantineConfirmationChange: (value: string) => void;
+  onQuarantineReasonChange: (value: string) => void;
   onShowNewPeriod: () => void;
   onCancelNewPeriod: () => void;
   onPeriodStartChange: (value: string) => void;
@@ -53,23 +66,28 @@ interface CompanyDetailWorkbenchProps {
   onShowAddOfficer: () => void;
   onNewOfficerNameChange: (value: string) => void;
   onNewOfficerRoleChange: (value: string) => void;
+  onNewOfficerAppointedDateChange?: (value: string) => void;
   onCancelAddOfficer: () => void;
   onAddOfficer: () => void;
   onStartEditOfficer: (officer: Officer) => void;
   onEditOfficerNameChange: (value: string) => void;
   onEditOfficerRoleChange: (value: string) => void;
+  onEditOfficerAppointedDateChange?: (value: string) => void;
+  onEditOfficerResignedDateChange?: (value: string) => void;
   onSaveOfficer: () => void;
   onCancelEditOfficer: () => void;
-  onDeleteOfficer: (officerId: number) => void;
+  onDeleteOfficer: (officerId: number) => void | Promise<void>;
   onStartEditCharity: () => void;
   onCancelEditCharity: () => void;
   onSaveCharity: () => void;
   onCharityFormChange: (form: CharityInfo) => void;
+  onAnnualReturnDateChanged: () => void | Promise<void>;
 }
 
 export function CompanyDetailWorkbench({
   company,
   canWriteWorkingPapers,
+  canDeleteCompany,
   editing,
   editForm,
   savingCompany,
@@ -81,16 +99,23 @@ export function CompanyDetailWorkbench({
   editingOfficerId,
   editOfficerName,
   editOfficerRole,
+  editOfficerAppointedDate,
+  editOfficerResignedDate,
   savingOfficer,
   showAddOfficer,
   newOfficerName,
   newOfficerRole,
+  newOfficerAppointedDate,
   charityInfo,
+  charityResourceState,
+  onRetryCharity,
   charityForm,
   editingCharity,
   savingCharity,
   showDeleteModal,
   deleting,
+  quarantineConfirmation,
+  quarantineReason,
   onStartEditCompany,
   onEditFormChange,
   onSaveCompany,
@@ -98,6 +123,8 @@ export function CompanyDetailWorkbench({
   onDeleteCompanyRequest,
   onConfirmDeleteCompany,
   onCancelDeleteCompany,
+  onQuarantineConfirmationChange,
+  onQuarantineReasonChange,
   onShowNewPeriod,
   onCancelNewPeriod,
   onPeriodStartChange,
@@ -107,11 +134,14 @@ export function CompanyDetailWorkbench({
   onShowAddOfficer,
   onNewOfficerNameChange,
   onNewOfficerRoleChange,
+  onNewOfficerAppointedDateChange,
   onCancelAddOfficer,
   onAddOfficer,
   onStartEditOfficer,
   onEditOfficerNameChange,
   onEditOfficerRoleChange,
+  onEditOfficerAppointedDateChange,
+  onEditOfficerResignedDateChange,
   onSaveOfficer,
   onCancelEditOfficer,
   onDeleteOfficer,
@@ -119,6 +149,7 @@ export function CompanyDetailWorkbench({
   onCancelEditCharity,
   onSaveCharity,
   onCharityFormChange,
+  onAnnualReturnDateChanged,
 }: CompanyDetailWorkbenchProps) {
   return (
     <PageShell
@@ -128,22 +159,28 @@ export function CompanyDetailWorkbench({
       backLabel="Dashboard"
       meta={<CompanyMeta company={company} />}
       actions={
-        canWriteWorkingPapers ? (
+        canWriteWorkingPapers || canDeleteCompany ? (
           <>
-            <Button variant="outline" size="sm" onPress={onStartEditCompany} aria-label="Edit company">
-              <Pencil className="h-3.5 w-3.5" />
-              Edit
-            </Button>
-            <Button variant="danger" size="sm" onPress={onDeleteCompanyRequest} aria-label="Delete company">
-              <Trash2 className="h-3.5 w-3.5" />
-              Delete
-            </Button>
+            {canWriteWorkingPapers && (
+              <Button variant="outline" size="sm" onPress={onStartEditCompany} aria-label="Edit company">
+                <Pencil className="h-3.5 w-3.5" />
+                Edit
+              </Button>
+            )}
+            {canDeleteCompany && (
+              <Button variant="danger" size="sm" onPress={onDeleteCompanyRequest} aria-label="Quarantine company">
+                <Archive className="h-3.5 w-3.5" />
+                Quarantine
+              </Button>
+            )}
           </>
         ) : undefined
       }
     >
       <div className="space-y-6">
-        {editing && (
+        {!canWriteWorkingPapers && <ReadOnlyNotice subject="company profile and period setup" />}
+
+        {canWriteWorkingPapers && editing && (
           <CompanyIdentityEditPanel
             form={editForm}
             saving={savingCompany}
@@ -157,41 +194,60 @@ export function CompanyDetailWorkbench({
 
         <CompanyStatutoryProfile company={company} />
 
+        <CompanyAnnualReturnDatePanel
+          company={company}
+          canWrite={canWriteWorkingPapers}
+          onChanged={onAnnualReturnDateChanged}
+        />
+
         <CompanyOfficersPanel
           officers={company.officers}
           showAddOfficer={showAddOfficer}
           newOfficerName={newOfficerName}
           newOfficerRole={newOfficerRole}
+          newOfficerAppointedDate={newOfficerAppointedDate}
           editingOfficerId={editingOfficerId}
           editOfficerName={editOfficerName}
           editOfficerRole={editOfficerRole}
+          editOfficerAppointedDate={editOfficerAppointedDate}
+          editOfficerResignedDate={editOfficerResignedDate}
           savingOfficer={savingOfficer}
           canWrite={canWriteWorkingPapers}
           onShowAddOfficer={onShowAddOfficer}
           onNewOfficerNameChange={onNewOfficerNameChange}
           onNewOfficerRoleChange={onNewOfficerRoleChange}
+          onNewOfficerAppointedDateChange={onNewOfficerAppointedDateChange}
           onCancelAddOfficer={onCancelAddOfficer}
           onAddOfficer={onAddOfficer}
           onStartEditOfficer={onStartEditOfficer}
           onEditOfficerNameChange={onEditOfficerNameChange}
           onEditOfficerRoleChange={onEditOfficerRoleChange}
+          onEditOfficerAppointedDateChange={onEditOfficerAppointedDateChange}
+          onEditOfficerResignedDateChange={onEditOfficerResignedDateChange}
           onSaveOfficer={onSaveOfficer}
           onCancelEditOfficer={onCancelEditOfficer}
           onDeleteOfficer={onDeleteOfficer}
         />
 
         {company.isCharitableOrganisation && (
-          <CompanyCharityInfoPanel
-            charityInfo={charityInfo}
-            charityForm={charityForm}
-            editing={editingCharity}
-            saving={savingCharity}
-            canWrite={canWriteWorkingPapers}
-            onStartEdit={onStartEditCharity}
-            onCancelEdit={onCancelEditCharity}
-            onSave={onSaveCharity}
-            onFormChange={onCharityFormChange}
-          />
+          <div className="space-y-3">
+            {charityResourceState && (
+              <ResourceStateNotice state={charityResourceState} label="charity profile evidence" onRetry={onRetryCharity} />
+            )}
+            {(!charityResourceState || charityResourceState.status === "loaded" || charityResourceState.status === "empty" || charityResourceState.hasRetainedData) && (
+              <CompanyCharityInfoPanel
+                charityInfo={charityInfo}
+                charityForm={charityForm}
+                editing={editingCharity}
+                saving={savingCharity}
+                canWrite={canWriteWorkingPapers}
+                onStartEdit={onStartEditCharity}
+                onCancelEdit={onCancelEditCharity}
+                onSave={onSaveCharity}
+                onFormChange={onCharityFormChange}
+              />
+            )}
+          </div>
         )}
 
         <ShareCapitalCard companyId={company.id} canWrite={canWriteWorkingPapers} />
@@ -212,16 +268,51 @@ export function CompanyDetailWorkbench({
           onCreatePeriod={onCreatePeriod}
         />
 
-        <ConfirmModal
-          open={showDeleteModal}
-          title="Delete Company"
-          description={`This will permanently delete "${company.legalName}" and all its accounting periods, transactions, and financial data. This action cannot be undone.`}
-          confirmLabel="Delete Company"
-          variant="danger"
-          loading={deleting}
-          onConfirm={onConfirmDeleteCompany}
-          onCancel={onCancelDeleteCompany}
-        />
+        {canDeleteCompany && (
+          <ConfirmModal
+            open={showDeleteModal}
+            title="Quarantine Company"
+            description={`This hides "${company.legalName}" and all owned records from normal workspaces without deleting them. An Owner can recover the complete retained record later.`}
+            confirmLabel="Quarantine Company"
+            variant="danger"
+            loading={deleting}
+            confirmDisabled={quarantineConfirmation !== company.legalName || quarantineReason.trim().length < 20}
+            onConfirm={onConfirmDeleteCompany}
+            onCancel={onCancelDeleteCompany}
+          >
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="quarantine-confirmation" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Type the exact legal name to confirm
+                </label>
+                <input
+                  id="quarantine-confirmation"
+                  value={quarantineConfirmation}
+                  onChange={(event) => onQuarantineConfirmationChange(event.target.value)}
+                  autoComplete="off"
+                  className="mt-1.5 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500 dark:border-neutral-600 dark:bg-neutral-800 dark:text-gray-100"
+                />
+              </div>
+              <div>
+                <label htmlFor="quarantine-reason" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Retained reason
+                </label>
+                <textarea
+                  id="quarantine-reason"
+                  value={quarantineReason}
+                  onChange={(event) => onQuarantineReasonChange(event.target.value)}
+                  rows={3}
+                  maxLength={2000}
+                  placeholder="Give a specific reason (minimum 20 characters)."
+                  className="mt-1.5 w-full resize-y rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500 dark:border-neutral-600 dark:bg-neutral-800 dark:text-gray-100"
+                />
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {quarantineReason.trim().length}/20 minimum characters
+                </p>
+              </div>
+            </div>
+          </ConfirmModal>
+        )}
       </div>
     </PageShell>
   );

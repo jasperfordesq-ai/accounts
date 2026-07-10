@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "fixtureId": "irish-statutory-golden-corpus-v1",
+  "expectationDerivation": "Fixed arithmetic and output wording authored outside the production services. Values must not be rewritten from service output.",
+  "independentReviewStatus": "pending-qualified-accountant",
+  "externalValidationStatus": "pending-real-ros-validator",
+  "scenarios": [
+    {
+      "code": "micro-ltd",
+      "legalName": "Example Micro Limited",
+      "companyType": "Private",
+      "electedRegime": "Micro",
+      "expectedSizeClass": "Micro",
+      "isCharity": false,
+      "priorYear": { "periodStart": "2025-01-01", "periodEnd": "2025-12-31", "turnover": 480000.00, "balanceSheetTotal": 220000.00, "averageEmployees": 3 },
+      "currentYear": { "periodStart": "2026-01-01", "periodEnd": "2026-12-31", "turnover": 500.00, "balanceSheetTotal": 600.00, "averageEmployees": 2 },
+      "workflowFacts": { "openingShareCapital": 100.00, "cashReceipt": 500.00, "expectedNetAssets": 600.00, "expectedCorporationTax": 62.50 },
+      "expectedPdfPhrases": [ "Example Micro Limited", "STATEMENT REQUIRED BY SECTION 280D", "FRS 105" ],
+      "expectedIxbrlPhrases": [ "Example Micro Limited", "core:TurnoverGrossRevenue", "data-generation-support=\"manual-handoff-only\"" ]
+    },
+    {
+      "code": "small-abridged-ltd",
+      "legalName": "Connacht Digital Solutions Limited",
+      "companyType": "Private",
+      "electedRegime": "SmallAbridged",
+      "expectedSizeClass": "Small",
+      "isCharity": false,
+      "priorYear": { "periodStart": "2025-01-01", "periodEnd": "2025-12-31", "turnover": 1400000.00, "balanceSheetTotal": 720000.00, "averageEmployees": 14 },
+      "currentYear": { "periodStart": "2026-01-01", "periodEnd": "2026-12-31", "turnover": 1000000.00, "balanceSheetTotal": 500000.00, "averageEmployees": 12 },
+      "workflowFacts": { "openingShareCapital": 100.00, "cashReceipt": 500.00, "expectedNetAssets": 600.00, "expectedCorporationTax": 62.50 },
+      "expectedPdfPhrases": [ "Connacht Digital Solutions Limited", "Abridged Financial Statements for filing with the CRO", "section 352" ],
+      "expectedIxbrlPhrases": [ "Connacht Digital Solutions Limited", "core:TurnoverGrossRevenue", "data-generation-support=\"manual-handoff-only\"" ]
+    },
+    {
+      "code": "dac-small",
+      "legalName": "Atlantic Manufacturing DAC",
+      "companyType": "DesignatedActivityCompany",
+      "electedRegime": "Small",
+      "expectedSizeClass": "Small",
+      "isCharity": false,
+      "priorYear": { "periodStart": "2025-01-01", "periodEnd": "2025-12-31", "turnover": 2250000.00, "balanceSheetTotal": 1100000.00, "averageEmployees": 22 },
+      "currentYear": { "periodStart": "2026-01-01", "periodEnd": "2026-12-31", "turnover": 1000000.00, "balanceSheetTotal": 500000.00, "averageEmployees": 12 },
+      "workflowFacts": { "openingShareCapital": 100.00, "cashReceipt": 500.00, "expectedNetAssets": 600.00, "expectedCorporationTax": 62.50 },
+      "expectedPdfPhrases": [ "Atlantic Manufacturing DAC", "DIRECTORS' REPORT", "PROFIT AND LOSS ACCOUNT" ],
+      "expectedIxbrlPhrases": [ "Atlantic Manufacturing DAC", "bus:EntityCurrentLegalOrRegisteredName", "data-generation-support=\"manual-handoff-only\"" ]
+    },
+    {
+      "code": "clg-charity",
+      "legalName": "Dublin Community Support CLG",
+      "companyType": "CompanyLimitedByGuarantee",
+      "electedRegime": "Small",
+      "expectedSizeClass": "Small",
+      "isCharity": true,
+      "priorYear": { "periodStart": "2025-01-01", "periodEnd": "2025-12-31", "turnover": 2250000.00, "balanceSheetTotal": 1100000.00, "averageEmployees": 11 },
+      "currentYear": { "periodStart": "2026-01-01", "periodEnd": "2026-12-31", "turnover": 2400000.00, "balanceSheetTotal": 1200000.00, "averageEmployees": 12 },
+      "workflowFacts": { "openingShareCapital": 0.00, "cashReceipt": 500.00, "expectedNetAssets": 500.00, "expectedCorporationTax": 62.50 },
+      "expectedPdfPhrases": [ "Dublin Community Support CLG", "Community support and education.", "DIRECTORS' REPORT" ],
+      "expectedIxbrlPhrases": [ "Dublin Community Support CLG", "core:TurnoverGrossRevenue", "data-generation-support=\"manual-handoff-only\"" ]
+    },
+    {
+      "code": "medium-audit-required",
+      "legalName": "Midlands Manufacturing Limited",
+      "companyType": "Private",
+      "electedRegime": "Medium",
+      "expectedSizeClass": "Medium",
+      "isCharity": false,
+      "priorYear": { "periodStart": "2025-01-01", "periodEnd": "2025-12-31", "turnover": 17600000.00, "balanceSheetTotal": 7900000.00, "averageEmployees": 116 },
+      "currentYear": { "periodStart": "2026-01-01", "periodEnd": "2026-12-31", "turnover": 18000000.00, "balanceSheetTotal": 8000000.00, "averageEmployees": 120 },
+      "workflowFacts": { "openingShareCapital": 100.00, "cashReceipt": 500.00, "expectedNetAssets": 600.00, "expectedCorporationTax": 62.50 },
+      "expectedPdfPhrases": [ "Midlands Manufacturing Limited", "INDEPENDENT AUDITOR'S REPORT" ],
+      "expectedIxbrlPhrases": [ "Midlands Manufacturing Limited", "core:ProfitLossOnOrdinaryActivitiesBeforeTax", "data-generation-support=\"manual-handoff-only\"" ]
+    }
+  ]
+}

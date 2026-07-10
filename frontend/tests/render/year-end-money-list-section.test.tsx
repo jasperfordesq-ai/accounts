@@ -24,6 +24,9 @@ describe("YearEndMoneyListSection", () => {
     await user.selectOptions(screen.getByRole("combobox", { name: "Debtor type" }), "Prepayment");
     await user.click(screen.getByRole("button", { name: "Add debtor" }));
     await user.click(screen.getByRole("button", { name: "Delete debtor Trade customer" }));
+    expect(onDelete).not.toHaveBeenCalled();
+    expect(screen.getByRole("alertdialog", { name: "Remove debtor Trade customer?" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Remove record" }));
 
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ name: "New debtor" }));
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ amount: 99 }));

@@ -29,6 +29,29 @@ Current working posture:
   blocked by named qualified-accountant review.
 - Direct CRO/ROS submission must stay unsupported; the app records workflow states only.
 
+### Independent audit reset — 10 July 2026
+
+`Docs/PLATFORM_AUDIT_2026-07-10.md` is the current acceptance contract. Its independent
+baseline is **600/1,000**, and it supersedes the historic 698/700 process-score claims
+recorded later in this handoff log. Those older entries describe completed evidence-workspace
+work but do not prove statutory correctness, persistence security, workflow correctness,
+production operations, or human/external acceptance. Do not restore full category marks until
+the weighted controls and blocking audit IDs in the live readiness report are objectively closed.
+
+### Current executable verification command
+
+Restore/build may use `backend/Accounts.slnx`, but run the backend gate through the test project:
+
+```powershell
+.\.dotnet-sdk\dotnet.exe test backend\Accounts.Tests\Accounts.Tests.csproj -c Release `
+  "-p:ArtifactsPath=$env:TEMP\accts-art"
+```
+
+The .NET 10 SDK used here can return success for `dotnet test backend/Accounts.slnx` after build
+without executing the test project. Historical command/result entries below are retained as a
+handoff log, not as current release evidence. A current pass must report an explicit executed test
+count and must set the PostgreSQL/golden-corpus environment gates used by CI.
+
 ## What Has Been Achieved In This Session
 
 Committed and pushed work on `main` includes:

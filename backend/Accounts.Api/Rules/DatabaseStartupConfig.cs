@@ -10,7 +10,7 @@ public class DatabaseStartupConfig
     public bool AllowDemoSeedInProduction { get; set; }
     public bool AllowDevelopmentDatabasePasswordInProduction { get; set; }
 
-    // crypto-tls-to-db: outside development the DB connection must require TLS. Set this true only to
-    // deliberately allow an unencrypted connection (e.g. a private encrypted network link).
+    // Retained for configuration compatibility only. ProductionSafetyService rejects this legacy
+    // escape hatch outside development; production must use certificate-verified PostgreSQL TLS.
     public bool AllowInsecureDatabaseConnection { get; set; }
 }

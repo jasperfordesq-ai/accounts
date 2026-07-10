@@ -12,6 +12,8 @@ import { ArrowLeft, CheckCircle2, AlertTriangle, Scale } from "lucide-react";
 import { toast } from "sonner";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { PeriodWorkspaceSkeleton } from "@/components/Skeleton";
+import { useAuth } from "@/components/AuthProvider";
+import { ReadOnlyNotice } from "@/components/workbench";
 import { useUnsavedChanges } from "@/lib/useUnsavedChanges";
 import {
   getCompany,
@@ -22,6 +24,7 @@ import {
   saveMemberAuditNotice,
   type Company,
   type AccountingPeriod,
+  type ClassificationResult,
 } from "@/lib/api";
 
 const inputClass =
@@ -34,16 +37,7 @@ function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
-interface ClassificationResult {
-  calculatedClass: string;
-  qualificationNotes: string;
-  canUseMicro: boolean;
-  canFileAbridged: boolean;
-  auditExempt: boolean;
-  availableRegimes: string[];
-  isIneligibleEntity: boolean;
-  ineligibleReason?: string;
-}
+type ThresholdElectionDate = "2023-01-01" | "2024-01-01";
 
 type RegimeOption = {
   label: string;
@@ -80,6 +74,7 @@ export default function ClassifyPage({
   const { companyId, periodId } = use(params);
   const cId = Number(companyId);
   const pId = Number(periodId);
+  const { canWriteWorkingPapers } = useAuth();
 
   const [company, setCompany] = useState<Company | null>(null);
   const [period, setPeriod] = useState<AccountingPeriod | null>(null);
@@ -89,12 +84,11 @@ export default function ClassifyPage({
   const [turnover, setTurnover] = useState<number>(0);
   const [balanceSheetTotal, setBalanceSheetTotal] = useState<number>(0);
   const [avgEmployees, setAvgEmployees] = useState<number>(0);
-  const [priorYearClass, setPriorYearClass] = useState<string>("");
+  const [thresholdElectionEffectiveFrom, setThresholdElectionEffectiveFrom] = useState<ThresholdElectionDate>("2024-01-01");
 
   // Unsaved-changes guard: the size figures are only persisted when "Run classification" saves them
   // (shared guard across notes/year-end/classify/charity).
   const [dirty, setDirty] = useState(false);
-  useUnsavedChanges(dirty);
 
   // Result state
   const [result, setResult] = useState<ClassificationResult | null>(null);
@@ -108,6 +102,7 @@ export default function ClassifyPage({
   const [selectedRegime, setSelectedRegime] = useState<string>("");
   const [confirmingRegime, setConfirmingRegime] = useState(false);
   const [regimeConfirmed, setRegimeConfirmed] = useState(false);
+  useUnsavedChanges(dirty || (selectedRegime !== "" && !regimeConfirmed));
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -125,16 +120,9 @@ export default function ClassifyPage({
         setTurnover(sc.turnover);
         setBalanceSheetTotal(sc.balanceSheetTotal);
         setAvgEmployees(sc.avgEmployees);
-
-        try {
-          const classResult = await runClassification(cId, pId);
-          setResult(classResult);
-          if (!periodData.filingRegime && classResult.availableRegimes.length > 0) {
-            setSelectedRegime(toRegimeOption(classResult.availableRegimes[0]).value);
-          }
-        } catch {
-          // Existing classification can still be displayed; the user can re-run it manually.
-        }
+        setThresholdElectionEffectiveFrom(
+          sc.thresholdElectionEffectiveFrom === "2023-01-01" ? "2023-01-01" : "2024-01-01",
+        );
       }
 
       setMemberAuditNotice(periodData.memberAuditNoticeReceived ?? false);
@@ -166,7 +154,7 @@ export default function ClassifyPage({
         turnover,
         balanceSheetTotal,
         avgEmployees,
-        priorYearClass: priorYearClass || undefined,
+        thresholdElectionEffectiveFrom,
       });
       setDirty(false);
       const classResult = await runClassification(cId, pId);
@@ -239,8 +227,10 @@ export default function ClassifyPage({
         </p>
       </div>
 
+      {!canWriteWorkingPapers && <ReadOnlyNotice subject="classification and filing-regime decisions" />}
+
       {/* Input Form */}
-      <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 mb-6">
+      {canWriteWorkingPapers && <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 mb-6">
         <Card.Header>
           <Card.Title className="flex items-center gap-2">
             <Scale className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
@@ -251,13 +241,16 @@ export default function ClassifyPage({
           </Card.Description>
         </Card.Header>
         <Card.Content>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+              <label htmlFor="classification-turnover" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                 Turnover
               </label>
               <input
+                id="classification-turnover"
                 type="number"
+                min={0}
+                step="0.01"
                 className={inputClass}
                 placeholder="0.00"
                 value={turnover || ""}
@@ -265,11 +258,14 @@ export default function ClassifyPage({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+              <label htmlFor="classification-balance-sheet-total" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                 Balance Sheet Total
               </label>
               <input
+                id="classification-balance-sheet-total"
                 type="number"
+                min={0}
+                step="0.01"
                 className={inputClass}
                 placeholder="0.00"
                 value={balanceSheetTotal || ""}
@@ -277,11 +273,14 @@ export default function ClassifyPage({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+              <label htmlFor="classification-average-employees" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                 Average Employees
               </label>
               <input
+                id="classification-average-employees"
                 type="number"
+                min={0}
+                step="1"
                 className={inputClass}
                 placeholder="0"
                 value={avgEmployees || ""}
@@ -289,22 +288,26 @@ export default function ClassifyPage({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                Prior Year Classification
+              <label htmlFor="classification-threshold-election" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                2024 threshold adjustment election
               </label>
               <select
+                id="classification-threshold-election"
                 className={inputClass}
-                value={priorYearClass}
-                onChange={(e) => { setPriorYearClass(e.target.value); setDirty(true); }}
-                title="Prior Year Classification"
-                aria-label="Prior Year Classification"
+                value={thresholdElectionEffectiveFrom}
+                onChange={(e) => {
+                  setThresholdElectionEffectiveFrom(e.target.value as ThresholdElectionDate);
+                  setDirty(true);
+                }}
+                title="2024 threshold adjustment election"
+                aria-label="2024 threshold adjustment election"
               >
-                <option value="">None / First Year</option>
-                <option value="Micro">Micro</option>
-                <option value="Small">Small</option>
-                <option value="Medium">Medium</option>
-                <option value="Large">Large</option>
+                <option value="2024-01-01">Apply adjusted thresholds from financial years beginning in 2024</option>
+                <option value="2023-01-01">Elect adjusted thresholds from financial years beginning in 2023</option>
               </select>
+              <p className="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">
+                Prior-period raw figures and the prior effective class are derived from retained accounting periods; they cannot be supplied here.
+              </p>
             </div>
           </div>
 
@@ -312,7 +315,7 @@ export default function ClassifyPage({
             <Button
               variant="primary"
               onPress={handleClassify}
-              isDisabled={classifying}
+              isDisabled={classifying || turnover < 0 || balanceSheetTotal < 0 || avgEmployees < 0}
             >
               {classifying ? (
                 <>
@@ -334,10 +337,10 @@ export default function ClassifyPage({
             </div>
           )}
         </Card.Content>
-      </Card>
+      </Card>}
 
       {/* Member Audit Notice (s.334) */}
-      <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 mb-6">
+      {canWriteWorkingPapers && <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 mb-6">
         <Card.Header>
           <Card.Title className="text-gray-900 dark:text-gray-100">Member Audit Notice</Card.Title>
           <Card.Description>
@@ -374,7 +377,7 @@ export default function ClassifyPage({
             </div>
           )}
         </Card.Content>
-      </Card>
+      </Card>}
 
       {/* Results */}
       {result && (
@@ -459,12 +462,29 @@ export default function ClassifyPage({
                     </p>
                   </div>
                 </div>
+
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-neutral-700 dark:bg-neutral-800">
+                  <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Threshold decision evidence</h4>
+                  <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+                    <DecisionEvidence label="Current raw class" value={result.rawCurrentClass} />
+                    <DecisionEvidence label="Prior raw class" value={result.rawPriorClass ?? "First year / no retained prior period"} />
+                    <DecisionEvidence label="Annualised turnover" value={formatCurrency(result.annualisedTurnover)} />
+                    <DecisionEvidence label="Period length" value={`${result.periodLengthInYears.toFixed(4)} years`} />
+                    <DecisionEvidence label="Threshold schedule" value={result.thresholdScheduleCode ?? "Not recorded"} />
+                    <DecisionEvidence
+                      label="Schedule effective from"
+                      value={result.thresholdScheduleEffectiveFrom
+                        ? new Date(`${result.thresholdScheduleEffectiveFrom}T00:00:00Z`).toLocaleDateString("en-IE")
+                        : "Not recorded"}
+                    />
+                  </dl>
+                </div>
               </div>
             </Card.Content>
           </Card>
 
           {/* Filing Regime Selection */}
-          {result.availableRegimes.length > 0 && (
+          {canWriteWorkingPapers && result.availableRegimes.length > 0 && (
             <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 mb-6">
               <Card.Header>
                 <Card.Title>Select Filing Regime</Card.Title>
@@ -531,10 +551,21 @@ export default function ClassifyPage({
       {!result && period?.sizeClassification && (
         <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 mb-6">
           <Card.Header>
-            <Card.Title>Current Classification</Card.Title>
+            <Card.Title>
+              {period.sizeClassification.decisionInputFingerprintSha256
+                && !period.sizeClassification.overrideRequiresRereview
+                ? "Current Classification"
+                : "Classification Requires Re-run"}
+            </Card.Title>
           </Card.Header>
           <Card.Content>
             <div className="space-y-4">
+              {(!period.sizeClassification.decisionInputFingerprintSha256
+                || period.sizeClassification.overrideRequiresRereview) && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
+                  The retained decision is stale. Re-run classification before selecting a regime or using filing outputs.
+                </div>
+              )}
               <div className="flex items-center justify-center">
                 <Chip
                   color={classColorMap[period.sizeClassification.calculatedClass] ?? "default"}
@@ -572,6 +603,12 @@ export default function ClassifyPage({
                   </p>
                 </div>
               </div>
+              <p className="text-xs leading-5 text-gray-500 dark:text-gray-400 text-center">
+                Threshold schedule {period.sizeClassification.thresholdScheduleCode ?? "not yet recorded"}
+                {period.sizeClassification.thresholdScheduleEffectiveFrom
+                  ? `, effective ${new Date(`${period.sizeClassification.thresholdScheduleEffectiveFrom}T00:00:00Z`).toLocaleDateString("en-IE")}`
+                  : ""}. Prior-period class evidence is derived from retained period inputs.
+              </p>
               <p className="text-xs text-gray-400 dark:text-gray-500 text-center">
                 Re-classify above to update.
               </p>
@@ -579,6 +616,15 @@ export default function ClassifyPage({
           </Card.Content>
         </Card>
       )}
+    </div>
+  );
+}
+
+function DecisionEvidence({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">{label}</dt>
+      <dd className="mt-1 font-semibold text-gray-900 dark:text-gray-100">{value}</dd>
     </div>
   );
 }

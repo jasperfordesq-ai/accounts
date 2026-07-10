@@ -50,7 +50,7 @@ function sampleCompany(): Company {
     registeredOfficeAddress1: "1 Review Quay",
     registeredOfficeCity: "Dublin",
     financialYearStartMonth: 1,
-    ardMonth: 9,
+    annualReturnDate: "2026-09-15",
     isGroupMember: false,
     isHolding: false,
     isInvestment: false,

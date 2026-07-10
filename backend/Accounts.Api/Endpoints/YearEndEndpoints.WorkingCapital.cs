@@ -12,7 +12,7 @@ public static partial class YearEndEndpoints
     public static async Task<IResult> CreateDebtorEndpointAsync(
         int companyId,
         int periodId,
-        Debtor input,
+        DebtorInput input,
         AccountsDbContext db,
         AuditService audit,
         HttpContext context)
@@ -23,27 +23,26 @@ public static partial class YearEndEndpoints
         if (YearEndFigureInputs.ForDebtor(input) is { } invalid)
             return invalid;
 
-        input.Id = 0;
-        input.PeriodId = periodId;
-        db.Debtors.Add(input);
+        var debtor = input.ToEntity(periodId);
+        db.Debtors.Add(debtor);
         await db.SaveChangesAsync();
         await audit.LogAsync(
             companyId,
             periodId,
             "Debtor",
-            input.Id,
+            debtor.Id,
             AuditEventCodes.DebtorCreated,
             null,
-            DebtorSnapshot(input),
+            DebtorSnapshot(debtor),
             AuditUserId(context));
-        return Results.Created($"/api/companies/{companyId}/periods/{periodId}/debtors/{input.Id}", input);
+        return Results.Created($"/api/companies/{companyId}/periods/{periodId}/debtors/{debtor.Id}", debtor);
     }
 
     public static async Task<IResult> UpdateDebtorEndpointAsync(
         int companyId,
         int periodId,
         int id,
-        Debtor input,
+        DebtorInput input,
         AccountsDbContext db,
         AuditService audit,
         HttpContext context)
@@ -58,7 +57,7 @@ public static partial class YearEndEndpoints
             return invalid;
 
         var oldValue = DebtorSnapshot(item);
-        item.Name = input.Name;
+        item.Name = input.Name!;
         item.Amount = input.Amount;
         item.Type = input.Type;
         item.Notes = input.Notes;
@@ -107,7 +106,7 @@ public static partial class YearEndEndpoints
     public static async Task<IResult> CreateCreditorEndpointAsync(
         int companyId,
         int periodId,
-        Creditor input,
+        CreditorInput input,
         AccountsDbContext db,
         AuditService audit,
         HttpContext context)
@@ -118,27 +117,26 @@ public static partial class YearEndEndpoints
         if (YearEndFigureInputs.ForCreditor(input) is { } invalid)
             return invalid;
 
-        input.Id = 0;
-        input.PeriodId = periodId;
-        db.Creditors.Add(input);
+        var creditor = input.ToEntity(periodId);
+        db.Creditors.Add(creditor);
         await db.SaveChangesAsync();
         await audit.LogAsync(
             companyId,
             periodId,
             "Creditor",
-            input.Id,
+            creditor.Id,
             AuditEventCodes.CreditorCreated,
             null,
-            CreditorSnapshot(input),
+            CreditorSnapshot(creditor),
             AuditUserId(context));
-        return Results.Created($"/api/companies/{companyId}/periods/{periodId}/creditors/{input.Id}", input);
+        return Results.Created($"/api/companies/{companyId}/periods/{periodId}/creditors/{creditor.Id}", creditor);
     }
 
     public static async Task<IResult> UpdateCreditorEndpointAsync(
         int companyId,
         int periodId,
         int id,
-        Creditor input,
+        CreditorInput input,
         AccountsDbContext db,
         AuditService audit,
         HttpContext context)
@@ -153,7 +151,7 @@ public static partial class YearEndEndpoints
             return invalid;
 
         var oldValue = CreditorSnapshot(item);
-        item.Name = input.Name;
+        item.Name = input.Name!;
         item.Amount = input.Amount;
         item.Type = input.Type;
         item.DueWithinYear = input.DueWithinYear;
@@ -203,7 +201,7 @@ public static partial class YearEndEndpoints
     public static async Task<IResult> CreateInventoryEndpointAsync(
         int companyId,
         int periodId,
-        Inventory input,
+        InventoryInput input,
         AccountsDbContext db,
         AuditService audit,
         HttpContext context)
@@ -214,27 +212,26 @@ public static partial class YearEndEndpoints
         if (YearEndFigureInputs.ForInventory(input) is { } invalid)
             return invalid;
 
-        input.Id = 0;
-        input.PeriodId = periodId;
-        db.Inventories.Add(input);
+        var inventory = input.ToEntity(periodId);
+        db.Inventories.Add(inventory);
         await db.SaveChangesAsync();
         await audit.LogAsync(
             companyId,
             periodId,
             "Inventory",
-            input.Id,
+            inventory.Id,
             AuditEventCodes.InventoryCreated,
             null,
-            InventorySnapshot(input),
+            InventorySnapshot(inventory),
             AuditUserId(context));
-        return Results.Created($"/api/companies/{companyId}/periods/{periodId}/inventory/{input.Id}", input);
+        return Results.Created($"/api/companies/{companyId}/periods/{periodId}/inventory/{inventory.Id}", inventory);
     }
 
     public static async Task<IResult> UpdateInventoryEndpointAsync(
         int companyId,
         int periodId,
         int id,
-        Inventory input,
+        InventoryInput input,
         AccountsDbContext db,
         AuditService audit,
         HttpContext context)
@@ -249,7 +246,7 @@ public static partial class YearEndEndpoints
             return invalid;
 
         var oldValue = InventorySnapshot(item);
-        item.Description = input.Description;
+        item.Description = input.Description!;
         item.Value = input.Value;
         item.ValuationMethod = input.ValuationMethod;
         await db.SaveChangesAsync();

@@ -10,7 +10,7 @@ describe("CompanyOfficersPanel", () => {
     const onDeleteOfficer = vi.fn();
     const officers = sampleOfficers();
 
-    render(
+    const { container } = render(
       <CompanyOfficersPanel
         officers={officers}
         showAddOfficer={false}
@@ -40,10 +40,21 @@ describe("CompanyOfficersPanel", () => {
     expect(screen.getByText("Niamh Director")).toBeInTheDocument();
     expect(screen.getByText("Sean Secretary")).toBeInTheDocument();
     expect(screen.getAllByText("Active")).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "Sort by Officer" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sort by Role" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Sort by Actions" })).not.toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Actions" })).not.toHaveAttribute("aria-sort");
+    expect(container.querySelector(".workbench-data-grid")).toHaveAttribute("data-responsive", "card");
+    expect(container.querySelector('td[data-label="Actions"]')).toContainElement(
+      screen.getByRole("button", { name: "Edit Niamh Director" }),
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Add officer" }));
     fireEvent.click(screen.getByRole("button", { name: "Edit Niamh Director" }));
     fireEvent.click(screen.getByRole("button", { name: "Remove Sean Secretary" }));
+    expect(onDeleteOfficer).not.toHaveBeenCalled();
+    expect(screen.getByRole("alertdialog", { name: "Remove officer Sean Secretary?" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Remove record" }));
 
     expect(onShowAddOfficer).toHaveBeenCalledTimes(1);
     expect(onStartEditOfficer).toHaveBeenCalledWith(officers[0]);

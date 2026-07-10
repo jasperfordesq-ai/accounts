@@ -3,6 +3,9 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "23 3 * * 1"
 
 permissions:
   contents: read
@@ -13,15 +16,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
 
       - name: Set up Node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version-file: .nvmrc
 
       - name: Validate CI action versions
         run: node scripts/verify-ci-actions.mjs
+
+      - name: Validate reproducible build inputs
+        run: node scripts/verify-build-inputs.mjs
 
   backend:
     name: Backend
@@ -45,15 +53,34 @@ jobs:
           --health-retries 5
     steps:
       - name: Check out repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
 
       - name: Set up .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
         with:
-          dotnet-version: 10.0.x
+          global-json-file: global.json
 
       - name: Restore backend
-        run: dotnet restore backend/Accounts.slnx
+        run: dotnet restore backend/Accounts.slnx --locked-mode
+
+      - name: Restore pinned .NET tools
+        run: dotnet tool restore
+
+      - name: Build API
+        run: dotnet build backend/Accounts.Api/Accounts.Api.csproj --configuration Release --no-restore
+
+      - name: Reject generated OpenAPI contract drift
+        run: git diff --exit-code -- backend/Accounts.Api/OpenApi/accounts-api-v1.json
+
+      - name: Reject pending EF model changes
+        run: >-
+          dotnet ef migrations has-pending-model-changes
+          --project backend/Accounts.Api/Accounts.Api.csproj
+          --startup-project backend/Accounts.Api/Accounts.Api.csproj
+          --configuration Release
+          --no-build
 
       - name: Test backend
         run: dotnet test backend/Accounts.Tests/Accounts.Tests.csproj --configuration Release --no-restore
@@ -61,8 +88,50 @@ jobs:
           # Enables the [PostgresFact] audit-durability tests (otherwise skipped on InMemory).
           ACCOUNTS_POSTGRES_TEST_CONNECTION: "Host=localhost;Port=5432;Database=accounts_test;Username=accounts_test;Password=accounts_test"
 
-      - name: Build API
-        run: dotnet build backend/Accounts.Api/Accounts.Api.csproj --configuration Release --no-restore
+      - name: Run mandatory PostgreSQL golden corpus release gate
+        run: >-
+          dotnet test backend/Accounts.Tests/Accounts.Tests.csproj
+          --configuration Release
+          --no-restore
+          --filter FullyQualifiedName~GoldenCorpusPostgresReleaseTests
+        env:
+          ACCOUNTS_POSTGRES_TEST_CONNECTION: "Host=localhost;Port=5432;Database=accounts_test;Username=accounts_test;Password=accounts_test"
+          ACCOUNTS_REQUIRE_POSTGRES_GOLDEN_CORPUS: "true"
+
+      - name: Run fresh and previous-release PostgreSQL migration gate
+        run: >-
+          dotnet test backend/Accounts.Tests/Accounts.Tests.csproj
+          --configuration Release
+          --no-restore
+          --filter FullyQualifiedName~MigrationUpgradePostgresTests
+        env:
+          ACCOUNTS_POSTGRES_TEST_CONNECTION: "Host=localhost;Port=5432;Database=accounts_test;Username=accounts_test;Password=accounts_test"
+          ACCOUNTS_MIGRATION_EVIDENCE_PATH: ${{ runner.temp }}/accounts-migration-upgrade/migration-upgrade-report.json
+          ACCOUNTS_GITHUB_ACTIONS_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+      - name: Verify migration upgrade evidence
+        if: always()
+        shell: pwsh
+        run: |
+          $evidenceDirectory = Join-Path $env:RUNNER_TEMP "accounts-migration-upgrade"
+          New-Item -ItemType Directory -Path $evidenceDirectory -Force | Out-Null
+          $runUrl = "https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
+          ./scripts/verify-migration-upgrade-evidence.ps1 `
+            -ReportPath (Join-Path $evidenceDirectory "migration-upgrade-report.json") `
+            -ConfigurationPath "config/migration-gate.json" `
+            -EvidencePath (Join-Path $evidenceDirectory "migration-upgrade-verification-report.json") `
+            -CommitSha $env:GITHUB_SHA `
+            -GitHubActionsRunUrl $runUrl
+          Copy-Item -LiteralPath "config/migration-gate.json" -Destination $evidenceDirectory
+          Copy-Item -LiteralPath ".config/dotnet-tools.json" -Destination $evidenceDirectory
+
+      - name: Upload PostgreSQL migration upgrade evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: postgres-migration-upgrade-gate
+          path: ${{ runner.temp }}/accounts-migration-upgrade
+          if-no-files-found: error
 
   frontend:
     name: Frontend
@@ -74,10 +143,12 @@ jobs:
         working-directory: frontend
     steps:
       - name: Check out repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
 
       - name: Set up Node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -103,7 +174,7 @@ jobs:
 
       - name: Upload dependency audit evidence
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: dependency-audit-release
           path: ${{ runner.temp }}/accounts-dependency-audit
@@ -140,8 +211,8 @@ jobs:
     env:
       POSTGRES_DB: accounts
       POSTGRES_USER: accounts
-      ACCOUNTS_API_IMAGE: accounts-api-ci:${{ github.sha }}
-      ACCOUNTS_FRONTEND_IMAGE: accounts-frontend-ci:${{ github.sha }}
+      ACCOUNTS_API_IMAGE: ghcr.io/example/accounts-api@sha256:1111111111111111111111111111111111111111111111111111111111111111
+      ACCOUNTS_FRONTEND_IMAGE: ghcr.io/example/accounts-frontend@sha256:2222222222222222222222222222222222222222222222222222222222222222
       ACCOUNTS_ALLOWED_HOSTS: accounts-smoke.local
       ACCOUNTS_ALLOWED_ORIGIN: https://accounts-smoke.local
       TRUST_PROXY_HEADERS: "true"
@@ -155,9 +226,15 @@ jobs:
       MONITORING_ERROR_TRACKING_DSN: https://public@sentry.invalid/1
       MONITORING_ERROR_SMOKE_ENABLED: "true"
       MONITORING_TRACES_SAMPLE_RATE: "0"
+      MONITORING_ON_CALL_OWNER: CI Operations Owner
+      MONITORING_ALERT_ROUTE: ci-operations-alert-route
+      MFA_ENCRYPTION_ACTIVE_KEY_ID: ci-mfa-primary
+      DEADLINE_DELIVERY_PROVIDER_ENDPOINT: https://deadline-provider.invalid/reminders
     steps:
       - name: Check out repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
 
       - name: Generate ephemeral production config secrets
         shell: bash
@@ -190,20 +267,70 @@ jobs:
             printf '%s=%s\n' "$env_name" "$path" >> "$GITHUB_ENV"
           }
 
+          generate_postgres_tls() {
+            local ca_key="$secrets_dir/postgres-ca.key"
+            local ca_cert="$secrets_dir/postgres-ca.crt"
+            local server_key="$secrets_dir/postgres-server.key"
+            local server_csr="$secrets_dir/postgres-server.csr"
+            local server_cert="$secrets_dir/postgres-server.crt"
+            local extensions="$secrets_dir/postgres-server.ext"
+
+            openssl req -x509 -newkey rsa:3072 -nodes -sha256 -days 2 \
+              -subj "/CN=Accounts CI PostgreSQL CA" \
+              -addext "basicConstraints=critical,CA:TRUE" \
+              -addext "keyUsage=critical,keyCertSign,cRLSign" \
+              -keyout "$ca_key" -out "$ca_cert" >/dev/null 2>&1
+            openssl req -new -newkey rsa:3072 -nodes -sha256 \
+              -subj "/CN=db" -keyout "$server_key" -out "$server_csr" >/dev/null 2>&1
+            cat > "$extensions" <<'EOF'
+          basicConstraints=critical,CA:FALSE
+          keyUsage=critical,digitalSignature,keyEncipherment
+          extendedKeyUsage=serverAuth
+          subjectAltName=DNS:db
+          EOF
+            openssl x509 -req -sha256 -days 2 -in "$server_csr" \
+              -CA "$ca_cert" -CAkey "$ca_key" -CAcreateserial \
+              -extfile "$extensions" -out "$server_cert" >/dev/null 2>&1
+            local backup_private_key="$secrets_dir/backup-decryption.key"
+            local backup_certificate="$secrets_dir/backup-encryption.crt"
+            openssl req -x509 -newkey rsa:3072 -nodes -sha256 -days 2 \
+              -subj "/CN=Accounts CI Backup Encryption" \
+              -addext "basicConstraints=critical,CA:FALSE" \
+              -addext "keyUsage=critical,keyEncipherment,dataEncipherment" \
+              -keyout "$backup_private_key" -out "$backup_certificate" >/dev/null 2>&1
+            chmod 0600 "$ca_key" "$backup_private_key"
+            chmod 0444 "$ca_cert" "$server_cert" "$server_key" "$backup_certificate"
+            printf 'POSTGRES_SERVER_CERTIFICATE_FILE=%s\n' "$server_cert" >> "$GITHUB_ENV"
+            printf 'POSTGRES_SERVER_KEY_FILE=%s\n' "$server_key" >> "$GITHUB_ENV"
+            printf 'POSTGRES_CA_CERTIFICATE_FILE=%s\n' "$ca_cert" >> "$GITHUB_ENV"
+            printf 'BACKUP_ENCRYPTION_CERTIFICATE_FILE=%s\n' "$backup_certificate" >> "$GITHUB_ENV"
+            printf 'BACKUP_DECRYPTION_CERTIFICATE_FILE=%s\n' "$backup_certificate" >> "$GITHUB_ENV"
+            printf 'BACKUP_DECRYPTION_PRIVATE_KEY_FILE=%s\n' "$backup_private_key" >> "$GITHUB_ENV"
+          }
+
           secrets_dir="$RUNNER_TEMP/accounts-production-config-secrets"
           mkdir -p "$secrets_dir"
           chmod 700 "$secrets_dir"
+          generate_postgres_tls
 
           postgres_password="$(generate_secret)"
+          postgres_application_password="$(generate_secret)"
           accounts_api_key="$(generate_secret)"
           accounts_api_key_hash="$(printf '%s' "$accounts_api_key" | sha256sum | awk '{print $1}')"
-          accounts_connection_string="Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${postgres_password}"
+          accounts_migration_connection_string="Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${postgres_password};SSL Mode=VerifyFull;Root Certificate=/run/secrets/postgres_ca_certificate;Trust Server Certificate=false"
+          accounts_application_connection_string="Host=db;Port=5432;Database=${POSTGRES_DB};Username=accounts_api;Password=${postgres_application_password};SSL Mode=VerifyFull;Root Certificate=/run/secrets/postgres_ca_certificate;Trust Server Certificate=false"
           bootstrap_owner_password="$(generate_bootstrap_owner_password)"
 
           write_secret_file POSTGRES_PASSWORD_FILE postgres_password "$postgres_password"
-          write_secret_file ACCOUNTS_CONNECTION_STRING_FILE accounts_connection_string "$accounts_connection_string"
+          write_secret_file POSTGRES_APPLICATION_PASSWORD_FILE postgres_application_password "$postgres_application_password"
+          write_secret_file ACCOUNTS_MIGRATION_CONNECTION_STRING_FILE accounts_migration_connection_string "$accounts_migration_connection_string"
+          write_secret_file ACCOUNTS_APPLICATION_CONNECTION_STRING_FILE accounts_application_connection_string "$accounts_application_connection_string"
           write_secret_file AUTH_SESSION_SIGNING_KEY_FILE auth_session_signing_key "$(generate_secret)"
           write_secret_file AUDIT_INTEGRITY_SIGNING_KEY_FILE audit_integrity_signing_key "$(generate_secret)"
+          write_secret_file DATABASE_TENANT_CONTEXT_KEY_FILE database_tenant_context_key "$(generate_secret)"
+          write_secret_file IDENTITY_HMAC_KEY_FILE identity_hmac_key "$(generate_secret)"
+          write_secret_file MFA_ENCRYPTION_KEY_FILE mfa_encryption_key "$(generate_secret | head -c 44)"
+          write_secret_file DEADLINE_PROVIDER_TOKEN_FILE deadline_provider_token "$(generate_secret)"
           write_secret_file ACCOUNTS_API_KEY_FILE accounts_api_key "$accounts_api_key"
           write_secret_file BOOTSTRAP_OWNER_PASSWORD_FILE bootstrap_owner_password "$bootstrap_owner_password"
           set_masked_env ACCOUNTS_API_KEY_HASH "$accounts_api_key_hash"
@@ -221,7 +348,7 @@ jobs:
 
       - name: Upload production safety evidence
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: production-safety-config
           path: ${{ runner.temp }}/accounts-production-safety/production-safety-report.json
@@ -236,15 +363,14 @@ jobs:
           caddy:2
           caddy validate --config /etc/caddy/Caddyfile
 
-      - name: Build backend production image
-        run: docker build -f Dockerfile.backend --tag "$ACCOUNTS_API_IMAGE" .
-
-      - name: Build frontend production image
-        run: docker build -f Dockerfile.frontend --build-arg API_URL=http://api:8080 --tag "$ACCOUNTS_FRONTEND_IMAGE" .
-
   production-smoke:
     name: Production Stack Smoke
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
     needs:
       - backend
       - frontend
@@ -252,8 +378,6 @@ jobs:
     env:
       POSTGRES_DB: accounts
       POSTGRES_USER: accounts
-      ACCOUNTS_API_IMAGE: accounts-api-ci:${{ github.sha }}
-      ACCOUNTS_FRONTEND_IMAGE: accounts-frontend-ci:${{ github.sha }}
       ACCOUNTS_ALLOWED_HOSTS: accounts-smoke.local
       ACCOUNTS_ALLOWED_ORIGIN: https://accounts-smoke.local
       TRUST_PROXY_HEADERS: "true"
@@ -267,9 +391,15 @@ jobs:
       MONITORING_ERROR_TRACKING_DSN: https://public@sentry.invalid/1
       MONITORING_ERROR_SMOKE_ENABLED: "true"
       MONITORING_TRACES_SAMPLE_RATE: "0"
+      MONITORING_ON_CALL_OWNER: CI Operations Owner
+      MONITORING_ALERT_ROUTE: ci-operations-alert-route
+      MFA_ENCRYPTION_ACTIVE_KEY_ID: ci-mfa-primary
+      DEADLINE_DELIVERY_PROVIDER_ENDPOINT: https://deadline-provider.invalid/reminders
     steps:
       - name: Check out repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
 
       - name: Generate ephemeral production smoke secrets
         shell: bash
@@ -302,20 +432,70 @@ jobs:
             printf '%s=%s\n' "$env_name" "$path" >> "$GITHUB_ENV"
           }
 
+          generate_postgres_tls() {
+            local ca_key="$secrets_dir/postgres-ca.key"
+            local ca_cert="$secrets_dir/postgres-ca.crt"
+            local server_key="$secrets_dir/postgres-server.key"
+            local server_csr="$secrets_dir/postgres-server.csr"
+            local server_cert="$secrets_dir/postgres-server.crt"
+            local extensions="$secrets_dir/postgres-server.ext"
+
+            openssl req -x509 -newkey rsa:3072 -nodes -sha256 -days 2 \
+              -subj "/CN=Accounts CI PostgreSQL CA" \
+              -addext "basicConstraints=critical,CA:TRUE" \
+              -addext "keyUsage=critical,keyCertSign,cRLSign" \
+              -keyout "$ca_key" -out "$ca_cert" >/dev/null 2>&1
+            openssl req -new -newkey rsa:3072 -nodes -sha256 \
+              -subj "/CN=db" -keyout "$server_key" -out "$server_csr" >/dev/null 2>&1
+            cat > "$extensions" <<'EOF'
+          basicConstraints=critical,CA:FALSE
+          keyUsage=critical,digitalSignature,keyEncipherment
+          extendedKeyUsage=serverAuth
+          subjectAltName=DNS:db
+          EOF
+            openssl x509 -req -sha256 -days 2 -in "$server_csr" \
+              -CA "$ca_cert" -CAkey "$ca_key" -CAcreateserial \
+              -extfile "$extensions" -out "$server_cert" >/dev/null 2>&1
+            local backup_private_key="$secrets_dir/backup-decryption.key"
+            local backup_certificate="$secrets_dir/backup-encryption.crt"
+            openssl req -x509 -newkey rsa:3072 -nodes -sha256 -days 2 \
+              -subj "/CN=Accounts CI Backup Encryption" \
+              -addext "basicConstraints=critical,CA:FALSE" \
+              -addext "keyUsage=critical,keyEncipherment,dataEncipherment" \
+              -keyout "$backup_private_key" -out "$backup_certificate" >/dev/null 2>&1
+            chmod 0600 "$ca_key" "$backup_private_key"
+            chmod 0444 "$ca_cert" "$server_cert" "$server_key" "$backup_certificate"
+            printf 'POSTGRES_SERVER_CERTIFICATE_FILE=%s\n' "$server_cert" >> "$GITHUB_ENV"
+            printf 'POSTGRES_SERVER_KEY_FILE=%s\n' "$server_key" >> "$GITHUB_ENV"
+            printf 'POSTGRES_CA_CERTIFICATE_FILE=%s\n' "$ca_cert" >> "$GITHUB_ENV"
+            printf 'BACKUP_ENCRYPTION_CERTIFICATE_FILE=%s\n' "$backup_certificate" >> "$GITHUB_ENV"
+            printf 'BACKUP_DECRYPTION_CERTIFICATE_FILE=%s\n' "$backup_certificate" >> "$GITHUB_ENV"
+            printf 'BACKUP_DECRYPTION_PRIVATE_KEY_FILE=%s\n' "$backup_private_key" >> "$GITHUB_ENV"
+          }
+
           secrets_dir="$RUNNER_TEMP/accounts-production-smoke-secrets"
           mkdir -p "$secrets_dir"
           chmod 700 "$secrets_dir"
+          generate_postgres_tls
 
           postgres_password="$(generate_secret)"
+          postgres_application_password="$(generate_secret)"
           accounts_api_key="$(generate_secret)"
           accounts_api_key_hash="$(printf '%s' "$accounts_api_key" | sha256sum | awk '{print $1}')"
-          accounts_connection_string="Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${postgres_password}"
+          accounts_migration_connection_string="Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${postgres_password};SSL Mode=VerifyFull;Root Certificate=/run/secrets/postgres_ca_certificate;Trust Server Certificate=false"
+          accounts_application_connection_string="Host=db;Port=5432;Database=${POSTGRES_DB};Username=accounts_api;Password=${postgres_application_password};SSL Mode=VerifyFull;Root Certificate=/run/secrets/postgres_ca_certificate;Trust Server Certificate=false"
           bootstrap_owner_password="$(generate_bootstrap_owner_password)"
 
           write_secret_file POSTGRES_PASSWORD_FILE postgres_password "$postgres_password"
-          write_secret_file ACCOUNTS_CONNECTION_STRING_FILE accounts_connection_string "$accounts_connection_string"
+          write_secret_file POSTGRES_APPLICATION_PASSWORD_FILE postgres_application_password "$postgres_application_password"
+          write_secret_file ACCOUNTS_MIGRATION_CONNECTION_STRING_FILE accounts_migration_connection_string "$accounts_migration_connection_string"
+          write_secret_file ACCOUNTS_APPLICATION_CONNECTION_STRING_FILE accounts_application_connection_string "$accounts_application_connection_string"
           write_secret_file AUTH_SESSION_SIGNING_KEY_FILE auth_session_signing_key "$(generate_secret)"
           write_secret_file AUDIT_INTEGRITY_SIGNING_KEY_FILE audit_integrity_signing_key "$(generate_secret)"
+          write_secret_file DATABASE_TENANT_CONTEXT_KEY_FILE database_tenant_context_key "$(generate_secret)"
+          write_secret_file IDENTITY_HMAC_KEY_FILE identity_hmac_key "$(generate_secret)"
+          write_secret_file MFA_ENCRYPTION_KEY_FILE mfa_encryption_key "$(generate_secret | head -c 44)"
+          write_secret_file DEADLINE_PROVIDER_TOKEN_FILE deadline_provider_token "$(generate_secret)"
           write_secret_file ACCOUNTS_API_KEY_FILE accounts_api_key "$accounts_api_key"
           write_secret_file BOOTSTRAP_OWNER_PASSWORD_FILE bootstrap_owner_password "$bootstrap_owner_password"
           set_masked_env ACCOUNTS_API_KEY_HASH "$accounts_api_key_hash"
@@ -323,7 +503,7 @@ jobs:
           printf 'AUDIT_INTEGRITY_ACTIVE_KEY_ID=ci-audit-%s-%s\n' "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" >> "$GITHUB_ENV"
 
       - name: Set up Node for visual smoke
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -337,13 +517,180 @@ jobs:
         working-directory: frontend
         run: npx playwright install --with-deps chromium
 
-      - name: Build production smoke images
+      - name: Verify visual contrast policy in Chromium
+        working-directory: frontend
+        run: node --test tests/browser/visual-smoke-contrast.test.mjs
+
+      - name: Determine container promotion mode
+        id: promotion-mode
+        shell: bash
         run: |
-          docker build -f Dockerfile.backend --tag "$ACCOUNTS_API_IMAGE" .
-          docker build -f Dockerfile.frontend --build-arg API_URL=http://api:8080 --tag "$ACCOUNTS_FRONTEND_IMAGE" .
+          set -euo pipefail
+
+          repository="${GITHUB_REPOSITORY,,}"
+          promotion_enabled=false
+          if [[ "$GITHUB_EVENT_NAME" == "push" && "$GITHUB_REF" == "refs/heads/main" ]]; then
+            promotion_enabled=true
+          fi
+
+          evidence_dir="$RUNNER_TEMP/accounts-container-supply-chain"
+          mkdir -p "$evidence_dir"
+          printf 'enabled=%s\n' "$promotion_enabled" >> "$GITHUB_OUTPUT"
+          printf 'backend-name=ghcr.io/%s-api\n' "$repository" >> "$GITHUB_OUTPUT"
+          printf 'frontend-name=ghcr.io/%s-frontend\n' "$repository" >> "$GITHUB_OUTPUT"
+          printf 'evidence-dir=%s\n' "$evidence_dir" >> "$GITHUB_OUTPUT"
+          printf 'CONTAINER_PROMOTION_MODE=%s\n' "$([[ "$promotion_enabled" == "true" ]] && echo promoted || echo verification-only)" >> "$GITHUB_ENV"
+
+      - name: Log in to GHCR for trusted promotion
+        if: steps.promotion-mode.outputs.enabled == 'true'
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Build backend image exactly once
+        id: backend-build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: Dockerfile.backend
+          push: ${{ steps.promotion-mode.outputs.enabled == 'true' }}
+          load: ${{ steps.promotion-mode.outputs.enabled != 'true' }}
+          provenance: false
+          tags: ${{ steps.promotion-mode.outputs.enabled == 'true' && format('{0}:{1}', steps.promotion-mode.outputs.backend-name, github.sha) || format('accounts-api-ci:{0}', github.sha) }}
+
+      - name: Build frontend image exactly once
+        id: frontend-build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: Dockerfile.frontend
+          build-args: API_URL=http://api:8080
+          push: ${{ steps.promotion-mode.outputs.enabled == 'true' }}
+          load: ${{ steps.promotion-mode.outputs.enabled != 'true' }}
+          provenance: false
+          tags: ${{ steps.promotion-mode.outputs.enabled == 'true' && format('{0}:{1}', steps.promotion-mode.outputs.frontend-name, github.sha) || format('accounts-frontend-ci:{0}', github.sha) }}
+
+      - name: Resolve exact built image references
+        id: image-refs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          backend_digest='${{ steps.backend-build.outputs.digest }}'
+          frontend_digest='${{ steps.frontend-build.outputs.digest }}'
+          digest_pattern='^sha256:[0-9a-f]{64}$'
+          [[ "$backend_digest" =~ $digest_pattern ]] || { echo "Invalid backend digest: $backend_digest" >&2; exit 1; }
+          [[ "$frontend_digest" =~ $digest_pattern ]] || { echo "Invalid frontend digest: $frontend_digest" >&2; exit 1; }
+
+          if [[ '${{ steps.promotion-mode.outputs.enabled }}' == 'true' ]]; then
+            backend_ref='${{ steps.promotion-mode.outputs.backend-name }}'@"$backend_digest"
+            frontend_ref='${{ steps.promotion-mode.outputs.frontend-name }}'@"$frontend_digest"
+          else
+            backend_ref="accounts-api-ci:$GITHUB_SHA"
+            frontend_ref="accounts-frontend-ci:$GITHUB_SHA"
+          fi
+
+          printf 'backend-digest=%s\nfrontend-digest=%s\n' "$backend_digest" "$frontend_digest" >> "$GITHUB_OUTPUT"
+          printf 'backend-ref=%s\nfrontend-ref=%s\n' "$backend_ref" "$frontend_ref" >> "$GITHUB_OUTPUT"
+          printf 'ACCOUNTS_API_IMAGE=%s\nACCOUNTS_FRONTEND_IMAGE=%s\n' "$backend_ref" "$frontend_ref" >> "$GITHUB_ENV"
+          printf 'BACKEND_IMAGE_DIGEST=%s\nFRONTEND_IMAGE_DIGEST=%s\n' "$backend_digest" "$frontend_digest" >> "$GITHUB_ENV"
+
+      - name: Scan exact backend image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ steps.image-refs.outputs.backend-ref }}
+          format: json
+          output: ${{ steps.promotion-mode.outputs.evidence-dir }}/backend-trivy.json
+          severity: HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: "1"
+
+      - name: Scan exact frontend image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ steps.image-refs.outputs.frontend-ref }}
+          format: json
+          output: ${{ steps.promotion-mode.outputs.evidence-dir }}/frontend-trivy.json
+          severity: HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: "1"
+
+      - name: Generate backend SPDX SBOM
+        uses: anchore/sbom-action@43a17d6e7add2b5535efe4dcae9952337c479a93 # v0
+        with:
+          image: ${{ steps.image-refs.outputs.backend-ref }}
+          format: spdx-json
+          output-file: ${{ steps.promotion-mode.outputs.evidence-dir }}/backend-sbom.spdx.json
+          upload-artifact: false
+
+      - name: Generate frontend SPDX SBOM
+        uses: anchore/sbom-action@43a17d6e7add2b5535efe4dcae9952337c479a93 # v0
+        with:
+          image: ${{ steps.image-refs.outputs.frontend-ref }}
+          format: spdx-json
+          output-file: ${{ steps.promotion-mode.outputs.evidence-dir }}/frontend-sbom.spdx.json
+          upload-artifact: false
+
+      - name: Attest backend build provenance
+        id: backend-attest
+        if: steps.promotion-mode.outputs.enabled == 'true'
+        uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
+        with:
+          subject-name: ${{ steps.promotion-mode.outputs.backend-name }}
+          subject-digest: ${{ steps.image-refs.outputs.backend-digest }}
+          push-to-registry: true
+
+      - name: Attest frontend build provenance
+        id: frontend-attest
+        if: steps.promotion-mode.outputs.enabled == 'true'
+        uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
+        with:
+          subject-name: ${{ steps.promotion-mode.outputs.frontend-name }}
+          subject-digest: ${{ steps.image-refs.outputs.frontend-digest }}
+          push-to-registry: true
+
+      - name: Retain provenance bundle metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence_dir='${{ steps.promotion-mode.outputs.evidence-dir }}'
+          backend_bundle='${{ steps.backend-attest.outputs.bundle-path }}'
+          frontend_bundle='${{ steps.frontend-attest.outputs.bundle-path }}'
+
+          if [[ '${{ steps.promotion-mode.outputs.enabled }}' == 'true' ]]; then
+            test -s "$backend_bundle"
+            test -s "$frontend_bundle"
+            cp "$backend_bundle" "$evidence_dir/backend-provenance.jsonl"
+            cp "$frontend_bundle" "$evidence_dir/frontend-provenance.jsonl"
+          fi
+
+          printf 'BACKEND_ATTESTATION_URL=%s\n' '${{ steps.backend-attest.outputs.attestation-url }}' >> "$GITHUB_ENV"
+          printf 'FRONTEND_ATTESTATION_URL=%s\n' '${{ steps.frontend-attest.outputs.attestation-url }}' >> "$GITHUB_ENV"
+          printf 'BACKEND_PROVENANCE_PATH=%s\n' "$([[ -f "$evidence_dir/backend-provenance.jsonl" ]] && echo "$evidence_dir/backend-provenance.jsonl" || true)" >> "$GITHUB_ENV"
+          printf 'FRONTEND_PROVENANCE_PATH=%s\n' "$([[ -f "$evidence_dir/frontend-provenance.jsonl" ]] && echo "$evidence_dir/frontend-provenance.jsonl" || true)" >> "$GITHUB_ENV"
+
+      - name: Pull exact promoted image digests
+        if: steps.promotion-mode.outputs.enabled == 'true'
+        run: |
+          docker pull "$ACCOUNTS_API_IMAGE"
+          docker pull "$ACCOUNTS_FRONTEND_IMAGE"
 
       - name: Start production stack
         run: docker compose -f compose.production.yml up -d --wait --wait-timeout 300
+
+      - name: Verify certificate-validated PostgreSQL transport
+        shell: pwsh
+        run: |
+          $runUrl = "https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
+          ./scripts/verify-postgres-tls.ps1 `
+            -EvidencePath (Join-Path $env:RUNNER_TEMP "accounts-postgres-tls/postgres-tls-report.json") `
+            -CommitSha $env:GITHUB_SHA `
+            -GitHubActionsRunUrl $runUrl
 
       - name: Map local HTTPS smoke hostname
         run: echo "127.0.0.1 accounts-smoke.local" | sudo tee -a /etc/hosts
@@ -414,6 +761,51 @@ jobs:
             -OutputDirectory (Join-Path $env:RUNNER_TEMP "accounts-smoke") `
             -CheckMonitoringErrorRouting
 
+      - name: Run bounded production capacity profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/run-capacity-profile.mjs \
+            --base-url=https://accounts-smoke.local \
+            --report-path="$RUNNER_TEMP/accounts-capacity/capacity-profile-report.json" \
+            --requests=120 \
+            --concurrency=12 \
+            --p95-ms=1000 \
+            --max-error-rate-percent=0 \
+            --min-throughput-rps=10 \
+            --commit-sha="$GITHUB_SHA" \
+            --github-actions-run-url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+
+      - name: Upload bounded capacity evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: bounded-capacity-profile
+          path: ${{ runner.temp }}/accounts-capacity/capacity-profile-report.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Exercise API and database interruption recovery
+        shell: pwsh
+        run: |
+          ./scripts/test-production-failover.ps1 `
+            -BaseUrl https://accounts-smoke.local `
+            -ComposeFile compose.production.yml `
+            -EvidencePath (Join-Path $env:RUNNER_TEMP "accounts-failover/production-failover-report.json") `
+            -CommitSha $env:GITHUB_SHA `
+            -GitHubActionsRunUrl "https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID" `
+            -ConfirmEphemeralCandidateStack `
+            -ExpectedComposeProject accounts-production
+
+      - name: Upload failover drill evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: production-failover-drill
+          path: ${{ runner.temp }}/accounts-failover/production-failover-report.json
+          if-no-files-found: error
+          retention-days: 90
+
       - name: Verify no-direct filing submission control
         shell: pwsh
         run: |
@@ -430,9 +822,69 @@ jobs:
             -ReportPath (Join-Path $env:RUNNER_TEMP "accounts-smoke/production-readiness-report.json") `
             -EvidencePath (Join-Path $env:RUNNER_TEMP "accounts-smoke/production-readiness-verification-report.json")
 
+      - name: Write and verify container supply-chain evidence
+        shell: pwsh
+        run: |
+          $evidenceDirectory = '${{ steps.promotion-mode.outputs.evidence-dir }}'
+          $runUrl = "https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
+          $evidencePath = Join-Path $evidenceDirectory "container-supply-chain-report.json"
+          $verificationPath = Join-Path $evidenceDirectory "container-supply-chain-verification-report.json"
+
+          ./scripts/write-container-supply-chain-report.ps1 `
+            -PromotionMode $env:CONTAINER_PROMOTION_MODE `
+            -CommitSha $env:GITHUB_SHA `
+            -GitHubActionsRunUrl $runUrl `
+            -BackendImageName '${{ steps.promotion-mode.outputs.backend-name }}' `
+            -BackendImageReference $env:ACCOUNTS_API_IMAGE `
+            -BackendDigest $env:BACKEND_IMAGE_DIGEST `
+            -FrontendImageName '${{ steps.promotion-mode.outputs.frontend-name }}' `
+            -FrontendImageReference $env:ACCOUNTS_FRONTEND_IMAGE `
+            -FrontendDigest $env:FRONTEND_IMAGE_DIGEST `
+            -BackendScanPath (Join-Path $evidenceDirectory "backend-trivy.json") `
+            -FrontendScanPath (Join-Path $evidenceDirectory "frontend-trivy.json") `
+            -BackendSbomPath (Join-Path $evidenceDirectory "backend-sbom.spdx.json") `
+            -FrontendSbomPath (Join-Path $evidenceDirectory "frontend-sbom.spdx.json") `
+            -BackendProvenancePath $env:BACKEND_PROVENANCE_PATH `
+            -FrontendProvenancePath $env:FRONTEND_PROVENANCE_PATH `
+            -BackendAttestationUrl $env:BACKEND_ATTESTATION_URL `
+            -FrontendAttestationUrl $env:FRONTEND_ATTESTATION_URL `
+            -SmokeVerified `
+            -EvidencePath $evidencePath
+
+          if ($env:CONTAINER_PROMOTION_MODE -eq "promoted") {
+            ./scripts/verify-container-supply-chain-report.ps1 `
+              -EvidencePath $evidencePath `
+              -ReportPath $verificationPath `
+              -CommitSha $env:GITHUB_SHA `
+              -GitHubActionsRunUrl $runUrl
+          } else {
+            ./scripts/verify-container-supply-chain-report.ps1 `
+              -EvidencePath $evidencePath `
+              -ReportPath $verificationPath `
+              -CommitSha $env:GITHUB_SHA `
+              -GitHubActionsRunUrl $runUrl `
+              -AllowUnpromoted
+          }
+
+      - name: Upload container supply-chain evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: container-supply-chain
+          path: ${{ steps.promotion-mode.outputs.evidence-dir }}
+          if-no-files-found: warn
+
+      - name: Upload PostgreSQL TLS evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: postgres-tls-runtime
+          path: ${{ runner.temp }}/accounts-postgres-tls/postgres-tls-report.json
+          if-no-files-found: error
+
       - name: Upload monitoring error routing evidence
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: monitoring-error-routing-smoke
           path: ${{ runner.temp }}/accounts-smoke/monitoring-error-routing-report.json
@@ -440,7 +892,7 @@ jobs:
 
       - name: Upload no-direct filing submission evidence
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: no-direct-filing-submission-control
           path: ${{ runner.temp }}/accounts-smoke/no-direct-filing-submission-report.json
@@ -448,7 +900,7 @@ jobs:
 
       - name: Upload production readiness report
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: production-readiness-report
           path: |
@@ -470,7 +922,7 @@ jobs:
 
       - name: Upload structured API log evidence
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: structured-json-log-sample
           path: ${{ runner.temp }}/accounts-logs
@@ -492,7 +944,7 @@ jobs:
 
       - name: Upload visual smoke screenshots
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: visual-smoke-screenshots
           path: .tmp/visual-smoke
@@ -507,7 +959,7 @@ jobs:
           ./scripts/backup-postgres.ps1 `
             -OutputDirectory $backupDir
 
-          $backups = @(Get-ChildItem -LiteralPath $backupDir -Filter "*.dump" |
+          $backups = @(Get-ChildItem -LiteralPath $backupDir -Filter "*.dump.cms" |
             Sort-Object LastWriteTimeUtc -Descending |
             Select-Object)
           if ($backups.Count -ne 1) {
@@ -518,6 +970,12 @@ jobs:
           if (-not (Test-Path -LiteralPath "$($backup.FullName).sha256")) {
             throw "Missing sha256 for $($backup.FullName)."
           }
+          if (-not (Test-Path -LiteralPath "$($backup.FullName).manifest.json")) {
+            throw "Missing encrypted backup manifest for $($backup.FullName)."
+          }
+          if (@(Get-ChildItem -LiteralPath $backupDir -Filter "*.dump").Count -ne 0) {
+            throw "Plaintext PostgreSQL dumps must not remain in the retained backup artifact directory."
+          }
 
           $restoreEvidencePath = Join-Path $backupDir "restore-drill-report.json"
           ./scripts/verify-postgres-backup.ps1 `
@@ -526,11 +984,12 @@ jobs:
 
       - name: Upload backup restore drill evidence
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: postgres-backup-restore-drill
           path: ${{ runner.temp }}/accounts-backups
           if-no-files-found: error
+          retention-days: 90
 
       - name: Show production stack diagnostics
         if: failure()
@@ -553,19 +1012,24 @@ jobs:
 
   ci-machine-evidence-pack:
     name: CI Machine Evidence Pack
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     needs:
+      - backend
       - frontend
       - production-config
       - production-smoke
     steps:
       - name: Check out repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
 
       - name: Download machine evidence artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           path: ${{ runner.temp }}/accounts-ci-machine-evidence
+          pattern: "!*.dockerbuild"
 
       - name: Verify CI machine evidence pack
         shell: pwsh
@@ -608,7 +1072,7 @@ jobs:
 
       - name: Upload CI machine evidence pack report
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: ci-machine-evidence-pack
           path: ${{ runner.temp }}/accounts-ci-machine-evidence-pack/ci-machine-evidence-pack-report.json
@@ -616,7 +1080,7 @@ jobs:
 
       - name: Upload release evidence reviewer workspace
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: release-evidence-reviewer-workspace
           path: ${{ runner.temp }}/accounts-release-evidence-workspace

@@ -37,6 +37,17 @@ public class AccountingPeriod
     // non-audit-exempt entity cannot generate final statutory outputs until this is recorded.
     public bool AuditorsReportReceived { get; set; }
     public string? AuditorsReportReference { get; set; }
+    public string? AuditorsReportFirmName { get; set; }
+    public string? AuditorsReportSignerName { get; set; }
+    public string? AuditorsReportProfessionalBody { get; set; }
+    public string? AuditorsReportMembershipNumber { get; set; }
+    public DateTime? AuditorsReportSignedAt { get; set; }
+    public string? AuditorsReportReviewedBy { get; set; }
+    public DateTime? AuditorsReportReviewedAt { get; set; }
+    public string? AuditorsReportReviewDecision { get; set; }
+    [JsonIgnore]
+    public byte[]? AuditorsReportArtifact { get; set; }
+    public string? AuditorsReportSha256 { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
@@ -52,6 +63,10 @@ public class AccountingPeriod
     public List<Inventory> Inventories { get; set; } = [];
     public List<DirectorLoan> DirectorLoans { get; set; } = [];
     public PayrollSummary? PayrollSummary { get; set; }
+    public CorporationTaxScopeReview? CorporationTaxScopeReview { get; set; }
+    public CorporationTaxLossRecord? CorporationTaxLossRecord { get; set; }
+    public CorporationTaxFilingSupportReview? CorporationTaxFilingSupportReview { get; set; }
+    public List<CorporationTaxPaymentRecord> CorporationTaxPaymentRecords { get; set; } = [];
     public List<TaxBalance> TaxBalances { get; set; } = [];
     public List<Dividend> Dividends { get; set; } = [];
     public List<OpeningBalance> OpeningBalances { get; set; } = [];

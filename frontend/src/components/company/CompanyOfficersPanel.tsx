@@ -4,56 +4,72 @@ import { Button } from "@heroui/react";
 import { Pencil, Plus, Save, Trash2, UserRound, X } from "lucide-react";
 import type { Officer } from "@/lib/api";
 import { DataGrid, ReviewPanel, StatusBadge } from "@/components/workbench";
+import { useDestructiveActionConfirmation } from "@/lib/useDestructiveAction";
 
 interface CompanyOfficersPanelProps {
   officers?: Officer[];
   showAddOfficer: boolean;
   newOfficerName: string;
   newOfficerRole: string;
+  newOfficerAppointedDate?: string;
   editingOfficerId: number | null;
   editOfficerName: string;
   editOfficerRole: string;
+  editOfficerAppointedDate?: string;
+  editOfficerResignedDate?: string;
   savingOfficer: boolean;
   canWrite?: boolean;
   onShowAddOfficer: () => void;
   onNewOfficerNameChange: (value: string) => void;
   onNewOfficerRoleChange: (value: string) => void;
+  onNewOfficerAppointedDateChange?: (value: string) => void;
   onCancelAddOfficer: () => void;
   onAddOfficer: () => void;
   onStartEditOfficer: (officer: Officer) => void;
   onEditOfficerNameChange: (value: string) => void;
   onEditOfficerRoleChange: (value: string) => void;
+  onEditOfficerAppointedDateChange?: (value: string) => void;
+  onEditOfficerResignedDateChange?: (value: string) => void;
   onSaveOfficer: () => void;
   onCancelEditOfficer: () => void;
-  onDeleteOfficer: (officerId: number) => void;
+  onDeleteOfficer: (officerId: number) => void | Promise<void>;
 }
 
-const officerRoles = ["Director", "Secretary", "Chairperson", "Shareholder"];
+const officerRoles = ["Director", "Secretary", "CompanySecretary"];
 
 export function CompanyOfficersPanel({
   officers = [],
   showAddOfficer,
   newOfficerName,
   newOfficerRole,
+  newOfficerAppointedDate = "",
   editingOfficerId,
   editOfficerName,
   editOfficerRole,
+  editOfficerAppointedDate = "",
+  editOfficerResignedDate = "",
   savingOfficer,
   canWrite = true,
   onShowAddOfficer,
   onNewOfficerNameChange,
   onNewOfficerRoleChange,
+  onNewOfficerAppointedDateChange = () => {},
   onCancelAddOfficer,
   onAddOfficer,
   onStartEditOfficer,
   onEditOfficerNameChange,
   onEditOfficerRoleChange,
+  onEditOfficerAppointedDateChange = () => {},
+  onEditOfficerResignedDateChange = () => {},
   onSaveOfficer,
   onCancelEditOfficer,
   onDeleteOfficer,
 }: CompanyOfficersPanelProps) {
+  const { requestDestructiveAction, destructiveActionConfirmation } = useDestructiveActionConfirmation();
+
   return (
-    <ReviewPanel
+    <>
+      <ReviewPanel
       title="Officers & Signatories"
       description="Directors, secretary and statutory signatory records."
       actions={
@@ -71,7 +87,7 @@ export function CompanyOfficersPanel({
       }
     >
       {showAddOfficer && canWrite && (
-        <div className="mb-4 grid gap-3 rounded-md border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-800 dark:bg-emerald-950/30 md:grid-cols-[minmax(14rem,1fr)_12rem_auto_auto] md:items-end">
+        <div className="mb-4 grid gap-3 rounded-md border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-800 dark:bg-emerald-950/30 md:grid-cols-[minmax(14rem,1fr)_12rem_11rem_auto_auto] md:items-end">
           <OfficerNameField
             label="New officer"
             value={newOfficerName}
@@ -84,7 +100,12 @@ export function CompanyOfficersPanel({
             value={newOfficerRole}
             onChange={onNewOfficerRoleChange}
           />
-          <Button variant="primary" size="sm" onPress={onAddOfficer} isDisabled={savingOfficer || !newOfficerName.trim()}>
+          <OfficerDateField
+            label="Appointed"
+            value={newOfficerAppointedDate}
+            onChange={onNewOfficerAppointedDateChange}
+          />
+          <Button variant="primary" size="sm" onPress={onAddOfficer} isDisabled={savingOfficer || !newOfficerName.trim() || (newOfficerRole === "Director" && !newOfficerAppointedDate)}>
             <Save className="h-3.5 w-3.5" />
             Save
           </Button>
@@ -106,21 +127,43 @@ export function CompanyOfficersPanel({
       ) : (
         <DataGrid
           columns={["Officer", "Role", "Status", "Actions"]}
+          mobilePresentation="cards"
+          sortableColumns={[true, true, true, false]}
           rows={officers.map((officer) => {
             const isEditing = editingOfficerId === officer.id;
+            const officerStatus = officer.resignedDate ? "Resigned" : isEditing ? "Editing" : "Active";
 
-            return [
+            return {
+              id: officer.id ?? `${officer.name}-${officer.role}`,
+              searchText: `${officer.name} ${officer.role} ${officerStatus}`,
+              sortValues: [officer.name, officer.role, officerStatus, null],
+              cells: [
               isEditing ? (
-                <OfficerNameField
-                  key="name"
-                  label="Edit officer name"
-                  value={editOfficerName}
-                  onChange={onEditOfficerNameChange}
-                  onEnter={onSaveOfficer}
-                  onEscape={onCancelEditOfficer}
-                  compact
-                  autoFocus
-                />
+                <div key="name" className="min-w-0 space-y-2 sm:min-w-64">
+                  <OfficerNameField
+                    label="Edit officer name"
+                    value={editOfficerName}
+                    onChange={onEditOfficerNameChange}
+                    onEnter={onSaveOfficer}
+                    onEscape={onCancelEditOfficer}
+                    compact
+                    autoFocus
+                  />
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <OfficerDateField
+                      label="Appointed"
+                      value={editOfficerAppointedDate}
+                      onChange={onEditOfficerAppointedDateChange}
+                      compact
+                    />
+                    <OfficerDateField
+                      label="Resigned"
+                      value={editOfficerResignedDate}
+                      onChange={onEditOfficerResignedDateChange}
+                      compact
+                    />
+                  </div>
+                </div>
               ) : (
                 <OfficerIdentity key="name" officer={officer} />
               ),
@@ -138,7 +181,7 @@ export function CompanyOfficersPanel({
                 </StatusBadge>
               ),
               <StatusBadge key="status" tone={officer.resignedDate ? "warn" : isEditing ? "warn" : "good"}>
-                {officer.resignedDate ? "Resigned" : isEditing ? "Editing" : "Active"}
+                {officerStatus}
               </StatusBadge>,
               <OfficerActions
                 key="actions"
@@ -146,27 +189,40 @@ export function CompanyOfficersPanel({
                 isEditing={isEditing}
                 canWrite={canWrite}
                 savingOfficer={savingOfficer}
-                canSave={Boolean(editOfficerName.trim())}
+                canSave={Boolean(editOfficerName.trim()) && (editOfficerRole !== "Director" || Boolean(editOfficerAppointedDate))}
                 onStartEditOfficer={onStartEditOfficer}
                 onSaveOfficer={onSaveOfficer}
                 onCancelEditOfficer={onCancelEditOfficer}
-                onDeleteOfficer={onDeleteOfficer}
+                onDeleteOfficer={(officerId) => requestDestructiveAction({
+                  recordLabel: `officer ${officer.name}`,
+                  consequence: `This permanently removes ${officer.name}'s ${officer.role} appointment record and may affect statutory reports, signatories and charity trustee evidence. The removal cannot be undone.`,
+                  onConfirm: () => onDeleteOfficer(officerId),
+                  successAnnouncement: `Officer ${officer.name} was removed.`,
+                })}
               />,
-            ];
+              ],
+            };
           })}
         />
       )}
-    </ReviewPanel>
+      </ReviewPanel>
+      {destructiveActionConfirmation}
+    </>
   );
 }
 
 function OfficerIdentity({ officer }: { officer: Officer }) {
   return (
-    <div className="min-w-48">
+    <div className="min-w-0 sm:min-w-48">
       <p className="font-medium text-[var(--foreground)]">{officer.name}</p>
       {officer.appointedDate && (
         <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">
           Appointed {new Intl.DateTimeFormat("en-IE", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(officer.appointedDate))}
+        </p>
+      )}
+      {!officer.appointedDate && officer.role === "Director" && (
+        <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-300">
+          Appointment date required for charity trustee-period review
         </p>
       )}
     </div>
@@ -192,7 +248,7 @@ function OfficerActions({
   onStartEditOfficer: (officer: Officer) => void;
   onSaveOfficer: () => void;
   onCancelEditOfficer: () => void;
-  onDeleteOfficer: (officerId: number) => void;
+  onDeleteOfficer: (officerId: number) => void | Promise<void>;
 }) {
   if (!canWrite) {
     return <span className="text-xs text-[var(--muted-foreground)]">Read only</span>;
@@ -284,6 +340,30 @@ function OfficerRoleField({
           </option>
         ))}
       </select>
+    </label>
+  );
+}
+
+function OfficerDateField({
+  label,
+  value,
+  onChange,
+  compact = false,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  compact?: boolean;
+}) {
+  return (
+    <label className={`block text-xs font-semibold uppercase ${compact ? "text-[var(--muted-foreground)]" : "text-emerald-900 dark:text-emerald-100"}`}>
+      {label}
+      <input
+        type="date"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-1 min-h-10 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 text-sm normal-case text-[var(--foreground)] outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500"
+      />
     </label>
   );
 }

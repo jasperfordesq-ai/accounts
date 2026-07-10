@@ -1,8 +1,8 @@
 "use client";
 
-import { Button, Card } from "@heroui/react";
+import { Card } from "@heroui/react";
 import { ArrowRight, ClipboardList, Eye, Heart } from "lucide-react";
-import Link from "next/link";
+import { ActionLink } from "@/components/workbench";
 
 import type { ReadinessScore } from "@/lib/api";
 
@@ -91,12 +91,10 @@ function WorkflowLinkCard({
               <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{description}</p>
             </div>
           </div>
-          <Link href={href}>
-            <Button variant="outline" size="sm">
-              {actionLabel}
-              <ArrowRight className="ml-1.5 h-4 w-4" />
-            </Button>
-          </Link>
+          <ActionLink href={href}>
+            {actionLabel}
+            <ArrowRight className="ml-1.5 h-4 w-4" />
+          </ActionLink>
         </div>
       </Card.Content>
     </Card>

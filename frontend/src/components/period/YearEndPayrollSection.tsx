@@ -5,6 +5,7 @@ import { Button, Spinner } from "@heroui/react";
 import type { PayrollSummary } from "@/lib/api";
 
 interface YearEndPayrollSectionProps {
+  canWrite?: boolean;
   form: PayrollSummary;
   saving: boolean;
   onFormChange: (form: PayrollSummary) => void;
@@ -15,6 +16,7 @@ const inputClass =
   "w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors";
 
 export function YearEndPayrollSection({
+  canWrite = true,
   form,
   saving,
   onFormChange,
@@ -25,10 +27,11 @@ export function YearEndPayrollSection({
       <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">
         Record payroll and staff costs for the statutory accounts, notes, and corporation tax working papers.
       </p>
-      <div className="grid grid-cols-2 gap-4">
+      {canWrite ? <><div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Number of Staff</label>
+          <label htmlFor="payroll-staff-count" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Number of Staff</label>
           <input
+            id="payroll-staff-count"
             type="number"
             className={inputClass}
             placeholder="0"
@@ -38,19 +41,33 @@ export function YearEndPayrollSection({
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Gross Wages</label>
+          <label htmlFor="payroll-gross-wages" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Employee gross wages (excluding director fees)</label>
           <input
+            id="payroll-gross-wages"
             type="number"
             className={inputClass}
             placeholder="0.00"
             value={form.grossWages || ""}
             onChange={(event) => onFormChange({ ...form, grossWages: Number(event.target.value) })}
-            aria-label="Gross wages"
+            aria-label="Employee gross wages excluding director fees"
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Employer PRSI</label>
+          <label htmlFor="payroll-directors-fees" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Directors&apos; salaries and fees</label>
           <input
+            id="payroll-directors-fees"
+            type="number"
+            className={inputClass}
+            placeholder="0.00"
+            value={form.directorsFees || ""}
+            onChange={(event) => onFormChange({ ...form, directorsFees: Number(event.target.value) })}
+            aria-label="Directors salaries and fees"
+          />
+        </div>
+        <div>
+          <label htmlFor="payroll-employer-prsi" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Employer PRSI</label>
+          <input
+            id="payroll-employer-prsi"
             type="number"
             className={inputClass}
             placeholder="0.00"
@@ -60,8 +77,9 @@ export function YearEndPayrollSection({
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Pension Contributions</label>
+          <label htmlFor="payroll-pension-contributions" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Pension Contributions</label>
           <input
+            id="payroll-pension-contributions"
             type="number"
             className={inputClass}
             placeholder="0.00"
@@ -81,7 +99,15 @@ export function YearEndPayrollSection({
         >
           {saving ? <Spinner size="sm" /> : "Save Payroll"}
         </Button>
-      </div>
+      </div></> : (
+        <dl className="grid grid-cols-2 gap-3 text-sm text-gray-700 dark:text-gray-300">
+          <div><dt className="text-xs text-gray-500">Staff</dt><dd>{form.staffCount}</dd></div>
+          <div><dt className="text-xs text-gray-500">Employee gross wages</dt><dd>{form.grossWages}</dd></div>
+          <div><dt className="text-xs text-gray-500">Directors&apos; salaries and fees</dt><dd>{form.directorsFees}</dd></div>
+          <div><dt className="text-xs text-gray-500">Employer PRSI</dt><dd>{form.employerPrsi}</dd></div>
+          <div><dt className="text-xs text-gray-500">Pension contributions</dt><dd>{form.pensionContributions}</dd></div>
+        </dl>
+      )}
     </>
   );
 }

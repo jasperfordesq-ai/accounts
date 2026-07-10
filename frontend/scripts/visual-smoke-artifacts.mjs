@@ -3,13 +3,22 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { inflateSync } from "node:zlib";
 import {
+  accountantWorkbenchRoutes,
+  canonicalStateUrlMatches,
   expectedVisualSmokeArtifacts,
   expectedVisualSmokeRouteAudits,
   expectedVisualSmokeScreenshotCount,
+  MIN_LARGE_TEXT_CONTRAST_RATIO,
+  MIN_NORMAL_TEXT_CONTRAST_RATIO,
+  MIN_UI_COMPONENT_CONTRAST_RATIO,
   MIN_VISUAL_SMOKE_CONTRAST_RATIO,
+  REQUIRED_VISUAL_SMOKE_MATERIAL_ROUTES,
+  REQUIRED_VISUAL_SMOKE_UI_STATES,
+  VISUAL_SMOKE_INVENTORY_VERSION,
   visualSmokeContrastCheck,
   visualSmokeLayoutChecks,
   visualSmokeReviewChecks,
+  visualSmokeStateInventory,
   visualSmokeThemes,
   visualSmokeViewports,
 } from "./visual-smoke-plan.mjs";
@@ -17,6 +26,7 @@ import {
 const VISUAL_SMOKE_EVIDENCE_REPORT_FILE = "visual-smoke-evidence-report.json";
 const MIN_VISUAL_SMOKE_DISTINCT_COLORS = 4;
 const MIN_VISUAL_SMOKE_LUMINANCE_RANGE = 10;
+const pngPixelEvidenceCache = new Map();
 
 export async function withScreenshotEvidence(artifact) {
   const bytes = await readFile(artifact.artifactPath);
@@ -65,6 +75,32 @@ export async function verifyVisualSmokeManifest(manifestPath, options = {}) {
   const screenshots = Array.isArray(manifest.screenshots) ? manifest.screenshots : [];
   const failures = [];
 
+  if (manifest.inventoryVersion !== VISUAL_SMOKE_INVENTORY_VERSION) {
+    failures.push(`visual smoke manifest inventoryVersion must be ${VISUAL_SMOKE_INVENTORY_VERSION}`);
+  }
+
+  if (manifest.inventoryStateCount !== visualSmokeStateInventory.length) {
+    failures.push(
+      `visual smoke manifest inventoryStateCount must be ${visualSmokeStateInventory.length}, found ${manifest.inventoryStateCount}`,
+    );
+  }
+
+  if (!sameJson(manifest.requiredMaterialRoutes, REQUIRED_VISUAL_SMOKE_MATERIAL_ROUTES)) {
+    failures.push("visual smoke manifest requiredMaterialRoutes must match the canonical material-route inventory");
+  }
+
+  if (!sameJson(manifest.requiredUiStates, REQUIRED_VISUAL_SMOKE_UI_STATES)) {
+    failures.push("visual smoke manifest requiredUiStates must match the canonical material-state inventory");
+  }
+
+  if (!sameJson(manifest.themes, visualSmokeThemes)) {
+    failures.push("visual smoke manifest themes must be exactly light and dark");
+  }
+
+  if (!sameJson(manifest.viewportDimensions, visualSmokeViewports)) {
+    failures.push("visual smoke manifest viewportDimensions must be exactly 390x844, 768x1024 and 1440x1000");
+  }
+
   if (manifest.expectedScreenshotCount !== screenshots.length) {
     failures.push(`visual smoke manifest screenshot count mismatch: expected ${manifest.expectedScreenshotCount}, found ${screenshots.length}`);
   }
@@ -91,6 +127,14 @@ export async function verifyVisualSmokeManifest(manifestPath, options = {}) {
     failures.push("visual smoke manifest review protocol must require per-screenshot automated theme contrast smoke evidence");
   }
 
+  if (!manifest.reviewProtocol?.requiredEvidence?.includes("canonical state inventory and exact URL/tab evidence")) {
+    failures.push("visual smoke manifest review protocol must require canonical state inventory and exact URL/tab evidence");
+  }
+
+  if (!manifest.reviewProtocol?.requiredEvidence?.includes("semantic content SHA-256 distinctness evidence")) {
+    failures.push("visual smoke manifest review protocol must require semantic content SHA-256 distinctness evidence");
+  }
+
   if (!manifest.reviewProtocol?.requiredEvidence?.includes(VISUAL_SMOKE_EVIDENCE_REPORT_FILE)) {
     failures.push(`visual smoke manifest review protocol must require ${VISUAL_SMOKE_EVIDENCE_REPORT_FILE}`);
   }
@@ -103,6 +147,8 @@ export async function verifyVisualSmokeManifest(manifestPath, options = {}) {
   const screenshotSummaries = [];
   const duplicateKeys = new Set();
   const seenKeys = new Set();
+  const semanticContentGroups = new Map();
+  const screenshotHashGroups = new Map();
   for (const screenshot of screenshots) {
     const evidence = await withScreenshotEvidence({
       ...screenshot,
@@ -114,6 +160,25 @@ export async function verifyVisualSmokeManifest(manifestPath, options = {}) {
       duplicateKeys.add(key);
     }
     seenKeys.add(key);
+
+    const semanticHash = String(screenshot.semanticContentSha256 ?? "");
+    if (!/^sha256:[a-f0-9]{64}$/.test(semanticHash)) {
+      failures.push(`visual smoke screenshot ${screenshot.fileName} must record a canonical semanticContentSha256`);
+    }
+    if (Number(screenshot.semanticContentByteSize) <= 0) {
+      failures.push(`visual smoke screenshot ${screenshot.fileName} semanticContentByteSize must be greater than zero`);
+    }
+
+    addCaptureIdentity(
+      semanticContentGroups,
+      `${screenshot.theme}/${screenshot.viewportName}/${semanticHash}`,
+      screenshot,
+    );
+    addCaptureIdentity(
+      screenshotHashGroups,
+      `${screenshot.theme}/${screenshot.viewportName}/${evidence.sha256}`,
+      screenshot,
+    );
 
     if (screenshot.byteSize !== evidence.byteSize) {
       failures.push(`visual smoke screenshot byte size mismatch: ${screenshot.fileName}`);
@@ -133,12 +198,25 @@ export async function verifyVisualSmokeManifest(manifestPath, options = {}) {
 
     totalBytes += evidence.byteSize;
     screenshotSummaries.push({
+      stateId: screenshot.stateId,
       routeName: screenshot.routeName,
       routeKey: screenshot.routeKey,
+      materialRoute: screenshot.materialRoute ?? null,
+      uiState: screenshot.uiState,
+      authMode: screenshot.authMode,
       theme: screenshot.theme,
       viewportName: screenshot.viewportName,
       fileName: screenshot.fileName,
       expectedText: screenshot.expectedText,
+      expectedStateText: screenshot.expectedStateText,
+      canonicalUrlTemplate: screenshot.canonicalUrlTemplate,
+      canonicalUrl: screenshot.canonicalUrl,
+      observedUrl: screenshot.observedUrl,
+      canonicalQuery: screenshot.canonicalQuery,
+      canonicalTabState: screenshot.canonicalTabState,
+      observedTabState: screenshot.observedTabState ?? null,
+      semanticContentSha256: screenshot.semanticContentSha256,
+      semanticContentByteSize: screenshot.semanticContentByteSize,
       byteSize: evidence.byteSize,
       imageWidth: evidence.imageWidth,
       imageHeight: evidence.imageHeight,
@@ -160,6 +238,9 @@ export async function verifyVisualSmokeManifest(manifestPath, options = {}) {
     failures.push(`visual smoke manifest contains duplicate screenshot coverage: ${key}`);
   }
 
+  reportSemanticallyIdenticalCaptures(semanticContentGroups, failures, "semantic content");
+  reportSemanticallyIdenticalCaptures(screenshotHashGroups, failures, "PNG image");
+
   for (const expected of expectedVisualSmokeArtifacts()) {
     const actual = screenshots.find((screenshot) => screenshotKey(screenshot) === screenshotKey(expected));
     if (!actual) {
@@ -171,6 +252,22 @@ export async function verifyVisualSmokeManifest(manifestPath, options = {}) {
       failures.push(`visual smoke screenshot route key mismatch: ${actual.fileName}`);
     }
 
+    if (actual.stateId !== expected.stateId) {
+      failures.push(`visual smoke screenshot state id mismatch: ${actual.fileName}`);
+    }
+
+    if ((actual.materialRoute ?? null) !== expected.materialRoute) {
+      failures.push(`visual smoke screenshot material route mismatch: ${actual.fileName}`);
+    }
+
+    if (actual.uiState !== expected.uiState) {
+      failures.push(`visual smoke screenshot UI state mismatch: ${actual.fileName}`);
+    }
+
+    if (actual.authMode !== expected.authMode) {
+      failures.push(`visual smoke screenshot auth mode mismatch: ${actual.fileName}`);
+    }
+
     if (actual.fileName !== expected.fileName) {
       failures.push(`visual smoke screenshot file name mismatch for ${screenshotKey(expected)}: expected ${expected.fileName}, found ${actual.fileName}`);
     }
@@ -179,6 +276,37 @@ export async function verifyVisualSmokeManifest(manifestPath, options = {}) {
       failures.push(
         `visual smoke screenshot expected text mismatch for ${screenshotKey(expected)}: expected ${expected.expectedText}, found ${actual.expectedText ?? "(missing)"}`,
       );
+    }
+
+
+    if (actual.expectedStateText !== expected.expectedStateText) {
+      failures.push(
+        `visual smoke screenshot expected state text mismatch for ${screenshotKey(expected)}: expected ${expected.expectedStateText}, found ${actual.expectedStateText ?? "(missing)"}`,
+      );
+    }
+
+    if (actual.canonicalUrlTemplate !== expected.canonicalUrlTemplate) {
+      failures.push(`visual smoke screenshot canonical URL template mismatch: ${actual.fileName}`);
+    }
+
+    if (!canonicalStateUrlMatches(actual.canonicalUrl, visualSmokeStateInventory.find((state) => state.id === expected.stateId))) {
+      failures.push(`visual smoke screenshot canonical URL mismatch: ${actual.fileName}`);
+    }
+
+    if (actual.observedUrl !== actual.canonicalUrl) {
+      failures.push(`visual smoke screenshot observed URL must match its canonical URL: ${actual.fileName}`);
+    }
+
+    if (!sameJson(actual.canonicalQuery, expected.canonicalQuery)) {
+      failures.push(`visual smoke screenshot canonical query mismatch: ${actual.fileName}`);
+    }
+
+    if (!sameJson(actual.canonicalTabState, expected.canonicalTabState)) {
+      failures.push(`visual smoke screenshot canonical tab state mismatch: ${actual.fileName}`);
+    }
+
+    if (expected.canonicalTabState?.kind?.endsWith("-tab") && !sameJson(actual.observedTabState, expected.canonicalTabState)) {
+      failures.push(`visual smoke screenshot observed tab state mismatch: ${actual.fileName}`);
     }
 
     if (actual.reviewStatus !== "required-review") {
@@ -211,7 +339,7 @@ export async function verifyVisualSmokeManifest(manifestPath, options = {}) {
   }
 
   for (const expectedAudit of expectedVisualSmokeRouteAudits()) {
-    const actualAudit = (manifest.routeAudits ?? []).find((audit) => audit.routeName === expectedAudit.routeName);
+    const actualAudit = (manifest.routeAudits ?? []).find((audit) => audit.stateId === expectedAudit.stateId);
     if (!actualAudit) {
       failures.push(`visual smoke manifest is missing route audit: ${expectedAudit.routeName}`);
       continue;
@@ -227,11 +355,34 @@ export async function verifyVisualSmokeManifest(manifestPath, options = {}) {
       failures.push(`visual smoke route audit must remain pending human review: ${expectedAudit.routeName}`);
     }
 
+
+    for (const [field, expectedValue] of [
+      ["routeName", expectedAudit.routeName],
+      ["routeKey", expectedAudit.routeKey],
+      ["materialRoute", expectedAudit.materialRoute],
+      ["uiState", expectedAudit.uiState],
+      ["canonicalUrlTemplate", expectedAudit.canonicalUrlTemplate],
+      ["expectedText", expectedAudit.expectedText],
+      ["expectedStateText", expectedAudit.expectedStateText],
+    ]) {
+      if ((actualAudit[field] ?? null) !== (expectedValue ?? null)) {
+        failures.push(`visual smoke state audit ${expectedAudit.stateId} ${field} mismatch`);
+      }
+    }
+
+    if (!sameJson(actualAudit.canonicalTabState, expectedAudit.canonicalTabState)) {
+      failures.push(`visual smoke state audit ${expectedAudit.stateId} canonicalTabState mismatch`);
+    }
+
     for (const reviewCheck of visualSmokeReviewChecks) {
       if (!actualAudit.reviewChecks?.includes(reviewCheck)) {
         failures.push(`visual smoke route audit ${expectedAudit.routeName} is missing review check ${reviewCheck}`);
       }
     }
+  }
+
+  if (!sameJson(manifest.stateInventory, expectedVisualSmokeRouteAudits())) {
+    failures.push("visual smoke manifest stateInventory must exactly match the canonical inventory-derived audit rows");
   }
 
   if (failures.length > 0) {
@@ -244,12 +395,17 @@ export async function verifyVisualSmokeManifest(manifestPath, options = {}) {
     checkedAtUtc,
     manifestPath: resolvedManifestPath,
     evidenceReportFileName: VISUAL_SMOKE_EVIDENCE_REPORT_FILE,
+    inventoryVersion: VISUAL_SMOKE_INVENTORY_VERSION,
+    inventoryStateCount: visualSmokeStateInventory.length,
     routeCount: expectedVisualSmokeRouteAudits().length,
+    accountantWorkbenchRouteCount: accountantWorkbenchRoutes.length,
     screenshotCount: screenshots.length,
     expectedScreenshotCount: expectedVisualSmokeScreenshotCount(),
     themes: visualSmokeThemes,
     viewports: visualSmokeViewports.map((viewport) => viewport.name),
     viewportDimensions: visualSmokeViewports,
+    requiredMaterialRoutes: REQUIRED_VISUAL_SMOKE_MATERIAL_ROUTES,
+    requiredUiStates: REQUIRED_VISUAL_SMOKE_UI_STATES,
     totalBytes,
     layoutChecksPassed: true,
     layoutCheckResultCount: screenshotSummaries.reduce(
@@ -261,9 +417,18 @@ export async function verifyVisualSmokeManifest(manifestPath, options = {}) {
     minimumContrastRatio: Math.min(
       ...screenshotSummaries.map((screenshot) => Number(screenshot.themeContrastResult?.minimumContrastRatio ?? 0)),
     ),
+    semanticDistinctnessPassed: true,
+    semanticContentHashCount: new Set(screenshotSummaries.map((screenshot) => screenshot.semanticContentSha256)).size,
     routeCoverage: expectedVisualSmokeRouteAudits().map((audit) => ({
+      stateId: audit.stateId,
       routeName: audit.routeName,
       routeKey: audit.routeKey,
+      materialRoute: audit.materialRoute,
+      uiState: audit.uiState,
+      canonicalUrlTemplate: audit.canonicalUrlTemplate,
+      canonicalTabState: audit.canonicalTabState,
+      expectedText: audit.expectedText,
+      expectedStateText: audit.expectedStateText,
       screenshotCount: screenshots.filter((screenshot) => screenshot.routeName === audit.routeName).length,
       requiredReviewChecks: audit.reviewChecks,
       reviewStatus: audit.reviewStatus,
@@ -303,10 +468,47 @@ function validateThemeContrastResult(result, fileName, failures) {
     failures.push(`visual smoke screenshot ${fileName} themeContrastResult.failingTextCount must be zero.`);
   }
 
+  if (Number(result.failingUiComponentCount) !== 0) {
+    failures.push(`visual smoke screenshot ${fileName} themeContrastResult.failingUiComponentCount must be zero.`);
+  }
+
+  if (Number(result.sampledNormalTextCount) <= 0) {
+    failures.push(`visual smoke screenshot ${fileName} themeContrastResult.sampledNormalTextCount must be greater than zero.`);
+  }
+
+  for (const [field, label] of [
+    ["sampledInteractiveTextCount", "interactive text"],
+    ["sampledUiComponentCount", "UI component"],
+  ]) {
+    if (Number(result[field]) <= 0) {
+      failures.push(`visual smoke screenshot ${fileName} themeContrastResult.${field} must prove at least one ${label} sample.`);
+    }
+  }
+
   if (Number(result.requiredMinimumContrastRatio) !== MIN_VISUAL_SMOKE_CONTRAST_RATIO) {
     failures.push(
       `visual smoke screenshot ${fileName} themeContrastResult.requiredMinimumContrastRatio must be ${MIN_VISUAL_SMOKE_CONTRAST_RATIO}.`,
     );
+  }
+
+  for (const [field, expected] of [
+    ["requiredNormalTextContrastRatio", MIN_NORMAL_TEXT_CONTRAST_RATIO],
+    ["requiredLargeTextContrastRatio", MIN_LARGE_TEXT_CONTRAST_RATIO],
+    ["requiredUiComponentContrastRatio", MIN_UI_COMPONENT_CONTRAST_RATIO],
+  ]) {
+    if (Number(result[field]) !== expected) {
+      failures.push(`visual smoke screenshot ${fileName} themeContrastResult.${field} must be ${expected}.`);
+    }
+  }
+
+  for (const [field, expected] of [
+    ["minimumNormalTextContrastRatio", MIN_NORMAL_TEXT_CONTRAST_RATIO],
+    ["minimumLargeTextContrastRatio", MIN_LARGE_TEXT_CONTRAST_RATIO],
+    ["minimumUiComponentContrastRatio", MIN_UI_COMPONENT_CONTRAST_RATIO],
+  ]) {
+    if (Number(result[field]) < expected) {
+      failures.push(`visual smoke screenshot ${fileName} themeContrastResult.${field} must be at least ${expected}.`);
+    }
   }
 
   if (Number(result.minimumContrastRatio) < MIN_VISUAL_SMOKE_CONTRAST_RATIO) {
@@ -321,7 +523,33 @@ function resolveArtifactPath(artifactPath) {
 }
 
 function screenshotKey(screenshot) {
-  return `${screenshot.routeName}/${screenshot.theme}/${screenshot.viewportName}`;
+  return `${screenshot.stateId ?? screenshot.routeName}/${screenshot.theme}/${screenshot.viewportName}`;
+}
+
+function sameJson(actual, expected) {
+  return JSON.stringify(actual) === JSON.stringify(expected);
+}
+
+function addCaptureIdentity(groups, key, screenshot) {
+  const existing = groups.get(key) ?? [];
+  existing.push({
+    stateId: screenshot.stateId ?? screenshot.routeName,
+    fileName: screenshot.fileName,
+    theme: screenshot.theme,
+    viewportName: screenshot.viewportName,
+  });
+  groups.set(key, existing);
+}
+
+function reportSemanticallyIdenticalCaptures(groups, failures, evidenceLabel) {
+  for (const captures of groups.values()) {
+    const stateIds = new Set(captures.map((capture) => capture.stateId));
+    if (stateIds.size <= 1) continue;
+    failures.push(
+      `visual smoke manifest contains semantically identical ${evidenceLabel} captures for ` +
+      `${captures[0].theme}/${captures[0].viewportName}: ${captures.map((capture) => capture.stateId).join(", ")}`,
+    );
+  }
 }
 
 function readPngEvidence(bytes, fileName) {
@@ -366,14 +594,26 @@ function readPngEvidence(bytes, fileName) {
     throw new Error(`visual smoke screenshot is missing PNG image data: ${fileName}`);
   }
 
-  const metrics = analyzePngPixels({
-    fileName,
+  const compressedPixels = Buffer.concat(idatChunks);
+  const pixelEvidenceKey = [
     width,
     height,
     bitDepth,
     colorType,
-    compressedPixels: Buffer.concat(idatChunks),
-  });
+    createHash("sha256").update(compressedPixels).digest("hex"),
+  ].join(":");
+  let metrics = pngPixelEvidenceCache.get(pixelEvidenceKey);
+  if (!metrics) {
+    metrics = analyzePngPixels({
+      fileName,
+      width,
+      height,
+      bitDepth,
+      colorType,
+      compressedPixels,
+    });
+    pngPixelEvidenceCache.set(pixelEvidenceKey, metrics);
+  }
 
   if (
     metrics.sampledDistinctColorCount < MIN_VISUAL_SMOKE_DISTINCT_COLORS ||

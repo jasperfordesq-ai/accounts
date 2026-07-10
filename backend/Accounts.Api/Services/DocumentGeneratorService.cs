@@ -4,18 +4,40 @@ using Microsoft.EntityFrameworkCore;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
+using System.Diagnostics;
 
 namespace Accounts.Api.Services;
 
-public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsService statementsService)
+public class DocumentGeneratorService(
+    AccountsDbContext db,
+    FinancialStatementsService statementsService,
+    PlatformMetrics? platformMetrics = null)
 {
     public async Task<byte[]> GenerateAccountsPackageAsync(int companyId, int periodId)
-        => await GenerateAccountsPackageAsync(companyId, periodId, DocumentPackagePurpose.StatutoryApproval);
+        => await TrackDocumentAsync(
+            DocumentMetricKind.AccountsPackage,
+            () => GenerateAccountsPackageAsync(companyId, periodId, DocumentPackagePurpose.StatutoryApproval, reviewArtifact: false));
+
+    public async Task<byte[]> GenerateAccountsReviewPackageAsync(int companyId, int periodId)
+        => await TrackDocumentAsync(
+            DocumentMetricKind.AccountsPackage,
+            () => GenerateAccountsPackageAsync(companyId, periodId, DocumentPackagePurpose.StatutoryApproval, reviewArtifact: true));
 
     public async Task<byte[]> GenerateAgmApprovalPackAsync(int companyId, int periodId)
-        => await GenerateAccountsPackageAsync(companyId, periodId, DocumentPackagePurpose.AgmApproval);
+        => await TrackDocumentAsync(
+            DocumentMetricKind.AgmPack,
+            () => GenerateAccountsPackageAsync(companyId, periodId, DocumentPackagePurpose.AgmApproval, reviewArtifact: false));
 
-    private async Task<byte[]> GenerateAccountsPackageAsync(int companyId, int periodId, DocumentPackagePurpose purpose)
+    public async Task<byte[]> GenerateAgmReviewPackAsync(int companyId, int periodId)
+        => await TrackDocumentAsync(
+            DocumentMetricKind.AgmPack,
+            () => GenerateAccountsPackageAsync(companyId, periodId, DocumentPackagePurpose.AgmApproval, reviewArtifact: true));
+
+    private async Task<byte[]> GenerateAccountsPackageAsync(
+        int companyId,
+        int periodId,
+        DocumentPackagePurpose purpose,
+        bool reviewArtifact)
     {
         var period = await db.AccountingPeriods
             .Include(p => p.Company).ThenInclude(c => c.Officers)
@@ -45,15 +67,17 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
             equityChanges = await statementsService.GetEquityChangesAsync(companyId, periodId);
         }
 
-        // Get prior year balance sheet if available
+        // Get the deterministic prior period comparatives when available. Full statutory/member
+        // accounts must not silently drop the prior-year profit and loss comparative.
         FinancialStatementsService.BalanceSheet? priorBs = null;
-        var priorPeriod = await db.AccountingPeriods
-            .Where(p => p.CompanyId == company.Id && p.PeriodEnd < period.PeriodStart)
-            .OrderByDescending(p => p.PeriodEnd)
+        FinancialStatementsService.ProfitAndLoss? priorPl = null;
+        var priorPeriod = await PeriodChronologyService
+            .PriorPeriodQuery(db, company.Id, period.PeriodStart)
             .FirstOrDefaultAsync();
         if (priorPeriod != null)
         {
             try { priorBs = await statementsService.GetBalanceSheetAsync(company.Id, priorPeriod.Id); } catch { }
+            try { priorPl = await statementsService.GetProfitAndLossAsync(company.Id, priorPeriod.Id); } catch { }
         }
 
         var notes = await db.NotesDisclosures
@@ -64,9 +88,9 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
         var directors = company.Officers.Where(o => o.Role == OfficerRole.Director && o.ResignedDate == null).ToList();
         var secretary = company.Officers.FirstOrDefault(o => o.Role == OfficerRole.Secretary && o.ResignedDate == null);
 
-        // filing-directors-report-from-service: drive the PDF directors' report from DirectorsReportService
-        // (dormant wording when not trading, dividend disclosure, audit-info statement only when audited)
-        // instead of hardcoded boilerplate that falsely states a dormant company traded.
+        // filing-directors-report-from-service: drive the report from retained, reviewed evidence.
+        // The service supplies the period-effective officer timeline, principal-activities narrative,
+        // dividend facts and any evidenced audit-information statement.
         var directorsReport = await new DirectorsReportService(db, statementsService).GenerateAsync(companyId, periodId);
 
         return Document.Create(container =>
@@ -78,7 +102,7 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
                 page.MarginVertical(40);
                 page.DefaultTextStyle(x => x.FontSize(10).FontFamily("Helvetica"));
 
-                page.Header().Element(c => ComposeHeader(c, company));
+                page.Header().Element(c => ComposeArtifactHeader(c, company, reviewArtifact));
 
                 page.Content().Element(c =>
                 {
@@ -102,7 +126,10 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
                         // audit exemption. Rendered as a template for the appointed auditor to complete.
                         if (!auditExempt)
                         {
-                            ComposeAuditorsReport(col, company, period);
+                            if (FilingReleaseGate.HasCompleteAuditorReportEvidence(period))
+                                ComposeAttachedAuditorReportNotice(col, company, period);
+                            else
+                                ComposeAuditorsReport(col, company, period);
                             col.Item().PageBreak();
                         }
 
@@ -111,10 +138,12 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
 
                         col.Item().PageBreak();
 
-                        // Profit and Loss (full statutory/approval packs include this for small abridged companies)
+                        // Full statutory/member-approval accounts include the profit and loss account
+                        // for every regime, including Micro. Only an eligible reduced CRO filing copy
+                        // may omit it.
                         if (ShouldIncludeProfitAndLoss(regime, purpose))
                         {
-                            ComposeProfitAndLoss(col, company, period, pl);
+                            ComposeProfitAndLoss(col, company, period, pl, priorPeriod, priorPl);
                             col.Item().PageBreak();
                         }
 
@@ -133,7 +162,7 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
                         col.Item().PageBreak();
 
                         // Notes
-                        ComposeNotes(col, company, period, regime, balanceSheet, notes);
+                        ComposeNotes(col, period, notes);
                     });
                 });
 
@@ -183,7 +212,11 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
         });
     }
 
-    private static void ComposeDirectorsReport(ColumnDescriptor col, AccountingPeriod period, List<CompanyOfficer> directors, DirectorsReportService.DirectorsReportData report)
+    private static void ComposeDirectorsReport(
+        ColumnDescriptor col,
+        AccountingPeriod period,
+        List<CompanyOfficer> signingDirectors,
+        DirectorsReportService.DirectorsReportData report)
     {
         col.Item().Text("DIRECTORS' REPORT").Bold().FontSize(14);
         col.Item().Text($"for the financial year ended {period.PeriodEnd:dd MMMM yyyy}").FontSize(10).Italic();
@@ -194,7 +227,6 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
             t.Span($" for the financial year ended {period.PeriodEnd:dd MMMM yyyy}.");
         });
 
-        // Driven from DirectorsReportService: dormant wording when not trading, dividend disclosure.
         col.Item().PaddingTop(10).Text("Principal Activities").Bold();
         col.Item().Text(report.PrincipalActivities);
 
@@ -203,8 +235,14 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
 
         col.Item().PaddingTop(10).Text("Directors").Bold();
         col.Item().Text("The directors who held office during the financial year were:");
-        foreach (var d in directors)
-            col.Item().PaddingLeft(20).Text($"\u2022 {d.Name}");
+        foreach (var director in report.DirectorServicePeriods)
+        {
+            var appointed = FormatReportDate(director.AppointedDate);
+            var service = director.ResignedDate is { } resigned
+                ? $"appointed {appointed}; resigned {FormatReportDate(resigned)}"
+                : $"appointed {appointed}; in office at the financial year end";
+            col.Item().PaddingLeft(20).Text($"\u2022 {director.Name} ({service})");
+        }
 
         col.Item().PaddingTop(10).Text("Accounting Records").Bold();
         col.Item().Text(report.AccountingRecordsStatement);
@@ -230,17 +268,22 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
 
         col.Item().PaddingTop(20).Text("Signed on behalf of the Board:").Italic();
         col.Item().PaddingTop(30).Text("___________________________");
-        if (directors.Count > 0) col.Item().Text(directors[0].Name).Bold();
+        if (signingDirectors.Count > 0)
+            col.Item().Text(signingDirectors[0].Name).Bold();
         col.Item().Text("Director");
         col.Item().PaddingTop(10).Text($"Date: {ApprovalDateText(period)}");
     }
 
-    // filing-approval-date-persisted: stamp the persisted board-approval date when set, so regenerating a
-    // finalised period reproduces the same date instead of DateTime.Now. Drafts fall back to today.
+    // filing-approval-date-persisted: never invent a render date. Final outputs are blocked until the
+    // board date is persisted; review surfaces show an explicit pending marker.
     private static string ApprovalDateText(AccountingPeriod period) =>
         period.ApprovalDate is { } approved
-            ? approved.ToString("dd MMMM yyyy", System.Globalization.CultureInfo.CurrentCulture)
-            : $"{DateTime.Now:dd MMMM yyyy}";
+            ? approved.ToString("dd MMMM yyyy", System.Globalization.CultureInfo.GetCultureInfo("en-IE"))
+            : "PENDING BOARD APPROVAL";
+
+    private static string FormatReportDate(string value) =>
+        DateOnly.ParseExact(value, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)
+            .ToString("dd MMMM yyyy", System.Globalization.CultureInfo.GetCultureInfo("en-IE"));
 
     private static void ComposeBalanceSheet(ColumnDescriptor col, Company company, AccountingPeriod period,
         FinancialStatementsService.BalanceSheet bs, FinancialStatementsService.BalanceSheet? priorBs, List<CompanyOfficer> directors)
@@ -374,7 +417,13 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
                 .Text(FormatEuro(prior.Value)).FontSize(9).Bold();
     }
 
-    private static void ComposeProfitAndLoss(ColumnDescriptor col, Company company, AccountingPeriod period, FinancialStatementsService.ProfitAndLoss pl)
+    private static void ComposeProfitAndLoss(
+        ColumnDescriptor col,
+        Company company,
+        AccountingPeriod period,
+        FinancialStatementsService.ProfitAndLoss pl,
+        AccountingPeriod? priorPeriod,
+        FinancialStatementsService.ProfitAndLoss? priorPl)
     {
         col.Item().Text("PROFIT AND LOSS ACCOUNT").Bold().FontSize(14);
         col.Item().Text($"for the financial year ended {period.PeriodEnd:dd MMMM yyyy}").FontSize(10).Italic();
@@ -384,48 +433,81 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
             table.ColumnsDefinition(columns =>
             {
                 columns.RelativeColumn(4);
-                columns.ConstantColumn(100);
+                columns.ConstantColumn(80);
+                columns.ConstantColumn(80);
             });
 
             uint row = 1;
+            table.Cell().Row(row).Column(2).AlignRight().Text($"{period.PeriodEnd:yyyy}").Bold().FontSize(9);
+            if (priorPeriod is not null && priorPl is not null)
+                table.Cell().Row(row).Column(3).AlignRight().Text($"{priorPeriod.PeriodEnd:yyyy}").Bold().FontSize(9);
+
+            row++;
             table.Cell().Row(row).Column(2).AlignRight().Text("\u20ac").Bold().FontSize(9);
+            if (priorPl is not null)
+                table.Cell().Row(row).Column(3).AlignRight().Text("\u20ac").Bold().FontSize(9);
 
-            row++; table.Cell().Row(row).Column(1).Text("Turnover").FontSize(9);
-            table.Cell().Row(row).Column(2).AlignRight().Text(FormatEuro(pl.Turnover)).FontSize(9);
+            AddLine("Turnover", pl.Turnover, priorPl?.Turnover);
+            AddLine("Cost of sales", -pl.CostOfSales, priorPl is null ? null : -priorPl.CostOfSales);
+            AddLine("Gross profit", pl.GrossProfit, priorPl?.GrossProfit, bold: true, topBorder: true);
 
-            row++; table.Cell().Row(row).Column(1).Text("Cost of sales").FontSize(9);
-            table.Cell().Row(row).Column(2).AlignRight().Text(FormatEuro(-pl.CostOfSales)).FontSize(9);
+            if (pl.OtherIncome != 0 || (priorPl?.OtherIncome ?? 0) != 0)
+                AddLine("Other operating income", pl.OtherIncome, priorPl?.OtherIncome, paddingTop: 8);
 
-            row++; table.Cell().Row(row).Column(1).Text("Gross profit").FontSize(9).Bold();
-            table.Cell().Row(row).Column(2).AlignRight().BorderTop(1).Text(FormatEuro(pl.GrossProfit)).FontSize(9).Bold();
+            AddLine("Administrative expenses", -pl.TotalOverheads, priorPl is null ? null : -priorPl.TotalOverheads, paddingTop: 8);
+            AddLine("Operating profit", pl.OperatingProfit, priorPl?.OperatingProfit, bold: true, topBorder: true);
 
-            if (pl.OtherIncome != 0)
+            if (pl.InterestPayable > 0 || (priorPl?.InterestPayable ?? 0) > 0)
+                AddLine("Interest payable", -pl.InterestPayable, priorPl is null ? null : -priorPl.InterestPayable);
+
+            AddLine("Profit before taxation", pl.ProfitBeforeTax, priorPl?.ProfitBeforeTax, bold: true, topBorder: true, paddingTop: 5);
+            AddLine("Tax on profit", -pl.TaxCharge, priorPl is null ? null : -priorPl.TaxCharge);
+            AddLine("Profit for the financial year", pl.ProfitAfterTax, priorPl?.ProfitAfterTax, bold: true, topBorder: true, bottomBorder: true, paddingTop: 5);
+
+            void AddLine(
+                string label,
+                decimal current,
+                decimal? prior,
+                bool bold = false,
+                bool topBorder = false,
+                bool bottomBorder = false,
+                float paddingTop = 0)
             {
-                row++; table.Cell().Row(row).Column(1).PaddingTop(8).Text("Other operating income").FontSize(9);
-                table.Cell().Row(row).Column(2).PaddingTop(8).AlignRight().Text(FormatEuro(pl.OtherIncome)).FontSize(9);
+                row++;
+                IContainer labelCell = table.Cell().Row(row).Column(1);
+                IContainer currentCell = table.Cell().Row(row).Column(2).AlignRight();
+                if (paddingTop > 0)
+                {
+                    labelCell = labelCell.PaddingTop(paddingTop);
+                    currentCell = currentCell.PaddingTop(paddingTop);
+                }
+                if (topBorder)
+                    currentCell = currentCell.BorderTop(1);
+                if (bottomBorder)
+                    currentCell = currentCell.BorderBottom(2);
+
+                var labelText = labelCell.Text(label).FontSize(9);
+                var currentText = currentCell.Text(FormatEuro(current)).FontSize(9);
+                if (bold)
+                {
+                    labelText.Bold();
+                    currentText.Bold();
+                }
+
+                if (prior.HasValue)
+                {
+                    IContainer priorCell = table.Cell().Row(row).Column(3).AlignRight();
+                    if (paddingTop > 0)
+                        priorCell = priorCell.PaddingTop(paddingTop);
+                    if (topBorder)
+                        priorCell = priorCell.BorderTop(1);
+                    if (bottomBorder)
+                        priorCell = priorCell.BorderBottom(2);
+                    var priorText = priorCell.Text(FormatEuro(prior.Value)).FontSize(9);
+                    if (bold)
+                        priorText.Bold();
+                }
             }
-
-            row++; table.Cell().Row(row).Column(1).PaddingTop(8).Text("Administrative expenses").FontSize(9);
-            table.Cell().Row(row).Column(2).PaddingTop(8).AlignRight().Text(FormatEuro(-pl.TotalOverheads)).FontSize(9);
-
-            row++; table.Cell().Row(row).Column(1).Text("Operating profit").FontSize(9).Bold();
-            table.Cell().Row(row).Column(2).AlignRight().BorderTop(1).Text(FormatEuro(pl.OperatingProfit)).FontSize(9).Bold();
-
-            if (pl.InterestPayable > 0)
-            {
-                row++; table.Cell().Row(row).Column(1).Text("Interest payable").FontSize(9);
-                table.Cell().Row(row).Column(2).AlignRight().Text(FormatEuro(-pl.InterestPayable)).FontSize(9);
-            }
-
-            row++; table.Cell().Row(row).Column(1).PaddingTop(5).Text("Profit before taxation").FontSize(9).Bold();
-            table.Cell().Row(row).Column(2).PaddingTop(5).AlignRight().BorderTop(1).Text(FormatEuro(pl.ProfitBeforeTax)).FontSize(9).Bold();
-
-            row++; table.Cell().Row(row).Column(1).Text("Tax on profit").FontSize(9);
-            table.Cell().Row(row).Column(2).AlignRight().Text(FormatEuro(-pl.TaxCharge)).FontSize(9);
-
-            row++; table.Cell().Row(row).Column(1).PaddingTop(5).Text("Profit for the financial year").FontSize(9).Bold();
-            table.Cell().Row(row).Column(2).PaddingTop(5).AlignRight().BorderTop(1).BorderBottom(2)
-                .Text(FormatEuro(pl.ProfitAfterTax)).FontSize(9).Bold();
         });
     }
 
@@ -488,6 +570,25 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
         col.Item().PaddingTop(6).Text("Date: ___________________").FontSize(9);
     }
 
+    private static void ComposeAttachedAuditorReportNotice(ColumnDescriptor col, Company company, AccountingPeriod period)
+    {
+        col.Item().Text("INDEPENDENT AUDITOR'S REPORT").Bold().FontSize(14);
+        col.Item().Text($"to the members of {company.LegalName}").FontSize(10).Italic();
+        col.Item().PaddingTop(12).Border(1).BorderColor(Colors.Grey.Lighten1).Padding(12).Column(notice =>
+        {
+            notice.Spacing(6);
+            notice.Item().Text("SIGNED REPORT RETAINED AS AN IMMUTABLE PDF ATTACHMENT").Bold().FontSize(10);
+            notice.Item().Text(
+                "The appointed auditor's actual signed report is embedded in this final PDF as the attachment "
+                + "signed-auditor-report.pdf. This notice is not an auditor opinion and no platform-generated "
+                + "template wording is represented as signed.").FontSize(9);
+            notice.Item().Text($"Report reference: {period.AuditorsReportReference}").FontSize(9);
+            notice.Item().Text($"Auditor: {period.AuditorsReportSignerName}, {period.AuditorsReportFirmName}").FontSize(9);
+            notice.Item().Text($"Signed: {period.AuditorsReportSignedAt:dd MMMM yyyy}").FontSize(9);
+            notice.Item().Text($"Retained report SHA-256: {period.AuditorsReportSha256}").FontSize(8);
+        });
+    }
+
     private static void ComposeCashFlowStatement(ColumnDescriptor col, Company company, AccountingPeriod period, FinancialStatementsService.CashFlowStatement cf)
     {
         col.Item().Text("CASH FLOW STATEMENT").Bold().FontSize(14);
@@ -536,6 +637,16 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
             table.Cell().Row(row).Column(2).AlignRight().Text(FormatEuro(-cf.LoanRepayments)).FontSize(9);
             row++; table.Cell().Row(row).Column(1).PaddingLeft(15).Text("Dividends paid").FontSize(9);
             table.Cell().Row(row).Column(2).AlignRight().Text(FormatEuro(-cf.DividendsPaid)).FontSize(9);
+            if (cf.ShareIssues != 0)
+            {
+                row++; table.Cell().Row(row).Column(1).PaddingLeft(15).Text("Cash proceeds from share issues").FontSize(9);
+                table.Cell().Row(row).Column(2).AlignRight().Text(FormatEuro(cf.ShareIssues)).FontSize(9);
+            }
+            if (cf.OtherFinancing != 0)
+            {
+                row++; table.Cell().Row(row).Column(1).PaddingLeft(15).Text("Other financing cash flows").FontSize(9);
+                table.Cell().Row(row).Column(2).AlignRight().Text(FormatEuro(cf.OtherFinancing)).FontSize(9);
+            }
             row++; table.Cell().Row(row).Column(1).Text("Net cash from financing activities").FontSize(9).Bold();
             table.Cell().Row(row).Column(2).AlignRight().BorderTop(1).Text(FormatEuro(cf.NetCashFromFinancing)).FontSize(9).Bold();
 
@@ -595,6 +706,15 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
                 table.Cell().Row(row).Column(4).AlignRight().Text(FormatEuro(-eq.DividendsPaid)).FontSize(9);
             }
 
+            if (eq.OtherReserveMovements != 0)
+            {
+                row++;
+                table.Cell().Row(row).Column(1).Text("Other posted reserve movements").FontSize(9);
+                table.Cell().Row(row).Column(2).AlignRight().Text("-").FontSize(9);
+                table.Cell().Row(row).Column(3).AlignRight().Text(FormatEuro(eq.OtherReserveMovements)).FontSize(9);
+                table.Cell().Row(row).Column(4).AlignRight().Text(FormatEuro(eq.OtherReserveMovements)).FontSize(9);
+            }
+
             row++;
             table.Cell().Row(row).Column(1).Text("Balance at end of year").FontSize(9).Bold();
             table.Cell().Row(row).Column(2).AlignRight().BorderTop(1).BorderBottom(2).Text(FormatEuro(eq.ClosingShareCapital)).FontSize(9).Bold();
@@ -604,17 +724,25 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
     }
 
     public static bool ShouldIncludeProfitAndLoss(ElectedRegime regime, DocumentPackagePurpose purpose) =>
-        regime != ElectedRegime.Micro
-        && !(purpose == DocumentPackagePurpose.CroFiling && regime == ElectedRegime.SmallAbridged);
+        purpose != DocumentPackagePurpose.CroFiling
+        || regime is not ElectedRegime.Micro and not ElectedRegime.SmallAbridged;
 
     public static string PackageRegimeSubtitle(ElectedRegime regime, DocumentPackagePurpose purpose) =>
         regime switch
         {
-            ElectedRegime.Micro => "(Prepared under the Micro Companies Regime)",
-            ElectedRegime.SmallAbridged when purpose == DocumentPackagePurpose.CroFiling => "(Abridged Financial Statements for filing with the CRO)",
-            ElectedRegime.SmallAbridged => "(Prepared under the Small Companies Regime - full statutory accounts)",
-            ElectedRegime.Small => "(Prepared under the Small Companies Regime)",
-            _ => ""
+            ElectedRegime.Micro when purpose == DocumentPackagePurpose.CroFiling =>
+                "(Reduced CRO filing copy under the Micro Companies Regime; statutory accounts prepared under FRS 105)",
+            ElectedRegime.Micro =>
+                "(Full statutory accounts prepared under FRS 105 and the Micro Companies Regime)",
+            ElectedRegime.SmallAbridged when purpose == DocumentPackagePurpose.CroFiling =>
+                "(Abridged Financial Statements for filing with the CRO; derived from FRS 102 Section 1A statutory accounts)",
+            ElectedRegime.SmallAbridged =>
+                "(Full statutory accounts prepared under FRS 102 Section 1A and the Small Companies Regime)",
+            ElectedRegime.Small =>
+                "(Full statutory accounts prepared under FRS 102 Section 1A and the Small Companies Regime)",
+            ElectedRegime.Medium or ElectedRegime.Full =>
+                "(Full statutory accounts prepared under FRS 102)",
+            _ => throw new ArgumentOutOfRangeException(nameof(regime), regime, "Unsupported filing regime.")
         };
 
     private static void ComposeStatutoryStatement(ColumnDescriptor col, Company company, AccountingPeriod period, ElectedRegime regime, List<CompanyOfficer> directors, bool auditExempt)
@@ -673,81 +801,18 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
         col.Item().PaddingTop(10).Text($"Date: {ApprovalDateText(period)}").FontSize(9);
     }
 
-    private static void ComposeNotes(ColumnDescriptor col, Company company, AccountingPeriod period, ElectedRegime regime,
-        FinancialStatementsService.BalanceSheet bs, List<NotesDisclosure> notes)
+    private static void ComposeNotes(
+        ColumnDescriptor col,
+        AccountingPeriod period,
+        IReadOnlyCollection<NotesDisclosure> notes)
     {
         col.Item().Text("NOTES TO THE FINANCIAL STATEMENTS").Bold().FontSize(14);
         col.Item().Text($"for the financial year ended {period.PeriodEnd:dd MMMM yyyy}").FontSize(10).Italic();
 
-        int noteNum = 1;
-
-        // Note 1: Accounting Policies
-        col.Item().PaddingTop(15).Text($"{noteNum}. ACCOUNTING POLICIES").Bold().FontSize(10);
-        col.Item().PaddingTop(5).Text("Basis of Preparation").Bold().FontSize(9);
-        if (regime == ElectedRegime.Micro)
+        var noteNumber = 1;
+        foreach (var note in notes.Where(note => note.IsIncluded).OrderBy(note => note.NoteNumber).ThenBy(note => note.Id))
         {
-            col.Item().Text("The financial statements have been prepared on the going concern basis and in accordance with FRS 105 \"The Financial Reporting Standard applicable to the Micro-entities Regime\" and the Companies Act 2014.").FontSize(9);
-        }
-        else
-        {
-            col.Item().Text("The financial statements have been prepared on the going concern basis and in accordance with FRS 102 \"The Financial Reporting Standard applicable in the UK and Republic of Ireland\" and the Companies Act 2014.").FontSize(9);
-        }
-
-        if (bs.FixedAssets.Total > 0)
-        {
-            col.Item().PaddingTop(5).Text("Tangible Fixed Assets and Depreciation").Bold().FontSize(9);
-            col.Item().Text("Tangible fixed assets are stated at cost less accumulated depreciation. Depreciation is provided at rates calculated to write off the cost of each asset over its expected useful life.").FontSize(9);
-        }
-
-        noteNum++;
-
-        // Note 2: Tangible Fixed Assets
-        if (bs.FixedAssets.Categories.Count > 0)
-        {
-            col.Item().PaddingTop(15).Text($"{noteNum}. TANGIBLE FIXED ASSETS").Bold().FontSize(10);
-            col.Item().PaddingTop(5).Table(table =>
-            {
-                table.ColumnsDefinition(columns =>
-                {
-                    columns.RelativeColumn(3);
-                    columns.ConstantColumn(80);
-                    columns.ConstantColumn(80);
-                    columns.ConstantColumn(80);
-                });
-
-                uint row = 1;
-                table.Cell().Row(row).Column(1).Text("").FontSize(8);
-                table.Cell().Row(row).Column(2).AlignRight().Text("Cost \u20ac").Bold().FontSize(8);
-                table.Cell().Row(row).Column(3).AlignRight().Text("Depreciation \u20ac").Bold().FontSize(8);
-                table.Cell().Row(row).Column(4).AlignRight().Text("NBV \u20ac").Bold().FontSize(8);
-
-                foreach (var cat in bs.FixedAssets.Categories)
-                {
-                    row++;
-                    table.Cell().Row(row).Column(1).Text(cat.Category).FontSize(9);
-                    table.Cell().Row(row).Column(2).AlignRight().Text(FormatEuro(cat.Cost)).FontSize(9);
-                    table.Cell().Row(row).Column(3).AlignRight().Text(FormatEuro(cat.Depreciation)).FontSize(9);
-                    table.Cell().Row(row).Column(4).AlignRight().Text(FormatEuro(cat.Nbv)).FontSize(9);
-                }
-
-                row++;
-                table.Cell().Row(row).Column(1).Text("Total").FontSize(9).Bold();
-                table.Cell().Row(row).Column(2).AlignRight().BorderTop(1).BorderBottom(2).Text(FormatEuro(bs.FixedAssets.Categories.Sum(c => c.Cost))).FontSize(9).Bold();
-                table.Cell().Row(row).Column(3).AlignRight().BorderTop(1).BorderBottom(2).Text(FormatEuro(bs.FixedAssets.Categories.Sum(c => c.Depreciation))).FontSize(9).Bold();
-                table.Cell().Row(row).Column(4).AlignRight().BorderTop(1).BorderBottom(2).Text(FormatEuro(bs.FixedAssets.Total)).FontSize(9).Bold();
-            });
-            noteNum++;
-        }
-
-        // Note: Approval
-        col.Item().PaddingTop(15).Text($"{noteNum}. APPROVAL OF FINANCIAL STATEMENTS").Bold().FontSize(10);
-        col.Item().PaddingTop(5).Text($"The financial statements were approved and authorised for issue by the Board of Directors on {ApprovalDateText(period)}.").FontSize(9);
-
-        // Custom notes
-        foreach (var note in notes)
-        {
-            noteNum++;
-            col.Item().PaddingTop(15).Text($"{noteNum}. {note.Title.ToUpper()}").Bold().FontSize(10);
+            col.Item().PaddingTop(15).Text($"{noteNumber++}. {note.Title.ToUpperInvariant()}").Bold().FontSize(10);
             if (!string.IsNullOrEmpty(note.Content))
                 col.Item().PaddingTop(5).Text(note.Content).FontSize(9);
         }
@@ -763,6 +828,16 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
     /// Other regimes: full accounts package.
     /// </summary>
     public async Task<byte[]> GenerateCroFilingPackAsync(int companyId, int periodId)
+        => await TrackDocumentAsync(
+            DocumentMetricKind.CroFilingPack,
+            () => GenerateCroFilingPackAsync(companyId, periodId, reviewArtifact: false));
+
+    public async Task<byte[]> GenerateCroFilingReviewPackAsync(int companyId, int periodId)
+        => await TrackDocumentAsync(
+            DocumentMetricKind.CroFilingPack,
+            () => GenerateCroFilingPackAsync(companyId, periodId, reviewArtifact: true));
+
+    private async Task<byte[]> GenerateCroFilingPackAsync(int companyId, int periodId, bool reviewArtifact)
     {
         var period = await db.AccountingPeriods
             .Include(p => p.Company).ThenInclude(c => c.Officers)
@@ -779,12 +854,15 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
 
         // For Medium/Full/Small (non-abridged), CRO pack is the full accounts package.
         if (regime == ElectedRegime.Medium || regime == ElectedRegime.Full || regime == ElectedRegime.Small)
-            return await GenerateAccountsPackageAsync(companyId, periodId, DocumentPackagePurpose.CroFiling);
+            return await GenerateAccountsPackageAsync(companyId, periodId, DocumentPackagePurpose.CroFiling, reviewArtifact);
 
-        return await GenerateAbridgedCroFilingPackAsync(period, regime);
+        return await GenerateAbridgedCroFilingPackAsync(period, regime, reviewArtifact);
     }
 
-    private async Task<byte[]> GenerateAbridgedCroFilingPackAsync(AccountingPeriod period, ElectedRegime regime)
+    private async Task<byte[]> GenerateAbridgedCroFilingPackAsync(
+        AccountingPeriod period,
+        ElectedRegime regime,
+        bool reviewArtifact)
     {
         var company = period.Company;
         var balanceSheet = await statementsService.GetBalanceSheetAsync(company.Id, period.Id);
@@ -792,6 +870,8 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
             .Where(n => n.PeriodId == period.Id && n.IsIncluded)
             .OrderBy(n => n.NoteNumber)
             .ToListAsync();
+        if (regime == ElectedRegime.SmallAbridged)
+            notes = notes.Where(note => !StatutoryNoteCodes.IsProfitAndLossNote(note.Code)).ToList();
         var directors = company.Officers
             .Where(o => o.Role == OfficerRole.Director && o.ResignedDate == null)
             .ToList();
@@ -803,9 +883,8 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
             : null;
 
         FinancialStatementsService.BalanceSheet? priorBs = null;
-        var priorPeriod = await db.AccountingPeriods
-            .Where(p => p.CompanyId == company.Id && p.PeriodEnd < period.PeriodStart)
-            .OrderByDescending(p => p.PeriodEnd)
+        var priorPeriod = await PeriodChronologyService
+            .PriorPeriodQuery(db, company.Id, period.PeriodStart)
             .FirstOrDefaultAsync();
         if (priorPeriod != null)
         {
@@ -821,7 +900,7 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
                 page.MarginVertical(40);
                 page.DefaultTextStyle(x => x.FontSize(10).FontFamily("Helvetica"));
 
-                page.Header().Element(c => ComposeHeader(c, company));
+                page.Header().Element(c => ComposeArtifactHeader(c, company, reviewArtifact));
 
                 page.Content().Column(col =>
                 {
@@ -857,7 +936,7 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
 
                     col.Item().PageBreak();
 
-                    ComposeNotes(col, company, period, regime, balanceSheet, notes);
+                    ComposeNotes(col, period, notes);
                 });
 
                 page.Footer().AlignCenter().Text(t =>
@@ -943,6 +1022,16 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
     /// Contains typeset director/secretary signatures per s.347 Companies Act 2014.
     /// </summary>
     public async Task<byte[]> GenerateSignaturePageAsync(int companyId, int periodId)
+        => await TrackDocumentAsync(
+            DocumentMetricKind.SignaturePage,
+            () => GenerateSignaturePageAsync(companyId, periodId, reviewArtifact: false));
+
+    public async Task<byte[]> GenerateSignatureReviewPageAsync(int companyId, int periodId)
+        => await TrackDocumentAsync(
+            DocumentMetricKind.SignaturePage,
+            () => GenerateSignaturePageAsync(companyId, periodId, reviewArtifact: true));
+
+    private async Task<byte[]> GenerateSignaturePageAsync(int companyId, int periodId, bool reviewArtifact)
     {
         var period = await db.AccountingPeriods
             .Include(p => p.Company).ThenInclude(c => c.Officers)
@@ -976,6 +1065,9 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
                 page.Size(PageSizes.A4);
                 page.Margin(50);
                 page.DefaultTextStyle(x => x.FontSize(10).FontFamily("Helvetica"));
+
+                if (reviewArtifact)
+                    page.Header().Element(ComposeReviewBanner);
 
                 page.Content().Column(col =>
                 {
@@ -1030,9 +1122,51 @@ public class DocumentGeneratorService(AccountsDbContext db, FinancialStatementsS
         return stream.ToArray();
     }
 
+    private async Task<byte[]> TrackDocumentAsync(DocumentMetricKind kind, Func<Task<byte[]>> action)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        var succeeded = false;
+        try
+        {
+            var result = await action();
+            succeeded = true;
+            return result;
+        }
+        finally
+        {
+            try { platformMetrics?.RecordDocument(kind, succeeded, stopwatch.Elapsed); }
+            catch { /* Telemetry must never change document-generation behavior. */ }
+        }
+    }
+
     private async Task AssertFinalDocumentReadinessAsync(int companyId, int periodId, string documentName)
     {
         await statementsService.AssertFinalOutputReadinessAsync(companyId, periodId, documentName);
+    }
+
+    private static void ComposeArtifactHeader(IContainer container, Company company, bool reviewArtifact)
+    {
+        container.Column(column =>
+        {
+            if (reviewArtifact)
+                column.Item().Element(ComposeReviewBanner);
+            column.Item().Element(c => ComposeHeader(c, company));
+        });
+    }
+
+    private static void ComposeReviewBanner(IContainer container)
+    {
+        container
+            .PaddingBottom(6)
+            .Background(Colors.Red.Lighten4)
+            .Border(1)
+            .BorderColor(Colors.Red.Medium)
+            .PaddingVertical(5)
+            .AlignCenter()
+            .Text("DRAFT — NOT FOR FILING")
+            .Bold()
+            .FontSize(11)
+            .FontColor(Colors.Red.Darken2);
     }
 }
 

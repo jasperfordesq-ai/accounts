@@ -5,8 +5,11 @@ param(
     [string]$Service = "db",
     [string]$TargetDatabase = $env:POSTGRES_DB,
     [string]$User = $env:POSTGRES_USER,
+    [string]$DecryptionCertificateFile = $env:BACKUP_DECRYPTION_CERTIFICATE_FILE,
+    [string]$DecryptionPrivateKeyFile = $env:BACKUP_DECRYPTION_PRIVATE_KEY_FILE,
     [switch]$Clean,
-    [switch]$AllowUnverifiedBackupRestore
+    [switch]$AllowUnverifiedBackupRestore,
+    [switch]$AllowUnencryptedBackupRestore
 )
 
 $ErrorActionPreference = "Stop"
@@ -18,8 +21,8 @@ function Assert-SafePostgresIdentifier([string]$Value, [string]$Name) {
 }
 
 function Assert-SafeBackupLeafName([string]$Leaf) {
-    if ($Leaf -notmatch '^[A-Za-z0-9_.-]+\.dump$') {
-        throw "Backup filename must be a .dump file using only letters, numbers, dots, dashes, and underscores."
+    if ($Leaf -notmatch '^[A-Za-z0-9_.-]+\.dump(?:\.cms)?$') {
+        throw "Backup filename must be a .dump or .dump.cms file using only letters, numbers, dots, dashes, and underscores."
     }
 }
 
@@ -59,6 +62,23 @@ function Invoke-NativeCommand([string]$Description, [scriptblock]$Command) {
     }
 }
 
+function Resolve-OpenSsl {
+    $command = Get-Command openssl -ErrorAction SilentlyContinue
+    if ($null -ne $command) {
+        return $command.Source
+    }
+
+    foreach ($candidate in @(
+        "C:\Program Files\Git\usr\bin\openssl.exe",
+        "C:\Program Files\Git\mingw64\bin\openssl.exe")) {
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+            return $candidate
+        }
+    }
+
+    throw "OpenSSL is required to decrypt production backups."
+}
+
 if ([string]::IsNullOrWhiteSpace($TargetDatabase)) {
     throw "POSTGRES_DB or -TargetDatabase is required."
 }
@@ -78,12 +98,57 @@ Assert-SafePostgresIdentifier $User "User"
 Assert-SafeBackupLeafName $leaf
 Assert-BackupHashMatches $BackupPath -AllowUnverified:$AllowUnverifiedBackupRestore
 
-$containerPath = "/tmp/$leaf"
+$encrypted = $leaf.EndsWith(".cms", [StringComparison]::OrdinalIgnoreCase)
+$restoreSourcePath = [IO.Path]::GetFullPath($BackupPath)
+$temporaryDecryptDirectory = ""
+$manifestPath = "$BackupPath.manifest.json"
+if ($encrypted) {
+    foreach ($requiredFile in @($DecryptionCertificateFile, $DecryptionPrivateKeyFile, $manifestPath)) {
+        if ([string]::IsNullOrWhiteSpace($requiredFile) -or -not (Test-Path -LiteralPath $requiredFile -PathType Leaf)) {
+            throw "Encrypted backup restore requires the decryption certificate, private key, and adjacent manifest: $requiredFile"
+        }
+    }
+
+    $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+    $backupSha256 = (Get-FileHash -LiteralPath $BackupPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $certificateSha256 = (Get-FileHash -LiteralPath $DecryptionCertificateFile -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($manifest.encrypted -ne $true -or [string]$manifest.encryptionAlgorithm -ne "CMS/AES-256-CBC") {
+        throw "Backup manifest does not identify the expected CMS/AES-256-CBC encrypted format."
+    }
+    if ([string]$manifest.backupSha256 -ne $backupSha256) {
+        throw "Backup manifest SHA-256 does not match the encrypted backup."
+    }
+    if ([string]$manifest.encryptionCertificateFileSha256 -ne $certificateSha256) {
+        throw "Backup manifest encryption certificate does not match the supplied decryption certificate."
+    }
+
+    $temporaryDecryptDirectory = Join-Path ([IO.Path]::GetTempPath()) ("accounts-backup-decrypt-" + [Guid]::NewGuid().ToString("N"))
+    New-Item -ItemType Directory -Path $temporaryDecryptDirectory | Out-Null
+    $restoreSourcePath = Join-Path $temporaryDecryptDirectory ([IO.Path]::GetFileNameWithoutExtension($leaf))
+    $openssl = Resolve-OpenSsl
+    Invoke-NativeCommand "Decrypt PostgreSQL backup into a temporary restore file" {
+        & $openssl cms -decrypt -binary -inform DER `
+            -in $BackupPath `
+            -recip $DecryptionCertificateFile `
+            -inkey $DecryptionPrivateKeyFile `
+            -out $restoreSourcePath
+    }
+    if (-not (Test-Path -LiteralPath $restoreSourcePath -PathType Leaf) -or (Get-Item -LiteralPath $restoreSourcePath).Length -le 0) {
+        throw "Decrypted PostgreSQL backup is missing or empty."
+    }
+} elseif (-not $AllowUnencryptedBackupRestore) {
+    throw "Plaintext .dump restore is disabled. Supply an encrypted .dump.cms backup or use -AllowUnencryptedBackupRestore only for a documented local/break-glass operation."
+}
+
+$restoreLeaf = Split-Path -Leaf $restoreSourcePath
+$containerPath = "/var/lib/postgresql/data/.accounts-restore-$restoreLeaf"
+$copiedToContainer = $false
 
 try {
     Invoke-NativeCommand "Copy PostgreSQL backup into container" {
-        docker compose -f $ComposeFile cp $BackupPath "${Service}:$containerPath"
+        docker compose -f $ComposeFile cp $restoreSourcePath "${Service}:$containerPath"
     }
+    $copiedToContainer = $true
 
     $restoreArgs = @(
         "compose", "-f", $ComposeFile,
@@ -104,8 +169,18 @@ try {
         & docker @restoreArgs
     }
 } finally {
-    Invoke-NativeCommand "Remove temporary PostgreSQL backup from container" {
-        docker compose -f $ComposeFile exec -T $Service rm -f "$containerPath"
+    if ($copiedToContainer) {
+        Invoke-NativeCommand "Remove temporary PostgreSQL backup from container" {
+            docker compose -f $ComposeFile exec -T $Service rm -f "$containerPath"
+        }
+    }
+    if (-not [string]::IsNullOrWhiteSpace($temporaryDecryptDirectory)) {
+        $resolvedTemporaryDirectory = [IO.Path]::GetFullPath($temporaryDecryptDirectory)
+        $temporaryRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
+        if (-not $resolvedTemporaryDirectory.StartsWith($temporaryRoot, [StringComparison]::OrdinalIgnoreCase)) {
+            throw "Refusing to remove a decrypted-backup path outside the operating-system temporary directory."
+        }
+        Remove-Item -LiteralPath $resolvedTemporaryDirectory -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
 

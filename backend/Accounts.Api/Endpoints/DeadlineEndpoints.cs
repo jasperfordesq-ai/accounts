@@ -1,6 +1,7 @@
 using Accounts.Api.Data;
 using Accounts.Api.Entities;
 using Accounts.Api.Services;
+using Microsoft.AspNetCore.Mvc;
 
 namespace Accounts.Api.Endpoints;
 
@@ -8,6 +9,17 @@ public static class DeadlineEndpoints
 {
     public static void MapDeadlineEndpoints(this WebApplication app)
     {
+        app.MapGet("/api/dashboard/deadlines", async (
+            DashboardDeadlineService service,
+            HttpContext context,
+            CancellationToken cancellationToken) =>
+        {
+            var user = AuthContext.GetUser(context);
+            return user is null
+                ? Results.Unauthorized()
+                : Results.Ok(await service.GetAsync(user, cancellationToken));
+        }).WithTags("Deadlines");
+
         var companyGroup = app.MapGroup("/api/companies/{companyId:int}").WithTags("Deadlines");
         var periodGroup = app.MapGroup("/api/companies/{companyId:int}/periods/{periodId:int}").WithTags("Deadlines");
 
@@ -55,8 +67,42 @@ public static class DeadlineEndpoints
             return Results.Ok(deadlines);
         });
 
+        // Record an evidence-backed manual due-date override while retaining the statutory result.
+        periodGroup.MapPost("/deadlines/override", async (
+            int companyId,
+            int periodId,
+            DeadlineOverrideInput input,
+            DeadlineService service,
+            AccountsDbContext db,
+            ApiAccessService apiAccess,
+            HttpContext context,
+            CancellationToken cancellationToken) =>
+        {
+            if (!await CompanyEndpointAccess.CanAccessCompanyPeriodAsync(context, db, companyId, periodId))
+                return Results.NotFound();
+            var denied = EndpointRequestAuthorization.AuthorizeCurrentRequest(context, apiAccess);
+            if (denied is not null)
+                return denied;
+            if (input.DeadlineType is null || !Enum.IsDefined(input.DeadlineType.Value))
+                return Results.BadRequest(new { error = "Valid deadline type is required." });
+            if (input.OverrideDueDate is null || input.OverrideDueDate == default)
+                return Results.BadRequest(new { error = "Override due date is required." });
+
+            var actor = AuthContext.RequireUser(context);
+            return Results.Ok(await service.RecordManualOverrideAsync(
+                companyId,
+                periodId,
+                input.DeadlineType.Value,
+                input.OverrideDueDate.Value,
+                input.Reason,
+                input.EvidenceReference,
+                input.EvidenceSha256,
+                actor,
+                cancellationToken));
+        });
+
         // Mark a period as filed
-        periodGroup.MapPost("/mark-filed", async (int companyId, int periodId, MarkFiledInput input, DeadlineService service, AccountsDbContext db, ApiAccessService apiAccess, HttpContext context) =>
+        periodGroup.MapPost("/mark-filed", async (int companyId, int periodId, MarkFiledInput input, DeadlineService service, AccountsDbContext db, ApiAccessService apiAccess, HttpContext context, [FromServices] IdempotencyService? idempotency = null) =>
         {
             if (!await CompanyEndpointAccess.CanAccessCompanyPeriodAsync(context, db, companyId, periodId))
                 return Results.NotFound();
@@ -69,14 +115,36 @@ public static class DeadlineEndpoints
             if (validation is not null)
                 return validation;
 
-            var deadline = await service.MarkFiledAsync(
-                companyId,
-                periodId,
-                input.DeadlineType!.Value,
-                input.FiledDate!.Value,
-                AuditUserId(context),
-                input.FilingReference);
-            return Results.Ok(deadline);
+            var actor = AuthContext.RequireUser(context);
+            idempotency ??= new IdempotencyService(db);
+            var command = await IdempotencyHttpContract.ExecuteAsync(
+                context,
+                idempotency,
+                actor,
+                IdempotencyOperations.DeadlineMarkFiled,
+                new
+                {
+                    companyId,
+                    periodId,
+                    DeadlineType = input.DeadlineType!.Value,
+                    FiledDate = input.FiledDate!.Value,
+                    input.FilingReference
+                },
+                async cancellationToken =>
+                {
+                    var deadline = await service.MarkFiledAsync(
+                        companyId,
+                        periodId,
+                        input.DeadlineType.Value,
+                        input.FiledDate.Value,
+                        AuthenticatedIdentity.AuditUserId(actor),
+                        input.FilingReference);
+                    return new IdempotencyOperationOutcome<FilingDeadline>(
+                        deadline,
+                        nameof(FilingDeadline),
+                        deadline.Id.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                });
+            return command.Error ?? IdempotencyHttpContract.JsonResult(command.Execution!);
         });
     }
 
@@ -99,3 +167,9 @@ public static class DeadlineEndpoints
 }
 
 public record MarkFiledInput(DeadlineType? DeadlineType, DateOnly? FiledDate, string? FilingReference);
+public record DeadlineOverrideInput(
+    DeadlineType? DeadlineType,
+    DateOnly? OverrideDueDate,
+    string? Reason,
+    string? EvidenceReference,
+    string? EvidenceSha256);

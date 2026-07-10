@@ -23,6 +23,7 @@ public class AuthService
     private readonly AuthSessionConfig config;
     private readonly IHostEnvironment environment;
     private readonly IPasswordVerifier passwordVerifier;
+    private readonly IPasswordSafetyService? passwordSafety;
     private readonly TimeProvider timeProvider;
     private readonly byte[] signingKey;
 
@@ -31,12 +32,14 @@ public class AuthService
         IOptions<AuthSessionConfig> config,
         IHostEnvironment environment,
         IPasswordVerifier passwordVerifier,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        IPasswordSafetyService? passwordSafety = null)
     {
         this.db = db;
         this.config = config.Value;
         this.environment = environment;
         this.passwordVerifier = passwordVerifier;
+        this.passwordSafety = passwordSafety;
         this.timeProvider = timeProvider ?? TimeProvider.System;
         signingKey = AuthSessionKey.DecodeRequired(this.config.SigningKey);
     }
@@ -102,13 +105,43 @@ public class AuthService
     public string CreateSessionCookieValue(AuthenticatedUser user, DateTimeOffset now)
     {
         var csrfToken = string.IsNullOrWhiteSpace(user.CsrfToken) ? CreateCsrfToken() : user.CsrfToken;
+        var absoluteExpiresAt = now.AddMinutes(AbsoluteLifetimeMinutes);
+        var idleExpiresAt = now.AddMinutes(IdleTimeoutMinutes);
         var payload = new SessionPayload(
             UserId: user.UserId,
             TenantId: user.TenantId,
-            ExpiresAtUnixSeconds: now.AddMinutes(ClampedExpiryMinutes).ToUnixTimeSeconds(),
+            ExpiresAtUnixSeconds: Min(idleExpiresAt, absoluteExpiresAt).ToUnixTimeSeconds(),
             PasswordLastChangedAtTicks: user.PasswordLastChangedAt.Ticks,
             SessionVersion: user.SessionVersion,
-            CsrfToken: csrfToken);
+            CsrfToken: csrfToken,
+            IssuedAtUnixSeconds: now.ToUnixTimeSeconds(),
+            LastActivityUnixSeconds: now.ToUnixTimeSeconds(),
+            MfaVerifiedAtUnixSeconds: user.MfaVerifiedAtUtc?.ToUnixTimeSeconds() ?? 0,
+            MfaMethod: user.MfaMethod ?? "");
+        return SignPayload(payload);
+    }
+
+    public string CreateRefreshedSessionCookieValue(AuthenticatedUser user, DateTimeOffset now)
+    {
+        var issuedAt = user.SessionIssuedAtUtc ?? now;
+        var absoluteExpiresAt = issuedAt.AddMinutes(AbsoluteLifetimeMinutes);
+        var idleExpiresAt = now.AddMinutes(IdleTimeoutMinutes);
+        var payload = new SessionPayload(
+            UserId: user.UserId,
+            TenantId: user.TenantId,
+            ExpiresAtUnixSeconds: Min(idleExpiresAt, absoluteExpiresAt).ToUnixTimeSeconds(),
+            PasswordLastChangedAtTicks: user.PasswordLastChangedAt.Ticks,
+            SessionVersion: user.SessionVersion,
+            CsrfToken: user.CsrfToken,
+            IssuedAtUnixSeconds: issuedAt.ToUnixTimeSeconds(),
+            LastActivityUnixSeconds: now.ToUnixTimeSeconds(),
+            MfaVerifiedAtUnixSeconds: user.MfaVerifiedAtUtc?.ToUnixTimeSeconds() ?? 0,
+            MfaMethod: user.MfaMethod ?? "");
+        return SignPayload(payload);
+    }
+
+    private string SignPayload(SessionPayload payload)
+    {
         var payloadBytes = JsonSerializer.SerializeToUtf8Bytes(payload, SessionJsonOptions);
         var encodedPayload = Base64UrlEncode(payloadBytes);
         var signature = Base64UrlEncode(ComputeSignature(encodedPayload));
@@ -118,32 +151,23 @@ public class AuthService
 
     public string CreateCsrfToken() => Base64UrlEncode(RandomNumberGenerator.GetBytes(32));
 
+    public VerifiedSessionScope? ReadVerifiedSessionScope(string? cookieValue, DateTimeOffset now) =>
+        TryReadVerifiedSessionPayload(cookieValue, now, out var payload, out _, out _)
+            ? new VerifiedSessionScope(payload!.UserId, payload.TenantId)
+            : null;
+
     public async Task<AuthenticatedUser?> ReadSessionAsync(string? cookieValue, DateTimeOffset now)
     {
-        if (string.IsNullOrWhiteSpace(cookieValue))
+        if (!TryReadVerifiedSessionPayload(
+                cookieValue,
+                now,
+                out var verifiedPayload,
+                out var issuedAt,
+                out var lastActivity))
             return null;
-
-        var parts = cookieValue.Split('.');
-        if (parts.Length != 2 || parts.Any(string.IsNullOrWhiteSpace))
-            return null;
-
-        if (!SignatureMatches(parts[0], parts[1]))
-            return null;
-
+        var payload = verifiedPayload!;
         try
         {
-            if (!TryBase64UrlDecode(parts[0], out var payloadBytes))
-                return null;
-
-            var payload = JsonSerializer.Deserialize<SessionPayload>(payloadBytes, SessionJsonOptions);
-            if (payload is null
-                || payload.UserId <= 0
-                || payload.TenantId <= 0
-                || payload.SessionVersion <= 0
-                || string.IsNullOrWhiteSpace(payload.CsrfToken)
-                || payload.ExpiresAtUnixSeconds <= now.ToUnixTimeSeconds())
-                return null;
-
             var user = await db.UserAccounts
                 .Include(u => u.Tenant)
                 .Include(u => u.CompanyAccesses)
@@ -161,15 +185,80 @@ public class AuthService
             if (user.SessionVersion != payload.SessionVersion)
                 return null;
 
-            return ToPrincipal(user) with { CsrfToken = payload.CsrfToken };
+            DateTimeOffset? mfaVerifiedAt = payload.MfaVerifiedAtUnixSeconds > 0
+                ? DateTimeOffset.FromUnixTimeSeconds(payload.MfaVerifiedAtUnixSeconds)
+                : null;
+            if (mfaVerifiedAt > now.AddMinutes(1))
+                return null;
+            if (config.RequirePrivilegedMfa && RequiresPrivilegedMfa(user.Role) && mfaVerifiedAt is null)
+                return null;
+
+            return ToPrincipal(user) with
+            {
+                CsrfToken = payload.CsrfToken,
+                SessionIssuedAtUtc = issuedAt,
+                LastActivityAtUtc = lastActivity,
+                MfaVerifiedAtUtc = mfaVerifiedAt,
+                MfaMethod = string.IsNullOrWhiteSpace(payload.MfaMethod) ? null : payload.MfaMethod
+            };
         }
-        catch (JsonException)
+        catch (ArgumentOutOfRangeException)
         {
             return null;
         }
     }
 
-    public async Task<PasswordChangeResult> ChangePasswordAsync(int userId, string? currentPassword, string? newPassword)
+    private bool TryReadVerifiedSessionPayload(
+        string? cookieValue,
+        DateTimeOffset now,
+        out SessionPayload? payload,
+        out DateTimeOffset issuedAt,
+        out DateTimeOffset lastActivity)
+    {
+        payload = null;
+        issuedAt = default;
+        lastActivity = default;
+        if (string.IsNullOrWhiteSpace(cookieValue)) return false;
+        var parts = cookieValue.Split('.');
+        if (parts.Length != 2 || parts.Any(string.IsNullOrWhiteSpace) || !SignatureMatches(parts[0], parts[1]))
+            return false;
+        try
+        {
+            if (!TryBase64UrlDecode(parts[0], out var payloadBytes)) return false;
+            payload = JsonSerializer.Deserialize<SessionPayload>(payloadBytes, SessionJsonOptions);
+            if (payload is null
+                || payload.UserId <= 0
+                || payload.TenantId <= 0
+                || payload.SessionVersion <= 0
+                || string.IsNullOrWhiteSpace(payload.CsrfToken)
+                || payload.ExpiresAtUnixSeconds <= now.ToUnixTimeSeconds())
+                return false;
+            issuedAt = payload.IssuedAtUnixSeconds > 0
+                ? DateTimeOffset.FromUnixTimeSeconds(payload.IssuedAtUnixSeconds)
+                : DateTimeOffset.FromUnixTimeSeconds(payload.ExpiresAtUnixSeconds).AddMinutes(-ClampedExpiryMinutes);
+            lastActivity = payload.LastActivityUnixSeconds > 0
+                ? DateTimeOffset.FromUnixTimeSeconds(payload.LastActivityUnixSeconds)
+                : issuedAt;
+            return issuedAt <= now.AddMinutes(1)
+                && lastActivity <= now.AddMinutes(1)
+                && now - issuedAt < TimeSpan.FromMinutes(AbsoluteLifetimeMinutes)
+                && now - lastActivity < TimeSpan.FromMinutes(IdleTimeoutMinutes);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            return false;
+        }
+    }
+
+    public async Task<PasswordChangeResult> ChangePasswordAsync(
+        int userId,
+        string? currentPassword,
+        string? newPassword,
+        CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(currentPassword) || string.IsNullOrWhiteSpace(newPassword))
             return PasswordChangeResult.Failed("Current password and new password are required.");
@@ -185,6 +274,14 @@ public class AuthService
         var passwordValidation = ValidateNewPassword(currentPassword, newPassword);
         if (passwordValidation is not null)
             return PasswordChangeResult.Failed(passwordValidation);
+        if (passwordSafety is not null)
+        {
+            var safety = await passwordSafety.CheckAsync(newPassword, cancellationToken);
+            if (safety.Status == PasswordSafetyStatus.Breached)
+                return PasswordChangeResult.Failed("This password appears in a known breach and cannot be used.");
+            if (safety.Status == PasswordSafetyStatus.Unavailable)
+                return PasswordChangeResult.Failed("Password safety validation is temporarily unavailable. Try again before changing the password.");
+        }
 
         var (hash, salt) = PasswordHasher.HashPassword(newPassword);
         var passwordLastChangedAt = DatabaseTimestampUtc();
@@ -303,6 +400,38 @@ public class AuthService
         !environment.IsDevelopment();
 
     private int ClampedExpiryMinutes => Math.Clamp(config.ExpiryMinutes, 15, 1_440);
+
+    public int IdleTimeoutMinutes => config.IdleTimeoutMinutes > 0
+        ? Math.Clamp(config.IdleTimeoutMinutes, 5, 1_440)
+        : ClampedExpiryMinutes;
+
+    public int AbsoluteLifetimeMinutes => config.AbsoluteLifetimeMinutes > 0
+        ? Math.Clamp(config.AbsoluteLifetimeMinutes, 15, 10_080)
+        : ClampedExpiryMinutes;
+
+    public static bool RequiresPrivilegedMfa(string? role) =>
+        role?.Trim().Equals("Owner", StringComparison.OrdinalIgnoreCase) == true
+        || role?.Trim().Equals("Accountant", StringComparison.OrdinalIgnoreCase) == true
+        || role?.Trim().Equals("Reviewer", StringComparison.OrdinalIgnoreCase) == true;
+
+    public async Task<AuthenticatedUser?> GetPrincipalAsync(int userId)
+    {
+        var user = await db.UserAccounts
+            .Include(candidate => candidate.Tenant)
+            .Include(candidate => candidate.CompanyAccesses)
+            .SingleOrDefaultAsync(candidate => candidate.Id == userId);
+        return CanAuthenticate(user) ? ToPrincipal(user!) : null;
+    }
+
+    public async Task<bool> VerifyCurrentPasswordAsync(int userId, string? password)
+    {
+        if (string.IsNullOrWhiteSpace(password)) return false;
+        var user = await db.UserAccounts.SingleOrDefaultAsync(candidate => candidate.Id == userId);
+        var now = DatabaseTimestampUtc();
+        return CanAuthenticate(user)
+            && !IsLocked(user, now)
+            && passwordVerifier.Verify(password, user);
+    }
 
     private DateTime DatabaseTimestampUtc()
     {
@@ -492,13 +621,21 @@ public class AuthService
         long ExpiresAtUnixSeconds,
         long PasswordLastChangedAtTicks,
         int SessionVersion = 0,
-        string CsrfToken = "");
+        string CsrfToken = "",
+        long IssuedAtUnixSeconds = 0,
+        long LastActivityUnixSeconds = 0,
+        long MfaVerifiedAtUnixSeconds = 0,
+        string MfaMethod = "");
+
+    private static DateTimeOffset Min(DateTimeOffset left, DateTimeOffset right) => left <= right ? left : right;
 
     private sealed record LoginFailureState(
         int FailedLoginCount = 0,
         DateTime? LockedUntilUtc = null,
         bool LockoutStarted = false);
 }
+
+public sealed record VerifiedSessionScope(int UserId, int TenantId);
 
 public record LoginResult(
     bool Succeeded,

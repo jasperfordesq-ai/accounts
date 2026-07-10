@@ -1,6 +1,7 @@
 using Accounts.Api.Data;
 using Accounts.Api.Entities;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Cryptography;
 
 namespace Accounts.Api.Services;
 
@@ -50,6 +51,9 @@ public sealed record FilingReadinessProfile(
     string AccountantReviewState,
     bool DirectCroSubmissionSupported,
     bool DirectRosSubmissionSupported,
+    bool RevenueIxbrlGenerationSupported,
+    bool RevenueManualHandoffRequired,
+    string RevenueGenerationSupportReason,
     RevenueIxbrlTaxonomySelection RevenueTaxonomy,
     FilingReadinessSignOffPacket SignOffPacket,
     IReadOnlyList<FilingReadinessEvidenceItem> RequiredEvidence,
@@ -80,7 +84,16 @@ public class FilingReadinessProfileService(AccountsDbContext db)
             ?? throw new ResourceNotFoundException($"Period {periodId} not found");
 
         var company = period.Company;
-        var sizeClass = period.SizeClassification?.OverrideClass ?? period.SizeClassification?.CalculatedClass;
+        var classification = period.SizeClassification;
+        var currentOverride = classification?.OverrideClass is not null
+            && classification.OverrideRequiresRereview == false
+            && classification.OverrideEvidenceArtifact is { Length: > 0 }
+            && classification.OverrideEvidenceSha256 is { Length: 64 }
+            && string.Equals(
+                FilingReleaseGate.ComputeSha256(classification.OverrideEvidenceArtifact),
+                classification.OverrideEvidenceSha256,
+                StringComparison.OrdinalIgnoreCase);
+        var sizeClass = currentOverride ? classification!.OverrideClass : classification?.CalculatedClass;
         var regime = period.FilingRegime?.ElectedRegime;
         var taxonomy = RevenueIxbrlTaxonomySelector.Select(period.PeriodStart, regime);
 
@@ -140,7 +153,8 @@ public class FilingReadinessProfileService(AccountsDbContext db)
                 source);
         }
 
-        if (company.IsListedSecurities || company.IsCreditInstitution || company.IsInsuranceUndertaking || company.IsPensionFund)
+        if (company.IsListedSecurities || company.IsCreditInstitution || company.IsInsuranceUndertaking || company.IsPensionFund
+            || company.IsFifthScheduleEntity || company.IsOtherIneligibleEntity)
         {
             supportedPath = false;
             manualHandoff = true;
@@ -149,6 +163,14 @@ public class FilingReadinessProfileService(AccountsDbContext db)
                 "Listed, credit institution, insurance undertaking, pension fund and other Fifth Schedule/excluded entities are not safe for automated filing.",
                 IrishStatutoryRuleSources.CroFinancialStatementsRequirements,
                 IrishStatutoryRuleSources.FrcFrs102);
+        }
+
+        if (classification?.OverrideClass is not null && !currentOverride)
+        {
+            Block(
+                "classification-override-rereview-required",
+                "The classification override is stale or its retained evidence no longer matches; re-review it before any filing use.",
+                IrishStatutoryRuleSources.CroFinancialStatementsRequirements);
         }
 
         if (company.IsGroupMember || company.IsHolding || company.IsSubsidiary)
@@ -165,10 +187,12 @@ public class FilingReadinessProfileService(AccountsDbContext db)
         RequireEvidence(
             "size-classification",
             "Company size classification completed",
-            sizeClass.HasValue,
-            sizeClass.HasValue ? sizeClass.Value.ToString() : "Run size classification before determining filing requirements.",
+            sizeClass.HasValue && !string.IsNullOrWhiteSpace(classification?.DecisionInputFingerprintSha256),
+            sizeClass.HasValue && !string.IsNullOrWhiteSpace(classification?.DecisionInputFingerprintSha256)
+                ? sizeClass.Value.ToString()
+                : "Run size classification against the current raw figures and threshold election before determining filing requirements.",
             IrishStatutoryRuleSources.CroFinancialStatementsRequirements);
-        if (!sizeClass.HasValue)
+        if (!sizeClass.HasValue || string.IsNullOrWhiteSpace(classification?.DecisionInputFingerprintSha256))
             Block("size-classification-required", "Size classification must be completed before filing readiness can be assessed.", IrishStatutoryRuleSources.CroFinancialStatementsRequirements);
 
         LegalSourceReference[] filingRegimeSources = regime == ElectedRegime.Micro
@@ -240,20 +264,23 @@ public class FilingReadinessProfileService(AccountsDbContext db)
 
         var auditRequired = period.FilingRegime?.AuditExempt == false
             || sizeClass is CompanySizeClass.Medium or CompanySizeClass.Large;
+        var completeAuditorReport = !auditRequired || FilingReleaseGate.HasCompleteAuditorReportEvidence(period);
         if (auditRequired)
             sourceReferences.Add(IrishStatutoryRuleSources.CroAuditorsReport);
         RequireEvidence(
             "audit-report",
             "Signed auditor report evidence where audit is required",
-            !auditRequired || period.AuditorsReportReceived,
+            completeAuditorReport,
             auditRequired
-                ? period.AuditorsReportReceived ? period.AuditorsReportReference ?? "Auditor report received." : "Auditor handoff and signed auditor report are required."
+                ? completeAuditorReport
+                    ? $"{period.AuditorsReportReference}; retained PDF SHA-256 {period.AuditorsReportSha256}."
+                    : "Retained signed auditor-report PDF, firm/signer identity and accepted qualified-accountant review are required."
                 : "Audit exemption currently indicated by filing regime.",
             IrishStatutoryRuleSources.CroFinancialStatementsRequirements,
             IrishStatutoryRuleSources.CroMediumCompany,
             IrishStatutoryRuleSources.CroAuditorsReport,
             IrishStatutoryRuleSources.FrcFrs102);
-        if (auditRequired && !period.AuditorsReportReceived)
+        if (auditRequired && !completeAuditorReport)
         {
             manualHandoff = true;
             Block(
@@ -264,8 +291,9 @@ public class FilingReadinessProfileService(AccountsDbContext db)
                 IrishStatutoryRuleSources.CroAuditorsReport);
         }
 
-        var reviewState = cro?.ApprovedAt is not null && !string.IsNullOrWhiteSpace(cro.ApprovedBy)
-            ? $"Approved by {cro.ApprovedBy}"
+        var qualifiedApprovalRetained = HasCurrentQualifiedAccountantApprovalEvidence(cro, company.TenantId);
+        var reviewState = qualifiedApprovalRetained
+            ? $"Verified approval by {cro!.ApprovedBy} ({cro.ApproverProfessionalBody}, {cro.ApproverMembershipNumber}); manifest {cro.ApprovedArtifactManifestSha256}"
             : "Required";
         RequireEvidence(
             "accountant-review",
@@ -277,30 +305,68 @@ public class FilingReadinessProfileService(AccountsDbContext db)
         if (reviewState == "Required")
             Block("accountant-review-required", "A named qualified accountant must approve the filing pack before any real CRO/Revenue use.", IrishStatutoryRuleSources.CroFinancialStatementsRequirements);
 
+        TaxComputationService.TaxComputation? taxSupport = null;
+        string? taxSupportFailure = null;
+        try
+        {
+            taxSupport = await new TaxComputationService(db, new FinancialStatementsService(db))
+                .ComputeAsync(companyId, periodId);
+        }
+        catch (BusinessRuleException exception)
+        {
+            taxSupportFailure = exception.Message;
+        }
+        var taxSupportSatisfied = taxSupport?.FinalTaxChargeSupported == true;
+        var taxSupportDetail = taxSupport is not null
+            ? taxSupportSatisfied
+                ? $"Simple-scope support calculation {taxSupport.CalculationSha256}; this is still not a complete CT1 return."
+                : string.Join("; ", taxSupport.BlockingReasons)
+            : $"Corporation-tax support calculation could not be produced: {taxSupportFailure}";
+        RequireEvidence(
+            "corporation-tax-scope",
+            "Corporation-tax support scope and retained loss movement are current",
+            taxSupportSatisfied,
+            taxSupportDetail,
+            IrishStatutoryRuleSources.RevenueIxbrlOverview);
+        if (!taxSupportSatisfied)
+        {
+            Block(
+                "corporation-tax-scope-required",
+                "Revenue-ready handoff is blocked until corporation-tax scope and loss evidence pass: "
+                + taxSupportDetail,
+                IrishStatutoryRuleSources.RevenueIxbrlOverview);
+        }
+
         var revenue = period.RevenueFilingPackage;
-        var internalIxbrlChecksPassed = revenue?.IxbrlGenerated == true
+        var internalIxbrlChecksPassed = RevenueIxbrlGenerationPolicy.FilingReadyGenerationEnabled
+            && revenue?.IxbrlGenerated == true
             && revenue.IxbrlValidationErrors?.StartsWith("Internal checks passed.", StringComparison.Ordinal) == true;
         RequireEvidence(
             "ixbrl-internal-checks",
             "Internal iXBRL generation checks completed",
             internalIxbrlChecksPassed,
-            internalIxbrlChecksPassed ? "Internal checks passed." : "Run internal iXBRL checks before Revenue workflow approval.",
+            internalIxbrlChecksPassed
+                ? "Internal checks passed."
+                : RevenueIxbrlGenerationPolicy.FilingReadyGenerationEnabled
+                    ? "Run internal iXBRL checks before Revenue workflow approval."
+                    : RevenueIxbrlGenerationPolicy.ManualHandoffReason,
             IrishStatutoryRuleSources.RevenueIxbrlOverview,
             IrishStatutoryRuleSources.RevenueIxbrlContents,
             IrishStatutoryRuleSources.RevenueAcceptedTaxonomies);
-        if (!internalIxbrlChecksPassed)
+        if (RevenueIxbrlGenerationPolicy.FilingReadyGenerationEnabled && !internalIxbrlChecksPassed)
             Block("ixbrl-internal-checks-required", "Internal iXBRL checks must pass before Revenue filing workflow approval.", IrishStatutoryRuleSources.RevenueIxbrlOverview);
 
+        var externalRevenueValidationComplete = HasCompleteExternalRevenueValidationEvidence(revenue);
         RequireEvidence(
             "external-ros-validation",
             "External ROS/iXBRL validation completed outside the platform",
-            revenue?.IxbrlValidated == true,
-            revenue?.IxbrlValidated == true
-                ? "External validation recorded."
-                : "The platform only records internal checks; ROS validation remains a manual external gate.",
+            externalRevenueValidationComplete,
+            externalRevenueValidationComplete
+                ? "Retained validator response, validator/taxonomy identity and exact artifact hashes are present."
+                : "A boolean is insufficient: retain the exact artifact plus complete ROS validator response and identity evidence.",
             IrishStatutoryRuleSources.RevenueIxbrlOverview,
             IrishStatutoryRuleSources.RevenueAcceptedTaxonomies);
-        if (revenue?.IxbrlValidated != true)
+        if (!externalRevenueValidationComplete)
             Warn("external-ros-validation-required", "External ROS/iXBRL validation must be completed and evidenced before real Revenue filing.", IrishStatutoryRuleSources.RevenueIxbrlOverview);
 
         if (company.IsCharitableOrganisation)
@@ -322,6 +388,16 @@ public class FilingReadinessProfileService(AccountsDbContext db)
                 charity?.SofaGenerated == true && charity.TrusteesReportGenerated,
                 charity?.SofaGenerated == true && charity.TrusteesReportGenerated ? "Generated." : "Generate charity annual report pack before approval.",
                 IrishStatutoryRuleSources.CharitiesRegulatorAnnualReport);
+        }
+
+        var revenueIxbrlGenerationSupported = RevenueIxbrlGenerationPolicy.FilingReadyGenerationEnabled;
+        var revenueManualHandoffRequired = !revenueIxbrlGenerationSupported;
+        if (revenueManualHandoffRequired)
+        {
+            Block(
+                "ixbrl-generation-manual-handoff",
+                RevenueIxbrlGenerationPolicy.ManualHandoffReason,
+                IrishStatutoryRuleSources.RevenueIxbrlContents);
         }
 
         if (!taxonomy.AcceptedByRevenue)
@@ -364,6 +440,9 @@ public class FilingReadinessProfileService(AccountsDbContext db)
             reviewState,
             DirectCroSubmissionSupported: false,
             DirectRosSubmissionSupported: false,
+            revenueIxbrlGenerationSupported,
+            revenueManualHandoffRequired,
+            RevenueIxbrlGenerationPolicy.ManualHandoffReason,
             taxonomy,
             signOffPacket,
             evidence,
@@ -377,7 +456,7 @@ public class FilingReadinessProfileService(AccountsDbContext db)
     {
         var profile = await GetProfileAsync(companyId, periodId);
         var blockers = profile.BlockingIssues
-            .Where(i => i.Code is not "ixbrl-internal-checks-required")
+            .Where(i => !IsRevenueOnlyBlocker(i.Code))
             .Select(i => i.Message)
             .Distinct()
             .ToList();
@@ -393,7 +472,7 @@ public class FilingReadinessProfileService(AccountsDbContext db)
     {
         var profile = await GetProfileAsync(companyId, periodId);
         var blockers = profile.BlockingIssues
-            .Where(i => i.Code is not "accountant-review-required" and not "ixbrl-internal-checks-required")
+            .Where(i => i.Code != "accountant-review-required" && !IsRevenueOnlyBlocker(i.Code))
             .Select(i => i.Message)
             .Distinct()
             .ToList();
@@ -425,7 +504,7 @@ public class FilingReadinessProfileService(AccountsDbContext db)
             actions.Add("run-internal-ixbrl-checks");
 
         var onlyReviewAndExternalRosRemain = blockers.All(i =>
-            i.Code is "accountant-review-required" or "ixbrl-internal-checks-required")
+            i.Code == "accountant-review-required" || IsRevenueOnlyBlocker(i.Code))
             || blockers.Count == 0;
         var docsReady = evidence.All(e =>
             e.Code is not ("cro-accounts-pdf" or "cro-signature-page" or "cro-signatories")
@@ -433,7 +512,7 @@ public class FilingReadinessProfileService(AccountsDbContext db)
         if (docsReady && onlyReviewAndExternalRosRemain)
             actions.Add("approve-cro-pack");
 
-        if (cro?.FilingStatus == FilingStatus.Approved && blockers.Count == 0)
+        if (cro?.FilingStatus == FilingStatus.Approved && blockers.All(i => IsRevenueOnlyBlocker(i.Code)))
             actions.Add("mark-cro-submitted");
         if (cro?.FilingStatus == FilingStatus.Submitted && cro.PaymentCompleted == false)
             actions.Add("confirm-core-payment");
@@ -442,6 +521,90 @@ public class FilingReadinessProfileService(AccountsDbContext db)
 
         return actions.Distinct().ToList();
     }
+
+    private static bool IsRevenueOnlyBlocker(string code) =>
+        code is "ixbrl-internal-checks-required"
+            or "ixbrl-generation-manual-handoff"
+            or "taxonomy-not-revenue-accepted"
+            or "corporation-tax-scope-required";
+
+    private static bool HasCompleteExternalRevenueValidationEvidence(RevenueFilingPackage? package)
+    {
+        if (package is null
+            || !package.IxbrlValidated
+            || package.ExternalValidatedAt is null
+            || package.ExternalValidatedAt.Value.Kind != DateTimeKind.Utc
+            || package.ExternalValidatedAt > DateTime.UtcNow.AddMinutes(5)
+            || string.IsNullOrWhiteSpace(package.ExternalValidationReference)
+            || string.IsNullOrWhiteSpace(package.ExternalValidatorProvider)
+            || string.IsNullOrWhiteSpace(package.ExternalValidatorVersion)
+            || package.ExternalValidationWarningDisposition is not ("accepted" or "remediated")
+            || !RetainedShaMatches(package.IxbrlArtifact, package.IxbrlSha256)
+            || !string.Equals(package.ExternalValidationArtifactSha256, package.IxbrlSha256, StringComparison.OrdinalIgnoreCase)
+            || package.ExternalTaxonomyPackageSha256?.Length != 64
+            || !RetainedShaMatches(package.ExternalValidationResponseArtifact, package.ExternalValidationResponseSha256))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool RetainedShaMatches(byte[]? content, string? expectedSha256)
+    {
+        if (content is not { Length: > 0 } || expectedSha256?.Length != 64)
+            return false;
+
+        var actual = Convert.ToHexString(SHA256.HashData(content)).ToLowerInvariant();
+        return string.Equals(actual, expectedSha256, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool HasCurrentQualifiedAccountantApprovalEvidence(CroFilingPackage? package, int? tenantId)
+    {
+        if (package is null
+            || tenantId is null
+            || package.ApproverTenantId != tenantId
+            || string.IsNullOrWhiteSpace(package.ApprovedBy)
+            || package.ApprovedAt is null
+            || package.ApprovedAt.Value.Kind != DateTimeKind.Utc
+            || package.ApprovedAt > DateTime.UtcNow.AddMinutes(5)
+            || !string.Equals(package.ApprovalScope, "cro-final-filing", StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(package.ApprovalCapacity, "qualified-accountant", StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(package.ApprovalDecision, "approved", StringComparison.OrdinalIgnoreCase)
+            || !IsRecognisedProfessionalBody(package.ApproverProfessionalBody)
+            || string.IsNullOrWhiteSpace(package.ApproverMembershipNumber)
+            || !IsHttpsReference(package.ApproverVerificationReference)
+            || package.ApproverVerifiedAt is null
+            || package.ApproverVerifiedAt.Value.Kind != DateTimeKind.Utc
+            || package.ApproverVerifiedAt > DateTime.UtcNow.AddMinutes(5)
+            || package.ApproverCredentialValidUntil is null
+            || package.ApproverCredentialValidUntil.Value.Kind != DateTimeKind.Utc
+            || package.ApproverCredentialValidUntil <= DateTime.UtcNow
+            || package.ApproverCredentialValidUntil <= package.ApproverVerifiedAt
+            || !RetainedShaMatches(package.ApproverVerificationArtifact, package.ApproverVerificationArtifactSha256)
+            || package.ApprovedArtifactManifestSha256?.Length != 64
+            || string.IsNullOrWhiteSpace(package.ApprovedReleaseCandidate)
+            || !string.Equals(package.ApprovedReleaseCandidate, package.ArtifactReleaseCandidate, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool IsRecognisedProfessionalBody(string? value) => value?.Trim() switch
+    {
+        "Chartered Accountants Ireland" => true,
+        "Association of Chartered Certified Accountants" => true,
+        "Chartered Institute of Management Accountants" => true,
+        "Institute of Chartered Accountants in England and Wales" => true,
+        "Institute of Chartered Accountants of Scotland" => true,
+        _ => false
+    };
+
+    private static bool IsHttpsReference(string? value) =>
+        Uri.TryCreate(value?.Trim(), UriKind.Absolute, out var uri)
+        && string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase);
 
     private static FilingReadinessSignOffPacket BuildSignOffPacket(
         bool supportedPath,

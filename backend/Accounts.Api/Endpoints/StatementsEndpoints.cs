@@ -16,7 +16,9 @@ public static class StatementsEndpoints
 
             var result = await service.GetTrialBalanceAsync(companyId, periodId);
             return Results.Ok(result);
-        });
+        })
+            .Produces<List<FinancialStatementsService.TrialBalanceLine>>()
+            .Produces(StatusCodes.Status404NotFound);
 
         group.MapGet("/profit-and-loss", async (int companyId, int periodId, FinancialStatementsService service, AccountsDbContext db, HttpContext context) =>
         {
@@ -25,7 +27,9 @@ public static class StatementsEndpoints
 
             var result = await service.GetProfitAndLossAsync(companyId, periodId);
             return Results.Ok(result);
-        });
+        })
+            .Produces<FinancialStatementsService.ProfitAndLoss>()
+            .Produces(StatusCodes.Status404NotFound);
 
         group.MapGet("/balance-sheet", async (int companyId, int periodId, FinancialStatementsService service, AccountsDbContext db, HttpContext context) =>
         {
@@ -34,7 +38,9 @@ public static class StatementsEndpoints
 
             var result = await service.GetBalanceSheetAsync(companyId, periodId);
             return Results.Ok(result);
-        });
+        })
+            .Produces<FinancialStatementsService.BalanceSheet>()
+            .Produces(StatusCodes.Status404NotFound);
 
         group.MapGet("/readiness", async (int companyId, int periodId, FinancialStatementsService service, AccountsDbContext db, HttpContext context) =>
         {
@@ -43,7 +49,9 @@ public static class StatementsEndpoints
 
             var result = await service.GetReadinessScoreAsync(companyId, periodId);
             return Results.Ok(result);
-        });
+        })
+            .Produces<FinancialStatementsService.ReadinessScore>()
+            .Produces(StatusCodes.Status404NotFound);
 
         group.MapGet("/sources", async (int companyId, int periodId, FinancialStatementsService service, AccountsDbContext db, HttpContext context) =>
         {
@@ -52,7 +60,9 @@ public static class StatementsEndpoints
 
             var result = await service.GetStatementSourcesAsync(companyId, periodId);
             return Results.Ok(result);
-        });
+        })
+            .Produces<List<FinancialStatementsService.StatementSourceSummary>>()
+            .Produces(StatusCodes.Status404NotFound);
 
         group.MapGet("/cash-flow", async (int companyId, int periodId, FinancialStatementsService service, AccountsDbContext db, HttpContext context) =>
         {
@@ -61,7 +71,9 @@ public static class StatementsEndpoints
 
             var result = await service.GetCashFlowStatementAsync(companyId, periodId);
             return Results.Ok(result);
-        });
+        })
+            .Produces<FinancialStatementsService.CashFlowStatement>()
+            .Produces(StatusCodes.Status404NotFound);
 
         group.MapGet("/equity-changes", async (int companyId, int periodId, FinancialStatementsService service, AccountsDbContext db, HttpContext context) =>
         {
@@ -70,6 +82,8 @@ public static class StatementsEndpoints
 
             var result = await service.GetEquityChangesAsync(companyId, periodId);
             return Results.Ok(result);
-        });
+        })
+            .Produces<FinancialStatementsService.EquityChanges>()
+            .Produces(StatusCodes.Status404NotFound);
     }
 }

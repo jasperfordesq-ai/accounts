@@ -23,8 +23,10 @@ describe("CompanyCharityInfoPanel", () => {
     expect(screen.getByText("Charity Reporting")).toBeInTheDocument();
     expect(screen.getByText("Charities Regulator and SORP facts for CLG charity workflows.")).toBeInTheDocument();
     expect(screen.getByText("CHY12345")).toBeInTheDocument();
-    expect(screen.getAllByText("Tier 1").length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByText("Governance confirmed")).toBeInTheDocument();
+    expect(screen.getByText("CLG")).toBeInTheDocument();
+    expect(screen.getByText("Period-specific SORP decision")).toBeInTheDocument();
+    expect(screen.getByText("Governance evidence retained")).toBeInTheDocument();
+    expect(screen.getByText("Yes")).toBeInTheDocument();
     expect(screen.getByText("Trustee remuneration")).toBeInTheDocument();
     expect(screen.getByText("International transfers")).toBeInTheDocument();
     expect(screen.getByText("Advance community accounting education.")).toBeInTheDocument();
@@ -55,13 +57,15 @@ describe("CompanyCharityInfoPanel", () => {
 
     fireEvent.change(screen.getByLabelText("Charity number"), { target: { value: "CHY99999" } });
     fireEvent.change(screen.getByLabelText("Gross income"), { target: { value: "300000" } });
-    fireEvent.change(screen.getByLabelText("SORP tier"), { target: { value: "2" } });
+    fireEvent.change(screen.getByLabelText("Charity legal form"), { target: { value: "Company limited by guarantee" } });
+    fireEvent.change(screen.getByLabelText("Has the charity complied with the Charities Governance Code?"), { target: { value: "no" } });
     fireEvent.click(screen.getByRole("button", { name: "Save charity reporting" }));
     fireEvent.click(screen.getByRole("button", { name: "Cancel charity reporting edit" }));
 
     expect(onFormChange).toHaveBeenCalledWith({ ...form, charityNumber: "CHY99999" });
     expect(onFormChange).toHaveBeenCalledWith({ ...form, grossIncome: 300000 });
-    expect(onFormChange).toHaveBeenCalledWith({ ...form, sorpTier: 2 });
+    expect(onFormChange).toHaveBeenCalledWith({ ...form, charityType: "Company limited by guarantee" });
+    expect(onFormChange).toHaveBeenCalledWith({ ...form, governanceCodeCompliant: false });
     expect(onSave).toHaveBeenCalledTimes(1);
     expect(onCancelEdit).toHaveBeenCalledTimes(1);
   });
@@ -92,11 +96,17 @@ function sampleCharityInfo(): CharityInfo {
     id: 4,
     companyId: 7,
     charityNumber: "CHY12345",
+    charityType: "CLG",
     grossIncome: 250000,
     sorpTier: 1,
     charitableObjectives: "Advance community accounting education.",
     principalActivities: "Training, governance clinics and financial literacy programmes.",
     governanceCodeCompliant: true,
+    governanceCodeNote: "Board review complete.",
+    governanceEvidenceReference: "GOV-BOARD-001",
+    governanceReviewedBy: "Niamh Reviewer",
+    governanceReviewedAtUtc: "2026-07-10T10:00:00Z",
+    governanceEvidenceArtifactSha256: "a".repeat(64),
     hasInternationalTransfers: true,
     internationalTransferDetails: "Grant transfer to EU partner.",
     trusteeRemunerationPaid: true,

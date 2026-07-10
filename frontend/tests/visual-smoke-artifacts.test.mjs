@@ -169,11 +169,13 @@ describe("visual smoke artifact evidence", () => {
       assert.equal(result.manifestPath, manifestPath);
       assert.equal(result.reportPath, reportPath);
       assert.equal(result.evidenceReportFileName, "visual-smoke-evidence-report.json");
-      assert.equal(result.routeCount, 7);
-      assert.equal(result.screenshotCount, 28);
-      assert.equal(result.expectedScreenshotCount, 28);
+      assert.equal(result.inventoryStateCount, 32);
+      assert.equal(result.routeCount, 32);
+      assert.equal(result.accountantWorkbenchRouteCount, 7);
+      assert.equal(result.screenshotCount, 192);
+      assert.equal(result.expectedScreenshotCount, 192);
       assert.deepEqual(result.themes, ["light", "dark"]);
-      assert.deepEqual(result.viewports, ["desktop", "mobile"]);
+      assert.deepEqual(result.viewports, ["mobile", "tablet", "desktop"]);
       assert.deepEqual(result.viewportDimensions, visualSmokeViewports);
       assert.equal(result.totalBytes, screenshots.reduce((sum, screenshot) => sum + screenshot.byteSize, 0));
       assert.equal(result.layoutChecksPassed, true);
@@ -181,11 +183,13 @@ describe("visual smoke artifact evidence", () => {
       assert.equal(result.themeContrastChecksPassed, true);
       assert.equal(result.contrastCheckResultCount, screenshots.length);
       assert.equal(result.minimumContrastRatio, MIN_VISUAL_SMOKE_CONTRAST_RATIO);
-      assert.equal(result.routeCoverage.find((route) => route.routeName === "dashboard")?.screenshotCount, 4);
-      assert.equal(result.screenshots.length, 28);
-      assert.equal(result.screenshots[0].imageWidth, 1440);
-      assert.ok(result.screenshots[0].imageHeight >= 1000);
-      assert.equal(result.screenshots[0].expectedText, "Firm command centre");
+      assert.equal(result.routeCoverage.find((route) => route.routeName === "dashboard")?.screenshotCount, 6);
+      assert.equal(result.screenshots.length, 192);
+      assert.equal(result.screenshots[0].imageWidth, 390);
+      assert.ok(result.screenshots[0].imageHeight >= 844);
+      assert.equal(result.screenshots[0].expectedText, "Sign in");
+      assert.equal(result.screenshots[0].canonicalUrl, "/login");
+      assert.match(result.screenshots[0].semanticContentSha256, /^sha256:[a-f0-9]{64}$/);
       assert.ok(result.screenshots[0].sampledDistinctColorCount >= 4);
       assert.ok(result.screenshots[0].luminanceRange >= 10);
       assert.deepEqual(
@@ -215,7 +219,35 @@ describe("visual smoke artifact evidence", () => {
     try {
       await assert.rejects(
         () => verifyVisualSmokeManifest(manifestPath),
-        /visual smoke screenshot dashboard-light-desktop\.png themeContrastResult\.minimumContrastRatio must be at least 3/,
+        /visual smoke screenshot login-light-mobile\.png themeContrastResult\.minimumContrastRatio must be at least 3/,
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects evidence that applies only the UI floor to normal text", async () => {
+    const { verifyVisualSmokeManifest, withScreenshotEvidence } = await import("../scripts/visual-smoke-artifacts.mjs");
+    const dir = await mkTempDir();
+    const manifestPath = path.join(dir, "visual-smoke-manifest.json");
+
+    const screenshots = await completeScreenshots(dir, withScreenshotEvidence);
+    await writeManifest(manifestPath, screenshots.map((screenshot, index) => (
+      index === 0
+        ? {
+            ...screenshot,
+            themeContrastResult: {
+              ...screenshot.themeContrastResult,
+              minimumNormalTextContrastRatio: 4.49,
+            },
+          }
+        : screenshot
+    )));
+
+    try {
+      await assert.rejects(
+        () => verifyVisualSmokeManifest(manifestPath),
+        /themeContrastResult\.minimumNormalTextContrastRatio must be at least 4\.5/,
       );
     } finally {
       await rm(dir, { recursive: true, force: true });
@@ -240,7 +272,7 @@ describe("visual smoke artifact evidence", () => {
     try {
       await assert.rejects(
         () => verifyVisualSmokeManifest(manifestPath),
-        /visual smoke screenshot dashboard-light-desktop\.png is missing passed layout check result visible-text-overlap/,
+        /visual smoke screenshot login-light-mobile\.png is missing passed layout check result visible-text-overlap/,
       );
     } finally {
       await rm(dir, { recursive: true, force: true });
@@ -262,7 +294,7 @@ describe("visual smoke artifact evidence", () => {
     try {
       await assert.rejects(
         () => verifyVisualSmokeManifest(manifestPath),
-        /visual smoke screenshot expected text mismatch for dashboard\/light\/desktop: expected Firm command centre, found Wrong route heading/,
+        /visual smoke screenshot expected text mismatch for login\/light\/mobile: expected Sign in, found Wrong route heading/,
       );
     } finally {
       await rm(dir, { recursive: true, force: true });
@@ -284,7 +316,7 @@ describe("visual smoke artifact evidence", () => {
     try {
       await assert.rejects(
         () => verifyVisualSmokeManifest(manifestPath),
-        /visual smoke screenshot hash mismatch: dashboard-light-desktop\.png/,
+        /visual smoke screenshot hash mismatch: login-light-mobile\.png/,
       );
     } finally {
       await rm(dir, { recursive: true, force: true });
@@ -307,7 +339,7 @@ describe("visual smoke artifact evidence", () => {
     try {
       await assert.rejects(
         () => verifyVisualSmokeManifest(manifestPath),
-        /visual smoke route audit mismatch: dashboard expected 99 screenshots, found 4/,
+        /visual smoke route audit mismatch: dashboard expected 99 screenshots, found 6/,
       );
     } finally {
       await rm(dir, { recursive: true, force: true });
@@ -349,13 +381,60 @@ describe("visual smoke artifact evidence", () => {
     const manifestPath = path.join(dir, "visual-smoke-manifest.json");
 
     const screenshots = await completeScreenshots(dir, withScreenshotEvidence);
-    const duplicate = { ...screenshots[1], routeName: screenshots[0].routeName, theme: screenshots[0].theme, viewportName: screenshots[0].viewportName };
+    const duplicate = {
+      ...screenshots[1],
+      stateId: screenshots[0].stateId,
+      routeName: screenshots[0].routeName,
+      theme: screenshots[0].theme,
+      viewportName: screenshots[0].viewportName,
+    };
     await writeManifest(manifestPath, [screenshots[0], duplicate, ...screenshots.slice(2)]);
 
     try {
       await assert.rejects(
         () => verifyVisualSmokeManifest(manifestPath),
-        /visual smoke manifest contains duplicate screenshot coverage: dashboard\/light\/desktop/,
+        /visual smoke manifest contains duplicate screenshot coverage: login\/light\/mobile/,
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects semantically identical intended states in the same theme and viewport", async () => {
+    const { verifyVisualSmokeManifest, withScreenshotEvidence } = await import("../scripts/visual-smoke-artifacts.mjs");
+    const dir = await mkTempDir();
+    const manifestPath = path.join(dir, "visual-smoke-manifest.json");
+    const screenshots = await completeScreenshots(dir, withScreenshotEvidence);
+    const login = screenshots.find((item) => item.stateId === "login" && item.theme === "light" && item.viewportName === "mobile");
+    const password = screenshots.find((item) => item.stateId === "password-change" && item.theme === "light" && item.viewportName === "mobile");
+    password.semanticContentSha256 = login.semanticContentSha256;
+    await writeManifest(manifestPath, screenshots);
+
+    try {
+      await assert.rejects(
+        () => verifyVisualSmokeManifest(manifestPath),
+        /semantically identical semantic content captures for light\/mobile: login, password-change/,
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects canonical URL or observed tab drift", async () => {
+    const { verifyVisualSmokeManifest, withScreenshotEvidence } = await import("../scripts/visual-smoke-artifacts.mjs");
+    const dir = await mkTempDir();
+    const manifestPath = path.join(dir, "visual-smoke-manifest.json");
+    const screenshots = await completeScreenshots(dir, withScreenshotEvidence);
+    const filing = screenshots.find((item) => item.stateId === "filing-review" && item.theme === "light" && item.viewportName === "mobile");
+    filing.canonicalUrl = filing.canonicalUrl.replace("?tab=filing", "");
+    filing.observedUrl = filing.canonicalUrl;
+    filing.observedTabState = { kind: "period-tab", id: "import", label: "Import" };
+    await writeManifest(manifestPath, screenshots);
+
+    try {
+      await assert.rejects(
+        () => verifyVisualSmokeManifest(manifestPath),
+        /canonical URL mismatch: filing-review-light-mobile\.png|observed tab state mismatch: filing-review-light-mobile\.png/,
       );
     } finally {
       await rm(dir, { recursive: true, force: true });
@@ -366,18 +445,35 @@ describe("visual smoke artifact evidence", () => {
 async function completeScreenshots(dir, withScreenshotEvidence) {
   const { expectedVisualSmokeArtifacts } = await import("../scripts/visual-smoke-plan.mjs");
   const screenshots = [];
+  const basePngs = new Map();
 
-  for (const artifact of expectedVisualSmokeArtifacts(dir)) {
+  for (const [index, artifact] of expectedVisualSmokeArtifacts(dir).entries()) {
     const screenshotPath = path.join(dir, artifact.fileName);
     const viewport = visualSmokeViewports.find((item) => item.name === artifact.viewportName);
-    await writeFile(screenshotPath, pngBytes(viewport.width, viewport.height + 200));
-    screenshots.push(await withScreenshotEvidence({ ...artifact, artifactPath: screenshotPath }));
+    const baseKey = `${viewport.width}x${viewport.height}`;
+    if (!basePngs.has(baseKey)) basePngs.set(baseKey, pngBytes(viewport.width, viewport.height));
+    await writeFile(screenshotPath, pngWithIdentity(basePngs.get(baseKey), `${artifact.stateId}-${artifact.theme}-${artifact.viewportName}-${index}`));
+    const concreteUrl = artifact.canonicalUrlTemplate
+      .replace("{companyId}", "41")
+      .replace("{periodId}", "52");
+    const semanticContentSha256 = `sha256:${createHash("sha256").update(`${artifact.stateId}-semantic-content`).digest("hex")}`;
+    screenshots.push(await withScreenshotEvidence({
+      ...artifact,
+      artifactPath: screenshotPath,
+      canonicalUrl: concreteUrl,
+      observedUrl: concreteUrl,
+      observedTabState: artifact.canonicalTabState.kind.endsWith("-tab") ? artifact.canonicalTabState : null,
+      semanticContentSha256,
+      semanticContentByteSize: 128 + index,
+    }));
   }
 
   return screenshots;
 }
 
 async function writeManifest(manifestPath, screenshots, routeAudits, requiredEvidence = [
+  "canonical state inventory and exact URL/tab evidence",
+  "semantic content SHA-256 distinctness evidence",
   "visual-smoke-evidence-report.json",
   "accountant-workbench-evidence-report.json",
   "screenshot SHA-256 checksums",
@@ -386,21 +482,18 @@ async function writeManifest(manifestPath, screenshots, routeAudits, requiredEvi
   "per-screenshot automated theme contrast smoke evidence",
 ]) {
   const {
-    expectedVisualSmokeRouteAudits,
-    visualSmokeLayoutChecks,
-    visualSmokeReviewChecks,
+    expectedVisualSmokeManifest,
   } = await import("../scripts/visual-smoke-plan.mjs");
+
+  const expectedManifest = expectedVisualSmokeManifest(path.dirname(manifestPath));
 
   await writeFile(
     manifestPath,
     `${JSON.stringify({
-      artifactName: "visual-smoke-screenshots",
-      manifestFileName: "visual-smoke-manifest.json",
+      ...expectedManifest,
       expectedScreenshotCount: screenshots.length,
-      layoutChecks: visualSmokeLayoutChecks,
-      reviewChecks: visualSmokeReviewChecks,
-      reviewProtocol: { requiredEvidence },
-      routeAudits: routeAudits ?? expectedVisualSmokeRouteAudits(),
+      reviewProtocol: { ...expectedManifest.reviewProtocol, requiredEvidence },
+      routeAudits: routeAudits ?? expectedManifest.routeAudits,
       screenshots,
     }, null, 2)}\n`,
     "utf8",
@@ -411,6 +504,17 @@ async function mkTempDir() {
   const dir = path.join(os.tmpdir(), `visual-smoke-artifacts-${Date.now()}-${Math.random().toString(16).slice(2)}`);
   await mkdir(dir, { recursive: true });
   return dir;
+}
+
+function pngWithIdentity(basePng, identity) {
+  const data = Buffer.from(identity, "utf8");
+  const chunk = Buffer.alloc(12 + data.length);
+  chunk.writeUInt32BE(data.length, 0);
+  chunk.write("tEXt", 4, "ascii");
+  data.copy(chunk, 8);
+  // Pixel evidence ignores ancillary CRC values; identity still changes the retained file hash.
+  chunk.writeUInt32BE(0, 8 + data.length);
+  return Buffer.concat([basePng.subarray(0, -12), chunk, basePng.subarray(-12)]);
 }
 
 function pngBytes(width, height, options = {}) {

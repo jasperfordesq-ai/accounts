@@ -22,6 +22,7 @@ const strictTransportSecurity = "max-age=31536000; includeSubDomains; preload";
     "Content-Type": "application/json",
     Cookie: "accounts_session=session-token; accounts_csrf=csrf-token",
     "X-CSRF-Token": "csrf-token",
+    "If-Match": '"period-v1"',
     "X-Accounts-Api-Key": "client-supplied-default-key",
     "X-Accounts-Service-Key": "client-supplied-custom-key",
     Forwarded: "for=198.51.100.40;proto=http;host=evil.example",
@@ -46,6 +47,7 @@ const strictTransportSecurity = "max-age=31536000; includeSubDomains; preload";
 
   assert.equal(proxyHeaders.get("Cookie"), "accounts_session=session-token; accounts_csrf=csrf-token");
   assert.equal(proxyHeaders.get("X-CSRF-Token"), "csrf-token");
+  assert.equal(proxyHeaders.get("If-Match"), '"period-v1"');
   assert.equal(proxyHeaders.get("X-Accounts-Service-Key"), "server-side-secret");
   assert.equal(proxyHeaders.get("X-Accounts-Api-Key"), null);
   assert.equal(proxyHeaders.get("Forwarded"), null);
@@ -110,6 +112,7 @@ const strictTransportSecurity = "max-age=31536000; includeSubDomains; preload";
     status: 400,
     headers: {
       "Content-Type": "application/json",
+      ETag: '"period-v2"',
       Location: "http://api:8080/internal",
       "Set-Cookie": "accounts_session=secret",
       "X-Internal-Trace": "trace-secret",
@@ -121,6 +124,7 @@ const strictTransportSecurity = "max-age=31536000; includeSubDomains; preload";
 
   assert.equal(response.status, 400);
   assert.equal(response.headers.get("Content-Type"), "application/json");
+  assert.equal(response.headers.get("ETag"), '"period-v2"');
   assert.equal(response.headers.get("Location"), null);
   assert.equal(response.headers.get("Set-Cookie"), null);
   assert.equal(response.headers.get("X-Internal-Trace"), null);

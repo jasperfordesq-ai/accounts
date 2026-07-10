@@ -1,26 +1,45 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Button } from "@heroui/react";
-import { Building2, LayoutDashboard, LogOut, Menu, Plus, UserCircle, X } from "lucide-react";
+import { Building2, KeyRound, LayoutDashboard, LogOut, Menu, Plus, UserCircle, UserCog, X } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
+import { ActionLink } from "@/components/workbench";
+import { useUnsavedNavigationGuard } from "@/lib/useUnsavedChanges";
 import { ThemeToggle } from "./ThemeToggle";
 
 export function AppNavbar() {
   const pathname = usePathname();
-  const { user, isOwner, logout, logoutError } = useAuth();
+  const { user, canCreateCompany, isOwner, logout, logoutError } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
+  const guardNavigation = useUnsavedNavigationGuard();
 
   const isActive = (path: string) => pathname === path;
 
-  if (pathname === "/login" || pathname === "/change-password") return null;
-
-  async function handleLogout() {
-    setMobileOpen(false);
-    await logout();
+  function handleLogout() {
+    guardNavigation(() => {
+      setMobileOpen(false);
+      void logout();
+    }, "replace");
   }
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setMobileOpen(false);
+      mobileMenuButtonRef.current?.focus();
+    };
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, [mobileOpen]);
+
+  if (["/login", "/change-password", "/accept-invite", "/reset-password"].includes(pathname)) return null;
 
   return (
     <nav className="bg-white dark:bg-neutral-900 border-b border-gray-200 dark:border-neutral-700 px-6 py-3 no-print">
@@ -35,27 +54,33 @@ export function AppNavbar() {
 
         {/* Desktop nav */}
         <div className="hidden md:flex items-center gap-2">
-          <Link href="/">
-            <Button
-              variant={isActive("/") ? "secondary" : "ghost"}
-              size="sm"
-              aria-current={isActive("/") ? "page" : undefined}
+          <ActionLink
+            href="/"
+            variant={isActive("/") ? "secondary" : "ghost"}
+            ariaCurrent={isActive("/") ? "page" : undefined}
+          >
+            <LayoutDashboard className="w-4 h-4" />
+            Dashboard
+          </ActionLink>
+          {canCreateCompany && (
+            <ActionLink
+              href="/companies/new"
+              variant={isActive("/companies/new") ? "secondary" : "primary"}
+              ariaCurrent={isActive("/companies/new") ? "page" : undefined}
             >
-              <LayoutDashboard className="w-4 h-4" />
-              Dashboard
-            </Button>
-          </Link>
+              <Plus className="w-4 h-4" />
+              New Company
+            </ActionLink>
+          )}
           {isOwner && (
-            <Link href="/companies/new">
-              <Button
-                variant={isActive("/companies/new") ? "secondary" : "primary"}
-                size="sm"
-                aria-current={isActive("/companies/new") ? "page" : undefined}
-              >
-                <Plus className="w-4 h-4" />
-                New Company
-              </Button>
-            </Link>
+            <ActionLink
+              href="/settings/users"
+              variant={isActive("/settings/users") ? "secondary" : "ghost"}
+              ariaCurrent={isActive("/settings/users") ? "page" : undefined}
+            >
+              <UserCog className="h-4 w-4" />
+              Users
+            </ActionLink>
           )}
           {user && (
             <div className="ml-2 flex max-w-xl items-center gap-2 border-l border-gray-200 pl-3 dark:border-neutral-700">
@@ -77,6 +102,14 @@ export function AppNavbar() {
                   {logoutError}
                 </div>
               )}
+              <ActionLink
+                href="/change-password"
+                variant={isActive("/change-password") ? "secondary" : "ghost"}
+                ariaLabel="Change password"
+              >
+                <KeyRound className="h-4 w-4" />
+                <span className="hidden xl:inline">Password</span>
+              </ActionLink>
               <Button
                 variant="ghost"
                 size="sm"
@@ -97,12 +130,14 @@ export function AppNavbar() {
         <div className="flex md:hidden items-center gap-2">
           <ThemeToggle />
           <Button
+            ref={mobileMenuButtonRef}
             variant="ghost"
             size="sm"
             isIconOnly
             onPress={() => setMobileOpen(!mobileOpen)}
             aria-label={mobileOpen ? "Close menu" : "Open menu"}
             aria-expanded={mobileOpen}
+            aria-controls="primary-mobile-navigation"
           >
             {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </Button>
@@ -121,29 +156,41 @@ export function AppNavbar() {
 
       {/* Mobile menu */}
       {mobileOpen && (
-        <div className="md:hidden border-t border-gray-200 dark:border-neutral-700 mt-3 pt-3 pb-1 animate-slide-down">
+        <div id="primary-mobile-navigation" role="group" aria-label="Mobile primary navigation" className="md:hidden border-t border-gray-200 dark:border-neutral-700 mt-3 pt-3 pb-1 animate-slide-down">
           <div className="flex flex-col gap-1">
-            <Link href="/" onClick={() => setMobileOpen(false)}>
-              <Button
-                variant={isActive("/") ? "secondary" : "ghost"}
-                size="sm"
+            <ActionLink
+              href="/"
+              variant={isActive("/") ? "secondary" : "ghost"}
+              className="w-full justify-start"
+              ariaCurrent={isActive("/") ? "page" : undefined}
+              onClick={() => setMobileOpen(false)}
+            >
+              <LayoutDashboard className="w-4 h-4" />
+              Dashboard
+            </ActionLink>
+            {canCreateCompany && (
+              <ActionLink
+                href="/companies/new"
+                variant="primary"
                 className="w-full justify-start"
+                ariaCurrent={isActive("/companies/new") ? "page" : undefined}
+                onClick={() => setMobileOpen(false)}
               >
-                <LayoutDashboard className="w-4 h-4" />
-                Dashboard
-              </Button>
-            </Link>
+                <Plus className="w-4 h-4" />
+                New Company
+              </ActionLink>
+            )}
             {isOwner && (
-              <Link href="/companies/new" onClick={() => setMobileOpen(false)}>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  className="w-full justify-start"
-                >
-                  <Plus className="w-4 h-4" />
-                  New Company
-                </Button>
-              </Link>
+              <ActionLink
+                href="/settings/users"
+                variant={isActive("/settings/users") ? "secondary" : "ghost"}
+                className="w-full justify-start"
+                ariaCurrent={isActive("/settings/users") ? "page" : undefined}
+                onClick={() => setMobileOpen(false)}
+              >
+                <UserCog className="h-4 w-4" />
+                User administration
+              </ActionLink>
             )}
             {user && (
               <div className="mt-2 border-t border-gray-200 pt-3 dark:border-neutral-700">
@@ -167,6 +214,15 @@ export function AppNavbar() {
                     {logoutError}
                   </div>
                 )}
+                <ActionLink
+                  href="/change-password"
+                  variant="ghost"
+                  className="w-full justify-start"
+                  onClick={() => setMobileOpen(false)}
+                >
+                  <KeyRound className="h-4 w-4" />
+                  Change password
+                </ActionLink>
                 <Button
                   variant="ghost"
                   size="sm"

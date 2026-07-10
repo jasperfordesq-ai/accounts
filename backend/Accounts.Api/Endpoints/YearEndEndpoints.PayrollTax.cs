@@ -12,7 +12,7 @@ public static partial class YearEndEndpoints
     public static async Task<IResult> UpsertPayrollSummaryEndpointAsync(
         int companyId,
         int periodId,
-        PayrollSummary input,
+        PayrollSummaryInput input,
         AccountsDbContext db,
         AuditService audit,
         HttpContext context)
@@ -20,19 +20,28 @@ public static partial class YearEndEndpoints
         if (await RequirePeriodWriteAccessAsync(db, companyId, periodId, context) is { } denied)
             return denied;
 
+        if (input.GrossWages < 0
+            || input.DirectorsFees < 0
+            || input.EmployerPrsi < 0
+            || input.PensionContributions < 0
+            || input.StaffCount < 0)
+        {
+            return Results.BadRequest(new { error = "Payroll amounts and staff count must not be negative." });
+        }
+
         var item = await db.PayrollSummaries.FirstOrDefaultAsync(p => p.PeriodId == periodId);
         var wasCreated = item is null;
         var oldValue = item is null ? null : PayrollSummarySnapshot(item);
 
         if (item == null)
         {
-            input.PeriodId = periodId;
-            db.PayrollSummaries.Add(input);
-            item = input;
+            item = input.ToEntity(periodId);
+            db.PayrollSummaries.Add(item);
         }
         else
         {
             item.GrossWages = input.GrossWages;
+            item.DirectorsFees = input.DirectorsFees;
             item.EmployerPrsi = input.EmployerPrsi;
             item.PensionContributions = input.PensionContributions;
             item.StaffCount = input.StaffCount;
@@ -49,6 +58,7 @@ public static partial class YearEndEndpoints
             new
             {
                 item.GrossWages,
+                item.DirectorsFees,
                 item.EmployerPrsi,
                 item.PensionContributions,
                 item.StaffCount,
@@ -62,7 +72,7 @@ public static partial class YearEndEndpoints
         int companyId,
         int periodId,
         TaxType taxType,
-        TaxBalance input,
+        TaxBalanceInput input,
         AccountsDbContext db,
         AuditService audit,
         HttpContext context)
@@ -84,10 +94,8 @@ public static partial class YearEndEndpoints
         var oldValue = item is null ? null : TaxBalanceSnapshot(item);
         if (item == null)
         {
-            input.PeriodId = periodId;
-            input.TaxType = taxType;
-            db.TaxBalances.Add(input);
-            item = input;
+            item = input.ToEntity(periodId, taxType);
+            db.TaxBalances.Add(item);
         }
         else
         {

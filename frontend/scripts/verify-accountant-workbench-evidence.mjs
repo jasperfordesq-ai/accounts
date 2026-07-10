@@ -3,11 +3,17 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   ACCOUNTANT_WORKFLOW_STAGES,
+  expectedAccountantWorkbenchScreenshotCount,
+  expectedVisualSmokeScreenshotCount,
+  MIN_LARGE_TEXT_CONTRAST_RATIO,
+  MIN_NORMAL_TEXT_CONTRAST_RATIO,
+  MIN_UI_COMPONENT_CONTRAST_RATIO,
   MIN_VISUAL_SMOKE_CONTRAST_RATIO,
   visualSmokeContrastCheck,
   visualSmokeLayoutChecks,
   visualSmokeReviewChecks,
   visualSmokeRoutes,
+  visualSmokeStateInventory,
   visualSmokeThemes,
   visualSmokeViewports,
 } from "./visual-smoke-plan.mjs";
@@ -40,13 +46,13 @@ export async function verifyAccountantWorkbenchEvidence(options = {}) {
     failures.push("visual-smoke-evidence-report.json must have status passed.");
   }
 
-  if (visualReport.routeCount !== visualSmokeRoutes.length) {
-    failures.push(`visual smoke routeCount must be ${visualSmokeRoutes.length}, found ${visualReport.routeCount}.`);
+  if (visualReport.routeCount !== visualSmokeStateInventory.length) {
+    failures.push(`visual smoke routeCount must be ${visualSmokeStateInventory.length}, found ${visualReport.routeCount}.`);
   }
 
-  if (visualReport.screenshotCount !== visualSmokeRoutes.length * visualSmokeThemes.length * visualSmokeViewports.length) {
+  if (visualReport.screenshotCount !== expectedVisualSmokeScreenshotCount()) {
     failures.push(
-      `visual smoke screenshotCount must be ${visualSmokeRoutes.length * visualSmokeThemes.length * visualSmokeViewports.length}, found ${visualReport.screenshotCount}.`,
+      `visual smoke screenshotCount must be ${expectedVisualSmokeScreenshotCount()}, found ${visualReport.screenshotCount}.`,
     );
   }
 
@@ -68,7 +74,9 @@ export async function verifyAccountantWorkbenchEvidence(options = {}) {
       }
 
       if (coverage.screenshotCount !== visualSmokeThemes.length * visualSmokeViewports.length) {
-        failures.push(`route ${route.name} must have 4 screenshots, found ${coverage.screenshotCount}.`);
+        failures.push(
+          `route ${route.name} must have ${visualSmokeThemes.length * visualSmokeViewports.length} screenshots, found ${coverage.screenshotCount}.`,
+        );
       }
 
       if (coverage.reviewStatus !== "required-review") {
@@ -129,6 +137,36 @@ export async function verifyAccountantWorkbenchEvidence(options = {}) {
         if (Number(themeContrastResult.failingTextCount) !== 0) {
           failures.push(`route ${route.name} screenshot ${screenshot.fileName ?? "(unnamed)"} failingTextCount must be zero.`);
         }
+        if (Number(themeContrastResult.failingUiComponentCount) !== 0) {
+          failures.push(`route ${route.name} screenshot ${screenshot.fileName ?? "(unnamed)"} failingUiComponentCount must be zero.`);
+        }
+        if (Number(themeContrastResult.sampledNormalTextCount) <= 0) {
+          failures.push(`route ${route.name} screenshot ${screenshot.fileName ?? "(unnamed)"} sampledNormalTextCount must be greater than zero.`);
+        }
+        if (Number(themeContrastResult.sampledInteractiveTextCount) <= 0) {
+          failures.push(`route ${route.name} screenshot ${screenshot.fileName ?? "(unnamed)"} sampledInteractiveTextCount must be greater than zero.`);
+        }
+        if (Number(themeContrastResult.sampledUiComponentCount) <= 0) {
+          failures.push(`route ${route.name} screenshot ${screenshot.fileName ?? "(unnamed)"} sampledUiComponentCount must be greater than zero.`);
+        }
+        for (const [field, expected] of [
+          ["requiredNormalTextContrastRatio", MIN_NORMAL_TEXT_CONTRAST_RATIO],
+          ["requiredLargeTextContrastRatio", MIN_LARGE_TEXT_CONTRAST_RATIO],
+          ["requiredUiComponentContrastRatio", MIN_UI_COMPONENT_CONTRAST_RATIO],
+        ]) {
+          if (Number(themeContrastResult[field]) !== expected) {
+            failures.push(`route ${route.name} screenshot ${screenshot.fileName ?? "(unnamed)"} ${field} must be ${expected}.`);
+          }
+        }
+        for (const [field, expected] of [
+          ["minimumNormalTextContrastRatio", MIN_NORMAL_TEXT_CONTRAST_RATIO],
+          ["minimumLargeTextContrastRatio", MIN_LARGE_TEXT_CONTRAST_RATIO],
+          ["minimumUiComponentContrastRatio", MIN_UI_COMPONENT_CONTRAST_RATIO],
+        ]) {
+          if (Number(themeContrastResult[field]) < expected) {
+            failures.push(`route ${route.name} screenshot ${screenshot.fileName ?? "(unnamed)"} ${field} must be at least ${expected}.`);
+          }
+        }
       }
     }
 
@@ -167,7 +205,7 @@ export async function verifyAccountantWorkbenchEvidence(options = {}) {
     workflowStages: route.workflowStages,
     expectedText: route.expectedText,
     requiredAcceptanceEvidence: routeAcceptanceEvidence(route),
-    screenshotReviewEvidence: `${route.name}-light-dark-desktop-mobile-screenshot-review`,
+    screenshotReviewEvidence: `${route.name}-light-dark-mobile-tablet-desktop-screenshot-review`,
     signOffGate: ROUTE_ACCEPTANCE_SIGN_OFF_GATE,
     reviewStatus: "required-review",
     blocksRelease: true,
@@ -191,8 +229,10 @@ export async function verifyAccountantWorkbenchEvidence(options = {}) {
     visualSmokeEvidenceReportPath: visualReportPath,
     evidenceReportFileName: REPORT_FILE_NAME,
     routeCount: visualSmokeRoutes.length,
-    screenshotCount: visualReport.screenshotCount,
-    expectedScreenshotCount: visualSmokeRoutes.length * visualSmokeThemes.length * visualSmokeViewports.length,
+    screenshotCount: expectedAccountantWorkbenchScreenshotCount(),
+    expectedScreenshotCount: expectedAccountantWorkbenchScreenshotCount(),
+    visualSmokeTotalScreenshotCount: visualReport.screenshotCount,
+    visualSmokeExpectedScreenshotCount: expectedVisualSmokeScreenshotCount(),
     workflowStageCount: ACCOUNTANT_WORKFLOW_STAGES.length,
     routeAcceptanceCount: routeAcceptance.length,
     requiredCoverage: {

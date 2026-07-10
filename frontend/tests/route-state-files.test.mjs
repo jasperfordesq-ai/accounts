@@ -1,9 +1,72 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync as readFileFromDisk, readdirSync, statSync } from "node:fs";
 import { test } from "node:test";
 
 const appDir = new URL("../src/app/", import.meta.url);
 const componentsDir = new URL("../src/components/", import.meta.url);
+
+const routeImplementations = new Map([
+  [
+    "/companies/[companyId]/periods/[periodId]/page.tsx",
+    new URL("../src/components/period/PeriodWorkspaceRoute.tsx", import.meta.url),
+  ],
+  [
+    "/companies/[companyId]/periods/[periodId]/year-end/page.tsx",
+    new URL("../src/components/period/YearEndQuestionnaireRoute.tsx", import.meta.url),
+  ],
+]);
+
+function readFileSync(fileUrl, encoding) {
+  const routeSource = readFileFromDisk(fileUrl, encoding);
+  const pathname = fileUrl instanceof URL ? fileUrl.pathname : String(fileUrl).replaceAll("\\", "/");
+  const implementation = [...routeImplementations].find(([suffix]) => pathname.endsWith(suffix))?.[1];
+  return implementation
+    ? `${routeSource}\n${readFileFromDisk(implementation, encoding)}`
+    : routeSource;
+}
+
+test("large period routes are thin App Router adapters over focused implementations", () => {
+  const expectations = [
+    [
+      new URL("companies/[companyId]/periods/[periodId]/page.tsx", appDir),
+      "PeriodWorkspaceRoute",
+      routeImplementations.get("/companies/[companyId]/periods/[periodId]/page.tsx"),
+    ],
+    [
+      new URL("companies/[companyId]/periods/[periodId]/year-end/page.tsx", appDir),
+      "YearEndQuestionnaireRoute",
+      routeImplementations.get("/companies/[companyId]/periods/[periodId]/year-end/page.tsx"),
+    ],
+  ];
+
+  for (const [routeFile, implementationName, implementationFile] of expectations) {
+    const routeSource = readFileFromDisk(routeFile, "utf8");
+    const implementationSource = readFileFromDisk(implementationFile, "utf8");
+    assert.ok(routeSource.trim().split(/\r?\n/).length <= 3, `${routeFile.pathname} should remain a thin route adapter`);
+    assert.match(routeSource, new RegExp(`export \\{ ${implementationName} as default \\}`));
+    assert.match(implementationSource, new RegExp(`export function ${implementationName}`));
+  }
+});
+
+test("period route implementations delegate query and form defaults to focused helpers", () => {
+  const periodSource = readFileFromDisk(
+    routeImplementations.get("/companies/[companyId]/periods/[periodId]/page.tsx"),
+    "utf8",
+  );
+  const yearEndSource = readFileFromDisk(
+    routeImplementations.get("/companies/[companyId]/periods/[periodId]/year-end/page.tsx"),
+    "utf8",
+  );
+  const querySource = readFileFromDisk(new URL("../src/lib/periodWorkspaceQuery.ts", import.meta.url), "utf8");
+  const formSource = readFileFromDisk(new URL("../src/lib/yearEndQuestionnaireForms.ts", import.meta.url), "utf8");
+
+  assert.match(periodSource, /parsePeriodWorkspaceQuery/, "period orchestration should consume the canonical query parser");
+  assert.doesNotMatch(periodSource, /const TRANSACTION_PAGE_SIZES/, "period query defaults should not drift back into the route component");
+  assert.match(querySource, /export function parsePeriodWorkspaceQuery/, "period query parsing should remain independently focused");
+  assert.match(yearEndSource, /createEmptyTaxScopeReview/, "year-end orchestration should consume the canonical form factories");
+  assert.doesNotMatch(yearEndSource, /const EMPTY_TAX_SCOPE/, "year-end form defaults should not drift back into the route component");
+  assert.match(formSource, /export function taxScopeInputFromReview/, "tax-scope API-to-form conversion should remain independently focused");
+});
 
 test("Next app shell has production route-state files wired to workbench primitives", () => {
   const expectations = [
@@ -74,7 +137,7 @@ test("period filing route wires reviewer permission into the filing workspace", 
   const source = readFileSync(periodRoute, "utf8");
 
   assert.match(source, /useAuth/, "period route should read authenticated workflow permissions");
-  assert.match(source, /const\s*\{\s*canReview\s*\}\s*=\s*useAuth\(\)/, "period route should read canReview from auth context");
+  assert.match(source, /const\s*\{[^}]*\bcanReview\b[^}]*\}\s*=\s*useAuth\(\)/, "period route should read canReview from auth context");
   assert.match(source, /PeriodFilingWorkspace/, "period route should import the focused filing workspace");
   assert.match(source, /<PeriodFilingWorkspace[\s\S]*canReview=\{canReview\}/, "period route should pass canReview into PeriodFilingWorkspace");
   assert.doesNotMatch(source, /import\s+\{\s*FilingReviewCentre\s*\}/, "period route should not import the low-level filing review centre directly");
@@ -338,18 +401,18 @@ test("year-end questionnaire route delegates director-loan compliance summary", 
   const routeFile = new URL("companies/[companyId]/periods/[periodId]/year-end/page.tsx", appDir);
   const componentFile = new URL("../src/components/period/YearEndDirectorLoanComplianceSummary.tsx", import.meta.url);
 
-  assert.ok(existsSync(componentFile), "YearEndDirectorLoanComplianceSummary should exist for s.236/SAP review cues");
+  assert.ok(existsSync(componentFile), "YearEndDirectorLoanComplianceSummary should exist for evidence-led statutory review cues");
 
   const routeSource = readFileSync(routeFile, "utf8");
   const componentSource = readFileSync(componentFile, "utf8");
 
   assert.match(routeSource, /YearEndDirectorLoanComplianceSummary/, "year-end questionnaire route should render the focused director-loan compliance summary");
-  assert.doesNotMatch(routeSource, /s\.236 \/ overdrawn-DLA compliance summary/, "year-end questionnaire route should not own director-loan compliance summary markup");
-  assert.doesNotMatch(routeSource, /Shareholder Approval Process \(SAP\) required/, "year-end questionnaire route should not own SAP warning copy");
-  assert.doesNotMatch(routeSource, /10% Threshold/, "year-end questionnaire route should not own director-loan threshold tile copy");
-  assert.match(componentSource, /s\.236 \/ overdrawn-DLA compliance summary/, "director-loan summary should preserve review context");
-  assert.match(componentSource, /Shareholder Approval Process \(SAP\) required/, "director-loan summary should preserve SAP warning copy");
-  assert.match(componentSource, /Exceeds Threshold/, "director-loan summary should preserve threshold status copy");
+  assert.doesNotMatch(routeSource, /Director-loan statutory evidence/, "year-end questionnaire route should not own director-loan compliance summary markup");
+  assert.doesNotMatch(routeSource, /Not strictly below/, "year-end questionnaire route should not own strict-threshold decision copy");
+  assert.match(componentSource, /Director-loan statutory evidence/, "director-loan summary should preserve statutory review context");
+  assert.match(componentSource, /does not replace release-level qualified-accountant approval/, "director-loan summary should preserve the separate human gate");
+  assert.match(componentSource, /Not strictly below/, "director-loan summary should preserve the strict section 240 boundary result");
+  assert.doesNotMatch(componentSource, /SAP required under s\.239/, "director-loan summary must not repeat the former incorrect automatic-SAP claim");
 });
 
 test("year-end questionnaire route delegates post-balance-sheet-events working-paper section", () => {
@@ -425,6 +488,19 @@ test("year-end questionnaire route delegates going-concern working-paper section
   assert.match(componentSource, /The directors confirm the company is a going concern/, "going-concern shell should preserve director confirmation copy");
 });
 
+test("year-end questionnaire retains directors report representations before review", () => {
+  const routeFile = new URL("companies/[companyId]/periods/[periodId]/year-end/page.tsx", appDir);
+  const source = readFileSync(routeFile, "utf8");
+
+  assert.match(source, /directors-report-principal-activities/, "principal-activities review should have a stable evidence key");
+  assert.match(source, /Approved principal-activities narrative/, "route should capture the exact directors-approved narrative");
+  assert.match(source, /principalActivitiesNarrative\.trim\(\)\.length >= 20/, "token principal-activities notes must not be confirmable");
+  assert.match(source, /filingRegime\?\.auditExempt === false/, "section 330 evidence should be requested only for non-exempt reports");
+  assert.match(source, /Director confirmation and evidence reference/, "route should retain the director enquiries and working-paper reference");
+  assert.match(source, /auditInformationEvidence\.trim\(\)\.length >= 20/, "token audit-information evidence must not be confirmable");
+  assert.match(source, /useUnsavedChanges\(yearEndDraftDirty\)/, "all year-end drafts, including statutory narratives, must participate in the navigation guard");
+});
+
 test("period adjustments route delegates generation, filters and approval composition", () => {
   const periodRoute = new URL("companies/[companyId]/periods/[periodId]/page.tsx", appDir);
   const source = readFileSync(periodRoute, "utf8");
@@ -491,6 +567,7 @@ test("period statements workspace composes readiness, notes and charity navigati
 test("accountant workflow components use DataGrid as the canonical dense table primitive", () => {
   const allowedDataTableFiles = new Set([
     "workbench.tsx",
+    "workbench/DataGrid.tsx",
   ]);
   const offenders = [];
 

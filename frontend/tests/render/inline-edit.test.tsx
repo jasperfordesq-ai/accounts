@@ -72,8 +72,17 @@ describe("inline edit (PUT, preserving id)", () => {
 
   it("DirectorLoansManager edits a row via PUT /director-loans/{id}", async () => {
     const existing = {
-      id: 4, periodId: 3, directorId: 9, openingBalance: 1000, advances: 5000, repayments: 2000,
-      closingBalance: 4000, interestRate: 0, interestCharged: 0, isDocumented: false, maxBalanceDuringYear: 4000,
+      id: 4, periodId: 3, directorId: 9, counterpartyType: "Director", arrangementType: "Loan",
+      openingBalance: 1000, advances: 5000, repayments: 2000, closingBalance: 4000,
+      termsStatus: "Unassessed", interestRate: 0, interestCharged: 0, allowanceMade: 0,
+      isDocumented: false, maxBalanceDuringYear: 4000, complianceBasis: "Unassessed",
+      relevantAssetsBasis: "Unassessed", noPriorFinancialStatementsConfirmed: false,
+      relevantAssetsFallReview: "Unassessed", sapDeclarationCoversSection203Matters: false,
+      ordinaryCourseConfirmed: false, noMoreFavourableTermsConfirmed: false,
+      reviewDecision: "Unreviewed", balanceMovements: [
+        { id: 41, directorLoanId: 4, movementDate: "2025-03-01", movementType: "Advance", amount: 5000 },
+        { id: 42, directorLoanId: 4, movementDate: "2025-09-01", movementType: "Repayment", amount: 2000 },
+      ],
     };
     const fetchMock = installFetchMock((req) => {
       if (req.method === "PUT") return { status: 200, body: { ...(req.body as object), id: 4 } };
@@ -83,10 +92,10 @@ describe("inline edit (PUT, preserving id)", () => {
     render(
       <DirectorLoansManager companyId={7} periodId={3} directors={[{ id: 9, name: "Jane Director" }]} />,
     );
-    fireEvent.click(await screen.findByLabelText("Edit director loan for Jane Director"));
+    fireEvent.click(await screen.findByLabelText("Edit director-loan evidence for Jane Director"));
 
-    fireEvent.change(screen.getByLabelText("Repayments by director"), { target: { value: "1000" } });
-    await userEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    fireEvent.change(screen.getByLabelText("Movement 2 amount"), { target: { value: "1000" } });
+    await userEvent.click(screen.getByRole("button", { name: /save statutory evidence/i }));
 
     await waitFor(() => {
       const request = fetchMock.one("PUT", "/api/companies/7/periods/3/director-loans/4");

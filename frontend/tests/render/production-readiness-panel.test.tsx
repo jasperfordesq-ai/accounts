@@ -2,6 +2,8 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { ProductionReadinessPanel } from "@/components/ProductionReadinessPanel";
 import type { ProductionReadinessReport } from "@/lib/api";
+import { productionScorecardControls } from "../fixtures/production-scorecard-controls";
+import { canonicalVisualQaCoverage } from "../fixtures/visual-qa-coverage";
 
 describe("ProductionReadinessPanel", () => {
   it("surfaces golden corpus, statutory source and operational gate evidence", () => {
@@ -43,23 +45,27 @@ describe("ProductionReadinessPanel", () => {
     expect(screen.getByText("Complete templates")).toBeInTheDocument();
     expect(screen.getByText(/Complete 6 retained Markdown templates/)).toBeInTheDocument();
     expect(screen.getByText("scripts/verify-release-evidence.ps1")).toBeInTheDocument();
-    expect(screen.getByText(/productionScorecardCompletion status complete at 700\/700/)).toBeInTheDocument();
+    expect(screen.getByText(/productionScorecardCompletion status complete at 1,000\/1,000/)).toBeInTheDocument();
     expect(screen.getByText("scripts/verify-release-artifact-pack.ps1")).toBeInTheDocument();
   });
 });
 
 function productionScorecard(): ProductionReadinessReport["productionScorecard"] {
   return {
-    currentScore: 698,
-    targetScore: 700,
-    status: "review-required",
-    nextGate: "Complete source-law review, named visual QA, monitoring-provider confirmation, manual handoff and qualified-accountant acceptance evidence.",
+    currentScore: 783,
+    targetScore: 1000,
+    status: "remediation-required",
+    nextGate: "Close the remaining statutory/tax, visual/accessibility, governance/operations, resilience, maintainability and authentic human/external evidence findings before release.",
+    scoreBasis: "independent-audit-control-ledger-v1",
+    auditBaselineDate: "2026-07-10",
+    auditedCommit: "7ea54cc6d1769ced568ac1568d190cc2bb4b16d1",
+    evidencePolicy: "Points are awarded only by passed weighted controls in this exact live candidate report; machine and human/external controls must retain candidate-bound artifact hashes and accepted evidence before they can pass.",
     categories: [
       {
         code: "architecture-documentation",
         label: "Architecture and documentation",
-        currentScore: 99,
-        targetScore: 100,
+        currentScore: 115,
+        targetScore: 150,
         status: "release-evidence-required",
         currentEvidence: [
           "Canonical architecture guide and active handoff are present.",
@@ -70,12 +76,13 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
         remainingGaps: ["Complete release evidence templates with named reviewers, including source-law-review-template.md."],
         completionTrackCodes: ["backend-code", "frontend-ui-ux", "frontend-code"],
         releaseBlockerCodes: ["backend-code:qualified-accountant-signoff", "frontend-ui-ux:light-dark-visual-regression"],
+        controls: productionScorecardControls("architecture-documentation"),
       },
       {
         code: "backend-statutory-accounting-engine",
         label: "Backend statutory/accounting engine",
         currentScore: 250,
-        targetScore: 250,
+        targetScore: 350,
         status: "qualified-accountant-review-required",
         currentEvidence: [
           "Golden filing corpus covers the production scenarios.",
@@ -111,20 +118,21 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
         remainingGaps: ["Run and retain verified source-law, qualified-accountant acceptance, external ROS/iXBRL validation, and manual handoff evidence across every canonical golden corpus scenario."],
         completionTrackCodes: ["backend-code"],
         releaseBlockerCodes: ["backend-code:qualified-accountant-signoff"],
+        controls: productionScorecardControls("backend-statutory-accounting-engine"),
       },
       {
         code: "frontend-accountant-workbench",
         label: "Frontend accountant workbench",
-        currentScore: 199,
-        targetScore: 200,
+        currentScore: 203,
+        targetScore: 250,
         status: "visual-acceptance-required",
         currentEvidence: [
           "Visual smoke plan covers the accountant journey.",
           "visual-smoke-evidence-report.json proves screenshot hash, byte-size, PNG dimension, nonblank pixel diversity, per-screenshot layout-check pass results, automated theme-contrast smoke results and route/theme/viewport coverage.",
           "visual-qa-signoff-template.md and verify-release-evidence.ps1 require reviewers to record visual smoke nonblank pixel and contrast metrics before visual QA evidence can pass.",
-          "Visual QA sign-off requires exact pass decisions for every route across desktop light, desktop dark, mobile light and mobile dark captures.",
+          "Visual QA sign-off requires exact pass decisions for every canonical state across light and dark themes at mobile, tablet and desktop viewports.",
           "Visual QA route capture cells reject accepted-style ambiguous text so reviewer limitations must stay in retained route notes or references.",
-          "Visual QA route notes must match the exact visual-smoke-evidence-report.json routeAcceptance anchor for every route before sign-off evidence can pass.",
+          "Visual QA state notes must match the exact visual-smoke-evidence-report.json routeCoverage anchor for every canonical state before sign-off evidence can pass.",
           "Release evidence reviewer workspaces now prefill visual QA route note anchors from visual-smoke-evidence-report.json while leaving all route pass/fail cells blank for named human review.",
           "Visual QA release evidence requires exact visual-smoke manifest, visual evidence report and accountant workbench evidence report filenames before sign-off evidence can pass.",
           "Visual QA top-level evidence rejects placeholder reviewer name, reviewer role and reviewer signature fields before human visual sign-off evidence can pass.",
@@ -137,19 +145,20 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
           "Release artifact and CI machine evidence pack verifiers require exact accountant-workbench route acceptance names, route keys, expected decision text and per-route acceptance evidence ids for every workbench route.",
           "Release artifact and CI machine evidence pack verifiers require exact accountant-workbench route acceptance labels, screenshot-review evidence anchors and required-review status for every workbench route.",
           "Release artifact and CI machine evidence pack verifiers require exact accountant-workbench route readiness screenshot counts, layout-check counts, contrast counts, minimum contrast ratios, required-review status and required review checks for every workbench route.",
-          "Release artifact and CI machine evidence pack verifiers require exact accountant-workbench route workflow-stage coverage and light/dark desktop/mobile theme-viewport coverage before retained route readiness evidence can pass.",
+          "Release artifact and CI machine evidence pack verifiers require exact accountant-workbench route workflow-stage coverage and light/dark mobile/tablet/desktop theme-viewport coverage before retained route readiness evidence can pass.",
           "Release artifact and CI machine evidence pack verifiers require exact accountant-workbench required coverage for workflow stages, themes, viewports, review checks, layout checks, expected-text checks, layout/contrast evidence and retained visual evidence files.",
           "Frontend parser invariants now require the CI machine evidence pack, production smoke, readiness verification, visual smoke and manual release-verification rows before rendering readiness data.",
         ],
         remainingGaps: ["Complete named visual QA review against the screenshot manifest and visual-smoke-evidence-report.json."],
         completionTrackCodes: ["frontend-ui-ux", "frontend-code"],
         releaseBlockerCodes: ["frontend-ui-ux:light-dark-visual-regression"],
+        controls: productionScorecardControls("frontend-accountant-workbench"),
       },
       {
         code: "security-auth-tenant-platform-guardrails",
         label: "Security/auth/tenant/platform guardrails",
-        currentScore: 150,
-        targetScore: 150,
+        currentScore: 215,
+        targetScore: 250,
         status: "operator-confirmation-required",
         currentEvidence: [
           "Auth, tenant and platform release gates are represented in readiness evidence.",
@@ -157,7 +166,7 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
           "no-direct-filing-submission-report.json records release candidate commit/run identity and pack verifiers reject stale no-direct evidence.",
           "Release artifact pack verifier validates operational, workspace verification and reviewer handoff reports together.",
           "release-artifact-pack-report.json records release candidate identity, per-report and reviewer-handoff SHA-256/byte-size evidence, plus a release-evidence workspace summary with the 21-file prepared workspace, six pending human blockers, six unassigned reviewer assignment rows, reviewerAssignmentPickupFileGuidanceCount and the per-gate reviewerAssignmentPickupFiles inventory.",
-          "release-evidence-report.json records productionScorecardCompletion, staying blocked below 700/700 until all six named human evidence templates are accepted with zero verifier failures.",
+          "release-evidence-report.json records productionScorecardCompletion, staying blocked below 1,000/1,000 until all six named human evidence templates are accepted with zero verifier failures.",
           "ci-machine-evidence-pack-report.json records exact commit/run identity, machine-evidence SHA-256 inventory and a prepared reviewer-workspace summary with the 21-file workspace plus six unassigned reviewer assignment rows with complete per-gate pickup-file guidance.",
           "verify-production-readiness-report.ps1 now requires default-CI and manual release manifest rows, including the no-direct CRO/ROS control, CI machine evidence pack and release artifact pack.",
           "verify-release-artifact-pack.ps1 now rejects release packs unless production-readiness-verification-report.json proves every required default-CI and manual release manifest row.",
@@ -165,13 +174,14 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
           "verify-release-evidence.ps1 now rejects completed human evidence when release candidate identity, UTC timestamps, SHA-256 digests, external iXBRL artifact hashes, or monitoring log confirmation fields are malformed.",
           "verify-release-evidence.ps1 emits a consistent releaseCandidate identity for all six human evidence templates, and verify-release-artifact-pack.ps1 rejects packs whose release-evidence-report.json identity does not match the pack CommitSha and GitHubActionsRunUrl.",
           "verify-release-evidence.ps1 emits SHA-256/byte-size manifest entries for all six human release-evidence templates, and verify-release-artifact-pack.ps1 requires those completed templates to be retained in the pack with matching hashes.",
-          "verify-release-artifact-pack.ps1 independently parses release-evidence-workspace-verification-report.json, release-evidence-machine-summary.json and release-evidence-report.json productionScorecardCompletion, requiring the same release candidate, exact 21-file prepared workspace inventory, retained machine-evidence provenance and hashes, humanReleaseEvidenceCloseoutStepCodes, reviewer pickup-file maps, the pending reviewer assignment ledger, retained reviewer handoff files and final 700/700 scorecard proof.",
+          "verify-release-artifact-pack.ps1 independently parses release-evidence-workspace-verification-report.json, release-evidence-machine-summary.json and release-evidence-report.json productionScorecardCompletion, requiring the same release candidate, exact 21-file prepared workspace inventory, retained machine-evidence provenance and hashes, humanReleaseEvidenceCloseoutStepCodes, reviewer pickup-file maps, the pending reviewer assignment ledger, retained reviewer handoff files and final 1,000/1,000 scorecard proof.",
           "Monitoring-provider confirmation evidence requires real provider/event/correlation references, an HTTPS provider base URL, a matched structured-log smoke line and an explicit accepted operator decision.",
           "Release evidence reviewer workspaces now prefill monitoring provider machine evidence from retained CI smoke/log reports while leaving provider confirmation, operator identity, decision and signature fields blank.",
         ],
         remainingGaps: ["Confirm the controlled monitoring smoke event inside the configured provider and retain the full release-artifact-pack-report.json after release-evidence-report.json is completed with named human sign-offs."],
         completionTrackCodes: ["backend-code"],
         releaseBlockerCodes: ["backend-code:qualified-accountant-signoff"],
+        controls: productionScorecardControls("security-auth-tenant-platform-guardrails"),
       },
     ],
   };
@@ -179,7 +189,7 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
 
 function humanReleaseEvidence(): ProductionReadinessReport["humanReleaseEvidence"] {
   return [
-    humanEvidenceGate("visualQa", "Visual QA sign-off", "visual-qa-signoff-template.md", "Named visual QA reviewer", "visual-qa-screenshot-review", "visual-qa-screenshot-review", "visual-smoke-light-dark", "light-dark-desktop-mobile-screenshot-review"),
+    humanEvidenceGate("visualQa", "Visual QA sign-off", "visual-qa-signoff-template.md", "Named visual QA reviewer", "visual-qa-screenshot-review", "visual-qa-screenshot-review", "visual-smoke-light-dark", "light-dark-mobile-tablet-desktop-screenshot-review"),
     humanEvidenceGate("sourceLawReview", "Source-law review sign-off", "source-law-review-template.md", "Named source-law reviewer plus qualified accountant", "source-law-change-review", "source-law-change-review", "source-law-change-review", "source-law-change-review-note"),
     humanEvidenceGate("externalRosIxbrlValidation", "External ROS/iXBRL validation", "external-ros-ixbrl-validation-template.md", "External ROS/iXBRL validation reviewer", "external-ros-validation-evidence", "external-ros-validation-evidence", "external-ros-validation-evidence", "external-ros-validation-reference"),
     humanEvidenceGate("qualifiedAccountantAcceptance", "Qualified-accountant acceptance", "qualified-accountant-acceptance-template.md", "Named qualified accountant", "qualified-accountant-final-signoff", "accountant-final-signoff", "qualified-accountant-final-signoff", "named-accountant-approval-record"),
@@ -218,7 +228,7 @@ function humanReleaseEvidenceCloseout(): ProductionReadinessReport["humanRelease
       code: "confirm-human-evidence-completion",
       label: "Confirm human completion",
       sequence: 4,
-      detail: "Confirm 6 accepted humanEvidenceCompletion rows and productionScorecardCompletion status complete at 700/700 with zero blocking failures in release-evidence-report.json.",
+      detail: "Confirm 6 accepted humanEvidenceCompletion rows and productionScorecardCompletion status complete at 1,000/1,000 with zero blocking failures in release-evidence-report.json.",
       artifact: "release-evidence-report.json",
       blocksRelease: true,
     },
@@ -372,7 +382,7 @@ function sampleReport(): ProductionReadinessReport {
       goldenCorpusTotal: 5,
       statutoryRuleMatrixPaths: 1,
       statutoryRuleCoverageFamilies: 1,
-      visualQaExpectedScreenshots: 28,
+      visualQaExpectedScreenshots: 192,
       requiredOperationalGates: 1,
       openCriticalActions: 1,
       evidenceItems: ["source-law-snapshot-fingerprint", "source-law-traceability-index", "source-law-maintenance-protocol", "source-law-review-ledger", "revenue-taxonomy-range-evidence", "golden-filing-corpus", "golden-evidence-ledger", "golden-verifier-manifest", "audit-evidence-timeline", "production-audit-evidence-pack", "operations-evidence-pack", "production-readiness-report", "production-readiness-verification-report", "visual-smoke-screenshots", "accountant-workbench-evidence-report", "release-review-checklist", "release-verification-manifest", "human-release-evidence", "accountant-acceptance-summary", "accountant-workflow-walkthrough-protocol", "accountant-journey-acceptance-checklist", "accountant-workflow-evidence-pack", "accountant-walkthrough-evidence-matrix", "workbench-visual-acceptance-register", "production-completion-map", "production-scorecard"],
@@ -910,7 +920,7 @@ function sampleReport(): ProductionReadinessReport {
         evidenceStage: "visual-qa-evidence",
         status: "in-progress",
         detail: "The accountant journey needs screenshot evidence across light and dark mode.",
-        evidenceRequired: "Light/dark desktop/mobile screenshots for the main workflow routes.",
+        evidenceRequired: "Light/dark mobile/tablet/desktop screenshots for the main workflow routes.",
       },
     ],
     releaseBlockerRegister: [
@@ -986,12 +996,12 @@ function sampleReport(): ProductionReadinessReport {
         severity: "high",
         riskRank: 30,
         blockingIssue: "Light/dark visual regression required",
-        requiredEvidence: "Light/dark desktop/mobile screenshots for the main workflow routes.",
+        requiredEvidence: "Light/dark mobile/tablet/desktop screenshots for the main workflow routes.",
         nextAction: "Review each screenshot route-by-route in light and dark mode.",
         sourceActionCode: "light-dark-visual-regression",
         releaseChecklistCode: "visual-qa-screenshot-review",
         operationalGateCode: "production-ci-gates",
-        evidenceArtifact: "light-dark-desktop-mobile-screenshot-review",
+        evidenceArtifact: "light-dark-mobile-tablet-desktop-screenshot-review",
         blocksRelease: true,
       },
       {
@@ -1018,12 +1028,12 @@ function sampleReport(): ProductionReadinessReport {
         severity: "high",
         riskRank: 30,
         blockingIssue: "Light/dark visual regression required",
-        requiredEvidence: "Light/dark desktop/mobile screenshots for the main workflow routes.",
+        requiredEvidence: "Light/dark mobile/tablet/desktop screenshots for the main workflow routes.",
         nextAction: "Expand visual regression assertions from screenshot capture into reviewable sign-off.",
         sourceActionCode: "light-dark-visual-regression",
         releaseChecklistCode: "visual-qa-screenshot-review",
         operationalGateCode: "production-ci-gates",
-        evidenceArtifact: "light-dark-desktop-mobile-screenshot-review",
+        evidenceArtifact: "light-dark-mobile-tablet-desktop-screenshot-review",
         blocksRelease: true,
       },
     ],
@@ -1151,11 +1161,11 @@ function sampleReport(): ProductionReadinessReport {
         required: true,
         status: "in-progress",
         blocksRelease: true,
-        evidenceArtifact: "light-dark-desktop-mobile-screenshot-review",
+        evidenceArtifact: "light-dark-mobile-tablet-desktop-screenshot-review",
         assuranceActionCode: "light-dark-visual-regression",
         operationalGateCode: "production-ci-gates",
         auditEventCodes: [],
-        detail: "Desktop and mobile screenshots in light and dark mode must be reviewed for the accountant workflow before release.",
+        detail: "Mobile, tablet and desktop screenshots in light and dark mode must be reviewed for the accountant workflow before release.",
       },
     ],
     releaseVerificationManifest: [
@@ -1180,7 +1190,7 @@ function sampleReport(): ProductionReadinessReport {
         runsInDefaultCi: true,
         blocksRelease: true,
         evidenceArtifact: "frontend-test-results",
-        releaseChecklistEvidenceArtifact: "light-dark-desktop-mobile-screenshot-review",
+        releaseChecklistEvidenceArtifact: "light-dark-mobile-tablet-desktop-screenshot-review",
         manualFallback: "Run from frontend/ and retain the unit, render, readiness, proxy, auth and API-client verifier output.",
       },
       {
@@ -1192,19 +1202,19 @@ function sampleReport(): ProductionReadinessReport {
         runsInDefaultCi: true,
         blocksRelease: true,
         evidenceArtifact: "frontend-build-results",
-        releaseChecklistEvidenceArtifact: "light-dark-desktop-mobile-screenshot-review",
+        releaseChecklistEvidenceArtifact: "light-dark-mobile-tablet-desktop-screenshot-review",
         manualFallback: "Run from frontend/ and retain lint, TypeScript and Next production build output when CI is unavailable.",
       },
       {
         code: "visual-smoke-light-dark",
-        label: "Light/dark desktop/mobile visual smoke",
+        label: "Light/dark mobile/tablet/desktop visual smoke",
         ownerRole: "Engineering",
         command: "node scripts/visual-smoke.mjs; node scripts/verify-visual-smoke-artifacts.mjs --report-path=artifacts/visual-smoke/visual-smoke-evidence-report.json; node scripts/verify-accountant-workbench-evidence.mjs --visual-report=artifacts/visual-smoke/visual-smoke-evidence-report.json --report-path=artifacts/visual-smoke/accountant-workbench-evidence-report.json",
         ciScope: "default-ci",
         runsInDefaultCi: true,
         blocksRelease: true,
         evidenceArtifact: "artifacts/visual-smoke",
-        releaseChecklistEvidenceArtifact: "light-dark-desktop-mobile-screenshot-review",
+        releaseChecklistEvidenceArtifact: "light-dark-mobile-tablet-desktop-screenshot-review",
         manualFallback: "Run visual smoke locally, then retain the manifest verification output and review the generated artifacts manually.",
       },
       {
@@ -1417,23 +1427,7 @@ function sampleReport(): ProductionReadinessReport {
         failurePolicy: "Block release if backup creation, checksum verification or restore verification fails.",
       },
     ],
-    visualQaCoverage: {
-      artifactName: "visual-smoke-screenshots",
-      enforcement: "ci-production-smoke",
-      manifestFileName: "visual-smoke-manifest.json",
-      expectedScreenshotCount: 28,
-      layoutChecks: ["browser-console-errors", "page-horizontal-overflow", "visible-text-overlap"],
-      reviewChecks: visualQaReviewChecks(),
-      reviewProtocol: visualQaReviewProtocol(),
-      themes: ["light", "dark"],
-      viewports: [
-        { name: "desktop", width: 1440, height: 1000 },
-        { name: "mobile", width: 390, height: 844 },
-      ],
-      routes: visualQaRoutes(),
-      routeAudits: visualQaRouteAudits(),
-      artifacts: visualQaArtifacts(),
-    },
+    visualQaCoverage: canonicalVisualQaCoverage(),
   };
 }
 
@@ -1629,7 +1623,7 @@ function journeyAcceptance(
     routeKey,
     workflowStages,
     seededScenarioCodes: goldenScenarioCodes(),
-    visualArtifactNames: ["light-desktop", "light-mobile", "dark-desktop", "dark-mobile"].map(
+    visualArtifactNames: ["light-desktop", "light-mobile", "light-tablet", "dark-desktop", "dark-mobile", "dark-tablet"].map(
       (suffix) => `${routeCode}-${suffix}.png`,
     ),
     requiredEvidence: [
@@ -1678,7 +1672,7 @@ function accountantRouteEvidence(
     routeLabel,
     workflowStages,
     seededScenarioCodes: goldenScenarioCodes(),
-    visualArtifactNames: ["light-desktop", "light-mobile", "dark-desktop", "dark-mobile"].map(
+    visualArtifactNames: ["light-desktop", "light-mobile", "light-tablet", "dark-desktop", "dark-mobile", "dark-tablet"].map(
       (suffix) => `${routeCode}-${suffix}.png`,
     ),
     evidenceArtifact: `${routeCode}-accountant-route-acceptance-note`,
@@ -1708,7 +1702,7 @@ function accountantWalkthroughEvidenceMatrix(): ProductionReadinessReport["accou
       routeLabel: "Dashboard",
       routeKey: "dashboard",
       workflowStages: accountantWorkflowStages(),
-      visualArtifactNames: ["light-desktop", "light-mobile", "dark-desktop", "dark-mobile"].map(
+      visualArtifactNames: ["light-desktop", "light-mobile", "light-tablet", "dark-desktop", "dark-mobile", "dark-tablet"].map(
         (suffix) => `dashboard-${suffix}.png`,
       ),
       evidenceArtifact: "micro-ltd-dashboard-walkthrough-note",
@@ -1741,13 +1735,13 @@ function workbenchVisualAcceptanceRegister(): ProductionReadinessReport["workben
       "filing-review",
       "Filing review",
       ["Review", "Filing"],
-      "Accept the filing review screen only after its evidence checklist, source links, generated outputs and filing-state actions are visually clear in light/dark desktop/mobile screenshots.",
+      "Accept the filing review screen only after its evidence checklist, source links, generated outputs and filing-state actions are visually clear in light/dark mobile/tablet/desktop screenshots.",
     ),
     workbenchVisualAcceptance(
       "production-readiness",
       "Production readiness",
       ["Review", "Filing"],
-      "Accept the production readiness screen only after release blockers, rule coverage, visual QA, operational readiness and accountant review state are visually clear in light/dark desktop/mobile screenshots.",
+      "Accept the production readiness screen only after release blockers, rule coverage, visual QA, operational readiness and accountant review state are visually clear in light/dark mobile/tablet/desktop screenshots.",
     ),
     workbenchVisualAcceptance("workbench-preview", "Workbench preview", accountantWorkflowStages()),
   ];
@@ -1767,160 +1761,28 @@ function workbenchVisualAcceptance(
       "accountant-workflow-hierarchy",
       "table-scanability",
       "theme-contrast",
-      "mobile-density",
+      "responsive-density",
+      "canonical-url-tab-state",
+      "semantic-capture-distinctness",
+      "stale-conflict-states",
       "loading-error-empty-states",
     ],
-    screenshotArtifactNames: ["light-desktop", "light-mobile", "dark-desktop", "dark-mobile"].map(
+    screenshotArtifactNames: ["light-desktop", "light-mobile", "light-tablet", "dark-desktop", "dark-mobile", "dark-tablet"].map(
       (suffix) => `${routeCode}-${suffix}.png`,
     ),
     evidenceArtifact: `${routeCode}-visual-acceptance-note`,
     requiredEvidence: [
       "route-state acceptance note",
-      "light/dark desktop/mobile screenshot review",
+      "light/dark mobile/tablet/desktop screenshot review",
       "named visual QA reviewer sign-off",
     ],
     releaseGateCode: "visual-qa-screenshot-review",
     status: "required-review",
-    failurePolicy: "Block release until this accountant workbench route is visually accepted across workflow hierarchy, table scanability, theme contrast, mobile density and route states.",
-    nextAction: nextAction ?? `Accept the ${routeLabel} route only after its workflow hierarchy, tables, contrast, mobile layout, loading/error/empty states and screenshots are professionally reviewed.`,
+    failurePolicy: "Block release until this accountant workbench route is visually accepted across workflow hierarchy, table scanability, theme contrast, responsive density and route states.",
+    nextAction: nextAction ?? `Accept the ${routeLabel} route only after its workflow hierarchy, tables, contrast, responsive layout, loading/error/empty states and screenshots are professionally reviewed.`,
   };
 }
 
 function accountantWorkflowStages() {
   return ["Setup", "Import", "Classify", "Year-End", "Statements", "Notes", "Review", "Filing"];
-}
-
-function visualQaReviewChecks() {
-  return ["accountant-workflow-hierarchy", "table-scanability", "theme-contrast", "mobile-density", "loading-error-empty-states"];
-}
-
-function visualQaReviewProtocol(): ProductionReadinessReport["visualQaCoverage"]["reviewProtocol"] {
-  return {
-    protocolVersion: "visual-review-v1",
-    reviewerRole: "Design reviewer",
-    status: "required-review",
-    signOffGate: "visual-qa-screenshot-review",
-    failurePolicy: "Block release if any accountant workbench route has console errors, horizontal overflow, visible text overlap, inaccessible contrast, unreadable table density, or unresolved light/dark/mobile defects.",
-    acceptanceCriteria: [
-      "Every configured route is captured in light desktop, dark desktop, light mobile and dark mobile.",
-      "No browser console errors, horizontal overflow or visible text overlap are present.",
-      "Accountant workflow hierarchy, table scanability, theme contrast, mobile density and route states are professionally acceptable.",
-      "A named visual QA reviewer records screenshot-manifest acceptance before real filing release.",
-    ],
-    requiredEvidence: [
-      "visual-smoke-manifest.json",
-      "visual-smoke-evidence-report.json",
-      "accountant-workbench-evidence-report.json",
-      "28 visual smoke screenshots",
-      "screenshot SHA-256 checksums",
-      "screenshot PNG dimensions",
-      "screenshot nonblank pixel diversity evidence",
-      "per-screenshot automated theme contrast smoke evidence",
-      "route audit summary",
-      "named visual QA reviewer sign-off",
-    ],
-  };
-}
-
-function visualQaRoutes(): ProductionReadinessReport["visualQaCoverage"]["routes"] {
-  return [
-    {
-      code: "dashboard",
-      routeKey: "dashboard",
-      label: "Dashboard",
-      description: "Accountant queue and production readiness overview.",
-      requiredText: "Production Readiness",
-      workflowStages: accountantWorkflowStages(),
-      openFilingTab: false,
-    },
-    {
-      code: "production-readiness",
-      routeKey: "readiness",
-      label: "Production readiness",
-      description: "Assurance checklist, statutory rules matrix, source snapshot and operational gates.",
-      requiredText: "Production Readiness Checklist",
-      workflowStages: ["Review", "Filing"],
-      openFilingTab: false,
-    },
-    {
-      code: "company-detail",
-      routeKey: "company",
-      label: "Company detail",
-      description: "Company command centre, statutory profile, officers, charity facts and accounting periods.",
-      requiredText: "Company command centre",
-      workflowStages: ["Setup"],
-      openFilingTab: false,
-    },
-    {
-      code: "period-workspace",
-      routeKey: "period",
-      label: "Period workspace",
-      description: "Import, classification, year-end, statements and filing readiness overview.",
-      requiredText: "Filing readiness",
-      workflowStages: accountantWorkflowStages(),
-      openFilingTab: false,
-    },
-    {
-      code: "filing-review",
-      routeKey: "filing",
-      label: "Filing review",
-      description: "Period workspace filing tab.",
-      requiredText: "Filing readiness profile",
-      workflowStages: ["Review", "Filing"],
-      openFilingTab: true,
-    },
-    {
-      code: "financial-statements",
-      routeKey: "financialStatements",
-      label: "Financial statements",
-      description: "Statement preview, tax computation, source trail and directors' report workbench.",
-      requiredText: "Financial Statements",
-      workflowStages: ["Statements"],
-      openFilingTab: false,
-    },
-    {
-      code: "workbench-preview",
-      routeKey: "workbenchPreview",
-      label: "Workbench preview",
-      description: "Internal component preview for accountant workflow primitives and route states.",
-      requiredText: "Workbench Component Preview",
-      workflowStages: accountantWorkflowStages(),
-      openFilingTab: false,
-    },
-  ];
-}
-
-function visualQaArtifacts(): ProductionReadinessReport["visualQaCoverage"]["artifacts"] {
-  const layoutChecks = ["browser-console-errors", "page-horizontal-overflow", "visible-text-overlap"];
-  return ["light", "dark"].flatMap((theme) =>
-    ["desktop", "mobile"].flatMap((viewportName) =>
-      visualQaRoutes().map((route) => {
-        const fileName = `${route.code}-${theme}-${viewportName}.png`;
-        return {
-          routeCode: route.code,
-          routeKey: route.routeKey,
-          theme,
-          viewportName,
-          fileName,
-          artifactPath: `artifacts/visual-smoke/${fileName}`,
-          requiredText: route.requiredText,
-          openFilingTab: route.openFilingTab,
-          reviewStatus: "required-review",
-          layoutChecks,
-        };
-      }),
-    ),
-  );
-}
-
-function visualQaRouteAudits(): ProductionReadinessReport["visualQaCoverage"]["routeAudits"] {
-  return visualQaRoutes().map((route) => ({
-    routeCode: route.code,
-    routeKey: route.routeKey,
-    label: route.label,
-    workflowStages: route.workflowStages,
-    screenshotCount: 4,
-    reviewStatus: "required-review",
-    reviewChecks: visualQaReviewChecks(),
-  }));
 }

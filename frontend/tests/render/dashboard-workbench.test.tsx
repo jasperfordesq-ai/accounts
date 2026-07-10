@@ -9,7 +9,9 @@ describe("DashboardWorkbench", () => {
       <DashboardWorkbench
         companies={[sampleCompany()]}
         deadlines={{ 7: sampleDeadline() }}
-        isOwner
+        canCreateCompany
+        canRecoverCompany
+        canReviewReleaseEvidence
         readinessReport={sampleReadinessReport()}
         readinessError={null}
         error={null}
@@ -17,7 +19,7 @@ describe("DashboardWorkbench", () => {
     );
 
     expect(screen.getByRole("heading", { name: "Firm command centre" })).toBeInTheDocument();
-    expect(screen.getByText("Irish statutory accounts workload, filing pressure and production release evidence.")).toBeInTheDocument();
+    expect(screen.getByText("Deadlines, reviewer ownership and the next action across the practice.")).toBeInTheDocument();
     expect(screen.getAllByText("1 company").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("Production gated")).toBeInTheDocument();
     for (const addLink of screen.getAllByRole("link", { name: "Add Company" })) {
@@ -26,6 +28,11 @@ describe("DashboardWorkbench", () => {
     expect(screen.getByText("Accountant Work Queue")).toBeInTheDocument();
     expect(screen.getByText("Practice command summary")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Company directory" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Platform release status" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open release evidence" })).toHaveAttribute("href", "/production-readiness");
+    const workQueue = screen.getByText("Accountant Work Queue");
+    const releaseStatus = screen.getByRole("heading", { name: "Platform release status" });
+    expect(workQueue.compareDocumentPosition(releaseStatus) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.queryByText("Dashboard")).not.toBeInTheDocument();
   });
 
@@ -34,7 +41,9 @@ describe("DashboardWorkbench", () => {
       <DashboardWorkbench
         companies={[]}
         deadlines={{}}
-        isOwner={false}
+        canCreateCompany={false}
+        canRecoverCompany={false}
+        canReviewReleaseEvidence
         readinessReport={null}
         readinessError="Readiness API unavailable"
         error="Companies API unavailable"
@@ -46,6 +55,33 @@ describe("DashboardWorkbench", () => {
     expect(screen.getByText("Readiness API unavailable")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Add Company" })).not.toBeInTheDocument();
   });
+
+  it("gives Owners a recoverable quarantine register", () => {
+    render(
+      <DashboardWorkbench
+        companies={[]}
+        deadlines={{}}
+        canCreateCompany
+        canRecoverCompany
+        canReviewReleaseEvidence={false}
+        readinessReport={null}
+        quarantinedCompanies={[{
+          companyId: 19,
+          legalName: "Retained Records Limited",
+          quarantinedAtUtc: "2026-07-10T08:00:00Z",
+          quarantinedByDisplayName: "Owner User",
+          reason: "Engagement closed after the final retained-record review.",
+          evidenceSha256: "a".repeat(64),
+        }]}
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: "Quarantined companies" })).toBeInTheDocument();
+    expect(screen.getByText("Retained Records Limited")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Recover" })).toBeInTheDocument();
+    expect(screen.queryByText("Production clear")).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Platform release status" })).not.toBeInTheDocument();
+  });
 });
 
 function sampleCompany(): Company {
@@ -55,7 +91,7 @@ function sampleCompany(): Company {
     companyType: "Private",
     incorporationDate: "2024-01-01",
     financialYearStartMonth: 1,
-    ardMonth: 9,
+    annualReturnDate: "2026-09-15",
     isGroupMember: false,
     isHolding: false,
     isInvestment: false,
@@ -94,6 +130,7 @@ function sampleDeadline(): FilingDeadline {
     companyId: 7,
     periodId: 3,
     deadlineType: "CRO",
+    calculatedDueDate: "2026-07-10",
     dueDate: "2026-07-10",
     isLate: false,
     penaltyAmount: 0,
@@ -228,7 +265,7 @@ function sampleReadinessReport(): ProductionReadinessReport {
         sourceActionCode: "light-dark-visual-regression",
         releaseChecklistCode: "visual-qa-screenshot-review",
         operationalGateCode: "",
-        evidenceArtifact: "light-dark-desktop-mobile-screenshot-review",
+        evidenceArtifact: "light-dark-mobile-tablet-desktop-screenshot-review",
         blocksRelease: true,
       },
     ],

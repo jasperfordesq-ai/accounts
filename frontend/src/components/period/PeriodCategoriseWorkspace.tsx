@@ -2,8 +2,17 @@
 
 import { Button, Card, Chip, ProgressBar, ProgressBarFill, ProgressBarTrack, Spinner } from "@heroui/react";
 import { RefreshCw, Settings } from "lucide-react";
-import type { ReactNode } from "react";
-import type { AccountCategory, BankAccount, ImportedTransaction, TransactionRule } from "@/lib/api";
+import { cloneElement, useId, type ReactElement } from "react";
+import type {
+  AccountCategory,
+  BankAccount,
+  ImportedTransaction,
+  TransactionRule,
+  TransactionSortDirection,
+  TransactionSortField,
+} from "@/lib/api";
+import { DataGrid, ReadOnlyNotice } from "@/components/workbench";
+import { useDestructiveActionConfirmation } from "@/lib/useDestructiveAction";
 
 interface TransactionRuleForm {
   pattern: string;
@@ -12,10 +21,17 @@ interface TransactionRuleForm {
 }
 
 interface PeriodCategoriseWorkspaceProps {
+  canWrite?: boolean;
   transactions: ImportedTransaction[];
   transactionTotal: number;
+  filteredTransactionTotal: number;
   categorisedCount: number;
   uncategorisedCount: number;
+  transactionPage: number;
+  transactionPageSize: number;
+  transactionPageCount: number;
+  transactionSortBy: TransactionSortField;
+  transactionSortDirection: TransactionSortDirection;
   loadingTransactions: boolean;
   categorisingId: number | null;
   categories: AccountCategory[];
@@ -33,6 +49,7 @@ interface PeriodCategoriseWorkspaceProps {
   txFilterCategory: string;
   txFilterBank: string;
   txFilterSearch: string;
+  selectionAnnouncement?: string;
   onRefresh: () => void | Promise<void>;
   onRuleFormChange: (form: TransactionRuleForm) => void;
   onCreateRule: () => void | Promise<void>;
@@ -43,16 +60,27 @@ interface PeriodCategoriseWorkspaceProps {
   onFilterCategoryChange: (value: string) => void;
   onFilterBankChange: (value: string) => void;
   onSearchInputChange: (value: string) => void;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (pageSize: number) => void;
+  onSortByChange: (sortBy: TransactionSortField) => void;
+  onSortDirectionChange: (sortDirection: TransactionSortDirection) => void;
   onSelectVisibleTransactions: (selected: boolean) => void;
   onToggleTransactionSelection: (transactionId: number, selected: boolean) => void;
   onCategoriseTransaction: (transactionId: number, categoryId: number) => void | Promise<void>;
 }
 
 export function PeriodCategoriseWorkspace({
+  canWrite = true,
   transactions,
   transactionTotal,
+  filteredTransactionTotal,
   categorisedCount,
   uncategorisedCount,
+  transactionPage,
+  transactionPageSize,
+  transactionPageCount,
+  transactionSortBy,
+  transactionSortDirection,
   loadingTransactions,
   categorisingId,
   categories,
@@ -70,6 +98,7 @@ export function PeriodCategoriseWorkspace({
   txFilterCategory,
   txFilterBank,
   txFilterSearch,
+  selectionAnnouncement = "",
   onRefresh,
   onRuleFormChange,
   onCreateRule,
@@ -80,12 +109,22 @@ export function PeriodCategoriseWorkspace({
   onFilterCategoryChange,
   onFilterBankChange,
   onSearchInputChange,
+  onPageChange,
+  onPageSizeChange,
+  onSortByChange,
+  onSortDirectionChange,
   onSelectVisibleTransactions,
   onToggleTransactionSelection,
   onCategoriseTransaction,
 }: PeriodCategoriseWorkspaceProps) {
+  const selectedOnCurrentPage = visibleTransactionIds.filter((id) => selectedTransactionIds.includes(id)).length;
+
   return (
     <div className="space-y-6">
+      {!canWrite && <ReadOnlyNotice subject="transaction categorisation" />}
+      <p className="sr-only" aria-live="polite" aria-atomic="true">
+        {selectionAnnouncement}
+      </p>
       <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
         <Card.Header>
           <div className="flex items-center justify-between w-full">
@@ -129,6 +168,7 @@ export function PeriodCategoriseWorkspace({
           )}
 
           <TransactionRulesPanel
+            canWrite={canWrite}
             categories={categories}
             transactionRules={transactionRules}
             ruleForm={ruleForm}
@@ -139,14 +179,14 @@ export function PeriodCategoriseWorkspace({
             onDeleteRule={onDeleteRule}
           />
 
-          {transactions.length > 0 && (
+          {canWrite && transactions.length > 0 && (
             <div className="mb-4 rounded-md border border-slate-200 bg-slate-50 p-3 dark:border-neutral-700 dark:bg-neutral-800/40">
               <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
                 <div>
                   <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Bulk categorisation</p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {selectedTransactionIds.length} selected from {visibleTransactionIds.length} visible. Use this for
-                    reviewed recurring items only.
+                    {selectedTransactionIds.length} selected across pages; {selectedOnCurrentPage} of {visibleTransactionIds.length}
+                    {" "}on this page. Select current page never selects every matching result. Changing a filter clears the selection.
                   </p>
                 </div>
                 <div className="flex flex-col gap-2 md:flex-row md:items-center">
@@ -160,6 +200,7 @@ export function PeriodCategoriseWorkspace({
                   <Button
                     variant="primary"
                     size="sm"
+                    aria-label="Apply to Selected transactions"
                     onPress={onBulkCategorise}
                     isDisabled={bulkCategorising || selectedTransactionIds.length === 0 || !bulkCategoryId}
                   >
@@ -177,15 +218,24 @@ export function PeriodCategoriseWorkspace({
             txFilterCategory={txFilterCategory}
             txFilterBank={txFilterBank}
             txFilterSearch={txFilterSearch}
+            transactionSortBy={transactionSortBy}
+            transactionSortDirection={transactionSortDirection}
             onFilterStatusChange={onFilterStatusChange}
             onFilterCategoryChange={onFilterCategoryChange}
             onFilterBankChange={onFilterBankChange}
             onSearchInputChange={onSearchInputChange}
+            onSortByChange={onSortByChange}
+            onSortDirectionChange={onSortDirectionChange}
           />
 
           <TransactionTable
+            canWrite={canWrite}
             transactions={transactions}
             transactionTotal={transactionTotal}
+            filteredTransactionTotal={filteredTransactionTotal}
+            transactionPage={transactionPage}
+            transactionPageSize={transactionPageSize}
+            transactionPageCount={transactionPageCount}
             loadingTransactions={loadingTransactions}
             categories={categories}
             categorisingId={categorisingId}
@@ -194,6 +244,8 @@ export function PeriodCategoriseWorkspace({
             onSelectVisibleTransactions={onSelectVisibleTransactions}
             onToggleTransactionSelection={onToggleTransactionSelection}
             onCategoriseTransaction={onCategoriseTransaction}
+            onPageChange={onPageChange}
+            onPageSizeChange={onPageSizeChange}
           />
         </Card.Content>
       </Card>
@@ -202,6 +254,7 @@ export function PeriodCategoriseWorkspace({
 }
 
 function TransactionRulesPanel({
+  canWrite,
   categories,
   transactionRules,
   ruleForm,
@@ -211,6 +264,7 @@ function TransactionRulesPanel({
   onCreateRule,
   onDeleteRule,
 }: {
+  canWrite: boolean;
   categories: AccountCategory[];
   transactionRules: TransactionRule[];
   ruleForm: TransactionRuleForm;
@@ -220,6 +274,8 @@ function TransactionRulesPanel({
   onCreateRule: () => void | Promise<void>;
   onDeleteRule: (ruleId: number) => void | Promise<void>;
 }) {
+  const { requestDestructiveAction, destructiveActionConfirmation } = useDestructiveActionConfirmation();
+
   return (
     <div className="mb-6 rounded-md border border-gray-200 bg-gray-50 p-4 dark:border-neutral-700 dark:bg-neutral-800/40">
       <div className="mb-3 flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
@@ -233,7 +289,7 @@ function TransactionRulesPanel({
           {transactionRules.length} rule{transactionRules.length !== 1 ? "s" : ""}
         </Chip>
       </div>
-      <div className="grid gap-3 md:grid-cols-12">
+      {canWrite && <div className="grid gap-3 md:grid-cols-12">
         <input
           value={ruleForm.pattern}
           onChange={(event) => onRuleFormChange({ ...ruleForm, pattern: event.target.value })}
@@ -255,31 +311,39 @@ function TransactionRulesPanel({
           className="md:col-span-1 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-gray-100"
           aria-label="Rule priority"
         />
-        <Button variant="outline" size="sm" onPress={onCreateRule} isDisabled={savingRule || categories.length === 0} className="md:col-span-2">
+        <Button variant="outline" size="sm" aria-label="Add Rule for transaction matching" onPress={onCreateRule} isDisabled={savingRule || categories.length === 0} className="md:col-span-2">
           {savingRule ? <Spinner size="sm" /> : "Add Rule"}
         </Button>
-      </div>
+      </div>}
       {transactionRules.length > 0 && (
-        <div className="mt-4 overflow-hidden rounded-md border border-gray-200 bg-white dark:border-neutral-700 dark:bg-neutral-900">
+        <ul className="mt-4 overflow-hidden rounded-md border border-gray-200 bg-white dark:border-neutral-700 dark:bg-neutral-900" aria-label="Transaction rules">
           {transactionRules.map((rule) => {
             const category = categories.find((cat) => cat.id === rule.categoryId);
             return (
-              <div key={rule.id} className="grid grid-cols-12 items-center gap-2 border-b border-gray-100 px-3 py-2 text-xs last:border-b-0 dark:border-neutral-800">
-                <div className="col-span-5 font-medium text-gray-900 dark:text-gray-100">{rule.pattern}</div>
-                <div className="col-span-5 text-gray-600 dark:text-gray-300">
+              <li key={rule.id} className="grid gap-2 border-b border-gray-100 px-3 py-3 text-xs last:border-b-0 dark:border-neutral-800 md:grid-cols-12 md:items-center">
+                <div className="font-medium text-gray-900 dark:text-gray-100 md:col-span-5">{rule.pattern}</div>
+                <div className="text-gray-600 dark:text-gray-300 md:col-span-5">
                   {category ? categoryLabel(category) : `Category ${rule.categoryId}`}
                 </div>
-                <div className="col-span-1 text-right text-gray-500 dark:text-gray-400">{rule.priority}</div>
-                <div className="col-span-1 text-right">
-                  <Button variant="ghost" size="sm" onPress={() => onDeleteRule(rule.id)} isDisabled={deletingRuleId === rule.id}>
-                    {deletingRuleId === rule.id ? <Spinner size="sm" /> : "Delete"}
-                  </Button>
-                </div>
-              </div>
+                <div className="text-gray-500 dark:text-gray-400 md:col-span-1 md:text-right">Priority {rule.priority}</div>
+                {canWrite && (
+                  <div className="md:col-span-1 md:text-right">
+                    <Button variant="ghost" size="sm" aria-label={`Delete rule ${rule.pattern}`} onPress={() => requestDestructiveAction({
+                      recordLabel: `transaction rule "${rule.pattern}"`,
+                      consequence: `This permanently removes the rule that assigns matching transactions to ${category ? categoryLabel(category) : `category ${rule.categoryId}`}. Existing categorisations remain, but future imports will no longer use this rule.`,
+                      onConfirm: () => onDeleteRule(rule.id),
+                      successAnnouncement: `Transaction rule ${rule.pattern} was removed.`,
+                    })} isDisabled={deletingRuleId === rule.id}>
+                      {deletingRuleId === rule.id ? <Spinner size="sm" /> : "Delete"}
+                    </Button>
+                  </div>
+                )}
+              </li>
             );
           })}
-        </div>
+        </ul>
       )}
+      {destructiveActionConfirmation}
     </div>
   );
 }
@@ -291,10 +355,14 @@ function TransactionFilters({
   txFilterCategory,
   txFilterBank,
   txFilterSearch,
+  transactionSortBy,
+  transactionSortDirection,
   onFilterStatusChange,
   onFilterCategoryChange,
   onFilterBankChange,
   onSearchInputChange,
+  onSortByChange,
+  onSortDirectionChange,
 }: {
   categories: AccountCategory[];
   bankAccounts: BankAccount[];
@@ -302,13 +370,18 @@ function TransactionFilters({
   txFilterCategory: string;
   txFilterBank: string;
   txFilterSearch: string;
+  selectionAnnouncement?: string;
+  transactionSortBy: TransactionSortField;
+  transactionSortDirection: TransactionSortDirection;
   onFilterStatusChange: (value: string) => void;
   onFilterCategoryChange: (value: string) => void;
   onFilterBankChange: (value: string) => void;
   onSearchInputChange: (value: string) => void;
+  onSortByChange: (sortBy: TransactionSortField) => void;
+  onSortDirectionChange: (sortDirection: TransactionSortDirection) => void;
 }) {
   return (
-    <div className="grid grid-cols-4 gap-3 mb-4">
+    <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
       <FilterField label="Status">
         <select
           className="w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm text-gray-900 dark:text-gray-100 px-3 py-2"
@@ -347,17 +420,46 @@ function TransactionFilters({
           type="text"
           placeholder="Search description..."
           className="w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm text-gray-900 dark:text-gray-100 px-3 py-2"
-          defaultValue={txFilterSearch}
+          value={txFilterSearch}
           onChange={(event) => onSearchInputChange(event.target.value)}
         />
+      </FilterField>
+      <FilterField label="Sort by">
+        <select
+          aria-label="Sort by"
+          className="w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm text-gray-900 dark:text-gray-100 px-3 py-2"
+          value={transactionSortBy}
+          onChange={(event) => onSortByChange(event.target.value as TransactionSortField)}
+        >
+          <option value="date">Date</option>
+          <option value="description">Description</option>
+          <option value="amount">Amount</option>
+          <option value="confidence">Confidence</option>
+        </select>
+      </FilterField>
+      <FilterField label="Direction">
+        <select
+          aria-label="Sort direction"
+          className="w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm text-gray-900 dark:text-gray-100 px-3 py-2"
+          value={transactionSortDirection}
+          onChange={(event) => onSortDirectionChange(event.target.value as TransactionSortDirection)}
+        >
+          <option value="desc">Descending</option>
+          <option value="asc">Ascending</option>
+        </select>
       </FilterField>
     </div>
   );
 }
 
 function TransactionTable({
+  canWrite,
   transactions,
   transactionTotal,
+  filteredTransactionTotal,
+  transactionPage,
+  transactionPageSize,
+  transactionPageCount,
   loadingTransactions,
   categories,
   categorisingId,
@@ -366,9 +468,16 @@ function TransactionTable({
   onSelectVisibleTransactions,
   onToggleTransactionSelection,
   onCategoriseTransaction,
+  onPageChange,
+  onPageSizeChange,
 }: {
+  canWrite: boolean;
   transactions: ImportedTransaction[];
   transactionTotal: number;
+  filteredTransactionTotal: number;
+  transactionPage: number;
+  transactionPageSize: number;
+  transactionPageCount: number;
   loadingTransactions: boolean;
   categories: AccountCategory[];
   categorisingId: number | null;
@@ -377,6 +486,8 @@ function TransactionTable({
   onSelectVisibleTransactions: (selected: boolean) => void;
   onToggleTransactionSelection: (transactionId: number, selected: boolean) => void;
   onCategoriseTransaction: (transactionId: number, categoryId: number) => void | Promise<void>;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (pageSize: number) => void;
 }) {
   if (loadingTransactions) {
     return (
@@ -391,84 +502,132 @@ function TransactionTable({
       <div className="text-center py-8">
         <Settings className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
         <p className="text-sm text-gray-400 dark:text-gray-500 italic">
-          Import transactions to begin categorisation
+          {transactionTotal === 0
+            ? "Import transactions to begin categorisation"
+            : "No transactions match the current filters"}
         </p>
       </div>
     );
   }
 
   return (
-    <div className="border border-gray-200 dark:border-neutral-700 rounded-lg overflow-hidden">
-      <div className="grid grid-cols-12 gap-2 bg-gray-50 dark:bg-neutral-800 border-b border-gray-200 dark:border-neutral-700 px-4 py-2.5 text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">
-        <div className="col-span-1">
+    <div id="transaction-register" tabIndex={-1} className="min-w-0 space-y-3 outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">
+      {canWrite && (
+        <label className="flex min-h-10 items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-800 dark:border-neutral-700 dark:bg-neutral-800 dark:text-gray-100">
           <input
             type="checkbox"
             checked={allVisibleTransactionsSelected}
             onChange={(event) => onSelectVisibleTransactions(event.target.checked)}
-            aria-label="Select visible transactions"
+            aria-label="Select current page"
           />
-        </div>
-        <div className="col-span-2">Date</div>
-        <div className="col-span-3">Description</div>
-        <div className="col-span-2 text-right">Amount</div>
-        <div className="col-span-3">Category</div>
-        <div className="col-span-1 text-center">Conf.</div>
-      </div>
-      <div className="divide-y divide-gray-100 dark:divide-neutral-700">
-        {transactions.map((transaction, index) => (
-          <div
-            key={transaction.id}
-            className={`grid grid-cols-12 gap-2 px-4 py-3 text-sm hover:bg-gray-50 dark:hover:bg-neutral-800/50 items-center transition-colors ${
-              index % 2 === 1 ? "bg-gray-50/50 dark:bg-neutral-800/25" : ""
-            }`}
-          >
-            <div className="col-span-1">
-              <input
-                type="checkbox"
-                checked={selectedTransactionIds.includes(transaction.id)}
-                onChange={(event) => onToggleTransactionSelection(transaction.id, event.target.checked)}
-                aria-label={`Select ${transaction.description}`}
-              />
-            </div>
-            <div className="col-span-2 text-gray-600 dark:text-gray-400">
-              {new Date(transaction.date).toLocaleDateString("en-IE")}
-            </div>
-            <div className="col-span-3 text-gray-900 dark:text-gray-100 truncate" title={transaction.description}>
-              {transaction.description}
-            </div>
-            <div className={`col-span-2 text-right font-medium font-mono ${transaction.amount >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
-              {formatCurrency(transaction.amount)}
-            </div>
-            <div className="col-span-3">
-              <div className="flex items-center gap-2">
-                <CategorySelect
-                  value={transaction.categoryId ?? ""}
-                  categories={categories}
-                  ariaLabel={`Categorise ${transaction.description}`}
-                  placeholder="Uncategorised"
-                  disabled={categories.length === 0 || categorisingId === transaction.id}
-                  className="min-w-0 flex-1 rounded-md px-2 py-1.5 text-xs"
-                  onChange={(value) => {
-                    if (value) void onCategoriseTransaction(transaction.id, Number(value));
-                  }}
-                />
-                {categorisingId === transaction.id && <Spinner size="sm" />}
-              </div>
-              {transaction.manualOverride && (
-                <p className="mt-1 text-[11px] text-blue-600 dark:text-blue-400">Manual</p>
-              )}
-            </div>
-            <div className="col-span-1 text-center text-xs text-gray-400 dark:text-gray-500">
-              {transaction.confidenceScore != null ? `${Math.round(transaction.confidenceScore * 100)}%` : "--"}
-            </div>
-          </div>
-        ))}
-      </div>
-      {transactionTotal > transactions.length && (
-        <div className="bg-gray-50 dark:bg-neutral-800 border-t border-gray-200 dark:border-neutral-700 px-4 py-2.5 text-xs text-gray-500 dark:text-gray-400 text-center">
-          Showing {transactions.length} of {transactionTotal} transactions
-        </div>
+          Select all transactions on this page
+        </label>
       )}
+      <DataGrid
+        caption="Transactions to categorise"
+        columns={["Select", "Date", "Description", "Amount and entry", "Category", "Confidence"]}
+        mobilePresentation="cards"
+        rows={transactions.map((transaction) => {
+          const entrySide = transaction.amount >= 0 ? "Debit" : "Credit";
+          const category = categories.find((item) => item.id === transaction.categoryId);
+
+          return {
+            id: transaction.id,
+            searchText: `${transaction.date} ${transaction.description} ${transaction.amount} ${entrySide} ${category?.name ?? "Uncategorised"} ${transaction.confidenceScore ?? ""}`,
+            cells: [
+              canWrite ? (
+                <input
+                  key="select"
+                  type="checkbox"
+                  checked={selectedTransactionIds.includes(transaction.id)}
+                  onChange={(event) => onToggleTransactionSelection(transaction.id, event.target.checked)}
+                  aria-label={`Select ${transaction.description}`}
+                />
+              ) : (
+                <span key="select" className="text-xs text-gray-500 dark:text-gray-400">Read only</span>
+              ),
+              <time key="date" dateTime={transaction.date} className="text-gray-600 dark:text-gray-400">
+                {new Date(transaction.date).toLocaleDateString("en-IE")}
+              </time>,
+              <span key="description" className="break-words text-gray-900 dark:text-gray-100">
+                {transaction.description}
+              </span>,
+              <div key="amount" className={`font-mono font-medium ${transaction.amount >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
+                <span className="block">{formatCurrency(transaction.amount)}</span>
+                <span className="mt-1 block font-sans text-[11px] font-semibold uppercase tracking-wide">
+                  {entrySide} to bank
+                </span>
+              </div>,
+              <div key="category" className="min-w-0">
+                <div className="flex min-w-0 items-center gap-2">
+                  {canWrite ? (
+                    <CategorySelect
+                      value={transaction.categoryId ?? ""}
+                      categories={categories}
+                      ariaLabel={`Categorise ${transaction.description}`}
+                      placeholder="Uncategorised"
+                      disabled={categories.length === 0 || categorisingId === transaction.id}
+                      className="min-w-0 flex-1 rounded-md px-2 py-1.5 text-xs"
+                      onChange={(value) => {
+                        if (value) void onCategoriseTransaction(transaction.id, Number(value));
+                      }}
+                    />
+                  ) : (
+                    <span className="text-xs text-gray-700 dark:text-gray-300">
+                      {category?.name ?? "Uncategorised"}
+                    </span>
+                  )}
+                  {categorisingId === transaction.id && <Spinner size="sm" />}
+                </div>
+                {transaction.manualOverride && (
+                  <p className="mt-1 text-[11px] text-blue-600 dark:text-blue-400">Manual</p>
+                )}
+              </div>,
+              <span key="confidence" className="text-xs text-gray-500 dark:text-gray-400">
+                {transaction.confidenceScore != null ? `${Math.round(transaction.confidenceScore * 100)}%` : "Not scored"}
+              </span>,
+            ],
+          };
+        })}
+      />
+      <div className="flex flex-col gap-3 border-t border-gray-200 bg-gray-50 px-4 py-3 text-xs text-gray-600 dark:border-neutral-700 dark:bg-neutral-800 dark:text-gray-300 md:flex-row md:items-center md:justify-between">
+        <p aria-live="polite">
+          Showing {(transactionPage - 1) * transactionPageSize + 1}–{Math.min(transactionPage * transactionPageSize, filteredTransactionTotal)}
+          {" "}of {filteredTransactionTotal} matching transactions
+        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-2">
+            <span>Rows per page</span>
+            <select
+              aria-label="Rows per page"
+              className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-gray-100"
+              value={transactionPageSize}
+              onChange={(event) => onPageSizeChange(Number(event.target.value))}
+            >
+              <option value="25">25</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+          </label>
+          <span>Page {transactionPage} of {transactionPageCount}</span>
+          <Button
+            variant="outline"
+            size="sm"
+            onPress={() => onPageChange(transactionPage - 1)}
+            isDisabled={transactionPage <= 1 || loadingTransactions}
+          >
+            Previous
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onPress={() => onPageChange(transactionPage + 1)}
+            isDisabled={transactionPage >= transactionPageCount || loadingTransactions}
+          >
+            Next
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -510,11 +669,14 @@ function CategorySelect({
   );
 }
 
-function FilterField({ label, children }: { label: string; children: ReactNode }) {
+function FilterField({ label, children }: { label: string; children: ReactElement<{ id?: string }> }) {
+  const generatedId = useId();
+  const controlId = children.props.id ?? `${generatedId}-control`;
+
   return (
     <div>
-      <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{label}</label>
-      {children}
+      <label htmlFor={controlId} className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{label}</label>
+      {cloneElement(children, { id: controlId })}
     </div>
   );
 }

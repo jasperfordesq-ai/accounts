@@ -91,7 +91,7 @@ public sealed class AuditTrailPostgresIntegrationTests : IAsyncLifetime
         Assert.Equal(PeriodStatus.Draft, reloadedPeriod.Status);
         Assert.Equal("ApiWriteRejected", auditRow.Action);
         Assert.Equal("pg-rejected-rollback", auditRow.RequestId);
-        Assert.Equal("reviewer@example.ie", auditRow.UserId);
+        Assert.Equal("user:7", auditRow.UserId);
         Assert.NotNull(auditRow.IntegrityHash);
     }
 
@@ -125,7 +125,7 @@ public sealed class AuditTrailPostgresIntegrationTests : IAsyncLifetime
         Assert.Equal(PeriodStatus.Draft, reloadedPeriod.Status);
         Assert.Equal("ApiWriteFailed", auditRow.Action);
         Assert.Equal("pg-failed-rollback", auditRow.RequestId);
-        Assert.Equal("reviewer@example.ie", auditRow.UserId);
+        Assert.Equal("user:7", auditRow.UserId);
         Assert.Contains("InvalidOperationException", auditRow.NewValueJson);
         Assert.DoesNotContain("simulated handler failure", auditRow.NewValueJson);
         Assert.NotNull(auditRow.IntegrityHash);
@@ -138,13 +138,20 @@ public sealed class AuditTrailPostgresIntegrationTests : IAsyncLifetime
     {
         await using var scope = Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AccountsDbContext>();
+        var tenant = new Tenant
+        {
+            Id = 17,
+            Name = "Postgres Audit Firm",
+            Slug = $"postgres-audit-{Guid.NewGuid():N}"
+        };
         var company = new Company
         {
+            Tenant = tenant,
             LegalName = "Postgres Audit Test Limited",
             CroNumber = Guid.NewGuid().ToString("N")[..20],
             CompanyType = CompanyType.Private,
             IncorporationDate = new DateOnly(2025, 1, 1),
-            ArdMonth = 9,
+            AnnualReturnDate = new DateOnly(2024, 9, 15),
             IsTrading = true,
             RegisteredOfficeAddress1 = "1 Main Street",
             RegisteredOfficeCity = "Dublin",

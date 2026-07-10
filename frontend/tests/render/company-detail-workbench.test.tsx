@@ -17,7 +17,7 @@ describe("CompanyDetailWorkbench", () => {
     expect(screen.getAllByText("Trading").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("1 period").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByRole("button", { name: "Edit company" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Delete company" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Quarantine company" })).toBeInTheDocument();
 
     expect(screen.getByText("Company command centre")).toBeInTheDocument();
     expect(screen.getByText("Statutory Profile")).toBeInTheDocument();
@@ -25,8 +25,24 @@ describe("CompanyDetailWorkbench", () => {
     expect(screen.getByText("Share Capital")).toBeInTheDocument();
     expect(screen.getByText("Accounting Periods")).toBeInTheDocument();
 
-    await waitFor(() => expect(fetchMock.requests).toHaveLength(1));
+    await waitFor(() => expect(fetchMock.requests).toHaveLength(2));
     expect(fetchMock.one("GET", "/companies/7/share-capital")).toBeDefined();
+    expect(fetchMock.one("GET", "/companies/7/annual-return-dates")).toBeDefined();
+  });
+
+  it("keeps company deletion Owner-only while Accountant editing remains available", () => {
+    render(<CompanyDetailWorkbench {...props()} canWriteWorkingPapers canDeleteCompany={false} />);
+
+    expect(screen.getByRole("button", { name: "Edit company" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Quarantine company" })).toBeNull();
+  });
+
+  it("removes working-paper and owner controls for read-only roles", () => {
+    render(<CompanyDetailWorkbench {...props()} canWriteWorkingPapers={false} canDeleteCompany={false} />);
+
+    expect(screen.queryByRole("button", { name: "Edit company" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Quarantine company" })).toBeNull();
+    expect(screen.getByText(/Read-only access to company profile and period setup/i)).toBeInTheDocument();
   });
 });
 
@@ -34,6 +50,7 @@ function props(): Parameters<typeof CompanyDetailWorkbench>[0] {
   return {
     company: sampleCompany(),
     canWriteWorkingPapers: true,
+    canDeleteCompany: true,
     editing: false,
     editForm: {
       legalName: "Connacht Workbench Limited",
@@ -63,6 +80,8 @@ function props(): Parameters<typeof CompanyDetailWorkbench>[0] {
     savingCharity: false,
     showDeleteModal: false,
     deleting: false,
+    quarantineConfirmation: "",
+    quarantineReason: "",
     onStartEditCompany: vi.fn(),
     onEditFormChange: vi.fn(),
     onSaveCompany: vi.fn(),
@@ -70,6 +89,8 @@ function props(): Parameters<typeof CompanyDetailWorkbench>[0] {
     onDeleteCompanyRequest: vi.fn(),
     onConfirmDeleteCompany: vi.fn(),
     onCancelDeleteCompany: vi.fn(),
+    onQuarantineConfirmationChange: vi.fn(),
+    onQuarantineReasonChange: vi.fn(),
     onShowNewPeriod: vi.fn(),
     onCancelNewPeriod: vi.fn(),
     onPeriodStartChange: vi.fn(),
@@ -91,6 +112,7 @@ function props(): Parameters<typeof CompanyDetailWorkbench>[0] {
     onCancelEditCharity: vi.fn(),
     onSaveCharity: vi.fn(),
     onCharityFormChange: vi.fn(),
+    onAnnualReturnDateChanged: vi.fn(),
   };
 }
 
@@ -104,7 +126,7 @@ function sampleCompany(): Company {
     companyType: "Private",
     incorporationDate: "2024-01-01",
     financialYearStartMonth: 1,
-    ardMonth: 9,
+    annualReturnDate: "2026-09-15",
     registeredOfficeAddress1: "1 Review Quay",
     registeredOfficeCity: "Galway",
     registeredOfficeCounty: "Galway",

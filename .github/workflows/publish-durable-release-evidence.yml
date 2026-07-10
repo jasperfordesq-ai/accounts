@@ -1,0 +1,526 @@
+name: Publish Durable Release Evidence
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/publish-durable-release-evidence.yml"
+      - "scripts/ReleaseEvidenceCrypto.psm1"
+      - "scripts/new-release-evidence-signature.ps1"
+      - "scripts/verify-durable-release-evidence.ps1"
+      - "scripts/verify-durable-release-publication-inventory.ps1"
+      - "scripts/test-durable-release-evidence.ps1"
+      - "scripts/test-durable-release-publication-inventory.ps1"
+      - "scripts/verify-durable-release-evidence-workflow.mjs"
+  workflow_call:
+    inputs:
+      publication_authorized:
+        description: "Must be true; the called job still requires the protected private evidence-repository environment"
+        required: true
+        type: boolean
+      candidate_commit_sha:
+        description: "Exact verified application release-candidate commit"
+        required: true
+        type: string
+      candidate_run_id:
+        description: "Successful canonical application CI run ID"
+        required: true
+        type: string
+      evidence_ref:
+        description: "Exact verified private evidence-repository commit"
+        required: true
+        type: string
+      evidence_directory:
+        description: "Repository-relative directory containing the signed evidence pack"
+        required: false
+        default: "completed-release-evidence"
+        type: string
+      trust_policy_sha256:
+        description: "Out-of-band SHA-256 of release-evidence-trust-policy.json"
+        required: true
+        type: string
+    secrets:
+      release_governance_app_id:
+        description: "Read-only GitHub App ID installed only on the application and private evidence repositories"
+        required: true
+      release_governance_app_private_key:
+        description: "Read-only governance GitHub App private key; use the private evidence repository's protected caller secret"
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: durable-release-evidence-${{ inputs.candidate_commit_sha || github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  cryptographic-policy-test:
+    name: Detached Signature Policy Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out trusted application source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          repository: jasperfordesq-ai/accounts
+          ref: ${{ inputs.candidate_commit_sha || github.sha }}
+          path: trusted-source
+          persist-credentials: false
+
+      - name: Exercise trusted and adversarial signature paths
+        working-directory: trusted-source
+        shell: pwsh
+        run: |
+          node scripts/verify-durable-release-evidence-workflow.mjs
+          ./scripts/test-durable-release-evidence.ps1
+          ./scripts/test-durable-release-publication-inventory.ps1
+
+  publish:
+    name: Verify and Publish Private Immutable Evidence
+    if: inputs.publication_authorized == true
+    needs: cryptographic-policy-test
+    runs-on: ubuntu-latest
+    environment: durable-release-evidence
+    permissions:
+      actions: read
+      attestations: write
+      contents: write
+      id-token: write
+    steps:
+      - name: Validate allowlisted caller and reusable-workflow provenance
+        id: caller
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APPLICATION_REPOSITORY: jasperfordesq-ai/accounts
+          EVIDENCE_REPOSITORY: jasperfordesq-ai/accounts-release-evidence
+          CANDIDATE_SHA: ${{ inputs.candidate_commit_sha }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          EVIDENCE_REF: ${{ inputs.evidence_ref }}
+          EVIDENCE_DIRECTORY_INPUT: ${{ inputs.evidence_directory }}
+          TRUST_POLICY_SHA256: ${{ inputs.trust_policy_sha256 }}
+        run: |
+          set -euo pipefail
+
+          [[ "$GITHUB_REPOSITORY" == "$EVIDENCE_REPOSITORY" ]] || { echo "This reusable workflow may run only from the allowlisted private evidence repository." >&2; exit 1; }
+          [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]] || { echo "Evidence publication must originate from a manual workflow_dispatch event." >&2; exit 1; }
+          [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "candidate_commit_sha must be 40 lowercase hexadecimal characters." >&2; exit 1; }
+          [[ "$EVIDENCE_REF" =~ ^[0-9a-f]{40}$ && "$GITHUB_SHA" == "$EVIDENCE_REF" ]] || { echo "evidence_ref must be the exact 40-character caller commit." >&2; exit 1; }
+          [[ "$CANDIDATE_RUN_ID" =~ ^[0-9]+$ ]] || { echo "candidate_run_id must be numeric." >&2; exit 1; }
+          [[ "$TRUST_POLICY_SHA256" =~ ^[0-9a-f]{64}$ ]] || { echo "trust_policy_sha256 must be 64 lowercase hexadecimal characters." >&2; exit 1; }
+          [[ "$EVIDENCE_DIRECTORY_INPUT" =~ ^[A-Za-z0-9._/-]+$ && "$EVIDENCE_DIRECTORY_INPUT" != /* ]] || { echo "evidence_directory must be a repository-relative path using safe filename characters." >&2; exit 1; }
+          [[ "/$EVIDENCE_DIRECTORY_INPUT/" != *"/../"* && "/$EVIDENCE_DIRECTORY_INPUT/" != *"/./"* ]] || { echo "evidence_directory must not contain dot path segments." >&2; exit 1; }
+          [[ ! "$EVIDENCE_DIRECTORY_INPUT" =~ (^|/)- ]] || { echo "evidence_directory path segments must not begin with a hyphen." >&2; exit 1; }
+
+          evidence_repo_json="$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' "/repos/$EVIDENCE_REPOSITORY")"
+          [[ "$(jq -r .private <<<"$evidence_repo_json")" == "true" && "$(jq -r .default_branch <<<"$evidence_repo_json")" == "main" ]] || { echo "Allowlisted evidence repository must remain private with main as its default branch." >&2; exit 1; }
+          [[ "$GITHUB_REF" == "refs/heads/main" ]] || { echo "Evidence publication caller must run from refs/heads/main." >&2; exit 1; }
+          expected_caller_ref="$EVIDENCE_REPOSITORY/.github/workflows/publish-durable-release-evidence.yml@refs/heads/main"
+          [[ "$GITHUB_WORKFLOW_REF" == "$expected_caller_ref" ]] || { echo "Evidence publication must use the canonical protected caller workflow." >&2; exit 1; }
+          evidence_branch_json="$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' "/repos/$EVIDENCE_REPOSITORY/branches/main")"
+          [[ "$(jq -r .protected <<<"$evidence_branch_json")" == "true" && "$(jq -r .commit.sha <<<"$evidence_branch_json")" == "$EVIDENCE_REF" ]] || { echo "Evidence ref must be the current protected evidence main head." >&2; exit 1; }
+          evidence_commit_json="$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' "/repos/$EVIDENCE_REPOSITORY/commits/$EVIDENCE_REF")"
+          [[ "$(jq -r .commit.verification.verified <<<"$evidence_commit_json")" == "true" ]] || { echo "Evidence caller commit must have a verified signature." >&2; exit 1; }
+          evidence_runs_json="$(gh api --method GET -H 'X-GitHub-Api-Version: 2026-03-10' "/repos/$EVIDENCE_REPOSITORY/actions/workflows/evidence-ci.yml/runs" -f event=push -f status=completed -f branch=main -f head_sha="$EVIDENCE_REF" -f per_page=10)"
+          jq -e --arg sha "$EVIDENCE_REF" '.workflow_runs | any(.head_sha == $sha and .head_branch == "main" and .event == "push" and .path == ".github/workflows/evidence-ci.yml" and .status == "completed" and .conclusion == "success")' <<<"$evidence_runs_json" >/dev/null || { echo "Evidence main commit must have a successful canonical evidence CI run." >&2; exit 1; }
+
+          [[ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" && -n "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]] || { echo "OIDC provenance variables are unavailable." >&2; exit 1; }
+          oidc_response="$(curl --fail --silent --show-error -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=accounts-durable-release-evidence")"
+          oidc_token="$(jq -er .value <<<"$oidc_response")"
+          oidc_payload="$(cut -d. -f2 <<<"$oidc_token" | tr '_-' '/+')"
+          case $((${#oidc_payload} % 4)) in 2) oidc_payload="${oidc_payload}==" ;; 3) oidc_payload="${oidc_payload}=" ;; 1) echo "OIDC token has invalid base64url encoding." >&2; exit 1 ;; esac
+          oidc_claims="$(printf '%s' "$oidc_payload" | base64 --decode)"
+          expected_job_ref="$APPLICATION_REPOSITORY/.github/workflows/publish-durable-release-evidence.yml@$CANDIDATE_SHA"
+          jq -e \
+            --arg repository "$EVIDENCE_REPOSITORY" \
+            --arg sha "$EVIDENCE_REF" \
+            --arg callerRef "$expected_caller_ref" \
+            --arg jobRef "$expected_job_ref" \
+            --arg jobSha "$CANDIDATE_SHA" \
+            --arg runId "$GITHUB_RUN_ID" \
+            '.iss == "https://token.actions.githubusercontent.com" and .aud == "accounts-durable-release-evidence" and .repository == $repository and .repository_visibility == "private" and .event_name == "workflow_dispatch" and .ref == "refs/heads/main" and .sha == $sha and .workflow_ref == $callerRef and .workflow_sha == $sha and .job_workflow_ref == $jobRef and .job_workflow_sha == $jobSha and .environment == "durable-release-evidence" and (.run_id | tostring) == $runId' \
+            <<<"$oidc_claims" >/dev/null || { echo "GitHub OIDC claims do not bind the allowlisted caller, protected environment, and exact reusable-workflow candidate." >&2; exit 1; }
+
+      - name: Create short-lived evidence-repository administration token
+        id: evidence-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
+        with:
+          app-id: ${{ secrets.release_governance_app_id }}
+          private-key: ${{ secrets.release_governance_app_private_key }}
+          owner: jasperfordesq-ai
+          repositories: accounts-release-evidence
+          permission-actions: read
+          permission-administration: read
+          permission-contents: read
+          permission-metadata: read
+
+      - name: Create short-lived application governance token
+        id: application-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
+        with:
+          app-id: ${{ secrets.release_governance_app_id }}
+          private-key: ${{ secrets.release_governance_app_private_key }}
+          owner: jasperfordesq-ai
+          repositories: accounts
+          permission-actions: read
+          permission-administration: read
+          permission-contents: read
+          permission-metadata: read
+
+      - name: Verify application and evidence repository publication controls
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.evidence-token.outputs.token }}
+          APPLICATION_GOVERNANCE_TOKEN: ${{ steps.application-token.outputs.token }}
+          APPLICATION_REPOSITORY: jasperfordesq-ai/accounts
+          EVIDENCE_REPOSITORY: jasperfordesq-ai/accounts-release-evidence
+        run: |
+          set -euo pipefail
+
+          verify_branch_protection() {
+            local token="$1" repository="$2" branch="$3"
+            shift 3
+            local protection signatures
+            protection="$(GH_TOKEN="$token" gh api -H 'X-GitHub-Api-Version: 2026-03-10' "/repos/$repository/branches/$branch/protection")"
+            jq -e '.required_status_checks.strict == true and .required_pull_request_reviews.required_approving_review_count >= 1 and .required_pull_request_reviews.dismiss_stale_reviews == true and .required_pull_request_reviews.require_code_owner_reviews == true and .enforce_admins.enabled == true and .allow_force_pushes.enabled == false and .allow_deletions.enabled == false' <<<"$protection" >/dev/null || { echo "$repository@$branch does not enforce strict checks, independent/code-owner review, admin enforcement, and force-push/deletion blocking." >&2; exit 1; }
+            for required_check in "$@"; do
+              jq -e --arg check "$required_check" '([.required_status_checks.contexts[]?] + [.required_status_checks.checks[]?.context]) | index($check) != null' <<<"$protection" >/dev/null || { echo "$repository@$branch is missing required check '$required_check'." >&2; exit 1; }
+            done
+            signatures="$(GH_TOKEN="$token" gh api -H 'X-GitHub-Api-Version: 2026-03-10' "/repos/$repository/branches/$branch/protection/required_signatures")"
+            [[ "$(jq -r '.enabled // false' <<<"$signatures")" == "true" ]] || { echo "$repository@$branch must require signed commits." >&2; exit 1; }
+            GH_TOKEN="$token" gh api -H 'X-GitHub-Api-Version: 2026-03-10' "/repos/$repository/contents/.github/CODEOWNERS?ref=$branch" >/dev/null || { echo "$repository@$branch must retain .github/CODEOWNERS." >&2; exit 1; }
+          }
+
+          verify_branch_protection "$APPLICATION_GOVERNANCE_TOKEN" "$APPLICATION_REPOSITORY" main \
+            "Workflow Hygiene" "Backend" "Frontend" "Production Compose Config" "Production Stack Smoke" "CI Machine Evidence Pack"
+          verify_branch_protection "$GH_TOKEN" "$EVIDENCE_REPOSITORY" main "Evidence CI"
+
+          evidence_repo_json="$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' "/repos/$EVIDENCE_REPOSITORY")"
+          [[ "$(jq -r .private <<<"$evidence_repo_json")" == "true" ]] || { echo "Evidence repository must remain private." >&2; exit 1; }
+          [[ "$(jq -r .security_and_analysis.secret_scanning.status <<<"$evidence_repo_json")" == "enabled" && "$(jq -r .security_and_analysis.secret_scanning_push_protection.status <<<"$evidence_repo_json")" == "enabled" ]] || { echo "Private evidence repository must enable secret scanning and push protection." >&2; exit 1; }
+          environment_json="$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' "/repos/$EVIDENCE_REPOSITORY/environments/durable-release-evidence")"
+          [[ "$(jq -r '.can_admins_bypass // true' <<<"$environment_json")" == "false" ]] || { echo "Evidence publication environment must disable administrator bypass." >&2; exit 1; }
+          jq -e '[.protection_rules[]? | select(.type == "required_reviewers" and .prevent_self_review == true) | .reviewers[]?] | length >= 1' <<<"$environment_json" >/dev/null || { echo "Evidence publication environment must require at least one independent reviewer and prevent self-review." >&2; exit 1; }
+          [[ "$(jq -r '.deployment_branch_policy.protected_branches // false' <<<"$environment_json")" == "true" && "$(jq -r '.deployment_branch_policy.custom_branch_policies // true' <<<"$environment_json")" == "false" ]] || { echo "Evidence publication environment must permit protected branches only." >&2; exit 1; }
+          immutable_release_json="$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' "/repos/$EVIDENCE_REPOSITORY/immutable-releases")" || { echo "Private evidence repository immutable releases are not enabled." >&2; exit 1; }
+          [[ "$(jq -r '.enabled // false' <<<"$immutable_release_json")" == "true" ]] || { echo "Private evidence repository immutable releases must be enabled." >&2; exit 1; }
+
+      - name: Check out trusted candidate verifier source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          repository: jasperfordesq-ai/accounts
+          ref: ${{ inputs.candidate_commit_sha }}
+          path: trusted-source
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Check out private evidence commit as data only
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          repository: jasperfordesq-ai/accounts-release-evidence
+          ref: ${{ inputs.evidence_ref }}
+          path: evidence-source
+          fetch-depth: 1
+          persist-credentials: false
+          token: ${{ steps.evidence-token.outputs.token }}
+
+      - name: Validate repositories, candidates, and publication inputs
+        id: inputs
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.evidence-token.outputs.token }}
+          APPLICATION_REPOSITORY: jasperfordesq-ai/accounts
+          EVIDENCE_REPOSITORY: jasperfordesq-ai/accounts-release-evidence
+          CANDIDATE_SHA: ${{ inputs.candidate_commit_sha }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          EVIDENCE_REF: ${{ inputs.evidence_ref }}
+          EVIDENCE_DIRECTORY_INPUT: ${{ inputs.evidence_directory }}
+          TRUST_POLICY_SHA256: ${{ inputs.trust_policy_sha256 }}
+          TRUSTED_SOURCE: ${{ github.workspace }}/trusted-source
+          EVIDENCE_SOURCE: ${{ github.workspace }}/evidence-source
+        run: |
+          set -euo pipefail
+
+          [[ "$GITHUB_REPOSITORY" == "$EVIDENCE_REPOSITORY" ]] || { echo "This reusable workflow may run only from the allowlisted private evidence repository." >&2; exit 1; }
+          [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "candidate_commit_sha must be 40 lowercase hexadecimal characters." >&2; exit 1; }
+          [[ "$EVIDENCE_REF" =~ ^[0-9a-f]{40}$ ]] || { echo "evidence_ref must be 40 lowercase hexadecimal characters." >&2; exit 1; }
+          [[ "$CANDIDATE_RUN_ID" =~ ^[0-9]+$ ]] || { echo "candidate_run_id must be numeric." >&2; exit 1; }
+          [[ "$TRUST_POLICY_SHA256" =~ ^[0-9a-f]{64}$ ]] || { echo "trust_policy_sha256 must be 64 lowercase hexadecimal characters." >&2; exit 1; }
+          [[ "$EVIDENCE_DIRECTORY_INPUT" =~ ^[A-Za-z0-9._/-]+$ && "$EVIDENCE_DIRECTORY_INPUT" != /* ]] || { echo "evidence_directory must be a repository-relative path using safe filename characters." >&2; exit 1; }
+          [[ "/$EVIDENCE_DIRECTORY_INPUT/" != *"/../"* && "/$EVIDENCE_DIRECTORY_INPUT/" != *"/./"* ]] || { echo "evidence_directory must not contain dot path segments." >&2; exit 1; }
+          [[ ! "$EVIDENCE_DIRECTORY_INPUT" =~ (^|/)- ]] || { echo "evidence_directory path segments must not begin with a hyphen." >&2; exit 1; }
+          evidence_relative="${EVIDENCE_DIRECTORY_INPUT%/}"
+          [[ -n "$evidence_relative" ]] || { echo "evidence_directory must name a non-root evidence directory." >&2; exit 1; }
+          [[ "$(git -C "$TRUSTED_SOURCE" rev-parse HEAD)" == "$CANDIDATE_SHA" ]] || { echo "Trusted verifier checkout did not resolve to the candidate commit." >&2; exit 1; }
+          [[ "$(git -C "$EVIDENCE_SOURCE" rev-parse HEAD)" == "$EVIDENCE_REF" ]] || { echo "Evidence checkout did not resolve to evidence_ref." >&2; exit 1; }
+          [[ ! -e "$EVIDENCE_SOURCE/.gitmodules" ]] || { echo "Evidence repository must not use submodules." >&2; exit 1; }
+
+          application_repo_json="$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' "/repos/$APPLICATION_REPOSITORY")"
+          [[ "$(jq -r .default_branch <<<"$application_repo_json")" == "main" ]] || { echo "Application default branch must remain main." >&2; exit 1; }
+          application_branch_json="$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' "/repos/$APPLICATION_REPOSITORY/branches/main")"
+          [[ "$(jq -r .protected <<<"$application_branch_json")" == "true" ]] || { echo "Application main branch must be protected." >&2; exit 1; }
+          [[ "$(jq -r .commit.sha <<<"$application_branch_json")" == "$CANDIDATE_SHA" ]] || { echo "Candidate must be the current protected application main head during evidence publication." >&2; exit 1; }
+          candidate_commit_json="$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' "/repos/$APPLICATION_REPOSITORY/commits/$CANDIDATE_SHA")"
+          [[ "$(jq -r .commit.verification.verified <<<"$candidate_commit_json")" == "true" ]] || { echo "Application candidate commit must have a verified signature." >&2; exit 1; }
+
+          run_json="$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' "/repos/$APPLICATION_REPOSITORY/actions/runs/$CANDIDATE_RUN_ID")"
+          [[ "$(jq -r .head_sha <<<"$run_json")" == "$CANDIDATE_SHA" && "$(jq -r .head_branch <<<"$run_json")" == "main" ]] || { echo "Candidate CI run identity mismatch." >&2; exit 1; }
+          [[ "$(jq -r .event <<<"$run_json")" == "push" && "$(jq -r .path <<<"$run_json")" == ".github/workflows/ci.yml" ]] || { echo "Candidate run must be the canonical trusted main-push CI workflow." >&2; exit 1; }
+          [[ "$(jq -r .status <<<"$run_json")" == "completed" && "$(jq -r .conclusion <<<"$run_json")" == "success" ]] || { echo "Candidate CI run must be completed successfully." >&2; exit 1; }
+          candidate_completed_at="$(jq -r .updated_at <<<"$run_json")"
+          [[ "$candidate_completed_at" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]] || { echo "Completed candidate CI run must expose an exact UTC update time." >&2; exit 1; }
+
+          evidence_repo_json="$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' "/repos/$EVIDENCE_REPOSITORY")"
+          [[ "$(jq -r .private <<<"$evidence_repo_json")" == "true" ]] || { echo "Evidence repository must remain private." >&2; exit 1; }
+          [[ "$(jq -r .security_and_analysis.secret_scanning.status <<<"$evidence_repo_json")" == "enabled" && "$(jq -r .security_and_analysis.secret_scanning_push_protection.status <<<"$evidence_repo_json")" == "enabled" ]] || { echo "Private evidence repository must enable secret scanning and push protection." >&2; exit 1; }
+          evidence_default_branch="$(jq -r .default_branch <<<"$evidence_repo_json")"
+          evidence_branch_json="$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' "/repos/$EVIDENCE_REPOSITORY/branches/$evidence_default_branch")"
+          [[ "$(jq -r .protected <<<"$evidence_branch_json")" == "true" ]] || { echo "Evidence default branch must be protected." >&2; exit 1; }
+          [[ "$(jq -r .commit.sha <<<"$evidence_branch_json")" == "$EVIDENCE_REF" && "$GITHUB_SHA" == "$EVIDENCE_REF" ]] || { echo "Evidence ref must be the current protected caller default-branch head." >&2; exit 1; }
+          evidence_commit_json="$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' "/repos/$EVIDENCE_REPOSITORY/commits/$EVIDENCE_REF")"
+          [[ "$(jq -r .commit.verification.verified <<<"$evidence_commit_json")" == "true" ]] || { echo "Evidence commit must have a verified signature." >&2; exit 1; }
+          evidence_runs_json="$(gh api --method GET -H 'X-GitHub-Api-Version: 2026-03-10' "/repos/$EVIDENCE_REPOSITORY/actions/workflows/evidence-ci.yml/runs" -f event=push -f status=completed -f branch="$evidence_default_branch" -f head_sha="$EVIDENCE_REF" -f per_page=10)"
+          jq -e --arg sha "$EVIDENCE_REF" --arg branch "$evidence_default_branch" '.workflow_runs | any(.head_sha == $sha and .head_branch == $branch and .event == "push" and .path == ".github/workflows/evidence-ci.yml" and .status == "completed" and .conclusion == "success")' <<<"$evidence_runs_json" >/dev/null || { echo "Evidence default-branch commit must have a successful canonical evidence CI run." >&2; exit 1; }
+
+          evidence_directory="$(realpath "$EVIDENCE_SOURCE/$evidence_relative")"
+          [[ "$evidence_directory" == "$EVIDENCE_SOURCE/"* && -d "$evidence_directory" ]] || { echo "Evidence directory must exist inside the private evidence checkout." >&2; exit 1; }
+          if find "$evidence_directory" -type l -print -quit | grep -q .; then echo "Evidence directory must not contain symbolic links." >&2; exit 1; fi
+          mapfile -t private_key_markers < <(grep -RIlE --include='*' -- 'BEGIN ([A-Z0-9 ]+ )?PRIVATE KEY' "$evidence_directory" || true)
+          (( ${#private_key_markers[@]} == 0 )) || { echo "Evidence directory contains forbidden private-key material." >&2; exit 1; }
+
+          trust_policy="$evidence_directory/release-evidence-trust-policy.json"
+          [[ -f "$trust_policy" ]] || { echo "release-evidence-trust-policy.json is missing." >&2; exit 1; }
+          [[ "$(sha256sum "$trust_policy" | cut -d' ' -f1)" == "$TRUST_POLICY_SHA256" ]] || { echo "Trust-policy digest does not match the out-of-band input." >&2; exit 1; }
+          immutable_release_json="$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' "/repos/$EVIDENCE_REPOSITORY/immutable-releases")" || { echo "Private evidence repository immutable releases are not enabled." >&2; exit 1; }
+          [[ "$(jq -r '.enabled // false' <<<"$immutable_release_json")" == "true" ]] || { echo "Private evidence repository immutable releases must be enabled." >&2; exit 1; }
+
+          candidate_run_url="https://github.com/$APPLICATION_REPOSITORY/actions/runs/$CANDIDATE_RUN_ID"
+          release_tag="accounts-release-evidence-$CANDIDATE_SHA"
+          if gh release view "$release_tag" --repo "$EVIDENCE_REPOSITORY" >/dev/null 2>&1; then echo "Refusing to overwrite existing release $release_tag." >&2; exit 1; fi
+          if gh api -H 'X-GitHub-Api-Version: 2026-03-10' "/repos/$EVIDENCE_REPOSITORY/git/ref/tags/$release_tag" >/dev/null 2>&1; then echo "Refusing to reuse existing tag $release_tag." >&2; exit 1; fi
+
+          echo "application_repository=$APPLICATION_REPOSITORY" >> "$GITHUB_OUTPUT"
+          echo "evidence_repository=$EVIDENCE_REPOSITORY" >> "$GITHUB_OUTPUT"
+          echo "evidence_directory=$evidence_directory" >> "$GITHUB_OUTPUT"
+          echo "trust_policy=$trust_policy" >> "$GITHUB_OUTPUT"
+          echo "trusted_source=$TRUSTED_SOURCE" >> "$GITHUB_OUTPUT"
+          echo "candidate_run_url=$candidate_run_url" >> "$GITHUB_OUTPUT"
+          echo "candidate_completed_at=$candidate_completed_at" >> "$GITHUB_OUTPUT"
+          echo "release_tag=$release_tag" >> "$GITHUB_OUTPUT"
+
+      - name: Verify substantive evidence, signatures, artifact pack, and exact inventory
+        shell: pwsh
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_commit_sha }}
+          CANDIDATE_RUN_URL: ${{ steps.inputs.outputs.candidate_run_url }}
+          CANDIDATE_COMPLETED_AT: ${{ steps.inputs.outputs.candidate_completed_at }}
+          EVIDENCE_DIRECTORY: ${{ steps.inputs.outputs.evidence_directory }}
+          TRUST_POLICY: ${{ steps.inputs.outputs.trust_policy }}
+          TRUST_POLICY_SHA256: ${{ inputs.trust_policy_sha256 }}
+          TRUSTED_SOURCE: ${{ steps.inputs.outputs.trusted_source }}
+          VERIFIED_OUTPUT: ${{ runner.temp }}/verified-evidence
+        run: |
+          New-Item -ItemType Directory -Force -Path $env:VERIFIED_OUTPUT | Out-Null
+          & (Join-Path $env:TRUSTED_SOURCE "scripts/verify-release-evidence.ps1") `
+            -EvidenceDirectory $env:EVIDENCE_DIRECTORY `
+            -ReportPath (Join-Path $env:VERIFIED_OUTPUT "release-evidence-recheck-report.json")
+          & (Join-Path $env:TRUSTED_SOURCE "scripts/verify-durable-release-evidence.ps1") `
+            -EvidenceDirectory $env:EVIDENCE_DIRECTORY `
+            -TrustPolicyPath $env:TRUST_POLICY `
+            -TrustPolicySha256 $env:TRUST_POLICY_SHA256 `
+            -CommitSha $env:CANDIDATE_SHA `
+            -GitHubActionsRunUrl $env:CANDIDATE_RUN_URL `
+            -CandidateRunCompletedAtUtc $env:CANDIDATE_COMPLETED_AT `
+            -ReportPath (Join-Path $env:VERIFIED_OUTPUT "durable-release-evidence-report.json")
+          & (Join-Path $env:TRUSTED_SOURCE "scripts/verify-release-artifact-pack.ps1") `
+            -EvidenceDirectory $env:EVIDENCE_DIRECTORY `
+            -ReportPath (Join-Path $env:VERIFIED_OUTPUT "release-artifact-pack-report.json") `
+            -CommitSha $env:CANDIDATE_SHA `
+            -GitHubActionsRunUrl $env:CANDIDATE_RUN_URL
+          & (Join-Path $env:TRUSTED_SOURCE "scripts/verify-durable-release-publication-inventory.ps1") `
+            -EvidenceDirectory $env:EVIDENCE_DIRECTORY `
+            -TrustPolicyPath $env:TRUST_POLICY `
+            -TrustPolicySha256 $env:TRUST_POLICY_SHA256 `
+            -CommitSha $env:CANDIDATE_SHA `
+            -GitHubActionsRunUrl $env:CANDIDATE_RUN_URL `
+            -CandidateRunCompletedAtUtc $env:CANDIDATE_COMPLETED_AT `
+            -ReportPath (Join-Path $env:VERIFIED_OUTPUT "durable-publication-inventory-report.json")
+
+      - name: Build exact candidate-bound private evidence archive
+        id: bundle
+        shell: bash
+        env:
+          APPLICATION_REPOSITORY: ${{ steps.inputs.outputs.application_repository }}
+          EVIDENCE_REPOSITORY: ${{ steps.inputs.outputs.evidence_repository }}
+          CANDIDATE_SHA: ${{ inputs.candidate_commit_sha }}
+          CANDIDATE_RUN_URL: ${{ steps.inputs.outputs.candidate_run_url }}
+          CANDIDATE_COMPLETED_AT: ${{ steps.inputs.outputs.candidate_completed_at }}
+          EVIDENCE_REF: ${{ inputs.evidence_ref }}
+          EVIDENCE_DIRECTORY: ${{ steps.inputs.outputs.evidence_directory }}
+          RELEASE_TAG: ${{ steps.inputs.outputs.release_tag }}
+          TRUST_POLICY_SHA256: ${{ inputs.trust_policy_sha256 }}
+        run: |
+          set -euo pipefail
+          staging="$RUNNER_TEMP/durable-evidence-staging"
+          rm -rf "$staging"
+          mkdir -p "$staging/verified-publication"
+          cp -a "$EVIDENCE_DIRECTORY/." "$staging/"
+          cp "$RUNNER_TEMP/verified-evidence/"*.json "$staging/verified-publication/"
+          jq -n \
+            --arg applicationRepository "$APPLICATION_REPOSITORY" \
+            --arg candidateCommitSha "$CANDIDATE_SHA" \
+            --arg candidateGitHubActionsRunUrl "$CANDIDATE_RUN_URL" \
+            --arg candidateGitHubActionsCompletedAtUtc "$CANDIDATE_COMPLETED_AT" \
+            --arg evidenceRepository "$EVIDENCE_REPOSITORY" \
+            --arg evidenceSourceCommitSha "$EVIDENCE_REF" \
+            --arg trustPolicySha256 "$TRUST_POLICY_SHA256" \
+            --arg releaseTag "$RELEASE_TAG" \
+            --arg publicationWorkflowRunUrl "https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            '{schemaVersion:"accounts.release-evidence.durable-publication-input/v2",applicationRepository:$applicationRepository,candidateCommitSha:$candidateCommitSha,candidateGitHubActionsRunUrl:$candidateGitHubActionsRunUrl,candidateGitHubActionsCompletedAtUtc:$candidateGitHubActionsCompletedAtUtc,evidenceRepository:$evidenceRepository,evidenceSourceCommitSha:$evidenceSourceCommitSha,trustPolicySha256:$trustPolicySha256,releaseTag:$releaseTag,publicationWorkflowRunUrl:$publicationWorkflowRunUrl}' \
+            > "$staging/verified-publication/durable-publication-input.json"
+
+          archive="$RUNNER_TEMP/irish-accounts-release-evidence-$CANDIDATE_SHA.tar.gz"
+          archive_sha="$archive.sha256"
+          tar --sort=name --owner=0 --group=0 --numeric-owner --mtime='UTC 1970-01-01' -czf "$archive" -C "$staging" -- .
+          sha256sum "$archive" > "$archive_sha"
+          echo "archive_path=$archive" >> "$GITHUB_OUTPUT"
+          echo "archive_sha_path=$archive_sha" >> "$GITHUB_OUTPUT"
+          echo "archive_name=$(basename "$archive")" >> "$GITHUB_OUTPUT"
+          echo "archive_sha256=$(sha256sum "$archive" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Attest exact private evidence archive provenance
+        id: attest
+        uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
+        with:
+          subject-path: ${{ steps.bundle.outputs.archive_path }}
+
+      - name: Revalidate live controls immediately before publication
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.evidence-token.outputs.token }}
+          APPLICATION_GOVERNANCE_TOKEN: ${{ steps.application-token.outputs.token }}
+          APPLICATION_REPOSITORY: ${{ steps.inputs.outputs.application_repository }}
+          EVIDENCE_REPOSITORY: ${{ steps.inputs.outputs.evidence_repository }}
+          CANDIDATE_SHA: ${{ inputs.candidate_commit_sha }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          EVIDENCE_REF: ${{ inputs.evidence_ref }}
+          RELEASE_TAG: ${{ steps.inputs.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+
+          verify_branch_protection() {
+            local token="$1" repository="$2" branch="$3"
+            shift 3
+            local protection signatures
+            protection="$(GH_TOKEN="$token" gh api -H 'X-GitHub-Api-Version: 2026-03-10' "/repos/$repository/branches/$branch/protection")"
+            jq -e '.required_status_checks.strict == true and .required_pull_request_reviews.required_approving_review_count >= 1 and .required_pull_request_reviews.dismiss_stale_reviews == true and .required_pull_request_reviews.require_code_owner_reviews == true and .enforce_admins.enabled == true and .allow_force_pushes.enabled == false and .allow_deletions.enabled == false' <<<"$protection" >/dev/null || { echo "$repository@$branch publication governance changed during verification." >&2; exit 1; }
+            for required_check in "$@"; do
+              jq -e --arg check "$required_check" '([.required_status_checks.contexts[]?] + [.required_status_checks.checks[]?.context]) | index($check) != null' <<<"$protection" >/dev/null || { echo "$repository@$branch lost required check '$required_check' during verification." >&2; exit 1; }
+            done
+            signatures="$(GH_TOKEN="$token" gh api -H 'X-GitHub-Api-Version: 2026-03-10' "/repos/$repository/branches/$branch/protection/required_signatures")"
+            [[ "$(jq -r '.enabled // false' <<<"$signatures")" == "true" ]] || { echo "$repository@$branch lost its signed-commit requirement during verification." >&2; exit 1; }
+          }
+
+          verify_branch_protection "$APPLICATION_GOVERNANCE_TOKEN" "$APPLICATION_REPOSITORY" main \
+            "Workflow Hygiene" "Backend" "Frontend" "Production Compose Config" "Production Stack Smoke" "CI Machine Evidence Pack"
+          verify_branch_protection "$GH_TOKEN" "$EVIDENCE_REPOSITORY" main "Evidence CI"
+
+          [[ "$(GH_TOKEN="$APPLICATION_GOVERNANCE_TOKEN" gh api "/repos/$APPLICATION_REPOSITORY/branches/main" --jq .commit.sha)" == "$CANDIDATE_SHA" ]] || { echo "Application main moved during evidence verification; publication is stale." >&2; exit 1; }
+          [[ "$(gh api "/repos/$EVIDENCE_REPOSITORY/branches/main" --jq .commit.sha)" == "$EVIDENCE_REF" ]] || { echo "Evidence main moved during evidence verification; publication is stale." >&2; exit 1; }
+
+          run_json="$(GH_TOKEN="$APPLICATION_GOVERNANCE_TOKEN" gh api -H 'X-GitHub-Api-Version: 2026-03-10' "/repos/$APPLICATION_REPOSITORY/actions/runs/$CANDIDATE_RUN_ID")"
+          jq -e --arg sha "$CANDIDATE_SHA" '.head_sha == $sha and .head_branch == "main" and .event == "push" and .path == ".github/workflows/ci.yml" and .status == "completed" and .conclusion == "success"' <<<"$run_json" >/dev/null || { echo "Application candidate CI identity changed or is no longer successful." >&2; exit 1; }
+          evidence_runs_json="$(gh api --method GET -H 'X-GitHub-Api-Version: 2026-03-10' "/repos/$EVIDENCE_REPOSITORY/actions/workflows/evidence-ci.yml/runs" -f event=push -f status=completed -f branch=main -f head_sha="$EVIDENCE_REF" -f per_page=10)"
+          jq -e --arg sha "$EVIDENCE_REF" '.workflow_runs | any(.head_sha == $sha and .head_branch == "main" and .event == "push" and .path == ".github/workflows/evidence-ci.yml" and .status == "completed" and .conclusion == "success")' <<<"$evidence_runs_json" >/dev/null || { echo "Evidence candidate CI is no longer a successful protected-main run." >&2; exit 1; }
+
+          environment_json="$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' "/repos/$EVIDENCE_REPOSITORY/environments/durable-release-evidence")"
+          [[ "$(jq -r '.can_admins_bypass // true' <<<"$environment_json")" == "false" ]] || { echo "Evidence environment administrator bypass changed during verification." >&2; exit 1; }
+          jq -e '[.protection_rules[]? | select(.type == "required_reviewers" and .prevent_self_review == true) | .reviewers[]?] | length >= 1' <<<"$environment_json" >/dev/null || { echo "Evidence environment independent-review policy changed during verification." >&2; exit 1; }
+          [[ "$(jq -r '.deployment_branch_policy.protected_branches // false' <<<"$environment_json")" == "true" && "$(jq -r '.deployment_branch_policy.custom_branch_policies // true' <<<"$environment_json")" == "false" ]] || { echo "Evidence environment branch policy changed during verification." >&2; exit 1; }
+          immutable_release_json="$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' "/repos/$EVIDENCE_REPOSITORY/immutable-releases")"
+          [[ "$(jq -r '.enabled // false' <<<"$immutable_release_json")" == "true" ]] || { echo "Evidence immutable releases were disabled during verification." >&2; exit 1; }
+          if gh release view "$RELEASE_TAG" --repo "$EVIDENCE_REPOSITORY" >/dev/null 2>&1; then echo "Evidence release appeared during verification; refusing overwrite." >&2; exit 1; fi
+          if gh api -H 'X-GitHub-Api-Version: 2026-03-10' "/repos/$EVIDENCE_REPOSITORY/git/ref/tags/$RELEASE_TAG" >/dev/null 2>&1; then echo "Evidence tag appeared during verification; refusing reuse." >&2; exit 1; fi
+
+      - name: Create publication report and private immutable GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APPLICATION_REPOSITORY: ${{ steps.inputs.outputs.application_repository }}
+          EVIDENCE_REPOSITORY: ${{ steps.inputs.outputs.evidence_repository }}
+          CANDIDATE_SHA: ${{ inputs.candidate_commit_sha }}
+          CANDIDATE_RUN_URL: ${{ steps.inputs.outputs.candidate_run_url }}
+          CANDIDATE_COMPLETED_AT: ${{ steps.inputs.outputs.candidate_completed_at }}
+          EVIDENCE_REF: ${{ inputs.evidence_ref }}
+          RELEASE_TAG: ${{ steps.inputs.outputs.release_tag }}
+          TRUST_POLICY_SHA256: ${{ inputs.trust_policy_sha256 }}
+          ARCHIVE_PATH: ${{ steps.bundle.outputs.archive_path }}
+          ARCHIVE_SHA_PATH: ${{ steps.bundle.outputs.archive_sha_path }}
+          ARCHIVE_NAME: ${{ steps.bundle.outputs.archive_name }}
+          ARCHIVE_SHA256: ${{ steps.bundle.outputs.archive_sha256 }}
+          ATTESTATION_URL: ${{ steps.attest.outputs.attestation-url }}
+          ATTESTATION_BUNDLE_PATH: ${{ steps.attest.outputs.bundle-path }}
+        run: |
+          set -euo pipefail
+          publication_report="$RUNNER_TEMP/durable-release-evidence-publication-report.json"
+          provenance_bundle="$RUNNER_TEMP/durable-release-evidence-provenance.jsonl"
+          cp "$ATTESTATION_BUNDLE_PATH" "$provenance_bundle"
+          jq -n \
+            --arg applicationRepository "$APPLICATION_REPOSITORY" \
+            --arg candidateCommitSha "$CANDIDATE_SHA" \
+            --arg candidateGitHubActionsRunUrl "$CANDIDATE_RUN_URL" \
+            --arg candidateGitHubActionsCompletedAtUtc "$CANDIDATE_COMPLETED_AT" \
+            --arg evidenceRepository "$EVIDENCE_REPOSITORY" \
+            --arg evidenceSourceCommitSha "$EVIDENCE_REF" \
+            --arg trustPolicySha256 "$TRUST_POLICY_SHA256" \
+            --arg releaseTag "$RELEASE_TAG" \
+            --arg releaseUrl "https://github.com/$EVIDENCE_REPOSITORY/releases/tag/$RELEASE_TAG" \
+            --arg archiveFileName "$ARCHIVE_NAME" \
+            --arg archiveSha256 "$ARCHIVE_SHA256" \
+            --arg archiveByteSize "$(stat -c '%s' "$ARCHIVE_PATH")" \
+            --arg provenanceAttestationUrl "$ATTESTATION_URL" \
+            --arg provenanceBundleSha256 "$(sha256sum "$provenance_bundle" | cut -d' ' -f1)" \
+            --arg publicationWorkflowRunUrl "https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            '{schemaVersion:"accounts.release-evidence.durable-publication-report/v2",status:"verified-for-private-immutable-publication",applicationRepository:$applicationRepository,candidateCommitSha:$candidateCommitSha,candidateGitHubActionsRunUrl:$candidateGitHubActionsRunUrl,candidateGitHubActionsCompletedAtUtc:$candidateGitHubActionsCompletedAtUtc,evidenceRepository:$evidenceRepository,evidenceSourceCommitSha:$evidenceSourceCommitSha,trustPolicySha256:$trustPolicySha256,releaseTag:$releaseTag,releaseUrl:$releaseUrl,archiveFileName:$archiveFileName,archiveSha256:$archiveSha256,archiveByteSize:($archiveByteSize|tonumber),provenanceAttestationUrl:$provenanceAttestationUrl,provenanceRepository:$evidenceRepository,provenanceBundleSha256:$provenanceBundleSha256,publicationWorkflowRunUrl:$publicationWorkflowRunUrl,immutableReleaseRequired:true,privateRepositoryRequired:true,overwritePermitted:false}' \
+            > "$publication_report"
+
+          notes="$RUNNER_TEMP/durable-release-evidence-notes.md"
+          printf '%s\n' \
+            "Application candidate: $APPLICATION_REPOSITORY@$CANDIDATE_SHA" \
+            "Candidate CI: $CANDIDATE_RUN_URL" \
+            "Candidate CI completed: $CANDIDATE_COMPLETED_AT" \
+            "Private evidence source: $EVIDENCE_REPOSITORY@$EVIDENCE_REF" \
+            "Out-of-band trust-policy SHA-256: $TRUST_POLICY_SHA256" \
+            > "$notes"
+
+          gh release create "$RELEASE_TAG" \
+            --repo "$EVIDENCE_REPOSITORY" \
+            --target "$EVIDENCE_REF" \
+            --title "Private durable evidence for $CANDIDATE_SHA" \
+            --notes-file "$notes" \
+            --latest=false \
+            "$ARCHIVE_PATH#Candidate-bound signed evidence archive" \
+            "$ARCHIVE_SHA_PATH#Archive SHA-256" \
+            "$publication_report#Durable publication report" \
+            "$provenance_bundle#GitHub provenance bundle" \
+            "$RUNNER_TEMP/verified-evidence/durable-release-evidence-report.json#Detached signature verification report" \
+            "$RUNNER_TEMP/verified-evidence/durable-publication-inventory-report.json#Exact publication inventory report"
+
+          tag_sha="$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' "/repos/$EVIDENCE_REPOSITORY/git/ref/tags/$RELEASE_TAG" --jq .object.sha)"
+          [[ "$tag_sha" == "$EVIDENCE_REF" ]] || { echo "Published private evidence tag does not target the verified evidence commit." >&2; exit 1; }
+          release_verified=false
+          for attempt in 1 2 3 4 5 6; do
+            if gh release verify "$RELEASE_TAG" --repo "$EVIDENCE_REPOSITORY"; then release_verified=true; break; fi
+            sleep 10
+          done
+          [[ "$release_verified" == "true" ]] || { echo "Private immutable release verification failed." >&2; exit 1; }
+          gh release verify-asset "$RELEASE_TAG" "$ARCHIVE_PATH" --repo "$EVIDENCE_REPOSITORY"
+
+      - name: Verify private provenance with caller repository token
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVIDENCE_REPOSITORY: ${{ steps.inputs.outputs.evidence_repository }}
+          ARCHIVE_PATH: ${{ steps.bundle.outputs.archive_path }}
+        run: |
+          set -euo pipefail
+          gh attestation verify "$ARCHIVE_PATH" --repo "$EVIDENCE_REPOSITORY"

@@ -1,0 +1,152 @@
+{
+  "schemaVersion": 1,
+  "fixtureId": "irish-corporation-tax-filing-support-v1",
+  "expectationDerivation": "Expected dates, bases and interest amounts were transcribed from Revenue Tax and Duty Manual Part 41A-07-02 and Revenue's Corporation Tax payment-and-filing guidance, independently of the production calculator.",
+  "independentReviewStatus": "pending-qualified-accountant",
+  "officialSources": [
+    {
+      "code": "revenue-tdm-41a-07-02",
+      "title": "Payment of Preliminary Corporation Tax",
+      "url": "https://www.revenue.ie/en/tax-professionals/tdm/income-tax-capital-gains-tax-corporation-tax/part-41a/41a-07-02-20230307124614.pdf",
+      "sourceLastUpdated": "2023-03"
+    },
+    {
+      "code": "revenue-payment-and-filing",
+      "title": "Corporation Tax payment and filing",
+      "url": "https://www.revenue.ie/en/companies-and-charities/corporation-tax-for-companies/corporation-tax-payment-and-filing/payment-and-filing.aspx",
+      "sourcePublished": "2025-10-01"
+    }
+  ],
+  "deadlineScenarios": [
+    {
+      "code": "revenue-example-1-calendar-year",
+      "periodStart": "2022-01-01",
+      "periodEnd": "2022-12-31",
+      "expectedFirstPreliminaryDue": "2022-06-23",
+      "expectedSecondOrSinglePreliminaryDue": "2022-11-23"
+    },
+    {
+      "code": "revenue-example-2-offset-year",
+      "periodStart": "2022-01-05",
+      "periodEnd": "2023-01-04",
+      "expectedFirstPreliminaryDue": "2022-07-04",
+      "expectedSecondOrSinglePreliminaryDue": "2022-12-04"
+    },
+    {
+      "code": "revenue-balance-calendar-year",
+      "periodStart": "2021-01-01",
+      "periodEnd": "2021-12-31",
+      "expectedReturnAndBalanceDue": "2022-09-23"
+    },
+    {
+      "code": "revenue-balance-offset-year",
+      "periodStart": "2021-01-05",
+      "periodEnd": "2022-01-04",
+      "expectedReturnAndBalanceDue": "2022-10-04"
+    }
+  ],
+  "calculationScenarios": [
+    {
+      "code": "revenue-small-underpayment",
+      "periodStart": "2021-01-01",
+      "periodEnd": "2021-12-31",
+      "currentCorporationTax": 125000.00,
+      "priorCorporationTax": 160000.00,
+      "payments": [
+        { "date": "2021-11-23", "amount": 100000.00, "kind": "PreliminarySecondOrSingle" },
+        { "date": "2022-09-23", "amount": 25000.00, "kind": "Balance" }
+      ],
+      "asOfDate": "2022-09-23",
+      "filedDate": "2022-09-23",
+      "expectedCompanyClass": "Small",
+      "expectedSafeHarbour": 112500.00,
+      "expectedSafeHarbourMet": false,
+      "expectedInterest": 1669.88,
+      "expectedRevenueRoundedInterest": 1670.00,
+      "expectedInterestSegments": [
+        { "principal": 25000.00, "days": 305, "interest": 1669.88 }
+      ]
+    },
+    {
+      "code": "revenue-small-late-payment",
+      "periodStart": "2021-01-01",
+      "periodEnd": "2021-12-31",
+      "currentCorporationTax": 125000.00,
+      "priorCorporationTax": 160000.00,
+      "payments": [
+        { "date": "2021-12-20", "amount": 112500.00, "kind": "PreliminarySecondOrSingle" },
+        { "date": "2022-09-23", "amount": 12500.00, "kind": "Balance" }
+      ],
+      "asOfDate": "2022-09-23",
+      "filedDate": "2022-09-23",
+      "expectedCompanyClass": "Small",
+      "expectedSafeHarbour": 112500.00,
+      "expectedSafeHarbourMet": false,
+      "expectedInterest": 1524.79,
+      "expectedRevenueRoundedInterest": 1525.00,
+      "expectedInterestSegments": [
+        { "principal": 112500.00, "days": 28, "interest": 689.85 },
+        { "principal": 12500.00, "days": 305, "interest": 834.94 }
+      ]
+    },
+    {
+      "code": "revenue-large-amended-liability",
+      "periodStart": "2022-01-01",
+      "periodEnd": "2022-12-31",
+      "currentCorporationTax": 7350000.00,
+      "priorCorporationTax": 6300000.00,
+      "payments": [
+        { "date": "2022-06-23", "amount": 2950000.00, "kind": "PreliminaryFirst" },
+        { "date": "2022-11-23", "amount": 3350000.00, "kind": "PreliminarySecondOrSingle" },
+        { "date": "2023-09-23", "amount": 700000.00, "kind": "Balance" },
+        { "date": "2024-06-30", "amount": 350000.00, "kind": "Balance" }
+      ],
+      "asOfDate": "2024-06-30",
+      "filedDate": "2023-09-23",
+      "expectedCompanyClass": "Large",
+      "expectedSafeHarbour": 6615000.00,
+      "expectedSafeHarbourMet": false,
+      "expectedAcceleratedFirst": 3307500.00,
+      "expectedAcceleratedSecond": 7350000.00,
+      "expectedInterest": 103345.55,
+      "expectedRevenueRoundedInterest": 103345.00,
+      "expectedInterestSegments": [
+        { "principal": 357500.00, "days": 153, "interest": 11978.75 },
+        { "principal": 1050000.00, "days": 304, "interest": 69904.80 },
+        { "principal": 350000.00, "days": 280, "interest": 21462.00 }
+      ]
+    },
+    {
+      "code": "revenue-section-239-preceding-year-basis",
+      "periodStart": "2022-01-01",
+      "periodEnd": "2022-12-31",
+      "currentCorporationTax": 200000.00,
+      "currentSection239IncomeTax": 50000.00,
+      "priorCorporationTax": 150000.00,
+      "priorSection239IncomeTax": 50000.00,
+      "payments": [
+        { "date": "2022-11-23", "amount": 200000.00, "kind": "PreliminarySecondOrSingle" }
+      ],
+      "asOfDate": "2022-11-23",
+      "expectedCompanyClass": "Small",
+      "expectedSafeHarbour": 200000.00,
+      "expectedSafeHarbourMet": true
+    },
+    {
+      "code": "revenue-section-239-current-year-basis",
+      "periodStart": "2022-01-01",
+      "periodEnd": "2022-12-31",
+      "currentCorporationTax": 100000.00,
+      "currentSection239IncomeTax": 50000.00,
+      "priorCorporationTax": 150000.00,
+      "priorSection239IncomeTax": 50000.00,
+      "payments": [
+        { "date": "2022-11-23", "amount": 135000.00, "kind": "PreliminarySecondOrSingle" }
+      ],
+      "asOfDate": "2022-11-23",
+      "expectedCompanyClass": "Small",
+      "expectedSafeHarbour": 135000.00,
+      "expectedSafeHarbourMet": true
+    }
+  ]
+}

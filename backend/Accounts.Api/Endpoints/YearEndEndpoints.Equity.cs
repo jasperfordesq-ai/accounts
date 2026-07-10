@@ -12,7 +12,7 @@ public static partial class YearEndEndpoints
     public static async Task<IResult> CreateDividendEndpointAsync(
         int companyId,
         int periodId,
-        Dividend input,
+        DividendInput input,
         AccountsDbContext db,
         AuditService audit,
         HttpContext context)
@@ -23,27 +23,26 @@ public static partial class YearEndEndpoints
         if (YearEndFigureInputs.ForDividend(input) is { } invalid)
             return invalid;
 
-        input.Id = 0;
-        input.PeriodId = periodId;
-        db.Dividends.Add(input);
+        var dividend = input.ToEntity(periodId);
+        db.Dividends.Add(dividend);
         await db.SaveChangesAsync();
         await audit.LogAsync(
             companyId,
             periodId,
             "Dividend",
-            input.Id,
+            dividend.Id,
             AuditEventCodes.DividendCreated,
             null,
-            DividendSnapshot(input),
+            DividendSnapshot(dividend),
             AuditUserId(context));
-        return Results.Created($"/api/companies/{companyId}/periods/{periodId}/dividends/{input.Id}", input);
+        return Results.Created($"/api/companies/{companyId}/periods/{periodId}/dividends/{dividend.Id}", dividend);
     }
 
     public static async Task<IResult> UpdateDividendEndpointAsync(
         int companyId,
         int periodId,
         int id,
-        Dividend input,
+        DividendInput input,
         AccountsDbContext db,
         AuditService audit,
         HttpContext context)
@@ -105,7 +104,7 @@ public static partial class YearEndEndpoints
 
     public static async Task<IResult> CreateShareCapitalEndpointAsync(
         int companyId,
-        ShareCapital input,
+        ShareCapitalInput input,
         AccountsDbContext db,
         AccountingWriteGuard writeGuard,
         AuditService audit,
@@ -121,26 +120,25 @@ public static partial class YearEndEndpoints
         if (await writeGuard.BlockIfCompanyAccountingLockedAsync(companyId, effectiveDate) is { } blocked)
             return blocked;
 
-        input.CompanyId = companyId;
-        input.TotalValue = input.NominalValue * input.NumberIssued;
-        db.ShareCapitals.Add(input);
+        var shareCapital = input.ToEntity(companyId);
+        db.ShareCapitals.Add(shareCapital);
         await db.SaveChangesAsync();
         await audit.LogAsync(
             companyId,
             null,
             "ShareCapital",
-            input.Id,
+            shareCapital.Id,
             AuditEventCodes.ShareCapitalCreated,
             null,
-            ShareCapitalSnapshot(input),
+            ShareCapitalSnapshot(shareCapital),
             AuditUserId(context));
-        return Results.Created($"/api/companies/{companyId}/share-capital/{input.Id}", input);
+        return Results.Created($"/api/companies/{companyId}/share-capital/{shareCapital.Id}", shareCapital);
     }
 
     public static async Task<IResult> UpdateShareCapitalEndpointAsync(
         int companyId,
         int id,
-        ShareCapital input,
+        ShareCapitalInput input,
         AccountsDbContext db,
         AccountingWriteGuard writeGuard,
         AuditService audit,

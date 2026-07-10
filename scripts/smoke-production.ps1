@@ -2,6 +2,7 @@ param(
     [string]$BaseUrl = $env:ACCOUNTS_FRONTEND_URL,
     [string]$Email = $env:SMOKE_LOGIN_EMAIL,
     [string]$Password = $env:SMOKE_LOGIN_PASSWORD,
+    [string]$TotpSecret = $env:SMOKE_TOTP_SECRET,
     [int]$CompanyId = 0,
     [int]$PeriodId = 0,
     [switch]$CheckDownloads,
@@ -233,6 +234,58 @@ if ($CheckDownloads -and ($CompanyId -le 0 -or $PeriodId -le 0)) {
     throw "-CheckDownloads requires -CompanyId and -PeriodId."
 }
 
+function ConvertFrom-Base32([string]$Value) {
+    $alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
+    $normalized = ($Value -replace '[\s=-]', '').ToUpperInvariant()
+    if ([string]::IsNullOrWhiteSpace($normalized)) {
+        throw "The MFA TOTP secret is empty."
+    }
+
+    $bytes = [System.Collections.Generic.List[byte]]::new()
+    [int64]$buffer = 0
+    $bits = 0
+    foreach ($character in $normalized.ToCharArray()) {
+        $index = $alphabet.IndexOf($character)
+        if ($index -lt 0) {
+            throw "The MFA TOTP secret is not valid Base32."
+        }
+        $buffer = ($buffer -shl 5) -bor $index
+        $bits += 5
+        while ($bits -ge 8) {
+            $bits -= 8
+            $bytes.Add([byte](($buffer -shr $bits) -band 0xff))
+            if ($bits -eq 0) {
+                $buffer = 0
+            } else {
+                $buffer = $buffer -band (([int64]1 -shl $bits) - 1)
+            }
+        }
+    }
+    return $bytes.ToArray()
+}
+
+function New-TotpCode([string]$Secret, [DateTimeOffset]$At = [DateTimeOffset]::UtcNow) {
+    $key = ConvertFrom-Base32 $Secret
+    [int64]$counter = [Math]::Floor($At.ToUnixTimeSeconds() / 30)
+    $counterBytes = [BitConverter]::GetBytes($counter)
+    if ([BitConverter]::IsLittleEndian) {
+        [Array]::Reverse($counterBytes)
+    }
+    $hmac = [System.Security.Cryptography.HMACSHA1]::new($key)
+    try {
+        $digest = $hmac.ComputeHash($counterBytes)
+    } finally {
+        $hmac.Dispose()
+        [Array]::Clear($key, 0, $key.Length)
+    }
+    $offset = $digest[$digest.Length - 1] -band 0x0f
+    $binary = (($digest[$offset] -band 0x7f) -shl 24) -bor
+        (($digest[$offset + 1] -band 0xff) -shl 16) -bor
+        (($digest[$offset + 2] -band 0xff) -shl 8) -bor
+        ($digest[$offset + 3] -band 0xff)
+    return ($binary % 1000000).ToString("D6", [Globalization.CultureInfo]::InvariantCulture)
+}
+
 try {
     $baseUri = [Uri]$BaseUrl
 } catch {
@@ -341,6 +394,42 @@ $productionReadinessReport = Invoke-RestMethod `
     -WebSession $session `
     -TimeoutSec $TimeoutSeconds
 
+if ([int]$loginResponse.StatusCode -eq 202) {
+    $challenge = $loginResponse.Content | ConvertFrom-Json
+    if ([string]::IsNullOrWhiteSpace([string]$challenge.challengeToken)) {
+        throw "MFA login response did not include a challenge token."
+    }
+    $effectiveTotpSecret = if ([bool]$challenge.requiresEnrollment) {
+        [string]$challenge.enrollmentSecret
+    } else {
+        $TotpSecret
+    }
+    if ([string]::IsNullOrWhiteSpace($effectiveTotpSecret)) {
+        throw "The smoke account requires MFA. Set SMOKE_TOTP_SECRET or -TotpSecret for an already-enrolled account."
+    }
+
+    Write-Host "Completing privileged-account MFA through frontend proxy..."
+    $mfaBody = @{
+        challengeToken = [string]$challenge.challengeToken
+        totpCode = New-TotpCode $effectiveTotpSecret
+        recoveryCode = $null
+    } | ConvertTo-Json
+    $loginResponse = Invoke-WebRequest `
+        -Uri "$base/api/auth/mfa/challenge" `
+        -Method Post `
+        -ContentType "application/json" `
+        -Body $mfaBody `
+        -UseBasicParsing `
+        -WebSession $session `
+        -TimeoutSec $TimeoutSeconds
+    $mfaBody = $null
+    $effectiveTotpSecret = $null
+}
+
+if ([int]$loginResponse.StatusCode -ne 200) {
+    throw "Authentication did not complete successfully. HTTP status: $($loginResponse.StatusCode)."
+}
+
 if ([string]::IsNullOrWhiteSpace([string]$productionReadinessReport.overallStatus)) {
     throw "Production readiness report did not include overallStatus."
 }
@@ -381,6 +470,38 @@ if ($CheckMonitoringErrorRouting) {
         throw "Monitoring smoke response did not include an eventId."
     }
 
+    Write-Host "Checking controlled client monitoring routing..."
+    $clientMonitoringBody = @{
+        eventCode = "render-exception"
+        route = "/companies/742/periods/73/client%40example.ie?token=NeverSendThis"
+    } | ConvertTo-Json
+    $clientMonitoringResponse = Invoke-RestMethod `
+        -Uri "$base/api/system/monitoring/client-event" `
+        -Method Post `
+        -ContentType "application/json" `
+        -Headers @{ "X-CSRF-Token" = $csrfToken } `
+        -Body $clientMonitoringBody `
+        -WebSession $session `
+        -TimeoutSec $TimeoutSeconds
+
+    if ($clientMonitoringResponse.status -ne "reported") {
+        throw "Client monitoring smoke endpoint returned unexpected status '$($clientMonitoringResponse.status)'."
+    }
+    if ($clientMonitoringResponse.eventCode -ne "render-exception") {
+        throw "Client monitoring smoke endpoint returned unexpected event code '$($clientMonitoringResponse.eventCode)'."
+    }
+    if ([string]::IsNullOrWhiteSpace($clientMonitoringResponse.eventId) -or
+        [string]::IsNullOrWhiteSpace($clientMonitoringResponse.correlationId)) {
+        throw "Client monitoring smoke response did not include provider event and correlation identifiers."
+    }
+    if ($clientMonitoringResponse.route -ne "/companies/{id}/periods/{id}/{redacted}") {
+        throw "Client monitoring smoke response did not retain only the normalized route shape."
+    }
+    $clientMonitoringJson = $clientMonitoringResponse | ConvertTo-Json -Depth 4 -Compress
+    if ($clientMonitoringJson -match "client@example.ie|NeverSendThis|client%40example.ie") {
+        throw "Client monitoring smoke response exposed synthetic sensitive input."
+    }
+
     $monitoringEvidencePath = Join-Path $OutputDirectory "monitoring-error-routing-report.json"
     [ordered]@{
         status = "passed"
@@ -389,6 +510,13 @@ if ($CheckMonitoringErrorRouting) {
         provider = $monitoringResponse.provider
         eventId = $monitoringResponse.eventId
         correlationId = $monitoringResponse.correlationId
+        clientEvent = [ordered]@{
+            eventCode = $clientMonitoringResponse.eventCode
+            eventId = $clientMonitoringResponse.eventId
+            correlationId = $clientMonitoringResponse.correlationId
+            route = $clientMonitoringResponse.route
+            sensitiveInputAbsent = $true
+        }
     } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $monitoringEvidencePath -Encoding UTF8
     Write-Host "Monitoring error-routing evidence written: $monitoringEvidencePath"
 }

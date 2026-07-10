@@ -11,7 +11,7 @@ public static partial class YearEndEndpoints
 {
     public static async Task<IResult> CreateLoanEndpointAsync(
         int companyId,
-        Loan input,
+        LoanInput input,
         AccountsDbContext db,
         AccountingWriteGuard writeGuard,
         AuditService audit,
@@ -27,25 +27,25 @@ public static partial class YearEndEndpoints
         if (await writeGuard.BlockIfCompanyAccountingLockedAsync(companyId, effectiveDate) is { } blocked)
             return blocked;
 
-        input.CompanyId = companyId;
-        db.Loans.Add(input);
+        var loan = input.ToEntity(companyId);
+        db.Loans.Add(loan);
         await db.SaveChangesAsync();
         await audit.LogAsync(
             companyId,
             null,
             "Loan",
-            input.Id,
+            loan.Id,
             AuditEventCodes.LoanCreated,
             null,
-            LoanSnapshot(input),
+            LoanSnapshot(loan),
             AuditUserId(context));
-        return Results.Created($"/api/companies/{companyId}/loans/{input.Id}", input);
+        return Results.Created($"/api/companies/{companyId}/loans/{loan.Id}", loan);
     }
 
     public static async Task<IResult> UpdateLoanEndpointAsync(
         int companyId,
         int id,
-        Loan input,
+        LoanInput input,
         AccountsDbContext db,
         AccountingWriteGuard writeGuard,
         AuditService audit,
@@ -66,7 +66,7 @@ public static partial class YearEndEndpoints
         if (await writeGuard.BlockIfCompanyAccountingLockedAsync(companyId, effectiveDate) is { } blocked)
             return blocked;
 
-        item.Lender = input.Lender;
+        item.Lender = input.Lender!;
         item.OriginalAmount = input.OriginalAmount;
         item.Balance = input.Balance;
         item.DrawdownDate = input.DrawdownDate;
@@ -124,7 +124,7 @@ public static partial class YearEndEndpoints
     public static async Task<IResult> CreateLoanBalanceSnapshotEndpointAsync(
         int companyId,
         int periodId,
-        LoanBalanceSnapshot input,
+        LoanBalanceSnapshotInput input,
         AccountsDbContext db,
         AuditService audit,
         HttpContext context)
@@ -135,26 +135,27 @@ public static partial class YearEndEndpoints
         if (await LoanBalanceSnapshotInputs.ValidateAsync(db, companyId, input) is { } validationProblem)
             return validationProblem;
 
-        StampLoanBalanceSnapshot(input, periodId, context);
-        db.LoanBalanceSnapshots.Add(input);
+        var snapshot = input.ToEntity(periodId);
+        StampLoanBalanceSnapshot(snapshot, periodId, context);
+        db.LoanBalanceSnapshots.Add(snapshot);
         await db.SaveChangesAsync();
         await audit.LogAsync(
             companyId,
             periodId,
             "LoanBalanceSnapshot",
-            input.Id,
+            snapshot.Id,
             AuditEventCodes.LoanBalanceSnapshotCreated,
             null,
-            LoanBalanceSnapshotSnapshot(input),
+            LoanBalanceSnapshotSnapshot(snapshot),
             AuditUserId(context));
-        return Results.Created($"/api/companies/{companyId}/periods/{periodId}/loan-balance-snapshots/{input.Id}", input);
+        return Results.Created($"/api/companies/{companyId}/periods/{periodId}/loan-balance-snapshots/{snapshot.Id}", snapshot);
     }
 
     public static async Task<IResult> UpdateLoanBalanceSnapshotEndpointAsync(
         int companyId,
         int periodId,
         int id,
-        LoanBalanceSnapshot input,
+        LoanBalanceSnapshotInput input,
         AccountsDbContext db,
         AuditService audit,
         HttpContext context)
@@ -239,6 +240,7 @@ public static partial class YearEndEndpoints
             return validationProblem;
 
         var loan = DirectorLoanInputs.ToEntity(periodId, input);
+        StampDirectorLoanReview(loan, context);
         db.DirectorLoans.Add(loan);
         await db.SaveChangesAsync();
         await audit.LogAsync(
@@ -268,20 +270,18 @@ public static partial class YearEndEndpoints
         if (await DirectorLoanInputs.ValidateAsync(db, companyId, periodId, input) is { } validationProblem)
             return validationProblem;
 
-        var item = await db.DirectorLoans.FirstOrDefaultAsync(d => d.Id == id && d.PeriodId == periodId);
+        var item = await db.DirectorLoans
+            .Include(d => d.BalanceMovements)
+            .FirstOrDefaultAsync(d => d.Id == id
+                && d.PeriodId == periodId
+                && d.Period.CompanyId == companyId
+                && (d.CounterpartyType == DirectorLoanCounterpartyType.GroupCompany && d.DirectorId == null
+                    || d.DirectorId != null && d.Director!.CompanyId == companyId));
         if (item == null) return Results.NotFound();
 
         var oldValue = DirectorLoanSnapshot(item);
-        item.DirectorId = input.DirectorId;
-        item.OpeningBalance = input.OpeningBalance;
-        item.Advances = input.Advances;
-        item.Repayments = input.Repayments;
-        item.ClosingBalance = input.ClosingBalance;
-        item.InterestRate = input.InterestRate;
-        item.InterestCharged = input.InterestCharged;
-        item.IsDocumented = input.IsDocumented;
-        item.LoanTerms = string.IsNullOrWhiteSpace(input.LoanTerms) ? null : input.LoanTerms.Trim();
-        item.MaxBalanceDuringYear = input.MaxBalanceDuringYear;
+        DirectorLoanInputs.Apply(item, input);
+        StampDirectorLoanReview(item, context);
         await db.SaveChangesAsync();
         await audit.LogAsync(
             companyId,
@@ -306,7 +306,13 @@ public static partial class YearEndEndpoints
         if (await RequirePeriodWriteAccessAsync(db, companyId, periodId, context) is { } denied)
             return denied;
 
-        var item = await db.DirectorLoans.FirstOrDefaultAsync(d => d.Id == id && d.PeriodId == periodId);
+        var item = await db.DirectorLoans
+            .Include(d => d.BalanceMovements)
+            .FirstOrDefaultAsync(d => d.Id == id
+                && d.PeriodId == periodId
+                && d.Period.CompanyId == companyId
+                && (d.CounterpartyType == DirectorLoanCounterpartyType.GroupCompany && d.DirectorId == null
+                    || d.DirectorId != null && d.Director!.CompanyId == companyId));
         if (item == null) return Results.NotFound();
 
         var oldValue = DirectorLoanSnapshot(item);

@@ -93,22 +93,35 @@ export function CompanyPeriodsWorkbench({
       ) : (
         <DataGrid
           columns={["Period", "Status", "Size and regime", "Evidence cues", "Next action"]}
-          rows={periods.map((period, index) => [
-            <PeriodLabel key="period" period={period} />,
-            <StatusBadge key="status" tone={statusTone(period.status)}>
-              {period.status}
-            </StatusBadge>,
-            <SizeRegime key="size" period={period} />,
-            <EvidenceCue key="evidence" period={period} />,
-            <Link
-              key="action"
-              href={`/companies/${company.id}/periods/${period.id}`}
-              className="inline-flex min-h-8 items-center gap-2 whitespace-nowrap rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] px-3 text-xs font-semibold text-[var(--foreground)] hover:border-[var(--ring)]"
-            >
-              {index === 0 ? "Open workbench" : "Open record"}
-              <ArrowRight className="h-3.5 w-3.5" />
-            </Link>,
-          ])}
+          mobilePresentation="cards"
+          sortableColumns={[true, true, true, false, false]}
+          rows={periods.map((period, index) => ({
+            id: period.id,
+            searchText: `${period.periodStart} ${period.periodEnd} ${period.status} ${period.sizeClassification?.calculatedClass ?? "Unclassified"} ${period.filingRegime?.electedRegime ?? "Regime not elected"}`,
+            sortValues: [
+              period.periodStart,
+              period.status,
+              `${period.sizeClassification?.calculatedClass ?? "Unclassified"}:${period.filingRegime?.electedRegime ?? "Regime not elected"}`,
+              null,
+              null,
+            ],
+            cells: [
+              <PeriodLabel key="period" period={period} />,
+              <StatusBadge key="status" tone={statusTone(period.status)}>
+                {period.status}
+              </StatusBadge>,
+              <SizeRegime key="size" period={period} />,
+              <EvidenceCue key="evidence" period={period} />,
+              <Link
+                key="action"
+                href={`/companies/${company.id}/periods/${period.id}`}
+                className="inline-flex min-h-8 items-center gap-2 whitespace-nowrap rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] px-3 text-xs font-semibold text-[var(--foreground)] hover:border-[var(--ring)]"
+              >
+                {index === 0 ? "Open workbench" : "Open record"}
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>,
+            ],
+          }))}
         />
       )}
     </ReviewPanel>
@@ -139,7 +152,7 @@ function DateField({
 
 function PeriodLabel({ period }: { period: AccountingPeriod }) {
   return (
-    <div className="min-w-56">
+    <div className="min-w-0 sm:min-w-56">
       <p className="font-medium text-[var(--foreground)]">
         {formatPeriodRange(period.periodStart, period.periodEnd)}
       </p>
@@ -157,7 +170,7 @@ function SizeRegime({ period }: { period: AccountingPeriod }) {
   const regime = period.filingRegime?.electedRegime ?? "Regime not elected";
 
   return (
-    <div className="min-w-48">
+    <div className="min-w-0 sm:min-w-48">
       <p className="font-medium text-[var(--foreground)]">{size}</p>
       <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">Regime: {regime}</p>
     </div>
@@ -171,7 +184,7 @@ function EvidenceCue({ period }: { period: AccountingPeriod }) {
   ];
 
   return (
-    <div className="min-w-56 space-y-1 text-xs leading-5 text-[var(--muted-foreground)]">
+    <div className="min-w-0 space-y-1 text-xs leading-5 text-[var(--muted-foreground)] sm:min-w-56">
       {cues.map((cue) => (
         <div key={cue}>{cue}</div>
       ))}

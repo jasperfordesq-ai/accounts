@@ -1,3 +1,6 @@
+using System.Globalization;
+using System.Text;
+using System.Text.Json;
 using Accounts.Api.Data;
 using Accounts.Api.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -6,355 +9,596 @@ namespace Accounts.Api.Services;
 
 public class NotesDisclosureService(AccountsDbContext db)
 {
+    private static readonly CultureInfo IrishCulture = CultureInfo.GetCultureInfo("en-IE");
+
     public async Task<List<NotesDisclosure>> GenerateNotesAsync(int companyId, int periodId)
     {
-        var period = await db.AccountingPeriods
-            .Include(p => p.Company)
-            .Include(p => p.FilingRegime)
-            .FirstOrDefaultAsync(p => p.Id == periodId && p.CompanyId == companyId)
-            ?? throw new ResourceNotFoundException($"Period {periodId} not found");
-
-        var company = period.Company;
-        var regime = period.FilingRegime?.ElectedRegime ?? ElectedRegime.Small;
-        var periodsToDate = (await db.AccountingPeriods
-            .Where(p => p.CompanyId == companyId && p.PeriodEnd <= period.PeriodEnd)
-            .Select(p => p.Id)
-            .ToListAsync())
-            .ToHashSet();
-        var activeAssets = await db.FixedAssets
-            .Include(a => a.DepreciationEntries)
-            .Where(a => a.CompanyId == company.Id
-                && a.AcquisitionDate <= period.PeriodEnd
-                && (a.DisposalDate == null || a.DisposalDate > period.PeriodEnd))
+        var checklist = await BuildChecklistAsync(companyId, periodId);
+        var existing = await db.NotesDisclosures
+            .Where(note => note.PeriodId == periodId)
+            .OrderBy(note => note.NoteNumber)
+            .ThenBy(note => note.Id)
             .ToListAsync();
-
-        // Remove generated notes while preserving custom user disclosures.
-        var existing = await db.NotesDisclosures.Where(n => n.PeriodId == periodId).ToListAsync();
-        var generatedExisting = existing.Where(n => n.IsRequired).ToList();
-        var customExisting = existing
-            .Where(n => !n.IsRequired)
-            .OrderBy(n => n.NoteNumber)
-            .ThenBy(n => n.Id)
+        var generatedExisting = existing
+            .Where(note => note.IsRequired || StatutoryNoteCodes.IsStableCode(note.Code))
             .ToList();
+        var customExisting = existing.Except(generatedExisting).ToList();
+
         db.NotesDisclosures.RemoveRange(generatedExisting);
 
-        var notes = new List<NotesDisclosure>();
-        int num = 1;
-
-        // Note 1: Accounting Policies (always required)
-        var basisText = regime == ElectedRegime.Micro
-            ? "The financial statements have been prepared on the going concern basis and in accordance with FRS 105 \"The Financial Reporting Standard applicable to the Micro-entities Regime\" and the Companies Act 2014."
-            : "The financial statements have been prepared on the going concern basis and in accordance with FRS 102 \"The Financial Reporting Standard applicable in the UK and Republic of Ireland\" issued by the Financial Reporting Council, and the Companies Act 2014.";
-
-        var policiesContent = $"Basis of Preparation\n{basisText}\n\n";
-        policiesContent += "Currency\nThe financial statements are presented in Euro (\u20ac), which is also the functional currency of the company.\n\n";
-
-        // Check if company has fixed assets for depreciation policy
-        var hasAssets = activeAssets.Count > 0;
-        if (hasAssets)
+        var generated = checklist.Candidates.Select((candidate, index) => new NotesDisclosure
         {
-            policiesContent += "Tangible Fixed Assets and Depreciation\n";
-            policiesContent += "Tangible fixed assets are stated at cost less accumulated depreciation. Depreciation is provided at rates calculated to write off the cost of each asset over its expected useful life, as follows:\n";
+            PeriodId = periodId,
+            NoteNumber = index + 1,
+            Code = candidate.Code,
+            Title = candidate.Title,
+            Content = candidate.Content,
+            IsRequired = true,
+            IsIncluded = candidate.IsIncluded,
+            ChecklistState = candidate.State,
+            ReviewEvidence = candidate.ReviewEvidence,
+            ReviewedBy = candidate.ReviewedBy,
+            ReviewedAt = candidate.ReviewedAt
+        }).ToList();
 
-            var categories = activeAssets
-                .Select(a => new { a.Category, a.DepreciationMethod, a.UsefulLifeYears })
-                .Distinct()
-                .ToList();
-
-            foreach (var cat in categories)
-            {
-                var method = cat.DepreciationMethod == DepreciationMethod.StraightLine ? "Straight line" : "Reducing balance";
-                policiesContent += $"  {cat.Category}: {method} over {cat.UsefulLifeYears} years\n";
-            }
-            policiesContent += "\n";
+        var nextNumber = generated.Count + 1;
+        foreach (var custom in customExisting)
+        {
+            custom.Code = null;
+            custom.IsRequired = false;
+            custom.ChecklistState = NoteChecklistState.Required;
+            custom.NoteNumber = nextNumber++;
         }
 
-        var hasStock = await db.Inventories.AnyAsync(i => i.PeriodId == periodId);
-        if (hasStock)
+        if (checklist.Period.FilingRegime is { } filingRegime)
         {
-            policiesContent += "Stock\nStock is valued at the lower of cost and estimated net realisable value.\n\n";
+            filingRegime.RequiredNotesJson = JsonSerializer.Serialize(
+                checklist.Candidates.Select(candidate => candidate.Code).ToList());
         }
 
-        policiesContent += "Revenue Recognition\nRevenue is recognised to the extent that it is probable that the economic benefits will flow to the company and the revenue can be reliably measured.\n\n";
-        policiesContent += "Taxation\nCorporation tax is provided on taxable profits at the current rate. Deferred tax is recognised in respect of all timing differences that have originated but not reversed at the balance sheet date.";
-
-        notes.Add(new NotesDisclosure { PeriodId = periodId, NoteNumber = num++, Title = "Accounting Policies", Content = policiesContent, IsRequired = true, IsIncluded = true });
-
-        // For micro regime, only minimal additional notes required
-        if (regime == ElectedRegime.Micro)
-        {
-            // Director advances/guarantees (micro requirement)
-            var dirLoans = await db.DirectorLoans
-                .Where(d => d.PeriodId == periodId && d.Director.CompanyId == companyId)
-                .Include(d => d.Director)
-                .ToListAsync();
-            if (dirLoans.Count > 0)
-            {
-                var dlContent = "The following advances, credits and guarantees existed between the company and its directors during the financial year:\n\n";
-                foreach (var dl in dirLoans)
-                    dlContent += $"{dl.Director.Name}: Opening \u20ac{dl.OpeningBalance:N0}, Advances \u20ac{dl.Advances:N0}, Repayments \u20ac{dl.Repayments:N0}, Closing \u20ac{dl.ClosingBalance:N0}\n";
-                notes.Add(new NotesDisclosure { PeriodId = periodId, NoteNumber = num++, Title = "Advances, Credits and Guarantees to Directors", Content = dlContent, IsRequired = true, IsIncluded = true });
-            }
-
-            notes.Add(new NotesDisclosure { PeriodId = periodId, NoteNumber = num++, Title = "Approval of Financial Statements", Content = $"The financial statements were approved and authorised for issue by the Board of Directors on {DateTime.Now:dd MMMM yyyy}.", IsRequired = true, IsIncluded = true });
-
-            RenumberCustomNotesAfterGenerated(customExisting, notes.Count);
-            db.NotesDisclosures.AddRange(notes);
-            await db.SaveChangesAsync();
-            return await db.NotesDisclosures
-                .Where(n => n.PeriodId == periodId)
-                .OrderBy(n => n.NoteNumber)
-                .ToListAsync();
-        }
-
-        // Note 2: Tangible Fixed Assets (if any)
-        if (hasAssets)
-        {
-            var depEntries = activeAssets.SelectMany(a => a.DepreciationEntries.Where(d => d.PeriodId == periodId)).ToList();
-
-            var totalCost = activeAssets.Sum(a => a.Cost);
-            var totalDep = depEntries.Sum(d => d.Charge);
-            var totalNbv = activeAssets.Sum(a =>
-            {
-                var entry = a.DepreciationEntries.FirstOrDefault(d => d.PeriodId == periodId);
-                return entry?.ClosingNbv ?? (a.Cost - a.DepreciationEntries.Where(d => periodsToDate.Contains(d.PeriodId)).Sum(d => d.Charge));
-            });
-
-            var assetContent = $"Cost at period end: \u20ac{totalCost:N0}\n";
-            assetContent += $"Depreciation charge for the year: \u20ac{totalDep:N0}\n";
-            assetContent += $"Net book value at period end: \u20ac{totalNbv:N0}";
-
-            notes.Add(new NotesDisclosure { PeriodId = periodId, NoteNumber = num++, Title = "Tangible Fixed Assets", Content = assetContent, IsRequired = true, IsIncluded = true });
-        }
-
-        // Note: Debtors
-        var debtors = await db.Debtors.Where(d => d.PeriodId == periodId).ToListAsync();
-        if (debtors.Count > 0)
-        {
-            var dContent = "";
-            var trade = debtors.Where(d => d.Type == DebtorType.Trade).Sum(d => d.Amount);
-            var prepay = debtors.Where(d => d.Type == DebtorType.Prepayment).Sum(d => d.Amount);
-            var other = debtors.Where(d => d.Type == DebtorType.Other).Sum(d => d.Amount);
-            if (trade > 0) dContent += $"Trade debtors: \u20ac{trade:N0}\n";
-            if (prepay > 0) dContent += $"Prepayments and accrued income: \u20ac{prepay:N0}\n";
-            if (other > 0) dContent += $"Other debtors: \u20ac{other:N0}\n";
-            dContent += $"Total: \u20ac{debtors.Sum(d => d.Amount):N0}";
-            notes.Add(new NotesDisclosure { PeriodId = periodId, NoteNumber = num++, Title = "Debtors", Content = dContent, IsRequired = true, IsIncluded = true });
-        }
-
-        // Note: Creditors falling due within one year
-        var creditorsWithin = await db.Creditors.Where(c => c.PeriodId == periodId && c.DueWithinYear).ToListAsync();
-        var taxBals = await db.TaxBalances.Where(t => t.PeriodId == periodId).ToListAsync();
-        if (creditorsWithin.Count > 0 || taxBals.Count > 0)
-        {
-            var cContent = "";
-            var tradeCred = creditorsWithin.Where(c => c.Type == CreditorType.Trade).Sum(c => c.Amount);
-            var accruals = creditorsWithin.Where(c => c.Type == CreditorType.Accrual).Sum(c => c.Amount);
-            var taxCred = creditorsWithin.Where(c => c.Type == CreditorType.Tax).Sum(c => c.Amount) + taxBals.Sum(t => t.Balance);
-            var otherCred = creditorsWithin.Where(c => c.Type == CreditorType.Other).Sum(c => c.Amount);
-            if (tradeCred > 0) cContent += $"Trade creditors: \u20ac{tradeCred:N0}\n";
-            if (accruals > 0) cContent += $"Accruals: \u20ac{accruals:N0}\n";
-            if (taxCred > 0) cContent += $"Taxation and social insurance: \u20ac{taxCred:N0}\n";
-            if (otherCred > 0) cContent += $"Other creditors: \u20ac{otherCred:N0}\n";
-            var total = tradeCred + accruals + taxCred + otherCred;
-            cContent += $"Total: \u20ac{total:N0}";
-            notes.Add(new NotesDisclosure { PeriodId = periodId, NoteNumber = num++, Title = "Creditors: Amounts Falling Due Within One Year", Content = cContent, IsRequired = true, IsIncluded = true });
-        }
-
-        // Note: Creditors after one year
-        var loanSnapshots = await db.LoanBalanceSnapshots
-            .Include(s => s.Loan)
-            .Where(s => s.PeriodId == periodId && s.Loan.CompanyId == company.Id && s.DueAfterYear > 0)
-            .ToListAsync();
-        loanSnapshots = loanSnapshots
-            .Where(s => LoanAppliesAtPeriodEnd(s.Loan, period.PeriodStart, period.PeriodEnd))
-            .ToList();
-        var snapshotLoanIds = loanSnapshots.Select(s => s.LoanId).ToHashSet();
-        var loansAfter = (await db.Loans
-            .Where(l => l.CompanyId == company.Id
-                && l.DueAfterYear > 0
-                && l.DrawdownDate != null
-                && l.BalanceAsOfDate != null
-                && l.DrawdownDate <= period.PeriodEnd
-                && l.BalanceAsOfDate >= period.PeriodStart
-                && l.BalanceAsOfDate <= period.PeriodEnd)
-            .ToListAsync())
-            .Where(l => LoanAppliesAtPeriodEnd(l, period.PeriodStart, period.PeriodEnd))
-            .Where(l => !snapshotLoanIds.Contains(l.Id))
-            .Select(l => new LoanDisclosureLine(l.Lender, l.DueAfterYear))
-            .Concat(loanSnapshots.Select(s => new LoanDisclosureLine(s.Loan.Lender, s.DueAfterYear)))
-            .ToList();
-        if (loansAfter.Count > 0)
-        {
-            var lContent = "";
-            foreach (var loan in loansAfter)
-                lContent += $"{loan.Lender}: \u20ac{loan.Amount:N0}\n";
-            lContent += $"Total: \u20ac{loansAfter.Sum(l => l.Amount):N0}";
-            notes.Add(new NotesDisclosure { PeriodId = periodId, NoteNumber = num++, Title = "Creditors: Amounts Falling Due After More Than One Year", Content = lContent, IsRequired = true, IsIncluded = true });
-        }
-
-        // Note: Share Capital
-        var shareCapitals = await db.ShareCapitals
-            .Where(s => s.CompanyId == company.Id
-                && s.IssueDate != null
-                && s.IssueDate <= period.PeriodEnd
-                && (s.CancelledDate == null || s.CancelledDate > period.PeriodEnd))
-            .ToListAsync();
-        // accounting-share-capital-and-dividends-reserves: state the truth when no share capital is
-        // recorded instead of fabricating a "1 Ordinary share" plug.
-        var scContent = shareCapitals.Count > 0
-            ? string.Join("\n", shareCapitals.Select(s => $"Authorised and issued: {s.NumberIssued} {s.ShareClass} shares of \u20ac{s.NominalValue:N2} each, fully paid: \u20ac{s.TotalValue:N0}"))
-            : "No share capital has been recorded for this company.";
-        notes.Add(new NotesDisclosure { PeriodId = periodId, NoteNumber = num++, Title = "Share Capital", Content = scContent, IsRequired = true, IsIncluded = true });
-
-        // Note: Staff numbers (if employer)
-        if (company.IsEmployer)
-        {
-            var payroll = await db.PayrollSummaries.FirstOrDefaultAsync(p => p.PeriodId == periodId);
-            if (payroll != null)
-            {
-                var staffContent = $"The average number of employees during the financial year was {payroll.StaffCount}.\n\n";
-                staffContent += $"Staff costs:\n";
-                staffContent += $"  Wages and salaries: \u20ac{payroll.GrossWages:N0}\n";
-                staffContent += $"  Social insurance costs (Employer PRSI): \u20ac{payroll.EmployerPrsi:N0}\n";
-                staffContent += $"  Pension costs: \u20ac{payroll.PensionContributions:N0}\n";
-                staffContent += $"  Total: \u20ac{payroll.GrossWages + payroll.EmployerPrsi + payroll.PensionContributions:N0}";
-                notes.Add(new NotesDisclosure { PeriodId = periodId, NoteNumber = num++, Title = "Employees and Remuneration", Content = staffContent, IsRequired = true, IsIncluded = true });
-            }
-        }
-
-        // Note: Director loans
-        var directorLoans = await db.DirectorLoans
-            .Where(d => d.PeriodId == periodId && d.Director.CompanyId == companyId)
-            .Include(d => d.Director)
-            .ToListAsync();
-        if (directorLoans.Count > 0)
-        {
-            var dlContent = "";
-            foreach (var dl in directorLoans)
-                dlContent += $"{dl.Director.Name}: Opening \u20ac{dl.OpeningBalance:N0}, Advances \u20ac{dl.Advances:N0}, Repayments \u20ac{dl.Repayments:N0}, Closing \u20ac{dl.ClosingBalance:N0}\n";
-            notes.Add(new NotesDisclosure { PeriodId = periodId, NoteNumber = num++, Title = "Directors' Loans and Transactions", Content = dlContent, IsRequired = true, IsIncluded = true });
-        }
-
-        // Note: Post Balance Sheet Events
-        var pbsEvents = await db.PostBalanceSheetEvents.Where(e => e.PeriodId == periodId).OrderBy(e => e.EventDate).ToListAsync();
-        if (pbsEvents.Count > 0)
-        {
-            var pbsContent = "The following events have occurred after the balance sheet date:\n\n";
-            foreach (var evt in pbsEvents)
-            {
-                var eventType = evt.IsAdjusting ? "Adjusting" : "Non-adjusting";
-                pbsContent += $"{evt.EventDate:dd MMMM yyyy} ({eventType}): {evt.Description}";
-                if (evt.FinancialImpact.HasValue)
-                    pbsContent += $" — Estimated financial impact: \u20ac{evt.FinancialImpact.Value:N0}";
-                pbsContent += "\n";
-            }
-
-            var adjustingEvents = pbsEvents.Where(e => e.IsAdjusting).ToList();
-            if (adjustingEvents.Count > 0)
-                pbsContent += "\nAdjusting events have been reflected in the financial statements.";
-
-            notes.Add(new NotesDisclosure { PeriodId = periodId, NoteNumber = num++, Title = "Post Balance Sheet Events", Content = pbsContent.TrimEnd(), IsRequired = true, IsIncluded = true });
-        }
-
-        // Note: Related Party Transactions
-        var rptItems = await db.RelatedPartyTransactions.Where(r => r.PeriodId == periodId).OrderBy(r => r.PartyName).ToListAsync();
-        if (rptItems.Count > 0)
-        {
-            var rptContent = "The following transactions with related parties took place during the financial year:\n\n";
-            foreach (var rp in rptItems)
-            {
-                rptContent += $"{rp.PartyName} ({rp.Relationship}) — {rp.TransactionType}: \u20ac{rp.Amount:N0}";
-                if (rp.BalanceOwed.HasValue && rp.BalanceOwed.Value != 0)
-                    rptContent += $", Balance owed at year end: \u20ac{rp.BalanceOwed.Value:N0}";
-                if (!string.IsNullOrWhiteSpace(rp.Terms))
-                    rptContent += $" ({rp.Terms})";
-                rptContent += "\n";
-            }
-
-            notes.Add(new NotesDisclosure { PeriodId = periodId, NoteNumber = num++, Title = "Related Party Transactions", Content = rptContent.TrimEnd(), IsRequired = true, IsIncluded = true });
-        }
-
-        // Note: Contingent Liabilities
-        var clItems = await db.ContingentLiabilities.Where(c => c.PeriodId == periodId).OrderBy(c => c.Description).ToListAsync();
-        if (clItems.Count > 0)
-        {
-            var clContent = "The following contingent liabilities existed at the balance sheet date:\n\n";
-            foreach (var item in clItems)
-            {
-                clContent += $"{item.Description} ({item.Nature}) — Likelihood: {item.Likelihood}";
-                if (item.EstimatedAmount.HasValue)
-                    clContent += $", Estimated amount: \u20ac{item.EstimatedAmount.Value:N0}";
-                clContent += "\n";
-            }
-
-            notes.Add(new NotesDisclosure { PeriodId = periodId, NoteNumber = num++, Title = "Contingent Liabilities", Content = clContent.TrimEnd(), IsRequired = true, IsIncluded = true });
-        }
-
-        // Note: Going Concern
-        if (!period.GoingConcernConfirmed)
-        {
-            var gcContent = "Material uncertainty relating to going concern\n\n";
-            gcContent += !string.IsNullOrWhiteSpace(period.GoingConcernNote)
-                ? period.GoingConcernNote
-                : "The directors have identified material uncertainties related to events or conditions that may cast significant doubt on the company's ability to continue as a going concern.";
-            notes.Add(new NotesDisclosure { PeriodId = periodId, NoteNumber = num++, Title = "Going Concern", Content = gcContent, IsRequired = true, IsIncluded = true });
-        }
-        else
-        {
-            notes.Add(new NotesDisclosure { PeriodId = periodId, NoteNumber = num++, Title = "Going Concern", Content = "The directors have a reasonable expectation that the company has adequate resources to continue in operational existence for the foreseeable future. The financial statements have been prepared on the going concern basis.", IsRequired = true, IsIncluded = true });
-        }
-
-        // Medium/Full regimes require a fuller disclosure set than small companies (BL-13). These
-        // notes are required by the regime, so they render even when the underlying amount is nil,
-        // each with an explicit statement.
-        if (regime == ElectedRegime.Medium || regime == ElectedRegime.Full)
-        {
-            var pl = await new FinancialStatementsService(db).GetProfitAndLossAsync(companyId, periodId);
-
-            var turnoverContent = "Turnover represents the amounts derived from the provision of goods and services, "
-                + "stated net of value added tax, that fall within the company's ordinary activities.\n\n"
-                + $"Turnover for the financial year: €{pl.Turnover:N0}";
-            if (pl.OtherIncome != 0)
-                turnoverContent += $"\nOther operating income: €{pl.OtherIncome:N0}";
-            notes.Add(new NotesDisclosure { PeriodId = periodId, NoteNumber = num++, Title = "Turnover", Content = turnoverContent, IsRequired = true, IsIncluded = true });
-
-            var taxContent = $"The tax charge for the financial year is €{pl.TaxCharge:N0}.\n\n"
-                + "Corporation tax is provided on the company's taxable profits: trading profits are charged at 12.5% "
-                + "and non-trading (passive) income at 25% (s.21A TCA 1997). Capital allowances are claimed in place of "
-                + "depreciation in arriving at taxable profits.";
-            notes.Add(new NotesDisclosure { PeriodId = periodId, NoteNumber = num++, Title = "Tax on Profit on Ordinary Activities", Content = taxContent, IsRequired = true, IsIncluded = true });
-
-            notes.Add(new NotesDisclosure { PeriodId = periodId, NoteNumber = num++, Title = "Financial Instruments", Content = "The company's financial instruments comprise cash and cash equivalents, trade and other debtors, and trade and other creditors. These are basic financial instruments measured at amortised cost in accordance with Sections 11 and 12 of FRS 102. The company does not hold or issue derivative financial instruments.", IsRequired = true, IsIncluded = true });
-
-            notes.Add(new NotesDisclosure { PeriodId = periodId, NoteNumber = num++, Title = "Capital Commitments", Content = "There were no material capital commitments authorised or contracted for at the balance sheet date that have not been provided for in these financial statements.", IsRequired = true, IsIncluded = true });
-        }
-
-        // Note: Approval
-        notes.Add(new NotesDisclosure { PeriodId = periodId, NoteNumber = num++, Title = "Approval of Financial Statements", Content = $"The financial statements were approved and authorised for issue by the Board of Directors on {DateTime.Now:dd MMMM yyyy}.", IsRequired = true, IsIncluded = true });
-
-        RenumberCustomNotesAfterGenerated(customExisting, notes.Count);
-        db.NotesDisclosures.AddRange(notes);
+        db.NotesDisclosures.AddRange(generated);
         await db.SaveChangesAsync();
         return await db.NotesDisclosures
-            .Where(n => n.PeriodId == periodId)
-            .OrderBy(n => n.NoteNumber)
+            .Where(note => note.PeriodId == periodId)
+            .OrderBy(note => note.NoteNumber)
+            .ThenBy(note => note.Id)
             .ToListAsync();
     }
 
-    private static void RenumberCustomNotesAfterGenerated(List<NotesDisclosure> customNotes, int generatedCount)
+    /// <summary>
+    /// Returns release-blocking checklist failures without mutating persisted notes.
+    /// </summary>
+    public async Task<List<string>> GetChecklistIssuesAsync(int companyId, int periodId)
     {
-        var noteNumber = generatedCount + 1;
-        foreach (var note in customNotes)
-            note.NoteNumber = noteNumber++;
+        var checklist = await BuildChecklistAsync(companyId, periodId);
+        var notes = await db.NotesDisclosures
+            .Where(note => note.PeriodId == periodId)
+            .ToListAsync();
+
+        // Legacy test/upgrade rows pre-date stable codes. The production contract becomes strict as
+        // soon as the coded generator has run (or FilingRegimeService has persisted coded requirements).
+        var codedContract = notes.Any(note => StatutoryNoteCodes.IsStableCode(note.Code))
+            || RequiredNotesJsonUsesStableCodes(checklist.Period.FilingRegime?.RequiredNotesJson);
+        if (!codedContract)
+            return notes.Any(note => note.IsIncluded)
+                ? []
+                : ["Notes to the financial statements not generated or reviewed"];
+
+        var issues = new List<string>();
+        var expectedByCode = checklist.Candidates.ToDictionary(candidate => candidate.Code, StringComparer.Ordinal);
+        var generated = notes.Where(note => note.IsRequired || StatutoryNoteCodes.IsStableCode(note.Code)).ToList();
+
+        foreach (var candidate in checklist.Candidates)
+        {
+            var matches = generated.Where(note => note.Code == candidate.Code).ToList();
+            if (matches.Count != 1)
+            {
+                issues.Add(matches.Count == 0
+                    ? $"Required statutory note {candidate.Code} is missing."
+                    : $"Statutory note {candidate.Code} is duplicated ({matches.Count} rows)."
+                );
+                continue;
+            }
+
+            var note = matches[0];
+            if (!string.Equals(note.Title, candidate.Title, StringComparison.Ordinal))
+                issues.Add($"Statutory note {candidate.Code} has an unexpected title.");
+            if (note.ChecklistState != candidate.State)
+                issues.Add($"Statutory note {candidate.Code} has stale checklist state {note.ChecklistState}.");
+            if (candidate.ReviewedAt is not null
+                && (string.IsNullOrWhiteSpace(note.ReviewEvidence)
+                    || string.IsNullOrWhiteSpace(note.ReviewedBy)
+                    || note.ReviewedAt is null))
+            {
+                issues.Add($"Statutory note {candidate.Code} lacks retained review evidence.");
+            }
+
+            if (candidate.State == NoteChecklistState.NotApplicable)
+            {
+                if (note.IsIncluded)
+                    issues.Add($"Not-applicable statutory note {candidate.Code} must not be rendered.");
+                continue;
+            }
+
+            if (candidate.State == NoteChecklistState.ExplicitReview && !candidate.IsIncluded)
+            {
+                issues.Add($"Statutory note {candidate.Code} requires retained explicit-review or manual-handoff evidence.");
+                continue;
+            }
+
+            if (!note.IsIncluded || string.IsNullOrWhiteSpace(note.Content))
+            {
+                issues.Add($"Required statutory note {candidate.Code} is not included with content.");
+                continue;
+            }
+
+            if (!string.Equals(Normalise(note.Content), Normalise(candidate.Content), StringComparison.Ordinal))
+                issues.Add($"Statutory note {candidate.Code} no longer reconciles to its source facts or statements.");
+
+        }
+
+        foreach (var note in generated.Where(note =>
+                     StatutoryNoteCodes.IsStableCode(note.Code)
+                     && !expectedByCode.ContainsKey(note.Code!)))
+        {
+            issues.Add($"Obsolete generated statutory note {note.Code} remains in the checklist.");
+        }
+
+        var included = notes.Where(note => note.IsIncluded).ToList();
+        foreach (var title in expectedByCode.Values.Select(candidate => candidate.Title).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var titleCount = included.Count(note => string.Equals(note.Title.Trim(), title, StringComparison.OrdinalIgnoreCase));
+            if (titleCount > 1)
+                issues.Add($"Generated note title '{title}' is duplicated in rendered output.");
+        }
+
+        foreach (var note in included.Where(note => StatutoryNoteCodes.ContainsUnsupportedRepresentation(note.Content)))
+        {
+            var hasRetainedReview = note.ChecklistState == NoteChecklistState.ExplicitReview
+                && !string.IsNullOrWhiteSpace(note.ReviewEvidence)
+                && !string.IsNullOrWhiteSpace(note.ReviewedBy)
+                && note.ReviewedAt is not null;
+            if (!hasRetainedReview)
+                issues.Add($"Note '{note.Title}' contains an unsupported representation without retained manual-review evidence.");
+        }
+
+        if (checklist.Period.ApprovalDate is null)
+            issues.Add("Board approval date has not been persisted.");
+
+        return issues.Distinct(StringComparer.Ordinal).ToList();
     }
 
-    private static bool LoanAppliesAtPeriodEnd(Loan loan, DateOnly periodStart, DateOnly periodEnd) =>
-        loan.DrawdownDate is { } drawdownDate
-        && loan.BalanceAsOfDate is { } balanceAsOfDate
-        && drawdownDate <= periodEnd
-        && balanceAsOfDate >= periodStart
-        && balanceAsOfDate <= periodEnd;
+    public static async Task RefreshApprovalNoteAsync(AccountsDbContext db, AccountingPeriod period)
+    {
+        if (period.ApprovalDate is not { } approvalDate)
+            return;
 
-    private record LoanDisclosureLine(string Lender, decimal Amount);
+        var note = await db.NotesDisclosures
+            .FirstOrDefaultAsync(candidate => candidate.PeriodId == period.Id
+                && candidate.Code == StatutoryNoteCodes.Approval);
+        if (note is null)
+            return;
+
+        note.Content = ApprovalContent(approvalDate);
+        note.ChecklistState = NoteChecklistState.Required;
+        note.IsIncluded = true;
+    }
+
+    private async Task<Checklist> BuildChecklistAsync(int companyId, int periodId)
+    {
+        var period = await db.AccountingPeriods
+            .Include(candidate => candidate.Company)
+            .Include(candidate => candidate.FilingRegime)
+            .Include(candidate => candidate.SizeClassification)
+            .FirstOrDefaultAsync(candidate => candidate.Id == periodId && candidate.CompanyId == companyId)
+            ?? throw new ResourceNotFoundException($"Period {periodId} not found");
+        var company = period.Company;
+        var regime = period.FilingRegime?.ElectedRegime ?? ElectedRegime.Small;
+        var sizeClass = period.SizeClassification?.OverrideClass
+            ?? period.SizeClassification?.CalculatedClass
+            ?? RegimeFallbackSize(regime);
+        var confirmations = await db.YearEndReviewConfirmations
+            .Where(review => review.PeriodId == periodId && review.Confirmed)
+            .OrderByDescending(review => review.ConfirmedAt)
+            .ToListAsync();
+        var reviews = confirmations
+            .GroupBy(review => review.SectionKey, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+        var candidates = new List<NoteCandidate>();
+
+        void Add(NoteCandidate candidate) => candidates.Add(candidate);
+
+        var activeAssets = await db.FixedAssets
+            .Where(asset => asset.CompanyId == companyId
+                && asset.AcquisitionDate <= period.PeriodEnd
+                && (asset.DisposalDate == null || asset.DisposalDate > period.PeriodEnd))
+            .OrderBy(asset => asset.Category)
+            .ThenBy(asset => asset.Name)
+            .ToListAsync();
+        var hasStock = await db.Inventories.AnyAsync(inventory => inventory.PeriodId == periodId);
+        Add(Required(
+            StatutoryNoteCodes.AccountingPolicies,
+            AccountingPolicies(regime, activeAssets, hasStock)));
+
+        Add(GoingConcernCandidate(period, reviews));
+
+        if (regime == ElectedRegime.Micro)
+        {
+            var microDirectorLoans = await DirectorLoansAsync(companyId, periodId);
+            var microDirectorLoanDisclosure = microDirectorLoans.Count > 0
+                ? await new DirectorLoanComplianceService(db, new FinancialStatementsService(db))
+                    .GenerateSection307NoteAsync(companyId, periodId)
+                : null;
+            Add(microDirectorLoans.Count > 0
+                ? Required(StatutoryNoteCodes.DirectorTransactions, microDirectorLoanDisclosure!)
+                : company.HasDirectorLoans
+                    ? NotApplicableOrReview(StatutoryNoteCodes.DirectorTransactions, "director-loans", reviews)
+                    : FactNotApplicable(StatutoryNoteCodes.DirectorTransactions, "The company is not recorded as having director loans."));
+            Add(ApprovalCandidate(period));
+            return new Checklist(period, candidates);
+        }
+
+        var statements = new FinancialStatementsService(db);
+        var balanceSheet = await statements.GetBalanceSheetAsync(companyId, periodId);
+        var profitAndLoss = regime == ElectedRegime.SmallAbridged
+            ? null
+            : await statements.GetProfitAndLossAsync(companyId, periodId);
+        var equity = regime == ElectedRegime.SmallAbridged
+            ? null
+            : await statements.GetEquityChangesAsync(companyId, periodId);
+
+        Add(balanceSheet.FixedAssets.Total != 0 || balanceSheet.FixedAssets.Categories.Count > 0
+            ? Required(StatutoryNoteCodes.FixedAssets, FixedAssetContent(balanceSheet.FixedAssets))
+            : FactNotApplicable(StatutoryNoteCodes.FixedAssets, "No posted fixed-asset balance exists at period end."));
+
+        Add(balanceSheet.CurrentAssets.Stock != 0
+            ? Required(
+                StatutoryNoteCodes.Inventories,
+                $"Inventories recognised at period end: {Money(balanceSheet.CurrentAssets.Stock)}")
+            : NotApplicableOrReview(StatutoryNoteCodes.Inventories, "inventory", reviews));
+
+        Add(balanceSheet.CurrentAssets.Debtors != 0 || balanceSheet.CurrentAssets.Prepayments != 0
+            ? Required(StatutoryNoteCodes.Debtors, DebtorContent(balanceSheet.CurrentAssets))
+            : NotApplicableOrReview(StatutoryNoteCodes.Debtors, "debtors", reviews));
+
+        Add(balanceSheet.CreditorsWithinYear.Total != 0
+            ? Required(StatutoryNoteCodes.CurrentCreditors, CurrentCreditorContent(balanceSheet.CreditorsWithinYear))
+            : NotApplicableOrReview(StatutoryNoteCodes.CurrentCreditors, "creditors", reviews));
+
+        Add(balanceSheet.CreditorsAfterYear.Total != 0
+            ? Required(StatutoryNoteCodes.LongTermCreditors, LongTermCreditorContent(balanceSheet.CreditorsAfterYear))
+            : FactNotApplicable(StatutoryNoteCodes.LongTermCreditors, "No posted long-term creditor balance exists at period end."));
+
+        Add(company.CompanyType == CompanyType.CompanyLimitedByGuarantee
+            ? FactNotApplicable(StatutoryNoteCodes.ShareCapital, "A company limited by guarantee has no share capital.")
+            : balanceSheet.CapitalAndReserves.ShareCapital != 0
+            ? Required(
+                StatutoryNoteCodes.ShareCapital,
+                $"Issued share capital at period end: {Money(balanceSheet.CapitalAndReserves.ShareCapital)}")
+            : ExplicitReview(StatutoryNoteCodes.ShareCapital));
+        Add(Required(StatutoryNoteCodes.Reserves, ReserveContent(balanceSheet.CapitalAndReserves)));
+
+        var payroll = await db.PayrollSummaries.SingleOrDefaultAsync(item => item.PeriodId == periodId);
+        Add(company.IsEmployer
+            ? payroll is not null
+                ? Required(StatutoryNoteCodes.Employees, EmployeeContent(payroll))
+                : ExplicitReview(StatutoryNoteCodes.Employees)
+            : FactNotApplicable(StatutoryNoteCodes.Employees, "The company is not recorded as an employer."));
+
+        var directorLoans = await DirectorLoansAsync(companyId, periodId);
+        var directorLoanDisclosure = directorLoans.Count > 0
+            ? await new DirectorLoanComplianceService(db, new FinancialStatementsService(db))
+                .GenerateSection307NoteAsync(companyId, periodId)
+            : null;
+        Add(directorLoans.Count > 0
+            ? Required(StatutoryNoteCodes.DirectorTransactions, directorLoanDisclosure!)
+            : company.HasDirectorLoans
+                ? NotApplicableOrReview(StatutoryNoteCodes.DirectorTransactions, "director-loans", reviews)
+                : FactNotApplicable(StatutoryNoteCodes.DirectorTransactions, "The company is not recorded as having director loans."));
+        Add(ManualReview(StatutoryNoteCodes.DirectorRemuneration, "note-directors-remuneration", reviews));
+
+        var events = await db.PostBalanceSheetEvents
+            .Where(item => item.PeriodId == periodId)
+            .OrderBy(item => item.EventDate)
+            .ThenBy(item => item.Id)
+            .ToListAsync();
+        Add(events.Count > 0
+            ? Required(StatutoryNoteCodes.PostBalanceSheetEvents, PostBalanceSheetContent(events))
+            : NotApplicableOrReview(StatutoryNoteCodes.PostBalanceSheetEvents, "post-balance-sheet-events", reviews));
+
+        var relatedParties = await db.RelatedPartyTransactions
+            .Where(item => item.PeriodId == periodId)
+            .OrderBy(item => item.PartyName)
+            .ThenBy(item => item.Id)
+            .ToListAsync();
+        Add(relatedParties.Count > 0
+            ? Required(StatutoryNoteCodes.RelatedParties, RelatedPartyContent(relatedParties))
+            : NotApplicableOrReview(StatutoryNoteCodes.RelatedParties, "related-parties", reviews));
+
+        if (company.IsGroupMember)
+            Add(ManualReview(StatutoryNoteCodes.UltimateControllingParty, "note-ultimate-controlling-party", reviews));
+
+        var contingencies = await db.ContingentLiabilities
+            .Where(item => item.PeriodId == periodId)
+            .OrderBy(item => item.Description)
+            .ThenBy(item => item.Id)
+            .ToListAsync();
+        Add(contingencies.Count > 0
+            ? Required(StatutoryNoteCodes.ContingentLiabilities, ContingencyContent(contingencies))
+            : NotApplicableOrReview(StatutoryNoteCodes.ContingentLiabilities, "contingent-liabilities", reviews));
+
+        if (profitAndLoss is not null && equity is not null)
+        {
+            Add(Required(StatutoryNoteCodes.Turnover, TurnoverContent(profitAndLoss)));
+            Add(Required(StatutoryNoteCodes.TaxOnProfit, TaxContent(profitAndLoss)));
+
+            var dividends = await db.Dividends
+                .Where(item => item.PeriodId == periodId)
+                .OrderBy(item => item.DateDeclared)
+                .ThenBy(item => item.Id)
+                .ToListAsync();
+            Add(dividends.Count > 0 || equity.DividendsPaid != 0
+                ? Required(StatutoryNoteCodes.Dividends, DividendContent(equity, dividends))
+                : NotApplicableOrReview(StatutoryNoteCodes.Dividends, "dividends", reviews));
+        }
+
+        if (regime is ElectedRegime.Medium or ElectedRegime.Full || sizeClass >= CompanySizeClass.Medium)
+        {
+            Add(ManualReview(StatutoryNoteCodes.FinancialInstruments, "note-financial-instruments", reviews));
+            Add(ManualReview(StatutoryNoteCodes.CapitalCommitments, "note-capital-commitments", reviews));
+            Add(ManualReview(StatutoryNoteCodes.DeferredTax, "note-deferred-tax", reviews));
+        }
+
+        Add(ApprovalCandidate(period));
+        return new Checklist(period, candidates);
+    }
+
+    private static NoteCandidate GoingConcernCandidate(
+        AccountingPeriod period,
+        IReadOnlyDictionary<string, YearEndReviewConfirmation> reviews)
+    {
+        if (!reviews.TryGetValue("going-concern", out var review))
+            return ExplicitReview(StatutoryNoteCodes.GoingConcern);
+
+        var content = period.GoingConcernConfirmed
+            ? "Following their documented assessment, the directors consider the going concern basis of preparation appropriate."
+            : !string.IsNullOrWhiteSpace(period.GoingConcernNote)
+                ? period.GoingConcernNote.Trim()
+                : null;
+        if (string.IsNullOrWhiteSpace(content))
+            return ExplicitReview(StatutoryNoteCodes.GoingConcern);
+        return ReviewedRequired(StatutoryNoteCodes.GoingConcern, content, review);
+    }
+
+    private static NoteCandidate ApprovalCandidate(AccountingPeriod period) =>
+        period.ApprovalDate is { } date
+            ? Required(StatutoryNoteCodes.Approval, ApprovalContent(date))
+            : ExplicitReview(StatutoryNoteCodes.Approval);
+
+    private static string ApprovalContent(DateOnly date) =>
+        $"The financial statements were approved and authorised for issue by the Board of Directors on {date.ToString("dd MMMM yyyy", IrishCulture)}.";
+
+    private async Task<List<DirectorLoan>> DirectorLoansAsync(int companyId, int periodId) =>
+        await db.DirectorLoans
+            .Where(item => item.PeriodId == periodId
+                && item.Period.CompanyId == companyId
+                && (item.CounterpartyType == DirectorLoanCounterpartyType.GroupCompany && item.DirectorId == null
+                    || item.DirectorId != null && item.Director!.CompanyId == companyId))
+            .Include(item => item.Director)
+            .Include(item => item.BalanceMovements.OrderBy(movement => movement.MovementDate).ThenBy(movement => movement.Id))
+            .OrderBy(item => item.CounterpartyName ?? item.Director!.Name)
+            .ThenBy(item => item.Id)
+            .ToListAsync();
+
+    private static NoteCandidate Required(string code, string content) => new(
+        code,
+        StatutoryNoteCodes.Titles[code],
+        content,
+        NoteChecklistState.Required,
+        true,
+        null,
+        null,
+        null);
+
+    private static NoteCandidate ReviewedRequired(string code, string content, YearEndReviewConfirmation review) => new(
+        code,
+        StatutoryNoteCodes.Titles[code],
+        content,
+        NoteChecklistState.Required,
+        true,
+        ReviewEvidence(review),
+        review.ConfirmedBy,
+        review.ConfirmedAt);
+
+    private static NoteCandidate FactNotApplicable(string code, string evidence) => new(
+        code,
+        StatutoryNoteCodes.Titles[code],
+        null,
+        NoteChecklistState.NotApplicable,
+        false,
+        evidence,
+        null,
+        null);
+
+    private static NoteCandidate NotApplicableOrReview(
+        string code,
+        string reviewKey,
+        IReadOnlyDictionary<string, YearEndReviewConfirmation> reviews) =>
+        reviews.TryGetValue(reviewKey, out var review)
+            ? new NoteCandidate(
+                code,
+                StatutoryNoteCodes.Titles[code],
+                null,
+                NoteChecklistState.NotApplicable,
+                false,
+                ReviewEvidence(review),
+                review.ConfirmedBy,
+                review.ConfirmedAt)
+            : ExplicitReview(code);
+
+    private static NoteCandidate ManualReview(
+        string code,
+        string reviewKey,
+        IReadOnlyDictionary<string, YearEndReviewConfirmation> reviews)
+    {
+        if (!reviews.TryGetValue(reviewKey, out var review) || string.IsNullOrWhiteSpace(review.Note))
+            return ExplicitReview(code);
+        return new NoteCandidate(
+            code,
+            StatutoryNoteCodes.Titles[code],
+            review.Note.Trim(),
+            NoteChecklistState.ExplicitReview,
+            true,
+            ReviewEvidence(review),
+            review.ConfirmedBy,
+            review.ConfirmedAt);
+    }
+
+    private static NoteCandidate ExplicitReview(string code) => new(
+        code,
+        StatutoryNoteCodes.Titles[code],
+        null,
+        NoteChecklistState.ExplicitReview,
+        false,
+        null,
+        null,
+        null);
+
+    private static string ReviewEvidence(YearEndReviewConfirmation review) =>
+        $"Review section '{review.SectionKey}' confirmed at {review.ConfirmedAt:O}"
+        + (string.IsNullOrWhiteSpace(review.Note) ? "." : $": {review.Note.Trim()}");
+
+    private static string AccountingPolicies(
+        ElectedRegime regime,
+        IReadOnlyCollection<FixedAsset> assets,
+        bool hasStock)
+    {
+        var standard = regime == ElectedRegime.Micro
+            ? "FRS 105, The Financial Reporting Standard applicable to the Micro-entities Regime"
+            : "FRS 102, The Financial Reporting Standard applicable in the UK and Republic of Ireland";
+        var builder = new StringBuilder()
+            .AppendLine("Basis of preparation")
+            .AppendLine($"The financial statements have been prepared under the historical-cost convention in accordance with {standard} and the Companies Act 2014.")
+            .AppendLine()
+            .AppendLine("Currency")
+            .AppendLine("The financial statements are presented in euro (€), the company's functional currency.")
+            .AppendLine()
+            .AppendLine("Revenue recognition")
+            .Append("Revenue is recognised when the amount can be measured reliably and the related economic benefits are expected to flow to the company.");
+
+        if (assets.Count > 0)
+        {
+            builder.AppendLine().AppendLine()
+                .AppendLine("Tangible fixed assets and depreciation")
+                .Append("Tangible fixed assets are measured at cost less accumulated depreciation and impairment. Depreciation is charged over each asset's recorded useful life down to its recorded residual value.");
+        }
+        if (hasStock)
+        {
+            builder.AppendLine().AppendLine()
+                .AppendLine("Inventories")
+                .Append("Inventories are measured at the lower of cost and net realisable value.");
+        }
+        builder.AppendLine().AppendLine()
+            .AppendLine("Current taxation")
+            .Append("Current corporation tax is recognised by reference to taxable profits and enacted tax rates.");
+        return builder.ToString();
+    }
+
+    private static string FixedAssetContent(FinancialStatementsService.FixedAssetsSection section)
+    {
+        var builder = new StringBuilder();
+        foreach (var line in section.Categories)
+            builder.AppendLine($"{line.Category}: cost {Money(line.Cost)}; accumulated depreciation {Money(line.Depreciation)}; net book value {Money(line.Nbv)}");
+        builder.Append($"Total net book value at period end: {Money(section.Total)}");
+        return builder.ToString();
+    }
+
+    private static string DebtorContent(FinancialStatementsService.CurrentAssetsSection section) =>
+        $"Trade and other debtors: {Money(section.Debtors)}\nPrepayments and accrued income: {Money(section.Prepayments)}\nTotal debtors and prepayments: {Money(section.Debtors + section.Prepayments)}";
+
+    private static string CurrentCreditorContent(FinancialStatementsService.CreditorsWithinYearSection section) =>
+        $"Trade creditors: {Money(section.TradeCreditors)}\nAccruals: {Money(section.Accruals)}\nTaxation and social insurance: {Money(section.TaxCreditors)}\nOther creditors: {Money(section.OtherCreditors)}\nTotal amounts falling due within one year: {Money(section.Total)}";
+
+    private static string LongTermCreditorContent(FinancialStatementsService.CreditorsAfterYearSection section) =>
+        $"Loans: {Money(section.Loans)}\nOther creditors: {Money(section.Other)}\nTotal amounts falling due after more than one year: {Money(section.Total)}";
+
+    private static string ReserveContent(FinancialStatementsService.CapitalSection section) =>
+        $"Opening retained earnings: {Money(section.OpeningRetainedEarnings)}\nProfit for the financial year: {Money(section.ProfitForYear)}\nDividends: {Money(section.DividendsPaid)}\nOther reserve movements: {Money(section.OtherReserveMovements)}\nClosing retained earnings: {Money(section.RetainedEarnings)}";
+
+    private static string EmployeeContent(PayrollSummary payroll) =>
+        $"Average number of employees: {payroll.StaffCount}\nWages and salaries: {Money(payroll.GrossWages)}\nEmployer PRSI: {Money(payroll.EmployerPrsi)}\nPension costs: {Money(payroll.PensionContributions)}\nTotal staff costs: {Money(payroll.GrossWages + payroll.EmployerPrsi + payroll.PensionContributions)}";
+
+    private static string PostBalanceSheetContent(IEnumerable<PostBalanceSheetEvent> events) => string.Join(
+        "\n",
+        events.Select(item =>
+            $"{item.EventDate.ToString("dd MMMM yyyy", IrishCulture)} ({(item.IsAdjusting ? "adjusting" : "non-adjusting")}): {item.Description}"
+            + (item.FinancialImpact is { } impact ? $"; estimated financial impact {Money(impact)}" : string.Empty)));
+
+    private static string RelatedPartyContent(IEnumerable<RelatedPartyTransaction> transactions) => string.Join(
+        "\n",
+        transactions.Select(item =>
+            $"{item.PartyName} ({item.Relationship}) — {item.TransactionType}: {Money(item.Amount)}"
+            + (item.BalanceOwed is { } balance ? $"; balance at period end {Money(balance)}" : string.Empty)
+            + (string.IsNullOrWhiteSpace(item.Terms) ? string.Empty : $"; terms: {item.Terms.Trim()}")));
+
+    private static string ContingencyContent(IEnumerable<ContingentLiability> contingencies) => string.Join(
+        "\n",
+        contingencies.Select(item =>
+            $"{item.Description} ({item.Nature}); likelihood: {item.Likelihood}"
+            + (item.EstimatedAmount is { } amount ? $"; estimated amount {Money(amount)}" : string.Empty)));
+
+    private static string TurnoverContent(FinancialStatementsService.ProfitAndLoss statement) =>
+        $"Turnover for the financial year: {Money(statement.Turnover)}\nOther operating income: {Money(statement.OtherIncome)}";
+
+    private static string TaxContent(FinancialStatementsService.ProfitAndLoss statement) =>
+        $"Current tax charge recognised in the profit and loss account: {Money(statement.TaxCharge)}";
+
+    private static string DividendContent(
+        FinancialStatementsService.EquityChanges equity,
+        IReadOnlyCollection<Dividend> dividends)
+    {
+        var declared = dividends.Sum(item => item.Amount);
+        return $"Dividends recorded in the year-end register: {Money(declared)}\nDividends recognised in the statement of changes in equity: {Money(equity.DividendsPaid)}";
+    }
+
+    private static string Money(decimal amount) =>
+        $"€{amount.ToString("N2", CultureInfo.InvariantCulture)}";
+
+    private static CompanySizeClass RegimeFallbackSize(ElectedRegime regime) => regime switch
+    {
+        ElectedRegime.Micro => CompanySizeClass.Micro,
+        ElectedRegime.Small or ElectedRegime.SmallAbridged => CompanySizeClass.Small,
+        ElectedRegime.Medium => CompanySizeClass.Medium,
+        _ => CompanySizeClass.Large
+    };
+
+    private static bool RequiredNotesJsonUsesStableCodes(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return false;
+        try
+        {
+            return (JsonSerializer.Deserialize<List<string>>(json) ?? [])
+                .Any(StatutoryNoteCodes.IsStableCode);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    private static string? Normalise(string? value) =>
+        value?.Replace("\r\n", "\n", StringComparison.Ordinal).Trim();
+
+    private sealed record Checklist(AccountingPeriod Period, List<NoteCandidate> Candidates);
+
+    private sealed record NoteCandidate(
+        string Code,
+        string Title,
+        string? Content,
+        NoteChecklistState State,
+        bool IsIncluded,
+        string? ReviewEvidence,
+        string? ReviewedBy,
+        DateTime? ReviewedAt);
 }

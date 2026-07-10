@@ -23,10 +23,25 @@ public class UserAccount
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? LastLoginAt { get; set; }
+    public DateTime? InviteAcceptedAtUtc { get; set; }
+    public DateTime? DeactivatedAtUtc { get; set; }
+    public DateTime? OffboardedAtUtc { get; set; }
 
     [JsonIgnore]
     public Tenant Tenant { get; set; } = null!;
 
     [JsonIgnore]
     public List<UserCompanyAccess> CompanyAccesses { get; set; } = [];
+
+    [JsonIgnore]
+    public UserMfaCredential? MfaCredential { get; set; }
+
+    [JsonIgnore]
+    public List<UserMfaRecoveryCode> MfaRecoveryCodes { get; set; } = [];
+
+    [JsonIgnore]
+    public List<UserMfaChallenge> MfaChallenges { get; set; } = [];
+
+    [JsonIgnore]
+    public List<UserActionToken> ActionTokens { get; set; } = [];
 }

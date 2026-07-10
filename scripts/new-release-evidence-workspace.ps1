@@ -334,12 +334,12 @@ function Set-VisualQaRouteReferenceNotes {
     $updated = $Content
     foreach ($routeName in $RouteNames) {
         $escaped = [regex]::Escape($routeName)
-        $pattern = "(?m)^(\|\s*$escaped\s*\|\s*[^|]*\|\s*[^|]*\|\s*[^|]*\|\s*[^|]*\|)\s*[^|]*\|$"
+        $pattern = "(?m)^(\|\s*$escaped\s*\|\s*[^|]*\|\s*[^|]*\|\s*[^|]*\|\s*[^|]*\|\s*[^|]*\|\s*[^|]*\|)\s*[^|]*\|$"
         if (-not [regex]::IsMatch($updated, $pattern)) {
             throw "Visual QA template is missing route row '$routeName'."
         }
 
-        $reference = "visual-smoke-evidence-report.json#routeAcceptance.$routeName"
+        $reference = "visual-smoke-evidence-report.json#routeCoverage.$routeName"
         $updated = [regex]::Replace($updated, $pattern, "`$1 $reference |")
     }
 
@@ -547,6 +547,7 @@ $productionReadinessVerificationReport = Read-JsonFile $productionReadinessVerif
 $visualSmokeEvidenceReport = Read-JsonFile $visualSmokeEvidenceReportPath
 $monitoringErrorRoutingReport = Read-JsonFile $monitoringErrorRoutingReportPath
 $structuredLogReport = Read-JsonFile $structuredLogReportPath
+$clientMonitoringEvent = Get-JsonPropertyValue $monitoringErrorRoutingReport "clientEvent"
 $visualRouteNames = Get-VisualRouteNames $visualSmokeEvidenceReport
 $sourceLawSnapshotHash = Get-SourceLawSnapshotContentHash $productionReadinessReport
 $sourceLawSourceIds = Get-SourceLawSourceIds $productionReadinessReport
@@ -597,6 +598,12 @@ $preparedTemplates = @(
             "Visual smoke manifest file" = "visual-smoke-manifest.json"
             "Visual smoke evidence report file" = "visual-smoke-evidence-report.json"
             "Accountant workbench evidence report file" = "accountant-workbench-evidence-report.json"
+            "Visual inventory version" = [string](Get-JsonPropertyValue $visualSmokeEvidenceReport "inventoryVersion")
+            "Canonical state count" = [string](Get-JsonPropertyValue $visualSmokeEvidenceReport "inventoryStateCount")
+            "Canonical material route count" = [string]@((Get-JsonPropertyValue $visualSmokeEvidenceReport "requiredMaterialRoutes")).Count
+            "Canonical UI state count" = [string]@((Get-JsonPropertyValue $visualSmokeEvidenceReport "requiredUiStates")).Count
+            "Retained screenshot count" = [string](Get-JsonPropertyValue $visualSmokeEvidenceReport "screenshotCount")
+            "Semantic content hash count" = [string](Get-JsonPropertyValue $visualSmokeEvidenceReport "semanticContentHashCount")
             "Minimum PNG IDAT byte size" = Get-MinimumVisualMetric $visualSmokeEvidenceReport @("pngIdatByteSize")
             "Minimum screenshot pixel sample count" = Get-MinimumVisualMetric $visualSmokeEvidenceReport @("pixelSampleCount")
             "Minimum sampled distinct color count" = Get-MinimumVisualMetric $visualSmokeEvidenceReport @("sampledDistinctColorCount")
@@ -631,9 +638,16 @@ $preparedTemplates = @(
             "Correlation id" = [string](Get-JsonPropertyValue $monitoringErrorRoutingReport "correlationId")
             "Base URL" = [string](Get-JsonPropertyValue $monitoringErrorRoutingReport "baseUrl")
             "Checked at UTC" = $checkedAtUtc
+            "Client event code" = [string](Get-JsonPropertyValue $clientMonitoringEvent "eventCode")
+            "Client event id" = [string](Get-JsonPropertyValue $clientMonitoringEvent "eventId")
+            "Client correlation id" = [string](Get-JsonPropertyValue $clientMonitoringEvent "correlationId")
+            "Client normalized route" = [string](Get-JsonPropertyValue $clientMonitoringEvent "route")
+            "Client sensitive input absent" = if ([bool](Get-JsonPropertyValue $clientMonitoringEvent "sensitiveInputAbsent")) { "yes" } else { "" }
             "Structured log file" = [string](Get-FirstJsonPropertyValue $structuredLogReport @("structuredLogFile", "logFileName"))
             "JSON log line count" = [string](Get-JsonPropertyValue $structuredLogReport "jsonLogLineCount")
             "Matched monitoring smoke line" = if ([bool](Get-JsonPropertyValue $structuredLogReport "matchedMonitoringSmokeLine")) { "yes" } else { "" }
+            "Matched client monitoring line" = if ([bool](Get-JsonPropertyValue $structuredLogReport "matchedClientMonitoringLine")) { "yes" } else { "" }
+            "Synthetic sensitive markers absent" = if ([bool](Get-JsonPropertyValue $structuredLogReport "syntheticSensitiveMarkersAbsent")) { "yes" } else { "" }
         }
     }
 )
@@ -645,7 +659,7 @@ $reviewerQueue = @(
         TemplateFile = "visual-qa-signoff-template.md"
         ReviewerRole = "Named visual QA reviewer"
         SignOffGate = "visual-qa-screenshot-review"
-        HumanAction = "Review every retained light/dark desktop/mobile screenshot and record exact pass cells, notes, decision, reviewer identity, UTC time, and signature."
+        HumanAction = "Review all 192 retained light/dark mobile/tablet/desktop canonical-state screenshots and record exact pass cells, notes, decision, reviewer identity, UTC time, and signature."
         RequiredPickupFiles = @("visual-qa-signoff-template.md", "visual-smoke-manifest.json", "visual-smoke-evidence-report.json", "accountant-workbench-evidence-report.json", "release-evidence-reviewer-blockers.md")
     },
     [pscustomobject]@{
@@ -695,6 +709,17 @@ $reviewerQueue = @(
     }
 )
 
+$scorecardCategories = @((Get-JsonPathValue $productionReadinessReport @("productionScorecard", "categories")))
+$openScorecardControls = @(
+    foreach ($scorecardCategory in $scorecardCategories) {
+        foreach ($scorecardControl in @((Get-JsonPropertyValue $scorecardCategory "controls"))) {
+            if ((Get-JsonPropertyValue $scorecardControl "passed") -ne $true) {
+                "{0}:{1}" -f ([string](Get-JsonPropertyValue $scorecardCategory "code")), ([string](Get-JsonPropertyValue $scorecardControl "code"))
+            }
+        }
+    }
+)
+
 $machineEvidenceSummaryFile = "release-evidence-machine-summary.json"
 $machineEvidenceSummary = [ordered]@{
     status = "pending-human-evidence"
@@ -710,6 +735,13 @@ $machineEvidenceSummary = [ordered]@{
         scorecardStatus = [string](Get-JsonPathValue $productionReadinessReport @("productionScorecard", "status"))
         currentScore = Get-JsonPathValue $productionReadinessReport @("productionScorecard", "currentScore")
         targetScore = Get-JsonPathValue $productionReadinessReport @("productionScorecard", "targetScore")
+        scoreBasis = [string](Get-JsonPathValue $productionReadinessReport @("productionScorecard", "scoreBasis"))
+        auditBaselineDate = [string](Get-JsonPathValue $productionReadinessReport @("productionScorecard", "auditBaselineDate"))
+        auditedCommit = [string](Get-JsonPathValue $productionReadinessReport @("productionScorecard", "auditedCommit"))
+        evidencePolicy = [string](Get-JsonPathValue $productionReadinessReport @("productionScorecard", "evidencePolicy"))
+        openEngineeringOrAssuranceControlCount = $openScorecardControls.Count
+        openEngineeringOrAssuranceControls = $openScorecardControls
+        scorecardControlCodes = @((Get-JsonPathValue $productionReadinessVerificationReport @("requiredCoverage", "scorecardControlCodes")) | ForEach-Object { [string]$_ })
         verificationStatus = [string](Get-JsonPropertyValue $productionReadinessVerificationReport "status")
         verificationFailureCount = Get-JsonPropertyValue $productionReadinessVerificationReport "failureCount"
         humanReleaseEvidenceCloseoutStepCodes = @((Get-JsonPathValue $productionReadinessVerificationReport @("requiredCoverage", "humanReleaseEvidenceCloseoutStepCodes")) | ForEach-Object { [string]$_ })
@@ -722,6 +754,13 @@ $machineEvidenceSummary = [ordered]@{
         screenshotCount = Get-JsonPropertyValue $visualSmokeEvidenceReport "screenshotCount"
         expectedScreenshotCount = Get-JsonPropertyValue $visualSmokeEvidenceReport "expectedScreenshotCount"
         routeCount = Get-JsonPropertyValue $visualSmokeEvidenceReport "routeCount"
+        inventoryVersion = Get-JsonPropertyValue $visualSmokeEvidenceReport "inventoryVersion"
+        inventoryStateCount = Get-JsonPropertyValue $visualSmokeEvidenceReport "inventoryStateCount"
+        accountantWorkbenchRouteCount = Get-JsonPropertyValue $visualSmokeEvidenceReport "accountantWorkbenchRouteCount"
+        requiredMaterialRouteCount = @((Get-JsonPropertyValue $visualSmokeEvidenceReport "requiredMaterialRoutes")).Count
+        requiredUiStateCount = @((Get-JsonPropertyValue $visualSmokeEvidenceReport "requiredUiStates")).Count
+        semanticDistinctnessPassed = Get-JsonPropertyValue $visualSmokeEvidenceReport "semanticDistinctnessPassed"
+        semanticContentHashCount = Get-JsonPropertyValue $visualSmokeEvidenceReport "semanticContentHashCount"
         minimumPngIdatByteSize = Get-MinimumVisualMetric $visualSmokeEvidenceReport @("pngIdatByteSize")
         minimumScreenshotPixelSampleCount = Get-MinimumVisualMetric $visualSmokeEvidenceReport @("pixelSampleCount")
         minimumSampledDistinctColorCount = Get-MinimumVisualMetric $visualSmokeEvidenceReport @("sampledDistinctColorCount")
@@ -734,9 +773,16 @@ $machineEvidenceSummary = [ordered]@{
         correlationId = [string](Get-JsonPropertyValue $monitoringErrorRoutingReport "correlationId")
         baseUrl = [string](Get-JsonPropertyValue $monitoringErrorRoutingReport "baseUrl")
         checkedAtUtc = $checkedAtUtc
+        clientEventCode = [string](Get-JsonPropertyValue $clientMonitoringEvent "eventCode")
+        clientEventId = [string](Get-JsonPropertyValue $clientMonitoringEvent "eventId")
+        clientCorrelationId = [string](Get-JsonPropertyValue $clientMonitoringEvent "correlationId")
+        clientNormalizedRoute = [string](Get-JsonPropertyValue $clientMonitoringEvent "route")
+        clientSensitiveInputAbsent = [bool](Get-JsonPropertyValue $clientMonitoringEvent "sensitiveInputAbsent")
         structuredLogFile = [string](Get-FirstJsonPropertyValue $structuredLogReport @("structuredLogFile", "logFileName"))
         jsonLogLineCount = Get-JsonPropertyValue $structuredLogReport "jsonLogLineCount"
         matchedMonitoringSmokeLine = [bool](Get-JsonPropertyValue $structuredLogReport "matchedMonitoringSmokeLine")
+        matchedClientMonitoringLine = [bool](Get-JsonPropertyValue $structuredLogReport "matchedClientMonitoringLine")
+        syntheticSensitiveMarkersAbsent = [bool](Get-JsonPropertyValue $structuredLogReport "syntheticSensitiveMarkersAbsent")
     }
     reviewerQueue = @($reviewerQueue)
     completionPolicy = "This summary is machine evidence only; all six human evidence templates must still be completed by named reviewers."
@@ -895,7 +941,7 @@ After workspace verification runs, retain ``release-evidence-reviewer-blockers.m
 1. Inspect this ``release-evidence-reviewer-workspace`` artifact, ``release-evidence-reviewer-index.md``, ``release-evidence-reviewer-completion.json``, ``release-evidence-reviewer-assignments.json`` and the pending human blocker inventory before assigning reviewers.
 2. Complete the six Markdown templates with named reviewer identities, UTC timestamps, retained evidence references, accepted decisions, and signatures.
 3. Run ``scripts/verify-release-evidence.ps1 -EvidenceDirectory <this-workspace> -ReportPath <this-workspace>/release-evidence-report.json`` and retain the passing ``release-evidence-report.json``.
-4. Confirm ``release-evidence-report.json`` has six accepted ``humanEvidenceCompletion`` entries, ``productionScorecardCompletion`` status ``complete`` at 700/700, and no blocking failures.
+4. Confirm ``release-evidence-report.json`` has six accepted ``humanEvidenceCompletion`` entries, ``productionScorecardCompletion`` status ``complete`` at 1,000/1,000, no open weighted engineering/assurance controls, and no blocking failures.
 5. Run ``scripts/verify-release-artifact-pack.ps1`` against the final collected release artifacts for the same commit SHA and GitHub Actions run URL.
 
 ## Completion Gate

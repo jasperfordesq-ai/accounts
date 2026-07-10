@@ -39,6 +39,12 @@ if ($jsonLines.Count -eq 0) {
     throw "No JSON log lines were found in $LogPath."
 }
 
+$syntheticSensitiveMarkers = @("client@example.ie", "client%40example.ie", "NeverSendThis")
+$leakedSyntheticMarker = $syntheticSensitiveMarkers | Where-Object { $marker = $_; $rawLines -match [regex]::Escape($marker) } | Select-Object -First 1
+if (-not [string]::IsNullOrWhiteSpace([string]$leakedSyntheticMarker)) {
+    throw "Structured logs exposed the controlled client-monitoring sensitive marker '$leakedSyntheticMarker'."
+}
+
 function Get-PropertyValue($Object, [string[]]$Names) {
     foreach ($name in $Names) {
         $property = $Object.PSObject.Properties[$name]
@@ -64,6 +70,8 @@ if ($null -eq $structuredLine) {
 
 $monitoringCorrelationId = ""
 $matchedMonitoringSmokeLine = $false
+$clientMonitoringCorrelationId = ""
+$matchedClientMonitoringLine = $false
 if (-not [string]::IsNullOrWhiteSpace($MonitoringEvidencePath)) {
     if (-not (Test-Path -LiteralPath $MonitoringEvidencePath -PathType Leaf)) {
         throw "MonitoringEvidencePath does not exist: $MonitoringEvidencePath"
@@ -82,6 +90,20 @@ if (-not [string]::IsNullOrWhiteSpace($MonitoringEvidencePath)) {
 
     if (-not $matchedMonitoringSmokeLine) {
         throw "No structured log line matched the monitoring smoke correlation id '$monitoringCorrelationId'."
+    }
+
+    $clientMonitoringCorrelationId = [string]$monitoringEvidence.clientEvent.correlationId
+    if ([string]::IsNullOrWhiteSpace($clientMonitoringCorrelationId)) {
+        throw "Monitoring evidence did not include a clientEvent correlationId."
+    }
+
+    $matchedClientMonitoringLine = @($rawLines | Where-Object {
+        $_.IndexOf($clientMonitoringCorrelationId, [StringComparison]::Ordinal) -ge 0 -and
+        $_.IndexOf("Sanitized client monitoring event", [StringComparison]::Ordinal) -ge 0
+    }).Count -gt 0
+
+    if (-not $matchedClientMonitoringLine) {
+        throw "No structured log line matched the controlled client monitoring correlation id '$clientMonitoringCorrelationId'."
     }
 }
 
@@ -103,6 +125,9 @@ if (-not [string]::IsNullOrWhiteSpace($EvidencePath)) {
         }
         monitoringCorrelationId = $monitoringCorrelationId
         matchedMonitoringSmokeLine = $matchedMonitoringSmokeLine
+        clientMonitoringCorrelationId = $clientMonitoringCorrelationId
+        matchedClientMonitoringLine = $matchedClientMonitoringLine
+        syntheticSensitiveMarkersAbsent = $true
     } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $EvidencePath -Encoding UTF8
 
     Write-Host "Structured log evidence written: $EvidencePath"

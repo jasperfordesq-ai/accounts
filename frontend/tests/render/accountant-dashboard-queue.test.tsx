@@ -102,6 +102,11 @@ describe("AccountantDashboardQueue", () => {
     expect(reviewerCells[2]).toHaveTextContent("Niamh Reviewer");
     expect(actionCells[2]).toHaveTextContent("Open filing");
 
+    await user.click(screen.getByRole("button", { name: "Sort by Company" }));
+    expect(screen.getByRole("columnheader", { name: "Company" })).toHaveAttribute("aria-sort", "ascending");
+    await user.click(screen.getByRole("button", { name: "Sort by Company" }));
+    expect(screen.getByRole("columnheader", { name: "Company" })).toHaveAttribute("aria-sort", "descending");
+
     expect(screen.getAllByText("Connacht Visual Limited").length).toBeGreaterThan(1);
     expect(screen.getAllByText("CRO due 10 Jul 2026").length).toBeGreaterThan(1);
     expect(screen.getByText("Due soon")).toBeInTheDocument();
@@ -136,7 +141,7 @@ function sampleCompany(): Company {
     companyType: "Private",
     incorporationDate: "2024-01-01",
     financialYearStartMonth: 1,
-    ardMonth: 9,
+    annualReturnDate: "2026-09-15",
     isGroupMember: false,
     isHolding: false,
     isInvestment: false,
@@ -222,6 +227,7 @@ function sampleDeadline({
     companyId,
     periodId,
     deadlineType,
+    calculatedDueDate: dueDate,
     dueDate,
     isLate: false,
     penaltyAmount: 0,
@@ -259,7 +265,7 @@ function sampleProductionReleaseBlockers(): ProductionReleaseBlocker[] {
       sourceActionCode: "light-dark-visual-regression",
       releaseChecklistCode: "visual-qa-screenshot-review",
       operationalGateCode: "",
-      evidenceArtifact: "light-dark-desktop-mobile-screenshot-review",
+      evidenceArtifact: "light-dark-mobile-tablet-desktop-screenshot-review",
       blocksRelease: true,
     },
   ];

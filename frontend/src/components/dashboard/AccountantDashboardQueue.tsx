@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { AlertTriangle, ArrowRight, CalendarClock, UserRound } from "lucide-react";
-import type { Company, FilingDeadline, ProductionReleaseBlocker } from "@/lib/api";
+import type { Company, DashboardDeadlineState, FilingDeadline, ProductionReleaseBlocker } from "@/lib/api";
 import { formatCompanyType, formatDateIE } from "@/lib/format";
 import { DataGrid, MetricStrip, ReleaseBlockerSummary, ReviewPanel, StatusBadge } from "@/components/workbench";
 import { AccountantWorkflowRail } from "@/components/workbench/AccountantWorkflowRail";
@@ -8,6 +8,8 @@ import { AccountantWorkflowRail } from "@/components/workbench/AccountantWorkflo
 interface AccountantDashboardQueueProps {
   companies: Company[];
   deadlines: Record<number, FilingDeadline | null>;
+  deadlineUnavailableCompanyIds?: number[];
+  deadlineStates?: Record<number, DashboardDeadlineState>;
   today?: string;
   productionReleaseBlockers?: ProductionReleaseBlocker[];
 }
@@ -32,12 +34,21 @@ interface QueueRow {
 export function AccountantDashboardQueue({
   companies,
   deadlines,
+  deadlineUnavailableCompanyIds = [],
+  deadlineStates = {},
   today,
   productionReleaseBlockers = [],
 }: AccountantDashboardQueueProps) {
   const todayDate = parseDate(today) ?? new Date();
+  const unavailableDeadlineIds = new Set(deadlineUnavailableCompanyIds);
   const rows = companies
-    .map((company) => buildQueueRow(company, deadlines[company.id] ?? null, todayDate))
+    .map((company) => buildQueueRow(
+      company,
+      deadlines[company.id] ?? null,
+      todayDate,
+      unavailableDeadlineIds.has(company.id),
+      deadlineStates[company.id],
+    ))
     .sort(compareQueueRows);
   const urgentCount = rows.filter((row) => row.deadlineTone === "bad" || row.blockerTone === "bad").length;
   const dueSoonCount = rows.filter((row) => row.deadlineState === "Due soon").length;
@@ -87,6 +98,7 @@ export function AccountantDashboardQueue({
           <ReviewerActionQueue rows={rows} missingReviewerCount={unassignedReviewerCount} />
           <DataGrid
             caption="Accountant work queue"
+            mobilePresentation="cards"
             filterPlaceholder="Filter companies, blockers, reviewers or actions"
             emptyState="No matching companies in the work queue"
             columns={["Company", "Deadline", "Blockers", "Assigned reviewer", "Next action"]}
@@ -314,10 +326,16 @@ function ReviewerBadge({ company }: { company: Company }) {
   );
 }
 
-function buildQueueRow(company: Company, deadline: FilingDeadline | null, today: Date): QueueRow {
+function buildQueueRow(
+  company: Company,
+  deadline: FilingDeadline | null,
+  today: Date,
+  deadlineUnavailable = false,
+  authoritativeState?: DashboardDeadlineState,
+): QueueRow {
   const period = latestPeriod(company);
   const manualHandoffDetail = manualHandoffReason(company);
-  const deadlineState = deadlineStatus(deadline, today);
+  const deadlineState = deadlineStatus(deadline, today, deadlineUnavailable, authoritativeState);
 
   if (!period) {
     return {
@@ -325,7 +343,7 @@ function buildQueueRow(company: Company, deadline: FilingDeadline | null, today:
       periodId: null,
       deadline,
       deadlineLabel: "No active period",
-      deadlineState: "Not scheduled",
+      deadlineState: authoritativeState === "not-applicable" ? "Not applicable" : "Not scheduled",
       deadlineTone: "warn",
       blockerLabel: "No period",
       blockerDetail: "Create the first accounting period before production work can start.",
@@ -341,7 +359,7 @@ function buildQueueRow(company: Company, deadline: FilingDeadline | null, today:
       company,
       periodId: period.id,
       deadline,
-      deadlineLabel: formatDeadline(deadline),
+      deadlineLabel: formatDeadline(deadline, deadlineUnavailable, authoritativeState),
       deadlineState: deadlineState.label,
       deadlineTone: deadlineState.tone,
       blockerLabel: "Manual handoff",
@@ -354,7 +372,9 @@ function buildQueueRow(company: Company, deadline: FilingDeadline | null, today:
   }
 
   const hasDeadlinePressure = deadlineState.label === "Overdue" || deadlineState.label === "Due soon";
-  const blockerLabel = deadlineState.label === "Overdue"
+  const blockerLabel = deadlineUnavailable || authoritativeState === "unavailable"
+    ? "Deadline unavailable"
+    : deadlineState.label === "Overdue"
     ? "Deadline overdue"
     : deadline
       ? "No blockers"
@@ -364,17 +384,21 @@ function buildQueueRow(company: Company, deadline: FilingDeadline | null, today:
     company,
     periodId: period.id,
     deadline,
-    deadlineLabel: formatDeadline(deadline),
+    deadlineLabel: formatDeadline(deadline, deadlineUnavailable, authoritativeState),
     deadlineState: deadlineState.label,
     deadlineTone: deadlineState.tone,
     blockerLabel,
-    blockerDetail: deadlineState.label === "Overdue"
+    blockerDetail: deadlineUnavailable || authoritativeState === "unavailable"
+      ? "Deadline evidence failed to load. Retry the failed deadline resource before relying on filing status."
+      : deadlineState.label === "Overdue"
       ? "Late filing exposure and audit exemption impact must be reviewed."
       : deadline
         ? "No dashboard-level blockers detected from current company and deadline data."
         : "Calculate filing deadlines for the active accounting period.",
-    blockerTone: deadlineState.label === "Overdue" || !deadline ? "bad" : "good",
-    readyDetail: deadline
+    blockerTone: deadlineState.label === "Overdue" || !deadline || deadlineUnavailable ? "bad" : "good",
+    readyDetail: deadlineUnavailable
+      ? "Company and period data remain visible; filing deadline evidence is unavailable."
+      : deadline
       ? "Active period and filing deadline are available for review."
       : "Active period is ready for deadline calculation.",
     nextActionLabel: hasDeadlinePressure ? "Open filing" : "Continue workbench",
@@ -477,7 +501,19 @@ function manualHandoffReason(company: Company) {
   return null;
 }
 
-function deadlineStatus(deadline: FilingDeadline | null, today: Date): { label: string; tone: QueueTone } {
+function deadlineStatus(
+  deadline: FilingDeadline | null,
+  today: Date,
+  unavailable = false,
+  authoritativeState?: DashboardDeadlineState,
+): { label: string; tone: QueueTone } {
+  if (unavailable || authoritativeState === "unavailable") return { label: "Unavailable", tone: "bad" };
+  if (authoritativeState === "not-applicable") return { label: "Not applicable", tone: "default" };
+  if (authoritativeState === "not-configured") return { label: "Not configured", tone: "warn" };
+  if (authoritativeState === "overdue") return { label: "Overdue", tone: "bad" };
+  if (authoritativeState === "due-soon") return { label: "Due soon", tone: "warn" };
+  if (authoritativeState === "scheduled") return { label: "On track", tone: "good" };
+  if (authoritativeState === "filed") return { label: "Filed", tone: "good" };
   if (!deadline) return { label: "Not scheduled", tone: "warn" };
 
   const dueDate = parseDate(deadline.dueDate);
@@ -489,7 +525,13 @@ function deadlineStatus(deadline: FilingDeadline | null, today: Date): { label: 
   return { label: "On track", tone: "good" };
 }
 
-function formatDeadline(deadline: FilingDeadline | null) {
+function formatDeadline(deadline: FilingDeadline | null, unavailable = false, authoritativeState?: DashboardDeadlineState) {
+  if (unavailable || authoritativeState === "unavailable") return "Deadline evidence unavailable";
+  if (authoritativeState === "not-applicable") return "No accounting period exists";
+  if (authoritativeState === "not-configured") return "Deadline calculation required";
+  if (authoritativeState === "filed" && deadline?.filedDate) {
+    return `${deadline.deadlineType} filed ${formatDateIE(deadline.filedDate)}`;
+  }
   if (!deadline) return "No deadline calculated";
   return `${deadline.deadlineType} due ${formatDateIE(deadline.dueDate)}`;
 }

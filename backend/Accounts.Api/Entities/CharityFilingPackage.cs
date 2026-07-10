@@ -21,6 +21,50 @@ public class CharityFilingPackage
     public string? RejectionReason { get; set; }
     public DateTime? CorrectionDeadline { get; set; }
 
+    // Exact clean PDF bytes retained for release. Review copies are rendered separately and are
+    // never accepted by FilingReleaseGate as final artifacts.
+    [JsonIgnore]
+    public byte[]? SofaArtifact { get; set; }
+    public string? SofaSha256 { get; set; }
+    [JsonIgnore]
+    public byte[]? TrusteesReportArtifact { get; set; }
+    public string? TrusteesReportSha256 { get; set; }
+    public string? ArtifactReleaseCandidate { get; set; }
+    public string? ArtifactSourceFingerprintSha256 { get; set; }
+    public string? SorpFrameworkCode { get; set; }
+    public int? SorpTier { get; set; }
+    public string? SofaBasis { get; set; }
+    public string? SorpDecisionSha256 { get; set; }
+    public string? CharityNumberSnapshot { get; set; }
+    public decimal? SofaClosingFunds { get; set; }
+    public decimal? BalanceSheetNetAssets { get; set; }
+    public decimal? ReconciliationDifference { get; set; }
+    public DateTime? ReconciledAtUtc { get; set; }
+    public bool TrusteeReviewAccepted { get; set; }
+    public string? TrusteeReviewReference { get; set; }
+    public string? TrusteeReviewedBy { get; set; }
+    public DateTime? TrusteeReviewedAtUtc { get; set; }
+    [JsonIgnore]
+    public byte[]? TrusteeReviewArtifact { get; set; }
+    public string? TrusteeReviewArtifactSha256 { get; set; }
+    public string? TrusteePopulationJson { get; set; }
+    public string? TrusteePopulationSha256 { get; set; }
+    public string? ManualProfessionalHandoffReason { get; set; }
+    public string? ApprovedArtifactManifestSha256 { get; set; }
+    public string? ApprovedReleaseCandidate { get; set; }
+    public string? ApproverProfessionalBody { get; set; }
+    public string? ApproverMembershipNumber { get; set; }
+    public int? ApproverTenantId { get; set; }
+    public string? ApprovalScope { get; set; }
+    public string? ApprovalCapacity { get; set; }
+    public string? ApprovalDecision { get; set; }
+    public string? ApproverVerificationReference { get; set; }
+    [JsonIgnore]
+    public byte[]? ApproverVerificationArtifact { get; set; }
+    public string? ApproverVerificationArtifactSha256 { get; set; }
+    public DateTime? ApproverVerifiedAt { get; set; }
+    public DateTime? ApproverCredentialValidUntil { get; set; }
+
     [JsonIgnore]
     public AccountingPeriod Period { get; set; } = null!;
 }

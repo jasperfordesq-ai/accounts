@@ -26,6 +26,22 @@ public static partial class YearEndEndpoints
             : AuthenticatedIdentity.ReviewerDisplayName(user);
     }
 
+    private static void StampDirectorLoanReview(DirectorLoan loan, HttpContext context)
+    {
+        if (loan.ReviewDecision == DirectorLoanReviewDecision.Unreviewed)
+        {
+            loan.ReviewedBy = null;
+            loan.ReviewerRole = null;
+            loan.ReviewedAtUtc = null;
+            return;
+        }
+
+        var user = AuthContext.GetUser(context);
+        loan.ReviewedBy = user is null ? null : AuthenticatedIdentity.ReviewerDisplayName(user);
+        loan.ReviewerRole = user?.Role;
+        loan.ReviewedAtUtc = user is null ? null : DateTime.UtcNow;
+    }
+
     private static async Task<IResult?> RequireCompanyWriteAccessAsync(
         AccountsDbContext db,
         int companyId,
@@ -136,11 +152,16 @@ public static partial class YearEndEndpoints
         item.Name,
         item.Category,
         item.Cost,
+        item.ResidualValue,
         item.AcquisitionDate,
         item.DisposalDate,
         item.DisposalProceeds,
         item.UsefulLifeYears,
-        item.DepreciationMethod
+        item.DepreciationMethod,
+        item.CapitalAllowanceTreatment,
+        item.CapitalAllowanceEvidence,
+        item.CapitalAllowanceReviewedBy,
+        item.CapitalAllowanceReviewedAtUtc
     };
 
     private static object LoanSnapshot(Loan item) => new
@@ -173,15 +194,61 @@ public static partial class YearEndEndpoints
     private static object DirectorLoanSnapshot(DirectorLoan item) => new
     {
         item.DirectorId,
+        item.CounterpartyType,
+        item.CounterpartyName,
+        item.ArrangementType,
+        item.ArrangementDate,
         item.OpeningBalance,
         item.Advances,
         item.Repayments,
         item.ClosingBalance,
+        item.TermsStatus,
         item.InterestRate,
         item.InterestCharged,
+        item.AllowanceMade,
+        item.Section236PresumptionEvidenceReference,
         item.IsDocumented,
         item.LoanTerms,
-        item.MaxBalanceDuringYear
+        item.MaxBalanceDuringYear,
+        item.ComplianceBasis,
+        item.RelevantAssetsBasis,
+        item.RelevantAssetsAmount,
+        item.RelevantAssetsAsOfDate,
+        item.RelevantAssetsReference,
+        item.NoPriorFinancialStatementsConfirmed,
+        item.RelevantAssetsFallReview,
+        item.RelevantAssetsReductionAwarenessDate,
+        item.TermsAmendedDate,
+        item.TermsAmendmentEvidenceReference,
+        item.ExceptionEvidenceReference,
+        item.SapDeclarationDate,
+        item.SapResolutionDate,
+        item.SapActivityStartDate,
+        item.SapCroFilingDate,
+        item.SapDeclarationReference,
+        item.SapResolutionReference,
+        item.SapCroFilingReference,
+        item.SapDeclarationCoversSection203Matters,
+        item.ExpenseIncurredDate,
+        item.ExpenseDischargedDate,
+        item.OrdinaryCourseConfirmed,
+        item.NoMoreFavourableTermsConfirmed,
+        item.ReviewDecision,
+        item.ReviewNote,
+        item.ReviewedBy,
+        item.ReviewerRole,
+        item.ReviewedAtUtc,
+        BalanceMovements = item.BalanceMovements
+            .OrderBy(movement => movement.MovementDate)
+            .ThenBy(movement => movement.Id)
+            .Select(movement => new
+            {
+                movement.MovementDate,
+                movement.MovementType,
+                movement.Amount,
+                movement.EvidenceReference
+            })
+            .ToArray()
     };
 
     private static object PostBalanceSheetEventSnapshot(PostBalanceSheetEvent item) => new
@@ -238,6 +305,7 @@ public static partial class YearEndEndpoints
     private static object PayrollSummarySnapshot(PayrollSummary item) => new
     {
         item.GrossWages,
+        item.DirectorsFees,
         item.EmployerPrsi,
         item.PensionContributions,
         item.StaffCount
@@ -277,16 +345,25 @@ public static partial class YearEndEndpoints
     {
         note.Id,
         note.NoteNumber,
+        note.Code,
         note.Title,
         note.IsRequired,
         note.IsIncluded,
+        note.ChecklistState,
+        note.ReviewEvidence,
+        note.ReviewedBy,
+        note.ReviewedAt,
         ContentLength = note.Content?.Length ?? 0
     };
 
-    private static IResult? ValidateNoteInput(NotesDisclosure input)
+    private static IResult? ValidateNoteInput(NotesDisclosureInput input)
     {
+        if (string.IsNullOrWhiteSpace(input.Title))
+            return Results.BadRequest(new { error = "Note title is required." });
         if ((input.Content?.Length ?? 0) > MaxNoteContentLength)
             return Results.BadRequest(new { error = $"Note content must be {MaxNoteContentLength:N0} characters or fewer." });
+        if (StatutoryNoteCodes.ContainsUnsupportedRepresentation(input.Content))
+            return Results.BadRequest(new { error = "Unsupported nil/deferred-tax/financial-instrument/derivative/commitment representations must be supplied through the retained manual-review checklist." });
 
         return null;
     }

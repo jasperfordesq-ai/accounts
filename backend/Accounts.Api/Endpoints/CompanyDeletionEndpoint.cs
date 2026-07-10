@@ -1,68 +1,106 @@
 using Accounts.Api.Data;
-using Accounts.Api.Middleware;
 using Accounts.Api.Services;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace Accounts.Api.Endpoints;
 
+/// <summary>
+/// Recoverable company quarantine boundary. No company or dependent accounting row is deleted.
+/// </summary>
 public static class CompanyDeletionEndpoint
 {
-    /// <summary>
-    /// data-company-soft-delete: a company DELETE cascade-wipes every period, transaction, year-end
-    /// figure and filing irreversibly. When any period holds financial data the delete is blocked unless
-    /// the caller supplies a typed confirmation equal to the exact legal name, so a populated company
-    /// cannot be wiped by accident.
-    /// </summary>
     public static async Task<IResult> DeleteAsync(
         int id,
-        string? confirmName,
+        [FromBody] CompanyQuarantineRequest? input,
         HttpContext context,
         ApiAccessService apiAccess,
         AccountsDbContext db,
-        AccountingWriteGuard writeGuard)
+        AccountingWriteGuard writeGuard,
+        AuditService audit)
     {
         if (!await CompanyEndpointAccess.CanAccessCompanyAsync(context, db, id))
             return Results.NotFound();
-
         if (EndpointRequestAuthorization.AuthorizeCurrentRequest(context, apiAccess) is { } denied)
             return denied;
 
-        var company = await db.Companies.FirstOrDefaultAsync(c => c.Id == id);
-        if (company is null) return Results.NotFound();
-
+        var user = AuthContext.RequireUser(context);
+        if (!string.Equals(user.Role, "Owner", StringComparison.Ordinal))
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
+        if (input is null)
+            return Results.BadRequest(new { error = "Typed confirmation and a reason are required." });
         if (await writeGuard.BlockIfCompanyMasterDataLockedAsync(id) is { } blocked)
             return blocked;
 
-        if (await CompanyHasFinancialDataAsync(db, id)
-            && !string.Equals(confirmName?.Trim(), company.LegalName, StringComparison.Ordinal))
+        try
         {
-            return Results.BadRequest(new
-            {
-                error = $"This company holds financial data and deleting it is irreversible. To confirm, "
-                    + $"resend the delete with confirmName equal to the exact legal name \"{company.LegalName}\"."
-            });
+            var outcome = await new CompanyQuarantineService(db, audit).QuarantineAsync(
+                id,
+                input,
+                user,
+                DomainAuditCoverage.RequestId(context),
+                context.RequestAborted);
+            return Results.Ok(outcome);
         }
-
-        db.Companies.Remove(company);
-        await db.SaveChangesAsync();
-        return Results.NoContent();
+        catch (BusinessRuleException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
     }
 
-    /// <summary>True when any of the company's periods holds transactions, year-end figures or a filing.</summary>
-    public static async Task<bool> CompanyHasFinancialDataAsync(AccountsDbContext db, int companyId)
+    public static async Task<IResult> RecoverAsync(
+        int id,
+        CompanyQuarantineRequest? input,
+        HttpContext context,
+        ApiAccessService apiAccess,
+        AccountsDbContext db,
+        AuditService audit)
     {
-        var periodIds = await db.AccountingPeriods
-            .Where(p => p.CompanyId == companyId)
-            .Select(p => p.Id)
-            .ToListAsync();
-        if (periodIds.Count == 0) return false;
+        if (EndpointRequestAuthorization.AuthorizeCurrentRequest(context, apiAccess) is { } denied)
+            return denied;
 
-        return await db.ImportedTransactions.AnyAsync(t => t.PeriodId != null && periodIds.Contains(t.PeriodId.Value))
-            || await db.Debtors.AnyAsync(d => periodIds.Contains(d.PeriodId))
-            || await db.Creditors.AnyAsync(c => periodIds.Contains(c.PeriodId))
-            || await db.TaxBalances.AnyAsync(t => periodIds.Contains(t.PeriodId))
-            || await db.CroFilingPackages.AnyAsync(f => periodIds.Contains(f.PeriodId))
-            || await db.RevenueFilingPackages.AnyAsync(f => periodIds.Contains(f.PeriodId));
+        var user = AuthContext.RequireUser(context);
+        var existsForTenant = await db.Companies
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .AnyAsync(company => company.Id == id && company.TenantId == user.TenantId && company.IsQuarantined);
+        if (!existsForTenant)
+            return Results.NotFound();
+        if (!string.Equals(user.Role, "Owner", StringComparison.Ordinal))
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
+        if (input is null)
+            return Results.BadRequest(new { error = "Typed confirmation and a reason are required." });
+
+        try
+        {
+            var outcome = await new CompanyQuarantineService(db, audit).RecoverAsync(
+                id,
+                input,
+                user,
+                DomainAuditCoverage.RequestId(context),
+                context.RequestAborted);
+            return Results.Ok(outcome);
+        }
+        catch (BusinessRuleException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    }
+
+    public static async Task<IResult> ListQuarantinedAsync(
+        HttpContext context,
+        ApiAccessService apiAccess,
+        AccountsDbContext db,
+        AuditService audit)
+    {
+        if (EndpointRequestAuthorization.AuthorizeCurrentRequest(context, apiAccess) is { } denied)
+            return denied;
+        var user = AuthContext.RequireUser(context);
+        if (!string.Equals(user.Role, "Owner", StringComparison.Ordinal))
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
+        var companies = await new CompanyQuarantineService(db, audit)
+            .ListAsync(user, context.RequestAborted);
+        return Results.Ok(companies);
     }
 }

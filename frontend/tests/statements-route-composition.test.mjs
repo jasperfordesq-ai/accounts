@@ -11,7 +11,8 @@ test("financial statements route delegates preview UI to a focused workbench com
   assert.match(routeSource, /FinancialStatementsWorkbench/);
   assert.match(routeSource, /<FinancialStatementsWorkbench[\s\S]*company=\{company\}/);
   assert.match(routeSource, /<FinancialStatementsWorkbench[\s\S]*trialBalance=\{trialBalance\}/);
-  assert.match(routeSource, /<FinancialStatementsWorkbench[\s\S]*onRetry=\{loadData\}/);
+  assert.match(routeSource, /<FinancialStatementsWorkbench[\s\S]*onRetry=\{\(\) => loadShell\(shellState\.failedResourceKeys\)\}/);
+  assert.match(routeSource, /<FinancialStatementsWorkbench[\s\S]*onRetryStatements=\{\(\) => loadStatements\(statementState\.failedResourceKeys\)\}/);
   assert.doesNotMatch(routeSource, /<TabsRoot>/);
   assert.doesNotMatch(routeSource, /Financial statements tabs/);
   assert.doesNotMatch(routeSource, /<table className="w-full text-sm/);

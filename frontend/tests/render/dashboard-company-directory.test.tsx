@@ -14,7 +14,7 @@ describe("DashboardCompanyDirectory", () => {
           7: sampleDeadline({ companyId: 7, periodId: 3, deadlineType: "CRO", dueDate: "2026-07-10" }),
           8: null,
         }}
-        isOwner
+        canCreateCompany
         today="2026-07-03"
       />,
     );
@@ -42,11 +42,27 @@ describe("DashboardCompanyDirectory", () => {
   });
 
   it("renders a workbench empty state when no companies are available", () => {
-    render(<DashboardCompanyDirectory companies={[]} deadlines={{}} isOwner />);
+    render(<DashboardCompanyDirectory companies={[]} deadlines={{}} canCreateCompany />);
 
     expect(screen.getByText("No companies available")).toBeInTheDocument();
     expect(screen.getByText("Add the first company before preparing year-end accounts.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Add Company" })).toHaveAttribute("href", "/companies/new");
+  });
+
+  it("renders a deadline fetch failure as unavailable rather than not scheduled", () => {
+    render(
+      <DashboardCompanyDirectory
+        companies={[sampleCompany()]}
+        deadlines={{}}
+        deadlineUnavailableCompanyIds={[7]}
+        canCreateCompany={false}
+      />,
+    );
+
+    expect(screen.getByText("Deadline evidence unavailable")).toBeInTheDocument();
+    expect(screen.getByText("Unavailable")).toBeInTheDocument();
+    expect(screen.queryByText("Not scheduled")).not.toBeInTheDocument();
+    expect(screen.queryByText("No deadline calculated")).not.toBeInTheDocument();
   });
 });
 
@@ -57,7 +73,7 @@ function sampleCompany(): Company {
     companyType: "Private",
     incorporationDate: "2024-01-01",
     financialYearStartMonth: 1,
-    ardMonth: 9,
+    annualReturnDate: "2026-09-15",
     isGroupMember: false,
     isHolding: false,
     isInvestment: false,
@@ -129,6 +145,7 @@ function sampleDeadline({
     companyId,
     periodId,
     deadlineType,
+    calculatedDueDate: dueDate,
     dueDate,
     isLate: false,
     penaltyAmount: 0,

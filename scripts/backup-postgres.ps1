@@ -5,6 +5,10 @@ param(
     [string]$OutputDirectory,
     [string]$Database = $env:POSTGRES_DB,
     [string]$User = $env:POSTGRES_USER,
+    [string]$EncryptionCertificateFile = $env:BACKUP_ENCRYPTION_CERTIFICATE_FILE,
+    [string]$ReleaseCandidate = $env:GITHUB_SHA,
+    [string]$EnvironmentName = "production",
+    [switch]$AllowUnencryptedBackupForLocalDryRun,
     [switch]$AllowRepositoryOutputForLocalDryRun
 )
 
@@ -96,6 +100,23 @@ function Invoke-NativeCommand([string]$Description, [scriptblock]$Command) {
     }
 }
 
+function Resolve-OpenSsl {
+    $command = Get-Command openssl -ErrorAction SilentlyContinue
+    if ($null -ne $command) {
+        return $command.Source
+    }
+
+    foreach ($candidate in @(
+        "C:\Program Files\Git\usr\bin\openssl.exe",
+        "C:\Program Files\Git\mingw64\bin\openssl.exe")) {
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+            return $candidate
+        }
+    }
+
+    throw "OpenSSL is required to encrypt production backups."
+}
+
 if ([string]::IsNullOrWhiteSpace($Database)) {
     throw "POSTGRES_DB or -Database is required."
 }
@@ -104,6 +125,12 @@ if ([string]::IsNullOrWhiteSpace($User)) {
 }
 if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
     throw "-OutputDirectory is required and must point to an off-repository backup location."
+}
+if ([string]::IsNullOrWhiteSpace($EncryptionCertificateFile) -and -not $AllowUnencryptedBackupForLocalDryRun) {
+    throw "BACKUP_ENCRYPTION_CERTIFICATE_FILE or -EncryptionCertificateFile is required. Production backups cannot be written in plaintext."
+}
+if (-not [string]::IsNullOrWhiteSpace($EncryptionCertificateFile) -and -not (Test-Path -LiteralPath $EncryptionCertificateFile -PathType Leaf)) {
+    throw "Backup encryption certificate was not found: $EncryptionCertificateFile"
 }
 
 $repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
@@ -119,8 +146,7 @@ New-Item -ItemType Directory -Force -Path $outputDirectoryFullPath | Out-Null
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $safeDatabase = $Database -replace "[^A-Za-z0-9_.-]", "_"
 $backupPath = Join-Path $outputDirectoryFullPath "$safeDatabase-$timestamp.dump"
-$hashPath = "$backupPath.sha256"
-$containerBackupPath = "/tmp/$safeDatabase-$timestamp.dump"
+$containerBackupPath = "/var/lib/postgresql/data/.accounts-backup-$safeDatabase-$timestamp.dump"
 
 try {
     Invoke-NativeCommand "Create PostgreSQL backup inside container" {
@@ -142,8 +168,57 @@ try {
     }
 }
 
-$hash = Get-FileHash -Algorithm SHA256 -Path $backupPath
-"$($hash.Hash.ToLowerInvariant())  $(Split-Path -Leaf $backupPath)" | Set-Content -NoNewline -Encoding ascii -Path $hashPath
+$outputPath = $backupPath
+$encrypted = $false
+$encryptionAlgorithm = "none"
+$encryptionCertificateSha256 = ""
+if (-not [string]::IsNullOrWhiteSpace($EncryptionCertificateFile)) {
+    $openssl = Resolve-OpenSsl
+    $outputPath = "$backupPath.cms"
+    try {
+        Invoke-NativeCommand "Encrypt PostgreSQL backup with the release backup certificate" {
+            & $openssl cms -encrypt -binary -aes-256-cbc `
+                -in $backupPath `
+                -outform DER `
+                -out $outputPath `
+                $EncryptionCertificateFile
+        }
+        $encrypted = $true
+        $encryptionAlgorithm = "CMS/AES-256-CBC"
+        $encryptionCertificateSha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $EncryptionCertificateFile).Hash.ToLowerInvariant()
+    } finally {
+        if (Test-Path -LiteralPath $backupPath -PathType Leaf) {
+            Remove-Item -LiteralPath $backupPath -Force
+        }
+    }
+}
 
-Write-Host "Backup written: $backupPath"
+if (-not (Test-Path -LiteralPath $outputPath -PathType Leaf)) {
+    throw "Backup output was not created: $outputPath"
+}
+
+$hashPath = "$outputPath.sha256"
+$manifestPath = "$outputPath.manifest.json"
+$hash = Get-FileHash -Algorithm SHA256 -LiteralPath $outputPath
+$backupSha256 = $hash.Hash.ToLowerInvariant()
+"$backupSha256  $(Split-Path -Leaf $outputPath)" | Set-Content -NoNewline -Encoding ascii -Path $hashPath
+
+[ordered]@{
+    formatVersion = 1
+    status = "created"
+    createdAtUtc = (Get-Date).ToUniversalTime().ToString("o")
+    database = $Database
+    environment = $EnvironmentName
+    releaseCandidate = $ReleaseCandidate
+    backupFileName = Split-Path -Leaf $outputPath
+    backupSha256 = $backupSha256
+    byteSize = (Get-Item -LiteralPath $outputPath).Length
+    encrypted = $encrypted
+    encryptionAlgorithm = $encryptionAlgorithm
+    encryptionCertificateFileSha256 = $encryptionCertificateSha256
+    plaintextDumpRetained = Test-Path -LiteralPath $backupPath -PathType Leaf
+} | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
+
+Write-Host "Backup written: $outputPath"
 Write-Host "sha256 written: $hashPath"
+Write-Host "manifest written: $manifestPath"

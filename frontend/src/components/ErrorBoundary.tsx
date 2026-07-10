@@ -3,6 +3,7 @@
 import { Component, type ReactNode } from "react";
 import { Button } from "@heroui/react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
+import { reportClientMonitoringEvent } from "@/lib/clientMonitoring";
 
 interface Props {
   children: ReactNode;
@@ -11,25 +12,25 @@ interface Props {
 
 interface State {
   hasError: boolean;
-  error: Error | null;
 }
 
 export class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
-    this.state = { hasError: false, error: null };
+    this.state = { hasError: false };
   }
 
-  static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error };
+  static getDerivedStateFromError(): State {
+    return { hasError: true };
   }
 
-  componentDidCatch(error: Error) {
-    console.error("Unhandled frontend error", error);
+  componentDidCatch() {
+    void reportClientMonitoringEvent("render-exception");
+    console.error("A sanitized frontend render exception was reported.");
   }
 
   handleReset = () => {
-    this.setState({ hasError: false, error: null });
+    this.setState({ hasError: false });
   };
 
   render() {

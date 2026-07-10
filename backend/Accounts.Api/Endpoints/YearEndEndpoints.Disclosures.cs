@@ -141,7 +141,7 @@ public static partial class YearEndEndpoints
     public static async Task<IResult> CreateNoteEndpointAsync(
         int companyId,
         int periodId,
-        NotesDisclosure input,
+        NotesDisclosureInput input,
         AccountsDbContext db,
         AuditService audit,
         HttpContext context)
@@ -151,22 +151,20 @@ public static partial class YearEndEndpoints
         if (ValidateNoteInput(input) is { } validationError)
             return validationError;
 
-        input.PeriodId = periodId;
-        input.IsRequired = false;
         var maxNum = await db.NotesDisclosures.Where(n => n.PeriodId == periodId).MaxAsync(n => (int?)n.NoteNumber) ?? 0;
-        input.NoteNumber = maxNum + 1;
-        db.NotesDisclosures.Add(input);
+        var note = input.ToEntity(periodId, maxNum + 1);
+        db.NotesDisclosures.Add(note);
         await db.SaveChangesAsync();
         await audit.LogAsync(
             companyId,
             periodId,
             "NotesDisclosure",
-            input.Id,
+            note.Id,
             AuditEventCodes.NoteDisclosureCreated,
             null,
-            NoteSummarySnapshot(input),
+            NoteSummarySnapshot(note),
             AuditUserId(context));
-        return Results.Created($"/api/companies/{companyId}/periods/{periodId}/notes/{input.Id}", input);
+        return Results.Created($"/api/companies/{companyId}/periods/{periodId}/notes/{note.Id}", note);
     }
 
     public static async Task<IResult> DeleteNoteEndpointAsync(
@@ -203,7 +201,7 @@ public static partial class YearEndEndpoints
     public static async Task<IResult> CreatePostBalanceSheetEventEndpointAsync(
         int companyId,
         int periodId,
-        PostBalanceSheetEvent input,
+        PostBalanceSheetEventInput input,
         AccountsDbContext db,
         AuditService audit,
         HttpContext context)
@@ -211,19 +209,19 @@ public static partial class YearEndEndpoints
         if (await RequirePeriodWriteAccessAsync(db, companyId, periodId, context) is { } denied)
             return denied;
 
-        input.PeriodId = periodId;
-        db.PostBalanceSheetEvents.Add(input);
+        var item = input.ToEntity(periodId);
+        db.PostBalanceSheetEvents.Add(item);
         await db.SaveChangesAsync();
         await audit.LogAsync(
             companyId,
             periodId,
             "PostBalanceSheetEvent",
-            input.Id,
+            item.Id,
             AuditEventCodes.PostBalanceSheetEventCreated,
             null,
-            PostBalanceSheetEventSnapshot(input),
+            PostBalanceSheetEventSnapshot(item),
             AuditUserId(context));
-        return Results.Created($"/api/companies/{companyId}/periods/{periodId}/post-balance-sheet-events/{input.Id}", input);
+        return Results.Created($"/api/companies/{companyId}/periods/{periodId}/post-balance-sheet-events/{item.Id}", item);
     }
 
     public static async Task<IResult> DeletePostBalanceSheetEventEndpointAsync(
@@ -258,7 +256,7 @@ public static partial class YearEndEndpoints
     public static async Task<IResult> CreateRelatedPartyTransactionEndpointAsync(
         int companyId,
         int periodId,
-        RelatedPartyTransaction input,
+        RelatedPartyTransactionInput input,
         AccountsDbContext db,
         AuditService audit,
         HttpContext context)
@@ -266,19 +264,19 @@ public static partial class YearEndEndpoints
         if (await RequirePeriodWriteAccessAsync(db, companyId, periodId, context) is { } denied)
             return denied;
 
-        input.PeriodId = periodId;
-        db.RelatedPartyTransactions.Add(input);
+        var item = input.ToEntity(periodId);
+        db.RelatedPartyTransactions.Add(item);
         await db.SaveChangesAsync();
         await audit.LogAsync(
             companyId,
             periodId,
             "RelatedPartyTransaction",
-            input.Id,
+            item.Id,
             AuditEventCodes.RelatedPartyTransactionCreated,
             null,
-            RelatedPartyTransactionSnapshot(input),
+            RelatedPartyTransactionSnapshot(item),
             AuditUserId(context));
-        return Results.Created($"/api/companies/{companyId}/periods/{periodId}/related-party-transactions/{input.Id}", input);
+        return Results.Created($"/api/companies/{companyId}/periods/{periodId}/related-party-transactions/{item.Id}", item);
     }
 
     public static async Task<IResult> DeleteRelatedPartyTransactionEndpointAsync(
@@ -313,7 +311,7 @@ public static partial class YearEndEndpoints
     public static async Task<IResult> CreateContingentLiabilityEndpointAsync(
         int companyId,
         int periodId,
-        ContingentLiability input,
+        ContingentLiabilityInput input,
         AccountsDbContext db,
         AuditService audit,
         HttpContext context)
@@ -321,19 +319,19 @@ public static partial class YearEndEndpoints
         if (await RequirePeriodWriteAccessAsync(db, companyId, periodId, context) is { } denied)
             return denied;
 
-        input.PeriodId = periodId;
-        db.ContingentLiabilities.Add(input);
+        var item = input.ToEntity(periodId);
+        db.ContingentLiabilities.Add(item);
         await db.SaveChangesAsync();
         await audit.LogAsync(
             companyId,
             periodId,
             "ContingentLiability",
-            input.Id,
+            item.Id,
             AuditEventCodes.ContingentLiabilityCreated,
             null,
-            ContingentLiabilitySnapshot(input),
+            ContingentLiabilitySnapshot(item),
             AuditUserId(context));
-        return Results.Created($"/api/companies/{companyId}/periods/{periodId}/contingent-liabilities/{input.Id}", input);
+        return Results.Created($"/api/companies/{companyId}/periods/{periodId}/contingent-liabilities/{item.Id}", item);
     }
 
     public static async Task<IResult> DeleteContingentLiabilityEndpointAsync(
@@ -410,6 +408,17 @@ public static partial class YearEndEndpoints
         var user = AuthContext.RequireUser(context);
         if (!ReviewSectionKeys.Contains(sectionKey))
             return Results.BadRequest(new { error = "Unknown year-end review section." });
+        var isDirectorsReportRepresentation = sectionKey is DirectorsReportService.PrincipalActivitiesReviewKey
+            or DirectorsReportService.AuditInformationReviewKey;
+        if (input.Confirmed
+            && isDirectorsReportRepresentation
+            && (input.Note?.Trim().Length ?? 0) < 20)
+        {
+            return Results.BadRequest(new
+            {
+                error = "Directors' report evidence must include a retained narrative or evidence reference of at least 20 characters."
+            });
+        }
 
         var confirmation = await db.YearEndReviewConfirmations
             .FirstOrDefaultAsync(r => r.PeriodId == periodId && r.SectionKey == sectionKey);
@@ -485,7 +494,7 @@ public static partial class YearEndEndpoints
         int companyId,
         int periodId,
         int id,
-        NotesDisclosure input,
+        NotesDisclosureInput input,
         AccountsDbContext db,
         AuditService audit,
         HttpContext context)
@@ -495,11 +504,13 @@ public static partial class YearEndEndpoints
 
         var note = await db.NotesDisclosures.FirstOrDefaultAsync(n => n.Id == id && n.PeriodId == periodId);
         if (note == null) return Results.NotFound();
+        if (note.IsRequired || StatutoryNoteCodes.IsStableCode(note.Code))
+            return Results.BadRequest(new { error = "Generated checklist notes are source-derived and cannot be edited. Update the source facts or retained review evidence, then regenerate notes." });
         if (ValidateNoteInput(input) is { } validationError)
             return validationError;
 
         var oldValue = NoteSummarySnapshot(note);
-        note.Title = input.Title;
+        note.Title = input.Title!;
         note.Content = input.Content;
         note.IsIncluded = input.IsIncluded;
         await db.SaveChangesAsync();

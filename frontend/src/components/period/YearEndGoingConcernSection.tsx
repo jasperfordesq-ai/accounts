@@ -3,6 +3,7 @@
 import { Button, Spinner } from "@heroui/react";
 
 interface YearEndGoingConcernSectionProps {
+  canWrite?: boolean;
   confirmed: boolean;
   note: string;
   saving: boolean;
@@ -15,6 +16,7 @@ const inputClass =
   "w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors";
 
 export function YearEndGoingConcernSection({
+  canWrite = true,
   confirmed,
   note,
   saving,
@@ -32,7 +34,7 @@ export function YearEndGoingConcernSection({
         </div>
       )}
 
-      <div className="flex items-center gap-3">
+      {canWrite ? <><div className="flex items-center gap-3">
         <input
           type="checkbox"
           id="going-concern-confirmed"
@@ -47,10 +49,11 @@ export function YearEndGoingConcernSection({
 
       {!confirmed && (
         <div>
-          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+          <label htmlFor="going-concern-material-uncertainty" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
             Material uncertainty / going concern note
           </label>
           <textarea
+            id="going-concern-material-uncertainty"
             className={`${inputClass} min-h-[100px]`}
             placeholder="Describe the material uncertainties that cast significant doubt on the company's ability to continue as a going concern..."
             value={note}
@@ -64,12 +67,18 @@ export function YearEndGoingConcernSection({
         <Button
           variant="primary"
           size="sm"
+          aria-label="Save going concern assessment"
           onPress={onSave}
           isDisabled={saving}
         >
           {saving ? <Spinner size="sm" /> : "Save Going Concern"}
         </Button>
-      </div>
+      </div></> : (
+        <div className="text-sm text-gray-700 dark:text-gray-300">
+          <p>{confirmed ? "Going concern confirmed by the directors." : "Going concern is not confirmed."}</p>
+          {!confirmed && note && <p className="mt-2 whitespace-pre-wrap">{note}</p>}
+        </div>
+      )}
     </div>
   );
 }

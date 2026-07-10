@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "evidenceClass": "synthetic-engineering-exercise",
+  "exerciseId": "monitoring-engineering-drill-2026-07-10",
+  "releaseCommitSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "githubActionsRunUrl": "https://github.com/jasperfordesq-ai/accounts/actions/runs/1",
+  "environment": "isolated-ci",
+  "syntheticDataOnly": true,
+  "configuredTargets": {
+    "acknowledgementMinutes": 15,
+    "escalationMinutes": 30,
+    "structuredLogRetentionDays": 90,
+    "errorEventRetentionDays": 90
+  },
+  "timeline": {
+    "detectedAtUtc": "2026-07-10T09:00:00Z",
+    "providerReceivedAtUtc": "2026-07-10T09:00:30Z",
+    "alertDeliveredAtUtc": "2026-07-10T09:01:00Z",
+    "acknowledgedAtUtc": "2026-07-10T09:04:00Z",
+    "escalationTestAtUtc": "2026-07-10T09:29:00Z",
+    "containedAtUtc": "2026-07-10T09:12:00Z",
+    "recoveredAtUtc": "2026-07-10T09:24:00Z"
+  },
+  "providerEvidence": {
+    "provider": "synthetic-sentry-compatible-fixture",
+    "eventId": "synthetic-event-0001",
+    "correlationId": "corr-synthetic-monitoring-0001",
+    "eventReference": "synthetic-provider-fixture#event-0001",
+    "structuredLogMatched": true
+  },
+  "redactionReview": {
+    "requestBodyAbsent": true,
+    "queryStringAbsent": true,
+    "userIdentityAbsent": true,
+    "clientDataAbsent": true,
+    "secretDataAbsent": true
+  },
+  "responseExercise": {
+    "notificationRouteTested": true,
+    "unacknowledgedEscalationTested": true,
+    "containmentWalkthroughCompleted": true,
+    "recoveryWalkthroughCompleted": true,
+    "auditChainVerified": true,
+    "operator": "Automated engineering fixture",
+    "incidentCommander": "Automated engineering fixture"
+  },
+  "evidence": [
+    {
+      "reference": "synthetic-provider-fixture#redacted-event",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    {
+      "reference": "synthetic-structured-log-fixture#correlation",
+      "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    }
+  ],
+  "acceptedForProduction": false
+}

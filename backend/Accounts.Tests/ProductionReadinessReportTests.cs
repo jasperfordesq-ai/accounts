@@ -66,14 +66,14 @@ public class ProductionReadinessReportTests
         var report = await service.GetReportAsync();
 
         Assert.Equal("review-required", report.OverallStatus);
-        Assert.Contains(report.GoldenFilingCorpus, s => s.Code == "micro-ltd" && s.CoverageStatus == "covered");
-        Assert.Contains(report.GoldenFilingCorpus, s => s.Code == "small-abridged-ltd" && s.CoverageStatus == "covered");
-        Assert.Contains(report.GoldenFilingCorpus, s => s.Code == "clg-charity" && s.CoverageStatus == "covered");
+        Assert.Contains(report.GoldenFilingCorpus, s => s.Code == "micro-ltd" && s.CoverageStatus == "machine-covered-review-pending");
+        Assert.Contains(report.GoldenFilingCorpus, s => s.Code == "small-abridged-ltd" && s.CoverageStatus == "machine-covered-review-pending");
+        Assert.Contains(report.GoldenFilingCorpus, s => s.Code == "clg-charity" && s.CoverageStatus == "machine-covered-review-pending");
         Assert.Contains(report.GoldenFilingCorpus, s => s.Code == "medium-audit-required" && s.ExpectedOutcome == "manual-handoff");
         Assert.Contains(report.ManualHandoffPaths, p => p.Contains("PLC", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(report.OperationalGates, g => g.Code == "qualified-accountant-review" && g.Required);
         Assert.Contains(report.OperationalGates, g => g.Code == "no-direct-cro-ros-submission" && g.Required);
-        Assert.Contains(report.Areas, a => a.Code == "backend-accounting-engine" && a.Status == "hardened");
+        Assert.Contains(report.Areas, a => a.Code == "backend-accounting-engine" && a.Status == "in-progress");
         Assert.Contains(report.SourceLawSnapshot.Sources, s => s.SourceId == IrishStatutoryRuleSources.RevenueAcceptedTaxonomies.SourceId);
     }
 
@@ -590,7 +590,7 @@ public class ProductionReadinessReportTests
                 .Order(StringComparer.Ordinal)
                 .ToArray();
 
-            Assert.Equal(4, expectedArtifactNames.Length);
+            Assert.Equal(6, expectedArtifactNames.Length);
             Assert.Equal(expectedArtifactNames, StringListProperty(item, "VisualArtifactNames").Order(StringComparer.Ordinal));
         }
 
@@ -774,7 +774,7 @@ public class ProductionReadinessReportTests
             Assert.Equal("required-review", StringProperty(item, "Status"));
             Assert.Contains("Block release", StringProperty(item, "FailurePolicy"), StringComparison.OrdinalIgnoreCase);
             Assert.Contains("route-state acceptance note", StringListProperty(item, "RequiredEvidence"));
-            Assert.Contains("light/dark desktop/mobile screenshot review", StringListProperty(item, "RequiredEvidence"));
+            Assert.Contains("light/dark mobile/tablet/desktop screenshot review", StringListProperty(item, "RequiredEvidence"));
             Assert.Contains("named visual QA reviewer sign-off", StringListProperty(item, "RequiredEvidence"));
             Assert.False(string.IsNullOrWhiteSpace(StringProperty(item, "EvidenceArtifact")));
             Assert.False(string.IsNullOrWhiteSpace(StringProperty(item, "NextAction")));
@@ -860,12 +860,17 @@ public class ProductionReadinessReportTests
         var report = await new ProductionReadinessReportService(db).GetReportAsync();
 
         Assert.NotNull(report.ProductionScorecard);
-        Assert.Equal(698, report.ProductionScorecard.CurrentScore);
-        Assert.Equal(700, report.ProductionScorecard.TargetScore);
-        Assert.Equal("review-required", report.ProductionScorecard.Status);
-        Assert.Contains("source-law", report.ProductionScorecard.NextGate, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("visual QA", report.ProductionScorecard.NextGate, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("qualified-accountant", report.ProductionScorecard.NextGate, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(783, report.ProductionScorecard.CurrentScore);
+        Assert.Equal(1000, report.ProductionScorecard.TargetScore);
+        Assert.Equal("remediation-required", report.ProductionScorecard.Status);
+        Assert.Equal("independent-audit-control-ledger-v1", report.ProductionScorecard.ScoreBasis);
+        Assert.Equal(new DateOnly(2026, 7, 10), report.ProductionScorecard.AuditBaselineDate);
+        Assert.Equal("7ea54cc6d1769ced568ac1568d190cc2bb4b16d1", report.ProductionScorecard.AuditedCommit);
+        Assert.Contains("exact live candidate report", report.ProductionScorecard.EvidencePolicy, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("artifact hashes", report.ProductionScorecard.EvidencePolicy, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("statutory/tax", report.ProductionScorecard.NextGate, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("visual/accessibility", report.ProductionScorecard.NextGate, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("human/external", report.ProductionScorecard.NextGate, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("production-scorecard", report.AssurancePacket.EvidenceItems);
         Assert.Contains("human-release-evidence", report.AssurancePacket.EvidenceItems);
 
@@ -881,10 +886,33 @@ public class ProductionReadinessReportTests
             categories.Select(category => category.Code));
 
         var scores = categories.ToDictionary(category => category.Code);
-        Assert.Equal((99, 100), (scores["architecture-documentation"].CurrentScore, scores["architecture-documentation"].TargetScore));
-        Assert.Equal((250, 250), (scores["backend-statutory-accounting-engine"].CurrentScore, scores["backend-statutory-accounting-engine"].TargetScore));
-        Assert.Equal((199, 200), (scores["frontend-accountant-workbench"].CurrentScore, scores["frontend-accountant-workbench"].TargetScore));
-        Assert.Equal((150, 150), (scores["security-auth-tenant-platform-guardrails"].CurrentScore, scores["security-auth-tenant-platform-guardrails"].TargetScore));
+        Assert.Equal((115, 150), (scores["architecture-documentation"].CurrentScore, scores["architecture-documentation"].TargetScore));
+        Assert.Equal((250, 350), (scores["backend-statutory-accounting-engine"].CurrentScore, scores["backend-statutory-accounting-engine"].TargetScore));
+        Assert.Equal((203, 250), (scores["frontend-accountant-workbench"].CurrentScore, scores["frontend-accountant-workbench"].TargetScore));
+        Assert.Equal((215, 250), (scores["security-auth-tenant-platform-guardrails"].CurrentScore, scores["security-auth-tenant-platform-guardrails"].TargetScore));
+        Assert.All(categories, category =>
+        {
+            Assert.NotEmpty(category.Controls);
+            Assert.Equal(category.TargetScore, category.Controls.Sum(control => control.Weight));
+            Assert.Equal(category.CurrentScore, category.Controls.Where(control => control.Passed).Sum(control => control.Weight));
+            Assert.All(category.Controls, control => Assert.NotEmpty(control.Evidence));
+            Assert.All(category.Controls.Where(control => !control.Passed), control => Assert.NotEmpty(control.BlockingAuditItemIds));
+        });
+        Assert.Contains(scores["backend-statutory-accounting-engine"].Controls, control =>
+            control.Code == "external-ixbrl-acceptance"
+            && !control.Passed
+            && control.AssuranceClass == "human-external"
+            && control.BlockingAuditItemIds.Contains("P0-STAT-002"));
+        Assert.Contains(scores["backend-statutory-accounting-engine"].Controls, control =>
+            control.Code == "final-release-containment"
+            && control.Passed
+            && control.Status == "passed"
+            && control.BlockingAuditItemIds.Count == 0);
+        Assert.Contains(scores["security-auth-tenant-platform-guardrails"].Controls, control =>
+            control.Code == "persistence-boundaries"
+            && control.Passed
+            && control.Status == "passed"
+            && control.BlockingAuditItemIds.Count == 0);
         Assert.Contains(scores["architecture-documentation"].CurrentEvidence, evidence =>
             evidence.Contains("verify-release-evidence.ps1", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["architecture-documentation"].CurrentEvidence, evidence =>
@@ -984,8 +1012,8 @@ public class ProductionReadinessReportTests
             evidence.Contains("Qualified-accountant route decision-question cells", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("reject accepted-style ambiguous text", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["frontend-accountant-workbench"].CurrentEvidence, evidence =>
-            evidence.Contains("Visual QA route notes", StringComparison.OrdinalIgnoreCase)
-            && evidence.Contains("exact visual-smoke-evidence-report.json routeAcceptance anchor", StringComparison.OrdinalIgnoreCase));
+            evidence.Contains("Visual QA state notes", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("exact visual-smoke-evidence-report.json routeCoverage anchor", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["frontend-accountant-workbench"].CurrentEvidence, evidence =>
             evidence.Contains("Release evidence reviewer workspaces", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("prefill visual QA route note anchors", StringComparison.OrdinalIgnoreCase)
@@ -1063,7 +1091,7 @@ public class ProductionReadinessReportTests
         Assert.Contains("6 retained Markdown templates", report.HumanReleaseEvidenceCloseout[1].Detail);
         Assert.Contains("humanEvidenceCompletion", report.HumanReleaseEvidenceCloseout[3].Detail);
         Assert.Contains("productionScorecardCompletion", report.HumanReleaseEvidenceCloseout[3].Detail);
-        Assert.Contains("700/700", report.HumanReleaseEvidenceCloseout[3].Detail);
+        Assert.Contains("1,000/1,000", report.HumanReleaseEvidenceCloseout[3].Detail);
         Assert.Equal("scripts/verify-release-artifact-pack.ps1", report.HumanReleaseEvidenceCloseout[4].Artifact);
 
         var trackCodes = report.CompletionTracks.Select(track => track.Code).ToHashSet(StringComparer.Ordinal);
@@ -1116,17 +1144,17 @@ public class ProductionReadinessReportTests
             evidence.Contains("release-evidence-workspace-verification-report.json", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("release-evidence-machine-summary.json", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("productionScorecardCompletion", StringComparison.OrdinalIgnoreCase)
-            && evidence.Contains("21-file prepared workspace inventory", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("exact prepared workspace inventory", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("retained machine-evidence provenance and hashes", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("humanReleaseEvidenceCloseoutStepCodes", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("reviewer pickup-file maps", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("pending reviewer assignment ledger", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("reviewer handoff", StringComparison.OrdinalIgnoreCase)
-            && evidence.Contains("700/700", StringComparison.OrdinalIgnoreCase));
+            && evidence.Contains("1,000/1,000", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["architecture-documentation"].CurrentEvidence, evidence =>
             evidence.Contains("productionScorecardCompletion", StringComparison.OrdinalIgnoreCase)
-            && evidence.Contains("blocked below 700/700", StringComparison.OrdinalIgnoreCase)
-            && evidence.Contains("six named human evidence templates", StringComparison.OrdinalIgnoreCase));
+            && evidence.Contains("independently audited 1,000-point control ledger", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("engineering or human/external control remains open", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["security-auth-tenant-platform-guardrails"].CurrentEvidence, evidence =>
             evidence.Contains("Release evidence reviewer workspaces", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("prefill monitoring provider machine evidence", StringComparison.OrdinalIgnoreCase)
@@ -1147,8 +1175,8 @@ public class ProductionReadinessReportTests
             && evidence.Contains("nonblank pixel", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["frontend-accountant-workbench"].CurrentEvidence, evidence =>
             evidence.Contains("exact pass decisions", StringComparison.OrdinalIgnoreCase)
-            && evidence.Contains("desktop light", StringComparison.OrdinalIgnoreCase)
-            && evidence.Contains("mobile dark", StringComparison.OrdinalIgnoreCase));
+            && evidence.Contains("light and dark", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("mobile, tablet and desktop", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["frontend-accountant-workbench"].CurrentEvidence, evidence =>
             evidence.Contains("Visual QA route capture cells", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("reject accepted-style ambiguous text", StringComparison.OrdinalIgnoreCase));
@@ -1187,7 +1215,7 @@ public class ProductionReadinessReportTests
             && evidence.Contains("required review checks", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["frontend-accountant-workbench"].CurrentEvidence, evidence =>
             evidence.Contains("route workflow-stage coverage", StringComparison.OrdinalIgnoreCase)
-            && evidence.Contains("light/dark desktop/mobile theme-viewport coverage", StringComparison.OrdinalIgnoreCase));
+            && evidence.Contains("light/dark mobile/tablet/desktop theme-viewport coverage", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["frontend-accountant-workbench"].CurrentEvidence, evidence =>
             evidence.Contains("Release artifact and CI machine evidence pack verifiers", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("required coverage", StringComparison.OrdinalIgnoreCase)
@@ -1195,7 +1223,7 @@ public class ProductionReadinessReportTests
             && evidence.Contains("layout/contrast evidence", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["frontend-accountant-workbench"].CurrentEvidence, evidence =>
             evidence.Contains("expected accountant decision text", StringComparison.OrdinalIgnoreCase)
-            && evidence.Contains("light/dark desktop/mobile", StringComparison.OrdinalIgnoreCase));
+            && evidence.Contains("light/dark mobile/tablet/desktop", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["frontend-accountant-workbench"].CurrentEvidence, evidence =>
             evidence.Contains("exact visual-smoke top-level themes", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("layout/contrast result counts", StringComparison.OrdinalIgnoreCase)
@@ -1299,7 +1327,45 @@ public class ProductionReadinessReportTests
                 Assert.Contains(expectedTest, evidenceTestNames);
                 AssertGoldenEvidenceTestExists(expectedTest);
             }
+            const string postgresVerifier = "GoldenCorpusPostgresReleaseTests.AllFiveImmutableScenarios_UsePublicDecisionAndArtifactWorkflowsOnPostgres";
+            Assert.Contains(postgresVerifier, evidenceTestNames);
+            AssertGoldenEvidenceTestExists(postgresVerifier);
         }
+    }
+
+    [Fact]
+    public async Task GoldenCorpusReport_NeverRepresentsMachineFixturesAsHumanOrExternalAcceptance()
+    {
+        await using var db = CreateDbContext();
+        var report = await new ProductionReadinessReportService(db).GetReportAsync();
+        const string postgresVerifier =
+            "GoldenCorpusPostgresReleaseTests.AllFiveImmutableScenarios_UsePublicDecisionAndArtifactWorkflowsOnPostgres";
+
+        Assert.Equal(0, report.AssurancePacket.GoldenCorpusCovered);
+        foreach (var scenario in report.GoldenFilingCorpus)
+        {
+            Assert.Equal("machine-covered-review-pending", scenario.CoverageStatus);
+            Assert.NotEqual("ready-for-external-filing", scenario.EvidencePack.ExpectedOutputs.FilingReadinessState);
+            Assert.NotEqual("ready-for-external-filing", scenario.EvidencePack.ExpectedOutputs.SignOffPacketState);
+            Assert.Contains(
+                scenario.EvidencePack.DecisionGates,
+                gate => gate.Contains("qualified-accountant", StringComparison.OrdinalIgnoreCase)
+                    || gate.Contains("professional review", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(
+                scenario.EvidencePack.DecisionGates,
+                gate => gate.Contains("external ROS/iXBRL validation", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(
+                scenario.EvidencePack.ExpectedOutputs.FilingGateStates,
+                gate => gate.Contains("external ROS/iXBRL validation required", StringComparison.OrdinalIgnoreCase));
+            Assert.DoesNotContain(
+                scenario.EvidencePack.ExpectedOutputs.PdfTextMarkers,
+                marker => marker.Contains("AUD-2026-MIDLANDS-001", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(postgresVerifier, scenario.EvidenceTestNames);
+        }
+
+        Assert.All(
+            report.AccountantAcceptanceCriteria,
+            criterion => Assert.NotEqual("accepted", criterion.AcceptanceStatus));
     }
 
     [Fact]
@@ -1325,7 +1391,7 @@ public class ProductionReadinessReportTests
                 Assert.False(string.IsNullOrWhiteSpace(StringProperty(verifier, "EvidenceLevel")));
             });
 
-            if (scenario.CoverageStatus == "covered")
+            if (scenario.CoverageStatus.StartsWith("machine-covered", StringComparison.Ordinal))
                 Assert.All(verifiers, verifier => Assert.True(BooleanProperty(verifier, "RunsInDefaultCi")));
         }
 
@@ -1461,6 +1527,15 @@ public class ProductionReadinessReportTests
             && StringProperty(item, "Command").Contains("verify-postgres-backup", StringComparison.OrdinalIgnoreCase)
             && StringProperty(item, "CiScope") == "default-ci");
         Assert.Contains(manifest, item =>
+            StringProperty(item, "Code") == "postgres-migration-upgrade-gate"
+            && StringProperty(item, "Command").Contains("has-pending-model-changes", StringComparison.OrdinalIgnoreCase)
+            && StringProperty(item, "Command").Contains("MigrationUpgradePostgresTests", StringComparison.Ordinal)
+            && StringProperty(item, "Command").Contains("verify-migration-upgrade-evidence", StringComparison.OrdinalIgnoreCase)
+            && StringProperty(item, "EvidenceArtifact") == "postgres-migration-upgrade-gate"
+            && StringProperty(item, "CiScope") == "default-ci"
+            && BooleanProperty(item, "RunsInDefaultCi")
+            && BooleanProperty(item, "BlocksRelease"));
+        Assert.Contains(manifest, item =>
             StringProperty(item, "Code") == "postgres-gated-audit-tests"
             && StringProperty(item, "CiScope") == "environment-gated"
             && !BooleanProperty(item, "RunsInDefaultCi")
@@ -1521,7 +1596,7 @@ public class ProductionReadinessReportTests
             expectedValueChecks:
             [
                 "Micro regime",
-                "100% filing readiness",
+                "machine statement readiness complete; release gates remain open",
                 "well-formed iXBRL"
             ],
             expectedSourceIds:
@@ -1558,7 +1633,7 @@ public class ProductionReadinessReportTests
             [
                 "SmallAbridged regime",
                 "Section 352 wording",
-                "public P&L turnover omitted from iXBRL"
+                "private P&L turnover retained in the manual-handoff review prototype"
             ],
             expectedSourceIds:
             [
@@ -1608,8 +1683,8 @@ public class ProductionReadinessReportTests
             [
                 "CLG accounts PDF text",
                 "charity readiness profile",
-                "SoFA evidence",
-                "trustees annual report evidence",
+                "SoFA evidence requirement (pending genuine trustee review)",
+                "trustees annual report evidence requirement (pending genuine trustee review)",
                 "iXBRL XML"
             ],
             expectedGates:
@@ -1620,7 +1695,7 @@ public class ProductionReadinessReportTests
             ],
             expectedValueChecks:
             [
-                "charity evidence satisfied",
+                "charity number satisfied while SoFA and trustees evidence remain pending",
                 "Charities Regulator source attached"
             ],
             expectedSourceIds:
@@ -1635,10 +1710,10 @@ public class ProductionReadinessReportTests
             "medium-audit-required",
             expectedArtifacts:
             [
-                "full accounts PDF text",
-                "auditor report evidence",
-                "cash flow statement",
-                "statement of changes in equity",
+                "full accounts PDF blocker evidence",
+                "auditor report requirement (pending genuine evidence)",
+                "cash flow statement requirement",
+                "statement of changes in equity requirement",
                 "iXBRL XML",
                 "filing readiness profile"
             ],
@@ -1652,7 +1727,7 @@ public class ProductionReadinessReportTests
             [
                 "Medium regime",
                 "audit report blocker",
-                "tagged P&L facts"
+                "tagged P&L facts present in the review prototype"
             ],
             expectedSourceIds:
             [
@@ -1814,11 +1889,20 @@ public class ProductionReadinessReportTests
             Assert.False(string.IsNullOrWhiteSpace(StringProperty(fixture!, "ExpectedRegime")));
         }
 
-        AssertGoldenFixture(report, "micro-ltd", "Example Micro Limited", "Private", "2025-01-01", "2025-12-31", "Micro", "Micro", auditExempt: true, manualReviewRequired: false);
-        AssertGoldenFixture(report, "small-abridged-ltd", "Connacht Digital Solutions Limited", "Private", "2025-01-01", "2025-12-31", "Small", "SmallAbridged", auditExempt: true, manualReviewRequired: false);
-        AssertGoldenFixture(report, "dac-small", "Atlantic Manufacturing DAC", "DesignatedActivityCompany", "2026-01-01", "2026-12-31", "Small", "Small", auditExempt: true, manualReviewRequired: false);
-        AssertGoldenFixture(report, "clg-charity", "Dublin Community Support CLG", "CompanyLimitedByGuarantee", "2026-01-01", "2026-12-31", "Small", "Small", auditExempt: true, manualReviewRequired: false);
-        AssertGoldenFixture(report, "medium-audit-required", "Midlands Manufacturing Limited", "Private", "2026-01-01", "2026-12-31", "Medium", "Medium", auditExempt: false, manualReviewRequired: true);
+        foreach (var fixture in GoldenCorpusFixture.Document.Scenarios)
+        {
+            AssertGoldenFixture(
+                report,
+                fixture.Code,
+                fixture.LegalName,
+                fixture.CompanyType,
+                fixture.CurrentYear.PeriodStart.ToString("yyyy-MM-dd"),
+                fixture.CurrentYear.PeriodEnd.ToString("yyyy-MM-dd"),
+                fixture.ExpectedSizeClass,
+                fixture.ElectedRegime,
+                auditExempt: fixture.ParsedSizeClass <= Accounts.Api.Entities.CompanySizeClass.Small,
+                manualReviewRequired: fixture.ParsedSizeClass >= Accounts.Api.Entities.CompanySizeClass.Medium);
+        }
     }
 
     [Fact]
@@ -1844,15 +1928,15 @@ public class ProductionReadinessReportTests
             report,
             "micro-ltd",
             expectedPdfMarker: "280D",
-            expectedIxbrlTag: "core:EntityCurrentLegalOrRegisteredName",
+            expectedIxbrlTag: "core:TurnoverGrossRevenue",
             expectedTax: 62.50m,
-            readinessState: "100% filing readiness",
+            readinessState: "machine-statements-ready-release-blocked",
             signOffState: "review-required");
         AssertGoldenExpectedOutputs(
             report,
             "small-abridged-ltd",
             expectedPdfMarker: "Section 352",
-            expectedIxbrlTag: "core:EntityCurrentLegalOrRegisteredName",
+            expectedIxbrlTag: "core:TurnoverGrossRevenue",
             expectedTax: 62.50m,
             readinessState: "generated-output-evidence-required",
             signOffState: "review-required");
@@ -1862,20 +1946,20 @@ public class ProductionReadinessReportTests
             expectedPdfMarker: "Atlantic Manufacturing DAC",
             expectedIxbrlTag: "bus:EntityCurrentLegalOrRegisteredName",
             expectedTax: 62.50m,
-            readinessState: "ready-for-external-filing",
-            signOffState: "ready-for-external-filing");
+            readinessState: "machine-artifacts-generated-release-blocked",
+            signOffState: "review-required");
         AssertGoldenExpectedOutputs(
             report,
             "clg-charity",
             expectedPdfMarker: "Community support and education.",
-            expectedIxbrlTag: "core:EntityCurrentLegalOrRegisteredName",
+            expectedIxbrlTag: "core:TurnoverGrossRevenue",
             expectedTax: 62.50m,
-            readinessState: "ready-for-external-filing",
-            signOffState: "ready-for-external-filing");
+            readinessState: "charity-evidence-review-required",
+            signOffState: "review-required");
         AssertGoldenExpectedOutputs(
             report,
             "medium-audit-required",
-            expectedPdfMarker: "INDEPENDENT AUDITOR'S REPORT",
+            expectedPdfMarker: "signed auditor's report is required before final PDF generation",
             expectedIxbrlTag: "core:TurnoverGrossRevenue",
             expectedTax: 62.50m,
             readinessState: "manual-handoff-until-auditor-evidence",
@@ -1887,14 +1971,10 @@ public class ProductionReadinessReportTests
     {
         await using var db = CreateDbContext();
         var report = await new ProductionReadinessReportService(db).GetReportAsync();
-        var expectedTaxByScenario = new Dictionary<string, decimal>(StringComparer.Ordinal)
-        {
-            ["micro-ltd"] = 62.50m,
-            ["small-abridged-ltd"] = 62.50m,
-            ["dac-small"] = 62.50m,
-            ["clg-charity"] = 62.50m,
-            ["medium-audit-required"] = 62.50m
-        };
+        var expectedTaxByScenario = GoldenCorpusFixture.Document.Scenarios.ToDictionary(
+            scenario => scenario.Code,
+            scenario => scenario.WorkflowFacts.ExpectedCorporationTax,
+            StringComparer.Ordinal);
 
         foreach (var scenario in report.GoldenFilingCorpus)
         {
@@ -2127,6 +2207,12 @@ public class ProductionReadinessReportTests
             control.Code == "correlation-id-error-responses"
             && control.Required
             && control.Verification.Contains("ExceptionMiddleware", StringComparison.Ordinal));
+        Assert.Contains(report.MonitoringControls, control =>
+            control.Code == "sanitized-client-error-telemetry"
+            && control.Required
+            && control.ProductionSafetyGate.Contains("client-event", StringComparison.Ordinal)
+            && control.EvidenceCaptured.Contains("fixed event codes", StringComparison.OrdinalIgnoreCase)
+            && control.Verification.Contains("synthetic email/secret markers", StringComparison.OrdinalIgnoreCase));
         Assert.All(report.MonitoringControls, control =>
         {
             Assert.False(string.IsNullOrWhiteSpace(control.Label));
@@ -2216,9 +2302,20 @@ public class ProductionReadinessReportTests
             && StringProperty(control, "Enforcement").Contains("SeedDemoData", StringComparison.Ordinal)
             && StringProperty(control, "FailurePolicy").Contains("demo", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(controls, control =>
+            StringProperty(control, "Code") == "migration-upgrade-compatibility"
+            && StringProperty(control, "Enforcement").Contains("PostgreSQL 16.4", StringComparison.Ordinal)
+            && StringProperty(control, "Enforcement").Contains("20260621123340_AddCroSignatories", StringComparison.Ordinal)
+            && StringProperty(control, "EvidenceCaptured").Contains("migration-upgrade-report.json", StringComparison.Ordinal)
+            && StringProperty(control, "Verification").Contains("restore-drill-report.json", StringComparison.Ordinal)
+            && StringProperty(control, "FailurePolicy").Contains("partial schema", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(controls, control =>
             StringProperty(control, "Code") == "backup-restore-drill"
             && StringProperty(control, "EvidenceCaptured").Contains("backup restore", StringComparison.OrdinalIgnoreCase)
             && StringProperty(control, "Verification").Contains("verify-postgres-backup", StringComparison.Ordinal));
+        Assert.Contains(controls, control =>
+            StringProperty(control, "Code") == "certificate-verified-database-transport"
+            && StringProperty(control, "Enforcement").Contains("VerifyFull", StringComparison.Ordinal)
+            && StringProperty(control, "Verification").Contains("verify-postgres-tls", StringComparison.Ordinal));
         Assert.All(controls, control =>
         {
             Assert.False(string.IsNullOrWhiteSpace(StringProperty(control, "Label")));
@@ -2267,6 +2364,15 @@ public class ProductionReadinessReportTests
             && StringProperty(item, "Verification").Contains("--migrate-only", StringComparison.Ordinal)
             && StringProperty(item, "Verification").Contains("AutoMigrateOnStartup", StringComparison.Ordinal));
         Assert.Contains(pack, item =>
+            StringProperty(item, "Code") == "migration-upgrade-compatibility"
+            && StringProperty(item, "Command").Contains("has-pending-model-changes", StringComparison.Ordinal)
+            && StringProperty(item, "Command").Contains("MigrationUpgradePostgresTests", StringComparison.Ordinal)
+            && StringProperty(item, "Command").Contains("verify-migration-upgrade-evidence", StringComparison.Ordinal)
+            && StringProperty(item, "RequiredArtifact") == "postgres-migration-upgrade-gate"
+            && StringProperty(item, "Verification").Contains("migration-upgrade-verification-report.json", StringComparison.Ordinal)
+            && StringProperty(item, "Verification").Contains("restore-drill-report.json", StringComparison.Ordinal)
+            && StringProperty(item, "FailurePolicy").Contains("candidate-bound", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(pack, item =>
             StringProperty(item, "Code") == "production-seed-block"
             && StringProperty(item, "Command").Contains("production-safety-report.json", StringComparison.Ordinal)
             && StringProperty(item, "RequiredArtifact") == "production-safety-config"
@@ -2277,6 +2383,11 @@ public class ProductionReadinessReportTests
             StringProperty(item, "Code") == "backup-restore-drill"
             && StringProperty(item, "Command").Contains("verify-postgres-backup", StringComparison.Ordinal)
             && StringProperty(item, "RequiredArtifact") == "postgres-backup-restore-drill-report");
+        Assert.Contains(pack, item =>
+            StringProperty(item, "Code") == "postgres-transport-tls"
+            && StringProperty(item, "Command").Contains("verify-postgres-tls", StringComparison.Ordinal)
+            && StringProperty(item, "RequiredArtifact") == "postgres-tls-runtime"
+            && StringProperty(item, "Verification").Contains("VerifyFull", StringComparison.Ordinal));
 
         Assert.All(pack, item =>
         {
@@ -2389,7 +2500,7 @@ public class ProductionReadinessReportTests
             StringProperty(blocker, "TrackCode") == "frontend-ui-ux"
             && StringProperty(blocker, "SourceActionCode") == "light-dark-visual-regression"
             && StringProperty(blocker, "ReleaseChecklistCode") == "visual-qa-screenshot-review"
-            && StringProperty(blocker, "EvidenceArtifact") == "light-dark-desktop-mobile-screenshot-review"
+            && StringProperty(blocker, "EvidenceArtifact") == "light-dark-mobile-tablet-desktop-screenshot-review"
             && StringProperty(blocker, "RequiredEvidence").Contains("screenshot", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(blockerRegister, blocker =>
             StringProperty(blocker, "TrackCode") == "frontend-code"
@@ -2527,7 +2638,7 @@ public class ProductionReadinessReportTests
     }
 
     [Fact]
-    public async Task ProductionReadinessReport_DeclaresVisualQaCoverageForAccountantWorkbenchRoutes()
+    public async Task ProductionReadinessReport_DeclaresCanonicalVisualQaStateInventoryAndAccountantSubset()
     {
         await using var db = CreateDbContext();
         var report = await new ProductionReadinessReportService(db).GetReportAsync();
@@ -2535,13 +2646,44 @@ public class ProductionReadinessReportTests
         Assert.Equal("visual-smoke-screenshots", report.VisualQaCoverage.ArtifactName);
         Assert.Equal("ci-production-smoke", report.VisualQaCoverage.Enforcement);
         Assert.Equal("visual-smoke-manifest.json", StringProperty(report.VisualQaCoverage, "ManifestFileName"));
-        Assert.Equal(28, report.VisualQaCoverage.ExpectedScreenshotCount);
+        Assert.Equal("canonical-material-states-v1", report.VisualQaCoverage.InventoryVersion);
+        Assert.Equal(32, report.VisualQaCoverage.InventoryStateCount);
+        Assert.Equal(32, report.VisualQaCoverage.RouteCount);
+        Assert.Equal(7, report.VisualQaCoverage.AccountantWorkbenchRouteCount);
+        Assert.Equal(192, report.VisualQaCoverage.ExpectedScreenshotCount);
+        Assert.True(report.VisualQaCoverage.SemanticDistinctnessRequired);
+        Assert.Equal(18, report.VisualQaCoverage.RequiredMaterialRoutes.Count);
+        Assert.Equal(9, report.VisualQaCoverage.RequiredUiStates.Count);
+        Assert.Equal(32, report.VisualQaCoverage.StateInventory.Count);
+        Assert.Equal(
+            new[]
+            {
+                "login", "password-change", "dashboard", "onboarding", "production-readiness", "company-detail",
+                "period-workspace", "classification", "categorisation", "year-end", "adjustments", "notes", "charity",
+                "financial-statements", "statement-source-trail", "statement-profit-and-loss", "statement-balance-sheet",
+                "statement-tax-computation", "statement-cash-flow", "statement-equity-changes", "statement-directors-report",
+                "filing-review", "workbench-preview", "state-loading", "state-empty", "state-maximum-data", "state-error",
+                "state-partial-error", "state-permission-denied", "state-read-only", "state-stale", "state-conflict"
+            },
+            report.VisualQaCoverage.StateInventory.Select(state => state.StateId));
+        Assert.Equal(
+            new[]
+            {
+                "login", "password-change", "onboarding", "classification", "categorisation", "year-end", "adjustments",
+                "notes", "charity", "statement-trial-balance", "statement-source-trail", "statement-profit-and-loss",
+                "statement-balance-sheet", "statement-tax-computation", "statement-cash-flow", "statement-equity-changes",
+                "statement-directors-report", "filing"
+            },
+            report.VisualQaCoverage.RequiredMaterialRoutes);
+        Assert.Equal(
+            new[] { "loading", "empty", "maximum-data", "error", "partial-error", "permission-denied", "read-only", "stale", "conflict" },
+            report.VisualQaCoverage.RequiredUiStates);
         var artifacts = ObjectListProperty(report.VisualQaCoverage, "Artifacts");
         var routeAudits = ObjectListProperty(report.VisualQaCoverage, "RouteAudits");
         var reviewProtocol = ObjectProperty(report.VisualQaCoverage, "ReviewProtocol");
         Assert.Equal(report.VisualQaCoverage.ExpectedScreenshotCount, artifacts.Count);
         Assert.Equal(report.VisualQaCoverage.Routes.Count, routeAudits.Count);
-        Assert.Equal("visual-review-v1", StringProperty(reviewProtocol, "ProtocolVersion"));
+        Assert.Equal("visual-review-v2-canonical-states", StringProperty(reviewProtocol, "ProtocolVersion"));
         Assert.Equal("Design reviewer", StringProperty(reviewProtocol, "ReviewerRole"));
         Assert.Equal("required-review", StringProperty(reviewProtocol, "Status"));
         Assert.Equal("visual-qa-screenshot-review", StringProperty(reviewProtocol, "SignOffGate"));
@@ -2549,9 +2691,9 @@ public class ProductionReadinessReportTests
         AssertListContainsAll(
             StringListProperty(reviewProtocol, "AcceptanceCriteria"),
             [
-                "light desktop",
-                "horizontal overflow",
-                "table scanability",
+                "768x1024 tablet",
+                "exact canonical URL/tab state",
+                "semantically identical",
                 "named visual QA reviewer"
             ],
             "visual-qa",
@@ -2562,12 +2704,14 @@ public class ProductionReadinessReportTests
                 "visual-smoke-manifest.json",
                 "visual-smoke-evidence-report.json",
                 "accountant-workbench-evidence-report.json",
-                "28 visual smoke screenshots",
+                "192 canonical material-state screenshots",
+                "canonical state inventory and exact URL/tab evidence",
+                "semantic content SHA-256 distinctness evidence",
                 "screenshot SHA-256 checksums",
                 "screenshot PNG dimensions",
                 "screenshot nonblank pixel diversity evidence",
                 "per-screenshot automated theme contrast smoke evidence",
-                "route audit summary",
+                "state audit summary",
                 "named visual QA reviewer sign-off"
             ],
             "visual-qa",
@@ -2580,42 +2724,54 @@ public class ProductionReadinessReportTests
         Assert.Contains("visible-text-overlap", layoutChecks);
         Assert.Equal(["light", "dark"], report.VisualQaCoverage.Themes);
         Assert.Contains(report.VisualQaCoverage.Viewports, viewport =>
+            viewport.Name == "tablet" && viewport.Width == 768 && viewport.Height == 1024);
+        Assert.Contains(report.VisualQaCoverage.Viewports, viewport =>
             viewport.Name == "desktop" && viewport.Width == 1440 && viewport.Height == 1000);
         Assert.Contains(report.VisualQaCoverage.Viewports, viewport =>
             viewport.Name == "mobile" && viewport.Width == 390 && viewport.Height == 844);
         Assert.Contains(report.VisualQaCoverage.Routes, route =>
-            route.Code == "dashboard" && route.RequiredText == "Production Readiness");
+            route.Code == "dashboard" && route.RequiredText == "Firm command centre");
         Assert.Contains(report.VisualQaCoverage.Routes, route =>
             route.Code == "company-detail" && route.RequiredText == "Company command centre");
         Assert.Contains(report.VisualQaCoverage.Routes, route =>
             route.Code == "period-workspace" && route.RequiredText == "Filing readiness");
         Assert.Contains(report.VisualQaCoverage.Routes, route =>
-            route.Code == "filing-review" && route.OpenFilingTab && route.RequiredText == "Filing readiness profile");
+            route.Code == "filing-review" && !route.OpenFilingTab && route.RequiredText == "Filing readiness profile");
         Assert.Contains(report.VisualQaCoverage.Routes, route =>
             route.Code == "financial-statements" && route.RequiredText == "Financial Statements");
         Assert.Contains(report.VisualQaCoverage.Routes, route =>
             route.Code == "workbench-preview" && route.RequiredText == "Workbench Component Preview");
-        foreach (var route in report.VisualQaCoverage.Routes)
+        foreach (var state in report.VisualQaCoverage.StateInventory)
         {
             foreach (var theme in report.VisualQaCoverage.Themes)
             {
                 foreach (var viewport in report.VisualQaCoverage.Viewports)
                 {
                     var artifact = Assert.Single(artifacts, item =>
-                        StringProperty(item, "RouteCode") == route.Code
+                        StringProperty(item, "StateId") == state.StateId
                         && StringProperty(item, "Theme") == theme
                         && StringProperty(item, "ViewportName") == viewport.Name);
-                    var fileName = $"{route.Code}-{theme}-{viewport.Name}.png";
+                    var fileName = $"{state.StateId}-{theme}-{viewport.Name}.png";
 
                     Assert.Equal(fileName, StringProperty(artifact, "FileName"));
                     Assert.Equal($"artifacts/visual-smoke/{fileName}", StringProperty(artifact, "ArtifactPath"));
-                    Assert.Equal(route.RequiredText, StringProperty(artifact, "RequiredText"));
+                    Assert.Equal(state.ExpectedText, StringProperty(artifact, "RequiredText"));
+                    Assert.Equal(state.ExpectedStateText, StringProperty(artifact, "ExpectedStateText"));
+                    Assert.Equal(state.CanonicalUrlTemplate, StringProperty(artifact, "CanonicalUrlTemplate"));
                     Assert.Equal("required-review", StringProperty(artifact, "ReviewStatus"));
-                    Assert.Equal(route.OpenFilingTab, BooleanProperty(artifact, "OpenFilingTab"));
+                    Assert.False(BooleanProperty(artifact, "OpenFilingTab"));
                     Assert.Equal(report.VisualQaCoverage.LayoutChecks, StringListProperty(artifact, "LayoutChecks"));
                 }
             }
         }
+        var categorisation = Assert.Single(report.VisualQaCoverage.StateInventory, state => state.StateId == "categorisation");
+        Assert.Equal("/companies/{companyId}/periods/{periodId}?tab=categorise", categorisation.CanonicalUrlTemplate);
+        Assert.Equal("period-tab", categorisation.CanonicalTabState.Kind);
+        Assert.Equal("categorise", categorisation.CanonicalTabState.Id);
+        var tabletArtifact = Assert.Single(report.VisualQaCoverage.Artifacts, artifact =>
+            artifact.StateId == "state-conflict" && artifact.Theme == "dark" && artifact.ViewportName == "tablet");
+        Assert.Equal("conflict", tabletArtifact.UiState);
+        Assert.Equal("Accounting record changed by another reviewer", tabletArtifact.ExpectedStateText);
         var expectedWorkflowStages = new[]
         {
             "Setup",
@@ -2652,8 +2808,11 @@ public class ProductionReadinessReportTests
             Assert.Contains("accountant-workflow-hierarchy", StringListProperty(routeAudit, "ReviewChecks"));
             Assert.Contains("table-scanability", StringListProperty(routeAudit, "ReviewChecks"));
             Assert.Contains("theme-contrast", StringListProperty(routeAudit, "ReviewChecks"));
-            Assert.Contains("mobile-density", StringListProperty(routeAudit, "ReviewChecks"));
+            Assert.Contains("responsive-density", StringListProperty(routeAudit, "ReviewChecks"));
             Assert.Contains("loading-error-empty-states", StringListProperty(routeAudit, "ReviewChecks"));
+            Assert.Contains("canonical-url-tab-state", StringListProperty(routeAudit, "ReviewChecks"));
+            Assert.Contains("semantic-capture-distinctness", StringListProperty(routeAudit, "ReviewChecks"));
+            Assert.Contains("stale-conflict-states", StringListProperty(routeAudit, "ReviewChecks"));
         });
     }
 
@@ -2680,13 +2839,10 @@ public class ProductionReadinessReportTests
             Assert.Equal(expectedRouteKeys[route.Code], routeKeyProperty!.GetValue(route));
         }
 
-        var artifacts = ObjectListProperty(report.VisualQaCoverage, "Artifacts");
-        foreach (var artifact in artifacts)
+        var stateInventory = report.VisualQaCoverage.StateInventory.ToDictionary(state => state.StateId);
+        foreach (var artifact in report.VisualQaCoverage.Artifacts)
         {
-            var routeCode = StringProperty(artifact, "RouteCode");
-            var routeKeyProperty = artifact.GetType().GetProperty("RouteKey");
-            Assert.NotNull(routeKeyProperty);
-            Assert.Equal(expectedRouteKeys[routeCode], routeKeyProperty!.GetValue(artifact));
+            Assert.Equal(stateInventory[artifact.StateId].RouteKey, artifact.RouteKey);
         }
     }
 

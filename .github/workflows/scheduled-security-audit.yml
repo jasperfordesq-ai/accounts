@@ -1,0 +1,140 @@
+name: Scheduled Security Audit
+
+on:
+  schedule:
+    - cron: "31 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-and-container-audit:
+    name: Dependency and Container Audit
+    runs-on: ubuntu-latest
+    env:
+      EVIDENCE_DIR: ${{ runner.temp }}/scheduled-security-audit
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
+      - name: Prepare evidence directory
+        shell: bash
+        run: mkdir -p "$EVIDENCE_DIR"
+
+      - name: Set up exact Node runtime
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install locked frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Capture npm vulnerability evidence
+        working-directory: frontend
+        shell: bash
+        run: |
+          set +e
+          npm audit --audit-level=high --json > "$EVIDENCE_DIR/npm-audit.json"
+          audit_exit_code=$?
+          set -e
+          printf '%s\n' "$audit_exit_code" > "$EVIDENCE_DIR/npm-audit-exit-code.txt"
+
+      - name: Set up exact .NET SDK
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          global-json-file: global.json
+
+      - name: Restore locked backend dependencies
+        run: dotnet restore backend/Accounts.slnx --locked-mode
+
+      - name: Capture NuGet vulnerability evidence
+        shell: bash
+        run: >-
+          dotnet list backend/Accounts.slnx package --vulnerable --include-transitive --format json
+          > "$EVIDENCE_DIR/nuget-vulnerabilities.json"
+
+      - name: Verify reproducible build inputs
+        run: node scripts/verify-build-inputs.mjs
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Build backend audit image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: Dockerfile.backend
+          load: true
+          push: false
+          provenance: false
+          tags: accounts-api-scheduled-audit:${{ github.run_id }}
+
+      - name: Build frontend audit image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: Dockerfile.frontend
+          build-args: API_URL=http://api:8080
+          load: true
+          push: false
+          provenance: false
+          tags: accounts-frontend-scheduled-audit:${{ github.run_id }}
+
+      - name: Scan backend image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: accounts-api-scheduled-audit:${{ github.run_id }}
+          format: json
+          output: ${{ env.EVIDENCE_DIR }}/backend-trivy.json
+          severity: HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: "0"
+
+      - name: Scan frontend image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: accounts-frontend-scheduled-audit:${{ github.run_id }}
+          format: json
+          output: ${{ env.EVIDENCE_DIR }}/frontend-trivy.json
+          severity: HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: "0"
+
+      - name: Generate backend SPDX SBOM
+        uses: anchore/sbom-action@43a17d6e7add2b5535efe4dcae9952337c479a93 # v0
+        with:
+          image: accounts-api-scheduled-audit:${{ github.run_id }}
+          format: spdx-json
+          output-file: ${{ env.EVIDENCE_DIR }}/backend-sbom.spdx.json
+          upload-artifact: false
+
+      - name: Generate frontend SPDX SBOM
+        uses: anchore/sbom-action@43a17d6e7add2b5535efe4dcae9952337c479a93 # v0
+        with:
+          image: accounts-frontend-scheduled-audit:${{ github.run_id }}
+          format: spdx-json
+          output-file: ${{ env.EVIDENCE_DIR }}/frontend-sbom.spdx.json
+          upload-artifact: false
+
+      - name: Enforce vulnerability policy and bind evidence hashes
+        run: >-
+          node scripts/verify-security-audit-report.mjs
+          --npm "$EVIDENCE_DIR/npm-audit.json"
+          --trivy "$EVIDENCE_DIR/backend-trivy.json"
+          --trivy "$EVIDENCE_DIR/frontend-trivy.json"
+          --report "$EVIDENCE_DIR/scheduled-security-audit-report.json"
+
+      - name: Retain scheduled security evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: scheduled-security-audit-${{ github.run_id }}
+          path: ${{ env.EVIDENCE_DIR }}
+          if-no-files-found: error
+          retention-days: 90

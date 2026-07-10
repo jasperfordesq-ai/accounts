@@ -16,6 +16,7 @@ export interface RecordedRequest {
 export interface RouteResponse {
   status?: number;
   body?: unknown;
+  headers?: HeadersInit;
 }
 
 type RouteHandler = (request: RecordedRequest) => RouteResponse | undefined;
@@ -78,6 +79,7 @@ export function installFetchMock(handler: RouteHandler = () => undefined): Fetch
       ok: status >= 200 && status < 300,
       status,
       statusText: String(status),
+      headers: new Headers(result.headers),
       json: async () => result.body ?? {},
       text: async () => (result.body == null ? "" : JSON.stringify(result.body)),
     } as Response;

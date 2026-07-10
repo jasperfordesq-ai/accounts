@@ -5,7 +5,7 @@ import type { Company } from "@/lib/api";
 
 describe("CompanyPeriodsWorkbench", () => {
   it("surfaces period status, statutory size/regime and next accountant actions", () => {
-    render(
+    const { container } = render(
       <CompanyPeriodsWorkbench
         company={sampleCompany()}
         showNewPeriod={false}
@@ -36,6 +36,14 @@ describe("CompanyPeriodsWorkbench", () => {
       "/companies/7/periods/3",
     );
     expect(screen.getByRole("button", { name: "New Period" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sort by Period" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sort by Status" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Sort by Next action" })).not.toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Next action" })).not.toHaveAttribute("aria-sort");
+    expect(container.querySelector(".workbench-data-grid")).toHaveAttribute("data-responsive", "card");
+    expect(container.querySelector('td[data-label="Next action"]')).toContainElement(
+      screen.getByRole("link", { name: "Open workbench" }),
+    );
   });
 });
 
@@ -46,7 +54,7 @@ function sampleCompany(): Company {
     companyType: "Private",
     incorporationDate: "2024-01-01",
     financialYearStartMonth: 1,
-    ardMonth: 9,
+    annualReturnDate: "2026-09-15",
     isGroupMember: false,
     isHolding: false,
     isInvestment: false,

@@ -8,6 +8,7 @@ describe("FilingDeadlinesPanel", () => {
   it("renders filing deadlines with reference controls and filed-state evidence", () => {
     render(
       <FilingDeadlinesPanel
+        canReview
         deadlines={[
           sampleDeadline({ id: 1, deadlineType: "CRO", dueDate: "2026-09-28" }),
           sampleDeadline({ id: 2, deadlineType: "Revenue", dueDate: "2026-09-23" }),
@@ -45,6 +46,7 @@ describe("FilingDeadlinesPanel", () => {
 
     render(
       <FilingDeadlinesPanel
+        canReview
         deadlines={[sampleDeadline({ id: 2, deadlineType: "Revenue", dueDate: "2026-09-23" })]}
         filingStatus={sampleWorkflowStatus({ ct1Reference: "" })}
         filingReferences={{}}
@@ -55,7 +57,7 @@ describe("FilingDeadlinesPanel", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: "Mark as Filed" }));
+    await user.click(screen.getByRole("button", { name: "Mark as Filed — Revenue deadline" }));
 
     expect(onMarkFiled).not.toHaveBeenCalled();
     expect(onReferenceMissing).toHaveBeenCalledWith("Revenue filing reference is required");
@@ -67,6 +69,7 @@ describe("FilingDeadlinesPanel", () => {
 
     render(
       <FilingDeadlinesPanel
+        canReview
         deadlines={[sampleDeadline({ id: 3, deadlineType: "Charity", dueDate: "2026-10-31" })]}
         filingStatus={sampleWorkflowStatus()}
         filingReferences={{ 3: " CHARITY-2026-77 " }}
@@ -77,7 +80,7 @@ describe("FilingDeadlinesPanel", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: "Mark as Filed" }));
+    await user.click(screen.getByRole("button", { name: "Mark as Filed — Charity deadline" }));
 
     expect(onMarkFiled).toHaveBeenCalledWith(
       expect.objectContaining({ id: 3, deadlineType: "Charity" }),
@@ -104,6 +107,7 @@ function sampleDeadline({
     companyId: 7,
     periodId: 3,
     deadlineType,
+    calculatedDueDate: dueDate,
     dueDate,
     filedDate,
     filingReference,
@@ -129,6 +133,9 @@ function sampleWorkflowStatus({ ct1Reference = "ROS-2026-0011" }: { ct1Reference
       ixbrlInternalChecksPassed: false,
       ixbrlValid: false,
       ct1Reference,
+      generationSupport: "manual-handoff-only",
+      manualHandoffRequired: true,
+      reviewPrototypeChecksPassed: false,
     },
     charity: {
       status: "NotStarted",

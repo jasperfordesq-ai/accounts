@@ -24,6 +24,9 @@ describe("YearEndDividendsSection", () => {
     await user.type(screen.getByLabelText("Date dividend paid"), "2026-05-15");
     await user.click(screen.getByRole("button", { name: "Add dividend" }));
     await user.click(screen.getByRole("button", { name: "Delete dividend of \u20ac4,200.00" }));
+    expect(onDelete).not.toHaveBeenCalled();
+    expect(screen.getByRole("alertdialog", { name: "Remove dividend of \u20ac4,200.00?" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Remove record" }));
 
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ amount: 1800 }));
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ dateDeclared: "2026-05-01" }));

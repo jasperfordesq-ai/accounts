@@ -27,6 +27,9 @@ public static class ClassificationEndpoints
             return Results.Ok(result);
         });
 
+        // Apply or re-review a conservative, evidence-bound statutory classification override.
+        group.MapPut("/size-classification/override", ApplySizeClassificationOverrideEndpointAsync);
+
         // Determine filing regime
         group.MapPost("/filing-regime", async (int companyId, int periodId, FilingRegimeInput? input, FilingRegimeService service, AccountsDbContext db, HttpContext context, ApiAccessService apiAccess) =>
         {
@@ -107,8 +110,17 @@ public static class ClassificationEndpoints
 
         var period = await db.AccountingPeriods
             .Include(p => p.SizeClassification)
+            .Include(p => p.FilingRegime)
             .FirstOrDefaultAsync(p => p.Id == periodId && p.CompanyId == companyId);
         if (period == null) return Results.NotFound();
+
+        SizeClassificationService.ValidateInputs(
+            input.Turnover,
+            input.BalanceSheetTotal,
+            input.AvgEmployees,
+            input.ThresholdElectionEffectiveFrom);
+        if (input.PriorYearClass is not null)
+            throw new BusinessRuleException("Prior-year class is derived from retained raw prior-period figures and cannot be supplied by the caller.");
 
         var sc = period.SizeClassification;
         object? oldValue = sc is null ? null : SizeClassificationInputSnapshot(sc);
@@ -118,10 +130,24 @@ public static class ClassificationEndpoints
             db.SizeClassifications.Add(sc);
         }
 
+        var changed = sc.Turnover != input.Turnover
+            || sc.BalanceSheetTotal != input.BalanceSheetTotal
+            || sc.AvgEmployees != input.AvgEmployees
+            || sc.ThresholdElectionEffectiveFrom != input.ThresholdElectionEffectiveFrom;
+
         sc.Turnover = input.Turnover;
         sc.BalanceSheetTotal = input.BalanceSheetTotal;
         sc.AvgEmployees = input.AvgEmployees;
-        sc.PriorYearClass = input.PriorYearClass;
+        sc.ThresholdElectionEffectiveFrom = input.ThresholdElectionEffectiveFrom;
+        if (changed)
+        {
+            sc.DecisionInputFingerprintSha256 = null;
+            sc.QualificationNotes = null;
+            if (sc.OverrideClass is not null)
+                sc.OverrideRequiresRereview = true;
+            if (period.FilingRegime is not null)
+                db.FilingRegimes.Remove(period.FilingRegime);
+        }
 
         await db.SaveChangesAsync();
         await audit.LogAsync(
@@ -136,6 +162,37 @@ public static class ClassificationEndpoints
         return Results.Ok(sc);
     }
 
+    public static async Task<IResult> ApplySizeClassificationOverrideEndpointAsync(
+        int companyId,
+        int periodId,
+        SizeClassificationOverrideInput input,
+        SizeClassificationService service,
+        AccountsDbContext db,
+        HttpContext context,
+        ApiAccessService apiAccess)
+    {
+        if (!await CompanyEndpointAccess.CanAccessCompanyPeriodAsync(context, db, companyId, periodId))
+            return Results.NotFound();
+        if (EndpointRequestAuthorization.AuthorizeCurrentRequest(context, apiAccess) is { } denied)
+            return denied;
+
+        var user = AuthContext.RequireUser(context);
+        if (user.Role is not "Owner" and not "Reviewer")
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
+        var result = await service.ApplyOverrideAsync(
+            companyId,
+            periodId,
+            new SizeClassificationOverrideRequest(
+                input.OverrideClass,
+                input.Reason,
+                input.EvidenceArtifact,
+                input.EvidenceSha256),
+            user.Role,
+            user.DisplayName,
+            AuthenticatedIdentity.AuditUserId(user));
+        return Results.Ok(result);
+    }
+
     private static string? AuditUserId(HttpContext context)
     {
         var user = AuthContext.GetUser(context);
@@ -147,10 +204,23 @@ public static class ClassificationEndpoints
         sc.Turnover,
         sc.BalanceSheetTotal,
         sc.AvgEmployees,
-        sc.PriorYearClass
+        sc.ThresholdElectionEffectiveFrom,
+        sc.PriorYearClass,
+        sc.DecisionInputFingerprintSha256,
+        sc.OverrideRequiresRereview
     };
 }
 
-public record SizeClassificationInput(decimal Turnover, decimal BalanceSheetTotal, int AvgEmployees, CompanySizeClass? PriorYearClass);
+public record SizeClassificationInput(
+    decimal Turnover,
+    decimal BalanceSheetTotal,
+    int AvgEmployees,
+    CompanySizeClass? PriorYearClass,
+    DateOnly? ThresholdElectionEffectiveFrom = null);
+public record SizeClassificationOverrideInput(
+    CompanySizeClass OverrideClass,
+    string Reason,
+    byte[] EvidenceArtifact,
+    string EvidenceSha256);
 public record FilingRegimeInput(ElectedRegime? ElectedRegime);
 public record MemberAuditNoticeInput(bool Received, DateOnly? NoticeDate);

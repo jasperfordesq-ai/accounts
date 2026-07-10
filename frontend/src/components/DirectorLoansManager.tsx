@@ -1,19 +1,36 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Button, Chip, Spinner } from "@heroui/react";
-import { Pencil, Plus, Trash2, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Chip, Spinner } from "@heroui/react";
+import { Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
-  getDirectorLoans, createDirectorLoan, updateDirectorLoan, deleteDirectorLoan, type DirectorLoanRow,
+  createDirectorLoan,
+  deleteDirectorLoan,
+  getDirectorLoans,
+  updateDirectorLoan,
+  type DirectorLoanRow,
 } from "@/lib/api";
-import { MoneyInput, ReadOnlyNotice } from "@/components/workbench";
-
-const inputClass =
-  "w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors";
+import { ReadOnlyNotice } from "@/components/workbench";
+import { DirectorLoanEvidenceForm, deriveDirectorLoanBalances } from "@/components/DirectorLoanEvidenceForm";
+import { ResourceStateNotice } from "@/components/ResourceStateNotice";
+import {
+  INITIAL_RESOURCE_STATE,
+  beginResourceLoad,
+  canUseResourceAsEvidence,
+  completeResourceLoad,
+  failResourceLoad,
+  type ResourceState,
+} from "@/lib/resourceState";
+import { useUnsavedChanges } from "@/lib/useUnsavedChanges";
+import { useDestructiveActionConfirmation } from "@/lib/useDestructiveAction";
 
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" }).format(amount);
+}
+
+function humanise(value: string): string {
+  return value.replace(/([a-z])([A-Z0-9])/g, "$1 $2").replace(/Section(\d+)/, "Section $1");
 }
 
 export interface DirectorOption {
@@ -21,28 +38,57 @@ export interface DirectorOption {
   name: string;
 }
 
-function emptyForm(directorId = 0): DirectorLoanRow {
+function emptyForm(directorId?: number): DirectorLoanRow {
   return {
     directorId,
+    counterpartyType: "Director",
+    counterpartyName: undefined,
+    arrangementType: "Loan",
+    arrangementDate: undefined,
     openingBalance: 0,
     advances: 0,
     repayments: 0,
     closingBalance: 0,
+    termsStatus: "Unassessed",
     interestRate: 0,
     interestCharged: 0,
+    allowanceMade: 0,
+    section236PresumptionEvidenceReference: undefined,
     isDocumented: false,
-    loanTerms: "",
+    loanTerms: undefined,
     maxBalanceDuringYear: 0,
+    complianceBasis: "Unassessed",
+    relevantAssetsBasis: "Unassessed",
+    relevantAssetsAmount: undefined,
+    relevantAssetsAsOfDate: undefined,
+    relevantAssetsReference: undefined,
+    noPriorFinancialStatementsConfirmed: false,
+    relevantAssetsFallReview: "Unassessed",
+    relevantAssetsReductionAwarenessDate: undefined,
+    termsAmendedDate: undefined,
+    termsAmendmentEvidenceReference: undefined,
+    exceptionEvidenceReference: undefined,
+    sapDeclarationDate: undefined,
+    sapResolutionDate: undefined,
+    sapActivityStartDate: undefined,
+    sapCroFilingDate: undefined,
+    sapDeclarationReference: undefined,
+    sapResolutionReference: undefined,
+    sapCroFilingReference: undefined,
+    sapDeclarationCoversSection203Matters: false,
+    expenseIncurredDate: undefined,
+    expenseDischargedDate: undefined,
+    ordinaryCourseConfirmed: false,
+    noMoreFavourableTermsConfirmed: false,
+    reviewDecision: "Unreviewed",
+    reviewNote: undefined,
+    reviewedBy: undefined,
+    reviewerRole: undefined,
+    reviewedAtUtc: undefined,
+    balanceMovements: [],
   };
 }
 
-/**
- * Director-loan create/edit for the year-end Director Loans section (frontend-director-loans-no-entry).
- * The section used to be display-only, so directorLoanCompliance was always null and the s.236 /
- * overdrawn-DLA checks never fired. Closing balance is derived (opening + advances - repayments) and the
- * max-during-year defaults to the larger of opening/closing (the figure the 10%-of-net-assets test uses),
- * both overridable. On save it asks the page to refresh the compliance summary.
- */
 export function DirectorLoansManager({
   companyId,
   periodId,
@@ -50,6 +96,7 @@ export function DirectorLoansManager({
   canWrite = true,
   onCountChange,
   onSaved,
+  onResourceStateChange,
 }: {
   companyId: number;
   periodId: number;
@@ -57,12 +104,27 @@ export function DirectorLoansManager({
   canWrite?: boolean;
   onCountChange?: (count: number) => void;
   onSaved?: () => void;
+  onResourceStateChange?: (state: ResourceState) => void;
 }) {
   const [rows, setRows] = useState<DirectorLoanRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState<DirectorLoanRow>(() => emptyForm(directors[0]?.id ?? 0));
+  const [form, setForm] = useState<DirectorLoanRow>(() => emptyForm(directors[0]?.id));
   const [editingId, setEditingId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const [resourceState, setResourceState] = useState<ResourceState>(INITIAL_RESOURCE_STATE);
+  const { requestDestructiveAction, destructiveActionConfirmation } = useDestructiveActionConfirmation();
+
+  const directorLoanFormDirty = useMemo(() => {
+    const baseline = editingId == null
+      ? emptyForm(directors[0]?.id)
+      : rows.find((row) => row.id === editingId) ?? emptyForm(directors[0]?.id);
+    return JSON.stringify(form) !== JSON.stringify(baseline);
+  }, [directors, editingId, form, rows]);
+  useUnsavedChanges(directorLoanFormDirty);
+
+  useEffect(() => {
+    onResourceStateChange?.(resourceState);
+  }, [onResourceStateChange, resourceState]);
 
   const publishCount = useCallback(
     (next: DirectorLoanRow[]) => onCountChange?.(next.length),
@@ -71,60 +133,93 @@ export function DirectorLoansManager({
 
   const load = useCallback(async () => {
     setLoading(true);
+    setResourceState((current) => beginResourceLoad(current, current.hasRetainedData));
     try {
       const data = await getDirectorLoans(companyId, periodId);
       setRows(data);
       publishCount(data);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to load director loans");
+      setResourceState(completeResourceLoad(data.length === 0));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to load director-loan evidence";
+      setResourceState((current) => failResourceLoad({
+        failedResourceKeys: ["director-loans"],
+        errors: { "director-loans": message },
+      }, current.hasRetainedData));
+      toast.error(message);
     } finally {
       setLoading(false);
     }
   }, [companyId, periodId, publishCount]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { void load(); }, [load]);
 
-  const directorName = (id: number) => directors.find((d) => d.id === id)?.name ?? `Director #${id}`;
-  const closingBalance = form.openingBalance + form.advances - form.repayments;
-  const maxDuringYear = form.maxBalanceDuringYear || Math.max(form.openingBalance, closingBalance);
+  const directorName = (id?: number) => directors.find((director) => director.id === id)?.name ?? (id ? `Director #${id}` : "No director");
+  const counterpartyName = (row: DirectorLoanRow) => row.counterpartyName || directorName(row.directorId);
 
-  function startEdit(r: DirectorLoanRow) {
-    setEditingId(r.id ?? null);
-    setForm({ ...r });
+  function startEdit(row: DirectorLoanRow) {
+    setEditingId(row.id ?? null);
+    setForm({ ...row, balanceMovements: row.balanceMovements.map((movement) => ({ ...movement })) });
   }
 
-  function cancelEdit() {
+  function resetForm() {
     setEditingId(null);
-    setForm(emptyForm(directors[0]?.id ?? 0));
+    setForm(emptyForm(directors[0]?.id));
   }
 
   async function handleSubmit() {
-    if (!form.directorId) { toast.error("Select the director"); return; }
+    if (form.counterpartyType !== "GroupCompany" && !form.directorId) {
+      toast.error("Select the related director");
+      return;
+    }
+    if (form.counterpartyType !== "Director" && !form.counterpartyName?.trim()) {
+      toast.error("Enter the counterparty name");
+      return;
+    }
+    if (form.balanceMovements.some((movement) => !movement.movementDate || movement.amount <= 0)) {
+      toast.error("Every dated movement needs a date and positive amount");
+      return;
+    }
+
+    const derived = deriveDirectorLoanBalances(form.openingBalance, form.balanceMovements);
+    if (derived.closingBalance < 0) {
+      toast.error("Repayments cannot reduce the director-loan balance below zero");
+      return;
+    }
+    const payload: DirectorLoanRow = {
+      ...form,
+      directorId: form.counterpartyType === "GroupCompany" ? undefined : form.directorId,
+      counterpartyName: form.counterpartyName?.trim() || undefined,
+      advances: derived.advances,
+      repayments: derived.repayments,
+      closingBalance: derived.closingBalance,
+      maxBalanceDuringYear: derived.maximumBalance,
+      isDocumented: form.termsStatus.startsWith("Written"),
+      loanTerms: form.loanTerms?.trim() || undefined,
+      reviewNote: form.reviewNote?.trim() || undefined,
+      balanceMovements: form.balanceMovements.map((movement) => ({
+        ...movement,
+        evidenceReference: movement.evidenceReference?.trim() || undefined,
+      })),
+    };
+
     setSaving(true);
     try {
-      const payload = {
-        ...form,
-        closingBalance,
-        maxBalanceDuringYear: maxDuringYear,
-        loanTerms: form.loanTerms?.trim() ? form.loanTerms.trim() : undefined,
-      };
       if (editingId != null) {
-        // PUT preserves the row id and audit continuity (no delete + re-add).
         const updated = await updateDirectorLoan(companyId, periodId, editingId, payload);
-        setRows((prev) => prev.map((r) => (r.id === editingId ? updated : r)));
-        toast.success("Director loan updated");
+        setRows((current) => current.map((row) => (row.id === editingId ? updated : row)));
+        toast.success("Director-loan evidence updated");
       } else {
         const created = await createDirectorLoan(companyId, periodId, payload);
         const next = [...rows, created];
         setRows(next);
+        setResourceState(completeResourceLoad(false));
         publishCount(next);
-        toast.success("Director loan recorded");
+        toast.success("Director-loan evidence recorded");
       }
-      setEditingId(null);
-      setForm(emptyForm(directors[0]?.id ?? 0));
+      resetForm();
       onSaved?.();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to save director loan");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to save director-loan evidence");
     } finally {
       setSaving(false);
     }
@@ -134,182 +229,93 @@ export function DirectorLoansManager({
     setSaving(true);
     try {
       await deleteDirectorLoan(companyId, periodId, id);
-      const next = rows.filter((r) => r.id !== id);
+      const next = rows.filter((row) => row.id !== id);
       setRows(next);
+      setResourceState(completeResourceLoad(next.length === 0));
       publishCount(next);
-      toast.success("Director loan removed");
+      toast.success("Director-loan evidence removed");
+      if (editingId === id) resetForm();
       onSaved?.();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to remove director loan");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to remove director-loan evidence");
+      throw error;
     } finally {
       setSaving(false);
     }
   }
 
-  if (loading) {
-    return <div className="py-6 flex justify-center"><Spinner size="sm" /></div>;
+  if (loading && !resourceState.hasRetainedData) {
+    return <div className="flex justify-center py-6"><Spinner size="sm" /></div>;
   }
-
-  if (directors.length === 0) {
-    return (
-      <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 p-4 text-sm text-amber-800 dark:text-amber-300">
-        Add a director to this company first (Officers, on the company page) — a director loan must be
-        attributed to a named director.
-      </div>
-    );
+  if (resourceState.status === "error" && !resourceState.hasRetainedData) {
+    return <ResourceStateNotice state={resourceState} label="director-loan evidence" onRetry={load} compact />;
   }
 
   return (
-    <div>
+    <div className="space-y-4">
+      <ResourceStateNotice state={resourceState} label="director-loan evidence" onRetry={load} compact />
+
       {rows.length > 0 && (
-        <div className="space-y-2 mb-4">
-          {rows.map((r) => (
-            <div
-              key={r.id}
-              className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-neutral-700 px-4 py-3 dark:bg-neutral-800/50"
-            >
-              <div>
-                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{directorName(r.directorId)}</p>
-                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                  <span className="text-xs text-gray-400 dark:text-gray-500">
-                    Opening {formatCurrency(r.openingBalance)} · Max {formatCurrency(r.maxBalanceDuringYear)}
-                  </span>
-                  <Chip variant="soft" size="sm" color={r.isDocumented ? "success" : "warning"}>
-                    {r.isDocumented ? "Documented" : "Undocumented"}
-                  </Chip>
+        <div className="space-y-2" aria-label="Retained director-loan arrangements">
+          {rows.map((row) => (
+            <article key={row.id} className="rounded-lg border border-gray-200 p-4 dark:border-neutral-700 dark:bg-neutral-800/50">
+              <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+                <div className="min-w-0">
+                  <p className="font-medium text-gray-900 dark:text-gray-100">{counterpartyName(row)}</p>
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                    <span>{humanise(row.arrangementType)}</span>
+                    <span>Maximum {formatCurrency(row.maxBalanceDuringYear)}</span>
+                    <span>Closing {formatCurrency(row.closingBalance)}</span>
+                    <Chip variant="soft" size="sm" color={row.reviewDecision === "Accepted" ? "success" : row.reviewDecision === "RemediationRequired" ? "danger" : "warning"}>
+                      {humanise(row.reviewDecision)}
+                    </Chip>
+                    <Chip variant="soft" size="sm">{humanise(row.complianceBasis)}</Chip>
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                  {formatCurrency(r.closingBalance)}
-                </span>
-                {canWrite && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => startEdit(r)}
-                      className="text-gray-400 hover:text-emerald-600 dark:text-gray-500 dark:hover:text-emerald-400"
-                      aria-label={`Edit director loan for ${directorName(r.directorId)}`}
-                    >
-                      <Pencil className="w-4 h-4" />
+                {canWrite && canUseResourceAsEvidence(resourceState) && row.id && (
+                  <div className="flex shrink-0 items-center gap-3">
+                    <button type="button" onClick={() => startEdit(row)} className="text-gray-500 hover:text-emerald-600" aria-label={`Edit director-loan evidence for ${counterpartyName(row)}`}>
+                      <Pencil className="h-4 w-4" />
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => r.id && handleDelete(r.id)}
-                      className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400"
-                      aria-label={`Delete director loan for ${directorName(r.directorId)}`}
-                    >
-                      <Trash2 className="w-4 h-4" />
+                    <button type="button" onClick={() => requestDestructiveAction({
+                      recordLabel: `director-loan evidence for ${counterpartyName(row)}`,
+                      consequence: "This permanently removes the retained arrangement, balance movements, compliance review and linked evidence from this period. The removal cannot be undone.",
+                      onConfirm: () => handleDelete(row.id!),
+                      successAnnouncement: `Director-loan evidence for ${counterpartyName(row)} was removed.`,
+                    })} className="text-red-500 hover:text-red-700" aria-label={`Delete director-loan evidence for ${counterpartyName(row)}`}>
+                      <Trash2 className="h-4 w-4" />
                     </button>
-                  </>
+                  </div>
                 )}
               </div>
-            </div>
+            </article>
           ))}
         </div>
       )}
 
       {!canWrite ? (
-        <ReadOnlyNotice subject="director loans" />
+        <ReadOnlyNotice subject="director-loan evidence" />
+      ) : !canUseResourceAsEvidence(resourceState) ? (
+        <p className="text-sm text-amber-700 dark:text-amber-300">Editing is disabled until the failed evidence refresh succeeds.</p>
       ) : (
-      <div className="space-y-3">
-        <div className="grid grid-cols-12 gap-3 items-end">
-          <div className="col-span-4">
-            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Director</label>
-            <select
-              className={inputClass}
-              value={form.directorId || ""}
-              onChange={(e) => setForm({ ...form, directorId: Number(e.target.value) })}
-              aria-label="Director"
-              title="Director"
-            >
-              {directors.map((d) => (
-                <option key={d.id} value={d.id}>{d.name}</option>
-              ))}
-            </select>
-          </div>
-          <MoneyInput
-            className="col-span-2"
-            label="Opening Balance"
-            ariaLabel="Opening balance"
-            value={form.openingBalance}
-            onValueChange={(value) => setForm({ ...form, openingBalance: value })}
-          />
-          <MoneyInput
-            className="col-span-2"
-            label="Advances"
-            ariaLabel="Advances to director"
-            value={form.advances}
-            onValueChange={(value) => setForm({ ...form, advances: value })}
-          />
-          <MoneyInput
-            className="col-span-2"
-            label="Repayments"
-            ariaLabel="Repayments by director"
-            value={form.repayments}
-            onValueChange={(value) => setForm({ ...form, repayments: value })}
-          />
-          <MoneyInput
-            className="col-span-2"
-            label="Max During Year"
-            ariaLabel="Maximum balance during year"
-            placeholder="auto"
-            value={form.maxBalanceDuringYear}
-            onValueChange={(value) => setForm({ ...form, maxBalanceDuringYear: value })}
-          />
-        </div>
-        <div className="grid grid-cols-12 gap-3 items-end">
-          <div className="col-span-3">
-            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Interest Rate %</label>
-            <input
-              type="number"
-              className={inputClass}
-              placeholder="0.0"
-              value={form.interestRate || ""}
-              onChange={(e) => setForm({ ...form, interestRate: Number(e.target.value) })}
-              aria-label="Interest rate"
-            />
-          </div>
-          <MoneyInput
-            className="col-span-3"
-            label="Interest Charged"
-            ariaLabel="Interest charged"
-            value={form.interestCharged}
-            onValueChange={(value) => setForm({ ...form, interestCharged: value })}
-          />
-          <div className="col-span-3 flex items-center gap-2 pb-2">
-            <input
-              type="checkbox"
-              id="director-loan-documented"
-              checked={form.isDocumented}
-              onChange={(e) => setForm({ ...form, isDocumented: e.target.checked })}
-              className="rounded border-gray-300 dark:border-neutral-600 text-emerald-600 focus:ring-emerald-500"
-            />
-            <label htmlFor="director-loan-documented" className="text-xs font-medium text-gray-600 dark:text-gray-400">
-              Documented terms
-            </label>
-          </div>
-          <div className="col-span-3 flex items-center justify-end pb-1">
-            <span className="text-xs text-gray-500 dark:text-gray-400">
-              Closing:{" "}
-              <span className="font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(closingBalance)}</span>
-            </span>
-          </div>
-        </div>
-        <div className="flex items-center justify-end gap-2">
-          {editingId != null && (
-            <Button variant="ghost" size="sm" onPress={cancelEdit} isDisabled={saving}>
-              <X className="w-4 h-4 mr-1" /> Cancel
-            </Button>
+        <>
+          {directors.length === 0 && form.counterpartyType !== "GroupCompany" && (
+            <p className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
+              Add a director with a verified appointment date before recording an individual or connected-person arrangement, or select “Group company” for a section 243 arrangement.
+            </p>
           )}
-          <Button variant="primary" size="sm" onPress={handleSubmit} isDisabled={saving}>
-            {saving ? <Spinner size="sm" /> : editingId != null
-              ? <>Save changes</>
-              : <><Plus className="w-4 h-4 mr-1" /> Add Director Loan</>}
-          </Button>
-        </div>
-      </div>
+          <DirectorLoanEvidenceForm
+            form={form}
+            directors={directors}
+            editing={editingId != null}
+            saving={saving}
+            onChange={setForm}
+            onCancel={editingId != null ? resetForm : undefined}
+            onSubmit={() => void handleSubmit()}
+          />
+        </>
       )}
+      {destructiveActionConfirmation}
     </div>
   );
 }

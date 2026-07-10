@@ -1,0 +1,10 @@
+# Every production change requires an accountable repository owner review. More specific entries
+# make ownership explicit for the highest-risk surfaces and prevent later broad rules hiding them.
+* @jasperfordesq-ai
+/.github/ @jasperfordesq-ai
+/backend/ @jasperfordesq-ai
+/frontend/ @jasperfordesq-ai
+/scripts/ @jasperfordesq-ai
+/Dockerfile.backend @jasperfordesq-ai
+/Dockerfile.frontend @jasperfordesq-ai
+/compose.production.yml @jasperfordesq-ai

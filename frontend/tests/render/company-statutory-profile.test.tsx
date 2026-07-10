@@ -32,7 +32,7 @@ function sampleCompany(): Company {
     companyType: "PublicLimitedCompany",
     incorporationDate: "2024-01-01",
     financialYearStartMonth: 1,
-    ardMonth: 9,
+    annualReturnDate: "2026-09-15",
     registeredOfficeAddress1: "1 Review Quay",
     registeredOfficeCity: "Dublin",
     registeredOfficeCounty: "Dublin",

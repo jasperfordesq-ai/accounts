@@ -25,7 +25,15 @@ public static partial class YearEndEndpoints
         "post-balance-sheet-events",
         "related-parties",
         "contingent-liabilities",
-        "going-concern"
+        "going-concern",
+        "adjustments",
+        DirectorsReportService.PrincipalActivitiesReviewKey,
+        DirectorsReportService.AuditInformationReviewKey,
+        "note-directors-remuneration",
+        "note-ultimate-controlling-party",
+        "note-financial-instruments",
+        "note-capital-commitments",
+        "note-deferred-tax"
     };
 
     public static void MapYearEndEndpoints(this WebApplication app)
@@ -132,7 +140,11 @@ public static partial class YearEndEndpoints
                 context,
                 db.DirectorLoans
                     .Include(d => d.Director)
-                    .Where(d => d.PeriodId == periodId && d.Director.CompanyId == companyId)));
+                    .Include(d => d.BalanceMovements.OrderBy(movement => movement.MovementDate).ThenBy(movement => movement.Id))
+                    .Where(d => d.PeriodId == periodId
+                        && d.Period.CompanyId == companyId
+                        && (d.CounterpartyType == DirectorLoanCounterpartyType.GroupCompany && d.DirectorId == null
+                            || d.DirectorId != null && d.Director!.CompanyId == companyId))));
 
         dirLoans.MapPost("/", CreateDirectorLoanEndpointAsync);
 
@@ -212,7 +224,11 @@ public static partial class YearEndEndpoints
             var fallbackLoanBalance = loansList.Where(l => !loanSnapshotIds.Contains(l.Id)).Sum(l => l.Balance);
             var dirLoansList = await db.DirectorLoans
                 .Include(d => d.Director)
-                .Where(d => d.PeriodId == periodId && d.Director.CompanyId == companyId)
+                .Include(d => d.BalanceMovements.OrderBy(movement => movement.MovementDate).ThenBy(movement => movement.Id))
+                .Where(d => d.PeriodId == periodId
+                    && d.Period.CompanyId == companyId
+                    && (d.CounterpartyType == DirectorLoanCounterpartyType.GroupCompany && d.DirectorId == null
+                        || d.DirectorId != null && d.Director!.CompanyId == companyId))
                 .ToListAsync();
             var payrollItem = await db.PayrollSummaries.FirstOrDefaultAsync(p => p.PeriodId == periodId);
             var taxList = await db.TaxBalances.Where(t => t.PeriodId == periodId).ToListAsync();

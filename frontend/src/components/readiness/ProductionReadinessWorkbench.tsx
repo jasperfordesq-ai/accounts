@@ -1,11 +1,12 @@
+"use client";
+
 import {
   AlertTriangle,
   CheckCircle2,
   ExternalLink,
-  FileCheck2,
   ShieldCheck,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ProductionReadinessReport } from "@/lib/api";
 import {
   DataGrid,
@@ -16,8 +17,49 @@ import {
   SectionHeader,
   StatusBadge,
 } from "@/components/workbench";
+import {
+  DecisionSummaryItem,
+  PriorityReadinessOverview,
+  ReadinessControlSurface,
+  ReadinessDisclosure,
+  readinessSections,
+  sectionIdFromHash,
+  type ReadinessSectionId,
+} from "@/components/readiness/ProductionReadinessNavigation";
+import {
+  AssertionList,
+  ciScopeTone,
+  closeoutStepTone,
+  CodeStack,
+  CompactList,
+  EmptyLine,
+  EvidenceRow,
+  ExpectedOutputsList,
+  formatCurrency,
+  formatDate,
+  formatDateTime,
+  formatPacketStatus,
+  formatPinnedSources,
+  formatScore,
+  formatStatus,
+  formatTaxonomyPeriodWindow,
+  PacketMetric,
+  priorityTone,
+  ProofPointList,
+  riskTone,
+  ScorecardControlLedger,
+  scorecardTone,
+  SourceLinkList,
+  supportTone,
+  VerifierScopeList,
+} from "@/components/readiness/ProductionReadinessEvidencePrimitives";
 
 export function ProductionReadinessWorkbench({ report }: { report: ProductionReadinessReport }) {
+  const [openSectionIds, setOpenSectionIds] = useState<Set<ReadinessSectionId>>(
+    () => new Set(["readiness-priority"]),
+  );
+  const [activeSectionId, setActiveSectionId] = useState<ReadinessSectionId | null>(null);
+  const [sectionSearch, setSectionSearch] = useState("");
   const assuranceActions = report.assuranceActions ?? [];
   const completionTracks = report.completionTracks ?? [];
   const accountantAcceptanceCriteria = report.accountantAcceptanceCriteria ?? [];
@@ -54,13 +96,55 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
   const statusTone = report.overallStatus === "ready" ? "good" : "warn";
   const releaseReady = report.overallStatus === "ready" && assurancePacket.openCriticalActions === 0;
   const openVisualRouteReviews = visualQaCoverage?.routeAudits.filter((audit) => audit.reviewStatus !== "accepted") ?? [];
-  const visualScreenshotsRequiringReview = openVisualRouteReviews.reduce(
-    (total, audit) => total + audit.screenshotCount,
-    0,
-  );
+  const visualScreenshotsRequiringReview = visualQaCoverage?.reviewProtocol.status === "accepted"
+    ? 0
+    : visualQaCoverage?.expectedScreenshotCount ?? 0;
   const pendingHumanEvidenceCount = humanReleaseEvidence.filter((item) => item.blocksRelease).length;
   const humanEvidenceTemplateCount = humanReleaseEvidence.length;
   const humanEvidenceCloseoutSteps = report.humanReleaseEvidenceCloseout ?? [];
+  const blockingReleaseItems = releaseBlockerRegister
+    .filter((blocker) => blocker.blocksRelease)
+    .sort((left, right) => left.riskRank - right.riskRank);
+  const normalizedSectionSearch = sectionSearch.trim().toLocaleLowerCase("en-IE");
+  const matchingSectionIds = useMemo(() => new Set(
+    readinessSections
+      .filter((section) => normalizedSectionSearch === ""
+        || `${section.label} ${section.description} ${section.keywords}`.toLocaleLowerCase("en-IE").includes(normalizedSectionSearch))
+      .map((section) => section.id),
+  ), [normalizedSectionSearch]);
+
+  const setSectionOpen = useCallback((sectionId: ReadinessSectionId, open: boolean) => {
+    setOpenSectionIds((current) => {
+      const next = new Set(current);
+      if (open) next.add(sectionId);
+      else next.delete(sectionId);
+      return next;
+    });
+  }, []);
+
+  const prepareSectionAnchor = useCallback((sectionId: ReadinessSectionId) => {
+    setSectionSearch("");
+    setSectionOpen(sectionId, true);
+    setActiveSectionId(sectionId);
+  }, [setSectionOpen]);
+  const sectionIsOpen = (sectionId: ReadinessSectionId) =>
+    openSectionIds.has(sectionId)
+    || (normalizedSectionSearch !== "" && matchingSectionIds.has(sectionId));
+
+  useEffect(() => {
+    const restoreSectionFromLocation = () => {
+      const sectionId = sectionIdFromHash(window.location.hash);
+      setActiveSectionId(sectionId);
+      if (sectionId) setSectionOpen(sectionId, true);
+    };
+    restoreSectionFromLocation();
+    window.addEventListener("hashchange", restoreSectionFromLocation);
+    window.addEventListener("popstate", restoreSectionFromLocation);
+    return () => {
+      window.removeEventListener("hashchange", restoreSectionFromLocation);
+      window.removeEventListener("popstate", restoreSectionFromLocation);
+    };
+  }, [setSectionOpen]);
 
   return (
     <PageShell
@@ -75,6 +159,21 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
         </>
       }
     >
+      <div
+        className="min-w-0 space-y-4"
+        data-readiness-progressive-disclosure="true"
+        data-mobile-initial-max-viewports="8"
+      >
+      <ReadinessControlSurface
+        activeSectionId={activeSectionId}
+        blockers={blockingReleaseItems}
+        matchingSectionIds={matchingSectionIds}
+        pendingHumanEvidenceCount={pendingHumanEvidenceCount}
+        search={sectionSearch}
+        onSearchChange={setSectionSearch}
+        onSectionAnchor={prepareSectionAnchor}
+      />
+
       <MetricStrip
         metrics={[
           { label: "Companies in database", value: `${report.companiesInDatabase} companies`, tone: "default" },
@@ -84,15 +183,65 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
         ]}
       />
 
+      <ReadinessDisclosure
+        section={readinessSections[0]}
+        open={sectionIsOpen("readiness-priority")}
+        visible={matchingSectionIds.has("readiness-priority")}
+        searchActive={normalizedSectionSearch !== ""}
+        onOpenChange={(open) => setSectionOpen("readiness-priority", open)}
+      >
+        <PriorityReadinessOverview
+          accountantAcceptanceSummary={accountantAcceptanceSummary}
+          assurancePacket={assurancePacket}
+          blockers={blockingReleaseItems}
+          pendingHumanEvidenceCount={pendingHumanEvidenceCount}
+          releaseReady={releaseReady}
+        />
+      </ReadinessDisclosure>
+
+      <ReadinessDisclosure
+        section={readinessSections[1]}
+        open={sectionIsOpen("readiness-release-evidence")}
+        visible={matchingSectionIds.has("readiness-release-evidence")}
+        searchActive={normalizedSectionSearch !== ""}
+        onOpenChange={(open) => setSectionOpen("readiness-release-evidence", open)}
+      >
+
       <ReviewPanel
         title="Production scorecard"
-        description="The four scoring categories currently being driven to full release readiness."
+        description="Independent audit baseline calculated from explicit weighted controls; it is not a self-awarded completion score."
         actions={
           <StatusBadge tone={productionScorecard.currentScore === productionScorecard.targetScore ? "good" : "warn"}>
-            {productionScorecard.currentScore}/{productionScorecard.targetScore}
+            {formatScore(productionScorecard.currentScore)}/{formatScore(productionScorecard.targetScore)}
           </StatusBadge>
         }
       >
+        <div className="mb-4 rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-3 text-xs leading-5 text-[var(--muted-foreground)]" role="note">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="font-semibold text-[var(--foreground)]">Independent audit baseline</p>
+              <p>
+                Baseline dated {formatDate(productionScorecard.auditBaselineDate)}. Passed control weights contribute to the score;
+                open controls contribute zero until their blocking audit items close.
+              </p>
+              <p className="mt-1 font-mono text-[11px] text-[var(--muted)]">
+                Audited commit {productionScorecard.auditedCommit}
+              </p>
+            </div>
+            <code className="break-all rounded bg-[var(--surface)] px-2 py-1 text-[11px] text-[var(--foreground)]">
+              {productionScorecard.scoreBasis}
+            </code>
+          </div>
+          <p className="mt-2">
+            <span className="font-semibold text-[var(--foreground)]">Evidence policy:</span>{" "}
+            {productionScorecard.evidencePolicy}
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2" aria-label="Score assurance classes">
+            <StatusBadge tone="info">Code controls</StatusBadge>
+            <StatusBadge tone="default">Machine assurance</StatusBadge>
+            <StatusBadge tone="warn">Human / external assurance</StatusBadge>
+          </div>
+        </div>
         <div className="grid min-w-0 grid-cols-1 gap-3 xl:grid-cols-4">
           {productionScorecard.categories.map((category) => (
             <div key={category.code} className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
@@ -111,6 +260,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
                   style={{ width: `${Math.min(100, Math.round((category.currentScore / category.targetScore) * 100))}%` }}
                 />
               </div>
+              <ScorecardControlLedger category={category} />
               <div className="mt-3 space-y-3 text-xs leading-5">
                 <div>
                   <p className="font-semibold uppercase text-[var(--muted-foreground)]">Evidence</p>
@@ -154,7 +304,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
           <DecisionSummaryItem
             label="Visual QA evidence"
             value={`${assurancePacket.visualQaExpectedScreenshots} required screenshots`}
-            detail="Light and dark desktop/mobile screenshots for the accountant workflow routes."
+            detail="Light and dark mobile/tablet/desktop screenshots across the canonical material-state inventory."
             tone="info"
           />
           <DecisionSummaryItem
@@ -340,6 +490,15 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
         </div>
       </ReviewPanel>
 
+      </ReadinessDisclosure>
+
+      <ReadinessDisclosure
+        section={readinessSections[2]}
+        open={sectionIsOpen("readiness-law-taxonomy")}
+        visible={matchingSectionIds.has("readiness-law-taxonomy")}
+        searchActive={normalizedSectionSearch !== ""}
+        onOpenChange={(open) => setSectionOpen("readiness-law-taxonomy", open)}
+      >
       <ReviewPanel
         title="Source-law maintenance"
         description="Release gate for keeping CRO, Revenue, FRC and charity guidance aligned with the pinned source-law snapshot before real filing use."
@@ -510,6 +669,15 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
         />
       </ReviewPanel>
 
+      </ReadinessDisclosure>
+
+      <ReadinessDisclosure
+        section={readinessSections[3]}
+        open={sectionIsOpen("readiness-release-controls")}
+        visible={matchingSectionIds.has("readiness-release-controls")}
+        searchActive={normalizedSectionSearch !== ""}
+        onOpenChange={(open) => setSectionOpen("readiness-release-controls", open)}
+      >
       <ReviewPanel
         title="Next assurance actions"
         description="Priority-ranked work that must be evidenced before the platform can be treated as production-ready for real statutory accounts."
@@ -520,6 +688,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
           filterPlaceholder="Filter assurance actions"
           emptyState="No matching assurance actions"
           defaultSort={{ columnIndex: 2, direction: "asc" }}
+          sortableColumns={[true, true, true, true, true, true]}
           columns={["Action", "Owner", "Risk", "Stage", "Evidence required", "Status"]}
           rows={assuranceActions.map((action) => ({
             id: action.code,
@@ -575,6 +744,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
           filterPlaceholder="Filter release blocker register"
           emptyState="No release blockers"
           defaultSort={{ columnIndex: 2, direction: "asc" }}
+          sortableColumns={[true, true, true, true, true, true]}
           columns={["Blocker", "Track", "Risk", "Evidence", "Next action", "Linked gate"]}
           rows={releaseBlockerRegister.map((blocker) => ({
             id: blocker.code,
@@ -738,6 +908,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
           filterPlaceholder="Filter release verification manifest"
           emptyState="No release verification commands"
           defaultSort={{ columnIndex: 4, direction: "desc" }}
+          sortableColumns={[true, true, true, true, true, true]}
           columns={["Verification", "Owner", "Command", "CI scope", "Evidence linkage", "Fallback"]}
           rows={releaseVerificationManifest.map((item) => ({
             id: item.code,
@@ -786,6 +957,15 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
         />
       </ReviewPanel>
 
+      </ReadinessDisclosure>
+
+      <ReadinessDisclosure
+        section={readinessSections[4]}
+        open={sectionIsOpen("readiness-accountant-review")}
+        visible={matchingSectionIds.has("readiness-accountant-review")}
+        searchActive={normalizedSectionSearch !== ""}
+        onOpenChange={(open) => setSectionOpen("readiness-accountant-review", open)}
+      >
       <ReviewPanel
         title="Accountant workflow walkthrough"
         description="Named qualified-accountant walkthrough protocol for taking the seeded golden companies through the live accountant journey."
@@ -1109,6 +1289,15 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
         />
       </ReviewPanel>
 
+      </ReadinessDisclosure>
+
+      <ReadinessDisclosure
+        section={readinessSections[5]}
+        open={sectionIsOpen("readiness-audit-operations")}
+        visible={matchingSectionIds.has("readiness-audit-operations")}
+        searchActive={normalizedSectionSearch !== ""}
+        onOpenChange={(open) => setSectionOpen("readiness-audit-operations", open)}
+      >
       <ReviewPanel
         title="Production auditability"
         description="Controls proving who changed data, who approved outputs, what evidence was present, what was generated, and how the audit chain is checked."
@@ -1385,6 +1574,15 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
         />
       </ReviewPanel>
 
+      </ReadinessDisclosure>
+
+      <ReadinessDisclosure
+        section={readinessSections[6]}
+        open={sectionIsOpen("readiness-statutory-filing")}
+        visible={matchingSectionIds.has("readiness-statutory-filing")}
+        searchActive={normalizedSectionSearch !== ""}
+        onOpenChange={(open) => setSectionOpen("readiness-statutory-filing", open)}
+      >
       <ReviewPanel
         title="Statutory rules matrix"
         description="Accountant-readable filing paths, required evidence, outputs, fail-closed gates, and source references for the supported and unsupported Irish company workflows."
@@ -1460,7 +1658,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
       {visualQaCoverage && (
         <ReviewPanel
           title="Visual QA coverage"
-          description="CI screenshot evidence for the accountant workbench in light and dark mode across desktop and mobile viewports."
+          description="CI screenshot evidence for the canonical material-state inventory in light and dark mode across mobile, tablet and desktop viewports."
           actions={<StatusBadge tone="info">{visualQaCoverage.expectedScreenshotCount} screenshots</StatusBadge>}
         >
           <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,0.7fr)_minmax(0,1.3fr)]">
@@ -1470,7 +1668,10 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
                 <p className="mt-1 break-all text-sm font-medium text-[var(--foreground)]">{visualQaCoverage.artifactName}</p>
                 <p className="mt-1 break-all text-xs font-medium text-[var(--foreground)]">{visualQaCoverage.manifestFileName}</p>
                 <p className="mt-2 text-xs leading-5 text-[var(--muted-foreground)]">
-                  Enforced by {formatStatus(visualQaCoverage.enforcement)}
+                  {visualQaCoverage.inventoryStateCount} canonical states · {visualQaCoverage.requiredMaterialRoutes.length} material routes · {visualQaCoverage.requiredUiStates.length} UI states
+                </p>
+                <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">
+                  Enforced by {formatStatus(visualQaCoverage.enforcement)} · {visualQaCoverage.inventoryVersion}
                 </p>
               </div>
               <div className="flex min-w-0 flex-wrap gap-2">
@@ -1519,39 +1720,51 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
 
             <div className="min-w-0">
               <DataGrid
-                caption="Visual QA routes"
-                filterPlaceholder="Filter visual QA routes"
-                emptyState="No matching visual QA routes"
-                columns={["Route", "Capture key", "Workflow stages", "Required text", "Viewport evidence", "Tab action"]}
-                rows={visualQaCoverage.routes.map((route) => ({
-                  id: route.code,
-                  tone: route.openFilingTab ? "info" : "default",
+                caption="Canonical visual state inventory"
+                filterPlaceholder="Filter canonical visual states"
+                emptyState="No matching canonical visual states"
+                columns={["State", "Capture key", "Canonical URL / tab", "Expected text", "Coverage", "State type"]}
+                rows={visualQaCoverage.stateInventory.map((state) => ({
+                  id: state.stateId,
+                  tone: state.uiState === "populated" ? "default" : "info",
                   searchText: [
-                    route.label,
-                    route.routeKey,
-                    route.description,
-                    route.requiredText,
-                    ...route.workflowStages,
-                    route.openFilingTab ? "filing tab" : "initial view",
+                    state.stateId,
+                    state.label,
+                    state.routeKey,
+                    state.description,
+                    state.materialRoute ?? "",
+                    state.uiState,
+                    state.canonicalUrlTemplate,
+                    state.canonicalTabState.kind,
+                    state.canonicalTabState.id,
+                    state.canonicalTabState.label,
+                    state.expectedText,
+                    state.expectedStateText,
+                    ...state.workflowStages,
                   ].join(" "),
                   cells: [
-                    <div key="route" className="min-w-44 whitespace-normal">
-                      <p className="font-medium">{route.label}</p>
-                      <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">{route.description}</p>
+                    <div key="state" className="min-w-44 whitespace-normal">
+                      <p className="font-medium">{state.label}</p>
+                      <code className="mt-1 block break-all text-[11px] text-[var(--muted-foreground)]">{state.stateId}</code>
+                      <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">{state.description}</p>
                     </div>,
-                    <code key="route-key" className="break-all text-[11px] text-[var(--foreground)]">{route.routeKey}</code>,
-                    <div key="workflow-stages" className="flex min-w-44 flex-wrap gap-1.5">
-                      {route.workflowStages.map((stage) => (
-                        <StatusBadge key={stage} tone="default">{stage}</StatusBadge>
-                      ))}
+                    <code key="route-key" className="break-all text-[11px] text-[var(--foreground)]">{state.routeKey}</code>,
+                    <div key="canonical" className="min-w-56 whitespace-normal text-xs leading-5 text-[var(--muted-foreground)]">
+                      <code className="block break-all text-[11px] text-[var(--foreground)]">{state.canonicalUrlTemplate}</code>
+                      <p>{state.canonicalTabState.kind}: {state.canonicalTabState.id}</p>
+                      <p>{state.canonicalTabState.label}</p>
                     </div>,
-                    <span key="required-text" className="whitespace-normal text-[var(--muted-foreground)]">{route.requiredText}</span>,
+                    <div key="expected-text" className="min-w-48 whitespace-normal text-xs leading-5 text-[var(--muted-foreground)]">
+                      <p className="font-medium text-[var(--foreground)]">{state.expectedText}</p>
+                      <p>{state.expectedStateText}</p>
+                    </div>,
                     <span key="viewport-evidence" className="text-[var(--muted-foreground)]">
                       {visualQaCoverage.themes.length * visualQaCoverage.viewports.length} screenshots
                     </span>,
-                    <StatusBadge key="tab-action" tone={route.openFilingTab ? "info" : "default"}>
-                      {route.openFilingTab ? "Open filing tab" : "Initial view"}
-                    </StatusBadge>,
+                    <div key="state-type" className="flex min-w-40 flex-wrap gap-1.5">
+                      <StatusBadge tone="default">{formatStatus(state.uiState)}</StatusBadge>
+                      {state.materialRoute && <StatusBadge tone="info">{formatStatus(state.materialRoute)}</StatusBadge>}
+                    </div>,
                   ],
                 }))}
               />
@@ -1562,7 +1775,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
                 <div>
                   <h3 className="text-sm font-semibold text-[var(--foreground)]">Visual route review board</h3>
                   <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">
-                    Route-level visual sign-off queue for accountant workflow hierarchy, table scanability, contrast, mobile density and route states.
+                    Accountant-route sign-off subset for workflow hierarchy, table scanability, contrast, responsive density and route states; full canonical-state review remains required.
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -1949,6 +2162,15 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
         </div>
       </section>
 
+      </ReadinessDisclosure>
+
+      <ReadinessDisclosure
+        section={readinessSections[7]}
+        open={sectionIsOpen("readiness-coverage-boundaries")}
+        visible={matchingSectionIds.has("readiness-coverage-boundaries")}
+        searchActive={normalizedSectionSearch !== ""}
+        onOpenChange={(open) => setSectionOpen("readiness-coverage-boundaries", open)}
+      >
       <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
         <ReviewPanel
           title="Backend and statutory coverage"
@@ -2055,319 +2277,8 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
           </div>
         </ReviewPanel>
       </div>
+      </ReadinessDisclosure>
+      </div>
     </PageShell>
   );
-}
-
-function DecisionSummaryItem({
-  label,
-  value,
-  detail,
-  tone,
-}: {
-  label: string;
-  value: string;
-  detail: string;
-  tone: "good" | "warn" | "bad" | "info" | "default";
-}) {
-  return (
-    <div className="min-w-0 p-4">
-      <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">{label}</p>
-      <p className="mt-2 text-sm font-semibold text-[var(--foreground)]">{value}</p>
-      <div className="mt-3">
-        <StatusBadge tone={tone}>{tone === "good" ? "Clear" : tone === "bad" ? "Blocked" : tone === "info" ? "Evidenced" : "Required"}</StatusBadge>
-      </div>
-      <p className="mt-3 text-xs leading-5 text-[var(--muted-foreground)]">{detail}</p>
-    </div>
-  );
-}
-
-function EvidenceRow({
-  icon,
-  title,
-  detail,
-  status,
-  tone,
-}: {
-  icon: ReactNode;
-  title: string;
-  detail: string;
-  status: string;
-  tone: "good" | "warn" | "bad" | "info" | "default";
-}) {
-  return (
-    <div className="grid min-w-0 grid-cols-1 gap-3 py-3 first:pt-0 last:pb-0 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
-      <div className="flex min-w-0 items-start gap-3">
-        <span className={toneIconClass(tone)}>{icon}</span>
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-[var(--foreground)]">{title}</p>
-          <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">{detail}</p>
-        </div>
-      </div>
-      <StatusBadge tone={tone}>{status}</StatusBadge>
-    </div>
-  );
-}
-
-function CodeStack({ items }: { items: string[] }) {
-  return (
-    <div className="max-w-lg space-y-1 whitespace-normal">
-      {items.map((item) => (
-        <code
-          key={item}
-          className="block break-all rounded border border-[var(--border)] bg-[var(--surface-subtle)] px-2 py-1 text-[11px] text-[var(--muted-foreground)]"
-        >
-          {item}
-        </code>
-      ))}
-    </div>
-  );
-}
-
-function VerifierScopeList({
-  verifiers,
-  label,
-}: {
-  verifiers: ProductionReadinessReport["goldenFilingCorpus"][number]["evidenceVerifiers"];
-  label?: string;
-}) {
-  return (
-    <div className="max-w-lg space-y-2 whitespace-normal">
-      {verifiers.map((verifier) => (
-        <div key={verifier.name} className="rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-2 text-xs leading-5">
-          {label && <p className="mb-1 text-[11px] font-semibold uppercase text-[var(--foreground)]">{label}</p>}
-          <div className="flex flex-wrap items-center gap-2">
-            <StatusBadge tone={verifier.runsInDefaultCi ? "good" : "warn"}>
-              {verifier.runsInDefaultCi ? "Default CI" : "Environment gated"}
-            </StatusBadge>
-            <span className="font-medium text-[var(--foreground)]">{formatStatus(verifier.ciScope)}</span>
-          </div>
-          <p className="mt-1 text-[var(--muted-foreground)]">{verifier.environment}</p>
-          <code className="mt-1 block break-all rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-[11px] text-[var(--muted-foreground)]">
-            {verifier.command}
-          </code>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function AssertionList({ items }: { items: string[] }) {
-  return (
-    <ul className="space-y-1 whitespace-normal text-xs leading-5 text-[var(--muted-foreground)]">
-      {items.map((item) => (
-        <li key={item} className="flex items-center gap-1.5">
-          <FileCheck2 className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-300" />
-          {item}
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function CompactList({ items }: { items: string[] }) {
-  return (
-    <ul className="max-w-md space-y-1 whitespace-normal text-xs leading-5 text-[var(--muted-foreground)]">
-      {items.map((item) => (
-        <li key={item} className="flex items-start gap-1.5">
-          <FileCheck2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-300" />
-          <span>{item}</span>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function ExpectedOutputsList({
-  outputs,
-}: {
-  outputs: ProductionReadinessReport["goldenFilingCorpus"][number]["evidencePack"]["expectedOutputs"];
-}) {
-  return (
-    <div className="max-w-lg space-y-2 whitespace-normal text-xs leading-5 text-[var(--muted-foreground)]">
-      <ExpectedOutputGroup label="PDF" items={outputs.pdfTextMarkers} />
-      <ExpectedOutputGroup label="iXBRL" items={outputs.ixbrlRequiredTags} />
-      <ExpectedOutputGroup label="Notes" items={outputs.requiredNotes} />
-      <ExpectedOutputGroup label="Gates" items={outputs.filingGateStates} />
-      <div className="rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-2">
-        <p><span className="font-semibold text-[var(--foreground)]">Readiness:</span> {formatStatus(outputs.filingReadinessState)}</p>
-        <p><span className="font-semibold text-[var(--foreground)]">Sign-off:</span> {formatStatus(outputs.signOffPacketState)}</p>
-        <p><span className="font-semibold text-[var(--foreground)]">Expected CT:</span> {formatCurrency(outputs.expectedCorporationTax)}</p>
-      </div>
-    </div>
-  );
-}
-
-function ExpectedOutputGroup({ label, items }: { label: string; items: string[] }) {
-  return (
-    <div>
-      <p className="text-[11px] font-semibold uppercase text-[var(--foreground)]">{label}</p>
-      <CompactList items={items} />
-    </div>
-  );
-}
-
-function ProofPointList({
-  proofPoints,
-}: {
-  proofPoints: ProductionReadinessReport["goldenFilingCorpus"][number]["evidencePack"]["expectedProofPoints"];
-}) {
-  return (
-    <ul className="max-w-lg space-y-2 whitespace-normal text-xs leading-5 text-[var(--muted-foreground)]">
-      {proofPoints.map((proof) => (
-        <li key={`${proof.area}-${proof.automatedVerifier}`} className="rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <code className="rounded border border-[var(--border)] bg-[var(--surface)] px-1.5 py-0.5 text-[11px] text-[var(--foreground)]">
-              {proof.area}
-            </code>
-            {proof.required && <StatusBadge tone="good">Required</StatusBadge>}
-          </div>
-          <p className="mt-1 text-[var(--foreground)]">{proof.expectedEvidence}</p>
-          <code className="mt-1 block break-all text-[11px] text-[var(--muted-foreground)]">{proof.automatedVerifier}</code>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function SourceLinkList({ sources }: { sources: ProductionReadinessReport["sourceLawSnapshot"]["sources"] }) {
-  return (
-    <div className="flex max-w-xs flex-wrap gap-1.5 whitespace-normal">
-      {sources.map((source) => (
-        <a
-          key={source.sourceId}
-          href={source.url}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface-subtle)] px-2 py-1 text-[11px] font-medium text-[var(--foreground)] hover:border-[var(--ring)]"
-        >
-          {source.title}
-          <ExternalLink className="h-3 w-3 shrink-0" />
-        </a>
-      ))}
-    </div>
-  );
-}
-
-function EmptyLine({ label }: { label: string }) {
-  return <p className="text-sm text-[var(--muted-foreground)]">{label}</p>;
-}
-
-function PacketMetric({
-  label,
-  value,
-  tone,
-  status,
-}: {
-  label: string;
-  value: string;
-  tone: "good" | "warn" | "bad" | "info" | "default";
-  status: string;
-}) {
-  return (
-    <div className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
-      <p className="text-sm font-semibold text-[var(--foreground)]">{label} {value}</p>
-      <div className="mt-2">
-        <StatusBadge tone={tone}>{status}</StatusBadge>
-      </div>
-    </div>
-  );
-}
-
-function toneIconClass(tone: "good" | "warn" | "bad" | "info" | "default") {
-  if (tone === "good") return "mt-0.5 shrink-0 text-emerald-600 dark:text-emerald-300";
-  if (tone === "bad") return "mt-0.5 shrink-0 text-red-600 dark:text-red-300";
-  if (tone === "warn") return "mt-0.5 shrink-0 text-amber-600 dark:text-amber-300";
-  if (tone === "info") return "mt-0.5 shrink-0 text-sky-600 dark:text-sky-300";
-  return "mt-0.5 shrink-0 text-[var(--muted-foreground)]";
-}
-
-function priorityTone(priority: string): "good" | "warn" | "bad" | "info" | "default" {
-  if (priority === "critical") return "bad";
-  if (priority === "high") return "warn";
-  return "default";
-}
-
-function riskTone(riskRank: number): "good" | "warn" | "bad" | "info" | "default" {
-  if (riskRank <= 5) return "bad";
-  if (riskRank <= 20) return "warn";
-  if (riskRank <= 40) return "info";
-  return "default";
-}
-
-function scorecardTone(currentScore: number, targetScore: number): "good" | "warn" | "bad" | "info" | "default" {
-  const ratio = targetScore > 0 ? currentScore / targetScore : 0;
-  if (ratio >= 1) return "good";
-  if (ratio >= 0.85) return "info";
-  if (ratio >= 0.65) return "warn";
-  return "bad";
-}
-
-function supportTone(supportLevel: string): "good" | "warn" | "bad" | "info" | "default" {
-  if (supportLevel === "supported") return "good";
-  if (supportLevel === "supported-with-review") return "info";
-  if (supportLevel === "manual-handoff") return "warn";
-  if (supportLevel === "unsupported") return "bad";
-  return "default";
-}
-
-function ciScopeTone(scope: string): "good" | "warn" | "bad" | "info" | "default" {
-  if (scope === "default-ci") return "good";
-  if (scope === "environment-gated") return "warn";
-  if (scope === "manual-release") return "bad";
-  return "default";
-}
-
-function closeoutStepTone(
-  step: ProductionReadinessReport["humanReleaseEvidenceCloseout"][number],
-  pendingHumanEvidenceCount: number,
-): "good" | "warn" | "bad" | "info" | "default" {
-  if (!step.blocksRelease) return "good";
-  if (step.code === "pick-up-reviewer-workspace" && pendingHumanEvidenceCount > 0) return "bad";
-  return "warn";
-}
-
-function formatStatus(value: string) {
-  const words = value
-    .split("-")
-    .filter(Boolean)
-    .join(" ");
-
-  return words.charAt(0).toUpperCase() + words.slice(1);
-}
-
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" }).format(value);
-}
-
-function formatPacketStatus(value: string) {
-  return value === "ready" ? "Packet ready" : `Packet ${formatStatus(value).toLowerCase()}`;
-}
-
-function formatTaxonomyPeriodWindow(effectiveFrom: string, effectiveBefore: string) {
-  return effectiveBefore.trim()
-    ? `${effectiveFrom} to ${effectiveBefore}`
-    : `${effectiveFrom} onward`;
-}
-
-function formatDate(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("en-IE", { day: "2-digit", month: "short", year: "numeric" }).format(date);
-}
-
-function formatPinnedSources(count: number) {
-  return `${count} pinned source${count === 1 ? "" : "s"}`;
-}
-
-function formatDateTime(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("en-IE", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@heroui/react";
+import { Button, Spinner } from "@heroui/react";
 import { Building2, Save, X } from "lucide-react";
 import { ReviewPanel, StatusBadge } from "@/components/workbench";
 
@@ -118,9 +118,9 @@ export function CompanyIdentityEditPanel({
             <X className="h-3.5 w-3.5" />
             Cancel
           </Button>
-          <Button variant="primary" size="sm" onPress={onSave} isDisabled={saving} aria-label="Save company changes">
-            <Save className="h-3.5 w-3.5" />
-            {saving ? "Saving..." : "Save Changes"}
+          <Button variant="primary" size="sm" onPress={onSave} isDisabled={saving} aria-label="Save Changes to company">
+            {saving ? <Spinner size="sm" /> : <Save className="h-3.5 w-3.5" />}
+            Save Changes
           </Button>
         </div>
       </div>

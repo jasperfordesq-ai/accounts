@@ -15,7 +15,10 @@ public static class PeriodStatusEndpoint
         AuditService audit,
         FinancialStatementsService statements,
         HttpContext context,
-        ApiAccessService apiAccess)
+        ApiAccessService apiAccess,
+        FilingReleaseGate? releaseGate = null,
+        AccountingConcurrencyCoordinator? concurrency = null,
+        IdempotencyService? idempotency = null)
     {
         if (!await CompanyEndpointAccess.CanAccessCompanyAsync(context, db, companyId))
             return Results.NotFound();
@@ -24,66 +27,111 @@ public static class PeriodStatusEndpoint
             return denied;
 
         var user = AuthContext.RequireUser(context);
-        var period = await db.AccountingPeriods.FirstOrDefaultAsync(p => p.Id == id && p.CompanyId == companyId);
-        if (period is null) return Results.NotFound();
-
-        if (EndpointInputs.ValidatePeriodStatusUpdate(period, update, user) is { } validationProblem)
-            return validationProblem;
-
-        if (update.Status is PeriodStatus.Finalised or PeriodStatus.Filed)
+        idempotency ??= new IdempotencyService(db);
+        try
         {
-            var outputName = update.Status is PeriodStatus.Filed
-                ? "accounts filing"
-                : "accounts finalisation";
-            await statements.AssertFinalOutputReadinessAsync(companyId, id, outputName);
+            var command = await IdempotencyHttpContract.ExecuteAsync(
+                context,
+                idempotency,
+                user,
+                IdempotencyOperations.PeriodStatus,
+                new { companyId, periodId = id, update },
+                async cancellationToken =>
+                {
+                    concurrency ??= new AccountingConcurrencyCoordinator(db);
+                    await using var concurrencyLease = await concurrency.AcquirePeriodAsync(
+                        companyId,
+                        id,
+                        cancellationToken);
 
-            // accounting-retained-earnings-snapshot: capture the closing reserves at finalisation so a
-            // later period reads a fixed opening-reserves figure rather than recomputing prior-year P&L.
-            var snapshotBalanceSheet = await statements.GetBalanceSheetAsync(companyId, id);
-            period.ClosingRetainedEarnings = snapshotBalanceSheet.CapitalAndReserves.RetainedEarnings;
+                    // Every readiness query, immutable snapshot and status write below runs while the same
+                    // PostgreSQL transaction owns both the period advisory lock and its FOR UPDATE row lock.
+                    var period = await db.AccountingPeriods.FirstOrDefaultAsync(
+                        p => p.Id == id && p.CompanyId == companyId,
+                        cancellationToken)
+                        ?? throw new ResourceNotFoundException($"Period {id} not found");
 
-            // filing-approval-date-persisted: fix the board-approval date at finalisation (if not already
-            // set) so every regenerated output stamps the same date instead of DateTime.Now at render.
-            period.ApprovalDate ??= update.ApprovalDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
+                    if (EndpointInputs.ValidatePeriodStatusUpdate(period, update, user) is { } validationProblem)
+                        throw new PeriodStatusValidationException(validationProblem);
+
+                    if (update.Status is PeriodStatus.Finalised or PeriodStatus.Filed)
+                    {
+                        // Fix the board-approval date before readiness validation, then refresh the coded approval
+                        // note in the same advisory-locked transaction. If readiness fails, the transaction is not
+                        // committed and neither value leaks into the draft period.
+                        period.ApprovalDate ??= update.ApprovalDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
+                        await NotesDisclosureService.RefreshApprovalNoteAsync(db, period);
+
+                        var outputName = update.Status is PeriodStatus.Filed
+                            ? "accounts filing"
+                            : "accounts finalisation";
+                        await statements.AssertFinalOutputReadinessAsync(companyId, id, outputName);
+
+                        // accounting-retained-earnings-snapshot: capture the closing reserves at finalisation so a
+                        // later period reads a fixed opening-reserves figure rather than recomputing prior-year P&L.
+                        var snapshotBalanceSheet = await statements.GetBalanceSheetAsync(companyId, id);
+                        period.ClosingRetainedEarnings = snapshotBalanceSheet.CapitalAndReserves.RetainedEarnings;
+                    }
+                    if (update.Status is PeriodStatus.Filed)
+                        await AssertFilingObligationsRecordedAsync(
+                            db,
+                            releaseGate ?? new FilingReleaseGate(db),
+                            companyId,
+                            id,
+                            AuthenticatedIdentity.AuditUserId(user));
+
+                    var oldValue = new
+                    {
+                        period.Status,
+                        period.LockedAt,
+                        period.LockedBy,
+                        period.ReopenedAt,
+                        period.ReopenedBy,
+                        period.ReopenReason
+                    };
+                    EndpointInputs.ApplyPeriodStatusUpdate(period, update, user, DateTime.UtcNow);
+                    await db.SaveChangesAsync(cancellationToken);
+                    await DomainAuditCoverage.LogAsync(
+                        audit,
+                        context,
+                        companyId,
+                        id,
+                        nameof(AccountingPeriod),
+                        id,
+                        AuditEventCodes.AccountingPeriodStatusChanged,
+                        oldValue,
+                        DomainAuditCoverage.PeriodSnapshot(period),
+                        cancellationToken);
+                    await concurrencyLease.CommitIfOwnedAsync(cancellationToken);
+                    return new IdempotencyOperationOutcome<AccountingPeriod>(
+                        period,
+                        nameof(AccountingPeriod),
+                        period.Id.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                });
+            return command.Error ?? IdempotencyHttpContract.JsonResult(command.Execution!);
         }
-        if (update.Status is PeriodStatus.Filed)
-            await AssertFilingObligationsRecordedAsync(db, companyId, id);
-
-        var oldValue = new
+        catch (PeriodStatusValidationException validation)
         {
-            period.Status,
-            period.LockedAt,
-            period.LockedBy,
-            period.ReopenedAt,
-            period.ReopenedBy,
-            period.ReopenReason
-        };
-        EndpointInputs.ApplyPeriodStatusUpdate(period, update, user, DateTime.UtcNow);
-        await db.SaveChangesAsync();
-        await audit.LogAsync(
-            companyId,
-            id,
-            "AccountingPeriod",
-            id,
-            "StatusUpdated",
-            oldValue,
-            new
-            {
-                period.Status,
-                period.LockedAt,
-                period.LockedBy,
-                period.ReopenedAt,
-                period.ReopenedBy,
-                period.ReopenReason
-            },
-            AuthenticatedIdentity.AuditUserId(user));
-        return Results.Ok(period);
+            return validation.Result;
+        }
+        catch (ResourceNotFoundException)
+        {
+            return Results.NotFound();
+        }
+    }
+
+    private sealed class PeriodStatusValidationException(IResult result)
+        : BusinessRuleException("Period status validation failed.")
+    {
+        public IResult Result { get; } = result;
     }
 
     private static async Task AssertFilingObligationsRecordedAsync(
         AccountsDbContext db,
+        FilingReleaseGate releaseGate,
         int companyId,
-        int periodId)
+        int periodId,
+        string auditUserId)
     {
         var company = await db.Companies
             .AsNoTracking()
@@ -117,5 +165,22 @@ public static class PeriodStatusEndpoint
         if (issues.Count > 0)
             throw new BusinessRuleException(
                 $"Cannot mark period as filed until filing obligations are recorded: {string.Join("; ", issues)}.");
+
+        foreach (var deadline in deadlines.Where(d => requiredTypes.Contains(d.DeadlineType)))
+        {
+            var workflow = deadline.DeadlineType switch
+            {
+                DeadlineType.CRO => FilingReleaseWorkflow.Cro,
+                DeadlineType.Revenue => FilingReleaseWorkflow.Revenue,
+                DeadlineType.Charity => FilingReleaseWorkflow.Charity,
+                _ => throw new ArgumentOutOfRangeException()
+            };
+            await releaseGate.AssertCanRecordFiledAsync(
+                companyId,
+                periodId,
+                workflow,
+                deadline.FilingReference,
+                auditUserId);
+        }
     }
 }

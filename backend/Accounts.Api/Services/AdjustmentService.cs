@@ -77,19 +77,58 @@ public class AdjustmentService(AccountsDbContext db)
         var accrualsId = await GetOrCreateCategoryIdAsync(companyId, "2100", "Accruals", AccountCategoryType.Liability, TaxTreatment.Other);
         var corporationTaxChargeId = await GetOrCreateCategoryIdAsync(companyId, "8000", "Corporation Tax Charge", AccountCategoryType.Expense, TaxTreatment.NonDeductible);
         var corporationTaxPayableId = await GetOrCreateCategoryIdAsync(companyId, "2400", "Corporation Tax Payable", AccountCategoryType.Liability, TaxTreatment.Other);
+        var dividendsPaidId = await GetOrCreateCategoryIdAsync(companyId, "3200", "Dividends Paid", AccountCategoryType.Equity, TaxTreatment.Other);
+        var dividendsPayableId = await GetOrCreateCategoryIdAsync(companyId, "2800", "Dividends Payable", AccountCategoryType.Liability, TaxTreatment.Other);
+        var bankControlId = await GetOrCreateCategoryIdAsync(companyId, "1400", "Bank Current Account", AccountCategoryType.Asset, TaxTreatment.Other);
+        var disposalLossId = await GetOrCreateCategoryIdAsync(companyId, "7050", "Loss on Disposal of Fixed Assets", AccountCategoryType.Expense, TaxTreatment.NonDeductible);
+        var disposalGainId = await GetOrCreateCategoryIdAsync(companyId, "9000", "Gain on Disposal of Fixed Assets", AccountCategoryType.Income, TaxTreatment.Other);
+
+        var priorPeriod = await PeriodChronologyService
+            .PriorPeriodQuery(db, companyId, period.PeriodStart)
+            .FirstOrDefaultAsync();
+
+        // Period-end working-capital journals are closing snapshots. Reverse the exact prior-period
+        // postings before recognising this period's closing facts, so opening stock reaches cost of
+        // sales and debtors/creditors/prepayments do not accumulate across periods.
+        if (priorPeriod is not null)
+        {
+            var priorClosingJournals = await db.Adjustments
+                .Where(a => a.PeriodId == priorPeriod.Id
+                    && a.IsAuto
+                    && a.Amount > 0
+                    && a.DebitCategoryId != null
+                    && a.CreditCategoryId != null)
+                .OrderBy(a => a.Id)
+                .ToListAsync();
+            foreach (var prior in priorClosingJournals.Where(IsReversingBalanceJournal))
+            {
+                adjustments.Add(new Adjustment
+                {
+                    PeriodId = periodId,
+                    Description = $"Opening reversal — {prior.Description}",
+                    DebitCategoryId = prior.CreditCategoryId,
+                    CreditCategoryId = prior.DebitCategoryId,
+                    Amount = prior.Amount,
+                    Source = AdjustmentSource.Auto,
+                    Reason = $"Exact reversal of prior-period closing journal #{prior.Id}",
+                    LegalBasis = prior.LegalBasis,
+                    IsAuto = true,
+                    CreatedBy = "System"
+                });
+            }
+        }
 
         // 1. Depreciation charges
         var assets = await db.FixedAssets
             .Where(a => a.CompanyId == companyId
                 && a.AcquisitionDate <= period.PeriodEnd
-                && (a.DisposalDate == null || a.DisposalDate > period.PeriodEnd))
+                && (a.DisposalDate == null || a.DisposalDate >= period.PeriodStart))
             .ToListAsync();
 
         foreach (var asset in assets)
         {
             if (asset.UsefulLifeYears <= 0) continue;
 
-            decimal annualCharge;
             decimal openingNbv = asset.Cost;
 
             // Check for prior depreciation
@@ -102,23 +141,24 @@ public class AdjustmentService(AccountsDbContext db)
             if (lastEntry != null)
                 openingNbv = lastEntry.ClosingNbv;
 
-            if (openingNbv <= 0) continue;
-
+            var residualValue = Math.Max(0m, Math.Min(asset.ResidualValue, asset.Cost));
+            var depreciableOpening = Math.Max(0m, openingNbv - residualValue);
+            decimal annualCharge;
             if (asset.DepreciationMethod == DepreciationMethod.StraightLine)
-                annualCharge = asset.Cost / asset.UsefulLifeYears;
+                annualCharge = (asset.Cost - residualValue) / asset.UsefulLifeYears;
             else // Reducing balance (typically 25%)
             {
-                annualCharge = openingNbv * (1m / asset.UsefulLifeYears);
+                annualCharge = depreciableOpening * (1m / asset.UsefulLifeYears);
                 // In the final year of the asset's useful life, write off the remaining book value so a
-                // reducing-balance asset is fully depreciated by the end of its life rather than leaving
-                // an indefinite residual (BL-21).
+                // reducing-balance asset reaches its declared residual value by the end of its life.
                 if (priorEntries.Count + 1 >= asset.UsefulLifeYears)
-                    annualCharge = openingNbv;
+                    annualCharge = depreciableOpening;
             }
 
-            // Don't depreciate below zero
-            annualCharge = Math.Min(annualCharge, openingNbv);
-            annualCharge = Math.Round(annualCharge, 2);
+            var activeStart = asset.AcquisitionDate > period.PeriodStart ? asset.AcquisitionDate : period.PeriodStart;
+            var activeEnd = asset.DisposalDate is { } disposal && disposal < period.PeriodEnd ? disposal : period.PeriodEnd;
+            var activeFraction = activeEnd < activeStart ? 0m : ActualActualYearFraction(activeStart, activeEnd);
+            var charge = Math.Round(Math.Min(annualCharge * activeFraction, depreciableOpening), 2);
 
             // Create/update depreciation entry
             var depEntry = await db.DepreciationEntries
@@ -129,29 +169,74 @@ public class AdjustmentService(AccountsDbContext db)
                 db.DepreciationEntries.Add(depEntry);
             }
             depEntry.OpeningNbv = openingNbv;
-            depEntry.Charge = annualCharge;
-            depEntry.ClosingNbv = openingNbv - annualCharge;
+            depEntry.Charge = charge;
+            depEntry.ClosingNbv = openingNbv - charge;
 
-            adjustments.Add(new Adjustment
+            var assetCategoryId = await GetAssetCategoryIdAsync(companyId, asset.Category);
+            if (charge > 0)
+                adjustments.Add(new Adjustment
             {
                 PeriodId = periodId,
                 Description = $"Depreciation — {asset.Name} ({asset.Category})",
                 DebitCategoryId = depreciationExpenseId,
-                CreditCategoryId = await GetAssetCategoryIdAsync(companyId, asset.Category),
-                Amount = annualCharge,
+                CreditCategoryId = assetCategoryId,
+                Amount = charge,
                 Source = AdjustmentSource.Auto,
-                Reason = $"{asset.DepreciationMethod} over {asset.UsefulLifeYears} years",
+                Reason = $"{asset.DepreciationMethod} over {asset.UsefulLifeYears} years; actual/actual active-period fraction {activeFraction:0.######}; residual value €{residualValue:N2}; fixed-asset source #{asset.Id}",
                 LegalBasis = "FRS 102 Section 17 / FRS 105",
-                ImpactOnProfit = -annualCharge,
-                ImpactOnAssets = -annualCharge,
+                ImpactOnProfit = -charge,
+                ImpactOnAssets = -charge,
                 IsAuto = true,
                 CreatedBy = "System"
             });
+
+            // The imported disposal receipt credits the asset account. This journal removes the
+            // difference between proceeds and NBV and recognises the gain/loss, leaving the disposed
+            // asset at nil in the ledger.
+            if (asset.DisposalDate is { } disposalDate
+                && disposalDate >= period.PeriodStart
+                && disposalDate <= period.PeriodEnd
+                && asset.DisposalProceeds is { } proceeds)
+            {
+                var difference = Math.Round(depEntry.ClosingNbv - proceeds, 2);
+                if (difference > 0)
+                {
+                    adjustments.Add(new Adjustment
+                    {
+                        PeriodId = periodId,
+                        Description = $"Fixed asset disposal loss — {asset.Name}",
+                        DebitCategoryId = disposalLossId,
+                        CreditCategoryId = assetCategoryId,
+                        Amount = difference,
+                        Source = AdjustmentSource.Auto,
+                        Reason = $"NBV €{depEntry.ClosingNbv:N2} less proceeds €{proceeds:N2}; fixed-asset source #{asset.Id}",
+                        LegalBasis = "FRS 102 Section 17 / FRS 105",
+                        IsAuto = true,
+                        CreatedBy = "System"
+                    });
+                }
+                else if (difference < 0)
+                {
+                    adjustments.Add(new Adjustment
+                    {
+                        PeriodId = periodId,
+                        Description = $"Fixed asset disposal gain — {asset.Name}",
+                        DebitCategoryId = assetCategoryId,
+                        CreditCategoryId = disposalGainId,
+                        Amount = Math.Abs(difference),
+                        Source = AdjustmentSource.Auto,
+                        Reason = $"Proceeds €{proceeds:N2} less NBV €{depEntry.ClosingNbv:N2}; fixed-asset source #{asset.Id}",
+                        LegalBasis = "FRS 102 Section 17 / FRS 105",
+                        IsAuto = true,
+                        CreatedBy = "System"
+                    });
+                }
+            }
         }
 
         // 2. Prepayment adjustments (debtors of type Prepayment represent future benefit)
         var prepayments = await db.Debtors
-            .Where(d => d.PeriodId == periodId && d.Type == DebtorType.Prepayment)
+            .Where(d => d.PeriodId == periodId && d.Type == DebtorType.Prepayment && d.Amount > 0)
             .ToListAsync();
 
         foreach (var prep in prepayments)
@@ -182,7 +267,7 @@ public class AdjustmentService(AccountsDbContext db)
         var tradeDebtorsId = await GetOrCreateCategoryIdAsync(companyId, "1100", "Trade Debtors", AccountCategoryType.Asset, TaxTreatment.Other);
         var salesId = await GetOrCreateCategoryIdAsync(companyId, "4000", "Sales / Revenue", AccountCategoryType.Income, TaxTreatment.Deductible);
         var tradeDebtors = await db.Debtors
-            .Where(d => d.PeriodId == periodId && d.Type == DebtorType.Trade)
+            .Where(d => d.PeriodId == periodId && d.Type == DebtorType.Trade && d.Amount > 0)
             .ToListAsync();
 
         foreach (var debtor in tradeDebtors)
@@ -206,7 +291,7 @@ public class AdjustmentService(AccountsDbContext db)
 
         // 3. Accrual adjustments (creditors of type Accrual)
         var accruals = await db.Creditors
-            .Where(c => c.PeriodId == periodId && c.Type == CreditorType.Accrual)
+            .Where(c => c.PeriodId == periodId && c.Type == CreditorType.Accrual && c.Amount > 0)
             .ToListAsync();
 
         foreach (var acc in accruals)
@@ -235,7 +320,7 @@ public class AdjustmentService(AccountsDbContext db)
         // (Trade creditors only — Other creditors have an ambiguous contra and need a manual entry.)
         var tradeCreditorsId = await GetOrCreateCategoryIdAsync(companyId, "2000", "Trade Creditors", AccountCategoryType.Liability, TaxTreatment.Other);
         var tradeCreditors = await db.Creditors
-            .Where(c => c.PeriodId == periodId && c.Type == CreditorType.Trade)
+            .Where(c => c.PeriodId == periodId && c.Type == CreditorType.Trade && c.Amount > 0)
             .ToListAsync();
 
         foreach (var tradeCreditor in tradeCreditors)
@@ -266,7 +351,11 @@ public class AdjustmentService(AccountsDbContext db)
         var directorLoanReceivableId = await GetOrCreateCategoryIdAsync(companyId, "1150", "Director Loan Account (debit)", AccountCategoryType.Asset, TaxTreatment.Other);
         var overdrawnDirectorLoans = await db.DirectorLoans
             .Include(d => d.Director)
-            .Where(d => d.PeriodId == periodId && d.Director.CompanyId == companyId && d.ClosingBalance > 0)
+            .Where(d => d.PeriodId == periodId
+                && d.Period.CompanyId == companyId
+                && d.ClosingBalance > 0
+                && (d.CounterpartyType == DirectorLoanCounterpartyType.GroupCompany && d.DirectorId == null
+                    || d.DirectorId != null && d.Director!.CompanyId == companyId))
             .ToListAsync();
 
         foreach (var dl in overdrawnDirectorLoans)
@@ -274,7 +363,7 @@ public class AdjustmentService(AccountsDbContext db)
             adjustments.Add(new Adjustment
             {
                 PeriodId = periodId,
-                Description = $"Director loan reclassification — {dl.Director.Name}",
+                Description = $"Director loan reclassification — {dl.CounterpartyName ?? dl.Director?.Name ?? $"Arrangement #{dl.Id}"}",
                 DebitCategoryId = directorLoanReceivableId,
                 CreditCategoryId = directorLoanAccountId,
                 Amount = dl.ClosingBalance,
@@ -336,29 +425,59 @@ public class AdjustmentService(AccountsDbContext db)
             });
         }
 
-        // 6. Retained earnings roll-forward
-        var priorPeriod = await db.AccountingPeriods
-            .Where(p => p.CompanyId == companyId && p.PeriodEnd < period.PeriodStart)
-            .OrderByDescending(p => p.PeriodEnd)
-            .FirstOrDefaultAsync();
-
-        if (priorPeriod != null)
+        // Dividends are equity journals, not a second subtraction performed independently by
+        // statements. Avoid duplicating a matched imported bank payment; otherwise the retained paid
+        // date or declaration is the explicit year-end source for the balanced posting.
+        var dividends = await db.Dividends
+            .Where(d => d.PeriodId == periodId && d.Amount > 0)
+            .OrderBy(d => d.Id)
+            .ToListAsync();
+        foreach (var dividend in dividends)
         {
-            adjustments.Add(new Adjustment
+            if (dividend.DatePaid is { } paidDate)
             {
-                PeriodId = periodId,
-                Description = "Retained earnings — brought forward from prior period",
-                Amount = 0, // Will be computed from prior period P&L
-                Source = AdjustmentSource.Auto,
-                Reason = $"Carried forward from period ending {priorPeriod.PeriodEnd:yyyy-MM-dd}",
-                LegalBasis = "Companies Act 2014 — Capital maintenance",
-                ImpactOnProfit = 0,
-                ImpactOnAssets = 0,
-                IsAuto = true,
-                CreatedBy = "System"
-            });
+                var matchedBankPosting = await db.ImportedTransactions.AnyAsync(t =>
+                    t.PeriodId == periodId
+                    && !t.IsDuplicate
+                    && t.CategoryId == dividendsPaidId
+                    && t.Date == paidDate
+                    && t.Amount == -dividend.Amount);
+                if (matchedBankPosting)
+                    continue;
+
+                adjustments.Add(new Adjustment
+                {
+                    PeriodId = periodId,
+                    Description = $"Dividend paid — source #{dividend.Id}",
+                    DebitCategoryId = dividendsPaidId,
+                    CreditCategoryId = bankControlId,
+                    Amount = dividend.Amount,
+                    Source = AdjustmentSource.Auto,
+                    Reason = $"Dividend payment retained with paid date {paidDate:yyyy-MM-dd}",
+                    LegalBasis = "Companies Act 2014 — distributions and capital maintenance",
+                    IsAuto = true,
+                    CreatedBy = "System"
+                });
+            }
+            else
+            {
+                adjustments.Add(new Adjustment
+                {
+                    PeriodId = periodId,
+                    Description = $"Dividend declared and unpaid — source #{dividend.Id}",
+                    DebitCategoryId = dividendsPaidId,
+                    CreditCategoryId = dividendsPayableId,
+                    Amount = dividend.Amount,
+                    Source = AdjustmentSource.Auto,
+                    Reason = "Declared distribution recognised as a liability until payment",
+                    LegalBasis = "Companies Act 2014 — distributions and capital maintenance",
+                    IsAuto = true,
+                    CreatedBy = "System"
+                });
+            }
         }
 
+        await AdjustmentPostingRules.ApplyDerivedImpactsAsync(db, adjustments);
         db.Adjustments.AddRange(adjustments);
         await db.SaveChangesAsync();
 
@@ -388,15 +507,43 @@ public class AdjustmentService(AccountsDbContext db)
         return Math.Min(1m, days / 365m);
     }
 
+    private static bool IsReversingBalanceJournal(Adjustment adjustment) =>
+        adjustment.Description.StartsWith("Prepayment —", StringComparison.Ordinal)
+        || adjustment.Description.StartsWith("Trade debtor —", StringComparison.Ordinal)
+        || adjustment.Description.StartsWith("Accrual —", StringComparison.Ordinal)
+        || adjustment.Description.StartsWith("Trade creditor —", StringComparison.Ordinal)
+        || adjustment.Description.StartsWith("Director loan reclassification —", StringComparison.Ordinal)
+        || adjustment.Description.Equals("Closing stock / inventory recognition", StringComparison.Ordinal);
+
+    private static decimal ActualActualYearFraction(DateOnly start, DateOnly end)
+    {
+        if (end < start)
+            return 0m;
+
+        decimal fraction = 0m;
+        var cursor = start;
+        while (cursor <= end)
+        {
+            var segmentEnd = new DateOnly(cursor.Year, 12, 31);
+            if (segmentEnd > end)
+                segmentEnd = end;
+            var days = segmentEnd.DayNumber - cursor.DayNumber + 1;
+            fraction += days / (decimal)(DateTime.IsLeapYear(cursor.Year) ? 366 : 365);
+            cursor = segmentEnd.AddDays(1);
+        }
+
+        return fraction;
+    }
+
     private async Task<int> GetAssetCategoryIdAsync(int companyId, string assetCategory)
     {
         var code = assetCategory switch
         {
-            "Land & Buildings" => "0010",
+            "Land & Buildings" or "Property" => "0010",
             "Plant & Machinery" => "0020",
-            "Motor Vehicles" => "0030",
-            "Office Equipment" => "0040",
-            "Computer Equipment" => "0050",
+            "Motor Vehicles" or "Vehicles" => "0030",
+            "Office Equipment" or "Equipment" or "Furniture" => "0040",
+            "Computer Equipment" or "IT" => "0050",
             _ => "0040"
         };
 

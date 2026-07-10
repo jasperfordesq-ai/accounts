@@ -11,7 +11,7 @@ public static partial class YearEndEndpoints
 {
     public static async Task<IResult> CreateFixedAssetEndpointAsync(
         int companyId,
-        FixedAsset input,
+        FixedAssetInput input,
         AccountsDbContext db,
         AccountingWriteGuard writeGuard,
         AuditService audit,
@@ -26,27 +26,26 @@ public static partial class YearEndEndpoints
         if (await writeGuard.BlockIfCompanyAccountingLockedAsync(companyId, input.AcquisitionDate) is { } blocked)
             return blocked;
 
-        input.Id = 0;
-        input.CompanyId = companyId;
-        input.DepreciationEntries = [];
-        db.FixedAssets.Add(input);
+        var asset = input.ToEntity(companyId);
+        StampCapitalAllowanceReview(asset, input, AuthContext.RequireUser(context));
+        db.FixedAssets.Add(asset);
         await db.SaveChangesAsync();
         await audit.LogAsync(
             companyId,
             null,
             "FixedAsset",
-            input.Id,
+            asset.Id,
             AuditEventCodes.FixedAssetCreated,
             null,
-            FixedAssetSnapshot(input),
+            FixedAssetSnapshot(asset),
             AuditUserId(context));
-        return Results.Created($"/api/companies/{companyId}/fixed-assets/{input.Id}", input);
+        return Results.Created($"/api/companies/{companyId}/fixed-assets/{asset.Id}", asset);
     }
 
     public static async Task<IResult> UpdateFixedAssetEndpointAsync(
         int companyId,
         int id,
-        FixedAsset input,
+        FixedAssetInput input,
         AccountsDbContext db,
         AccountingWriteGuard writeGuard,
         AuditService audit,
@@ -66,15 +65,18 @@ public static partial class YearEndEndpoints
         if (await writeGuard.BlockIfCompanyAccountingLockedAsync(companyId, effectiveDate) is { } blocked)
             return blocked;
 
-        input.DepreciationEntries = [];
-        item.Name = input.Name;
-        item.Category = input.Category;
+        item.Name = input.Name!;
+        item.Category = input.Category!;
         item.Cost = input.Cost;
+        item.ResidualValue = input.ResidualValue;
         item.AcquisitionDate = input.AcquisitionDate;
         item.DisposalDate = input.DisposalDate;
         item.DisposalProceeds = input.DisposalProceeds;
         item.UsefulLifeYears = input.UsefulLifeYears;
         item.DepreciationMethod = input.DepreciationMethod;
+        item.CapitalAllowanceTreatment = input.CapitalAllowanceTreatment;
+        item.CapitalAllowanceEvidence = input.CapitalAllowanceEvidence;
+        StampCapitalAllowanceReview(item, input, AuthContext.RequireUser(context));
         await db.SaveChangesAsync();
         await audit.LogAsync(
             companyId,
@@ -118,6 +120,26 @@ public static partial class YearEndEndpoints
             new { Deleted = true },
             AuditUserId(context));
         return Results.NoContent();
+    }
+
+    private static void StampCapitalAllowanceReview(
+        FixedAsset asset,
+        FixedAssetInput input,
+        AuthenticatedUser user)
+    {
+        asset.CapitalAllowanceTreatment = input.CapitalAllowanceTreatment;
+        asset.CapitalAllowanceEvidence = string.IsNullOrWhiteSpace(input.CapitalAllowanceEvidence)
+            ? null
+            : input.CapitalAllowanceEvidence.Trim();
+        if (input.CapitalAllowanceTreatment == CapitalAllowanceTreatment.Unreviewed)
+        {
+            asset.CapitalAllowanceReviewedBy = null;
+            asset.CapitalAllowanceReviewedAtUtc = null;
+            return;
+        }
+
+        asset.CapitalAllowanceReviewedBy = AuthenticatedIdentity.ReviewerDisplayName(user);
+        asset.CapitalAllowanceReviewedAtUtc = DateTime.UtcNow;
     }
 
 }
