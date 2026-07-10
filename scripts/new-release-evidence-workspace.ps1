@@ -713,6 +713,7 @@ $machineEvidenceSummary = [ordered]@{
         verificationStatus = [string](Get-JsonPropertyValue $productionReadinessVerificationReport "status")
         verificationFailureCount = Get-JsonPropertyValue $productionReadinessVerificationReport "failureCount"
         humanReleaseEvidenceCloseoutStepCodes = @((Get-JsonPathValue $productionReadinessVerificationReport @("requiredCoverage", "humanReleaseEvidenceCloseoutStepCodes")) | ForEach-Object { [string]$_ })
+        humanReleaseEvidenceReviewerPickupFiles = Get-JsonPathValue $productionReadinessVerificationReport @("requiredCoverage", "humanReleaseEvidenceReviewerPickupFiles")
     }
     visualEvidence = [ordered]@{
         manifestFile = "visual-smoke-manifest.json"

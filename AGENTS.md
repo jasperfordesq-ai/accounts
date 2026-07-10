@@ -2570,6 +2570,10 @@ Reviewer assignment pickup-file guidance:
   rejects captured reports whose human evidence gates omit any required file from
   the full expected per-gate pickup list, and emits
   `humanReleaseEvidenceReviewerPickupFiles` in the retained verification coverage.
+- `release-evidence-machine-summary.json` now carries that
+  `humanReleaseEvidenceReviewerPickupFiles` coverage under `productionReadiness`,
+  and both the workspace verifier and final release-evidence verifier reject
+  summaries that drop any expected per-gate reviewer pickup file.
 - `scripts/new-release-evidence-workspace.ps1` now writes `reviewerPickupFiles`
   into each row of `release-evidence-reviewer-assignments.json`, so every
   unassigned human gate lists the exact retained template, machine-evidence and

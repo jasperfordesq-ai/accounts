@@ -957,6 +957,15 @@ function Test-ReleaseWorkspaceControlEvidence {
             Add-Failure $Failures "Release evidence machine summary reviewerQueue must contain exactly $($requiredReviewerQueue.Count) entries."
         }
 
+        $summaryProductionReadiness = Get-JsonPropertyValue $MachineEvidenceSummary "productionReadiness"
+        $summaryReviewerPickupFilesByEvidence = Get-JsonPropertyValue $summaryProductionReadiness "humanReleaseEvidenceReviewerPickupFiles"
+        foreach ($expected in $requiredPendingHumanEvidenceBlockers) {
+            $summaryReviewerPickupFiles = @((Get-JsonPropertyValue $summaryReviewerPickupFilesByEvidence $expected.EvidenceName) | ForEach-Object { [string]$_ })
+            foreach ($requiredPickupFile in @($expected.RequiredPickupFiles)) {
+                Assert-JsonArrayContains $summaryReviewerPickupFiles $requiredPickupFile "Release evidence machine summary productionReadiness.humanReleaseEvidenceReviewerPickupFiles.$($expected.EvidenceName)" $Failures
+            }
+        }
+
         $monitoringEvidence = Get-JsonPropertyValue $MachineEvidenceSummary "monitoringEvidence"
         if ([int](Get-JsonPropertyValue $monitoringEvidence "jsonLogLineCount") -le 0) {
             Add-Failure $Failures "Release evidence machine summary monitoringEvidence.jsonLogLineCount must be greater than zero."

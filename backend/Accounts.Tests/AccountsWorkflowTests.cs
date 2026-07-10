@@ -18502,6 +18502,7 @@ public class AccountsWorkflowTests
         Assert.Contains("Machine evidence summary productionReadiness.verificationStatus must be passed.", workspaceVerifier);
         Assert.Contains("Machine evidence summary productionReadiness.verificationFailureCount must be zero.", workspaceVerifier);
         Assert.Contains("Machine evidence summary productionReadiness.humanReleaseEvidenceCloseoutStepCodes", workspaceVerifier);
+        Assert.Contains("Machine evidence summary productionReadiness.humanReleaseEvidenceReviewerPickupFiles", workspaceVerifier);
         Assert.Contains("Machine evidence summary monitoringEvidence.$field must be present.", workspaceVerifier);
         Assert.Contains("Machine evidence summary monitoringEvidence.jsonLogLineCount must be greater than zero.", workspaceVerifier);
         Assert.Contains("Machine evidence summary monitoringEvidence.matchedMonitoringSmokeLine must be true.", workspaceVerifier);
@@ -18609,6 +18610,7 @@ public class AccountsWorkflowTests
         Assert.Contains("production-readiness-report\" \"production-readiness-report.json", workspaceScript);
         Assert.Contains("production-readiness-report\" \"production-readiness-verification-report.json", workspaceScript);
         Assert.Contains("humanReleaseEvidenceCloseoutStepCodes", workspaceScript);
+        Assert.Contains("humanReleaseEvidenceReviewerPickupFiles", workspaceScript);
         Assert.Contains("visual-smoke-screenshots\" \"accountant-workbench-evidence-report.json", workspaceScript);
         Assert.Contains("structured-json-log-sample\" \"structured-log-report.json", workspaceScript);
         Assert.Contains("byteSize = $destination.Length", workspaceScript);
@@ -18680,6 +18682,7 @@ public class AccountsWorkflowTests
         Assert.Contains("Assert-MachineEvidenceEntries (Get-JsonPropertyValue $WorkspaceManifest \"retainedMachineEvidence\") \"Release evidence workspace manifest\"", script);
         Assert.Contains("Assert-MachineEvidenceEntries (Get-JsonPropertyValue $MachineEvidenceSummary \"retainedMachineEvidence\") \"Release evidence machine summary\"", script);
         Assert.Contains("$Context retainedMachineEvidence must contain exactly", script);
+        Assert.Contains("Release evidence machine summary productionReadiness.humanReleaseEvidenceReviewerPickupFiles", script);
         Assert.Contains("Release evidence machine summary monitoringEvidence.jsonLogLineCount must be greater than zero.", script);
         Assert.Contains("Assert-JsonStringEquals $WorkspaceVerificationReport \"status\" \"passed\" \"Release evidence workspace verification report\"", script);
         Assert.Contains("Release evidence workspace verification report failureCount must be 0.", script);

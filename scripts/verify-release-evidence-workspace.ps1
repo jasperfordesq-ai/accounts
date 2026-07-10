@@ -1097,6 +1097,13 @@ if (-not (Test-Path -LiteralPath $machineEvidenceSummaryPath)) {
     )) {
         Assert-ArrayContains @((Get-JsonPropertyValue $summaryProductionReadiness "humanReleaseEvidenceCloseoutStepCodes")) $closeoutStepCode "Machine evidence summary productionReadiness.humanReleaseEvidenceCloseoutStepCodes" $failures
     }
+    $summaryReviewerPickupFilesByEvidence = Get-JsonPropertyValue $summaryProductionReadiness "humanReleaseEvidenceReviewerPickupFiles"
+    foreach ($expected in $requiredReviewerQueue) {
+        $summaryReviewerPickupFiles = @((Get-JsonPropertyValue $summaryReviewerPickupFilesByEvidence $expected.EvidenceName) | ForEach-Object { [string]$_ })
+        foreach ($requiredPickupFile in @($expected.RequiredPickupFiles)) {
+            Assert-ArrayContains $summaryReviewerPickupFiles $requiredPickupFile "Machine evidence summary productionReadiness.humanReleaseEvidenceReviewerPickupFiles.$($expected.EvidenceName)" $failures
+        }
+    }
 
     $summaryMonitoringEvidence = Get-JsonPropertyValue $machineEvidenceSummary "monitoringEvidence"
     foreach ($field in @("provider", "eventId", "correlationId", "baseUrl", "checkedAtUtc")) {
