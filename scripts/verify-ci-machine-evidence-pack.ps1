@@ -1071,6 +1071,9 @@ if ($ReviewerWorkspaceDirectory.Trim().Length -gt 0) {
                         Add-Failure $failures "release-evidence-workspace-verification-report.json reviewerAssignmentInventory.$evidenceName.$blankField must be blank before named reviewer routing."
                     }
                 }
+
+                Assert-ArrayContains @((Get-JsonProperty $assignment @("reviewerPickupFiles"))) ([string](Get-JsonProperty $assignment @("templateFile"))) "release-evidence-workspace-verification-report.json reviewerAssignmentInventory.$evidenceName.reviewerPickupFiles" $failures
+                Assert-ArrayContains @((Get-JsonProperty $assignment @("reviewerPickupFiles"))) "release-evidence-reviewer-blockers.md" "release-evidence-workspace-verification-report.json reviewerAssignmentInventory.$evidenceName.reviewerPickupFiles" $failures
             }
         }
     }

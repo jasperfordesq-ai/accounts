@@ -2553,6 +2553,20 @@ Final release artifact workspace summary:
   pack still cannot pass until `release-evidence-report.json` contains six accepted
   named human evidence completions with zero blocking failures.
 
+Reviewer assignment pickup-file guidance:
+
+- `scripts/new-release-evidence-workspace.ps1` now writes `reviewerPickupFiles`
+  into each row of `release-evidence-reviewer-assignments.json`, so every
+  unassigned human gate lists the exact retained template, machine-evidence and
+  blocker-summary files the reviewer must inspect before signing off.
+- `scripts/verify-release-evidence-workspace.ps1` now rejects prepared workspaces
+  whose reviewer queue, assignment ledger or reviewer index drops that pickup-file
+  guidance, and it carries the retained list into `reviewerAssignmentInventory`.
+- `scripts/verify-release-evidence.ps1`, `scripts/verify-release-artifact-pack.ps1`
+  and `scripts/verify-ci-machine-evidence-pack.ps1` now reject stale workspace
+  verification reports that omit the assignment pickup files. This reduces reviewer
+  handoff ambiguity without treating machine evidence as human/professional sign-off.
+
 ## What Is Left To Do
 
 Highest-priority next steps:

@@ -905,6 +905,11 @@ function Assert-ReviewerAssignmentInventory {
         if ([string]::IsNullOrWhiteSpace([string](Get-JsonPropertyValue $entry "humanAction"))) {
             Add-Failure $Failures "Release evidence workspace verification report reviewerAssignmentInventory.$expectedEvidenceName.humanAction must be present."
         }
+
+        $reviewerPickupFiles = @((Get-JsonPropertyValue $entry "reviewerPickupFiles") | ForEach-Object { [string]$_ })
+        foreach ($requiredPickupFile in @($expected.RequiredPickupFiles)) {
+            Assert-JsonArrayContains $reviewerPickupFiles $requiredPickupFile "Release evidence workspace verification report reviewerAssignmentInventory.$expectedEvidenceName.reviewerPickupFiles" $Failures
+        }
     }
 }
 
@@ -1156,12 +1161,12 @@ $requiredReleaseEvidenceTemplateFiles = @(
 )
 
 $requiredPendingHumanEvidenceBlockers = @(
-    [pscustomobject]@{ EvidenceName = "visualQa"; TemplateFile = "visual-qa-signoff-template.md"; RequiredReviewerRole = "Named visual QA reviewer"; SignOffGate = "visual-qa-screenshot-review" },
-    [pscustomobject]@{ EvidenceName = "sourceLawReview"; TemplateFile = "source-law-review-template.md"; RequiredReviewerRole = "Named source-law reviewer plus qualified accountant"; SignOffGate = "source-law-change-review" },
-    [pscustomobject]@{ EvidenceName = "externalRosIxbrlValidation"; TemplateFile = "external-ros-ixbrl-validation-template.md"; RequiredReviewerRole = "External ROS/iXBRL validation reviewer"; SignOffGate = "external-ros-validation-evidence" },
-    [pscustomobject]@{ EvidenceName = "qualifiedAccountantAcceptance"; TemplateFile = "qualified-accountant-acceptance-template.md"; RequiredReviewerRole = "Named qualified accountant"; SignOffGate = "qualified-accountant-final-signoff" },
-    [pscustomobject]@{ EvidenceName = "manualHandoffAcceptance"; TemplateFile = "manual-handoff-acceptance-template.md"; RequiredReviewerRole = "Named manual handoff reviewer"; SignOffGate = "manual-accountant-acceptance" },
-    [pscustomobject]@{ EvidenceName = "monitoringProviderConfirmation"; TemplateFile = "monitoring-provider-confirmation-template.md"; RequiredReviewerRole = "Named release operator"; SignOffGate = "production-monitoring" }
+    [pscustomobject]@{ EvidenceName = "visualQa"; TemplateFile = "visual-qa-signoff-template.md"; RequiredReviewerRole = "Named visual QA reviewer"; SignOffGate = "visual-qa-screenshot-review"; RequiredPickupFiles = @("visual-qa-signoff-template.md", "visual-smoke-manifest.json", "visual-smoke-evidence-report.json", "accountant-workbench-evidence-report.json", "release-evidence-reviewer-blockers.md") },
+    [pscustomobject]@{ EvidenceName = "sourceLawReview"; TemplateFile = "source-law-review-template.md"; RequiredReviewerRole = "Named source-law reviewer plus qualified accountant"; SignOffGate = "source-law-change-review"; RequiredPickupFiles = @("source-law-review-template.md", "production-readiness-report.json", "production-readiness-verification-report.json", "release-evidence-reviewer-blockers.md") },
+    [pscustomobject]@{ EvidenceName = "externalRosIxbrlValidation"; TemplateFile = "external-ros-ixbrl-validation-template.md"; RequiredReviewerRole = "External ROS/iXBRL validation reviewer"; SignOffGate = "external-ros-validation-evidence"; RequiredPickupFiles = @("external-ros-ixbrl-validation-template.md", "production-readiness-report.json", "release-evidence-reviewer-blockers.md") },
+    [pscustomobject]@{ EvidenceName = "qualifiedAccountantAcceptance"; TemplateFile = "qualified-accountant-acceptance-template.md"; RequiredReviewerRole = "Named qualified accountant"; SignOffGate = "qualified-accountant-final-signoff"; RequiredPickupFiles = @("qualified-accountant-acceptance-template.md", "production-readiness-report.json", "accountant-workbench-evidence-report.json", "release-evidence-reviewer-blockers.md") },
+    [pscustomobject]@{ EvidenceName = "manualHandoffAcceptance"; TemplateFile = "manual-handoff-acceptance-template.md"; RequiredReviewerRole = "Named manual handoff reviewer"; SignOffGate = "manual-accountant-acceptance"; RequiredPickupFiles = @("manual-handoff-acceptance-template.md", "production-readiness-report.json", "release-evidence-reviewer-blockers.md") },
+    [pscustomobject]@{ EvidenceName = "monitoringProviderConfirmation"; TemplateFile = "monitoring-provider-confirmation-template.md"; RequiredReviewerRole = "Named release operator"; SignOffGate = "production-monitoring"; RequiredPickupFiles = @("monitoring-provider-confirmation-template.md", "monitoring-error-routing-report.json", "structured-log-report.json", "release-evidence-reviewer-blockers.md") }
 )
 
 $requiredPreparedHumanTemplateControls = @(

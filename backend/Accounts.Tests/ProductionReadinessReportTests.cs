@@ -1084,12 +1084,14 @@ public class ProductionReadinessReportTests
             && evidence.Contains("SHA-256", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("release-evidence workspace summary", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("six pending human blockers", StringComparison.OrdinalIgnoreCase)
-            && evidence.Contains("six unassigned reviewer assignment rows", StringComparison.OrdinalIgnoreCase));
+            && evidence.Contains("six unassigned reviewer assignment rows", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("retained reviewer pickup files", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["security-auth-tenant-platform-guardrails"].CurrentEvidence, evidence =>
             evidence.Contains("verify-ci-machine-evidence-pack.ps1", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("ci-machine-evidence-pack-report.json", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("prepared reviewer-workspace summary", StringComparison.OrdinalIgnoreCase)
-            && evidence.Contains("six unassigned reviewer assignment rows", StringComparison.OrdinalIgnoreCase));
+            && evidence.Contains("six unassigned reviewer assignment rows", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("pickup-file guidance", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["security-auth-tenant-platform-guardrails"].CurrentEvidence, evidence =>
             evidence.Contains("verify-production-readiness-report.ps1", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("no-direct CRO/ROS control", StringComparison.OrdinalIgnoreCase)

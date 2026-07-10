@@ -646,6 +646,7 @@ $reviewerQueue = @(
         ReviewerRole = "Named visual QA reviewer"
         SignOffGate = "visual-qa-screenshot-review"
         HumanAction = "Review every retained light/dark desktop/mobile screenshot and record exact pass cells, notes, decision, reviewer identity, UTC time, and signature."
+        RequiredPickupFiles = @("visual-qa-signoff-template.md", "visual-smoke-manifest.json", "visual-smoke-evidence-report.json", "accountant-workbench-evidence-report.json", "release-evidence-reviewer-blockers.md")
     },
     [pscustomobject]@{
         EvidenceName = "sourceLawReview"
@@ -654,6 +655,7 @@ $reviewerQueue = @(
         ReviewerRole = "Named source-law reviewer plus qualified accountant"
         SignOffGate = "source-law-change-review"
         HumanAction = "Check current CRO, Revenue, FRC, and Charities Regulator sources, record source-row outcomes, qualified-accountant source-law sign-off, UTC time, and signatures."
+        RequiredPickupFiles = @("source-law-review-template.md", "production-readiness-report.json", "production-readiness-verification-report.json", "release-evidence-reviewer-blockers.md")
     },
     [pscustomobject]@{
         EvidenceName = "externalRosIxbrlValidation"
@@ -662,6 +664,7 @@ $reviewerQueue = @(
         ReviewerRole = "External ROS/iXBRL validation reviewer"
         SignOffGate = "external-ros-validation-evidence"
         HumanAction = "Retain external validation provider references for the exact generated iXBRL hashes, taxonomy package references, warnings/errors status, decision, UTC time, and signature."
+        RequiredPickupFiles = @("external-ros-ixbrl-validation-template.md", "production-readiness-report.json", "release-evidence-reviewer-blockers.md")
     },
     [pscustomobject]@{
         EvidenceName = "qualifiedAccountantAcceptance"
@@ -670,6 +673,7 @@ $reviewerQueue = @(
         ReviewerRole = "Named qualified accountant"
         SignOffGate = "qualified-accountant-final-signoff"
         HumanAction = "Walk the golden corpus and workbench routes, record accepted scenario and route rows, accountant identity, UTC time, and signature."
+        RequiredPickupFiles = @("qualified-accountant-acceptance-template.md", "production-readiness-report.json", "accountant-workbench-evidence-report.json", "release-evidence-reviewer-blockers.md")
     },
     [pscustomobject]@{
         EvidenceName = "manualHandoffAcceptance"
@@ -678,6 +682,7 @@ $reviewerQueue = @(
         ReviewerRole = "Named manual handoff reviewer"
         SignOffGate = "manual-accountant-acceptance"
         HumanAction = "Review audit-required and unsupported paths, retain exact handoff evidence anchors, accepted decisions, reviewer identity, UTC time, and signature."
+        RequiredPickupFiles = @("manual-handoff-acceptance-template.md", "production-readiness-report.json", "release-evidence-reviewer-blockers.md")
     },
     [pscustomobject]@{
         EvidenceName = "monitoringProviderConfirmation"
@@ -686,6 +691,7 @@ $reviewerQueue = @(
         ReviewerRole = "Named release operator"
         SignOffGate = "production-monitoring"
         HumanAction = "Confirm the controlled smoke event in the real provider, retain provider URL/reference, no-PII and alert-routing review, accepted decision, UTC time, and signature."
+        RequiredPickupFiles = @("monitoring-provider-confirmation-template.md", "monitoring-error-routing-report.json", "structured-log-report.json", "release-evidence-reviewer-blockers.md")
     }
 )
 
@@ -793,6 +799,7 @@ $assignmentLedger = [ordered]@{
             dueAtUtc = ""
             escalationOwnerRole = "Release operator"
             humanAction = $_.HumanAction
+            reviewerPickupFiles = @($_.RequiredPickupFiles)
         }
     })
 }
@@ -834,7 +841,7 @@ $manifestPath = Join-Path $resolvedOutputDirectory "release-evidence-workspace-m
 $manifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $manifestPath
 
 $reviewerRows = @($reviewerQueue | ForEach-Object {
-    "| $($_.EvidenceGate) | $($_.TemplateFile) | $($_.ReviewerRole) | $($_.SignOffGate) | $($_.HumanAction) |"
+    "| $($_.EvidenceGate) | $($_.TemplateFile) | $($_.ReviewerRole) | $($_.SignOffGate) | $($_.RequiredPickupFiles -join ", ") | $($_.HumanAction) |"
 })
 
 $indexContent = @"
@@ -866,8 +873,8 @@ Machine summary: release-evidence-machine-summary.json
 
 ## Reviewer Queue
 
-| Evidence gate | Template file | Required reviewer | Sign-off gate | Human action still required |
-| --- | --- | --- | --- | --- |
+| Evidence gate | Template file | Required reviewer | Sign-off gate | Reviewer pickup files | Human action still required |
+| --- | --- | --- | --- | --- | --- |
 $($reviewerRows -join "`n")
 
 ## Reviewer Completion Ledger
@@ -876,7 +883,7 @@ Use ``release-evidence-reviewer-completion.json`` as the handoff checklist. It i
 
 ## Reviewer Assignment Ledger
 
-Use ``release-evidence-reviewer-assignments.json`` to assign named owners and target dates before review starts. It is generated with all six gates in ``unassigned`` status and must not be treated as evidence acceptance, professional sign-off, or release approval.
+Use ``release-evidence-reviewer-assignments.json`` to assign named owners and target dates before review starts. Each assignment row lists the retained reviewer pickup files for that gate. It is generated with all six gates in ``unassigned`` status and must not be treated as evidence acceptance, professional sign-off, or release approval.
 
 ## Reviewer Handoff Files
 

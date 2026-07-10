@@ -45,6 +45,7 @@ $requiredReviewerQueue = @(
         TemplateFile = "visual-qa-signoff-template.md"
         ReviewerRole = "Named visual QA reviewer"
         SignOffGate = "visual-qa-screenshot-review"
+        RequiredPickupFiles = @("visual-qa-signoff-template.md", "visual-smoke-manifest.json", "visual-smoke-evidence-report.json", "accountant-workbench-evidence-report.json", "release-evidence-reviewer-blockers.md")
     },
     [pscustomobject]@{
         EvidenceName = "sourceLawReview"
@@ -52,6 +53,7 @@ $requiredReviewerQueue = @(
         TemplateFile = "source-law-review-template.md"
         ReviewerRole = "Named source-law reviewer plus qualified accountant"
         SignOffGate = "source-law-change-review"
+        RequiredPickupFiles = @("source-law-review-template.md", "production-readiness-report.json", "production-readiness-verification-report.json", "release-evidence-reviewer-blockers.md")
     },
     [pscustomobject]@{
         EvidenceName = "externalRosIxbrlValidation"
@@ -59,6 +61,7 @@ $requiredReviewerQueue = @(
         TemplateFile = "external-ros-ixbrl-validation-template.md"
         ReviewerRole = "External ROS/iXBRL validation reviewer"
         SignOffGate = "external-ros-validation-evidence"
+        RequiredPickupFiles = @("external-ros-ixbrl-validation-template.md", "production-readiness-report.json", "release-evidence-reviewer-blockers.md")
     },
     [pscustomobject]@{
         EvidenceName = "qualifiedAccountantAcceptance"
@@ -66,6 +69,7 @@ $requiredReviewerQueue = @(
         TemplateFile = "qualified-accountant-acceptance-template.md"
         ReviewerRole = "Named qualified accountant"
         SignOffGate = "qualified-accountant-final-signoff"
+        RequiredPickupFiles = @("qualified-accountant-acceptance-template.md", "production-readiness-report.json", "accountant-workbench-evidence-report.json", "release-evidence-reviewer-blockers.md")
     },
     [pscustomobject]@{
         EvidenceName = "manualHandoffAcceptance"
@@ -73,6 +77,7 @@ $requiredReviewerQueue = @(
         TemplateFile = "manual-handoff-acceptance-template.md"
         ReviewerRole = "Named manual handoff reviewer"
         SignOffGate = "manual-accountant-acceptance"
+        RequiredPickupFiles = @("manual-handoff-acceptance-template.md", "production-readiness-report.json", "release-evidence-reviewer-blockers.md")
     },
     [pscustomobject]@{
         EvidenceName = "monitoringProviderConfirmation"
@@ -80,6 +85,7 @@ $requiredReviewerQueue = @(
         TemplateFile = "monitoring-provider-confirmation-template.md"
         ReviewerRole = "Named release operator"
         SignOffGate = "production-monitoring"
+        RequiredPickupFiles = @("monitoring-provider-confirmation-template.md", "monitoring-error-routing-report.json", "structured-log-report.json", "release-evidence-reviewer-blockers.md")
     }
 )
 
@@ -997,6 +1003,11 @@ if (-not (Test-Path -LiteralPath $manifestPath)) {
         if ([string]::IsNullOrWhiteSpace([string](Get-JsonPropertyValue $entry "HumanAction"))) {
             Add-Failure $failures "Workspace manifest reviewerQueue.$($expected.TemplateFile).HumanAction must describe the remaining human-only action."
         }
+
+        $requiredPickupFiles = @((Get-JsonPropertyValue $entry "RequiredPickupFiles") | ForEach-Object { [string]$_ })
+        foreach ($requiredPickupFile in @($expected.RequiredPickupFiles)) {
+            Assert-ArrayContains $requiredPickupFiles $requiredPickupFile "Workspace manifest reviewerQueue.$($expected.TemplateFile).RequiredPickupFiles" $failures
+        }
     }
 
     foreach ($humanField in @(
@@ -1126,6 +1137,7 @@ if (-not (Test-Path -LiteralPath $reviewerIndexPath)) {
         "This workspace is reviewer preparation only.",
         "It is not release approval",
         "Reviewer Queue",
+        "Reviewer pickup files",
         "Reviewer Completion Ledger",
         "Reviewer Assignment Ledger",
         "Reviewer Handoff Files",
@@ -1286,6 +1298,11 @@ if (-not (Test-Path -LiteralPath $reviewerAssignmentPath)) {
             Add-Failure $failures "Reviewer assignment ledger $($expected.TemplateFile).humanAction must describe the remaining human-only action."
         }
 
+        $reviewerPickupFiles = @((Get-JsonPropertyValue $entry "reviewerPickupFiles") | ForEach-Object { [string]$_ })
+        foreach ($requiredPickupFile in @($expected.RequiredPickupFiles)) {
+            Assert-ArrayContains $reviewerPickupFiles $requiredPickupFile "Reviewer assignment ledger $($expected.TemplateFile).reviewerPickupFiles" $failures
+        }
+
         $assignmentInventory += [ordered]@{
             evidenceName = $expected.EvidenceName
             evidenceGate = $expected.EvidenceGate
@@ -1298,6 +1315,7 @@ if (-not (Test-Path -LiteralPath $reviewerAssignmentPath)) {
             dueAtUtc = [string](Get-JsonPropertyValue $entry "dueAtUtc")
             escalationOwnerRole = [string](Get-JsonPropertyValue $entry "escalationOwnerRole")
             humanAction = [string](Get-JsonPropertyValue $entry "humanAction")
+            reviewerPickupFiles = @($reviewerPickupFiles)
         }
     }
 

@@ -18473,6 +18473,8 @@ public class AccountsWorkflowTests
         Assert.Contains("leaves all reviewer identity, pass/fail/source-review/professional acceptance/manual handoff decisions, signatures", runbook);
         Assert.Contains("release-evidence-report.json", runbook);
         Assert.Contains("visual-smoke-evidence-report.json", runbook);
+        Assert.Contains("pickup-file guidance", runbook, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("reviewerPickupFiles", runbook);
         Assert.Contains("real filing use stays blocked", runbook, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Prepare release evidence reviewer workspace", workflow);
         Assert.Contains("new-release-evidence-workspace.ps1", workflow);
@@ -18570,6 +18572,9 @@ public class AccountsWorkflowTests
         Assert.Contains("Reviewer completion ledger entries must contain exactly", workspaceVerifier);
         Assert.Contains("Reviewer completion ledger $($expected.TemplateFile).completed must remain false before named human sign-off.", workspaceVerifier);
         Assert.Contains("Reviewer assignment ledger entries must contain exactly", workspaceVerifier);
+        Assert.Contains("RequiredPickupFiles", workspaceVerifier);
+        Assert.Contains("reviewerPickupFiles", workspaceVerifier);
+        Assert.Contains("Reviewer assignment ledger $($expected.TemplateFile).reviewerPickupFiles", workspaceVerifier);
         Assert.Contains("assignmentStatus = \"unassigned\"", workspaceVerifier);
         Assert.Contains("assignedReviewerName", workspaceVerifier);
         Assert.Contains("assignedReviewerEmail", workspaceVerifier);
@@ -18589,6 +18594,9 @@ public class AccountsWorkflowTests
         Assert.Contains("pending-human-evidence", workspaceScript);
         Assert.Contains("humanFieldsLeftBlank", workspaceScript);
         Assert.Contains("reviewerQueue", workspaceScript);
+        Assert.Contains("RequiredPickupFiles", workspaceScript);
+        Assert.Contains("reviewerPickupFiles = @($_.RequiredPickupFiles)", workspaceScript);
+        Assert.Contains("Reviewer pickup files", workspaceScript);
         Assert.Contains("reviewerAssignmentFile", workspaceScript);
         Assert.Contains("machineEvidenceSummaryFile", workspaceScript);
         Assert.Contains("release-evidence-machine-summary.json", workspaceScript);
@@ -18687,6 +18695,7 @@ public class AccountsWorkflowTests
         Assert.Contains("Release evidence workspace verification report reviewerAssignmentInventory must contain exactly", script);
         Assert.Contains("Assert-JsonStringEquals $entry \"assignmentStatus\" \"unassigned\"", script);
         Assert.Contains("reviewerAssignmentInventory.$expectedEvidenceName.$blankField must be blank before named reviewer routing", script);
+        Assert.Contains("reviewerAssignmentInventory.$expectedEvidenceName.reviewerPickupFiles", script);
         Assert.Contains("unchecked-before-named-human-signoff", script);
         Assert.Contains("release-evidence-machine-summary.json", script);
         Assert.Contains("Assert-MinimumIntegerField", script);
