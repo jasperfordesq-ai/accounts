@@ -2485,9 +2485,10 @@ Prepared workspace pending-human blocker inventory:
 
 Human evidence closeout workspace pickup:
 
-- Latest verified green release-evidence commit before this slice: `529c045 Remove
-  closeout render warning`, GitHub Actions run
-  `https://github.com/jasperfordesq-ai/accounts/actions/runs/29058731379`.
+- Inspected release-evidence pickup baseline before the reviewer-assignment inventory
+  slice: `4af6fb8 Add reviewer assignment ledger to evidence workspace`, GitHub
+  Actions run
+  `https://github.com/jasperfordesq-ai/accounts/actions/runs/29059476369`.
 - `humanReleaseEvidenceCloseout` is now a five-step operator sequence. Step 1 is
   to pick up the prepared `release-evidence-reviewer-workspace` artifact and
   inspect `release-evidence-reviewer-index.md`,
@@ -2507,14 +2508,21 @@ Prepared workspace reviewer assignment ledger:
   gates in `unassigned` status, blank reviewer name/email/due-date fields, and a
   release-operator escalation owner.
 - `scripts/verify-release-evidence-workspace.ps1` now requires that assignment
-  ledger, proves it is routing metadata only and not evidence acceptance, and
-  records `reviewerAssignmentPath` in
+  ledger, proves it is routing metadata only and not evidence acceptance, records
+  `reviewerAssignmentPath`, and emits a six-row
+  `reviewerAssignmentInventory` in
   `release-evidence-workspace-verification-report.json`.
 - `scripts/verify-release-evidence.ps1` and
   `scripts/verify-release-artifact-pack.ps1` now require the assignment ledger in
-  the exact prepared-workspace inventory. The final artifact-pack manifest also
-  treats it as a retained `release-evidence-reviewer-handoff` file with byte-size
-  and SHA-256 evidence.
+  the exact prepared-workspace inventory and reject stale workspace verification
+  reports that do not carry the six unassigned reviewer assignment rows. The final
+  artifact-pack manifest also treats the ledger as a retained
+  `release-evidence-reviewer-handoff` file with byte-size and SHA-256 evidence.
+- Current CI evidence from run `29059476369` was downloaded and inspected locally:
+  `release-evidence-workspace-verification-report.json` is `passed` with zero
+  failures and a 21-file required workspace inventory; the retained
+  `release-evidence-reviewer-assignments.json` has six `unassigned` entries with
+  blank reviewer name, reviewer email and due-date fields.
 
 ## What Is Left To Do
 
@@ -2562,7 +2570,7 @@ Highest-priority next steps:
 
 ## Estimated Completion
 
-As of July 9, 2026:
+As of July 10, 2026:
 
 - Code implementation is roughly 70-75% complete.
 - Production assurance is roughly 60-65% complete.

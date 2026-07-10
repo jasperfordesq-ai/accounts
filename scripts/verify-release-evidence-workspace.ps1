@@ -40,36 +40,42 @@ $requiredWorkspaceFiles = @(
 
 $requiredReviewerQueue = @(
     [pscustomobject]@{
+        EvidenceName = "visualQa"
         EvidenceGate = "Visual QA sign-off"
         TemplateFile = "visual-qa-signoff-template.md"
         ReviewerRole = "Named visual QA reviewer"
         SignOffGate = "visual-qa-screenshot-review"
     },
     [pscustomobject]@{
+        EvidenceName = "sourceLawReview"
         EvidenceGate = "Source-law review"
         TemplateFile = "source-law-review-template.md"
         ReviewerRole = "Named source-law reviewer plus qualified accountant"
         SignOffGate = "source-law-change-review"
     },
     [pscustomobject]@{
+        EvidenceName = "externalRosIxbrlValidation"
         EvidenceGate = "External ROS/iXBRL validation"
         TemplateFile = "external-ros-ixbrl-validation-template.md"
         ReviewerRole = "External ROS/iXBRL validation reviewer"
         SignOffGate = "external-ros-validation-evidence"
     },
     [pscustomobject]@{
+        EvidenceName = "qualifiedAccountantAcceptance"
         EvidenceGate = "Qualified-accountant acceptance"
         TemplateFile = "qualified-accountant-acceptance-template.md"
         ReviewerRole = "Named qualified accountant"
         SignOffGate = "qualified-accountant-final-signoff"
     },
     [pscustomobject]@{
+        EvidenceName = "manualHandoffAcceptance"
         EvidenceGate = "Manual handoff acceptance"
         TemplateFile = "manual-handoff-acceptance-template.md"
         ReviewerRole = "Named manual handoff reviewer"
         SignOffGate = "manual-accountant-acceptance"
     },
     [pscustomobject]@{
+        EvidenceName = "monitoringProviderConfirmation"
         EvidenceGate = "Monitoring provider confirmation"
         TemplateFile = "monitoring-provider-confirmation-template.md"
         ReviewerRole = "Named release operator"
@@ -873,6 +879,7 @@ $reviewerBlockersPath = Join-Path $resolvedWorkspace.Path "release-evidence-revi
 $releaseEvidenceVerifierOutputPath = Join-Path $resolvedWorkspace.Path "release-evidence-verifier-output.txt"
 $manifest = $null
 $pendingHumanEvidenceBlockers = @()
+$reviewerAssignmentInventory = @()
 
 if (-not (Test-Path -LiteralPath $manifestPath)) {
     Add-Failure $failures "Workspace must include release-evidence-workspace-manifest.json."
@@ -1221,6 +1228,7 @@ if (-not (Test-Path -LiteralPath $reviewerAssignmentPath)) {
     Add-Failure $failures "Workspace must include release-evidence-reviewer-assignments.json."
 } else {
     $assignmentLedger = Get-Content -LiteralPath $reviewerAssignmentPath -Raw | ConvertFrom-Json
+    $assignmentInventory = @()
 
     if ([string](Get-JsonPropertyValue $assignmentLedger "status") -ne "pending-human-assignment") {
         Add-Failure $failures "Reviewer assignment ledger status must be pending-human-assignment."
@@ -1277,7 +1285,23 @@ if (-not (Test-Path -LiteralPath $reviewerAssignmentPath)) {
         if ([string]::IsNullOrWhiteSpace([string](Get-JsonPropertyValue $entry "humanAction"))) {
             Add-Failure $failures "Reviewer assignment ledger $($expected.TemplateFile).humanAction must describe the remaining human-only action."
         }
+
+        $assignmentInventory += [ordered]@{
+            evidenceName = $expected.EvidenceName
+            evidenceGate = $expected.EvidenceGate
+            templateFile = $expected.TemplateFile
+            requiredReviewerRole = $expected.ReviewerRole
+            signOffGate = $expected.SignOffGate
+            assignmentStatus = [string](Get-JsonPropertyValue $entry "assignmentStatus")
+            assignedReviewerName = [string](Get-JsonPropertyValue $entry "assignedReviewerName")
+            assignedReviewerEmail = [string](Get-JsonPropertyValue $entry "assignedReviewerEmail")
+            dueAtUtc = [string](Get-JsonPropertyValue $entry "dueAtUtc")
+            escalationOwnerRole = [string](Get-JsonPropertyValue $entry "escalationOwnerRole")
+            humanAction = [string](Get-JsonPropertyValue $entry "humanAction")
+        }
     }
+
+    $reviewerAssignmentInventory = $assignmentInventory
 }
 
 foreach ($template in $requiredTemplates) {
@@ -1417,6 +1441,7 @@ $verificationReport = [ordered]@{
     requiredWorkspaceFiles = $requiredWorkspaceFiles
     preparedHumanTemplateControls = $preparedHumanTemplateControls
     pendingHumanEvidenceBlockers = $pendingHumanEvidenceBlockers
+    reviewerAssignmentInventory = $reviewerAssignmentInventory
     requiredTemplateCount = $requiredTemplates.Count
     failureCount = $failures.Count
     failures = @($failures)

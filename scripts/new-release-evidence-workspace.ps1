@@ -640,6 +640,7 @@ $preparedTemplates = @(
 
 $reviewerQueue = @(
     [pscustomobject]@{
+        EvidenceName = "visualQa"
         EvidenceGate = "Visual QA sign-off"
         TemplateFile = "visual-qa-signoff-template.md"
         ReviewerRole = "Named visual QA reviewer"
@@ -647,6 +648,7 @@ $reviewerQueue = @(
         HumanAction = "Review every retained light/dark desktop/mobile screenshot and record exact pass cells, notes, decision, reviewer identity, UTC time, and signature."
     },
     [pscustomobject]@{
+        EvidenceName = "sourceLawReview"
         EvidenceGate = "Source-law review"
         TemplateFile = "source-law-review-template.md"
         ReviewerRole = "Named source-law reviewer plus qualified accountant"
@@ -654,6 +656,7 @@ $reviewerQueue = @(
         HumanAction = "Check current CRO, Revenue, FRC, and Charities Regulator sources, record source-row outcomes, qualified-accountant source-law sign-off, UTC time, and signatures."
     },
     [pscustomobject]@{
+        EvidenceName = "externalRosIxbrlValidation"
         EvidenceGate = "External ROS/iXBRL validation"
         TemplateFile = "external-ros-ixbrl-validation-template.md"
         ReviewerRole = "External ROS/iXBRL validation reviewer"
@@ -661,6 +664,7 @@ $reviewerQueue = @(
         HumanAction = "Retain external validation provider references for the exact generated iXBRL hashes, taxonomy package references, warnings/errors status, decision, UTC time, and signature."
     },
     [pscustomobject]@{
+        EvidenceName = "qualifiedAccountantAcceptance"
         EvidenceGate = "Qualified-accountant acceptance"
         TemplateFile = "qualified-accountant-acceptance-template.md"
         ReviewerRole = "Named qualified accountant"
@@ -668,6 +672,7 @@ $reviewerQueue = @(
         HumanAction = "Walk the golden corpus and workbench routes, record accepted scenario and route rows, accountant identity, UTC time, and signature."
     },
     [pscustomobject]@{
+        EvidenceName = "manualHandoffAcceptance"
         EvidenceGate = "Manual handoff acceptance"
         TemplateFile = "manual-handoff-acceptance-template.md"
         ReviewerRole = "Named manual handoff reviewer"
@@ -675,6 +680,7 @@ $reviewerQueue = @(
         HumanAction = "Review audit-required and unsupported paths, retain exact handoff evidence anchors, accepted decisions, reviewer identity, UTC time, and signature."
     },
     [pscustomobject]@{
+        EvidenceName = "monitoringProviderConfirmation"
         EvidenceGate = "Monitoring provider confirmation"
         TemplateFile = "monitoring-provider-confirmation-template.md"
         ReviewerRole = "Named release operator"

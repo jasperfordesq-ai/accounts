@@ -868,6 +868,46 @@ function Assert-PendingHumanEvidenceBlockers {
     }
 }
 
+function Assert-ReviewerAssignmentInventory {
+    param(
+        $WorkspaceVerificationReport,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    $assignments = @((Get-JsonPropertyValue $WorkspaceVerificationReport "reviewerAssignmentInventory"))
+    if ($assignments.Count -ne $requiredPendingHumanEvidenceBlockers.Count) {
+        Add-Failure $Failures "Release evidence workspace verification report reviewerAssignmentInventory must contain exactly $($requiredPendingHumanEvidenceBlockers.Count) entries."
+    }
+
+    foreach ($expected in $requiredPendingHumanEvidenceBlockers) {
+        $expectedEvidenceName = [string]$expected.EvidenceName
+        $entry = $assignments | Where-Object {
+            [string]::Equals([string](Get-JsonPropertyValue $_ "evidenceName"), $expectedEvidenceName, [StringComparison]::OrdinalIgnoreCase)
+        } | Select-Object -First 1
+
+        if ($null -eq $entry) {
+            Add-Failure $Failures "Release evidence workspace verification report reviewerAssignmentInventory must include $expectedEvidenceName."
+            continue
+        }
+
+        Assert-JsonStringEquals $entry "templateFile" ([string]$expected.TemplateFile) "Release evidence workspace verification report reviewerAssignmentInventory.$expectedEvidenceName" $Failures
+        Assert-JsonStringEquals $entry "requiredReviewerRole" ([string]$expected.RequiredReviewerRole) "Release evidence workspace verification report reviewerAssignmentInventory.$expectedEvidenceName" $Failures
+        Assert-JsonStringEquals $entry "signOffGate" ([string]$expected.SignOffGate) "Release evidence workspace verification report reviewerAssignmentInventory.$expectedEvidenceName" $Failures
+        Assert-JsonStringEquals $entry "assignmentStatus" "unassigned" "Release evidence workspace verification report reviewerAssignmentInventory.$expectedEvidenceName" $Failures
+        Assert-JsonStringEquals $entry "escalationOwnerRole" "Release operator" "Release evidence workspace verification report reviewerAssignmentInventory.$expectedEvidenceName" $Failures
+
+        foreach ($blankField in @("assignedReviewerName", "assignedReviewerEmail", "dueAtUtc")) {
+            if (-not [string]::IsNullOrWhiteSpace([string](Get-JsonPropertyValue $entry $blankField))) {
+                Add-Failure $Failures "Release evidence workspace verification report reviewerAssignmentInventory.$expectedEvidenceName.$blankField must be blank before named reviewer routing."
+            }
+        }
+
+        if ([string]::IsNullOrWhiteSpace([string](Get-JsonPropertyValue $entry "humanAction"))) {
+            Add-Failure $Failures "Release evidence workspace verification report reviewerAssignmentInventory.$expectedEvidenceName.humanAction must be present."
+        }
+    }
+}
+
 function Test-ReleaseWorkspaceControlEvidence {
     param(
         $WorkspaceManifest,
@@ -941,6 +981,7 @@ function Test-ReleaseWorkspaceControlEvidence {
         Assert-WorkspaceVerificationInventory $WorkspaceVerificationReport $Failures
         Assert-PreparedHumanTemplateControls $WorkspaceVerificationReport $Failures
         Assert-PendingHumanEvidenceBlockers $WorkspaceVerificationReport $Failures
+        Assert-ReviewerAssignmentInventory $WorkspaceVerificationReport $Failures
     }
 }
 

@@ -18573,6 +18573,7 @@ public class AccountsWorkflowTests
         Assert.Contains("assignedReviewerName", workspaceVerifier);
         Assert.Contains("assignedReviewerEmail", workspaceVerifier);
         Assert.Contains("must be blank before named reviewer routing", workspaceVerifier);
+        Assert.Contains("reviewerAssignmentInventory", workspaceVerifier);
         Assert.Contains("Workspace manifest reviewerAssignmentFile must be release-evidence-reviewer-assignments.json.", workspaceVerifier);
         Assert.Contains("Prepared release evidence workspace unexpectedly passed before named human sign-off.", workspaceVerifier);
         Assert.Contains("Prepared release evidence workspace must keep all human evidence entries incomplete.", workspaceVerifier);
@@ -18681,6 +18682,10 @@ public class AccountsWorkflowTests
         Assert.Contains("Assert-PendingHumanEvidenceBlockers", script);
         Assert.Contains("Release evidence workspace verification report pendingHumanEvidenceBlockers must contain exactly", script);
         Assert.Contains("pendingHumanEvidenceBlockers.$expectedEvidenceName.blockingFailureCount must be greater than zero", script);
+        Assert.Contains("Assert-ReviewerAssignmentInventory", script);
+        Assert.Contains("Release evidence workspace verification report reviewerAssignmentInventory must contain exactly", script);
+        Assert.Contains("Assert-JsonStringEquals $entry \"assignmentStatus\" \"unassigned\"", script);
+        Assert.Contains("reviewerAssignmentInventory.$expectedEvidenceName.$blankField must be blank before named reviewer routing", script);
         Assert.Contains("unchecked-before-named-human-signoff", script);
         Assert.Contains("release-evidence-machine-summary.json", script);
         Assert.Contains("Assert-MinimumIntegerField", script);
@@ -19281,6 +19286,9 @@ public class AccountsWorkflowTests
         Assert.Contains("Assert-ReleaseEvidenceWorkspacePendingHumanBlockers", script);
         Assert.Contains("release-evidence-workspace-verification-report.json pendingHumanEvidenceBlockers must include exactly", script);
         Assert.Contains("pendingHumanEvidenceBlockers.$expectedEvidenceName.status must be incomplete", script);
+        Assert.Contains("Assert-ReleaseEvidenceWorkspaceReviewerAssignments", script);
+        Assert.Contains("release-evidence-workspace-verification-report.json reviewerAssignmentInventory must include exactly", script);
+        Assert.Contains("reviewerAssignmentInventory.$expectedEvidenceName.assignmentStatus must be unassigned", script);
         Assert.Contains("Assert-ReleaseEvidenceWorkspaceInventoryRetention", script);
         Assert.Contains("Release artifact pack must retain workspace inventory file", script);
         Assert.Contains("retained workspace inventory file $expectedFile sha256 must match release-evidence-workspace-verification-report.json", script);
