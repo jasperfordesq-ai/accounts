@@ -19074,8 +19074,10 @@ public class AccountsWorkflowTests
         Assert.Contains("humanReleaseEvidence", readinessVerifier);
         Assert.Contains("humanReleaseEvidenceCodes", readinessVerifier);
         Assert.Contains("humanReleaseEvidenceReviewerPickupFilePolicy", readinessVerifier);
-        Assert.Contains("reviewerPickupFiles must include its template file", readinessVerifier);
-        Assert.Contains("reviewerPickupFiles must include release-evidence-reviewer-blockers.md", readinessVerifier);
+        Assert.Contains("humanReleaseEvidenceReviewerPickupFiles", readinessVerifier);
+        Assert.Contains("visual-smoke-evidence-report.json", readinessVerifier);
+        Assert.Contains("structured-log-report.json", readinessVerifier);
+        Assert.Contains("reviewerPickupFiles must include expected pickup file", readinessVerifier);
         Assert.Contains("humanReleaseEvidenceCloseout", readinessVerifier);
         Assert.Contains("humanReleaseEvidenceCloseoutStepCodes", readinessVerifier);
         Assert.Contains("pick-up-reviewer-workspace", readinessVerifier);

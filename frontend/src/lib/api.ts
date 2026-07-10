@@ -4797,6 +4797,14 @@ function assertHumanReleaseEvidence(report: ProductionReadinessReport) {
     "manualHandoffAcceptance",
     "monitoringProviderConfirmation",
   ];
+  const requiredReviewerPickupFilesByCode: Record<string, string[]> = {
+    visualQa: ["visual-qa-signoff-template.md", "visual-smoke-manifest.json", "visual-smoke-evidence-report.json", "accountant-workbench-evidence-report.json", "release-evidence-reviewer-blockers.md"],
+    sourceLawReview: ["source-law-review-template.md", "production-readiness-report.json", "production-readiness-verification-report.json", "release-evidence-reviewer-blockers.md"],
+    externalRosIxbrlValidation: ["external-ros-ixbrl-validation-template.md", "production-readiness-report.json", "release-evidence-reviewer-blockers.md"],
+    qualifiedAccountantAcceptance: ["qualified-accountant-acceptance-template.md", "production-readiness-report.json", "accountant-workbench-evidence-report.json", "release-evidence-reviewer-blockers.md"],
+    manualHandoffAcceptance: ["manual-handoff-acceptance-template.md", "production-readiness-report.json", "release-evidence-reviewer-blockers.md"],
+    monitoringProviderConfirmation: ["monitoring-provider-confirmation-template.md", "monitoring-error-routing-report.json", "structured-log-report.json", "release-evidence-reviewer-blockers.md"],
+  };
   const checklistCodes = new Set(report.releaseReviewChecklist.map((item) => item.code));
   const manifestCodes = new Set(report.releaseVerificationManifest.map((item) => item.code));
   const checklistByCode = new Map(report.releaseReviewChecklist.map((item) => [item.code, item]));
@@ -4867,15 +4875,11 @@ function assertHumanReleaseEvidence(report: ProductionReadinessReport) {
       );
     }
 
-    if (!item.reviewerPickupFiles.includes(item.templateFile)) {
+    const requiredReviewerPickupFiles = requiredReviewerPickupFilesByCode[item.code] ?? [item.templateFile, "release-evidence-reviewer-blockers.md"];
+    const missingReviewerPickupFile = requiredReviewerPickupFiles.find((fileName) => !item.reviewerPickupFiles.includes(fileName));
+    if (missingReviewerPickupFile) {
       throw new Error(
-        `Invalid production readiness report contract: humanReleaseEvidence.${itemIndex}.reviewerPickupFiles - must include the gate template file`,
-      );
-    }
-
-    if (!item.reviewerPickupFiles.includes("release-evidence-reviewer-blockers.md")) {
-      throw new Error(
-        `Invalid production readiness report contract: humanReleaseEvidence.${itemIndex}.reviewerPickupFiles - must include release-evidence-reviewer-blockers.md`,
+        `Invalid production readiness report contract: humanReleaseEvidence.${itemIndex}.reviewerPickupFiles - must include expected pickup file ${missingReviewerPickupFile}`,
       );
     }
   });

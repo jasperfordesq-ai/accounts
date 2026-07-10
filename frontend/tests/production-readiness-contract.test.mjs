@@ -989,11 +989,11 @@ test("parseProductionReadinessReport rejects human release evidence manifest dri
 
 test("parseProductionReadinessReport rejects human release evidence without reviewer pickup files", () => {
   const payload = sampleReport();
-  payload.humanReleaseEvidence[0].reviewerPickupFiles = payload.humanReleaseEvidence[0].reviewerPickupFiles.filter((item) => item !== "release-evidence-reviewer-blockers.md");
+  payload.humanReleaseEvidence[0].reviewerPickupFiles = payload.humanReleaseEvidence[0].reviewerPickupFiles.filter((item) => item !== "visual-smoke-evidence-report.json");
 
   assert.throws(
     () => parseProductionReadinessReport(payload),
-    /Invalid production readiness report contract: humanReleaseEvidence\.0\.reviewerPickupFiles - must include release-evidence-reviewer-blockers\.md/,
+    /Invalid production readiness report contract: humanReleaseEvidence\.0\.reviewerPickupFiles - must include expected pickup file visual-smoke-evidence-report\.json/,
   );
 });
 

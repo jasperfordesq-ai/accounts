@@ -145,6 +145,14 @@ $requiredHumanReleaseEvidenceCodes = @(
     "manualHandoffAcceptance",
     "monitoringProviderConfirmation"
 )
+$requiredHumanReleaseEvidenceReviewerPickupFiles = @{
+    visualQa = @("visual-qa-signoff-template.md", "visual-smoke-manifest.json", "visual-smoke-evidence-report.json", "accountant-workbench-evidence-report.json", "release-evidence-reviewer-blockers.md")
+    sourceLawReview = @("source-law-review-template.md", "production-readiness-report.json", "production-readiness-verification-report.json", "release-evidence-reviewer-blockers.md")
+    externalRosIxbrlValidation = @("external-ros-ixbrl-validation-template.md", "production-readiness-report.json", "release-evidence-reviewer-blockers.md")
+    qualifiedAccountantAcceptance = @("qualified-accountant-acceptance-template.md", "production-readiness-report.json", "accountant-workbench-evidence-report.json", "release-evidence-reviewer-blockers.md")
+    manualHandoffAcceptance = @("manual-handoff-acceptance-template.md", "production-readiness-report.json", "release-evidence-reviewer-blockers.md")
+    monitoringProviderConfirmation = @("monitoring-provider-confirmation-template.md", "monitoring-error-routing-report.json", "structured-log-report.json", "release-evidence-reviewer-blockers.md")
+}
 $requiredHumanReleaseEvidenceCloseoutSteps = @(
     [pscustomobject]@{
         code = "pick-up-reviewer-workspace"
@@ -354,11 +362,11 @@ if ($null -ne $report) {
             Add-Failure $failures "humanReleaseEvidence '$humanEvidenceCode' must include retained requiredEvidence references."
         }
         $reviewerPickupFiles = @((Get-JsonProperty $humanEvidence "reviewerPickupFiles") | ForEach-Object { [string]$_ })
-        if (-not ($reviewerPickupFiles -contains $templateFile)) {
-            Add-Failure $failures "humanReleaseEvidence '$humanEvidenceCode' reviewerPickupFiles must include its template file."
-        }
-        if (-not ($reviewerPickupFiles -contains "release-evidence-reviewer-blockers.md")) {
-            Add-Failure $failures "humanReleaseEvidence '$humanEvidenceCode' reviewerPickupFiles must include release-evidence-reviewer-blockers.md."
+        $expectedReviewerPickupFiles = @($requiredHumanReleaseEvidenceReviewerPickupFiles[$humanEvidenceCode])
+        foreach ($expectedReviewerPickupFile in $expectedReviewerPickupFiles) {
+            if (-not ($reviewerPickupFiles -contains $expectedReviewerPickupFile)) {
+                Add-Failure $failures "humanReleaseEvidence '$humanEvidenceCode' reviewerPickupFiles must include expected pickup file '$expectedReviewerPickupFile'."
+            }
         }
     }
 
@@ -422,7 +430,8 @@ $evidence = [ordered]@{
         sourceLawSourceIds = $requiredSourceIds
         releaseVerificationManifestCodes = $requiredManifestCodes
         humanReleaseEvidenceCodes = $requiredHumanReleaseEvidenceCodes
-        humanReleaseEvidenceReviewerPickupFilePolicy = "Each humanReleaseEvidence row must include reviewerPickupFiles with the gate template and release-evidence-reviewer-blockers.md."
+        humanReleaseEvidenceReviewerPickupFilePolicy = "Each humanReleaseEvidence row must include the full expected per-gate reviewerPickupFiles list."
+        humanReleaseEvidenceReviewerPickupFiles = $requiredHumanReleaseEvidenceReviewerPickupFiles
         humanReleaseEvidenceCloseoutStepCodes = @($requiredHumanReleaseEvidenceCloseoutSteps | ForEach-Object { $_.code })
         assuranceEvidenceItems = $requiredAssuranceEvidence
         expectedVisualScreenshotCount = 28

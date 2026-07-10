@@ -2566,9 +2566,10 @@ Reviewer assignment pickup-file guidance:
 - The live production-readiness API now includes `reviewerPickupFiles` on each
   `humanReleaseEvidence` gate, and the production readiness workbench renders those
   retained pickup files beside the reviewer role, template, sign-off gate, required
-  evidence and next action. `scripts/verify-production-readiness-report.ps1` rejects
-  captured reports whose human evidence gates omit the template file or
-  `release-evidence-reviewer-blockers.md` from that live pickup guidance.
+  evidence and next action. `scripts/verify-production-readiness-report.ps1` now
+  rejects captured reports whose human evidence gates omit any required file from
+  the full expected per-gate pickup list, and emits
+  `humanReleaseEvidenceReviewerPickupFiles` in the retained verification coverage.
 - `scripts/new-release-evidence-workspace.ps1` now writes `reviewerPickupFiles`
   into each row of `release-evidence-reviewer-assignments.json`, so every
   unassigned human gate lists the exact retained template, machine-evidence and

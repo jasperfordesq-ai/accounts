@@ -1038,8 +1038,14 @@ public class ProductionReadinessReportTests
         Assert.Contains(report.HumanReleaseEvidence, item =>
             item.Code == "visualQa"
             && item.TemplateFile == "visual-qa-signoff-template.md"
+            && item.ReviewerPickupFiles.Contains("visual-smoke-manifest.json")
             && item.ReviewerPickupFiles.Contains("visual-smoke-evidence-report.json")
+            && item.ReviewerPickupFiles.Contains("accountant-workbench-evidence-report.json")
             && item.ReleaseManifestCode == "visual-smoke-light-dark");
+        Assert.Contains(report.HumanReleaseEvidence, item =>
+            item.Code == "monitoringProviderConfirmation"
+            && item.ReviewerPickupFiles.Contains("monitoring-error-routing-report.json")
+            && item.ReviewerPickupFiles.Contains("structured-log-report.json"));
         Assert.Equal(
             new[]
             {
