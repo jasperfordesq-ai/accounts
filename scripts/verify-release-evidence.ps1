@@ -706,15 +706,28 @@ function Assert-MachineEvidenceEntries {
     param(
         $Entries,
         [string]$Context,
-        [System.Collections.Generic.List[string]]$Failures
+        [System.Collections.Generic.List[string]]$Failures,
+        $ExpectedEntries = $null,
+        $ReferenceEntries = $null,
+        [string]$ReferenceContext = ""
     )
 
-    $entryList = @($Entries)
+    $entryList = @($Entries | Where-Object { $null -ne $_ })
     if ($entryList.Count -ne $requiredMachineEvidenceFiles.Count) {
         Add-Failure $Failures "$Context retainedMachineEvidence must contain exactly $($requiredMachineEvidenceFiles.Count) entries."
     }
 
-    foreach ($fileName in $requiredMachineEvidenceFiles) {
+    $expectedList = @($ExpectedEntries | Where-Object { $null -ne $_ })
+    if ($expectedList.Count -eq 0) {
+        $expectedList = @($requiredMachineEvidenceFiles | ForEach-Object {
+            [pscustomobject]@{ FileName = [string]$_; SourceArtifactName = ""; SourceArtifactFile = "" }
+        })
+    }
+
+    $referenceEntryList = @($ReferenceEntries | Where-Object { $null -ne $_ })
+
+    foreach ($expected in $expectedList) {
+        $fileName = [string](Get-JsonPropertyValue $expected "FileName")
         $entry = $entryList | Where-Object {
             [string]::Equals([string](Get-JsonPropertyValue $_ "fileName"), $fileName, [StringComparison]::OrdinalIgnoreCase)
         } | Select-Object -First 1
@@ -732,6 +745,36 @@ function Assert-MachineEvidenceEntries {
         $sha256 = [string](Get-JsonPropertyValue $entry "sha256")
         if ($sha256 -notmatch "^[0-9a-f]{64}$") {
             Add-Failure $Failures "$Context retainedMachineEvidence.$fileName.sha256 must be a lowercase 64-character SHA-256 digest."
+        }
+
+        foreach ($propertyName in @("sourceArtifactName", "sourceArtifactFile")) {
+            $expectedPropertyName = $propertyName.Substring(0, 1).ToUpperInvariant() + $propertyName.Substring(1)
+            $expectedValue = [string](Get-JsonPropertyValue $expected $expectedPropertyName)
+            if (-not [string]::IsNullOrWhiteSpace($expectedValue)) {
+                $actualValue = [string](Get-JsonPropertyValue $entry $propertyName)
+                if (-not [string]::Equals($actualValue, $expectedValue, [StringComparison]::OrdinalIgnoreCase)) {
+                    Add-Failure $Failures "$Context retainedMachineEvidence.$fileName.$propertyName must be $expectedValue."
+                }
+            }
+        }
+
+        if ($referenceEntryList.Count -gt 0) {
+            $referenceEntry = $referenceEntryList | Where-Object {
+                [string]::Equals([string](Get-JsonPropertyValue $_ "fileName"), $fileName, [StringComparison]::OrdinalIgnoreCase)
+            } | Select-Object -First 1
+
+            if ($null -eq $referenceEntry) {
+                Add-Failure $Failures "$Context retainedMachineEvidence.$fileName must match $ReferenceContext."
+                continue
+            }
+
+            foreach ($propertyName in @("sourceArtifactName", "sourceArtifactFile", "byteSize", "sha256")) {
+                $actualValue = [string](Get-JsonPropertyValue $entry $propertyName)
+                $referenceValue = [string](Get-JsonPropertyValue $referenceEntry $propertyName)
+                if (-not [string]::Equals($actualValue, $referenceValue, [StringComparison]::OrdinalIgnoreCase)) {
+                    Add-Failure $Failures "$Context retainedMachineEvidence.$fileName.$propertyName must match $ReferenceContext."
+                }
+            }
         }
     }
 }
@@ -929,7 +972,7 @@ function Test-ReleaseWorkspaceControlEvidence {
             Assert-JsonArrayContains (Get-JsonPropertyValue $WorkspaceManifest "preparedTemplates") $templateFile "Release evidence workspace manifest preparedTemplates" $Failures
         }
 
-        Assert-MachineEvidenceEntries (Get-JsonPropertyValue $WorkspaceManifest "retainedMachineEvidence") "Release evidence workspace manifest" $Failures
+        Assert-MachineEvidenceEntries (Get-JsonPropertyValue $WorkspaceManifest "retainedMachineEvidence") "Release evidence workspace manifest" $Failures $requiredMachineEvidenceProvenance
 
         if (-not [string]::IsNullOrWhiteSpace($ReleaseCandidateCommitSha)) {
             Assert-JsonStringEquals $WorkspaceManifest "commitSha" $ReleaseCandidateCommitSha "Release evidence workspace manifest" $Failures
@@ -950,7 +993,7 @@ function Test-ReleaseWorkspaceControlEvidence {
             Assert-JsonStringEquals $summaryCandidate "githubActionsRunUrl" $ReleaseCandidateRunUrl "Release evidence machine summary releaseCandidate" $Failures
         }
 
-        Assert-MachineEvidenceEntries (Get-JsonPropertyValue $MachineEvidenceSummary "retainedMachineEvidence") "Release evidence machine summary" $Failures
+        Assert-MachineEvidenceEntries (Get-JsonPropertyValue $MachineEvidenceSummary "retainedMachineEvidence") "Release evidence machine summary" $Failures $requiredMachineEvidenceProvenance (Get-JsonPropertyValue $WorkspaceManifest "retainedMachineEvidence") "Release evidence workspace manifest"
 
         $reviewerQueue = @((Get-JsonPropertyValue $MachineEvidenceSummary "reviewerQueue"))
         if ($reviewerQueue.Count -ne $requiredReviewerQueue.Count) {
@@ -1247,6 +1290,16 @@ $requiredMachineEvidenceFiles = @(
     "accountant-workbench-evidence-report.json",
     "monitoring-error-routing-report.json",
     "structured-log-report.json"
+)
+
+$requiredMachineEvidenceProvenance = @(
+    [pscustomobject]@{ FileName = "production-readiness-report.json"; SourceArtifactName = "production-readiness-report"; SourceArtifactFile = "production-readiness-report.json" },
+    [pscustomobject]@{ FileName = "production-readiness-verification-report.json"; SourceArtifactName = "production-readiness-report"; SourceArtifactFile = "production-readiness-verification-report.json" },
+    [pscustomobject]@{ FileName = "visual-smoke-manifest.json"; SourceArtifactName = "visual-smoke-screenshots"; SourceArtifactFile = "visual-smoke-manifest.json" },
+    [pscustomobject]@{ FileName = "visual-smoke-evidence-report.json"; SourceArtifactName = "visual-smoke-screenshots"; SourceArtifactFile = "visual-smoke-evidence-report.json" },
+    [pscustomobject]@{ FileName = "accountant-workbench-evidence-report.json"; SourceArtifactName = "visual-smoke-screenshots"; SourceArtifactFile = "accountant-workbench-evidence-report.json" },
+    [pscustomobject]@{ FileName = "monitoring-error-routing-report.json"; SourceArtifactName = "monitoring-error-routing-smoke"; SourceArtifactFile = "monitoring-error-routing-report.json" },
+    [pscustomobject]@{ FileName = "structured-log-report.json"; SourceArtifactName = "structured-json-log-sample"; SourceArtifactFile = "structured-log-report.json" }
 )
 
 $requiredReviewerQueue = @(

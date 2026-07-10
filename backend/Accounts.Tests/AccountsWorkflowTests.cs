@@ -18679,9 +18679,12 @@ public class AccountsWorkflowTests
         Assert.Contains("workspaceControlFiles", script);
         Assert.Contains("releaseEvidenceWorkspaceFiles", script);
         Assert.Contains("Assert-JsonStringEquals $WorkspaceManifest \"machineEvidenceSummaryFile\" \"release-evidence-machine-summary.json\" \"Release evidence workspace manifest\"", script);
-        Assert.Contains("Assert-MachineEvidenceEntries (Get-JsonPropertyValue $WorkspaceManifest \"retainedMachineEvidence\") \"Release evidence workspace manifest\"", script);
-        Assert.Contains("Assert-MachineEvidenceEntries (Get-JsonPropertyValue $MachineEvidenceSummary \"retainedMachineEvidence\") \"Release evidence machine summary\"", script);
+        Assert.Contains("requiredMachineEvidenceProvenance", script);
+        Assert.Contains("Assert-MachineEvidenceEntries (Get-JsonPropertyValue $WorkspaceManifest \"retainedMachineEvidence\") \"Release evidence workspace manifest\" $Failures $requiredMachineEvidenceProvenance", script);
+        Assert.Contains("Assert-MachineEvidenceEntries (Get-JsonPropertyValue $MachineEvidenceSummary \"retainedMachineEvidence\") \"Release evidence machine summary\" $Failures $requiredMachineEvidenceProvenance", script);
         Assert.Contains("$Context retainedMachineEvidence must contain exactly", script);
+        Assert.Contains("$Context retainedMachineEvidence.$fileName.$propertyName must be $expectedValue", script);
+        Assert.Contains("$Context retainedMachineEvidence.$fileName.$propertyName must match $ReferenceContext", script);
         Assert.Contains("Release evidence machine summary productionReadiness.humanReleaseEvidenceReviewerPickupFiles", script);
         Assert.Contains("Release evidence machine summary monitoringEvidence.jsonLogLineCount must be greater than zero.", script);
         Assert.Contains("Assert-JsonStringEquals $WorkspaceVerificationReport \"status\" \"passed\" \"Release evidence workspace verification report\"", script);
