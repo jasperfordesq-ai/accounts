@@ -1012,7 +1012,7 @@ jobs:
 
   ci-machine-evidence-pack:
     name: CI Machine Evidence Pack
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     needs:
       - backend

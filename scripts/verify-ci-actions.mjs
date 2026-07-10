@@ -88,8 +88,8 @@ requireText("./scripts/verify-container-supply-chain-report.ps1", "CI must verif
 requireText("name: container-supply-chain", "CI must retain the container supply-chain artifact.");
 requireText('pattern: "!*.dockerbuild"', "CI evidence download must exclude Buildx record artifacts.");
 requireText(
-  "if: github.event_name == 'push' && github.ref == 'refs/heads/main'",
-  "The CI release evidence pack must remain disabled for untrusted pull request and fork events.",
+  "if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')",
+  "The CI machine evidence check must run for protected-branch pull requests and trusted main pushes.",
 );
 
 if (failures.length > 0) {

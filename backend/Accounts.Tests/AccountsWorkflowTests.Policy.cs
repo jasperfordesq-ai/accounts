@@ -1750,6 +1750,16 @@ public partial class AccountsWorkflowTests
 
         Assert.Contains("USER $APP_UID", backendDockerfile);
         Assert.DoesNotContain("ENV API_URL=http://localhost:5090", frontendDockerfile);
+        Assert.Contains(
+            "/usr/local/lib/node_modules/npm",
+            frontendDockerfile);
+        Assert.Contains(
+            "/usr/local/lib/node_modules/corepack",
+            frontendDockerfile);
+        Assert.Contains(
+            "/opt/yarn-v*",
+            frontendDockerfile);
+        Assert.Contains("CMD [\"node\", \"server.js\"]", frontendDockerfile);
     }
 
     [Fact]
@@ -2010,7 +2020,9 @@ public partial class AccountsWorkflowTests
         Assert.Contains("actions/checkout", machineEvidenceJob);
         Assert.Contains("actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131", machineEvidenceJob);
         Assert.Contains("pattern: \"!*.dockerbuild\"", machineEvidenceJob);
-        Assert.Contains("if: github.event_name == 'push' && github.ref == 'refs/heads/main'", machineEvidenceJob);
+        Assert.Contains(
+            "if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')",
+            machineEvidenceJob);
         Assert.Contains("frontend", machineEvidenceJob);
         Assert.Contains("production-config", machineEvidenceJob);
         Assert.Contains("production-smoke", machineEvidenceJob);
