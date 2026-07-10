@@ -1672,6 +1672,44 @@ $releaseEvidenceReviewerHandoffManifest = @(
     }
 )
 
+$releaseEvidenceWorkspaceSummary = [ordered]@{
+    status = "missing"
+    verificationStatus = ""
+    failureCount = $null
+    releaseCandidateCommitSha = ""
+    releaseCandidateRunUrl = ""
+    requiredWorkspaceFileCount = 0
+    workspaceFileCount = 0
+    preparedHumanTemplateControlCount = 0
+    pendingHumanEvidenceBlockerCount = 0
+    reviewerAssignmentInventoryCount = 0
+    unassignedReviewerAssignmentCount = 0
+    blankReviewerAssignmentFieldCount = 0
+}
+
+if (-not ($releaseEvidenceWorkspaceVerificationReport.PSObject.Properties.Name -contains "__missing") -and
+    -not ($releaseEvidenceWorkspaceVerificationReport.PSObject.Properties.Name -contains "__invalid")) {
+    $assignmentInventory = @((Get-JsonProperty $releaseEvidenceWorkspaceVerificationReport @("reviewerAssignmentInventory")))
+    $releaseEvidenceWorkspaceSummary = [ordered]@{
+        status = "retained"
+        verificationStatus = [string](Get-JsonProperty $releaseEvidenceWorkspaceVerificationReport @("status"))
+        failureCount = [int](Get-JsonProperty $releaseEvidenceWorkspaceVerificationReport @("failureCount"))
+        releaseCandidateCommitSha = [string](Get-JsonProperty $releaseEvidenceWorkspaceVerificationReport @("releaseCandidate", "commitSha"))
+        releaseCandidateRunUrl = [string](Get-JsonProperty $releaseEvidenceWorkspaceVerificationReport @("releaseCandidate", "githubActionsRunUrl"))
+        requiredWorkspaceFileCount = @((Get-JsonProperty $releaseEvidenceWorkspaceVerificationReport @("requiredWorkspaceFiles"))).Count
+        workspaceFileCount = @((Get-JsonProperty $releaseEvidenceWorkspaceVerificationReport @("workspaceFiles"))).Count
+        preparedHumanTemplateControlCount = @((Get-JsonProperty $releaseEvidenceWorkspaceVerificationReport @("preparedHumanTemplateControls"))).Count
+        pendingHumanEvidenceBlockerCount = @((Get-JsonProperty $releaseEvidenceWorkspaceVerificationReport @("pendingHumanEvidenceBlockers"))).Count
+        reviewerAssignmentInventoryCount = $assignmentInventory.Count
+        unassignedReviewerAssignmentCount = @($assignmentInventory | Where-Object { [string](Get-JsonProperty $_ @("assignmentStatus")) -eq "unassigned" }).Count
+        blankReviewerAssignmentFieldCount = @($assignmentInventory | Where-Object {
+            [string]::IsNullOrWhiteSpace([string](Get-JsonProperty $_ @("assignedReviewerName"))) -and
+            [string]::IsNullOrWhiteSpace([string](Get-JsonProperty $_ @("assignedReviewerEmail"))) -and
+            [string]::IsNullOrWhiteSpace([string](Get-JsonProperty $_ @("dueAtUtc")))
+        }).Count
+    }
+}
+
 $report = [ordered]@{
     status = if ($failures.Count -eq 0) { "passed" } else { "failed" }
     checkedAtUtc = (Get-Date).ToUniversalTime().ToString("o")
@@ -1683,6 +1721,7 @@ $report = [ordered]@{
     }
     requiredFiles = @($allEvidence.Keys) + @($requiredReleaseEvidenceTemplates | ForEach-Object { $_.fileName }) + @($requiredReleaseEvidenceWorkspaceControls | ForEach-Object { $_.fileName }) + @($requiredReleaseEvidenceReviewerHandoffFiles | ForEach-Object { $_.fileName })
     evidenceFiles = @($evidenceFileManifest) + @($releaseEvidenceTemplateManifest) + @($releaseEvidenceWorkspaceControlManifest) + @($releaseEvidenceReviewerHandoffManifest)
+    releaseEvidenceWorkspaceSummary = $releaseEvidenceWorkspaceSummary
     failureCount = $failures.Count
     failures = $failures.ToArray()
 }

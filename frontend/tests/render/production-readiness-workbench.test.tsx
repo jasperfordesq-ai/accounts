@@ -412,7 +412,7 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
           "CI retains no-direct-filing-submission-report.json for the no-direct CRO/ROS submission verifier.",
           "no-direct-filing-submission-report.json records release candidate commit/run identity and pack verifiers reject stale no-direct evidence.",
           "Release artifact pack verifier validates operational, workspace verification and reviewer handoff reports together.",
-          "release-artifact-pack-report.json records release candidate identity plus per-report and reviewer-handoff SHA-256/byte-size evidence.",
+          "release-artifact-pack-report.json records release candidate identity, per-report and reviewer-handoff SHA-256/byte-size evidence, plus a release-evidence workspace summary with the 21-file prepared workspace, six pending human blockers and six unassigned reviewer assignment rows.",
           "ci-machine-evidence-pack-report.json records exact commit/run identity, machine-evidence SHA-256 inventory and a prepared reviewer-workspace summary with the 21-file workspace plus six unassigned reviewer assignment rows.",
           "verify-production-readiness-report.ps1 now requires default-CI and manual release manifest rows, including the no-direct CRO/ROS control, CI machine evidence pack and release artifact pack.",
           "verify-release-artifact-pack.ps1 now rejects release packs unless production-readiness-verification-report.json proves every required default-CI and manual release manifest row.",

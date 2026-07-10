@@ -2541,6 +2541,18 @@ CI machine evidence reviewer-workspace summary:
   `unassignedReviewerAssignmentCount = 6`, and
   `blankReviewerAssignmentFieldCount = 6`.
 
+Final release artifact workspace summary:
+
+- `scripts/verify-release-artifact-pack.ps1` now writes
+  `releaseEvidenceWorkspaceSummary` into `release-artifact-pack-report.json`.
+  The summary carries the retained workspace verification status, same-candidate
+  release identity, canonical 21-file prepared workspace count,
+  prepared-human-control count, six pending human blocker rows and six unassigned
+  reviewer assignment rows.
+- This is final-pack reporting only. It does not change the release blocker: the
+  pack still cannot pass until `release-evidence-report.json` contains six accepted
+  named human evidence completions with zero blocking failures.
+
 ## What Is Left To Do
 
 Highest-priority next steps:

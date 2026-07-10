@@ -233,7 +233,10 @@ visual smoke evidence report, or if
 cross-report checks such as the monitoring smoke correlation id do not match. The
 generated `release-artifact-pack-report.json` records the release commit, GitHub
 Actions run URL, and a SHA-256/byte-size manifest for each required report and
-retained human release-evidence template.
+retained human release-evidence template. It also records a
+`releaseEvidenceWorkspaceSummary` with the retained workspace verification status,
+21-file prepared workspace count, prepared-human-control count, six pending human
+blocker rows and six unassigned reviewer assignment rows.
 
 CI also retains a machine-evidence pack before human sign-off evidence is complete.
 Download the `ci-machine-evidence-pack` artifact and keep
