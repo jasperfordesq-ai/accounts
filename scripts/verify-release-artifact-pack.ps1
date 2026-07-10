@@ -120,6 +120,19 @@ function Assert-NonEmptyString {
     }
 }
 
+function Assert-TextContains {
+    param(
+        [string]$Value,
+        [string]$Needle,
+        [string]$Context,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Value) -or $Value.IndexOf($Needle, [StringComparison]::OrdinalIgnoreCase) -lt 0) {
+        Add-Failure $Failures "$Context must mention $Needle."
+    }
+}
+
 function Assert-ArrayContains {
     param(
         [object[]]$Values,
@@ -253,6 +266,16 @@ $expectedReleaseEvidenceWorkspaceInventory = @(
     "release-evidence-reviewer-blockers.md",
     "release-evidence-report.json",
     "release-evidence-verifier-output.txt"
+)
+
+$expectedReleaseEvidenceMachineSummaryInputs = @(
+    [pscustomobject]@{ fileName = "production-readiness-report.json"; sourceArtifactName = "production-readiness-report"; sourceArtifactFile = "production-readiness-report.json" },
+    [pscustomobject]@{ fileName = "production-readiness-verification-report.json"; sourceArtifactName = "production-readiness-report"; sourceArtifactFile = "production-readiness-verification-report.json" },
+    [pscustomobject]@{ fileName = "visual-smoke-manifest.json"; sourceArtifactName = "visual-smoke-screenshots"; sourceArtifactFile = "visual-smoke-manifest.json" },
+    [pscustomobject]@{ fileName = "visual-smoke-evidence-report.json"; sourceArtifactName = "visual-smoke-screenshots"; sourceArtifactFile = "visual-smoke-evidence-report.json" },
+    [pscustomobject]@{ fileName = "accountant-workbench-evidence-report.json"; sourceArtifactName = "visual-smoke-screenshots"; sourceArtifactFile = "accountant-workbench-evidence-report.json" },
+    [pscustomobject]@{ fileName = "monitoring-error-routing-report.json"; sourceArtifactName = "monitoring-error-routing-smoke"; sourceArtifactFile = "monitoring-error-routing-report.json" },
+    [pscustomobject]@{ fileName = "structured-log-report.json"; sourceArtifactName = "structured-json-log-sample"; sourceArtifactFile = "structured-log-report.json" }
 )
 
 $expectedPreparedHumanTemplateControls = @(
@@ -999,6 +1022,7 @@ function Assert-ReleaseEvidenceMachineSummary {
     param(
         [object]$MachineSummary,
         [object]$ReleaseEvidence,
+        [string]$Directory,
         [string]$ReleaseCommitSha,
         [string]$ReleaseRunUrl,
         [System.Collections.Generic.List[string]]$Failures
@@ -1033,6 +1057,59 @@ function Assert-ReleaseEvidenceMachineSummary {
         }
     }
 
+    Assert-TextContains ([string](Get-JsonProperty $MachineSummary @("completionPolicy"))) "machine evidence only" "release-evidence-machine-summary.json completionPolicy" $Failures
+    Assert-TextContains ([string](Get-JsonProperty $MachineSummary @("completionPolicy"))) "named reviewers" "release-evidence-machine-summary.json completionPolicy" $Failures
+
+    $retainedMachineEvidence = @((Get-JsonProperty $MachineSummary @("retainedMachineEvidence")))
+    if ($retainedMachineEvidence.Count -ne $expectedReleaseEvidenceMachineSummaryInputs.Count) {
+        Add-Failure $Failures "release-evidence-machine-summary.json retainedMachineEvidence must contain exactly $($expectedReleaseEvidenceMachineSummaryInputs.Count) entries."
+    }
+
+    foreach ($expected in $expectedReleaseEvidenceMachineSummaryInputs) {
+        $expectedFileName = [string](Get-JsonProperty $expected @("fileName"))
+        $entry = $retainedMachineEvidence |
+            Where-Object { [string]::Equals([string](Get-JsonProperty $_ @("fileName")), $expectedFileName, [StringComparison]::OrdinalIgnoreCase) } |
+            Select-Object -First 1
+
+        if ($null -eq $entry) {
+            Add-Failure $Failures "release-evidence-machine-summary.json retainedMachineEvidence must include $expectedFileName."
+            continue
+        }
+
+        foreach ($propertyName in @("sourceArtifactName", "sourceArtifactFile")) {
+            $actualValue = [string](Get-JsonProperty $entry @($propertyName))
+            $expectedValue = [string](Get-JsonProperty $expected @($propertyName))
+            if ($actualValue -ne $expectedValue) {
+                Add-Failure $Failures "release-evidence-machine-summary.json retainedMachineEvidence.$expectedFileName.$propertyName must be $expectedValue."
+            }
+        }
+
+        $byteSize = Get-JsonProperty $entry @("byteSize")
+        if ($null -eq $byteSize -or [int64]$byteSize -le 0) {
+            Add-Failure $Failures "release-evidence-machine-summary.json retainedMachineEvidence.$expectedFileName.byteSize must be a positive integer."
+        }
+
+        $sha256 = [string](Get-JsonProperty $entry @("sha256"))
+        if ($sha256 -notmatch '^[0-9a-f]{64}$') {
+            Add-Failure $Failures "release-evidence-machine-summary.json retainedMachineEvidence.$expectedFileName.sha256 must be a lowercase 64-character SHA-256 digest."
+        }
+
+        $retainedPath = Join-Path $Directory $expectedFileName
+        if (-not (Test-Path -LiteralPath $retainedPath -PathType Leaf)) {
+            Add-Failure $Failures "Release artifact pack must retain machine summary evidence file: $expectedFileName"
+            continue
+        }
+
+        $retainedFile = Get-Item -LiteralPath $retainedPath
+        if ($null -ne $byteSize -and [int64]$byteSize -ne [int64]$retainedFile.Length) {
+            Add-Failure $Failures "release-evidence-machine-summary.json retainedMachineEvidence.$expectedFileName.byteSize must match the retained evidence file."
+        }
+
+        if ($sha256 -match '^[0-9a-f]{64}$' -and $sha256 -ne (Get-FileSha256 $retainedPath)) {
+            Add-Failure $Failures "release-evidence-machine-summary.json retainedMachineEvidence.$expectedFileName.sha256 must match the retained evidence file."
+        }
+    }
+
     $productionReadiness = Get-JsonProperty $MachineSummary @("productionReadiness")
     if ([string](Get-JsonProperty $productionReadiness @("verificationStatus")) -ne "passed") {
         Add-Failure $Failures "release-evidence-machine-summary.json productionReadiness.verificationStatus must be passed."
@@ -1043,11 +1120,50 @@ function Assert-ReleaseEvidenceMachineSummary {
         Add-Failure $Failures "release-evidence-machine-summary.json productionReadiness.verificationFailureCount must be 0."
     }
 
+    foreach ($closeoutStepCode in $requiredHumanReleaseEvidenceCloseoutStepCodes) {
+        Assert-ArrayContains @((Get-JsonProperty $productionReadiness @("humanReleaseEvidenceCloseoutStepCodes"))) $closeoutStepCode "release-evidence-machine-summary.json productionReadiness.humanReleaseEvidenceCloseoutStepCodes" $Failures
+    }
+
     $pickupFilesByEvidence = Get-JsonProperty $productionReadiness @("humanReleaseEvidenceReviewerPickupFiles")
     foreach ($required in $requiredReleaseEvidenceTemplates) {
         $expectedEvidenceName = [string](Get-JsonProperty $required @("evidenceName"))
         foreach ($requiredPickupFile in @((Get-JsonProperty $required @("requiredPickupFiles")))) {
             Assert-ArrayContains @((Get-JsonProperty $pickupFilesByEvidence @($expectedEvidenceName))) ([string]$requiredPickupFile) "release-evidence-machine-summary.json productionReadiness.humanReleaseEvidenceReviewerPickupFiles.$expectedEvidenceName" $Failures
+        }
+    }
+
+    $reviewerQueue = @((Get-JsonProperty $MachineSummary @("reviewerQueue")))
+    if ($reviewerQueue.Count -ne $requiredReleaseEvidenceTemplates.Count) {
+        Add-Failure $Failures "release-evidence-machine-summary.json reviewerQueue must contain exactly $($requiredReleaseEvidenceTemplates.Count) entries."
+    }
+
+    foreach ($required in $requiredReleaseEvidenceTemplates) {
+        $expectedEvidenceName = [string](Get-JsonProperty $required @("evidenceName"))
+        $entry = $reviewerQueue |
+            Where-Object { [string]::Equals([string](Get-JsonProperty $_ @("EvidenceName")), $expectedEvidenceName, [StringComparison]::OrdinalIgnoreCase) } |
+            Select-Object -First 1
+
+        if ($null -eq $entry) {
+            Add-Failure $Failures "release-evidence-machine-summary.json reviewerQueue must include $expectedEvidenceName."
+            continue
+        }
+
+        if ([string](Get-JsonProperty $entry @("TemplateFile")) -ne [string](Get-JsonProperty $required @("fileName"))) {
+            Add-Failure $Failures "release-evidence-machine-summary.json reviewerQueue.$expectedEvidenceName.TemplateFile must match the required template."
+        }
+
+        if ([string](Get-JsonProperty $entry @("ReviewerRole")) -ne [string](Get-JsonProperty $required @("requiredReviewerRole"))) {
+            Add-Failure $Failures "release-evidence-machine-summary.json reviewerQueue.$expectedEvidenceName.ReviewerRole must match the required reviewer role."
+        }
+
+        if ([string](Get-JsonProperty $entry @("SignOffGate")) -ne [string](Get-JsonProperty $required @("signOffGate"))) {
+            Add-Failure $Failures "release-evidence-machine-summary.json reviewerQueue.$expectedEvidenceName.SignOffGate must match the required sign-off gate."
+        }
+
+        Assert-TextContains ([string](Get-JsonProperty $entry @("HumanAction"))) "record" "release-evidence-machine-summary.json reviewerQueue.$expectedEvidenceName.HumanAction" $Failures
+
+        foreach ($requiredPickupFile in @((Get-JsonProperty $required @("requiredPickupFiles")))) {
+            Assert-ArrayContains @((Get-JsonProperty $entry @("RequiredPickupFiles"))) ([string]$requiredPickupFile) "release-evidence-machine-summary.json reviewerQueue.$expectedEvidenceName.RequiredPickupFiles" $Failures
         }
     }
 }
@@ -1647,7 +1763,7 @@ if (-not ($releaseEvidence.PSObject.Properties.Name -contains "__missing")) {
     Assert-ReleaseEvidenceTemplateManifest $releaseEvidence $resolvedDirectory.Path $requiredReleaseEvidenceTemplates $failures
     Assert-ReleaseEvidenceHumanCompletionManifest $releaseEvidence $requiredReleaseEvidenceTemplates $failures
     Assert-ReleaseEvidenceWorkspaceControlManifest $releaseEvidence $resolvedDirectory.Path $requiredReleaseEvidenceWorkspaceControls $failures
-    Assert-ReleaseEvidenceMachineSummary $releaseEvidenceMachineSummary $releaseEvidence $releaseCommitSha $releaseRunUrl $failures
+    Assert-ReleaseEvidenceMachineSummary $releaseEvidenceMachineSummary $releaseEvidence $resolvedDirectory.Path $releaseCommitSha $releaseRunUrl $failures
     Assert-ReleaseEvidenceWorkspaceVerificationReport $releaseEvidenceWorkspaceVerificationReport $releaseEvidence $releaseCommitSha $releaseRunUrl $expectedReleaseEvidenceWorkspaceInventory $failures
     Assert-ReleaseEvidenceWorkspaceInventoryRetention $releaseEvidenceWorkspaceVerificationReport $resolvedDirectory.Path $expectedReleaseEvidenceWorkspaceInventory $failures
 }

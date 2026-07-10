@@ -19301,9 +19301,15 @@ public class AccountsWorkflowTests
         Assert.Contains("releaseEvidenceWorkspaceFiles", script);
         Assert.Contains("workspaceControlFiles.$($required.fileName).sha256 must match the retained workspace control file", script);
         Assert.Contains("Assert-ReleaseEvidenceMachineSummary", script);
+        Assert.Contains("release-evidence-machine-summary.json completionPolicy", script);
+        Assert.Contains("release-evidence-machine-summary.json retainedMachineEvidence must contain exactly", script);
+        Assert.Contains("retainedMachineEvidence.$expectedFileName.sha256 must match the retained evidence file", script);
         Assert.Contains("release-evidence-machine-summary.json productionReadiness.verificationStatus must be passed", script);
         Assert.Contains("release-evidence-machine-summary.json productionReadiness.verificationFailureCount must be 0", script);
+        Assert.Contains("release-evidence-machine-summary.json productionReadiness.humanReleaseEvidenceCloseoutStepCodes", script);
         Assert.Contains("release-evidence-machine-summary.json productionReadiness.humanReleaseEvidenceReviewerPickupFiles.$expectedEvidenceName", script);
+        Assert.Contains("release-evidence-machine-summary.json reviewerQueue must contain exactly", script);
+        Assert.Contains("release-evidence-machine-summary.json reviewerQueue.$expectedEvidenceName.RequiredPickupFiles", script);
         Assert.Contains("Assert-ReleaseEvidenceWorkspaceVerificationReport", script);
         Assert.Contains("release-evidence-workspace-verification-report.json status must be passed", script);
         Assert.Contains("release-evidence-workspace-verification-report.json releaseCandidate.identityProvided must be true", script);
