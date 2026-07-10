@@ -118,7 +118,7 @@ if ($null -ne $report -and $null -ne $configuration) {
     if ([string](Get-Property $database "supportedUpgradeFloorBasis") -cne [string](Get-Property $configuration "supportedUpgradeFloorBasis")) { Add-Failure $failures "database.supportedUpgradeFloorBasis must match migration-gate.json." }
     if ([string]::IsNullOrWhiteSpace([string](Get-Property $database "latestMigration"))) { Add-Failure $failures "database.latestMigration must be present." }
     if ([int](Get-Property $database "migrationCount") -le 0) { Add-Failure $failures "database.migrationCount must be positive." }
-    if ([string](Get-Property $database "serverVersion") -notmatch '^16\.4(?:\.|$)') { Add-Failure $failures "database.serverVersion must prove PostgreSQL 16.4." }
+    if ([string](Get-Property $database "serverVersion") -notmatch '^16\.4(?:[\s.]|$)') { Add-Failure $failures "database.serverVersion must prove PostgreSQL 16.4." }
 
     $fresh = Get-Property $report "freshDatabase"
     Assert-Passed (Get-Property $fresh "status") "freshDatabase.status" $failures
