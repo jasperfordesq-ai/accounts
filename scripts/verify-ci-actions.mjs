@@ -45,6 +45,16 @@ const requireText = (needle, message) => {
   if (!workflow.includes(needle)) failures.push(message);
 };
 
+requireText(
+  "push:\n    branches:\n      - main",
+  "CI push events must be restricted to main so pull-request branches do not run duplicate push and pull-request suites.",
+);
+requireText(
+  "group: ci-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref || github.run_id }}",
+  "CI must serialize superseded runs independently by event and branch or pull request.",
+);
+requireText("cancel-in-progress: true", "CI must cancel superseded runs in the same concurrency group.");
+
 if (count(`uses: docker/build-push-action@${approvedReferences.get("docker/build-push-action")}`) !== 2) {
   failures.push("CI must invoke the container builder exactly once for backend and once for frontend.");
 }

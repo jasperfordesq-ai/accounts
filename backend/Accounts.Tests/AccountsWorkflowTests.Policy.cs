@@ -1786,11 +1786,15 @@ public partial class AccountsWorkflowTests
     {
         var workflowPath = Path.Combine(RepositoryRoot(), ".github", "workflows", "ci.yml");
 
-        Assert.True(File.Exists(workflowPath), "CI should run production-readiness gates on every push and pull request.");
+        Assert.True(File.Exists(workflowPath), "CI should run production-readiness gates on main pushes and every pull request.");
 
         var workflow = File.ReadAllText(workflowPath);
-        AssertPushRunsOnEveryBranch(workflow);
+        AssertPushRunsOnMainOnly(workflow);
         Assert.Contains("pull_request:", workflow);
+        Assert.Contains(
+            "group: ci-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref || github.run_id }}",
+            workflow);
+        Assert.Contains("cancel-in-progress: true", workflow);
 
         var backendJob = WorkflowJob(workflow, "backend");
         Assert.Contains("actions/checkout", backendJob);
@@ -2083,7 +2087,9 @@ public partial class AccountsWorkflowTests
         Assert.Contains("GITHUB_EVENT_NAME\" == \"push\"", workflow);
         Assert.Contains("GITHUB_REF\" == \"refs/heads/main\"", workflow);
         Assert.Contains("if: steps.promotion-mode.outputs.enabled == 'true'", workflow);
-        Assert.Contains("if: github.event_name == 'push' && github.ref == 'refs/heads/main'", workflow);
+        Assert.Contains(
+            "if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')",
+            workflow);
         Assert.Contains("push: ${{ steps.promotion-mode.outputs.enabled == 'true' }}", workflow);
         Assert.Contains("load: ${{ steps.promotion-mode.outputs.enabled != 'true' }}", workflow);
         Assert.Contains("docker pull \"$ACCOUNTS_API_IMAGE\"", workflow);
@@ -2386,7 +2392,7 @@ public partial class AccountsWorkflowTests
         Assert.DoesNotContain("this.state.error?.message", errorBoundary);
     }
 
-    private static void AssertPushRunsOnEveryBranch(string workflow)
+    private static void AssertPushRunsOnMainOnly(string workflow)
     {
         Assert.Contains("push:", workflow);
 
@@ -2394,7 +2400,8 @@ public partial class AccountsWorkflowTests
             workflow,
             @"(?ms)^  push:\s*\r?\n(?<body>.*?)(?=^  [A-Za-z_][A-Za-z0-9_-]*:|^permissions:|^jobs:|\z)");
         Assert.True(pushMatch.Success, "CI workflow should declare a push trigger.");
-        Assert.DoesNotContain("branches:", pushMatch.Groups["body"].Value);
+        Assert.Contains("branches:", pushMatch.Groups["body"].Value);
+        Assert.Contains("- main", pushMatch.Groups["body"].Value);
     }
 
     private static string WorkflowJob(string workflow, string jobName)
