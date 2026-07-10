@@ -2636,6 +2636,19 @@ Production readiness scorecard-completion pickup:
   supplied; this is API/UI handoff alignment for the final proof, not substitute
   sign-off.
 
+Reviewer workspace scorecard-completion closeout:
+
+- This slice updates the generated `release-evidence-reviewer-index.md` closeout
+  sequence to tell reviewers to confirm six accepted `humanEvidenceCompletion`
+  entries, `productionScorecardCompletion` status `complete` at 700/700, and zero
+  blocking failures before final artifact-pack verification. The workspace verifier
+  now rejects reviewer indexes that omit that scorecard-completion instruction.
+- The runbook's CI reviewer-workspace handoff paragraph now carries the same
+  wording, keeping the generated artifact, verifier and operator instructions
+  aligned.
+- The production scorecard remains 698/700 until real named human/professional
+  evidence is supplied.
+
 ## What Is Left To Do
 
 Highest-priority next steps:

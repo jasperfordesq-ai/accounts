@@ -1156,6 +1156,7 @@ if (-not (Test-Path -LiteralPath $reviewerIndexPath)) {
         "release-evidence-reviewer-assignments.json",
         "pending human blocker inventory",
         "six accepted ``humanEvidenceCompletion`` entries",
+        "``productionScorecardCompletion`` status ``complete`` at 700/700",
         "scripts/verify-release-artifact-pack.ps1",
         "release-evidence-reviewer-completion.json",
         "release-evidence-machine-summary.json",
