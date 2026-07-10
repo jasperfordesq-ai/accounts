@@ -52,6 +52,13 @@ public sealed class DatabaseTenantIsolationProvisioner(
                     REVOKE {QuoteIdentifier(TenantIsolationPolicyCatalog.AdministratorGroupRole)}
                         FROM {QuoteIdentifier(options.ApplicationLoginRole)};
                     GRANT {QuoteIdentifier(options.ApplicationGroupRole)} TO {QuoteIdentifier(options.ApplicationLoginRole)};
+                    REVOKE ALL PRIVILEGES ON TABLE "__EFMigrationsHistory" FROM PUBLIC;
+                    REVOKE ALL PRIVILEGES ON TABLE "__EFMigrationsHistory"
+                        FROM {QuoteIdentifier(options.ApplicationLoginRole)};
+                    REVOKE ALL PRIVILEGES ON TABLE "__EFMigrationsHistory"
+                        FROM {QuoteIdentifier(options.ApplicationGroupRole)};
+                    GRANT SELECT ON TABLE "__EFMigrationsHistory"
+                        TO {QuoteIdentifier(options.ApplicationGroupRole)};
                     """;
                 await roleCommand.ExecuteNonQueryAsync(cancellationToken);
             }

@@ -45,6 +45,12 @@ public sealed class DatabaseTenantIsolationVerifier(
             if (await CurrentRoleCanReadContextKeyAsync(connection, cancellationToken))
                 failures.Add("The API login can read the protected tenant-context signing key.");
 
+            var migrationHistoryAccess = await ReadMigrationHistoryAccessAsync(connection, cancellationToken);
+            if (!migrationHistoryAccess.CanSelect)
+                failures.Add("The API login cannot read EF migration history for readiness checks.");
+            if (migrationHistoryAccess.CanWrite)
+                failures.Add("The API login can mutate EF migration history.");
+
             var databaseTables = await ReadTableSecurityAsync(connection, cancellationToken);
             var missingTables = TenantIsolationPolicyCatalog.TableNames.Except(databaseTables.Keys, StringComparer.Ordinal).Order().ToArray();
             if (missingTables.Length > 0)
@@ -144,6 +150,26 @@ public sealed class DatabaseTenantIsolationVerifier(
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT has_table_privilege(current_user, 'tenant_rls_context_keys', 'SELECT')";
         return await command.ExecuteScalarAsync(cancellationToken) is true;
+    }
+
+    private static async Task<MigrationHistoryAccess> ReadMigrationHistoryAccessAsync(
+        DbConnection connection,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT has_table_privilege(current_user, '"__EFMigrationsHistory"', 'SELECT'),
+                   has_table_privilege(current_user, '"__EFMigrationsHistory"', 'INSERT')
+                   OR has_table_privilege(current_user, '"__EFMigrationsHistory"', 'UPDATE')
+                   OR has_table_privilege(current_user, '"__EFMigrationsHistory"', 'DELETE')
+                   OR has_table_privilege(current_user, '"__EFMigrationsHistory"', 'TRUNCATE')
+                   OR has_table_privilege(current_user, '"__EFMigrationsHistory"', 'REFERENCES')
+                   OR has_table_privilege(current_user, '"__EFMigrationsHistory"', 'TRIGGER')
+            """;
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
+            return new MigrationHistoryAccess(false, true);
+        return new MigrationHistoryAccess(reader.GetBoolean(0), reader.GetBoolean(1));
     }
 
     private static async Task<IReadOnlyList<string>> ReadFunctionSecurityFailuresAsync(
@@ -265,4 +291,6 @@ public sealed class DatabaseTenantIsolationVerifier(
         bool IsAdministratorMember);
 
     private sealed record TableSecurity(bool RlsEnabled, bool RlsForced, bool OwnedByCurrentLogin);
+
+    private sealed record MigrationHistoryAccess(bool CanSelect, bool CanWrite);
 }

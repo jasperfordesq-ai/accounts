@@ -83,6 +83,25 @@ public sealed class DatabaseTenantIsolationPostgresTests : IAsyncLifetime
     }
 
     [PostgresFact]
+    public async Task ApplicationRoleCanReadButCannotMutateMigrationHistory()
+    {
+        var appConnection = applicationConnectionString
+            ?? throw new InvalidOperationException($"{ConnectionEnvVar} is required.");
+
+        await using (var appDb = CreateDb(appConnection))
+        {
+            Assert.Empty(await appDb.Database.GetPendingMigrationsAsync());
+        }
+
+        await using var connection = new NpgsqlConnection(appConnection);
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = "DELETE FROM \"__EFMigrationsHistory\" WHERE FALSE";
+        var mutation = await Assert.ThrowsAsync<PostgresException>(() => command.ExecuteNonQueryAsync());
+        Assert.Equal(PostgresErrorCodes.InsufficientPrivilege, mutation.SqlState);
+    }
+
+    [PostgresFact]
     public async Task DefectiveRawAndIgnoreFilterQueriesCannotCrossTenantOrForgeContext()
     {
         var adminConnection = administratorConnectionString
