@@ -1062,6 +1062,8 @@ public class ProductionReadinessReportTests
         Assert.Equal("Docs/release-evidence/*.md", report.HumanReleaseEvidenceCloseout[1].Artifact);
         Assert.Contains("6 retained Markdown templates", report.HumanReleaseEvidenceCloseout[1].Detail);
         Assert.Contains("humanEvidenceCompletion", report.HumanReleaseEvidenceCloseout[3].Detail);
+        Assert.Contains("productionScorecardCompletion", report.HumanReleaseEvidenceCloseout[3].Detail);
+        Assert.Contains("700/700", report.HumanReleaseEvidenceCloseout[3].Detail);
         Assert.Equal("scripts/verify-release-artifact-pack.ps1", report.HumanReleaseEvidenceCloseout[4].Artifact);
 
         var trackCodes = report.CompletionTracks.Select(track => track.Code).ToHashSet(StringComparer.Ordinal);
@@ -1113,12 +1115,18 @@ public class ProductionReadinessReportTests
         Assert.Contains(scores["security-auth-tenant-platform-guardrails"].CurrentEvidence, evidence =>
             evidence.Contains("release-evidence-workspace-verification-report.json", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("release-evidence-machine-summary.json", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("productionScorecardCompletion", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("21-file prepared workspace inventory", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("retained machine-evidence provenance and hashes", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("humanReleaseEvidenceCloseoutStepCodes", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("reviewer pickup-file maps", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("pending reviewer assignment ledger", StringComparison.OrdinalIgnoreCase)
-            && evidence.Contains("reviewer handoff", StringComparison.OrdinalIgnoreCase));
+            && evidence.Contains("reviewer handoff", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("700/700", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(scores["architecture-documentation"].CurrentEvidence, evidence =>
+            evidence.Contains("productionScorecardCompletion", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("blocked below 700/700", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("six named human evidence templates", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["security-auth-tenant-platform-guardrails"].CurrentEvidence, evidence =>
             evidence.Contains("Release evidence reviewer workspaces", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("prefill monitoring provider machine evidence", StringComparison.OrdinalIgnoreCase)

@@ -831,6 +831,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "Production readiness report exposes the six human release-evidence gates with template files, reviewer roles, sign-off gates, required retained evidence and full per-gate reviewerPickupFiles.",
                     "Release evidence reviewer workspace verification now inventories pending human-evidence blockers and rejects prepared human templates whose top-level reviewer/accountant identity, signature or acceptance checkbox fields are filled before named human sign-off.",
                     "Human release-evidence closeout now starts from the prepared release-evidence-reviewer-workspace artifact, its blocker inventory, its retained reviewer handoff files and assignment-ledger pickup files before reviewers complete the six templates.",
+                    "release-evidence-report.json now records productionScorecardCompletion, staying blocked below 700/700 until all six named human evidence templates are accepted with zero verifier failures.",
                     "CI artifacts now prove production safety, dependency audit, monitoring smoke, structured logs, visual smoke and backup restore drill."
                 ],
                 [
@@ -959,7 +960,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                     "scripts/verify-release-evidence.ps1 now rejects completed human evidence when release candidate identity, UTC timestamps, SHA-256 digests, external iXBRL artifact hashes, or monitoring log confirmation fields are malformed.",
                     "scripts/verify-release-evidence.ps1 emits a consistent releaseCandidate identity for all six human evidence templates, and scripts/verify-release-artifact-pack.ps1 rejects packs whose release-evidence-report.json identity does not match the pack CommitSha and GitHubActionsRunUrl.",
                     "scripts/verify-release-evidence.ps1 now emits SHA-256/byte-size manifest entries for all six human release-evidence templates, and scripts/verify-release-artifact-pack.ps1 requires those completed templates to be retained in the pack with matching hashes.",
-                    "scripts/verify-release-artifact-pack.ps1 independently parses release-evidence-workspace-verification-report.json and release-evidence-machine-summary.json, requiring the same release candidate, exact 21-file prepared workspace inventory, retained machine-evidence provenance and hashes, humanReleaseEvidenceCloseoutStepCodes, reviewer pickup-file maps, the pending reviewer assignment ledger and retained reviewer handoff files.",
+                    "scripts/verify-release-artifact-pack.ps1 independently parses release-evidence-workspace-verification-report.json, release-evidence-machine-summary.json and release-evidence-report.json productionScorecardCompletion, requiring the same release candidate, exact 21-file prepared workspace inventory, retained machine-evidence provenance and hashes, humanReleaseEvidenceCloseoutStepCodes, reviewer pickup-file maps, the pending reviewer assignment ledger, retained reviewer handoff files and final 700/700 scorecard proof.",
                     "Monitoring-provider confirmation evidence now requires real provider/event/correlation references, an HTTPS provider base URL, a matched structured-log smoke line and an explicit accepted operator decision.",
                     "Release evidence reviewer workspaces now prefill monitoring provider machine evidence from retained CI smoke/log reports while leaving provider confirmation, operator identity, decision and signature fields blank."
                 ],
@@ -3066,7 +3067,7 @@ public class ProductionReadinessReportService(AccountsDbContext db)
                 "confirm-human-evidence-completion",
                 "Confirm human completion",
                 4,
-                $"Confirm {templateCount} accepted humanEvidenceCompletion rows with zero blocking failures in release-evidence-report.json.",
+                $"Confirm {templateCount} accepted humanEvidenceCompletion rows and productionScorecardCompletion status complete at 700/700 with zero blocking failures in release-evidence-report.json.",
                 "release-evidence-report.json",
                 true),
             new(

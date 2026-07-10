@@ -2624,6 +2624,18 @@ Release evidence scorecard completion proof:
   supplied; this slice only makes the eventual 700/700 release evidence state
   explicit and pack-verifiable.
 
+Production readiness scorecard-completion pickup:
+
+- This slice surfaces the same `productionScorecardCompletion` release proof in the
+  live production-readiness scorecard evidence, human closeout step detail, frontend
+  parser fixture, and production-readiness panel/workbench render fixtures. The UI
+  now tells reviewers to confirm both six accepted `humanEvidenceCompletion` rows
+  and `productionScorecardCompletion` status `complete` at 700/700 in
+  `release-evidence-report.json`.
+- The score remains 698/700 until real named human/professional evidence is
+  supplied; this is API/UI handoff alignment for the final proof, not substitute
+  sign-off.
+
 ## What Is Left To Do
 
 Highest-priority next steps:
