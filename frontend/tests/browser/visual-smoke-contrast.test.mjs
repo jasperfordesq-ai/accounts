@@ -118,6 +118,33 @@ test("real Chromium rejects a transparent input without a verifiable boundary", 
   );
 });
 
+test("real Chromium does not treat native checkbox values as visible text", async () => {
+  const result = await withPage(documentShell(`
+    <label style="color: rgb(17, 24, 39)">
+      <input type="checkbox" style="color: rgb(150, 150, 150)" checked />
+      Fully paid
+    </label>
+  `), (page) => checkThemeContrast(page, "native-checkbox-value"));
+
+  assert.equal(result.status, "passed");
+  assert.equal(result.sampledInteractiveTextCount, 0);
+});
+
+test("real Chromium never exposes password values in contrast diagnostics", async () => {
+  const secret = "Never-Log-This-Password-42";
+  await assert.rejects(
+    () => withPage(documentShell(`
+      <label for="secret-value" style="color: rgb(17, 24, 39)">Password</label>
+      <input id="secret-value" type="password" value="${secret}" style="color: rgb(180, 180, 180); background: white; border: 2px solid rgb(89, 89, 89)" />
+    `), (page) => checkThemeContrast(page, "password-redaction")),
+    (error) => {
+      assert.doesNotMatch(String(error), new RegExp(secret));
+      assert.match(String(error), /••••/);
+      return true;
+    },
+  );
+});
+
 test("real Chromium rejects a weak explicit composite boundary", async () => {
   await assert.rejects(
     () => withPage(documentShell(`

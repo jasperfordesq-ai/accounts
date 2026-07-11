@@ -1044,6 +1044,7 @@ export function MoneyInput({
         {label}
       </label>
       <div
+        data-contrast-boundary="money-input"
         className={`grid min-h-10 grid-cols-[3.25rem_minmax(0,1fr)] overflow-hidden rounded-md border border-[var(--control-border)] bg-[var(--surface)] transition focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 ${isDisabled ? "money-input--disabled cursor-not-allowed" : ""}`}
       >
         <span

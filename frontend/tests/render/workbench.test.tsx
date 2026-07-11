@@ -526,6 +526,15 @@ describe("workbench primitives", () => {
     expect(screen.queryByText("Bravo Trading DAC")).not.toBeInTheDocument();
   });
 
+  it("declares the shared money-field shell as its single visual control boundary", () => {
+    const { container } = render(
+      <MoneyInput label="Nominal value" value={1} onValueChange={() => {}} />,
+    );
+
+    expect(container.querySelector("[data-contrast-boundary='money-input']"))
+      .toContainElement(screen.getByRole("textbox", { name: "Nominal value" }));
+  });
+
   it("sorts accountant tables by header without losing row status cues", async () => {
     const user = userEvent.setup();
     render(

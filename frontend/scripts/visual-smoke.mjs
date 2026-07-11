@@ -638,7 +638,13 @@ async function checkNoTextOverlap(page, routeName) {
     return blocks;
 
     function visibleControlTextFor(element) {
-      if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+      if (element instanceof HTMLInputElement) {
+        if (!inputRendersTextValue(element)) return "";
+        if (element.type === "password" && element.value) return "••••";
+        return normalizeText(element.value || element.placeholder || "");
+      }
+
+      if (element instanceof HTMLTextAreaElement) {
         return normalizeText(element.value || element.placeholder || "");
       }
 
@@ -647,6 +653,10 @@ async function checkNoTextOverlap(page, routeName) {
       }
 
       return "";
+    }
+
+    function inputRendersTextValue(element) {
+      return !["checkbox", "radio", "range", "color", "hidden", "file", "image"].includes(element.type);
     }
 
     function clipRectToVisibleBounds(rect, element) {
@@ -1240,7 +1250,13 @@ async function checkThemeContrast(page, routeName) {
     }
 
     function controlTextFor(element) {
-      if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+      if (element instanceof HTMLInputElement) {
+        if (!inputRendersTextValue(element)) return "";
+        if (element.type === "password" && element.value) return "••••";
+        return normalizeText(element.value || element.placeholder || "");
+      }
+
+      if (element instanceof HTMLTextAreaElement) {
         return normalizeText(element.value || element.placeholder || "");
       }
 
@@ -1249,6 +1265,10 @@ async function checkThemeContrast(page, routeName) {
       }
 
       return "";
+    }
+
+    function inputRendersTextValue(element) {
+      return !["checkbox", "radio", "range", "color", "hidden", "file", "image"].includes(element.type);
     }
 
     function labelFor(element, text) {
