@@ -17,9 +17,9 @@ interface YearEndFixedAssetsSectionProps {
 }
 
 const inputClass =
-  "w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors";
+  "w-full rounded-lg border border-[var(--control-border)] bg-white px-3 py-2 text-sm text-gray-900 outline-none transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500 dark:bg-neutral-800 dark:text-gray-100";
 const selectClass =
-  "w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors";
+  "w-full rounded-lg border border-[var(--control-border)] bg-white px-3 py-2 text-sm text-gray-900 outline-none transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500 dark:bg-neutral-800 dark:text-gray-100";
 
 export function YearEndFixedAssetsSection({
   canWrite = true,
@@ -45,14 +45,14 @@ export function YearEndFixedAssetsSection({
                 <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{asset.name}</p>
                 <div className="flex items-center gap-2 mt-0.5">
                   <Chip variant="soft" size="sm" color="default">{asset.category}</Chip>
-                  <span className="text-xs text-gray-400 dark:text-gray-500">
+                  <span className="text-xs text-[var(--muted-foreground)]">
                     {asset.usefulLifeYears}yr {asset.depreciationMethod}
                   </span>
-                  <span className="text-xs text-gray-400 dark:text-gray-500">
+                  <span className="text-xs text-[var(--muted-foreground)]">
                     Acquired {new Date(asset.acquisitionDate).toLocaleDateString("en-IE")}
                   </span>
                   {(asset.residualValue ?? 0) > 0 && (
-                    <span className="text-xs text-gray-400 dark:text-gray-500">
+                    <span className="text-xs text-[var(--muted-foreground)]">
                       Residual {formatCurrency(asset.residualValue ?? 0)}
                     </span>
                   )}
@@ -82,7 +82,7 @@ export function YearEndFixedAssetsSection({
                     onConfirm: () => onDelete(asset.id!),
                     successAnnouncement: `Fixed asset ${asset.name} was removed.`,
                   })}
-                  className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400"
+                  className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                   aria-label={`Delete asset ${asset.name}`}
                 >
                   <Trash2 className="w-4 h-4" />

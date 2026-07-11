@@ -108,7 +108,7 @@ export function DashboardCompanyDirectory({
             <Link
               key="action"
               href={row.nextActionHref}
-              className="inline-flex min-h-8 items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] px-3 text-xs font-semibold text-[var(--foreground)] hover:border-[var(--ring)]"
+              className="inline-flex min-h-8 items-center gap-2 rounded-md border border-[var(--control-border)] bg-[var(--surface-subtle)] px-3 text-xs font-semibold text-[var(--foreground)] hover:border-[var(--ring)]"
             >
               {row.nextActionLabel}
               <ArrowRight className="h-3.5 w-3.5" />

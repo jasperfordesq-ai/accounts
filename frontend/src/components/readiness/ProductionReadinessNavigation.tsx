@@ -157,7 +157,7 @@ export function ReadinessControlSurface({
             onChange={(event) => onSearchChange(event.target.value)}
             aria-label="Search readiness sections"
             placeholder="Find monitoring, source law, visual QA…"
-            className="min-h-9 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] py-2 pl-9 pr-3 text-sm text-[var(--foreground)] outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
+            className="min-h-9 w-full rounded-md border border-[var(--control-border)] bg-[var(--surface)] py-2 pl-9 pr-3 text-sm text-[var(--foreground)] outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
           />
         </div>
         <p className="mt-2 text-xs text-[var(--muted-foreground)]" role="status" aria-live="polite">
@@ -169,7 +169,7 @@ export function ReadinessControlSurface({
               <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted-foreground)]">{group}</p>
               <ul className="mt-1 space-y-1">
                 {readinessSections.filter((section) => section.navigationGroup === group).map((section) => (
-                  <li key={section.id} className={matchingSectionIds.has(section.id) ? "" : "opacity-45"}>
+                  <li key={section.id} className={matchingSectionIds.has(section.id) ? "" : "hidden"}>
                     <a
                       href={`#${section.id}`}
                       onClick={() => onSectionAnchor(section.id)}

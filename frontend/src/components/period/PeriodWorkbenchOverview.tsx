@@ -234,7 +234,7 @@ export function PeriodWorkbenchOverview({
           <GateSnapshotItem label="Allowed next action" value={allowedNextActions} />
           <Link
             href={filingReviewHref}
-            className="inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] px-3 text-xs font-semibold text-[var(--foreground)] hover:border-[var(--ring)]"
+            className="inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-[var(--control-border)] bg-[var(--surface-subtle)] px-3 text-xs font-semibold text-[var(--foreground)] hover:border-[var(--ring)]"
           >
             Open filing review
             <ArrowRight className="h-3.5 w-3.5" />
@@ -362,7 +362,7 @@ function WorkflowActionQueue({
             {item.href && (
               <Link
                 href={item.href}
-                className="inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] px-3 text-xs font-semibold text-[var(--foreground)] hover:border-[var(--ring)]"
+                className="inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-[var(--control-border)] bg-[var(--surface-subtle)] px-3 text-xs font-semibold text-[var(--foreground)] hover:border-[var(--ring)]"
               >
                 Open {item.label}
                 <ArrowRight className="h-3.5 w-3.5" />

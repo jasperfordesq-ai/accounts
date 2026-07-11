@@ -7,7 +7,7 @@ import type { DirectorLoanMovement, DirectorLoanRow } from "@/lib/api";
 import type { DirectorOption } from "@/components/DirectorLoansManager";
 import { useDestructiveActionConfirmation } from "@/lib/useDestructiveAction";
 
-const inputClass = "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500 dark:border-neutral-600 dark:bg-neutral-800 dark:text-gray-100";
+const inputClass = "w-full rounded-lg border border-[var(--control-border)] bg-white px-3 py-2 text-sm text-gray-900 outline-none transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500 dark:bg-neutral-800 dark:text-gray-100";
 const labelClass = "mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400";
 const sectionClass = "space-y-3 rounded-xl border border-gray-200 p-4 dark:border-neutral-700";
 
@@ -328,7 +328,7 @@ function NumberField({ label, value, onChange }: { label: string; value: number;
 }
 
 function CheckboxField({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) {
-  return <label className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300"><input type="checkbox" className="mt-0.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500" checked={checked} onChange={(event) => onChange(event.target.checked)} /><span>{label}</span></label>;
+  return <label className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300"><input type="checkbox" className="mt-0.5 rounded border-[var(--control-border)] text-emerald-600 focus:ring-emerald-500" checked={checked} onChange={(event) => onChange(event.target.checked)} /><span>{label}</span></label>;
 }
 
 function DerivedAmount({ label, amount }: { label: string; amount: number }) {

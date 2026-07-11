@@ -160,7 +160,7 @@ export function SourceLinkList({ sources }: { sources: ProductionReadinessReport
           href={source.url}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface-subtle)] px-2 py-1 text-[11px] font-medium text-[var(--foreground)] hover:border-[var(--ring)]"
+          className="inline-flex items-center gap-1 rounded-full border border-[var(--control-border)] bg-[var(--surface-subtle)] px-2 py-1 text-[11px] font-medium text-[var(--foreground)] hover:border-[var(--ring)]"
         >
           {source.title}
           <ExternalLink className="h-3 w-3 shrink-0" />

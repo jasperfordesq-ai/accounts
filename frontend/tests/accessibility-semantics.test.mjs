@@ -14,6 +14,22 @@ const protectedDirectorLoanFiles = new Set([
 ]);
 
 describe("critical journey accessibility semantics", () => {
+  it("uses explicit disabled colours instead of whole-control opacity", async () => {
+    const offenders = [];
+
+    for (const file of await tsxSourceFiles()) {
+      const source = await readFile(file, "utf8");
+      const relative = path.relative(sourceRoot, file).replaceAll("\\", "/");
+      source.split(/\r?\n/).forEach((line, index) => {
+        if (/disabled:opacity-|isDisabled[^\n]{0,160}opacity-/.test(line)) {
+          offenders.push(`${relative}:${index + 1}`);
+        }
+      });
+    }
+
+    assert.deepEqual(offenders, [], `disabled controls using whole-element opacity:\n${offenders.join("\n")}`);
+  });
+
   it("does not nest links and buttons", async () => {
     const offenders = [];
 

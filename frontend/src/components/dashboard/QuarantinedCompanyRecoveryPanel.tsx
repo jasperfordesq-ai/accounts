@@ -70,7 +70,7 @@ export function QuarantinedCompanyRecoveryPanel({
               <div className="min-w-0">
                 <p className="font-semibold text-gray-900 dark:text-gray-100">{company.legalName}</p>
                 <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">{company.reason}</p>
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-500">
+                <p className="mt-1 text-xs text-[var(--muted-foreground)]">
                   Quarantined {new Date(company.quarantinedAtUtc).toLocaleString("en-IE")} by {company.quarantinedByDisplayName}
                   {` · Evidence ${company.evidenceSha256.slice(0, 12)}…`}
                 </p>
@@ -114,7 +114,7 @@ export function QuarantinedCompanyRecoveryPanel({
               value={confirmation}
               onChange={(event) => setConfirmation(event.target.value)}
               autoComplete="off"
-              className="mt-1.5 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500 dark:border-neutral-600 dark:bg-neutral-800 dark:text-gray-100"
+              className="mt-1.5 w-full rounded-lg border border-[var(--control-border)] bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500 dark:bg-neutral-800 dark:text-gray-100"
             />
           </div>
           <div>
@@ -128,7 +128,7 @@ export function QuarantinedCompanyRecoveryPanel({
               rows={3}
               maxLength={2000}
               placeholder="Give a specific reason (minimum 20 characters)."
-              className="mt-1.5 w-full resize-y rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500 dark:border-neutral-600 dark:bg-neutral-800 dark:text-gray-100"
+              className="mt-1.5 w-full resize-y rounded-lg border border-[var(--control-border)] bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500 dark:bg-neutral-800 dark:text-gray-100"
             />
           </div>
         </div>

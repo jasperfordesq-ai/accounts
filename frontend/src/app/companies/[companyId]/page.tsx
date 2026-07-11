@@ -397,7 +397,7 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ compan
     }
     return (
       <div className="text-center py-12">
-        <Building2 className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+        <Building2 className="w-10 h-10 text-[var(--muted-foreground)] mx-auto mb-3" />
         <p className="text-gray-500 dark:text-gray-400 font-medium">Company not found</p>
         <ActionLink href="/" variant="ghost" className="mt-3">Back to Dashboard</ActionLink>
       </div>

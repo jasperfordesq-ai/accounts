@@ -13,7 +13,7 @@ interface YearEndGoingConcernSectionProps {
 }
 
 const inputClass =
-  "w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors";
+  "w-full rounded-lg border border-[var(--control-border)] bg-white px-3 py-2 text-sm text-gray-900 outline-none transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500 dark:bg-neutral-800 dark:text-gray-100";
 
 export function YearEndGoingConcernSection({
   canWrite = true,
@@ -40,7 +40,7 @@ export function YearEndGoingConcernSection({
           id="going-concern-confirmed"
           checked={confirmed}
           onChange={(event) => onConfirmedChange(event.target.checked)}
-          className="rounded border-gray-300 dark:border-neutral-600 text-emerald-600 focus:ring-emerald-500 w-5 h-5"
+          className="h-5 w-5 rounded border-[var(--control-border)] text-emerald-600 focus:ring-emerald-500"
         />
         <label htmlFor="going-concern-confirmed" className="text-sm font-medium text-gray-900 dark:text-gray-100">
           The directors confirm the company is a going concern

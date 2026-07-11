@@ -19,7 +19,7 @@ import { useUnsavedChanges } from "@/lib/useUnsavedChanges";
 import { useDestructiveActionConfirmation } from "@/lib/useDestructiveAction";
 
 const inputClass =
-  "w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors";
+  "w-full rounded-lg border border-[var(--control-border)] bg-white px-3 py-2 text-sm text-gray-900 outline-none transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500 dark:bg-neutral-800 dark:text-gray-100";
 
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" }).format(amount);
@@ -203,7 +203,7 @@ export function LoansManager({
                   <Chip variant="soft" size="sm" color="default">
                     {l.interestRate}% interest
                   </Chip>
-                  <span className="text-xs text-gray-400 dark:text-gray-500">
+                  <span className="text-xs text-[var(--muted-foreground)]">
                     Due &lt; 1yr {formatCurrency(l.dueWithinYear)} · &gt; 1yr {formatCurrency(l.dueAfterYear)}
                   </span>
                   {l.isDirectorLoan && (
@@ -220,7 +220,7 @@ export function LoansManager({
                     <button
                       type="button"
                       onClick={() => startEdit(l)}
-                      className="text-gray-400 hover:text-emerald-600 dark:text-gray-500 dark:hover:text-emerald-400"
+                      className="text-[var(--muted-foreground)] hover:text-[var(--accent)]"
                       aria-label={`Edit loan from ${l.lender}`}
                     >
                       <Pencil className="w-4 h-4" />
@@ -233,7 +233,7 @@ export function LoansManager({
                         onConfirm: () => handleDelete(l.id!),
                         successAnnouncement: `Loan from ${l.lender} was removed.`,
                       })}
-                      className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400"
+                      className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                       aria-label={`Delete loan from ${l.lender}`}
                     >
                       <Trash2 className="w-4 h-4" />
@@ -337,7 +337,7 @@ export function LoansManager({
               type="checkbox"
               checked={form.isDirectorLoan}
               onChange={(e) => setForm({ ...form, isDirectorLoan: e.target.checked })}
-              className="rounded border-gray-300 dark:border-neutral-600 text-emerald-600 focus:ring-emerald-500"
+              className="rounded border-[var(--control-border)] text-emerald-600 focus:ring-emerald-500"
               aria-label="This is a director loan"
             />
             Loan from a director

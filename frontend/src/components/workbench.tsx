@@ -205,9 +205,9 @@ export function WorkbenchShell({ children }: { children: ReactNode }) {
 }
 
 const actionLinkVariantClasses = {
-  primary: "border-emerald-700 bg-emerald-700 text-white hover:bg-emerald-800 dark:border-emerald-600 dark:bg-emerald-600 dark:hover:bg-emerald-500",
-  secondary: "border-[var(--border)] bg-[var(--surface-strong)] text-[var(--foreground)] hover:border-[var(--ring)]",
-  outline: "border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] hover:border-[var(--ring)] hover:bg-[var(--surface-subtle)]",
+  primary: "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-foreground)] hover:border-[var(--accent-hover)] hover:bg-[var(--accent-hover)] active:border-[var(--accent-pressed)] active:bg-[var(--accent-pressed)]",
+  secondary: "border-[var(--control-border)] bg-[var(--surface-strong)] text-[var(--foreground)] hover:border-[var(--ring)]",
+  outline: "border-[var(--control-border)] bg-[var(--surface)] text-[var(--foreground)] hover:border-[var(--ring)] hover:bg-[var(--surface-subtle)]",
   ghost: "border-transparent bg-transparent text-[var(--foreground)] hover:bg-[var(--surface-subtle)]",
 } satisfies Record<NonNullable<ActionLinkProps["variant"]>, string>;
 
@@ -517,7 +517,7 @@ function WorkflowIcon({ state }: { state: WorkflowState }) {
   if (state === "done") return <CheckCircle2 className="h-4 w-4 text-emerald-600" />;
   if (state === "blocked") return <AlertTriangle className="h-4 w-4 text-red-600" />;
   if (state === "active") return <Circle className="h-4 w-4 fill-amber-400 text-amber-500" />;
-  return <Circle className="h-4 w-4 text-gray-300 dark:text-neutral-600" />;
+  return <Circle className="h-4 w-4 text-[var(--muted-foreground)]" />;
 }
 
 export function ReviewPanel({
@@ -647,7 +647,7 @@ export function ReleaseBlockerSummary({
           {actionHref && (
             <Link
               href={actionHref}
-              className="inline-flex min-h-8 items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 text-xs font-semibold text-[var(--foreground)] hover:border-[var(--ring)]"
+              className="inline-flex min-h-8 items-center gap-2 rounded-md border border-[var(--control-border)] bg-[var(--surface)] px-3 text-xs font-semibold text-[var(--foreground)] hover:border-[var(--ring)]"
             >
               {actionLabel}
               <ArrowRight className="h-3.5 w-3.5" />
@@ -696,7 +696,7 @@ export function WorkflowDecisionSummary({
             {item.action && (
               <Link
                 href={item.action.href}
-                className="mt-4 inline-flex min-h-8 items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] px-3 text-xs font-semibold text-[var(--foreground)] hover:border-[var(--ring)]"
+                className="mt-4 inline-flex min-h-8 items-center gap-2 rounded-md border border-[var(--control-border)] bg-[var(--surface-subtle)] px-3 text-xs font-semibold text-[var(--foreground)] hover:border-[var(--ring)]"
               >
                 {item.action.label}
                 <ArrowRight className="h-3.5 w-3.5" />
@@ -955,7 +955,7 @@ export function LegalSourceList({
             href={source.url}
             target="_blank"
             rel="noreferrer"
-            className="group inline-flex w-full max-w-full items-start gap-2 rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] px-3 py-2 text-xs font-medium text-[var(--foreground)] transition hover:border-[var(--ring)] hover:bg-[var(--surface)]"
+            className="group inline-flex w-full max-w-full items-start gap-2 rounded-md border border-[var(--control-border)] bg-[var(--surface-subtle)] px-3 py-2 text-xs font-medium text-[var(--foreground)] transition hover:border-[var(--ring)] hover:bg-[var(--surface)]"
           >
             <span className="min-w-0">
               <span className="block truncate">{source.title}</span>
@@ -1044,7 +1044,7 @@ export function MoneyInput({
         {label}
       </label>
       <div
-        className={`grid min-h-10 grid-cols-[3.25rem_minmax(0,1fr)] overflow-hidden rounded-md border border-[var(--border)] bg-[var(--surface)] transition focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 ${isDisabled ? "cursor-not-allowed opacity-60" : ""}`}
+        className={`grid min-h-10 grid-cols-[3.25rem_minmax(0,1fr)] overflow-hidden rounded-md border border-[var(--control-border)] bg-[var(--surface)] transition focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 ${isDisabled ? "money-input--disabled cursor-not-allowed" : ""}`}
       >
         <span
           data-money-input-prefix="true"

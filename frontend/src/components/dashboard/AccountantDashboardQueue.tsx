@@ -144,7 +144,7 @@ export function AccountantDashboardQueue({
                 <Link
                   key="action"
                   href={row.nextActionHref}
-                  className="inline-flex min-h-8 items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] px-3 text-xs font-semibold text-[var(--foreground)] hover:border-[var(--ring)]"
+                  className="inline-flex min-h-8 items-center gap-2 rounded-md border border-[var(--control-border)] bg-[var(--surface-subtle)] px-3 text-xs font-semibold text-[var(--foreground)] hover:border-[var(--ring)]"
                 >
                   {row.nextActionLabel}
                   <ArrowRight className="h-3.5 w-3.5" />
@@ -219,7 +219,7 @@ function ReviewerActionQueue({
               </div>
               <Link
                 href={row.nextActionHref}
-                className="inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] px-3 text-xs font-semibold text-[var(--foreground)] hover:border-[var(--ring)]"
+                className="inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-[var(--control-border)] bg-[var(--surface-subtle)] px-3 text-xs font-semibold text-[var(--foreground)] hover:border-[var(--ring)]"
               >
                 {row.nextActionLabel}
                 <ArrowRight className="h-3.5 w-3.5" />
@@ -263,7 +263,7 @@ function QueueTriage({ row }: { row: QueueRow }) {
         <p className="mb-1 text-[11px] font-semibold uppercase text-[var(--muted-foreground)]">What must I do next</p>
         <Link
           href={row.nextActionHref}
-          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 text-sm font-semibold text-[var(--foreground)] shadow-sm transition hover:border-[var(--ring)]"
+          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-[var(--control-border)] bg-[var(--surface)] px-3 text-sm font-semibold text-[var(--foreground)] shadow-sm transition hover:border-[var(--ring)]"
         >
           {row.nextActionLabel}
           <ArrowRight className="h-4 w-4" />

@@ -58,7 +58,7 @@ export function ProductionReadinessPanel({
           <StatusBadge tone={statusTone}>{formatStatus(report.overallStatus)}</StatusBadge>
           <Link
             href="/production-readiness"
-            className="inline-flex min-h-7 items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--surface-subtle)] px-2.5 text-xs font-semibold text-[var(--foreground)] hover:border-[var(--ring)]"
+            className="inline-flex min-h-7 items-center gap-1.5 rounded-full border border-[var(--control-border)] bg-[var(--surface-subtle)] px-2.5 text-xs font-semibold text-[var(--foreground)] hover:border-[var(--ring)]"
           >
             Open checklist
             <ArrowRight className="h-3.5 w-3.5" />
@@ -286,7 +286,7 @@ export function ProductionReadinessPanel({
                   href={source.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="rounded-full border border-[var(--border)] bg-[var(--surface-subtle)] px-2.5 py-1 text-xs font-medium text-[var(--foreground)] hover:border-[var(--ring)]"
+                  className="rounded-full border border-[var(--control-border)] bg-[var(--surface-subtle)] px-2.5 py-1 text-xs font-medium text-[var(--foreground)] hover:border-[var(--ring)]"
                 >
                   {source.title}
                 </a>

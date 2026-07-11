@@ -20,7 +20,7 @@ export function DashboardProductionSummary({
       actions={(
         <Link
           href="/production-readiness"
-          className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] px-3 text-sm font-semibold text-[var(--foreground)] hover:border-[var(--ring)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)]"
+          className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-[var(--control-border)] bg-[var(--surface-subtle)] px-3 text-sm font-semibold text-[var(--foreground)] hover:border-[var(--ring)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)]"
         >
           Open release evidence
           <ArrowRight className="h-4 w-4" aria-hidden="true" />

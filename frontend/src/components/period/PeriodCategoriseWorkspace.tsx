@@ -294,7 +294,7 @@ function TransactionRulesPanel({
           value={ruleForm.pattern}
           onChange={(event) => onRuleFormChange({ ...ruleForm, pattern: event.target.value })}
           placeholder="Description contains..."
-          className="md:col-span-5 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-gray-100"
+          className="rounded-md border border-[var(--control-border)] bg-white px-3 py-2 text-sm text-gray-900 dark:bg-neutral-900 dark:text-gray-100 md:col-span-5"
           aria-label="Rule pattern"
         />
         <CategorySelect
@@ -308,7 +308,7 @@ function TransactionRulesPanel({
           type="number"
           value={ruleForm.priority}
           onChange={(event) => onRuleFormChange({ ...ruleForm, priority: event.target.value })}
-          className="md:col-span-1 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-gray-100"
+          className="rounded-md border border-[var(--control-border)] bg-white px-3 py-2 text-sm text-gray-900 dark:bg-neutral-900 dark:text-gray-100 md:col-span-1"
           aria-label="Rule priority"
         />
         <Button variant="outline" size="sm" aria-label="Add Rule for transaction matching" onPress={onCreateRule} isDisabled={savingRule || categories.length === 0} className="md:col-span-2">
@@ -384,7 +384,7 @@ function TransactionFilters({
     <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
       <FilterField label="Status">
         <select
-          className="w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm text-gray-900 dark:text-gray-100 px-3 py-2"
+          className="w-full rounded-lg border border-[var(--control-border)] bg-white px-3 py-2 text-sm text-gray-900 dark:bg-neutral-800 dark:text-gray-100"
           value={txFilterStatus}
           onChange={(event) => onFilterStatusChange(event.target.value)}
         >
@@ -403,7 +403,7 @@ function TransactionFilters({
       </FilterField>
       <FilterField label="Bank Account">
         <select
-          className="w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm text-gray-900 dark:text-gray-100 px-3 py-2"
+          className="w-full rounded-lg border border-[var(--control-border)] bg-white px-3 py-2 text-sm text-gray-900 dark:bg-neutral-800 dark:text-gray-100"
           value={txFilterBank}
           onChange={(event) => onFilterBankChange(event.target.value)}
         >
@@ -419,7 +419,7 @@ function TransactionFilters({
         <input
           type="text"
           placeholder="Search description..."
-          className="w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm text-gray-900 dark:text-gray-100 px-3 py-2"
+          className="w-full rounded-lg border border-[var(--control-border)] bg-white px-3 py-2 text-sm text-gray-900 dark:bg-neutral-800 dark:text-gray-100"
           value={txFilterSearch}
           onChange={(event) => onSearchInputChange(event.target.value)}
         />
@@ -427,7 +427,7 @@ function TransactionFilters({
       <FilterField label="Sort by">
         <select
           aria-label="Sort by"
-          className="w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm text-gray-900 dark:text-gray-100 px-3 py-2"
+          className="w-full rounded-lg border border-[var(--control-border)] bg-white px-3 py-2 text-sm text-gray-900 dark:bg-neutral-800 dark:text-gray-100"
           value={transactionSortBy}
           onChange={(event) => onSortByChange(event.target.value as TransactionSortField)}
         >
@@ -440,7 +440,7 @@ function TransactionFilters({
       <FilterField label="Direction">
         <select
           aria-label="Sort direction"
-          className="w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm text-gray-900 dark:text-gray-100 px-3 py-2"
+          className="w-full rounded-lg border border-[var(--control-border)] bg-white px-3 py-2 text-sm text-gray-900 dark:bg-neutral-800 dark:text-gray-100"
           value={transactionSortDirection}
           onChange={(event) => onSortDirectionChange(event.target.value as TransactionSortDirection)}
         >
@@ -500,8 +500,8 @@ function TransactionTable({
   if (transactions.length === 0) {
     return (
       <div className="text-center py-8">
-        <Settings className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-        <p className="text-sm text-gray-400 dark:text-gray-500 italic">
+        <Settings className="w-10 h-10 text-[var(--muted-foreground)] mx-auto mb-3" />
+        <p className="text-sm text-[var(--muted-foreground)] italic">
           {transactionTotal === 0
             ? "Import transactions to begin categorisation"
             : "No transactions match the current filters"}
@@ -600,7 +600,7 @@ function TransactionTable({
             <span>Rows per page</span>
             <select
               aria-label="Rows per page"
-              className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-gray-100"
+              className="rounded-md border border-[var(--control-border)] bg-white px-2 py-1 text-xs text-gray-900 dark:bg-neutral-900 dark:text-gray-100"
               value={transactionPageSize}
               onChange={(event) => onPageSizeChange(Number(event.target.value))}
             >
@@ -656,7 +656,7 @@ function CategorySelect({
       value={value}
       onChange={(event) => onChange(event.target.value)}
       disabled={disabled}
-      className={`rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-gray-100 ${className ?? ""}`}
+      className={`rounded-md border border-[var(--control-border)] bg-white px-3 py-2 text-sm text-gray-900 dark:bg-neutral-900 dark:text-gray-100 ${className ?? ""}`}
       aria-label={ariaLabel}
     >
       <option value="">{allLabel ?? placeholder}</option>

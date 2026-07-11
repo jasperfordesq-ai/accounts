@@ -17,7 +17,7 @@ interface YearEndDividendsSectionProps {
 }
 
 const inputClass =
-  "w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors";
+  "w-full rounded-lg border border-[var(--control-border)] bg-white px-3 py-2 text-sm text-gray-900 outline-none transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500 dark:bg-neutral-800 dark:text-gray-100";
 
 export function YearEndDividendsSection({
   canWrite = true,
@@ -45,12 +45,12 @@ export function YearEndDividendsSection({
                 </p>
                 <div className="flex items-center gap-2 mt-0.5">
                   {dividend.dateDeclared && (
-                    <span className="text-xs text-gray-400 dark:text-gray-500">
+                    <span className="text-xs text-[var(--muted-foreground)]">
                       Declared: {new Date(dividend.dateDeclared).toLocaleDateString("en-IE")}
                     </span>
                   )}
                   {dividend.datePaid && (
-                    <span className="text-xs text-gray-400 dark:text-gray-500">
+                    <span className="text-xs text-[var(--muted-foreground)]">
                       Paid: {new Date(dividend.datePaid).toLocaleDateString("en-IE")}
                     </span>
                   )}
@@ -64,7 +64,7 @@ export function YearEndDividendsSection({
                   onConfirm: () => onDelete(dividend.id!),
                   successAnnouncement: `Dividend of ${formatCurrency(dividend.amount)} was removed.`,
                 })}
-                className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400"
+                className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                 aria-label={`Delete dividend of ${formatCurrency(dividend.amount)}`}
               >
                 <Trash2 className="w-4 h-4" />

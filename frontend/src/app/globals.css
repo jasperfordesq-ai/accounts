@@ -12,9 +12,13 @@
   --muted: #eef2ed;
   --muted-foreground: #667067;
   --border: #d9e1d8;
+  --control-border: #667067;
   --ring: #0d9488;
   --accent: #245b4d;
   --accent-foreground: #ffffff;
+  --accent-hover: color-mix(in oklab, var(--accent) 92%, var(--foreground) 8%);
+  --accent-pressed: color-mix(in oklab, var(--accent) 84%, var(--foreground) 16%);
+  --accent-disabled: color-mix(in oklab, var(--accent) 80%, var(--surface) 20%);
   --secondary-accent: #334155;
   --emerald-50: #ecfdf5;
   --emerald-100: #d1fae5;
@@ -39,9 +43,13 @@
   --muted: #202820;
   --muted-foreground: #aab5aa;
   --border: #344033;
+  --control-border: #aab5aa;
   --ring: #2dd4bf;
   --accent: #34d399;
   --accent-foreground: #06281f;
+  --accent-hover: color-mix(in oklab, var(--accent) 92%, var(--foreground) 8%);
+  --accent-pressed: color-mix(in oklab, var(--accent) 84%, var(--foreground) 16%);
+  --accent-disabled: color-mix(in oklab, var(--accent) 80%, var(--surface) 20%);
   --secondary-accent: #c4b5fd;
   --emerald-50: #052e1c;
   --emerald-100: #064e32;
@@ -177,20 +185,30 @@ html {
 }
 
 .button--primary {
-  background: #047857;
-  border-color: #047857;
-  color: #ffffff;
-  box-shadow: 0 1px 2px rgba(4, 120, 87, 0.18);
+  --button-bg: var(--accent);
+  --button-bg-hover: var(--accent-hover);
+  --button-bg-pressed: var(--accent-pressed);
+  background-color: var(--button-bg);
+  border-color: var(--button-bg);
+  color: var(--accent-foreground);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
-.button--primary:hover {
-  background: #065f46;
-  border-color: #065f46;
+.button--primary:hover:not(:disabled):not([aria-disabled="true"]),
+.button--primary[data-hovered="true"]:not(:disabled):not([aria-disabled="true"]) {
+  background-color: var(--button-bg-hover);
+  border-color: var(--button-bg-hover);
+}
+
+.button--primary:active:not(:disabled):not([aria-disabled="true"]),
+.button--primary[data-pressed="true"]:not(:disabled):not([aria-disabled="true"]) {
+  background-color: var(--button-bg-pressed);
+  border-color: var(--button-bg-pressed);
 }
 
 .button--secondary {
   background: #ecfdf5;
-  border-color: #bbf7d0;
+  border-color: var(--control-border);
   color: #047857;
 }
 
@@ -200,14 +218,14 @@ html {
 
 .button--outline {
   background: #ffffff;
-  border-color: #d1d5db;
+  border-color: var(--control-border);
   color: #374151;
 }
 
 .button--outline:hover,
 .button--ghost:hover {
   background: #f3f4f6;
-  border-color: #d1d5db;
+  border-color: var(--control-border);
 }
 
 .button--ghost {
@@ -224,12 +242,6 @@ html {
 .button--danger:hover {
   background: #b91c1c;
   border-color: #b91c1c;
-}
-
-.button:disabled,
-.button[aria-disabled="true"] {
-  cursor: not-allowed;
-  opacity: 0.6;
 }
 
 .card {
@@ -317,21 +329,15 @@ html {
   color: #1d4ed8;
 }
 
-.dark .button--primary {
-  background: #059669;
-  border-color: #059669;
-  color: #ffffff;
-}
-
 .dark .button--secondary {
   background: #064e3b;
-  border-color: #047857;
+  border-color: var(--control-border);
   color: #d1fae5;
 }
 
 .dark .button--outline {
   background: #171717;
-  border-color: #404040;
+  border-color: var(--control-border);
   color: #f5f5f5;
 }
 
@@ -342,7 +348,24 @@ html {
 .dark .button--outline:hover,
 .dark .button--ghost:hover {
   background: #262626;
-  border-color: #525252;
+  border-color: var(--control-border);
+}
+
+.button:disabled,
+.button[aria-disabled="true"] {
+  cursor: not-allowed;
+  background-color: var(--muted);
+  border-color: var(--control-border);
+  color: var(--muted-foreground);
+  box-shadow: none;
+  opacity: 1;
+}
+
+.button--primary:disabled,
+.button--primary[aria-disabled="true"] {
+  background-color: var(--accent-disabled);
+  border-color: var(--accent-disabled);
+  color: var(--accent-foreground);
 }
 
 .dark .card__header {
@@ -652,15 +675,11 @@ html {
   color: var(--foreground);
 }
 
-.dark p, .dark span, .dark div, .dark td, .dark th, .dark li {
-  color: inherit;
-}
-
 /* Force select/input elements dark mode */
 .dark select, .dark input, .dark textarea {
   background-color: #262626;
   color: #fafafa;
-  border-color: #404040;
+  border-color: var(--control-border);
 }
 
 .dark select option {
@@ -668,9 +687,14 @@ html {
   color: #fafafa;
 }
 
-/* HeroUI Chip readability in dark mode */
-.dark [data-slot="chip"] {
-  opacity: 0.95;
+.money-input--disabled {
+  background-color: var(--muted);
+  color: var(--muted-foreground);
+}
+
+.money-input--disabled input {
+  background-color: transparent;
+  color: var(--muted-foreground);
 }
 
 /* HeroUI Button text contrast */

@@ -51,10 +51,10 @@ import {
 } from "@/lib/resourceState";
 
 const inputClass =
-  "w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-colors";
+  "w-full rounded-lg border border-[var(--control-border)] bg-white px-3 py-2 text-sm text-gray-900 shadow-sm transition-colors focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 dark:bg-neutral-800 dark:text-gray-100";
 
 const textareaClass =
-  "w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 resize-y transition-colors";
+  "w-full resize-y rounded-lg border border-[var(--control-border)] bg-white px-3 py-2 text-sm text-gray-900 shadow-sm transition-colors focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 dark:bg-neutral-800 dark:text-gray-100";
 
 const MANUAL_REVIEW_KEYS: Record<string, string> = {
   "DIRECTOR-REMUNERATION": "note-directors-remuneration",
@@ -337,7 +337,7 @@ export default function NotesPage({
       <div className="mb-6">
         <Link
           href={`/companies/${companyId}/periods/${periodId}`}
-          className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-emerald-600 dark:text-gray-400 dark:hover:text-emerald-400 mb-3"
+          className="inline-flex items-center gap-1.5 text-sm text-[var(--muted-foreground)] hover:text-[var(--accent)] mb-3"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to Period Workspace
@@ -487,11 +487,11 @@ export default function NotesPage({
       {shouldRenderResourceEmpty(notesState) ? (
         <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
           <Card.Content className="text-center py-12">
-            <FileText className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+            <FileText className="w-10 h-10 text-[var(--muted-foreground)] mx-auto mb-3" />
             <p className="text-sm text-gray-500 dark:text-gray-400">
               No notes have been created yet.
             </p>
-            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+            <p className="text-xs text-[var(--muted-foreground)] mt-1">
               Click &ldquo;Generate Auto-Notes&rdquo; to create standard
               disclosures, or add a custom note.
             </p>
@@ -513,7 +513,7 @@ export default function NotesPage({
                 className={`shadow-sm border animate-fade-in bg-white dark:bg-neutral-900 ${
                   note.isIncluded
                     ? "border-gray-200 dark:border-neutral-700"
-                    : "border-gray-200 dark:border-neutral-700 opacity-60"
+                    : "border-dashed border-gray-400 dark:border-neutral-500"
                 }`}
               >
                 <Card.Content className="p-5">
@@ -581,7 +581,7 @@ export default function NotesPage({
                           onChange={() => handleToggleIncluded(note)}
                           disabled={isSaving}
                           title={note.isIncluded ? "Exclude this note from the financial statements" : "Include this note in the financial statements"}
-                          className="rounded border-gray-300 dark:border-neutral-600 text-emerald-600 focus:ring-emerald-500 dark:bg-neutral-800"
+                          className="rounded border-[var(--control-border)] text-emerald-600 focus:ring-emerald-500 dark:bg-neutral-800"
                         />
                         <span className="text-xs text-gray-500 dark:text-gray-400">
                           Include
@@ -605,7 +605,7 @@ export default function NotesPage({
                           {isDeleting ? (
                             <Spinner size="sm" />
                           ) : (
-                            <Trash2 className="w-4 h-4 text-red-400 hover:text-red-600" />
+                            <Trash2 className="w-4 h-4 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300" />
                           )}
                         </Button>
                       )}

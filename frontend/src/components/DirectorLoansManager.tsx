@@ -274,7 +274,7 @@ export function DirectorLoansManager({
                 </div>
                 {canWrite && canUseResourceAsEvidence(resourceState) && row.id && (
                   <div className="flex shrink-0 items-center gap-3">
-                    <button type="button" onClick={() => startEdit(row)} className="text-gray-500 hover:text-emerald-600" aria-label={`Edit director-loan evidence for ${counterpartyName(row)}`}>
+                    <button type="button" onClick={() => startEdit(row)} className="text-[var(--muted-foreground)] hover:text-[var(--accent)]" aria-label={`Edit director-loan evidence for ${counterpartyName(row)}`}>
                       <Pencil className="h-4 w-4" />
                     </button>
                     <button type="button" onClick={() => requestDestructiveAction({

@@ -88,7 +88,7 @@ function WorkflowEvidenceRow({ label, done }: { label: string; done: boolean }) 
 }
 
 const inputClass =
-  "w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors";
+  "w-full rounded-lg border border-[var(--control-border)] bg-white px-3 py-2 text-sm text-gray-900 outline-none transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500 dark:bg-neutral-800 dark:text-gray-100";
 const selectClass = inputClass;
 
 const charityTabs = [
@@ -552,7 +552,7 @@ export default function CharityReportingPage({
                   type="button"
                   onClick={() => updateWorkflow("sofa", () => recordCharityReportGenerated(cId, pId, "sofa"), "Retained SoFA PDF generated")}
                   disabled={workflowEvidenceUnavailable || filingStatus?.sofaGenerated || updatingWorkflow !== null || !artifactStatus?.package?.trusteeReviewAccepted || artifactStatus?.decision.manualProfessionalHandoffRequired}
-                  className="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2 text-left text-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-neutral-700 dark:hover:bg-neutral-800"
+                  className="flex items-center justify-between rounded-lg border border-[var(--control-border)] px-3 py-2 text-left text-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:bg-[var(--muted)] dark:hover:bg-neutral-800"
                 >
                   <span className="font-medium text-gray-900 dark:text-gray-100">Generate retained SoFA PDF</span>
                   <Chip size="sm" variant="soft" color={filingStatus?.sofaGenerated ? "success" : "warning"}>{filingStatus?.sofaGenerated ? "Done" : "Open"}</Chip>
@@ -561,7 +561,7 @@ export default function CharityReportingPage({
                   type="button"
                   onClick={() => updateWorkflow("tar", () => recordCharityReportGenerated(cId, pId, "trustees-report"), "Retained Trustees' Annual Report PDF generated")}
                   disabled={workflowEvidenceUnavailable || filingStatus?.trusteesReportGenerated || updatingWorkflow !== null || !artifactStatus?.package?.trusteeReviewAccepted || artifactStatus?.decision.manualProfessionalHandoffRequired}
-                  className="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2 text-left text-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-neutral-700 dark:hover:bg-neutral-800"
+                  className="flex items-center justify-between rounded-lg border border-[var(--control-border)] px-3 py-2 text-left text-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:bg-[var(--muted)] dark:hover:bg-neutral-800"
                 >
                   <span className="font-medium text-gray-900 dark:text-gray-100">Generate retained Trustees&apos; Annual Report PDF</span>
                   <Chip size="sm" variant="soft" color={filingStatus?.trusteesReportGenerated ? "success" : "warning"}>{filingStatus?.trusteesReportGenerated ? "Done" : "Open"}</Chip>
@@ -757,9 +757,9 @@ export default function CharityReportingPage({
               {sofa.unrestrictedFunds.length === 0 && sofa.restrictedFunds.length === 0 && sofa.endowmentFunds.length === 0 && (
                 <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
                   <Card.Content className="text-center py-12">
-                    <DollarSign className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+                    <DollarSign className="w-10 h-10 text-[var(--muted-foreground)] mx-auto mb-3" />
                     <p className="text-sm text-gray-500 dark:text-gray-400">No fund balances entered yet.</p>
-                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Go to the Fund Balances tab to add funds.</p>
+                    <p className="text-xs text-[var(--muted-foreground)] mt-1">Go to the Fund Balances tab to add funds.</p>
                   </Card.Content>
                 </Card>
               )}
@@ -767,13 +767,13 @@ export default function CharityReportingPage({
           ) : (
             <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
               <Card.Content className="text-center py-12">
-                <DollarSign className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+                <DollarSign className="w-10 h-10 text-[var(--muted-foreground)] mx-auto mb-3" />
                 <p className="text-sm text-gray-500 dark:text-gray-400">
                   {evidenceState.failedResourceKeys.includes("sofa")
                     ? "Statement of Financial Activities evidence failed to load."
                     : "Statement of Financial Activities not available."}
                 </p>
-                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                <p className="text-xs text-[var(--muted-foreground)] mt-1">
                   {evidenceState.failedResourceKeys.includes("sofa")
                     ? "Retry the failed SoFA resource before relying on this view."
                     : "Add fund balances first, then the SoFA will be generated automatically."}
@@ -852,11 +852,11 @@ export default function CharityReportingPage({
 
               {funds.length === 0 ? (
                 <div className="text-center py-8">
-                  <FileText className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+                  <FileText className="w-10 h-10 text-[var(--muted-foreground)] mx-auto mb-3" />
                   <p className="text-sm text-gray-500 dark:text-gray-400">
                     {evidenceState.failedResourceKeys.includes("funds") ? "Fund balance evidence failed to load." : "No fund balances recorded."}
                   </p>
-                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                  <p className="text-xs text-[var(--muted-foreground)] mt-1">
                     {evidenceState.failedResourceKeys.includes("funds")
                       ? "Retry the failed funds resource; this is not evidence that no funds exist."
                       : "Add unrestricted, restricted, and endowment funds to generate the SoFA."}
@@ -900,7 +900,7 @@ export default function CharityReportingPage({
                           })}
                           aria-label={`Delete fund ${fund.fundName}`}
                         >
-                          <Trash2 className="w-4 h-4 text-red-400 hover:text-red-600" />
+                          <Trash2 className="w-4 h-4 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300" />
                         </Button>
                       )}
                     </div>
@@ -1029,7 +1029,7 @@ export default function CharityReportingPage({
                   )}
 
                   <div className="flex items-center gap-3">
-                    <Globe className={`w-5 h-5 ${tar.hasInternationalTransfers ? "text-amber-500" : "text-gray-400 dark:text-gray-600"}`} />
+                    <Globe className={`w-5 h-5 ${tar.hasInternationalTransfers ? "text-amber-500" : "text-[var(--muted-foreground)]"}`} />
                     <span className="text-sm text-gray-900 dark:text-gray-100">
                       International Transfers: {tar.hasInternationalTransfers ? "Yes" : "None"}
                     </span>
@@ -1043,13 +1043,13 @@ export default function CharityReportingPage({
           ) : (
             <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
               <Card.Content className="text-center py-12">
-                <Users className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+                <Users className="w-10 h-10 text-[var(--muted-foreground)] mx-auto mb-3" />
                 <p className="text-sm text-gray-500 dark:text-gray-400">
                   {evidenceState.failedResourceKeys.includes("trustees-report")
                     ? "Trustees' Annual Report evidence failed to load."
                     : "Trustees' Annual Report not available."}
                 </p>
-                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                <p className="text-xs text-[var(--muted-foreground)] mt-1">
                   {evidenceState.failedResourceKeys.includes("trustees-report")
                     ? "Retry the failed trustees' report resource before relying on this view."
                     : "Configure charity info on the company page and add fund balances first."}

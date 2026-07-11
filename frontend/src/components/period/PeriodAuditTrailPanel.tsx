@@ -138,7 +138,7 @@ export function PeriodAuditTrailPanel({
                 <span>Events per page</span>
                 <select
                   aria-label="Events per page"
-                  className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--foreground)]"
+                  className="rounded-md border border-[var(--control-border)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--foreground)]"
                   value={pageSize}
                   onChange={(event) => onPageSizeChange(Number(event.target.value))}
                   disabled={loading}

@@ -768,7 +768,7 @@ export function FinancialStatementsWorkbench({
                         {adj.description}
                       </span>
                       {adj.basis && (
-                        <span className="text-xs text-gray-400 dark:text-gray-500 ml-2">
+                        <span className="text-xs text-[var(--muted-foreground)] ml-2">
                           ({adj.basis})
                         </span>
                       )}
@@ -960,20 +960,20 @@ export function FinancialStatementsWorkbench({
                 </tr>
                 <tr className="border-b border-gray-100 dark:border-neutral-800">
                   <td className="px-4 py-2.5 text-gray-700 dark:text-gray-300">Profit for the Year</td>
-                  <td className="px-4 py-2.5 text-right font-mono text-gray-400 dark:text-gray-500">-</td>
+                  <td className="px-4 py-2.5 text-right font-mono text-[var(--muted-foreground)]">-</td>
                   <td className="px-4 py-2.5 text-right font-mono text-gray-900 dark:text-gray-100">{eur(equity.profitForYear)}</td>
                   <td className="px-4 py-2.5 text-right font-mono text-gray-900 dark:text-gray-100">{eur(equity.profitForYear)}</td>
                 </tr>
                 <tr className="border-b border-gray-100 dark:border-neutral-800">
                   <td className="px-4 py-2.5 text-gray-700 dark:text-gray-300">Dividends Paid</td>
-                  <td className="px-4 py-2.5 text-right font-mono text-gray-400 dark:text-gray-500">-</td>
+                  <td className="px-4 py-2.5 text-right font-mono text-[var(--muted-foreground)]">-</td>
                   <td className="px-4 py-2.5 text-right font-mono text-red-700 dark:text-red-400">{equity.dividendsPaid !== 0 ? eur(-Math.abs(equity.dividendsPaid)) : eur(0)}</td>
                   <td className="px-4 py-2.5 text-right font-mono text-red-700 dark:text-red-400">{equity.dividendsPaid !== 0 ? eur(-Math.abs(equity.dividendsPaid)) : eur(0)}</td>
                 </tr>
                 {equity.otherReserveMovements !== 0 && (
                   <tr className="border-b border-gray-100 dark:border-neutral-800">
                     <td className="px-4 py-2.5 text-gray-700 dark:text-gray-300">Other Posted Reserve Movements</td>
-                    <td className="px-4 py-2.5 text-right font-mono text-gray-400 dark:text-gray-500">-</td>
+                    <td className="px-4 py-2.5 text-right font-mono text-[var(--muted-foreground)]">-</td>
                     <td className="px-4 py-2.5 text-right font-mono text-gray-900 dark:text-gray-100">{eur(equity.otherReserveMovements)}</td>
                     <td className="px-4 py-2.5 text-right font-mono text-gray-900 dark:text-gray-100">{eur(equity.otherReserveMovements)}</td>
                   </tr>
@@ -982,7 +982,7 @@ export function FinancialStatementsWorkbench({
                   <tr className="border-b border-gray-100 dark:border-neutral-800">
                     <td className="px-4 py-2.5 text-gray-700 dark:text-gray-300">Shares Issued</td>
                     <td className="px-4 py-2.5 text-right font-mono text-gray-900 dark:text-gray-100">{eur(equity.sharesIssued)}</td>
-                    <td className="px-4 py-2.5 text-right font-mono text-gray-400 dark:text-gray-500">-</td>
+                    <td className="px-4 py-2.5 text-right font-mono text-[var(--muted-foreground)]">-</td>
                     <td className="px-4 py-2.5 text-right font-mono text-gray-900 dark:text-gray-100">{eur(equity.sharesIssued)}</td>
                   </tr>
                 )}
@@ -1251,9 +1251,9 @@ function EmptyState({
   }
   return (
     <div className="text-center py-12">
-      <FileText className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+      <FileText className="w-10 h-10 text-[var(--muted-foreground)] mx-auto mb-3" />
       <p className="text-sm text-gray-500 dark:text-gray-400">{message}</p>
-      <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+      <p className="text-xs text-[var(--muted-foreground)] mt-1">
         Complete the year-end process and generate adjustments first.
       </p>
     </div>

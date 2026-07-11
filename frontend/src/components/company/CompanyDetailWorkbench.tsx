@@ -290,7 +290,7 @@ export function CompanyDetailWorkbench({
                   value={quarantineConfirmation}
                   onChange={(event) => onQuarantineConfirmationChange(event.target.value)}
                   autoComplete="off"
-                  className="mt-1.5 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500 dark:border-neutral-600 dark:bg-neutral-800 dark:text-gray-100"
+                  className="mt-1.5 w-full rounded-lg border border-[var(--control-border)] bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500 dark:bg-neutral-800 dark:text-gray-100"
                 />
               </div>
               <div>
@@ -304,7 +304,7 @@ export function CompanyDetailWorkbench({
                   rows={3}
                   maxLength={2000}
                   placeholder="Give a specific reason (minimum 20 characters)."
-                  className="mt-1.5 w-full resize-y rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500 dark:border-neutral-600 dark:bg-neutral-800 dark:text-gray-100"
+                  className="mt-1.5 w-full resize-y rounded-lg border border-[var(--control-border)] bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500 dark:bg-neutral-800 dark:text-gray-100"
                 />
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                   {quarantineReason.trim().length}/20 minimum characters

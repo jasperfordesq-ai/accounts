@@ -79,11 +79,11 @@ export function PeriodYearEndWorkspace({ yearEnd, questionnaireHref }: PeriodYea
       {!yearEnd && (
         <Card className="shadow-sm border border-gray-200 bg-white dark:border-neutral-700 dark:bg-neutral-900">
           <Card.Content className="py-8 text-center">
-            <BarChart3 className="mx-auto mb-3 h-10 w-10 text-gray-300 dark:text-gray-600" />
+            <BarChart3 className="mx-auto mb-3 h-10 w-10 text-[var(--muted-foreground)]" />
             <p className="text-sm text-gray-500 dark:text-gray-400">
               Year-end summary data is not yet available for this period.
             </p>
-            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+            <p className="mt-1 text-xs text-[var(--muted-foreground)]">
               Complete the import and categorisation steps first.
             </p>
           </Card.Content>

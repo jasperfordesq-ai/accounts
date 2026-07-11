@@ -105,7 +105,7 @@ export function PeriodAdjustmentsWorkspace({
             </div>
           ) : adjustments.length === 0 ? (
             <div className="py-8 text-center">
-              <Calculator className="mx-auto mb-3 h-10 w-10 text-gray-300 dark:text-gray-600" />
+              <Calculator className="mx-auto mb-3 h-10 w-10 text-[var(--muted-foreground)]" />
               <p className="text-sm text-gray-500 dark:text-gray-400">
                 {canWrite
                   ? "No adjustments yet. Use Generate Adjustments to create them."
@@ -225,7 +225,7 @@ function AdjustmentFilters({
         <select
           value={adjFilterApproved}
           onChange={(event) => onFilterApprovedChange(event.target.value)}
-          className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-gray-100"
+          className="w-full rounded-md border border-[var(--control-border)] bg-white px-3 py-2 text-sm text-gray-900 dark:bg-neutral-900 dark:text-gray-100"
         >
           <option value="">All adjustments</option>
           <option value="pending">Pending approval</option>
@@ -236,7 +236,7 @@ function AdjustmentFilters({
         <select
           value={adjFilterType}
           onChange={(event) => onFilterTypeChange(event.target.value)}
-          className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-gray-100"
+          className="w-full rounded-md border border-[var(--control-border)] bg-white px-3 py-2 text-sm text-gray-900 dark:bg-neutral-900 dark:text-gray-100"
         >
           <option value="">Auto and manual</option>
           <option value="auto">Auto-generated</option>
@@ -296,7 +296,7 @@ function AdjustmentReviewCard({
               <AdjustmentAmount label="Assets" value={adjustment.impactOnAssets} signed />
             </div>
             {adjustment.approvedBy && (
-              <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+              <p className="mt-1 text-xs text-[var(--muted-foreground)]">
                 Approved by {adjustment.approvedBy}
                 {adjustment.approvedAt && ` on ${new Date(adjustment.approvedAt).toLocaleDateString("en-IE")}`}
               </p>

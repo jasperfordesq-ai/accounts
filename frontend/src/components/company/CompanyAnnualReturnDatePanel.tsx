@@ -267,4 +267,4 @@ function formatDateTime(value: string) {
   return new Date(value).toLocaleString("en-IE", { dateStyle: "medium", timeStyle: "short" });
 }
 
-const inputClass = "w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--foreground)] outline-none transition focus:border-[var(--ring)] focus:ring-2 focus:ring-teal-100 dark:focus:ring-teal-900/40";
+const inputClass = "w-full rounded-md border border-[var(--control-border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--foreground)] outline-none transition focus:border-[var(--ring)] focus:ring-2 focus:ring-teal-100 dark:focus:ring-teal-900/40";

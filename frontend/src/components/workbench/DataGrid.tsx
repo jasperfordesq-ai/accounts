@@ -179,7 +179,7 @@ function DataGridBase({
             onChange={(event) => setFilter(event.target.value)}
             placeholder={filterPlaceholder}
             aria-label={`Filter ${tableLabel}`}
-            className="min-h-10 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 text-sm text-[var(--foreground)] outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 sm:max-w-xs"
+            className="min-h-10 w-full rounded-md border border-[var(--control-border)] bg-[var(--surface)] px-3 text-sm text-[var(--foreground)] outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 sm:max-w-xs"
           />
           <p className="text-xs font-medium text-[var(--muted-foreground)]">
             {visibleRows.length} of {normalizedRows.length} rows

@@ -19,7 +19,7 @@ export function Breadcrumbs({ items }: BreadcrumbsProps) {
         <li>
           <Link
             href="/"
-            className="text-gray-400 hover:text-emerald-600 dark:text-gray-500 dark:hover:text-emerald-400 transition-colors"
+            className="text-[var(--muted-foreground)] hover:text-[var(--accent)] transition-colors"
             aria-label="Home"
           >
             <Home className="w-3.5 h-3.5" />
@@ -27,11 +27,11 @@ export function Breadcrumbs({ items }: BreadcrumbsProps) {
         </li>
         {items.map((item, i) => (
           <li key={i} className="flex items-center gap-1.5">
-            <ChevronRight className="w-3 h-3 text-gray-300 dark:text-gray-600" aria-hidden="true" />
+            <ChevronRight className="w-3 h-3 text-[var(--muted-foreground)]" aria-hidden="true" />
             {item.href && i < items.length - 1 ? (
               <Link
                 href={item.href}
-                className="text-gray-500 hover:text-emerald-600 dark:text-gray-400 dark:hover:text-emerald-400 transition-colors"
+                className="text-[var(--muted-foreground)] hover:text-[var(--accent)] transition-colors"
               >
                 {item.label}
               </Link>

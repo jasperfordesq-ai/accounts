@@ -206,7 +206,7 @@ export function FilingReviewCentre({
                 value={croSubmissionReference}
                 onChange={(event) => onCroSubmissionReferenceChange(event.target.value)}
                 disabled={!evidenceAvailable || filingStatus.cro.status === "Accepted"}
-                className="h-9 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 text-sm text-[var(--foreground)] outline-none transition focus:border-[var(--ring)] focus:ring-2 focus:ring-teal-100 disabled:bg-[var(--muted)] disabled:text-[var(--muted-foreground)] dark:focus:ring-teal-900/40"
+                className="h-9 w-full rounded-md border border-[var(--control-border)] bg-[var(--surface)] px-3 text-sm text-[var(--foreground)] outline-none transition focus:border-[var(--ring)] focus:ring-2 focus:ring-teal-100 disabled:bg-[var(--muted)] disabled:text-[var(--muted-foreground)] dark:focus:ring-teal-900/40"
                 placeholder="CORE-2026-0001"
               />
             </div>
@@ -247,11 +247,11 @@ export function FilingReviewCentre({
         </div>
       ) : (
         <div className="text-center py-8">
-          <Shield className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+          <Shield className="w-10 h-10 text-[var(--muted-foreground)] mx-auto mb-3" />
           <p className="text-sm text-gray-500 dark:text-gray-400">
             {evidenceAvailable ? "Filing status is not available yet." : "Filing status evidence failed to load."}
           </p>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+          <p className="text-xs text-[var(--muted-foreground)] mt-1">
             {evidenceAvailable ? "Complete the statements and generate documents first." : "Retry the failed resource; this is not evidence that filing has not started."}
           </p>
         </div>

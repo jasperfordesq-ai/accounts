@@ -748,6 +748,14 @@ async function checkThemeContrast(page, routeName) {
 
     const textSamples = [];
     const uiSamples = [];
+    const colorProbeCanvas = document.createElement("canvas");
+    colorProbeCanvas.width = 1;
+    colorProbeCanvas.height = 1;
+    const colorProbe = colorProbeCanvas.getContext("2d", { willReadFrequently: true });
+    const parsedColorCache = new Map();
+    const gradientColorCache = new Map();
+    const effectiveOpacityCache = new WeakMap();
+    const unresolvedSamples = new Set();
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
       acceptNode(node) {
         const text = normalizeText(node.textContent || "");
@@ -801,11 +809,11 @@ async function checkThemeContrast(page, routeName) {
       recordUiComponentSample(element);
     }
 
-    const failures = [...textSamples, ...uiSamples]
+    const contrastFailures = [...textSamples, ...uiSamples]
       .filter((sample) => sample.ratio < sample.requiredRatio)
       .sort((a, b) => a.ratio - b.ratio)
-      .slice(0, 12)
       .map((sample) => `${sample.label} ratio=${sample.ratio.toFixed(2)} required=${sample.requiredRatio.toFixed(2)} ${sample.detail}`);
+    const failures = [...unresolvedSamples, ...contrastFailures].slice(0, 12);
 
     const allSamples = [...textSamples, ...uiSamples];
     const normalTextSamples = textSamples.filter((sample) => !sample.largeText);
@@ -836,16 +844,28 @@ async function checkThemeContrast(page, routeName) {
 
     function recordTextSample(element, text, source, suppliedForeground) {
       const style = window.getComputedStyle(element);
+      const effectiveOpacity = effectiveOpacityFor(element);
+      if (effectiveOpacity <= 0) return;
+      if (effectiveOpacity > 0 && effectiveOpacity < 0.9995) {
+        recordUnresolvedSample(element, text, source, "partial CSS opacity requires explicit contrast-safe colours");
+        return;
+      }
       const foreground = suppliedForeground ?? parseCssColor(style.color);
       const backgroundResult = effectiveBackgroundsFor(element);
-      if (!foreground || !backgroundResult || backgroundResult.colors.length === 0) return;
+      if (!foreground) return;
+      if (backgroundResult.unresolved) {
+        recordUnresolvedSample(element, text, source, backgroundResult.unresolved);
+        return;
+      }
+      if (backgroundResult.colors.length === 0) return;
 
       const ratios = backgroundResult.colors.map((background) =>
         contrastRatio(composite(foreground, background), background));
       const largeText = isLargeText(style);
-      const requiredRatio = largeText
+      const baseRequiredRatio = largeText
         ? minimums.largeText
         : minimums.normalText;
+      const requiredRatio = baseRequiredRatio + (backgroundResult.gradient ? minimums.gradientGuardBand : 0);
       const interactive = Boolean(element.closest("a[href], button, input, textarea, select, [role='button'], [role='tab']"));
       textSamples.push({
         label: labelFor(element, text),
@@ -861,14 +881,34 @@ async function checkThemeContrast(page, routeName) {
 
     function recordUiComponentSample(element) {
       const style = window.getComputedStyle(element);
+      const effectiveOpacity = effectiveOpacityFor(element);
+      if (effectiveOpacity <= 0) return;
+      if (effectiveOpacity > 0 && effectiveOpacity < 0.9995) {
+        recordUnresolvedSample(element, element.getAttribute("aria-label") || element.textContent || element.tagName, "UI component", "partial CSS opacity requires explicit contrast-safe colours");
+        return;
+      }
       const outside = effectiveBackgroundsFor(element.parentElement ?? element);
-      if (!outside || outside.colors.length === 0) return;
+      if (outside.unresolved) {
+        recordUnresolvedSample(element, element.getAttribute("aria-label") || element.textContent || element.tagName, "UI component", outside.unresolved);
+        return;
+      }
+      if (outside.colors.length === 0) return;
 
       const indicators = [];
+      let gradientGuardRequired = outside.gradient;
       const background = parseCssColor(style.backgroundColor);
-      if (background && background.a > 0.05) {
-        indicators.push(Math.min(...outside.colors.map((color) =>
-          contrastRatio(composite(background, color), color))));
+      const hasBackgroundImage = style.backgroundImage && style.backgroundImage !== "none";
+      if ((background && background.a > 0.05) || hasBackgroundImage) {
+        const inside = effectiveBackgroundsFor(element);
+        if (inside.unresolved) {
+          recordUnresolvedSample(element, element.getAttribute("aria-label") || element.textContent || element.tagName, "UI component", inside.unresolved);
+          return;
+        }
+        if (inside.colors.length > 0) {
+          gradientGuardRequired ||= inside.gradient;
+          indicators.push(Math.min(...inside.colors.flatMap((insideColor) =>
+            outside.colors.map((outsideColor) => contrastRatio(insideColor, outsideColor)))));
+        }
       }
 
       const borderWidth = Math.max(
@@ -887,7 +927,7 @@ async function checkThemeContrast(page, routeName) {
       uiSamples.push({
         label: labelFor(element, element.getAttribute("aria-label") || element.textContent || element.tagName),
         ratio: Math.max(...indicators),
-        requiredRatio: minimums.uiComponent,
+        requiredRatio: minimums.uiComponent + (gradientGuardRequired ? minimums.gradientGuardBand : 0),
         detail: `UI component${element.matches(":disabled, [aria-disabled='true']") ? " (disabled)" : ""}`,
       });
     }
@@ -909,23 +949,153 @@ async function checkThemeContrast(page, routeName) {
         }
 
         if (style.backgroundImage && style.backgroundImage !== "none") {
-          const stops = gradientColors(style.backgroundImage);
-          if (stops.length === 0) return null;
+          const gradientResult = gradientColors(style.backgroundImage);
+          if (gradientResult.unresolved) {
+            return { colors: [], gradient: true, unresolved: gradientResult.unresolved };
+          }
           gradient = true;
-          backgrounds = stops
-            .flatMap((stop) => backgrounds.map((background) => composite(stop, background)))
-            .slice(0, 32);
+          const combinedBackgrounds = gradientResult.colors
+            .flatMap((stop) => backgrounds.map((background) => composite(stop, background)));
+          if (combinedBackgrounds.length > 512) {
+            return { colors: [], gradient: true, unresolved: "gradient background combinations exceed the machine-verification budget" };
+          }
+          backgrounds = combinedBackgrounds;
         }
       }
 
-      return { colors: backgrounds, gradient };
+      return { colors: backgrounds, gradient, unresolved: null };
     }
 
     function gradientColors(value) {
-      if (!/gradient\(/i.test(value) || /url\(/i.test(value)) return [];
-      return (String(value).match(/rgba?\([^)]*\)/gi) ?? [])
-        .map(parseCssColor)
-        .filter(Boolean);
+      const candidate = String(value);
+      if (gradientColorCache.has(candidate)) return gradientColorCache.get(candidate);
+      const resolved = (result) => {
+        gradientColorCache.set(candidate, result);
+        return result;
+      };
+      if (!/gradient\(/i.test(candidate)) {
+        return resolved({ colors: [], unresolved: "unsupported non-gradient background image" });
+      }
+      if (/url\(/i.test(candidate)) {
+        return resolved({ colors: [], unresolved: "image-backed background requires retained human visual review" });
+      }
+      if (splitTopLevelLayers(candidate).length !== 1) {
+        return resolved({ colors: [], unresolved: "layered gradients require retained human visual review" });
+      }
+      if (hasUnsupportedGradientInterpolation(candidate)) {
+        return resolved({ colors: [], unresolved: "non-sRGB gradient interpolation is not machine-verifiable" });
+      }
+
+      const tokens = extractCssColorFunctions(candidate);
+      const stops = tokens.map(parseCssColor);
+      if (tokens.length < 2 || stops.some((stop) => !stop)) {
+        return resolved({ colors: [], unresolved: "unresolved gradient colour stop" });
+      }
+      const usesOnlyLegacyRgbStops = tokens.every((token) => /^rgba?\(/i.test(token));
+      if (!usesOnlyLegacyRgbStops && !hasExplicitSrgbGradientInterpolation(candidate)) {
+        return resolved({ colors: [], unresolved: "implicit modern-colour gradient interpolation is not machine-verifiable" });
+      }
+      if (stops.some((stop) => stop.a < 1)) {
+        return resolved({ colors: [], unresolved: "translucent gradient stops require retained human visual review" });
+      }
+      if (stops.length !== 2) {
+        return resolved({ colors: [], unresolved: "multi-stop gradients require retained human visual review" });
+      }
+
+      const maximumSamples = 257;
+      const colors = [stops[0]];
+      const segmentCount = stops.length - 1;
+      const availableInteriorSamples = maximumSamples - stops.length;
+      const baseInteriorSamples = Math.floor(availableInteriorSamples / segmentCount);
+      const extraInteriorSamples = availableInteriorSamples % segmentCount;
+      for (let index = 0; index < stops.length - 1; index += 1) {
+        const interiorSamples = baseInteriorSamples + (index < extraInteriorSamples ? 1 : 0);
+        for (let step = 1; step <= interiorSamples; step += 1) {
+          colors.push(interpolateColor(stops[index], stops[index + 1], step / (interiorSamples + 1)));
+        }
+        colors.push(stops[index + 1]);
+      }
+      return resolved({ colors, unresolved: null });
+    }
+
+    function splitTopLevelLayers(value) {
+      const layers = [];
+      let depth = 0;
+      let start = 0;
+      for (let index = 0; index < value.length; index += 1) {
+        if (value[index] === "(") depth += 1;
+        if (value[index] === ")") depth = Math.max(0, depth - 1);
+        if (value[index] === "," && depth === 0) {
+          layers.push(value.slice(start, index).trim());
+          start = index + 1;
+        }
+      }
+      layers.push(value.slice(start).trim());
+      return layers.filter(Boolean);
+    }
+
+    function hasUnsupportedGradientInterpolation(value) {
+      return gradientInterpolationHeaders(value)
+        .some((header) => /\bin\s+(?!srgb(?:\s|$))/i.test(header));
+    }
+
+    function hasExplicitSrgbGradientInterpolation(value) {
+      return gradientInterpolationHeaders(value)
+        .some((header) => /\bin\s+srgb(?:\s|$)/i.test(header));
+    }
+
+    function gradientInterpolationHeaders(value) {
+      const gradientPattern = /(?:repeating-)?(?:linear|radial|conic)-gradient\(/gi;
+      const headers = [];
+      for (const match of value.matchAll(gradientPattern)) {
+        let depth = 1;
+        let header = "";
+        for (let index = match.index + match[0].length; index < value.length; index += 1) {
+          const character = value[index];
+          if (character === "(") depth += 1;
+          if (character === ")") depth -= 1;
+          if (character === "," && depth === 1) break;
+          if (depth === 1) header += character;
+          if (depth === 0) break;
+        }
+        headers.push(header);
+      }
+      return headers;
+    }
+
+    function extractCssColorFunctions(value) {
+      const colorFunctions = new Set(["rgb", "rgba", "hsl", "hsla", "hwb", "lab", "lch", "oklab", "oklch", "color", "color-mix"]);
+      const tokens = [];
+      for (let index = 0; index < value.length; index += 1) {
+        const match = value.slice(index).match(/^([a-z-]+)\(/i);
+        if (!match || !colorFunctions.has(match[1].toLowerCase())) continue;
+        let depth = 0;
+        let end = index;
+        for (; end < value.length; end += 1) {
+          if (value[end] === "(") depth += 1;
+          if (value[end] === ")") {
+            depth -= 1;
+            if (depth === 0) {
+              end += 1;
+              break;
+            }
+          }
+        }
+        if (depth !== 0) return [];
+        tokens.push(value.slice(index, end));
+        index = end - 1;
+      }
+      return tokens;
+    }
+
+    function interpolateColor(first, second, position) {
+      const interpolate = (start, end) => start + ((end - start) * position);
+      return {
+        r: Math.round(interpolate(first.r, second.r)),
+        g: Math.round(interpolate(first.g, second.g)),
+        b: Math.round(interpolate(first.b, second.b)),
+        a: Math.max(0, Math.min(1, interpolate(first.a, second.a))),
+      };
     }
 
     function composite(foreground, background) {
@@ -956,25 +1126,25 @@ async function checkThemeContrast(page, routeName) {
     }
 
     function parseCssColor(value) {
-      const match = String(value).match(/^rgba?\(([^)]+)\)$/);
-      if (!match) return null;
+      const candidate = String(value).trim();
+      if (parsedColorCache.has(candidate)) return parsedColorCache.get(candidate);
+      if (!candidate || !colorProbe || !CSS.supports("color", candidate)) {
+        parsedColorCache.set(candidate, null);
+        return null;
+      }
 
-      const normalized = match[1]
-        .replace(/\s*\/\s*/g, " ")
-        .replace(/,/g, " ");
-      const parts = normalized.split(/\s+/).filter(Boolean);
-      if (parts.length < 3) return null;
+      colorProbe.clearRect(0, 0, 1, 1);
+      colorProbe.fillStyle = "rgba(0, 0, 0, 0)";
+      colorProbe.fillStyle = candidate;
+      colorProbe.fillRect(0, 0, 1, 1);
+      const [r, g, b, alpha] = colorProbe.getImageData(0, 0, 1, 1).data;
+      const parsed = { r, g, b, a: alpha / 255 };
+      parsedColorCache.set(candidate, parsed);
+      return parsed;
+    }
 
-      const channel = (part) => part.endsWith("%")
-        ? Number.parseFloat(part) * 2.55
-        : Number.parseFloat(part);
-
-      return {
-        r: channel(parts[0]),
-        g: channel(parts[1]),
-        b: channel(parts[2]),
-        a: parts.length >= 4 ? Number.parseFloat(parts[3]) : 1,
-      };
+    function recordUnresolvedSample(element, text, source, reason) {
+      unresolvedSamples.add(`${labelFor(element, text)} unresolved ${source} background: ${reason}`);
     }
 
     function isLargeText(style) {
@@ -992,6 +1162,16 @@ async function checkThemeContrast(page, routeName) {
       if (style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0) return false;
       const rect = element.getBoundingClientRect();
       return rect.width > 1 && rect.height > 1;
+    }
+
+    function effectiveOpacityFor(element) {
+      if (!element) return 1;
+      if (effectiveOpacityCache.has(element)) return effectiveOpacityCache.get(element);
+      const parsedOpacity = Number.parseFloat(window.getComputedStyle(element).opacity);
+      const ownOpacity = Number.isFinite(parsedOpacity) ? parsedOpacity : 1;
+      const opacity = ownOpacity * effectiveOpacityFor(element.parentElement);
+      effectiveOpacityCache.set(element, opacity);
+      return opacity;
     }
 
     function controlTextFor(element) {
@@ -1026,14 +1206,15 @@ async function checkThemeContrast(page, routeName) {
     normalText: MIN_NORMAL_TEXT_CONTRAST_RATIO,
     largeText: MIN_LARGE_TEXT_CONTRAST_RATIO,
     uiComponent: MIN_UI_COMPONENT_CONTRAST_RATIO,
+    gradientGuardBand: 0.05,
   });
-
-  if (result.sampledTextCount <= 0) {
-    throw new Error(`${routeName} had no visible text samples for theme contrast smoke evidence.`);
-  }
 
   if (result.failures.length > 0) {
     throw new Error(`${routeName} has low-contrast visible text:\n${result.failures.join("\n")}`);
+  }
+
+  if (result.sampledTextCount <= 0) {
+    throw new Error(`${routeName} had no visible text samples for theme contrast smoke evidence.`);
   }
 
   return passedVisualSmokeContrastResult({
@@ -1049,6 +1230,23 @@ async function checkThemeContrast(page, routeName) {
     minimumLargeTextContrastRatio: result.minimumLargeTextContrastRatio,
     minimumUiComponentContrastRatio: result.minimumUiComponentContrastRatio,
   });
+}
+
+async function settleFiniteAnimations(page) {
+  await page.evaluate(() => {
+    for (const animation of document.getAnimations()) {
+      const endTime = animation.effect?.getComputedTiming().endTime;
+      if (typeof endTime !== "number" || !Number.isFinite(endTime)) continue;
+      try {
+        animation.finish();
+      } catch {
+        // A cancelled or not-yet-playable transition has no retained visual state to settle.
+      }
+    }
+  });
+  await page.evaluate(() => new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(resolve));
+  }));
 }
 
 async function captureRoute({ page, state, routeName, href, expectedText, expectedStateText, outputPath }) {
@@ -1100,6 +1298,7 @@ async function captureRoute({ page, state, routeName, href, expectedText, expect
     if (expectedStateText !== expectedText) {
       await expect(mainText(page, expectedStateText)).toBeVisible({ timeout: 30_000 });
     }
+    await settleFiniteAnimations(page);
     const observedTabState = await observeCanonicalTabState(page, state.canonicalTabState, routeName);
     await checkNoPageOverflow(page, routeName);
     await checkNoTextOverlap(page, routeName);

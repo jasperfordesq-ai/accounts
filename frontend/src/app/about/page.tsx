@@ -39,7 +39,7 @@ export default function AboutPage() {
               href={REPOSITORY_URL}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex min-h-9 items-center rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] px-3 text-sm font-semibold text-[var(--foreground)] hover:border-[var(--ring)]"
+              className="inline-flex min-h-9 items-center rounded-md border border-[var(--control-border)] bg-[var(--surface-subtle)] px-3 text-sm font-semibold text-[var(--foreground)] hover:border-[var(--ring)]"
             >
               accounts repository
             </a>

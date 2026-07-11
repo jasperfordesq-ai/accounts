@@ -126,7 +126,7 @@ import {
 const PRINCIPAL_ACTIVITIES_REVIEW_KEY = "directors-report-principal-activities";
 const AUDIT_INFORMATION_REVIEW_KEY = "directors-report-audit-information";
 const evidenceTextareaClass =
-  "mt-1 min-h-28 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500 dark:border-neutral-600 dark:bg-neutral-800 dark:text-gray-100";
+  "mt-1 min-h-28 w-full rounded-lg border border-[var(--control-border)] bg-white px-3 py-2 text-sm text-gray-900 outline-none transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500 dark:bg-neutral-800 dark:text-gray-100";
 
 /* ------------------------------------------------------------------ */
 /*  Main page component                                                */

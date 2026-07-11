@@ -73,9 +73,9 @@ export function YearEndQuestionnaireSection({
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{subtitle}</p>
         </div>
         {open ? (
-          <ChevronDown className="w-5 h-5 text-gray-400 dark:text-gray-500 shrink-0" />
+          <ChevronDown className="w-5 h-5 text-[var(--muted-foreground)] shrink-0" />
         ) : (
-          <ChevronRight className="w-5 h-5 text-gray-400 dark:text-gray-500 shrink-0" />
+          <ChevronRight className="w-5 h-5 text-[var(--muted-foreground)] shrink-0" />
         )}
       </button>
       {hasOpened && (

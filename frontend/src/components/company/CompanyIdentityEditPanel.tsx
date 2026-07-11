@@ -76,7 +76,7 @@ export function CompanyIdentityEditPanel({
               value={form.companyType}
               onChange={(event) => onFormChange({ ...form, companyType: event.target.value })}
               aria-label="Company Type"
-              className="mt-1 min-h-10 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 text-sm normal-case text-[var(--foreground)] outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500"
+              className="mt-1 min-h-10 w-full rounded-md border border-[var(--control-border)] bg-[var(--surface)] px-3 text-sm normal-case text-[var(--foreground)] outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500"
             >
               {companyTypeOptions.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -149,7 +149,7 @@ function TextField({
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder ?? label}
         aria-label={label}
-        className="mt-1 min-h-10 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 text-sm normal-case text-[var(--foreground)] outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500"
+        className="mt-1 min-h-10 w-full rounded-md border border-[var(--control-border)] bg-[var(--surface)] px-3 text-sm normal-case text-[var(--foreground)] outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500"
       />
     </label>
   );
@@ -173,7 +173,7 @@ function CheckboxField({
         checked={checked}
         onChange={(event) => onChange(event.target.checked)}
         aria-label={ariaLabel}
-        className="rounded border-[var(--border)] text-emerald-700 focus:ring-emerald-500"
+        className="rounded border-[var(--control-border)] text-emerald-700 focus:ring-emerald-500"
       />
       {label}
     </label>

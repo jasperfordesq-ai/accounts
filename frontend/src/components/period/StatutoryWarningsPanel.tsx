@@ -31,7 +31,7 @@ export function StatutoryWarningsPanel({ jeopardy, section307Note }: StatutoryWa
                   <AlertTriangle className="h-4 w-4 shrink-0" />
                   {jeopardy.hasLostExemption ? "Audit exemption lost" : "Audit exemption at risk"}
                 </h3>
-                <p className="mt-1 text-xs opacity-85">{jeopardy.lateFilingCount} late filings</p>
+                <p className="mt-1 text-xs">{jeopardy.lateFilingCount} late filings</p>
               </div>
               <StatusBadge tone={warningTone}>
                 {jeopardy.hasLostExemption ? "Manual review required" : "Monitor"}

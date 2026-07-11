@@ -308,7 +308,7 @@ function OfficerNameField({
           if (event.key === "Enter") onEnter();
           if (event.key === "Escape") onEscape?.();
         }}
-        className="mt-1 min-h-10 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 text-sm normal-case text-[var(--foreground)] outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500"
+        className="mt-1 min-h-10 w-full rounded-md border border-[var(--control-border)] bg-[var(--surface)] px-3 text-sm normal-case text-[var(--foreground)] outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500"
         autoFocus={autoFocus}
       />
     </label>
@@ -332,7 +332,7 @@ function OfficerRoleField({
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="mt-1 min-h-10 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 text-sm normal-case text-[var(--foreground)] outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500"
+        className="mt-1 min-h-10 w-full rounded-md border border-[var(--control-border)] bg-[var(--surface)] px-3 text-sm normal-case text-[var(--foreground)] outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500"
       >
         {officerRoles.map((role) => (
           <option key={role} value={role}>
@@ -362,7 +362,7 @@ function OfficerDateField({
         type="date"
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="mt-1 min-h-10 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 text-sm normal-case text-[var(--foreground)] outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500"
+        className="mt-1 min-h-10 w-full rounded-md border border-[var(--control-border)] bg-[var(--surface)] px-3 text-sm normal-case text-[var(--foreground)] outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500"
       />
     </label>
   );

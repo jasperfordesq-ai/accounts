@@ -54,7 +54,7 @@ const EMPTY_PAYMENT: CorporationTaxPaymentInput = {
   evidenceReference: "",
 };
 
-const inputClass = "w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--foreground)] outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500";
+const inputClass = "w-full rounded-md border border-[var(--control-border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--foreground)] outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500";
 
 export function CorporationTaxFilingSupportPanel(props: CorporationTaxFilingSupportPanelProps) {
   const responseRevision = [
@@ -156,13 +156,13 @@ function CorporationTaxFilingSupportPanelState({
             </div>
             <div className="flex flex-wrap gap-2">
               <a
-                className="inline-flex min-h-9 items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 text-sm font-semibold text-[var(--foreground)] hover:bg-[var(--surface-subtle)]"
+                className="inline-flex min-h-9 items-center gap-2 rounded-md border border-[var(--control-border)] bg-[var(--surface)] px-3 text-sm font-semibold text-[var(--foreground)] hover:bg-[var(--surface-subtle)]"
                 href={corporationTaxSupportWorksheetCsvUrl(companyId, periodId)}
               >
                 <Download aria-hidden="true" className="h-4 w-4" /> Support worksheet CSV
               </a>
               <a
-                className="inline-flex min-h-9 items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 text-sm font-semibold text-[var(--foreground)] hover:bg-[var(--surface-subtle)]"
+                className="inline-flex min-h-9 items-center gap-2 rounded-md border border-[var(--control-border)] bg-[var(--surface)] px-3 text-sm font-semibold text-[var(--foreground)] hover:bg-[var(--surface-subtle)]"
                 href={corporationTaxSupportWorksheetJsonUrl(companyId, periodId)}
               >
                 <Download aria-hidden="true" className="h-4 w-4" /> Evidence JSON
@@ -569,7 +569,7 @@ function MoneyField({ label, value, required = false, onChange }: { label: strin
 }
 
 function Flag({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) {
-  return <label className="flex min-h-11 items-start gap-2 rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] px-3 py-2 text-sm text-[var(--foreground)]"><input className="mt-0.5 h-4 w-4" type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} /><span>{label}</span></label>;
+  return <label className="flex min-h-11 items-start gap-2 rounded-md border border-[var(--control-border)] bg-[var(--surface-subtle)] px-3 py-2 text-sm text-[var(--foreground)]"><input className="mt-0.5 h-4 w-4" type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} /><span>{label}</span></label>;
 }
 
 function groupFields(fields: CorporationTaxFilingSupportResponse["worksheet"]["fields"]) {

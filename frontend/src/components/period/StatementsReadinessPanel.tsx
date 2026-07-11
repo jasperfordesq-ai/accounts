@@ -128,9 +128,9 @@ function ReadinessIssueList({
 function StatementsReadinessEmptyState() {
   return (
     <div className="text-center py-8">
-      <FileText className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+      <FileText className="w-10 h-10 text-[var(--muted-foreground)] mx-auto mb-3" />
       <p className="text-sm text-gray-500 dark:text-gray-400">Readiness data is not available yet.</p>
-      <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Complete the year-end process and generate adjustments first.</p>
+      <p className="text-xs text-[var(--muted-foreground)] mt-1">Complete the year-end process and generate adjustments first.</p>
     </div>
   );
 }

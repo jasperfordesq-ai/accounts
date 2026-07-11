@@ -165,7 +165,7 @@ export function PeriodImportWorkspace({
                     <input
                       value={bankForm.name}
                       onChange={(event) => onBankFormChange({ ...bankForm, name: event.target.value })}
-                      className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-gray-100"
+                      className="w-full rounded-md border border-[var(--control-border)] bg-white px-3 py-2 text-sm text-gray-900 dark:bg-neutral-900 dark:text-gray-100"
                       placeholder="Main current account"
                     />
                   </BankFormField>
@@ -173,7 +173,7 @@ export function PeriodImportWorkspace({
                     <input
                       value={bankForm.iban}
                       onChange={(event) => onBankFormChange({ ...bankForm, iban: event.target.value })}
-                      className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-gray-100"
+                      className="w-full rounded-md border border-[var(--control-border)] bg-white px-3 py-2 text-sm text-gray-900 dark:bg-neutral-900 dark:text-gray-100"
                       placeholder="IE00..."
                     />
                   </BankFormField>
@@ -183,7 +183,7 @@ export function PeriodImportWorkspace({
                       step="0.01"
                       value={bankForm.openingBalance}
                       onChange={(event) => onBankFormChange({ ...bankForm, openingBalance: event.target.value })}
-                      className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-gray-100"
+                      className="w-full rounded-md border border-[var(--control-border)] bg-white px-3 py-2 text-sm text-gray-900 dark:bg-neutral-900 dark:text-gray-100"
                     />
                   </BankFormField>
                   <BankFormField label="Balance date">
@@ -191,14 +191,14 @@ export function PeriodImportWorkspace({
                       type="date"
                       value={bankForm.openingBalanceDate || period?.periodStart || ""}
                       onChange={(event) => onBankFormChange({ ...bankForm, openingBalanceDate: event.target.value })}
-                      className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-gray-100"
+                      className="w-full rounded-md border border-[var(--control-border)] bg-white px-3 py-2 text-sm text-gray-900 dark:bg-neutral-900 dark:text-gray-100"
                     />
                   </BankFormField>
                   <BankFormField label="Currency">
                     <select
                       value={bankForm.currency}
                       onChange={(event) => onBankFormChange({ ...bankForm, currency: event.target.value })}
-                      className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-gray-100"
+                      className="w-full rounded-md border border-[var(--control-border)] bg-white px-3 py-2 text-sm text-gray-900 dark:bg-neutral-900 dark:text-gray-100"
                     >
                       <option value="EUR">EUR</option>
                       <option value="GBP">GBP</option>
@@ -299,7 +299,7 @@ export function PeriodImportWorkspace({
               <select
                 value={openingBalanceForm.categoryId}
                 onChange={(event) => onOpeningBalanceFormChange({ ...openingBalanceForm, categoryId: event.target.value })}
-                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-gray-100"
+                className="w-full rounded-md border border-[var(--control-border)] bg-white px-3 py-2 text-sm text-gray-900 dark:bg-neutral-900 dark:text-gray-100"
               >
                 <option value="">Select account...</option>
                 {openingBalanceCategories.map((category) => (
@@ -313,7 +313,7 @@ export function PeriodImportWorkspace({
               <select
                 value={openingBalanceForm.side}
                 onChange={(event) => onOpeningBalanceFormChange({ ...openingBalanceForm, side: event.target.value })}
-                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-gray-100"
+                className="w-full rounded-md border border-[var(--control-border)] bg-white px-3 py-2 text-sm text-gray-900 dark:bg-neutral-900 dark:text-gray-100"
               >
                 <option value="debit">Debit</option>
                 <option value="credit">Credit</option>
@@ -325,14 +325,14 @@ export function PeriodImportWorkspace({
                 step="0.01"
                 value={openingBalanceForm.amount}
                 onChange={(event) => onOpeningBalanceFormChange({ ...openingBalanceForm, amount: event.target.value })}
-                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-gray-100"
+                className="w-full rounded-md border border-[var(--control-border)] bg-white px-3 py-2 text-sm text-gray-900 dark:bg-neutral-900 dark:text-gray-100"
               />
             </BankFormField>
             <BankFormField label="Evidence note">
               <input
                 value={openingBalanceForm.sourceNote}
                 onChange={(event) => onOpeningBalanceFormChange({ ...openingBalanceForm, sourceNote: event.target.value })}
-                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-gray-100"
+                className="w-full rounded-md border border-[var(--control-border)] bg-white px-3 py-2 text-sm text-gray-900 dark:bg-neutral-900 dark:text-gray-100"
                 placeholder="Prior accounts / TB"
               />
             </BankFormField>
@@ -406,7 +406,7 @@ export function PeriodImportWorkspace({
               id="bank-account-select"
               value={selectedBankAccountId}
               onChange={(event) => onSelectBankAccount(event.target.value ? Number(event.target.value) : "")}
-              className="w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-colors"
+              className="w-full rounded-lg border border-[var(--control-border)] bg-white px-3 py-2 text-sm text-gray-900 shadow-sm transition-colors focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 dark:bg-neutral-800 dark:text-gray-100"
               title="Select bank account"
               aria-label="Select bank account"
             >
@@ -432,7 +432,7 @@ export function PeriodImportWorkspace({
             className={`border-2 border-dashed rounded-xl p-10 text-center transition-all cursor-pointer ${
               dragOver
                 ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 scale-[1.01]"
-                : "border-gray-300 dark:border-neutral-600 hover:border-emerald-400 dark:hover:border-emerald-600"
+                : "border-[var(--control-border)] hover:border-emerald-500"
             }`}
             onClick={() => fileInputRef.current?.click()}
             onDrop={handleDropzoneDrop}
@@ -462,7 +462,7 @@ export function PeriodImportWorkspace({
               </>
             ) : (
               <>
-                <Upload className="w-10 h-10 text-gray-400 dark:text-gray-500 mx-auto mb-3" />
+                <Upload className="w-10 h-10 text-[var(--muted-foreground)] mx-auto mb-3" />
                 <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
                   Drag and drop a CSV file here, or click to browse
                 </p>

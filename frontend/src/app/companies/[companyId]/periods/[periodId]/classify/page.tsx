@@ -28,7 +28,7 @@ import {
 } from "@/lib/api";
 
 const inputClass =
-  "w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors";
+  "w-full rounded-lg border border-[var(--control-border)] bg-white px-3 py-2 text-sm text-gray-900 outline-none transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500 dark:bg-neutral-800 dark:text-gray-100";
 
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("en-IE", {
@@ -362,7 +362,7 @@ export default function ClassifyPage({
                     toast.error("Failed to save audit notice");
                   }
                 }}
-                className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                className="rounded border-[var(--control-border)] text-emerald-600 focus:ring-emerald-500"
                 aria-label="Member audit notice received"
                 title="Member audit notice received"
               />
@@ -427,7 +427,7 @@ export default function ClassifyPage({
                       {result.canUseMicro ? (
                         <CheckCircle2 className="w-6 h-6 text-emerald-500" />
                       ) : (
-                        <AlertTriangle className="w-6 h-6 text-gray-400 dark:text-gray-500" />
+                        <AlertTriangle className="w-6 h-6 text-[var(--muted-foreground)]" />
                       )}
                     </div>
                     <p className="text-xs font-medium text-gray-600 dark:text-gray-400">Micro Regime</p>
@@ -440,7 +440,7 @@ export default function ClassifyPage({
                       {result.canFileAbridged ? (
                         <CheckCircle2 className="w-6 h-6 text-emerald-500" />
                       ) : (
-                        <AlertTriangle className="w-6 h-6 text-gray-400 dark:text-gray-500" />
+                        <AlertTriangle className="w-6 h-6 text-[var(--muted-foreground)]" />
                       )}
                     </div>
                     <p className="text-xs font-medium text-gray-600 dark:text-gray-400">Abridged Filing</p>
@@ -453,7 +453,7 @@ export default function ClassifyPage({
                       {result.auditExempt ? (
                         <CheckCircle2 className="w-6 h-6 text-emerald-500" />
                       ) : (
-                        <AlertTriangle className="w-6 h-6 text-gray-400 dark:text-gray-500" />
+                        <AlertTriangle className="w-6 h-6 text-[var(--muted-foreground)]" />
                       )}
                     </div>
                     <p className="text-xs font-medium text-gray-600 dark:text-gray-400">Audit Exemption</p>
@@ -609,7 +609,7 @@ export default function ClassifyPage({
                   ? `, effective ${new Date(`${period.sizeClassification.thresholdScheduleEffectiveFrom}T00:00:00Z`).toLocaleDateString("en-IE")}`
                   : ""}. Prior-period class evidence is derived from retained period inputs.
               </p>
-              <p className="text-xs text-gray-400 dark:text-gray-500 text-center">
+              <p className="text-xs text-[var(--muted-foreground)] text-center">
                 Re-classify above to update.
               </p>
             </div>

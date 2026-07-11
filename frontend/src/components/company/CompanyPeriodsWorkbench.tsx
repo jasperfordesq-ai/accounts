@@ -69,7 +69,7 @@ export function CompanyPeriodsWorkbench({
               type="checkbox"
               checked={isFirstYear}
               onChange={(event) => onFirstYearChange(event.target.checked)}
-              className="rounded border-emerald-300 text-emerald-700 focus:ring-emerald-500"
+              className="rounded border-[var(--control-border)] text-emerald-700 focus:ring-emerald-500"
             />
             First year
           </label>
@@ -115,7 +115,7 @@ export function CompanyPeriodsWorkbench({
               <Link
                 key="action"
                 href={`/companies/${company.id}/periods/${period.id}`}
-                className="inline-flex min-h-8 items-center gap-2 whitespace-nowrap rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] px-3 text-xs font-semibold text-[var(--foreground)] hover:border-[var(--ring)]"
+                className="inline-flex min-h-8 items-center gap-2 whitespace-nowrap rounded-md border border-[var(--control-border)] bg-[var(--surface-subtle)] px-3 text-xs font-semibold text-[var(--foreground)] hover:border-[var(--ring)]"
               >
                 {index === 0 ? "Open workbench" : "Open record"}
                 <ArrowRight className="h-3.5 w-3.5" />
@@ -144,7 +144,7 @@ function DateField({
         type="date"
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="mt-1 min-h-10 w-full rounded-md border border-emerald-200 bg-white px-3 text-sm normal-case text-gray-950 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500 dark:border-emerald-800 dark:bg-neutral-900 dark:text-gray-100"
+        className="mt-1 min-h-10 w-full rounded-md border border-[var(--control-border)] bg-white px-3 text-sm normal-case text-gray-950 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500 dark:bg-neutral-900 dark:text-gray-100"
       />
     </label>
   );

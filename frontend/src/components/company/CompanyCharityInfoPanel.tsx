@@ -194,7 +194,7 @@ function CharityEditForm({
               ...charityForm,
               governanceCodeCompliant: event.target.value === "" ? null : event.target.value === "yes",
             })}
-            className="mt-1 min-h-10 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 text-sm normal-case text-[var(--foreground)] outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500"
+        className="mt-1 min-h-10 w-full rounded-md border border-[var(--control-border)] bg-[var(--surface)] px-3 text-sm normal-case text-[var(--foreground)] outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500"
           >
             <option value="">Select an explicit answer</option>
             <option value="yes">Yes</option>
@@ -311,7 +311,7 @@ function EvidenceFileField({
         type="file"
         accept=".pdf,.png,.jpg,.jpeg,.txt,.doc,.docx"
         onChange={(event) => void readFile(event.target.files?.[0])}
-        className="mt-1 block min-h-10 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm normal-case text-[var(--foreground)] file:mr-3 file:rounded file:border-0 file:bg-emerald-700 file:px-3 file:py-1 file:text-xs file:font-semibold file:text-white"
+        className="mt-1 block min-h-10 w-full rounded-md border border-[var(--control-border)] bg-[var(--surface)] px-3 py-2 text-sm normal-case text-[var(--foreground)] file:mr-3 file:rounded file:border-0 file:bg-emerald-700 file:px-3 file:py-1 file:text-xs file:font-semibold file:text-white"
       />
       <span className="mt-1 block font-normal normal-case text-[var(--muted-foreground)]">
         Retained with a SHA-256 hash and the signed-in reviewer identity and UTC review time.
@@ -367,7 +367,7 @@ function TextField({
       <input
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="mt-1 min-h-10 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 text-sm normal-case text-[var(--foreground)] outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500"
+        className="mt-1 min-h-10 w-full rounded-md border border-[var(--control-border)] bg-[var(--surface)] px-3 text-sm normal-case text-[var(--foreground)] outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500"
       />
     </label>
   );
@@ -389,7 +389,7 @@ function NumberField({
         type="number"
         value={Number.isFinite(value) ? value : ""}
         onChange={(event) => onChange(Number(event.target.value))}
-        className="mt-1 min-h-10 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 text-sm normal-case text-[var(--foreground)] outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500"
+        className="mt-1 min-h-10 w-full rounded-md border border-[var(--control-border)] bg-[var(--surface)] px-3 text-sm normal-case text-[var(--foreground)] outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500"
       />
     </label>
   );
@@ -410,7 +410,7 @@ function TextareaField({
       <textarea
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="mt-1 min-h-24 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm normal-case leading-6 text-[var(--foreground)] outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500"
+        className="mt-1 min-h-24 w-full rounded-md border border-[var(--control-border)] bg-[var(--surface)] px-3 py-2 text-sm normal-case leading-6 text-[var(--foreground)] outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500"
       />
     </label>
   );
@@ -431,7 +431,7 @@ function CheckboxField({
         type="checkbox"
         checked={checked}
         onChange={(event) => onChange(event.target.checked)}
-        className="rounded border-[var(--border)] text-emerald-700 focus:ring-emerald-500"
+        className="rounded border-[var(--control-border)] text-emerald-700 focus:ring-emerald-500"
       />
       {label}
     </label>

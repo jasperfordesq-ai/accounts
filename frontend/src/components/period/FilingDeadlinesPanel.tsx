@@ -104,7 +104,7 @@ export function FilingDeadlinesPanel({
                         value={reference}
                         disabled={!evidenceAvailable}
                         onChange={(event) => onFilingReferenceChange(deadline.id, event.target.value)}
-                        className="h-9 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 text-sm text-[var(--foreground)] outline-none transition focus:border-[var(--ring)] focus:ring-2 focus:ring-teal-100 dark:focus:ring-teal-900/40 sm:w-56"
+                        className="h-9 w-full rounded-md border border-[var(--control-border)] bg-[var(--surface)] px-3 text-sm text-[var(--foreground)] outline-none transition focus:border-[var(--ring)] focus:ring-2 focus:ring-teal-100 dark:focus:ring-teal-900/40 sm:w-56"
                         placeholder={deadline.deadlineType === "Revenue" ? "ROS/CT1 reference" : "Annual return reference"}
                       />
                     )}

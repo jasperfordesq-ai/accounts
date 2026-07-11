@@ -17,7 +17,7 @@ interface YearEndPostBalanceSheetEventsSectionProps {
 }
 
 const inputClass =
-  "w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors";
+  "w-full rounded-lg border border-[var(--control-border)] bg-white px-3 py-2 text-sm text-gray-900 outline-none transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500 dark:bg-neutral-800 dark:text-gray-100";
 
 export function YearEndPostBalanceSheetEventsSection({
   canWrite = true,
@@ -42,7 +42,7 @@ export function YearEndPostBalanceSheetEventsSection({
               <div>
                 <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{event.description}</p>
                 <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-xs text-gray-400 dark:text-gray-500">
+                  <span className="text-xs text-[var(--muted-foreground)]">
                     {new Date(event.eventDate).toLocaleDateString("en-IE")}
                   </span>
                   <Chip variant="soft" size="sm" color={event.isAdjusting ? "warning" : "default"}>
@@ -63,7 +63,7 @@ export function YearEndPostBalanceSheetEventsSection({
                   onConfirm: () => onDelete(event.id!),
                   successAnnouncement: `Post-balance-sheet event ${event.description} was removed.`,
                 })}
-                className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400"
+                className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                 aria-label={`Delete event ${event.description}`}
               >
                 <Trash2 className="w-4 h-4" />
@@ -115,7 +115,7 @@ export function YearEndPostBalanceSheetEventsSection({
             id="pbse-adjusting"
             checked={draft.isAdjusting}
             onChange={(event) => onDraftChange({ ...draft, isAdjusting: event.target.checked })}
-            className="rounded border-gray-300 dark:border-neutral-600 text-emerald-600 focus:ring-emerald-500"
+            className="rounded border-[var(--control-border)] text-emerald-600 focus:ring-emerald-500"
           />
           <label htmlFor="pbse-adjusting" className="text-xs font-medium text-gray-600 dark:text-gray-400">
             Adjusting
