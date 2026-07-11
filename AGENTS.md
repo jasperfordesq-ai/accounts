@@ -12,6 +12,33 @@ starting a new plan from scratch.
 
 Project repository: https://github.com/jasperfordesq-ai/accounts
 
+## Deployment Modes Workstream Handoff — 11 July 2026
+
+The user has directed a new deployment-modes workstream so this repository can support:
+
+1. contributor development on localhost;
+2. a compiled Private Server installation on a personal machine, shared only with
+   selected users through Tailscale Serve; and
+3. the existing hardened Public Production path for an internet-reachable service.
+
+The canonical design, session findings, Docker-versus-native decision, security
+boundaries, proposed files, documentation outline, implementation packages, acceptance
+criteria, current status, and next-agent instructions are in
+**[Docs/deployment/DEPLOYMENT_MODES_HANDOFF.md](Docs/deployment/DEPLOYMENT_MODES_HANDOFF.md)**.
+
+Private Server is **planned and not yet implemented**. Do not expose `compose.yml`; it is
+development-only. Do not solve private deployment by setting the API environment to
+Development or by requiring the full public-production secret/evidence system. Preserve
+production runtime behaviour and implement a narrow explicit deployment-mode contract.
+Tailscale Serve is the planned private ingress; Funnel, public API/database ports, Caddy,
+IIS, Apache, and Nginx are outside that private path. Caddy remains only one optional
+Public Production ingress example.
+
+This workstream complements rather than supersedes the production-readiness and statutory
+acceptance goal below. A successful private installation must not be represented as real
+CRO/Revenue filing acceptance or used to close qualified-accountant/external evidence
+gates.
+
 ## Active Goal Handoff
 
 Goal: finish the Irish statutory accounts platform so it is production-ready code-wise,

@@ -22,7 +22,8 @@ real-world use until professional review is complete.
 
 - **Backend** — ASP.NET Core (.NET 10) Minimal API, EF Core 10, PostgreSQL 16.4, QuestPDF, CsvHelper
 - **Frontend** — Next.js 16 (App Router), HeroUI v3, Tailwind CSS 4
-- **Infra** — Docker Compose (local + production), GitHub Actions CI, Caddy reverse-proxy example
+- **Infra** — Docker Compose, GitHub Actions CI, private Tailscale deployment planning,
+  and optional public reverse-proxy examples
 
 ## Quick start (local)
 
@@ -33,6 +34,23 @@ docker compose up -d --build
 
 Full local instructions, the seeded local admin account, and SDK-only run steps are in
 **[LOCAL_SETUP.md](LOCAL_SETUP.md)**.
+
+## Deployment modes
+
+FilingBridge is separating development, private small-organisation use, and public
+production into explicit modes. The Private Server mode is currently **in development**;
+the existing development stack must not be exposed through Tailscale or the public
+internet.
+
+| Mode | Intended use | Status |
+|------|--------------|--------|
+| Development | Contributors changing code on localhost | Available |
+| Private Server | Compiled containers shared only with selected users through Tailscale Serve | Planned / in development |
+| Public Production | Internet-reachable service behind an approved HTTPS ingress | Hardened stack exists; release-readiness gates remain open |
+
+The agreed architecture, security boundaries, documentation plan, implementation work
+packages, acceptance criteria, and continuation instructions are recorded in
+**[Deployment Modes Workstream Handoff](Docs/deployment/DEPLOYMENT_MODES_HANDOFF.md)**.
 
 ## Build & test
 
@@ -51,8 +69,8 @@ backup/restore drill — see [`.github/workflows/ci.yml`](.github/workflows/ci.y
 
 ## Production deployment
 
-Use `compose.production.yml` behind a TLS-terminating reverse proxy
-(see [`deploy/caddy/Caddyfile.example`](deploy/caddy/Caddyfile.example)). All secrets are supplied
+Use `compose.production.yml` behind a TLS-terminating reverse proxy. Caddy is an optional
+example, not a dependency (see [`deploy/caddy/Caddyfile.example`](deploy/caddy/Caddyfile.example)). All secrets are supplied
 via env/secret files and never committed; `ProductionSafetyService` fails startup fast if the
 configuration is unsafe. Operational scripts (backup, restore, smoke, image verification) live in
 [`scripts/`](scripts/). The security model, required environment variables, and deployment details
@@ -65,6 +83,7 @@ are documented in **[CLAUDE.md](CLAUDE.md)** under *Authentication, Authorizatio
 |----------|----------|
 | [CLAUDE.md](CLAUDE.md) | Architecture, entities, services, endpoints, security model, deployment |
 | [LOCAL_SETUP.md](LOCAL_SETUP.md) | Running the stack locally + seeded admin |
+| [Deployment modes handoff](Docs/deployment/DEPLOYMENT_MODES_HANDOFF.md) | Work-in-progress private/public/development mode design and next-session instructions |
 | [REQUIREMENTS.md](REQUIREMENTS.md) | Product requirements |
 | [LICENSE](LICENSE) | GNU Affero General Public License version 3 text |
 | [NOTICE](NOTICE) | Jasper Ford attribution, Section 7 additional terms, and source-code notice |
