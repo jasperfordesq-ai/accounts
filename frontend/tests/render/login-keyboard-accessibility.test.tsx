@@ -82,4 +82,40 @@ describe("login keyboard accessibility", () => {
     await user.click(screen.getByRole("button", { name: "I have stored these codes" }));
     expect(mocks.replace).toHaveBeenCalledWith("/change-password?returnTo=%2F");
   });
+
+  it("completes an already-enrolled TOTP challenge with explicit null enrollment fields", async () => {
+    const user = userEvent.setup();
+    mocks.login.mockResolvedValue({
+      challengeToken: "mfa-login-challenge",
+      requiresEnrollment: false,
+      expiresAtUtc: "2026-07-10T21:00:00Z",
+      enrollmentSecret: null,
+      otpAuthUri: null,
+    });
+    mocks.completeMfaChallenge.mockResolvedValue({
+      user: {
+        userId: 1, tenantId: 2, tenantName: "Keyboard Accountants", email: "reviewer@example.test",
+        displayName: "Keyboard Reviewer", role: "Reviewer", allowedCompanyIds: [], mustChangePassword: false,
+      },
+      recoveryCodes: [],
+    });
+    render(<LoginPage />);
+
+    await user.type(screen.getByRole("textbox", { name: "Email" }), "reviewer@example.test");
+    await user.type(screen.getByLabelText("Password"), "correct horse battery staple");
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
+    expect(await screen.findByLabelText("6-digit authenticator code")).toBeVisible();
+    expect(screen.queryByLabelText("Authenticator setup key")).not.toBeInTheDocument();
+    await user.type(screen.getByLabelText("6-digit authenticator code"), "654321");
+    await user.click(screen.getByRole("button", { name: "Verify and sign in" }));
+
+    await waitFor(() => {
+      expect(mocks.completeMfaChallenge).toHaveBeenCalledWith(
+        "mfa-login-challenge",
+        "654321",
+        undefined,
+      );
+      expect(mocks.replace).toHaveBeenCalledWith("/");
+    });
+  });
 });

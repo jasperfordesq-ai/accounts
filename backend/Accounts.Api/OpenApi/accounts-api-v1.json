@@ -714,6 +714,16 @@
               }
             }
           },
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MfaChallengeResponse"
+                }
+              }
+            }
+          },
           "401": {
             "description": "Unauthorized"
           }
@@ -13889,6 +13899,40 @@
             ]
           },
           "recoveryCode": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "MfaChallengeResponse": {
+        "required": [
+          "challengeToken",
+          "requiresEnrollment",
+          "expiresAtUtc",
+          "enrollmentSecret",
+          "otpAuthUri"
+        ],
+        "type": "object",
+        "properties": {
+          "challengeToken": {
+            "type": "string"
+          },
+          "requiresEnrollment": {
+            "type": "boolean"
+          },
+          "expiresAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "enrollmentSecret": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "otpAuthUri": {
             "type": [
               "null",
               "string"

@@ -4,6 +4,7 @@ using Accounts.Api.Rules;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Accounts.Api.Services;
 
@@ -342,8 +343,8 @@ public sealed record MfaChallengeResponse(
     string ChallengeToken,
     bool RequiresEnrollment,
     DateTime ExpiresAtUtc,
-    string? EnrollmentSecret,
-    string? OtpAuthUri);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? EnrollmentSecret,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? OtpAuthUri);
 
 public sealed record IdentityLoginResult(
     bool Succeeded,

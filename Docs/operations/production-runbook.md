@@ -170,7 +170,7 @@ new backup and the oldest still-retained backup have been restored successfully.
 Set the production database environment variables used by `compose.production.yml`, then run:
 
 ```powershell
-.\scripts\backup-postgres.ps1 -OutputDirectory D:\accounts-backups
+.\scripts\backup-postgres.ps1 -OutputDirectory D:\accounts-backups -ReleaseCandidate <release-commit-sha>
 ```
 
 The script uses `pg_dump --format=custom`, immediately wraps the dump with OpenSSL CMS/AES-256-CBC using `BACKUP_ENCRYPTION_CERTIFICATE_FILE`, removes the plaintext staging dump, and writes only `.dump.cms`, `.dump.cms.sha256`, and `.dump.cms.manifest.json` files. The manifest binds environment/release identity, byte size, encrypted-file SHA-256, public-certificate SHA-256, algorithm, and plaintext-removal state. `-AllowUnencryptedBackupForLocalDryRun` is restricted to non-production local data and must never be used by scheduled or release backup jobs.
@@ -182,10 +182,10 @@ The script uses `pg_dump --format=custom`, immediately wraps the dump with OpenS
 Run a restore drill after every material schema change and at least monthly:
 
 ```powershell
-.\scripts\verify-postgres-backup.ps1 -BackupPath D:\accounts-backups\accounts-20260607-010000.dump.cms
+.\scripts\verify-postgres-backup.ps1 -BackupPath D:\accounts-backups\accounts-20260607-010000.dump.cms -ReleaseCandidate <release-commit-sha> -GitHubActionsRunUrl <ci-run-url>
 ```
 
-The drill decrypts into a bounded operating-system temporary directory, restores into `accounts_restore_verify`, deletes the temporary plaintext, and leaves the source production database untouched. It compares schema migration identity; counts across users, companies, periods, banking/import, adjustments, filing packages/history, audit logs and checkpoints; exact full-row fingerprints for financial, filing and audit data; representative monetary/artifact-byte totals; and malformed audit-hash/checkpoint counts. The report measures backup age (RPO) and end-to-end restore duration (RTO).
+The drill decrypts into a bounded operating-system temporary directory with Unix `0700` directory and `0600` plaintext-file permissions, restores into `accounts_restore_verify`, deletes the temporary plaintext, and leaves the source production database untouched. It compares schema migration identity; counts across users, companies, periods, banking/import, adjustments, filing packages/history, audit logs and checkpoints; exact full-row fingerprints for financial, filing and audit data; representative monetary/artifact-byte totals; and malformed audit-hash/checkpoint counts. The report measures backup age (RPO) and end-to-end restore duration (RTO), binds the exact commit/run, and records the retained envelope, checksum and manifest names, byte sizes and SHA-256 hashes. Machine and release pack verification must reject duplicate, missing, renamed, tampered or candidate-mismatched backup sets.
 
 In CI, the production smoke job creates an ephemeral production-shape backup, verifies
 the restore, writes `restore-drill-report.json`, and uploads the
@@ -499,9 +499,12 @@ rejects an account that still requires enrollment: enrol the production smoke ac
 retain its authenticator and recovery credentials through the approved identity process, and provide
 `SMOKE_TOTP_SECRET` (or `-TotpSecret`) from the separate authorized MFA secret store. Do not place it
 in the repository, command history, logs, or retained smoke artifacts. Only the disposable CI
-bootstrap passes `-AllowEphemeralMfaEnrollment`; that path consumes the one-time enrollment secret
-without writing the secret or generated recovery codes to evidence and must never be used for a
-persistent operator or production account.
+bootstrap passes `-AllowEphemeralMfaEnrollment`; that path may write the one-time secret and last
+accepted TOTP counter only to a mode-`0600` JSON handoff beneath `RUNNER_TEMP`. The visual runner
+consumes and unlinks that handoff before completing a real MFA login, and the always-run cleanup
+removes any remnant after an earlier failure. The handoff and generated recovery codes are never
+uploaded as evidence. This disposable path must never be used for a persistent operator or production
+account.
 
 To prove production error routing, deploy the stack with `MONITORING_ERROR_SMOKE_ENABLED=true` for the smoke window and run:
 

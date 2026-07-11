@@ -100,6 +100,45 @@ function Invoke-NativeCommand([string]$Description, [scriptblock]$Command) {
     }
 }
 
+function Set-UnixFileMode([string]$Path, [string]$Mode, [string]$Description) {
+    if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) {
+        return
+    }
+
+    Invoke-NativeCommand $Description {
+        & chmod $Mode -- $Path
+    }
+    $expectedMode = [Convert]::ToInt32($Mode, 8)
+    $actualMode = [int][IO.File]::GetUnixFileMode($Path)
+    if ($actualMode -ne $expectedMode) {
+        throw "$Description did not produce Unix mode $Mode on $Path."
+    }
+}
+
+function Remove-PrivateBackupStagingDirectory([string]$Path) {
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        return
+    }
+
+    $resolvedStagingDirectory = [IO.Path]::GetFullPath($Path)
+    $temporaryRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
+    $comparison = if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) {
+        [StringComparison]::OrdinalIgnoreCase
+    } else {
+        [StringComparison]::Ordinal
+    }
+    if (-not $resolvedStagingDirectory.StartsWith($temporaryRoot, $comparison)) {
+        throw "Refusing to remove a backup staging path outside the operating-system temporary directory."
+    }
+
+    if (Test-Path -LiteralPath $resolvedStagingDirectory) {
+        Remove-Item -LiteralPath $resolvedStagingDirectory -Recurse -Force -ErrorAction Stop
+    }
+    if (Test-Path -LiteralPath $resolvedStagingDirectory) {
+        throw "Private plaintext backup staging directory could not be removed: $resolvedStagingDirectory"
+    }
+}
+
 function Resolve-OpenSsl {
     $command = Get-Command openssl -ErrorAction SilentlyContinue
     if ($null -ne $command) {
@@ -123,6 +162,9 @@ if ([string]::IsNullOrWhiteSpace($Database)) {
 if ([string]::IsNullOrWhiteSpace($User)) {
     throw "POSTGRES_USER or -User is required."
 }
+if ($ReleaseCandidate -cnotmatch '^[0-9a-f]{40}$') {
+    throw "ReleaseCandidate must be a full lowercase 40-character hexadecimal Git commit SHA."
+}
 if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
     throw "-OutputDirectory is required and must point to an off-repository backup location."
 }
@@ -145,52 +187,76 @@ New-Item -ItemType Directory -Force -Path $outputDirectoryFullPath | Out-Null
 
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $safeDatabase = $Database -replace "[^A-Za-z0-9_.-]", "_"
-$backupPath = Join-Path $outputDirectoryFullPath "$safeDatabase-$timestamp.dump"
+$backupFileName = "$safeDatabase-$timestamp.dump"
+$temporaryStagingDirectory = Join-Path ([IO.Path]::GetTempPath()) ("accounts-backup-staging-" + [Guid]::NewGuid().ToString("N"))
+$backupPath = Join-Path $temporaryStagingDirectory $backupFileName
+$plaintextOutputPath = Join-Path $outputDirectoryFullPath $backupFileName
 $containerBackupPath = "/var/lib/postgresql/data/.accounts-backup-$safeDatabase-$timestamp.dump"
-
-try {
-    Invoke-NativeCommand "Create PostgreSQL backup inside container" {
-        docker compose -f $ComposeFile exec -T $Service pg_dump `
-            --username $User `
-            --dbname $Database `
-            --format=custom `
-            --no-owner `
-            --no-acl `
-            --file $containerBackupPath
-    }
-
-    Invoke-NativeCommand "Copy PostgreSQL backup out of container" {
-        docker compose -f $ComposeFile cp "${Service}:$containerBackupPath" $backupPath
-    }
-} finally {
-    Invoke-NativeCommand "Remove temporary PostgreSQL backup from container" {
-        docker compose -f $ComposeFile exec -T $Service rm -f $containerBackupPath
-    }
-}
-
-$outputPath = $backupPath
+$outputPath = $plaintextOutputPath
 $encrypted = $false
 $encryptionAlgorithm = "none"
 $encryptionCertificateSha256 = ""
-if (-not [string]::IsNullOrWhiteSpace($EncryptionCertificateFile)) {
-    $openssl = Resolve-OpenSsl
-    $outputPath = "$backupPath.cms"
+$plaintextDumpRetained = $false
+
+try {
+    New-Item -ItemType Directory -Path $temporaryStagingDirectory | Out-Null
+    Set-UnixFileMode $temporaryStagingDirectory "700" "Restrict plaintext-backup staging directory permissions"
+    if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
+        New-Item -ItemType File -Path $backupPath | Out-Null
+        Set-UnixFileMode $backupPath "600" "Restrict plaintext-backup staging file permissions"
+    }
+
     try {
-        Invoke-NativeCommand "Encrypt PostgreSQL backup with the release backup certificate" {
-            & $openssl cms -encrypt -binary -aes-256-cbc `
-                -in $backupPath `
-                -outform DER `
-                -out $outputPath `
-                $EncryptionCertificateFile
+        Invoke-NativeCommand "Create PostgreSQL backup inside container" {
+            docker compose -f $ComposeFile exec -T $Service pg_dump `
+                --username $User `
+                --dbname $Database `
+                --format=custom `
+                --no-owner `
+                --no-acl `
+                --file $containerBackupPath
         }
-        $encrypted = $true
-        $encryptionAlgorithm = "CMS/AES-256-CBC"
-        $encryptionCertificateSha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $EncryptionCertificateFile).Hash.ToLowerInvariant()
+
+        Invoke-NativeCommand "Copy PostgreSQL backup out of container" {
+            docker compose -f $ComposeFile cp "${Service}:$containerBackupPath" $backupPath
+        }
+        Set-UnixFileMode $backupPath "600" "Reassert plaintext-backup staging file permissions after container copy"
+        if (-not (Test-Path -LiteralPath $backupPath -PathType Leaf) -or (Get-Item -LiteralPath $backupPath).Length -le 0) {
+            throw "Copied PostgreSQL backup is missing or empty."
+        }
     } finally {
-        if (Test-Path -LiteralPath $backupPath -PathType Leaf) {
-            Remove-Item -LiteralPath $backupPath -Force
+        Invoke-NativeCommand "Remove temporary PostgreSQL backup from container" {
+            docker compose -f $ComposeFile exec -T $Service rm -f $containerBackupPath
         }
     }
+
+    if (-not [string]::IsNullOrWhiteSpace($EncryptionCertificateFile)) {
+        $openssl = Resolve-OpenSsl
+        $outputPath = "$plaintextOutputPath.cms"
+        try {
+            Invoke-NativeCommand "Encrypt PostgreSQL backup with the release backup certificate" {
+                & $openssl cms -encrypt -binary -aes-256-cbc `
+                    -in $backupPath `
+                    -outform DER `
+                    -out $outputPath `
+                    $EncryptionCertificateFile
+            }
+            $encrypted = $true
+            $encryptionAlgorithm = "CMS/AES-256-CBC"
+            $encryptionCertificateSha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $EncryptionCertificateFile).Hash.ToLowerInvariant()
+        } catch {
+            if (Test-Path -LiteralPath $outputPath -PathType Leaf) {
+                Remove-Item -LiteralPath $outputPath -Force -ErrorAction Stop
+            }
+            throw
+        }
+    } else {
+        Move-Item -LiteralPath $backupPath -Destination $plaintextOutputPath -Force
+        Set-UnixFileMode $plaintextOutputPath "600" "Restrict local plaintext-backup output permissions"
+        $plaintextDumpRetained = $true
+    }
+} finally {
+    Remove-PrivateBackupStagingDirectory $temporaryStagingDirectory
 }
 
 if (-not (Test-Path -LiteralPath $outputPath -PathType Leaf)) {
@@ -216,7 +282,7 @@ $backupSha256 = $hash.Hash.ToLowerInvariant()
     encrypted = $encrypted
     encryptionAlgorithm = $encryptionAlgorithm
     encryptionCertificateFileSha256 = $encryptionCertificateSha256
-    plaintextDumpRetained = Test-Path -LiteralPath $backupPath -PathType Leaf
+    plaintextDumpRetained = $plaintextDumpRetained
 } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
 
 Write-Host "Backup written: $outputPath"

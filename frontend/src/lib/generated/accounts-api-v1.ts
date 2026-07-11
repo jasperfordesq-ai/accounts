@@ -878,6 +878,15 @@ export interface paths {
                         "application/json": components["schemas"]["AuthResponse"];
                     };
                 };
+                /** @description Accepted */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MfaChallengeResponse"];
+                    };
+                };
                 /** @description Unauthorized */
                 401: {
                     headers: {
@@ -8771,6 +8780,14 @@ export interface components {
             challengeToken: null | string;
             totpCode: null | string;
             recoveryCode: null | string;
+        };
+        MfaChallengeResponse: {
+            challengeToken: string;
+            requiresEnrollment: boolean;
+            /** Format: date-time */
+            expiresAtUtc: string;
+            enrollmentSecret: null | string;
+            otpAuthUri: null | string;
         };
         MfaCompletionResponse: {
             user: components["schemas"]["AuthResponse"];

@@ -62,6 +62,45 @@ function Invoke-NativeCommand([string]$Description, [scriptblock]$Command) {
     }
 }
 
+function Set-UnixFileMode([string]$Path, [string]$Mode, [string]$Description) {
+    if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) {
+        return
+    }
+
+    Invoke-NativeCommand $Description {
+        & chmod $Mode -- $Path
+    }
+    $expectedMode = [Convert]::ToInt32($Mode, 8)
+    $actualMode = [int][IO.File]::GetUnixFileMode($Path)
+    if ($actualMode -ne $expectedMode) {
+        throw "$Description did not produce Unix mode $Mode on $Path."
+    }
+}
+
+function Remove-TemporaryDecryptDirectory([string]$Path) {
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        return
+    }
+
+    $resolvedTemporaryDirectory = [IO.Path]::GetFullPath($Path)
+    $temporaryRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
+    $comparison = if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) {
+        [StringComparison]::OrdinalIgnoreCase
+    } else {
+        [StringComparison]::Ordinal
+    }
+    if (-not $resolvedTemporaryDirectory.StartsWith($temporaryRoot, $comparison)) {
+        throw "Refusing to remove a decrypted-backup path outside the operating-system temporary directory."
+    }
+
+    if (Test-Path -LiteralPath $resolvedTemporaryDirectory) {
+        Remove-Item -LiteralPath $resolvedTemporaryDirectory -Recurse -Force -ErrorAction Stop
+    }
+    if (Test-Path -LiteralPath $resolvedTemporaryDirectory) {
+        throw "Decrypted-backup temporary directory could not be removed: $resolvedTemporaryDirectory"
+    }
+}
+
 function Resolve-OpenSsl {
     $command = Get-Command openssl -ErrorAction SilentlyContinue
     if ($null -ne $command) {
@@ -122,19 +161,32 @@ if ($encrypted) {
         throw "Backup manifest encryption certificate does not match the supplied decryption certificate."
     }
 
-    $temporaryDecryptDirectory = Join-Path ([IO.Path]::GetTempPath()) ("accounts-backup-decrypt-" + [Guid]::NewGuid().ToString("N"))
-    New-Item -ItemType Directory -Path $temporaryDecryptDirectory | Out-Null
-    $restoreSourcePath = Join-Path $temporaryDecryptDirectory ([IO.Path]::GetFileNameWithoutExtension($leaf))
-    $openssl = Resolve-OpenSsl
-    Invoke-NativeCommand "Decrypt PostgreSQL backup into a temporary restore file" {
-        & $openssl cms -decrypt -binary -inform DER `
-            -in $BackupPath `
-            -recip $DecryptionCertificateFile `
-            -inkey $DecryptionPrivateKeyFile `
-            -out $restoreSourcePath
-    }
-    if (-not (Test-Path -LiteralPath $restoreSourcePath -PathType Leaf) -or (Get-Item -LiteralPath $restoreSourcePath).Length -le 0) {
-        throw "Decrypted PostgreSQL backup is missing or empty."
+    try {
+        $temporaryDecryptDirectory = Join-Path ([IO.Path]::GetTempPath()) ("accounts-backup-decrypt-" + [Guid]::NewGuid().ToString("N"))
+        New-Item -ItemType Directory -Path $temporaryDecryptDirectory | Out-Null
+        Set-UnixFileMode $temporaryDecryptDirectory "700" "Restrict decrypted-backup temporary directory permissions"
+
+        $restoreSourcePath = Join-Path $temporaryDecryptDirectory ([IO.Path]::GetFileNameWithoutExtension($leaf))
+        if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
+            New-Item -ItemType File -Path $restoreSourcePath | Out-Null
+            Set-UnixFileMode $restoreSourcePath "600" "Restrict decrypted-backup temporary file permissions"
+        }
+
+        $openssl = Resolve-OpenSsl
+        Invoke-NativeCommand "Decrypt PostgreSQL backup into a temporary restore file" {
+            & $openssl cms -decrypt -binary -inform DER `
+                -in $BackupPath `
+                -recip $DecryptionCertificateFile `
+                -inkey $DecryptionPrivateKeyFile `
+                -out $restoreSourcePath
+        }
+        Set-UnixFileMode $restoreSourcePath "600" "Reassert decrypted-backup temporary file permissions after OpenSSL"
+        if (-not (Test-Path -LiteralPath $restoreSourcePath -PathType Leaf) -or (Get-Item -LiteralPath $restoreSourcePath).Length -le 0) {
+            throw "Decrypted PostgreSQL backup is missing or empty."
+        }
+    } catch {
+        Remove-TemporaryDecryptDirectory $temporaryDecryptDirectory
+        throw
     }
 } elseif (-not $AllowUnencryptedBackupRestore) {
     throw "Plaintext .dump restore is disabled. Supply an encrypted .dump.cms backup or use -AllowUnencryptedBackupRestore only for a documented local/break-glass operation."
@@ -142,13 +194,13 @@ if ($encrypted) {
 
 $restoreLeaf = Split-Path -Leaf $restoreSourcePath
 $containerPath = "/var/lib/postgresql/data/.accounts-restore-$restoreLeaf"
-$copiedToContainer = $false
+$containerCopyAttempted = $false
 
 try {
+    $containerCopyAttempted = $true
     Invoke-NativeCommand "Copy PostgreSQL backup into container" {
         docker compose -f $ComposeFile cp $restoreSourcePath "${Service}:$containerPath"
     }
-    $copiedToContainer = $true
 
     $restoreArgs = @(
         "compose", "-f", $ComposeFile,
@@ -169,18 +221,14 @@ try {
         & docker @restoreArgs
     }
 } finally {
-    if ($copiedToContainer) {
-        Invoke-NativeCommand "Remove temporary PostgreSQL backup from container" {
-            docker compose -f $ComposeFile exec -T $Service rm -f "$containerPath"
+    try {
+        if ($containerCopyAttempted) {
+            Invoke-NativeCommand "Remove temporary PostgreSQL backup from container" {
+                docker compose -f $ComposeFile exec -T $Service rm -f "$containerPath"
+            }
         }
-    }
-    if (-not [string]::IsNullOrWhiteSpace($temporaryDecryptDirectory)) {
-        $resolvedTemporaryDirectory = [IO.Path]::GetFullPath($temporaryDecryptDirectory)
-        $temporaryRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
-        if (-not $resolvedTemporaryDirectory.StartsWith($temporaryRoot, [StringComparison]::OrdinalIgnoreCase)) {
-            throw "Refusing to remove a decrypted-backup path outside the operating-system temporary directory."
-        }
-        Remove-Item -LiteralPath $resolvedTemporaryDirectory -Recurse -Force -ErrorAction SilentlyContinue
+    } finally {
+        Remove-TemporaryDecryptDirectory $temporaryDecryptDirectory
     }
 }
 

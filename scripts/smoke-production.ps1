@@ -8,6 +8,7 @@ param(
     [switch]$CheckDownloads,
     [switch]$CheckMonitoringErrorRouting,
     [switch]$AllowEphemeralMfaEnrollment,
+    [string]$EphemeralMfaHandoffPath = $env:SMOKE_EPHEMERAL_MFA_HANDOFF_PATH,
     [string]$OutputDirectory = (Join-Path ([System.IO.Path]::GetTempPath()) "accounts-smoke"),
     [int]$TimeoutSeconds = 30,
     [int]$DownloadTimeoutSeconds = 120,
@@ -265,9 +266,13 @@ function ConvertFrom-Base32([string]$Value) {
     return $bytes.ToArray()
 }
 
+function Get-TotpCounter([DateTimeOffset]$At = [DateTimeOffset]::UtcNow) {
+    return [int64][Math]::Floor($At.ToUnixTimeSeconds() / 30)
+}
+
 function New-TotpCode([string]$Secret, [DateTimeOffset]$At = [DateTimeOffset]::UtcNow) {
     $key = ConvertFrom-Base32 $Secret
-    [int64]$counter = [Math]::Floor($At.ToUnixTimeSeconds() / 30)
+    [int64]$counter = Get-TotpCounter $At
     $counterBytes = [BitConverter]::GetBytes($counter)
     if ([BitConverter]::IsLittleEndian) {
         [Array]::Reverse($counterBytes)
@@ -287,6 +292,101 @@ function New-TotpCode([string]$Secret, [DateTimeOffset]$At = [DateTimeOffset]::U
     return ($binary % 1000000).ToString("D6", [Globalization.CultureInfo]::InvariantCulture)
 }
 
+function Write-EphemeralMfaHandoff([string]$Path, [string]$Secret, [int64]$LastAcceptedCounter) {
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        return
+    }
+    if (-not $AllowEphemeralMfaEnrollment) {
+        throw "An MFA handoff is allowed only with -AllowEphemeralMfaEnrollment on a disposable candidate stack."
+    }
+    if ([string]::IsNullOrWhiteSpace($env:RUNNER_TEMP)) {
+        throw "EphemeralMfaHandoffPath requires RUNNER_TEMP so the secret cannot escape runner-temporary storage."
+    }
+
+    $runnerRoot = [System.IO.Path]::GetFullPath($env:RUNNER_TEMP).TrimEnd(
+        [System.IO.Path]::DirectorySeparatorChar,
+        [System.IO.Path]::AltDirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
+    $fullPath = [System.IO.Path]::GetFullPath($Path)
+    $runningOnWindows = [Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT
+    $pathComparison = if ($runningOnWindows) { [StringComparison]::OrdinalIgnoreCase } else { [StringComparison]::Ordinal }
+    if (-not $fullPath.StartsWith($runnerRoot, $pathComparison)) {
+        throw "EphemeralMfaHandoffPath must remain inside RUNNER_TEMP."
+    }
+    $runnerRootItem = Get-Item -LiteralPath $runnerRoot.TrimEnd(
+        [System.IO.Path]::DirectorySeparatorChar,
+        [System.IO.Path]::AltDirectorySeparatorChar) -Force
+    if (($runnerRootItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+        throw "RUNNER_TEMP must not be a filesystem link or junction for an MFA handoff."
+    }
+
+    $directory = Split-Path -Parent $fullPath
+    New-Item -ItemType Directory -Force -Path $directory | Out-Null
+    $runnerRootWithoutSeparator = $runnerRoot.TrimEnd(
+        [System.IO.Path]::DirectorySeparatorChar,
+        [System.IO.Path]::AltDirectorySeparatorChar)
+    $relativeDirectory = $directory.Substring($runnerRootWithoutSeparator.Length).TrimStart(
+        [System.IO.Path]::DirectorySeparatorChar,
+        [System.IO.Path]::AltDirectorySeparatorChar)
+    $currentDirectory = $runnerRootWithoutSeparator
+    foreach ($segment in $relativeDirectory.Split(
+        [char[]]@([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar),
+        [System.StringSplitOptions]::RemoveEmptyEntries)) {
+        $currentDirectory = Join-Path $currentDirectory $segment
+        $directoryItem = Get-Item -LiteralPath $currentDirectory -Force
+        if (($directoryItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+            throw "EphemeralMfaHandoffPath must not traverse a filesystem link or junction."
+        }
+    }
+    $payload = @{
+        schemaVersion = "accounts-visual-mfa-handoff-v1"
+        secret = $Secret
+        lastAcceptedCounter = $LastAcceptedCounter
+    } | ConvertTo-Json -Compress
+    $payloadBytes = [System.Text.UTF8Encoding]::new($false).GetBytes($payload)
+    $created = $false
+    try {
+        if ($runningOnWindows) {
+            $stream = [System.IO.File]::Open(
+                $fullPath,
+                [System.IO.FileMode]::CreateNew,
+                [System.IO.FileAccess]::Write,
+                [System.IO.FileShare]::None)
+        } else {
+            $expectedMode = [System.IO.UnixFileMode]::UserRead -bor [System.IO.UnixFileMode]::UserWrite
+            $options = [System.IO.FileStreamOptions]::new()
+            $options.Access = [System.IO.FileAccess]::Write
+            $options.Mode = [System.IO.FileMode]::CreateNew
+            $options.Share = [System.IO.FileShare]::None
+            $options.Options = [System.IO.FileOptions]::WriteThrough
+            $options.UnixCreateMode = $expectedMode
+            $stream = [System.IO.FileStream]::new($fullPath, $options)
+        }
+        $created = $true
+        try {
+            $stream.Write($payloadBytes, 0, $payloadBytes.Length)
+            $stream.Flush($true)
+        } finally {
+            $stream.Dispose()
+        }
+    } catch {
+        if ($created) {
+            Remove-Item -LiteralPath $fullPath -Force -ErrorAction SilentlyContinue
+        }
+        throw
+    } finally {
+        [Array]::Clear($payloadBytes, 0, $payloadBytes.Length)
+    }
+
+    if (-not $runningOnWindows) {
+        $mode = [System.IO.File]::GetUnixFileMode($fullPath)
+        $expectedMode = [System.IO.UnixFileMode]::UserRead -bor [System.IO.UnixFileMode]::UserWrite
+        if ($mode -ne $expectedMode) {
+            Remove-Item -LiteralPath $fullPath -Force -ErrorAction SilentlyContinue
+            throw "The ephemeral MFA handoff did not retain mode 0600."
+        }
+    }
+}
+
 try {
     $baseUri = [Uri]$BaseUrl
 } catch {
@@ -302,6 +402,11 @@ if ($baseUri.Scheme -eq "http" -and -not $AllowInsecureHttp) {
 
 $base = $baseUri.AbsoluteUri.TrimEnd("/")
 $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+$ephemeralEnrollmentSecret = $null
+$acceptedTotpCounter = $null
+if ($AllowEphemeralMfaEnrollment -and [string]::IsNullOrWhiteSpace($EphemeralMfaHandoffPath) -and -not [string]::IsNullOrWhiteSpace($env:RUNNER_TEMP)) {
+    $EphemeralMfaHandoffPath = Join-Path $env:RUNNER_TEMP "accounts-visual-auth/totp-handoff.json"
+}
 
 Write-Host "Checking frontend and upstream readiness..."
 $readyResponse = Invoke-WebRequest `
@@ -367,7 +472,8 @@ if ([int]$loginResponse.StatusCode -eq 202) {
         if ([string]::IsNullOrWhiteSpace([string]$challenge.enrollmentSecret)) {
             throw "MFA enrollment response did not include an enrollment secret."
         }
-        [string]$challenge.enrollmentSecret
+        $ephemeralEnrollmentSecret = [string]$challenge.enrollmentSecret
+        $ephemeralEnrollmentSecret
     } else {
         $TotpSecret
     }
@@ -376,9 +482,11 @@ if ([int]$loginResponse.StatusCode -eq 202) {
     }
 
     Write-Host "Completing privileged-account MFA through frontend proxy..."
+    $totpAt = [DateTimeOffset]::UtcNow
+    $acceptedTotpCounter = Get-TotpCounter $totpAt
     $mfaBody = @{
         challengeToken = [string]$challenge.challengeToken
-        totpCode = New-TotpCode $effectiveTotpSecret
+        totpCode = New-TotpCode $effectiveTotpSecret $totpAt
         recoveryCode = $null
     } | ConvertTo-Json
     $loginResponse = Invoke-WebRequest `
@@ -397,7 +505,6 @@ if ([int]$loginResponse.StatusCode -eq 202) {
 if ([int]$loginResponse.StatusCode -ne 200) {
     throw "Authentication did not complete successfully. HTTP status: $($loginResponse.StatusCode)."
 }
-
 if (-not $AllowInsecureHttp) {
     Assert-SecurityHeader -Response $loginResponse -Name "Strict-Transport-Security" -ExpectedText "max-age=31536000"
     Assert-SetCookieAttribute -Response $loginResponse -CookieName "accounts_session" -Attribute "Secure"
@@ -420,6 +527,9 @@ $currentUser = $currentUserResponse.Content | ConvertFrom-Json
 
 if ([string]::IsNullOrWhiteSpace($currentUser.email)) {
     throw "Authenticated /api/auth/me response did not include an email."
+}
+if ($currentUser.mfaVerified -ne $true -or [string]$currentUser.mfaMethod -cne "totp") {
+    throw "Authenticated /api/auth/me response did not prove a fresh TOTP MFA session."
 }
 
 Write-Host "Checking company list through frontend proxy..."
@@ -583,6 +693,15 @@ try {
 
 if ($postLogoutStatusCode -ne [int][System.Net.HttpStatusCode]::Unauthorized) {
     throw "Expected /api/auth/me to be unauthorized after logout, got HTTP $postLogoutStatusCode."
+}
+
+if (-not [string]::IsNullOrWhiteSpace($ephemeralEnrollmentSecret) -and $null -ne $acceptedTotpCounter) {
+    Write-EphemeralMfaHandoff `
+        -Path $EphemeralMfaHandoffPath `
+        -Secret $ephemeralEnrollmentSecret `
+        -LastAcceptedCounter $acceptedTotpCounter
+    $ephemeralEnrollmentSecret = $null
+    $acceptedTotpCounter = $null
 }
 
 Write-Host "Production smoke check completed."

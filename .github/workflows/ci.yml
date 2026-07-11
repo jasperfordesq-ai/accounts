@@ -41,6 +41,14 @@ jobs:
         shell: pwsh
         run: ./scripts/test-container-supply-chain-report.ps1
 
+      - name: Test PostgreSQL backup evidence binding
+        shell: pwsh
+        run: ./scripts/test-postgres-backup-evidence.ps1
+
+      - name: Test disposable MFA handoff writer
+        shell: pwsh
+        run: ./scripts/test-smoke-mfa-handoff.ps1
+
   backend:
     name: Backend
     runs-on: ubuntu-latest
@@ -780,6 +788,7 @@ jobs:
             -Password $bootstrapOwnerPassword `
             -OutputDirectory (Join-Path $env:RUNNER_TEMP "accounts-smoke") `
             -AllowEphemeralMfaEnrollment `
+            -EphemeralMfaHandoffPath (Join-Path $env:RUNNER_TEMP "accounts-visual-auth/totp-handoff.json") `
             -CheckMonitoringErrorRouting
 
       - name: Run bounded production capacity profile
@@ -960,8 +969,11 @@ jobs:
           export BASE_URL=https://accounts-smoke.local
           export EMAIL="$BOOTSTRAP_OWNER_EMAIL"
           export PASSWORD="$(tr -d '\r\n' < "$BOOTSTRAP_OWNER_PASSWORD_FILE")"
+          export MFA_HANDOFF_FILE="$RUNNER_TEMP/accounts-visual-auth/totp-handoff.json"
+          trap 'rm -f "$MFA_HANDOFF_FILE"' EXIT
+          test -s "$MFA_HANDOFF_FILE"
 
-          npm run test:visual -- --output-dir=../.tmp/visual-smoke
+          npm run test:visual -- --output-dir=../.tmp/visual-smoke --mfa-handoff-file="$MFA_HANDOFF_FILE"
           npm run test:visual:verify -- --manifest=../.tmp/visual-smoke/visual-smoke-manifest.json --report-path=../.tmp/visual-smoke/visual-smoke-evidence-report.json
           npm run test:visual:workbench -- --visual-report=../.tmp/visual-smoke/visual-smoke-evidence-report.json --report-path=../.tmp/visual-smoke/accountant-workbench-evidence-report.json
 
@@ -977,10 +989,12 @@ jobs:
         shell: pwsh
         run: |
           $backupDir = Join-Path $env:RUNNER_TEMP "accounts-backups"
+          $runUrl = "https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
           New-Item -ItemType Directory -Force -Path $backupDir | Out-Null
 
           ./scripts/backup-postgres.ps1 `
-            -OutputDirectory $backupDir
+            -OutputDirectory $backupDir `
+            -ReleaseCandidate $env:GITHUB_SHA
 
           $backups = @(Get-ChildItem -LiteralPath $backupDir -Filter "*.dump.cms" |
             Sort-Object LastWriteTimeUtc -Descending |
@@ -1003,7 +1017,9 @@ jobs:
           $restoreEvidencePath = Join-Path $backupDir "restore-drill-report.json"
           ./scripts/verify-postgres-backup.ps1 `
             -BackupPath $backup.FullName `
-            -EvidencePath $restoreEvidencePath
+            -EvidencePath $restoreEvidencePath `
+            -ReleaseCandidate $env:GITHUB_SHA `
+            -GitHubActionsRunUrl $runUrl
 
       - name: Upload backup restore drill evidence
         if: always()
@@ -1030,6 +1046,7 @@ jobs:
       - name: Stop production stack
         if: always()
         run: |
+          rm -f "$RUNNER_TEMP/accounts-visual-auth/totp-handoff.json"
           docker rm -f accounts-production-smoke-ingress >/dev/null 2>&1 || true
           docker compose -f compose.production.yml down -v --remove-orphans
 
@@ -1058,16 +1075,19 @@ jobs:
         shell: pwsh
         run: |
           $runUrl = "https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
+          $allowVerificationOnlySupplyChain = $env:GITHUB_EVENT_NAME -eq "pull_request"
           ./scripts/verify-ci-machine-evidence-pack.ps1 `
             -EvidenceDirectory (Join-Path $env:RUNNER_TEMP "accounts-ci-machine-evidence") `
             -ReportPath (Join-Path $env:RUNNER_TEMP "accounts-ci-machine-evidence-pack/ci-machine-evidence-pack-report.json") `
             -CommitSha $env:GITHUB_SHA `
-            -GitHubActionsRunUrl $runUrl
+            -GitHubActionsRunUrl $runUrl `
+            -AllowVerificationOnlySupplyChain:$allowVerificationOnlySupplyChain
 
       - name: Prepare release evidence reviewer workspace
         shell: pwsh
         run: |
           $runUrl = "https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
+          $allowVerificationOnlySupplyChain = $env:GITHUB_EVENT_NAME -eq "pull_request"
           $machineEvidenceRoot = Join-Path $env:RUNNER_TEMP "accounts-ci-machine-evidence"
           $workspaceRoot = Join-Path $env:RUNNER_TEMP "accounts-release-evidence-workspace"
           ./scripts/new-release-evidence-workspace.ps1 `
@@ -1091,6 +1111,7 @@ jobs:
             -ReportPath (Join-Path $env:RUNNER_TEMP "accounts-ci-machine-evidence-pack/ci-machine-evidence-pack-report.json") `
             -CommitSha $env:GITHUB_SHA `
             -GitHubActionsRunUrl $runUrl `
+            -AllowVerificationOnlySupplyChain:$allowVerificationOnlySupplyChain `
             -ReviewerWorkspaceDirectory $workspaceRoot
 
       - name: Upload CI machine evidence pack report

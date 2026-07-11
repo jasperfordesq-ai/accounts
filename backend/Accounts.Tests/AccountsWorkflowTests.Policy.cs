@@ -1789,12 +1789,25 @@ public partial class AccountsWorkflowTests
         Assert.True(File.Exists(workflowPath), "CI should run production-readiness gates on main pushes and every pull request.");
 
         var workflow = File.ReadAllText(workflowPath);
+        var governanceVerifier = File.ReadAllText(
+            Path.Combine(RepositoryRoot(), "scripts", "verify-github-governance.ps1"));
         AssertPushRunsOnMainOnly(workflow);
         Assert.Contains("pull_request:", workflow);
         Assert.Contains(
             "group: ci-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref || github.run_id }}",
             workflow);
         Assert.Contains("cancel-in-progress: true", workflow);
+        Assert.Contains("vulnerability-alerts", governanceVerifier);
+        Assert.Contains("required_linear_history.enabled", governanceVerifier);
+        Assert.Contains("required_conversation_resolution.enabled", governanceVerifier);
+        Assert.Contains("bypass_pull_request_allowances", governanceVerifier);
+        Assert.Contains("reviewBypassAllowanceCount", governanceVerifier);
+        Assert.Contains("reviewBypassShapeValid", governanceVerifier);
+        Assert.Contains("$requiredCheckAppId = 15368", governanceVerifier);
+        Assert.Contains("exactly one app-bound checks row", governanceVerifier);
+        Assert.Contains("$branchState.commit.sha -cne $CommitSha", governanceVerifier);
+        Assert.Contains("$requiredCodeScanningLanguages", governanceVerifier);
+        Assert.Contains("CodeQL default setup is missing required language", governanceVerifier);
 
         var backendJob = WorkflowJob(workflow, "backend");
         Assert.Contains("actions/checkout", backendJob);
@@ -1986,6 +1999,12 @@ public partial class AccountsWorkflowTests
         Assert.Contains("-Password $bootstrapOwnerPassword", productionSmokeJob);
         Assert.Contains("-OutputDirectory (Join-Path $env:RUNNER_TEMP \"accounts-smoke\")", productionSmokeJob);
         Assert.Contains("-AllowEphemeralMfaEnrollment", productionSmokeJob);
+        Assert.Contains(
+            "-EphemeralMfaHandoffPath (Join-Path $env:RUNNER_TEMP \"accounts-visual-auth/totp-handoff.json\")",
+            productionSmokeJob);
+        Assert.Contains("--mfa-handoff-file=\"$MFA_HANDOFF_FILE\"", productionSmokeJob);
+        Assert.Contains("trap 'rm -f \"$MFA_HANDOFF_FILE\"' EXIT", productionSmokeJob);
+        Assert.Contains("rm -f \"$RUNNER_TEMP/accounts-visual-auth/totp-handoff.json\"", productionSmokeJob);
         Assert.Contains("-CheckMonitoringErrorRouting", productionSmokeJob);
         Assert.Contains("Upload monitoring error routing evidence", productionSmokeJob);
         Assert.Contains("name: monitoring-error-routing-smoke", productionSmokeJob);
@@ -2002,10 +2021,19 @@ public partial class AccountsWorkflowTests
         Assert.Contains("postgres-tls-report.json", productionSmokeJob);
         Assert.Contains("name: postgres-tls-runtime", productionSmokeJob);
         Assert.Contains("Run production backup restore drill", productionSmokeJob);
+        Assert.Contains("Test PostgreSQL backup evidence binding", workflow);
+        Assert.Contains("./scripts/test-postgres-backup-evidence.ps1", workflow);
+        Assert.Contains("Test disposable MFA handoff writer", workflow);
+        Assert.Contains("./scripts/test-smoke-mfa-handoff.ps1", workflow);
         Assert.Contains("$env:RUNNER_TEMP", productionSmokeJob);
         Assert.Contains("accounts-backups", productionSmokeJob);
         Assert.Contains("./scripts/backup-postgres.ps1", productionSmokeJob);
         Assert.Contains("-OutputDirectory $backupDir", productionSmokeJob);
+        Assert.Equal(
+            2,
+            Regex.Matches(
+                productionSmokeJob,
+                Regex.Escape("-ReleaseCandidate $env:GITHUB_SHA")).Count);
         Assert.Contains("$backups = @(Get-ChildItem -LiteralPath $backupDir -Filter \"*.dump.cms\"", productionSmokeJob);
         Assert.Contains("$backups.Count -ne 1", productionSmokeJob);
         Assert.Contains("Expected exactly one backup dump", productionSmokeJob);
@@ -2019,6 +2047,7 @@ public partial class AccountsWorkflowTests
         Assert.Contains("./scripts/verify-postgres-backup.ps1", productionSmokeJob);
         Assert.Contains("-BackupPath $backup.FullName", productionSmokeJob);
         Assert.Contains("-EvidencePath $restoreEvidencePath", productionSmokeJob);
+        Assert.Contains("-GitHubActionsRunUrl $runUrl", productionSmokeJob);
         Assert.Contains("Upload backup restore drill evidence", productionSmokeJob);
         Assert.Contains("name: postgres-backup-restore-drill", productionSmokeJob);
         Assert.Contains("path: ${{ runner.temp }}/accounts-backups", productionSmokeJob);
@@ -2046,6 +2075,16 @@ public partial class AccountsWorkflowTests
         Assert.Contains("verify-ci-machine-evidence-pack.ps1", machineEvidenceJob);
         Assert.Contains("-CommitSha $env:GITHUB_SHA", machineEvidenceJob);
         Assert.Contains("-GitHubActionsRunUrl $runUrl", machineEvidenceJob);
+        Assert.Equal(
+            2,
+            Regex.Matches(
+                machineEvidenceJob,
+                Regex.Escape("$allowVerificationOnlySupplyChain = $env:GITHUB_EVENT_NAME -eq \"pull_request\"")).Count);
+        Assert.Equal(
+            2,
+            Regex.Matches(
+                machineEvidenceJob,
+                Regex.Escape("-AllowVerificationOnlySupplyChain:$allowVerificationOnlySupplyChain")).Count);
         Assert.Contains("-ReviewerWorkspaceDirectory $workspaceRoot", machineEvidenceJob);
         Assert.Contains("ci-machine-evidence-pack-report.json", machineEvidenceJob);
         Assert.Contains("name: ci-machine-evidence-pack", machineEvidenceJob);
@@ -3093,9 +3132,22 @@ public partial class AccountsWorkflowTests
         Assert.True(mfaChallengeIndex < authenticatedSessionIndex,
             "The smoke must complete a privileged MFA challenge before it calls authenticated endpoints.");
         Assert.True(
-            smokeScript.IndexOf("if (-not $AllowEphemeralMfaEnrollment)", StringComparison.Ordinal) > mfaChallengeIndex,
+            smokeScript.IndexOf(
+                "if (-not $AllowEphemeralMfaEnrollment)",
+                mfaChallengeIndex,
+                StringComparison.Ordinal) > mfaChallengeIndex,
             "MFA enrollment must fail closed unless the caller explicitly identifies a disposable CI account.");
         Assert.Contains("/api/auth/me", smokeScript);
+        Assert.Contains("$currentUser.mfaVerified -ne $true", smokeScript);
+        Assert.Contains("$currentUser.mfaMethod -cne \"totp\"", smokeScript);
+        var postLogoutAssertionIndex = smokeScript.IndexOf(
+            "Expected /api/auth/me to be unauthorized after logout",
+            StringComparison.Ordinal);
+        var ephemeralHandoffWriteIndex = smokeScript.LastIndexOf(
+            "Write-EphemeralMfaHandoff `",
+            StringComparison.Ordinal);
+        Assert.True(postLogoutAssertionIndex >= 0 && ephemeralHandoffWriteIndex > postLogoutAssertionIndex,
+            "The disposable MFA seed handoff must not exist until every smoke assertion and logout check has passed.");
         Assert.Contains("accounts_csrf", smokeScript);
         Assert.Contains("Assert-SetCookieAttribute", smokeScript);
         Assert.Contains("$Headers -is [System.Net.WebHeaderCollection]", smokeScript);

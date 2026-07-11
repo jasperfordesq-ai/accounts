@@ -117,12 +117,27 @@ requireText('docker pull "$ACCOUNTS_FRONTEND_IMAGE"', "Production smoke must pul
 requireText("./scripts/write-container-supply-chain-report.ps1", "CI must emit the machine-checkable container supply-chain report.");
 requireText("./scripts/verify-container-supply-chain-report.ps1", "CI must verify container supply-chain evidence before release packing.");
 requireText("./scripts/test-container-supply-chain-report.ps1", "CI must exercise clean and malformed Trivy evidence parser shapes.");
+requireText("./scripts/test-postgres-backup-evidence.ps1", "CI must exercise candidate-bound encrypted backup evidence and tamper cases.");
+requireText("./scripts/test-smoke-mfa-handoff.ps1", "CI must exercise atomic, contained disposable MFA handoff creation.");
+requireText(
+  '-EphemeralMfaHandoffPath (Join-Path $env:RUNNER_TEMP "accounts-visual-auth/totp-handoff.json")',
+  "Disposable CI MFA enrollment must hand off its TOTP state through runner-temporary storage.",
+);
+requireText(
+  '--mfa-handoff-file="$MFA_HANDOFF_FILE"',
+  "Visual smoke must consume the runner-temporary MFA handoff rather than bypassing privileged MFA.",
+);
+requireText("trap 'rm -f \"$MFA_HANDOFF_FILE\"' EXIT", "Visual smoke must delete the MFA handoff on success or failure.");
 requireText("name: container-supply-chain", "CI must retain the container supply-chain artifact.");
 requireText('pattern: "!*.dockerbuild"', "CI evidence download must exclude Buildx record artifacts.");
 requireText(
   "if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')",
   "The CI machine evidence check must run for protected-branch pull requests and trusted main pushes.",
 );
+if (count('$allowVerificationOnlySupplyChain = $env:GITHUB_EVENT_NAME -eq "pull_request"') !== 2 ||
+    count("-AllowVerificationOnlySupplyChain:$allowVerificationOnlySupplyChain") !== 2) {
+  failures.push("Both CI machine-evidence verifier passes must allow verification-only supply-chain evidence exclusively on pull-request events.");
+}
 
 if (failures.length > 0) {
   console.error("CI action policy failed:");

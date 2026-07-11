@@ -9,6 +9,8 @@ param(
     [string]$DecryptionCertificateFile = $env:BACKUP_DECRYPTION_CERTIFICATE_FILE,
     [string]$DecryptionPrivateKeyFile = $env:BACKUP_DECRYPTION_PRIVATE_KEY_FILE,
     [string]$EvidencePath,
+    [string]$ReleaseCandidate = $env:GITHUB_SHA,
+    [string]$GitHubActionsRunUrl = $env:GITHUB_ACTIONS_RUN_URL,
     [ValidateRange(1, 604800)]
     [int]$RpoTargetSeconds = 86400,
     [ValidateRange(1, 604800)]
@@ -111,6 +113,12 @@ if ([string]::IsNullOrWhiteSpace($SourceDatabase)) {
 if ([string]::IsNullOrWhiteSpace($User)) {
     throw "POSTGRES_USER or -User is required."
 }
+if ($ReleaseCandidate -cnotmatch '^[0-9a-f]{40}$') {
+    throw "ReleaseCandidate must be a full lowercase 40-character hexadecimal Git commit SHA."
+}
+if ($GitHubActionsRunUrl -cnotmatch '^https://github\.com/[^/\s]+/[^/\s]+/actions/runs/[0-9]+$') {
+    throw "GitHubActionsRunUrl must be an exact GitHub Actions run URL."
+}
 if (-not (Test-Path -LiteralPath $BackupPath)) {
     throw "Backup file not found: $BackupPath"
 }
@@ -131,11 +139,27 @@ $hashPath = "$BackupPath.sha256"
 if (-not (Test-Path -LiteralPath $hashPath)) {
     throw "Checksum file not found: $hashPath"
 }
-$backupHashLine = (Get-Content -LiteralPath $hashPath -Raw).Trim()
-$backupSha256 = ($backupHashLine -split '\s+', 2)[0]
-if ($backupSha256 -notmatch '^[0-9a-fA-F]{64}$') {
+$backupFile = Get-Item -LiteralPath $BackupPath
+$backupFileName = $backupFile.Name
+$backupByteSize = [int64]$backupFile.Length
+if ($backupByteSize -le 0) {
+    throw "Backup file must be non-empty: $BackupPath"
+}
+$backupHashLine = [IO.File]::ReadAllText($hashPath)
+$backupHashMatch = [regex]::Match($backupHashLine, '\A(?<hash>[0-9a-f]{64})  (?<file>[A-Za-z0-9_.-]+\.dump\.cms)\z')
+if (-not $backupHashMatch.Success) {
     throw "Checksum file is not in sha256 format: $hashPath"
 }
+$backupSha256 = $backupHashMatch.Groups['hash'].Value
+if ($backupHashMatch.Groups['file'].Value -cne $backupFileName) {
+    throw "Checksum file must reference the exact retained backup file '$backupFileName'."
+}
+$actualBackupSha256 = (Get-FileHash -LiteralPath $BackupPath -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($actualBackupSha256 -cne $backupSha256) {
+    throw "Backup SHA-256 does not match the checksum sidecar."
+}
+$backupChecksumFileName = (Get-Item -LiteralPath $hashPath).Name
+$backupChecksumSha256 = (Get-FileHash -LiteralPath $hashPath -Algorithm SHA256).Hash.ToLowerInvariant()
 
 $drillStartedAtUtc = [DateTimeOffset]::UtcNow
 $encrypted = $BackupPath.EndsWith(".dump.cms", [StringComparison]::OrdinalIgnoreCase)
@@ -147,11 +171,20 @@ if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
     throw "Encrypted backup manifest not found: $manifestPath"
 }
 $backupManifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
-if ($backupManifest.encrypted -ne $true -or [string]$backupManifest.encryptionAlgorithm -ne "CMS/AES-256-CBC") {
+if ($backupManifest.encrypted -ne $true -or [string]$backupManifest.encryptionAlgorithm -cne "CMS/AES-256-CBC") {
     throw "Backup manifest must identify CMS/AES-256-CBC encryption."
 }
-if ([string]$backupManifest.backupSha256 -ne $backupSha256.ToLowerInvariant()) {
+if ([string]$backupManifest.backupSha256 -cne $backupSha256) {
     throw "Backup manifest SHA-256 does not match the checksum sidecar."
+}
+if ([string]$backupManifest.backupFileName -cne $backupFileName) {
+    throw "Backup manifest file name does not match the retained encrypted backup."
+}
+if ([int64]$backupManifest.byteSize -ne $backupByteSize) {
+    throw "Backup manifest byte size does not match the retained encrypted backup."
+}
+if ([string]$backupManifest.releaseCandidate -cne $ReleaseCandidate) {
+    throw "Backup manifest release candidate does not match the restore drill candidate."
 }
 if ($backupManifest.plaintextDumpRetained -ne $false) {
     throw "Backup manifest must prove the plaintext dump was removed after encryption."
@@ -160,6 +193,13 @@ $backupCreatedAtUtc = [DateTimeOffset]::MinValue
 if (-not [DateTimeOffset]::TryParse([string]$backupManifest.createdAtUtc, [ref]$backupCreatedAtUtc)) {
     throw "Backup manifest createdAtUtc is invalid."
 }
+if ($backupCreatedAtUtc.Offset -ne [TimeSpan]::Zero) {
+    throw "Backup manifest createdAtUtc must use UTC."
+}
+if ($backupCreatedAtUtc -gt $drillStartedAtUtc) {
+    throw "Backup manifest createdAtUtc cannot be later than the restore drill start time."
+}
+$backupManifestSha256 = (Get-FileHash -LiteralPath $manifestPath -Algorithm SHA256).Hash.ToLowerInvariant()
 
 Invoke-NativeCommand "Drop previous restore verification database" {
     docker compose -f $ComposeFile exec -T $Service dropdb --username $User --if-exists $VerifyDatabase
@@ -233,16 +273,26 @@ try {
     $drillCompletedAtUtc = [DateTimeOffset]::UtcNow
     $rtoSeconds = [Math]::Round(($drillCompletedAtUtc - $drillStartedAtUtc).TotalSeconds, 3)
     $rpoSecondsAtDrill = [Math]::Round(($drillStartedAtUtc - $backupCreatedAtUtc).TotalSeconds, 3)
+    if ($rpoSecondsAtDrill -lt 0 -or $rtoSeconds -lt 0) {
+        throw "Restore recovery measurements must be non-negative and use ordered UTC timestamps."
+    }
     $rpoTargetMet = $rpoSecondsAtDrill -le $RpoTargetSeconds
     $rtoTargetMet = $rtoSeconds -le $RtoTargetSeconds
 
     if (-not [string]::IsNullOrWhiteSpace($EvidencePath)) {
         $evidence = [pscustomobject]@{
             status = if ($rpoTargetMet -and $rtoTargetMet) { "passed" } else { "failed" }
-            completedAtUtc = (Get-Date).ToUniversalTime().ToString("O")
-            backupFileName = Split-Path -Leaf $BackupPath
-            backupSha256 = $backupSha256.ToLowerInvariant()
+            completedAtUtc = $drillCompletedAtUtc.UtcDateTime.ToString("O")
+            releaseCandidate = $ReleaseCandidate
+            githubActionsRunUrl = $GitHubActionsRunUrl
+            backupFileName = $backupFileName
+            backupByteSize = $backupByteSize
+            backupSha256 = $backupSha256
+            backupChecksumFileName = $backupChecksumFileName
+            backupChecksumSha256 = $backupChecksumSha256
             backupManifestFileName = Split-Path -Leaf $manifestPath
+            backupManifestSha256 = $backupManifestSha256
+            backupManifestReleaseCandidate = [string]$backupManifest.releaseCandidate
             backupEncryption = [ordered]@{
                 encrypted = $true
                 algorithm = "CMS/AES-256-CBC"

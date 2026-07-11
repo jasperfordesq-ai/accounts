@@ -41,6 +41,7 @@ public static class AuthEndpoints
             return Results.Ok(AuthResponse.From(user));
         })
             .Produces<AuthResponse>()
+            .Produces<MfaChallengeResponse>(StatusCodes.Status202Accepted)
             .Produces(StatusCodes.Status401Unauthorized)
             .RequireRateLimiting(LoginRateLimitPolicy);
 

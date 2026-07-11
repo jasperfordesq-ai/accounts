@@ -6,6 +6,7 @@ import type {
   balanceSheetSchema,
   corporationTaxFilingSupportResponseSchema,
   filingReadinessProfileSchema,
+  mfaChallengeSchema,
   profitAndLossSchema,
   taxComputationSchema,
   trialBalanceLineSchema,
@@ -41,6 +42,7 @@ type Assert<Condition extends true> = Condition;
 type NotNever<Value> = [Value] extends [never] ? false : true;
 
 export type AuthWireResponse = JsonResponse<"/api/auth/me", "get", 200>;
+export type MfaChallengeWireResponse = JsonResponse<"/api/auth/login", "post", 202>;
 export type ProfitAndLossWireResponse = JsonResponse<
   "/api/companies/{companyId}/periods/{periodId}/statements/profit-and-loss",
   "get",
@@ -69,6 +71,7 @@ export type FilingReadinessProfileWireResponse = JsonResponse<
 
 type _CriticalResponsesExist = [
   Assert<NotNever<AuthWireResponse>>,
+  Assert<NotNever<MfaChallengeWireResponse>>,
   Assert<NotNever<ProfitAndLossWireResponse>>,
   Assert<NotNever<BalanceSheetWireResponse>>,
   Assert<NotNever<TaxComputationWireResponse>>,
@@ -81,6 +84,7 @@ type _CriticalResponsesExist = [
 // components and are checked by the generated paths above plus existing adversarial parser tests.
 type _CriticalRuntimeParserKeys = [
   Assert<Equal<keyof z.output<typeof authUserSchema>, keyof components["schemas"]["AuthResponse"]>>,
+  Assert<Equal<keyof z.output<typeof mfaChallengeSchema>, keyof components["schemas"]["MfaChallengeResponse"]>>,
   Assert<Equal<keyof z.output<typeof profitAndLossSchema>, keyof components["schemas"]["ProfitAndLoss"]>>,
   Assert<Equal<keyof z.output<typeof balanceSheetSchema>, keyof components["schemas"]["BalanceSheet"]>>,
   Assert<Equal<keyof z.output<typeof taxComputationSchema>, keyof components["schemas"]["TaxComputation"]>>,

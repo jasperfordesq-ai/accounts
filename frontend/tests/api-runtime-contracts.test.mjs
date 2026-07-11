@@ -13,6 +13,7 @@ import {
   filingReadinessProfileSchema,
   filingWorkflowStatusSchema,
   importResultSchema,
+  mfaChallengeSchema,
   notesDisclosureSchema,
   parseApiContract,
   profitAndLossSchema,
@@ -273,6 +274,47 @@ test("auth contract rejects role drift, malformed identities, and duplicate scop
   assert.throws(
     () => parse(authUserSchema, { ...user, role: "Reviewer", allowedCompanyIds: [7, 7] }),
     /allowedCompanyIds/,
+  );
+});
+
+test("MFA challenge contract requires explicit non-enrollment nulls and rejects inconsistent enrollment", () => {
+  const loginChallenge = parse(mfaChallengeSchema, {
+    challengeToken: "c".repeat(48),
+    requiresEnrollment: false,
+    expiresAtUtc: "2026-07-11T02:30:00Z",
+    enrollmentSecret: null,
+    otpAuthUri: null,
+  });
+  assert.equal(loginChallenge.enrollmentSecret, null);
+  assert.equal(loginChallenge.otpAuthUri, null);
+
+  assert.throws(
+    () => parse(mfaChallengeSchema, {
+      challengeToken: "c".repeat(48),
+      requiresEnrollment: false,
+      expiresAtUtc: "2026-07-11T02:30:00Z",
+    }),
+    /enrollmentSecret/,
+  );
+  assert.throws(
+    () => parse(mfaChallengeSchema, {
+      challengeToken: "c".repeat(48),
+      requiresEnrollment: true,
+      expiresAtUtc: "2026-07-11T02:30:00Z",
+      enrollmentSecret: null,
+      otpAuthUri: null,
+    }),
+    /requiresEnrollment/,
+  );
+  assert.throws(
+    () => parse(mfaChallengeSchema, {
+      challengeToken: "c".repeat(48),
+      requiresEnrollment: false,
+      expiresAtUtc: "2026-07-11T02:30:00Z",
+      enrollmentSecret: "JBSWY3DPEHPK3PXP",
+      otpAuthUri: "otpauth://totp/Irish%20Accounts:owner@example.ie?secret=JBSWY3DPEHPK3PXP",
+    }),
+    /requiresEnrollment/,
   );
 });
 

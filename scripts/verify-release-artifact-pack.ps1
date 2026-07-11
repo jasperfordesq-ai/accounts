@@ -17,6 +17,19 @@ function Add-Failure {
     $Failures.Add($Message) | Out-Null
 }
 
+function Assert-EvidenceDirectoryIsNotLink {
+    param([string]$Directory)
+
+    $directoryEntry = Get-Item -LiteralPath $Directory -Force -ErrorAction Stop
+    $isLink =
+        ($directoryEntry.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or
+        ($null -ne $directoryEntry.PSObject.Properties['LinkType'] -and
+            -not [string]::IsNullOrWhiteSpace([string]$directoryEntry.LinkType))
+    if ($isLink) {
+        throw "EvidenceDirectory must be a self-contained directory and must not itself be a filesystem link."
+    }
+}
+
 function Get-JsonProperty {
     param(
         [object]$Object,
@@ -947,6 +960,225 @@ function Get-FileSha256 {
     return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
 }
 
+function Assert-RestoreArtifactLinkage {
+    param(
+        [object]$RestoreEvidence,
+        [string]$Directory,
+        [string]$ExpectedCommitSha,
+        [string]$ExpectedRunUrl,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    $parseEvidenceTimestamp = {
+        param([object]$Value, [ref]$Result)
+        if ($Value -is [DateTimeOffset]) {
+            $Result.Value = ([DateTimeOffset]$Value).ToUniversalTime()
+            return $true
+        }
+        if ($Value -is [DateTime]) {
+            $Result.Value = [DateTimeOffset]::new(([DateTime]$Value).ToUniversalTime())
+            return $true
+        }
+        return [DateTimeOffset]::TryParse(
+            [string]$Value,
+            [Globalization.CultureInfo]::InvariantCulture,
+            [Globalization.DateTimeStyles]::RoundtripKind,
+            $Result)
+    }
+
+    if ($RestoreEvidence.PSObject.Properties.Name -contains "__missing" -or
+        $RestoreEvidence.PSObject.Properties.Name -contains "__invalid") {
+        return
+    }
+
+    $restoreCommitSha = [string](Get-JsonProperty $RestoreEvidence @("releaseCandidate"))
+    $restoreRunUrl = [string](Get-JsonProperty $RestoreEvidence @("githubActionsRunUrl"))
+    if ($restoreCommitSha -cnotmatch '^[0-9a-f]{40}$') {
+        Add-Failure $Failures "restore-drill-report.json releaseCandidate must be a full lowercase 40-character hexadecimal Git commit SHA."
+    }
+    if ($restoreRunUrl -cnotmatch '^https://github\.com/[^/\s]+/[^/\s]+/actions/runs/[0-9]+$') {
+        Add-Failure $Failures "restore-drill-report.json githubActionsRunUrl must be an exact GitHub Actions run URL."
+    }
+    if ($ExpectedCommitSha.Length -gt 0 -and $restoreCommitSha -cne $ExpectedCommitSha) {
+        Add-Failure $Failures "restore-drill-report.json releaseCandidate must exactly match the release-pack commit."
+    }
+    if ($ExpectedRunUrl.Length -gt 0 -and $restoreRunUrl -cne $ExpectedRunUrl) {
+        Add-Failure $Failures "restore-drill-report.json githubActionsRunUrl must exactly match the release-pack run URL."
+    }
+
+    $retainedEntries = @(Get-ChildItem -LiteralPath $Directory -Recurse -Force)
+    $linkedRetainedEntries = @($retainedEntries | Where-Object {
+        ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or
+        ($null -ne $_.PSObject.Properties['LinkType'] -and -not [string]::IsNullOrWhiteSpace([string]$_.LinkType))
+    })
+    if ($linkedRetainedEntries.Count -ne 0) {
+        Add-Failure $Failures "Release evidence must be self-contained and must not include filesystem links: $(@($linkedRetainedEntries.Name) -join ', ')"
+        return
+    }
+    $retainedFiles = @($retainedEntries | Where-Object { -not $_.PSIsContainer })
+    $encryptedBackups = @($retainedFiles | Where-Object { $_.Name.EndsWith('.dump.cms', [StringComparison]::OrdinalIgnoreCase) })
+    $checksumFiles = @($retainedFiles | Where-Object { $_.Name.EndsWith('.dump.cms.sha256', [StringComparison]::OrdinalIgnoreCase) })
+    $manifestFiles = @($retainedFiles | Where-Object { $_.Name.EndsWith('.dump.cms.manifest.json', [StringComparison]::OrdinalIgnoreCase) })
+    $plaintextBackups = @($retainedFiles | Where-Object { $_.Name.EndsWith('.dump', [StringComparison]::OrdinalIgnoreCase) })
+
+    foreach ($candidate in $encryptedBackups) {
+        if ($candidate.Name -cnotmatch '^[A-Za-z0-9_.-]+\.dump\.cms$') {
+            Add-Failure $Failures "Encrypted PostgreSQL backup filenames must use the canonical safe .dump.cms form: $($candidate.Name)"
+        }
+    }
+    foreach ($candidate in $checksumFiles) {
+        if ($candidate.Name -cnotmatch '^[A-Za-z0-9_.-]+\.dump\.cms\.sha256$') {
+            Add-Failure $Failures "Encrypted-backup checksum filenames must use the canonical safe .dump.cms.sha256 form: $($candidate.Name)"
+        }
+    }
+    foreach ($candidate in $manifestFiles) {
+        if ($candidate.Name -cnotmatch '^[A-Za-z0-9_.-]+\.dump\.cms\.manifest\.json$') {
+            Add-Failure $Failures "Encrypted-backup manifest filenames must use the canonical safe .dump.cms.manifest.json form: $($candidate.Name)"
+        }
+    }
+    foreach ($candidate in $plaintextBackups) {
+        if ($candidate.Name -cnotmatch '^[A-Za-z0-9_.-]+\.dump$') {
+            Add-Failure $Failures "Plaintext PostgreSQL dump filenames are forbidden even when their names are noncanonical: $($candidate.Name)"
+        }
+    }
+    if ($encryptedBackups.Count -ne 1) {
+        Add-Failure $Failures "Release artifact pack must retain exactly one encrypted PostgreSQL .dump.cms backup; found $($encryptedBackups.Count)."
+    }
+    if ($checksumFiles.Count -ne 1) {
+        Add-Failure $Failures "Release artifact pack must retain exactly one encrypted-backup .sha256 sidecar; found $($checksumFiles.Count)."
+    }
+    if ($manifestFiles.Count -ne 1) {
+        Add-Failure $Failures "Release artifact pack must retain exactly one encrypted-backup manifest; found $($manifestFiles.Count)."
+    }
+    if ($plaintextBackups.Count -ne 0) {
+        Add-Failure $Failures "Release artifact pack must not retain plaintext PostgreSQL .dump files."
+    }
+    if ($encryptedBackups.Count -ne 1 -or $checksumFiles.Count -ne 1 -or $manifestFiles.Count -ne 1) {
+        return
+    }
+
+    $backup = $encryptedBackups[0]
+    $checksum = $checksumFiles[0]
+    $manifestFile = $manifestFiles[0]
+    $expectedChecksumFileName = "$($backup.Name).sha256"
+    $expectedManifestFileName = "$($backup.Name).manifest.json"
+    if ($checksum.Name -cne $expectedChecksumFileName -or $manifestFile.Name -cne $expectedManifestFileName) {
+        Add-Failure $Failures "The retained PostgreSQL backup, checksum, and manifest must form one exact adjacent filename set."
+    }
+    if (([IO.Path]::GetFullPath($checksum.DirectoryName) -cne [IO.Path]::GetFullPath($backup.DirectoryName)) -or
+        ([IO.Path]::GetFullPath($manifestFile.DirectoryName) -cne [IO.Path]::GetFullPath($backup.DirectoryName))) {
+        Add-Failure $Failures "The retained PostgreSQL backup, checksum, and manifest must be adjacent in one evidence directory."
+    }
+
+    if ([string](Get-JsonProperty $RestoreEvidence @("backupFileName")) -cne $backup.Name) {
+        Add-Failure $Failures "restore-drill-report.json backupFileName must exactly match the retained encrypted backup."
+    }
+    if ([int64](Get-JsonProperty $RestoreEvidence @("backupByteSize")) -ne [int64]$backup.Length -or $backup.Length -le 0) {
+        Add-Failure $Failures "restore-drill-report.json backupByteSize must match the non-empty retained encrypted backup."
+    }
+
+    $backupSha256 = [string](Get-JsonProperty $RestoreEvidence @("backupSha256"))
+    if ($backupSha256 -cnotmatch '^[0-9a-f]{64}$' -or (Get-FileSha256 $backup.FullName) -cne $backupSha256) {
+        Add-Failure $Failures "restore-drill-report.json backupSha256 must match the retained encrypted backup."
+    }
+
+    if ([string](Get-JsonProperty $RestoreEvidence @("backupChecksumFileName")) -cne $checksum.Name) {
+        Add-Failure $Failures "restore-drill-report.json backupChecksumFileName must exactly match the retained checksum sidecar."
+    }
+    $checksumSha256 = [string](Get-JsonProperty $RestoreEvidence @("backupChecksumSha256"))
+    if ($checksumSha256 -cnotmatch '^[0-9a-f]{64}$' -or (Get-FileSha256 $checksum.FullName) -cne $checksumSha256) {
+        Add-Failure $Failures "restore-drill-report.json backupChecksumSha256 must match the retained checksum sidecar."
+    }
+    $expectedChecksumLine = "$backupSha256  $($backup.Name)"
+    if ([IO.File]::ReadAllText($checksum.FullName) -cne $expectedChecksumLine) {
+        Add-Failure $Failures "The retained checksum sidecar must contain the exact backup SHA-256 and filename."
+    }
+
+    if ([string](Get-JsonProperty $RestoreEvidence @("backupManifestFileName")) -cne $manifestFile.Name) {
+        Add-Failure $Failures "restore-drill-report.json backupManifestFileName must exactly match the retained backup manifest."
+    }
+    $manifestSha256 = [string](Get-JsonProperty $RestoreEvidence @("backupManifestSha256"))
+    if ($manifestSha256 -cnotmatch '^[0-9a-f]{64}$' -or (Get-FileSha256 $manifestFile.FullName) -cne $manifestSha256) {
+        Add-Failure $Failures "restore-drill-report.json backupManifestSha256 must match the retained backup manifest."
+    }
+
+    try {
+        $manifest = Get-Content -LiteralPath $manifestFile.FullName -Raw | ConvertFrom-Json
+    } catch {
+        Add-Failure $Failures "The retained PostgreSQL backup manifest must be valid JSON."
+        return
+    }
+
+    $manifestReleaseCandidate = [string](Get-JsonProperty $manifest @("releaseCandidate"))
+    if ([string](Get-JsonProperty $RestoreEvidence @("backupManifestReleaseCandidate")) -cne $manifestReleaseCandidate -or
+        $manifestReleaseCandidate -cne $restoreCommitSha) {
+        Add-Failure $Failures "The restore report and retained backup manifest must identify the same exact release candidate."
+    }
+    if ([string](Get-JsonProperty $manifest @("backupFileName")) -cne $backup.Name -or
+        [string](Get-JsonProperty $manifest @("backupSha256")) -cne $backupSha256 -or
+        [int64](Get-JsonProperty $manifest @("byteSize")) -ne [int64]$backup.Length) {
+        Add-Failure $Failures "The retained backup manifest filename, SHA-256, and byte size must match the encrypted backup."
+    }
+    if ((Get-JsonProperty $manifest @("encrypted")) -ne $true -or
+        [string](Get-JsonProperty $manifest @("encryptionAlgorithm")) -cne "CMS/AES-256-CBC" -or
+        (Get-JsonProperty $manifest @("plaintextDumpRetained")) -ne $false) {
+        Add-Failure $Failures "The retained backup manifest must prove CMS/AES-256-CBC encryption with no plaintext dump retained."
+    }
+
+    $recoveryMetrics = Get-JsonProperty $RestoreEvidence @("recoveryMetrics")
+    $backupCreatedAtUtc = [DateTimeOffset]::MinValue
+    $drillStartedAtUtc = [DateTimeOffset]::MinValue
+    $drillCompletedAtUtc = [DateTimeOffset]::MinValue
+    $timestampsValid =
+        (& $parseEvidenceTimestamp (Get-JsonProperty $recoveryMetrics @("backupCreatedAtUtc")) ([ref]$backupCreatedAtUtc)) -and
+        (& $parseEvidenceTimestamp (Get-JsonProperty $recoveryMetrics @("drillStartedAtUtc")) ([ref]$drillStartedAtUtc)) -and
+        (& $parseEvidenceTimestamp (Get-JsonProperty $recoveryMetrics @("drillCompletedAtUtc")) ([ref]$drillCompletedAtUtc))
+    if (-not $timestampsValid) {
+        Add-Failure $Failures "restore-drill-report.json recoveryMetrics must contain valid backup, drill-start, and drill-completion timestamps."
+    } else {
+        if ($backupCreatedAtUtc.Offset -ne [TimeSpan]::Zero -or
+            $drillStartedAtUtc.Offset -ne [TimeSpan]::Zero -or
+            $drillCompletedAtUtc.Offset -ne [TimeSpan]::Zero) {
+            Add-Failure $Failures "restore-drill-report.json recoveryMetrics timestamps must use UTC."
+        }
+        if ($backupCreatedAtUtc -gt $drillStartedAtUtc -or $drillStartedAtUtc -gt $drillCompletedAtUtc) {
+            Add-Failure $Failures "restore-drill-report.json recoveryMetrics timestamps must be ordered backup-created, drill-started, drill-completed."
+        }
+
+        $manifestCreatedAtUtc = [DateTimeOffset]::MinValue
+        $reportCompletedAtUtc = [DateTimeOffset]::MinValue
+        $identityTimestampsValid =
+            (& $parseEvidenceTimestamp (Get-JsonProperty $manifest @("createdAtUtc")) ([ref]$manifestCreatedAtUtc)) -and
+            (& $parseEvidenceTimestamp (Get-JsonProperty $RestoreEvidence @("completedAtUtc")) ([ref]$reportCompletedAtUtc))
+        if (-not $identityTimestampsValid -or
+            $manifestCreatedAtUtc.Offset -ne [TimeSpan]::Zero -or
+            $reportCompletedAtUtc.Offset -ne [TimeSpan]::Zero -or
+            $manifestCreatedAtUtc -ne $backupCreatedAtUtc -or
+            $reportCompletedAtUtc -ne $drillCompletedAtUtc) {
+            Add-Failure $Failures "restore-drill-report.json recoveryMetrics timestamps must bind exactly to the retained manifest creation time and report completion time."
+        }
+
+        $rpoSeconds = [double](Get-JsonProperty $recoveryMetrics @("rpoSecondsAtDrill"))
+        $rtoSeconds = [double](Get-JsonProperty $recoveryMetrics @("rtoSeconds"))
+        $rpoTargetSeconds = [double](Get-JsonProperty $recoveryMetrics @("rpoTargetSeconds"))
+        $rtoTargetSeconds = [double](Get-JsonProperty $recoveryMetrics @("rtoTargetSeconds"))
+        $calculatedRpoSeconds = [Math]::Round(($drillStartedAtUtc - $backupCreatedAtUtc).TotalSeconds, 3)
+        $calculatedRtoSeconds = [Math]::Round(($drillCompletedAtUtc - $drillStartedAtUtc).TotalSeconds, 3)
+        if ($rpoSeconds -lt 0 -or $rtoSeconds -lt 0 -or
+            [Math]::Abs($rpoSeconds - $calculatedRpoSeconds) -gt 0.0005 -or
+            [Math]::Abs($rtoSeconds - $calculatedRtoSeconds) -gt 0.0005) {
+            Add-Failure $Failures "restore-drill-report.json recoveryMetrics RPO/RTO measurements must be non-negative and match the ordered timestamps."
+        }
+        if ($rpoTargetSeconds -le 0 -or $rtoTargetSeconds -le 0) {
+            Add-Failure $Failures "restore-drill-report.json recoveryMetrics RPO/RTO targets must be positive."
+        }
+        if ((Get-JsonProperty $recoveryMetrics @("rpoTargetMet")) -ne ($rpoSeconds -ge 0 -and $rpoSeconds -le $rpoTargetSeconds) -or
+            (Get-JsonProperty $recoveryMetrics @("rtoTargetMet")) -ne ($rtoSeconds -ge 0 -and $rtoSeconds -le $rtoTargetSeconds)) {
+            Add-Failure $Failures "restore-drill-report.json recoveryMetrics target results must match the retained RPO/RTO measurements."
+        }
+    }
+}
+
 function Assert-SupplyChainRetainedFile {
     param(
         [object]$FileEvidence,
@@ -1855,6 +2087,7 @@ function Assert-ReleaseEvidenceWorkspaceInventoryRetention {
 }
 
 $failures = [System.Collections.Generic.List[string]]::new()
+Assert-EvidenceDirectoryIsNotLink $EvidenceDirectory
 $resolvedDirectory = Resolve-Path -LiteralPath $EvidenceDirectory -ErrorAction Stop
 $releaseCommitSha = $CommitSha.Trim()
 $releaseRunUrl = $GitHubActionsRunUrl.Trim()
@@ -2085,8 +2318,10 @@ if (-not ($postgresTls.PSObject.Properties.Name -contains "__missing")) {
     }
 }
 
-if (-not ($restore.PSObject.Properties.Name -contains "__missing")) {
-    if ([string]$restore.backupSha256 -notmatch '^[0-9a-f]{64}$') {
+if (-not ($restore.PSObject.Properties.Name -contains "__missing") -and
+    -not ($restore.PSObject.Properties.Name -contains "__invalid")) {
+    Assert-RestoreArtifactLinkage $restore $resolvedDirectory.Path $releaseCommitSha $releaseRunUrl $failures
+    if ([string]$restore.backupSha256 -cnotmatch '^[0-9a-f]{64}$') {
         Add-Failure $failures "restore-drill-report.json backupSha256 must be a lowercase SHA-256 hash."
     }
     foreach ($check in @($restore.tableChecks)) {

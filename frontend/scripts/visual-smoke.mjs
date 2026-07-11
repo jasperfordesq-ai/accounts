@@ -1,5 +1,6 @@
-import { createHash } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { createHash, createHmac } from "node:crypto";
+import { lstat, mkdir, readFile, realpath, unlink, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { chromium, expect } from "@playwright/test";
@@ -50,6 +51,179 @@ function mainText(page, text, options = {}) {
   return page.locator("main").getByText(text, options).first();
 }
 
+const TOTP_PERIOD_MS = 30_000;
+const LOGIN_UI_STATES = new Set([
+  "credentials",
+  "mfa-enrollment",
+  "mfa-challenge",
+  "recovery-codes",
+  "authentication-error",
+  "unknown",
+]);
+
+function safeLoginFailureDiagnostic(error, uiState, sensitiveValues = []) {
+  let message = error instanceof Error ? error.message : String(error);
+  for (const value of sensitiveValues) {
+    if (typeof value === "string" && value.length > 0) {
+      message = message.replaceAll(value, "[redacted]");
+    }
+  }
+  message = message.replace(/\b[A-Z2-7]{16,128}\b/g, "[redacted]");
+  const safeState = LOGIN_UI_STATES.has(uiState) ? uiState : "unknown";
+  return `${message}\nLogin UI state: ${safeState}`.trim();
+}
+
+function assertRequiredMfaCompleted(mfaState, mfaSubmitted) {
+  if (mfaState.secret && !mfaSubmitted) {
+    throw new Error("Privileged visual smoke login bypassed the required fresh MFA challenge.");
+  }
+}
+
+async function observedLoginUiState(page) {
+  if (await page.locator('[aria-label="Authenticator setup key"]').isVisible().catch(() => false)) {
+    return "mfa-enrollment";
+  }
+  if (await page.getByRole("button", { name: "I have stored these codes" }).isVisible().catch(() => false)) {
+    return "recovery-codes";
+  }
+  if (await page.locator('input[autocomplete="one-time-code"]').isVisible().catch(() => false)) {
+    return "mfa-challenge";
+  }
+  if (await page.getByRole("alert").isVisible().catch(() => false)) {
+    return "authentication-error";
+  }
+  if (await page.locator('input[type="email"]').isVisible().catch(() => false)) {
+    return "credentials";
+  }
+  return "unknown";
+}
+
+function decodeBase32Secret(value) {
+  const normalized = value.replace(/[\s=-]/g, "").toUpperCase();
+  if (!/^[A-Z2-7]{16,128}$/.test(normalized)) {
+    throw new Error("The visual smoke MFA handoff contained an invalid Base32 secret.");
+  }
+
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  const bytes = [];
+  let buffer = 0;
+  let bits = 0;
+  for (const character of normalized) {
+    buffer = (buffer * 32) + alphabet.indexOf(character);
+    bits += 5;
+    while (bits >= 8) {
+      bits -= 8;
+      bytes.push(Math.floor(buffer / (2 ** bits)) & 0xff);
+      buffer %= 2 ** bits;
+    }
+  }
+  return Buffer.from(bytes);
+}
+
+function totpCodeForCounter(secret, counter) {
+  if (!Number.isSafeInteger(counter) || counter < 0) {
+    throw new Error("The visual smoke MFA counter must be a non-negative safe integer.");
+  }
+  const key = decodeBase32Secret(secret);
+  const counterBytes = Buffer.alloc(8);
+  counterBytes.writeBigUInt64BE(BigInt(counter));
+  const digest = createHmac("sha1", key).update(counterBytes).digest();
+  key.fill(0);
+  const offset = digest[digest.length - 1] & 0x0f;
+  const binary = ((digest[offset] & 0x7f) << 24)
+    | ((digest[offset + 1] & 0xff) << 16)
+    | ((digest[offset + 2] & 0xff) << 8)
+    | (digest[offset + 3] & 0xff);
+  return String(binary % 1_000_000).padStart(6, "0");
+}
+
+async function nextFreshTotpCode(mfaState, {
+  now = () => Date.now(),
+  wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
+} = {}) {
+  if (!mfaState.secret) {
+    throw new Error("Privileged visual smoke login requires the disposable runner MFA handoff.");
+  }
+
+  let nowMs = now();
+  let counter = Math.floor(nowMs / TOTP_PERIOD_MS);
+  if (mfaState.lastUsedCounter !== null && counter <= mfaState.lastUsedCounter) {
+    const waitMilliseconds = ((mfaState.lastUsedCounter + 1) * TOTP_PERIOD_MS) - nowMs + 250;
+    await wait(Math.max(waitMilliseconds, 1));
+    nowMs = now();
+    counter = Math.floor(nowMs / TOTP_PERIOD_MS);
+  }
+  if (mfaState.lastUsedCounter !== null && counter <= mfaState.lastUsedCounter) {
+    throw new Error("The visual smoke MFA counter did not advance beyond the last accepted code.");
+  }
+
+  return { code: totpCodeForCounter(mfaState.secret, counter), counter };
+}
+
+function pathIsWithin(candidatePath, rootPath) {
+  const relative = path.relative(rootPath, candidatePath);
+  return relative === "" || (!relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative));
+}
+
+async function consumeEphemeralMfaHandoff(filePath, {
+  temporaryRoot = process.env.RUNNER_TEMP || os.tmpdir(),
+} = {}) {
+  if (!filePath) return { secret: null, lastUsedCounter: null };
+
+  const resolvedRoot = path.resolve(temporaryRoot);
+  const resolvedPath = path.resolve(filePath);
+  if (!pathIsWithin(resolvedPath, resolvedRoot)) {
+    throw new Error("The visual smoke MFA handoff must remain inside runner-temporary storage.");
+  }
+
+  let payloadText;
+  let safeToUnlink = false;
+  try {
+    const metadata = await lstat(resolvedPath);
+    if (metadata.isSymbolicLink() || !metadata.isFile()) {
+      throw new Error("The visual smoke MFA handoff must be a regular file, not a filesystem link.");
+    }
+    const [canonicalRoot, canonicalPath] = await Promise.all([realpath(resolvedRoot), realpath(resolvedPath)]);
+    if (!pathIsWithin(canonicalPath, canonicalRoot)) {
+      throw new Error("The visual smoke MFA handoff must not escape runner-temporary storage through a filesystem link.");
+    }
+    safeToUnlink = true;
+    if (metadata.size <= 0 || metadata.size > 1_024) {
+      throw new Error("The visual smoke MFA handoff must be a small regular file.");
+    }
+    if (process.platform !== "win32" && (metadata.mode & 0o077) !== 0) {
+      throw new Error("The visual smoke MFA handoff must use mode 0600.");
+    }
+    payloadText = await readFile(resolvedPath, "utf8");
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      throw new Error("The required visual smoke MFA handoff file is missing.");
+    }
+    throw error;
+  } finally {
+    if (safeToUnlink) {
+      await unlink(resolvedPath).catch((error) => {
+        if (error?.code !== "ENOENT") throw error;
+      });
+    }
+  }
+
+  const payload = JSON.parse(payloadText);
+  if (
+    payload?.schemaVersion !== "accounts-visual-mfa-handoff-v1"
+    || typeof payload.secret !== "string"
+    || !Number.isSafeInteger(payload.lastAcceptedCounter)
+    || payload.lastAcceptedCounter < 0
+  ) {
+    throw new Error("The visual smoke MFA handoff did not match its fail-closed contract.");
+  }
+  decodeBase32Secret(payload.secret);
+  return {
+    secret: payload.secret,
+    lastUsedCounter: payload.lastAcceptedCounter,
+  };
+}
+
 async function setTheme(context, theme) {
   await context.addInitScript((selectedTheme) => {
     localStorage.setItem("theme", selectedTheme);
@@ -65,16 +239,18 @@ async function setTheme(context, theme) {
   }, theme);
 }
 
-async function login(page, baseUrl, email, password) {
+async function login(page, baseUrl, email, password, mfaState) {
   let lastFailure = "";
 
   for (let attempt = 1; attempt <= 3; attempt += 1) {
+    let mfaSubmitted = false;
     await page.goto(`${baseUrl}/login`, { waitUntil: "domcontentloaded" });
     await page.waitForLoadState("networkidle", { timeout: 10_000 }).catch(() => {});
 
     const dashboardHeading = mainText(page, "Firm command centre", { exact: true });
     if (!new URL(page.url()).pathname.startsWith("/login") || await dashboardHeading.isVisible().catch(() => false)) {
       await expect(dashboardHeading).toBeVisible({ timeout: 30_000 });
+      assertRequiredMfaCompleted(mfaState, false);
       return;
     }
 
@@ -89,13 +265,56 @@ async function login(page, baseUrl, email, password) {
     await signInButton.click();
 
     try {
+      await page.waitForFunction(() => (
+        window.location.pathname !== "/login"
+        || document.querySelector('input[autocomplete="one-time-code"]')
+        || document.querySelector('[role="alert"]')
+      ), undefined, { timeout: 15_000 });
+
+      if (new URL(page.url()).pathname.startsWith("/login")) {
+        const alert = page.getByRole("alert");
+        if (await alert.isVisible().catch(() => false)) {
+          throw new Error("Login page reported an authentication error.");
+        }
+
+        const setupKey = page.locator('[aria-label="Authenticator setup key"]');
+        if (await setupKey.isVisible().catch(() => false)) {
+          const enrollmentSecret = (await setupKey.innerText()).trim();
+          decodeBase32Secret(enrollmentSecret);
+          mfaState.secret = enrollmentSecret;
+          mfaState.lastUsedCounter = null;
+        }
+
+        const credential = await nextFreshTotpCode(mfaState);
+        mfaState.lastUsedCounter = credential.counter;
+        await page.locator('input[autocomplete="one-time-code"]').fill(credential.code);
+        await page.getByRole("button", { name: /Verify and (?:enable MFA|sign in)/ }).click();
+        mfaSubmitted = true;
+        await page.waitForFunction(() => (
+          window.location.pathname !== "/login"
+          || Array.from(document.querySelectorAll("button")).some((button) => button.textContent?.includes("I have stored these codes"))
+          || document.querySelector('[role="alert"]')
+        ), undefined, { timeout: 15_000 });
+
+        const recoveryContinuation = page.getByRole("button", { name: "I have stored these codes" });
+        if (await recoveryContinuation.isVisible().catch(() => false)) {
+          await recoveryContinuation.click();
+        } else if (new URL(page.url()).pathname.startsWith("/login")) {
+          const mfaAlert = page.getByRole("alert");
+          if (await mfaAlert.isVisible().catch(() => false)) {
+            throw new Error("Login page reported an MFA verification error.");
+          }
+        }
+      }
+
       await page.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 15_000 });
       await page.waitForLoadState("networkidle", { timeout: 30_000 }).catch(() => {});
       await expect(mainText(page, "Firm command centre", { exact: true })).toBeVisible({ timeout: 30_000 });
+      assertRequiredMfaCompleted(mfaState, mfaSubmitted);
       return;
     } catch (error) {
-      const formText = await page.locator("form").innerText().catch(() => "");
-      lastFailure = `${error instanceof Error ? error.message : String(error)}\n${formText}`.trim();
+      const uiState = await observedLoginUiState(page);
+      lastFailure = safeLoginFailureDiagnostic(error, uiState, [email, password, mfaState.secret]);
       if (attempt < 3) {
         await page.waitForTimeout(attempt * 1_000);
         continue;
@@ -965,6 +1184,10 @@ async function run() {
   const password = requiredArg("password");
   const outputDir = path.resolve(arg("output-dir", "artifacts/visual-smoke"));
   const headless = arg("headed", "false") !== "true";
+  const defaultMfaHandoffPath = process.env.RUNNER_TEMP
+    ? path.join(process.env.RUNNER_TEMP, "accounts-visual-auth", "totp-handoff.json")
+    : "";
+  const mfaState = await consumeEphemeralMfaHandoff(arg("mfa-handoff-file", defaultMfaHandoffPath));
 
   await mkdir(outputDir, { recursive: true });
   const browser = await chromium.launch({ headless });
@@ -996,7 +1219,7 @@ async function run() {
           });
         }
 
-        await login(page, baseUrl, email, password);
+        await login(page, baseUrl, email, password, mfaState);
         const routeBases = await discoverRoutes(page, baseUrl);
 
         for (const state of visualSmokeStateInventory.filter((item) => item.authMode === "authenticated")) {
@@ -1133,12 +1356,17 @@ function relativePageUrl(page) {
 }
 
 export {
+  assertRequiredMfaCompleted,
   checkThemeContrast,
   companyHrefFromPeriodHref,
+  consumeEphemeralMfaHandoff,
   isExpectedAnonymousSessionProbeConsoleError,
+  nextFreshTotpCode,
   periodPathFromHref,
   resolveVisualSmokeStateHref,
+  safeLoginFailureDiagnostic,
   unexpectedVisualSmokeBrowserErrors,
+  totpCodeForCounter,
 };
 
 const invokedAsScript = process.argv[1]

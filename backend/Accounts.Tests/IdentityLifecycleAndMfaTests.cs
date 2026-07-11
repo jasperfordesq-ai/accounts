@@ -10,6 +10,8 @@ using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using System.Security.Cryptography;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Xunit;
 
 namespace Accounts.Tests;
@@ -18,6 +20,26 @@ public sealed class IdentityLifecycleAndMfaTests
 {
     private const string OwnerPassword = "Correct Horse Battery Staple 1!";
     private const string NewPassword = "Different Strong Password Value 2!";
+
+    [Fact]
+    public void MfaLoginChallenge_EmitsExplicitNullEnrollmentFieldsUnderProductionJsonPolicy()
+    {
+        var challenge = new MfaChallengeResponse(
+            "challenge-token-that-is-long-enough-for-the-wire-contract",
+            false,
+            new DateTime(2026, 7, 11, 2, 30, 0, DateTimeKind.Utc),
+            null,
+            null);
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web)
+        {
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+        };
+
+        using var document = JsonDocument.Parse(JsonSerializer.Serialize(challenge, options));
+
+        Assert.Equal(JsonValueKind.Null, document.RootElement.GetProperty("enrollmentSecret").ValueKind);
+        Assert.Equal(JsonValueKind.Null, document.RootElement.GetProperty("otpAuthUri").ValueKind);
+    }
 
     [Fact]
     public async Task PrivilegedLogin_RequiresTotpEnrollment_AndCreatesNoPrincipalBeforeSecondFactor()
