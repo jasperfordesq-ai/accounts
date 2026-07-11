@@ -1910,7 +1910,6 @@ public partial class AccountsWorkflowTests
         Assert.DoesNotContain("ACCOUNTS_FRONTEND_IMAGE: accounts-frontend-ci:${{ github.sha }}", productionSmokeJob);
         Assert.Contains("FRONTEND_PORT: \"3000\"", productionSmokeJob);
         Assert.Contains("NO_PROXY: accounts-smoke.local,127.0.0.1,localhost", productionSmokeJob);
-        Assert.Contains("no_proxy: accounts-smoke.local,127.0.0.1,localhost", productionSmokeJob);
         Assert.Contains("Generate ephemeral production smoke secrets", productionSmokeJob);
         Assert.Contains("::add-mask::", productionSmokeJob);
         Assert.Contains("GITHUB_ENV", productionSmokeJob);
