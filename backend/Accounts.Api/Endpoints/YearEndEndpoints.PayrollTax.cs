@@ -9,6 +9,21 @@ namespace Accounts.Api.Endpoints;
 
 public static partial class YearEndEndpoints
 {
+    public static async Task<IResult> GetPayrollSummaryEndpointAsync(
+        int companyId,
+        int periodId,
+        AccountsDbContext db,
+        HttpContext context)
+    {
+        if (!await CompanyEndpointAccess.CanAccessCompanyPeriodAsync(context, db, companyId, periodId))
+            return Results.NotFound();
+
+        var payroll = await db.PayrollSummaries
+            .AsNoTracking()
+            .FirstOrDefaultAsync(item => item.PeriodId == periodId);
+        return TypedResults.Ok(payroll);
+    }
+
     public static async Task<IResult> UpsertPayrollSummaryEndpointAsync(
         int companyId,
         int periodId,

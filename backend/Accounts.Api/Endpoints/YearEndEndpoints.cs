@@ -155,13 +155,7 @@ public static partial class YearEndEndpoints
         // ===== PAYROLL SUMMARY =====
         var payroll = app.MapGroup($"{basePath}/payroll").WithTags("Payroll");
 
-        payroll.MapGet("/", async (int companyId, int periodId, AccountsDbContext db, HttpContext context) =>
-            await GetPeriodOwnedValueAsync(
-                db,
-                companyId,
-                periodId,
-                context,
-                db.PayrollSummaries.Where(p => p.PeriodId == periodId)));
+        payroll.MapGet("/", GetPayrollSummaryEndpointAsync);
 
         payroll.MapPut("/", UpsertPayrollSummaryEndpointAsync);
 

@@ -115,22 +115,6 @@ public static partial class YearEndEndpoints
         return Results.Ok(await query.ToListAsync());
     }
 
-    private static async Task<IResult> GetPeriodOwnedValueAsync<T>(
-        AccountsDbContext db,
-        int companyId,
-        int periodId,
-        HttpContext context,
-        IQueryable<T> query)
-        where T : class
-    {
-        if (!await CompanyEndpointAccess.CanAccessCompanyPeriodAsync(context, db, companyId, periodId))
-            return Results.NotFound();
-
-        return await query.FirstOrDefaultAsync() is { } value
-            ? Results.Ok(value)
-            : Results.NotFound();
-    }
-
     private static Task<bool> AccountCategoryAvailableToCompanyAsync(AccountsDbContext db, int companyId, int categoryId) =>
         db.AccountCategories.AnyAsync(c => c.Id == categoryId && (c.CompanyId == companyId || (c.IsSystem && c.CompanyId == null)));
 
