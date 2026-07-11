@@ -77,7 +77,7 @@ test("visual smoke consumes and deletes a mode-0600 runner MFA handoff", async (
       lastAcceptedCounter: 42,
     }), { encoding: "utf8", mode: 0o600 });
 
-    assert.deepEqual(await consumeEphemeralMfaHandoff(handoffPath), {
+    assert.deepEqual(await consumeEphemeralMfaHandoff(handoffPath, { temporaryRoot: directory }), {
       secret: RFC_SECRET,
       lastUsedCounter: 42,
     });
@@ -110,7 +110,7 @@ test("visual smoke deletes malformed MFA handoffs while failing closed", async (
     }), { encoding: "utf8", mode: 0o600 });
 
     await assert.rejects(
-      () => consumeEphemeralMfaHandoff(handoffPath),
+      () => consumeEphemeralMfaHandoff(handoffPath, { temporaryRoot: directory }),
       /invalid Base32 secret/,
     );
     await assert.rejects(() => readFile(handoffPath), (error) => error?.code === "ENOENT");
@@ -133,7 +133,7 @@ test("visual smoke rejects and deletes a group-readable MFA handoff", {
     await chmod(handoffPath, 0o640);
 
     await assert.rejects(
-      () => consumeEphemeralMfaHandoff(handoffPath),
+      () => consumeEphemeralMfaHandoff(handoffPath, { temporaryRoot: directory }),
       /mode 0600/,
     );
     await assert.rejects(() => readFile(handoffPath), (error) => error?.code === "ENOENT");
