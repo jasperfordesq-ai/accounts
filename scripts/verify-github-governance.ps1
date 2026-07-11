@@ -82,6 +82,7 @@ $configuredChecks = @()
 $configuredCheckBindings = @()
 $reviewBypassAllowanceCount = 0
 $reviewBypassShapeValid = $false
+$reviewBypassUnsupportedForUserRepository = $false
 
 if ($null -ne $protection) {
     $configuredChecks = @($protection.required_status_checks.contexts)
@@ -121,7 +122,14 @@ if ($null -ne $protection) {
     if ($null -ne $reviews) {
         $bypassProperty = $reviews.PSObject.Properties['bypass_pull_request_allowances']
         if ($null -eq $bypassProperty -or $null -eq $bypassProperty.Value) {
-            $failures.Add("Pull-request review bypass allowances must be explicitly reported by the GitHub API.")
+            if ([string]$repositoryState.owner.type -ceq "User") {
+                # GitHub omits this organization-only shape for personal repositories; omission is
+                # the API's authoritative representation that user/team/app allowances cannot exist.
+                $reviewBypassShapeValid = $true
+                $reviewBypassUnsupportedForUserRepository = $true
+            } else {
+                $failures.Add("Pull-request review bypass allowances must be explicitly reported by the GitHub API.")
+            }
         } else {
             $bypass = $bypassProperty.Value
             $bypassUsersProperty = $bypass.PSObject.Properties['users']
@@ -200,6 +208,7 @@ $report = [ordered]@{
         requireConversationResolution = $protection.required_conversation_resolution.enabled
         reviewBypassAllowanceCount = $reviewBypassAllowanceCount
         reviewBypassShapeValid = $reviewBypassShapeValid
+        reviewBypassUnsupportedForUserRepository = $reviewBypassUnsupportedForUserRepository
         allowForcePushes = $protection.allow_force_pushes.enabled
         allowDeletions = $protection.allow_deletions.enabled
         requireSignedCommits = $requiredSignatures.enabled

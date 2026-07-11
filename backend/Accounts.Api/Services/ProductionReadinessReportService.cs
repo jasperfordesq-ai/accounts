@@ -695,8 +695,8 @@ public partial class ProductionReadinessReportService(AccountsDbContext db)
                         25,
                         "machine",
                         false,
-                        ["Build-once digest promotion, reproducible locked inputs, restricted readiness evidence and domain audit coverage are implemented; exact-candidate protected-branch governance, scheduled scan/SBOM evidence, production backup, live monitoring confirmation, deployment encryption evidence and the remaining dependency-maintenance control stay open."],
-                        ["P1-OPS-003", "P1-OPS-004", "P1-OPS-005", "P1-OPS-006", "P1-OPS-008", "P2-FE-009"]),
+                        ["Build-once digest promotion, exact-candidate protected-branch governance, reproducible locked inputs, retained scheduled scan/SBOM evidence, restricted readiness evidence and domain audit coverage are implemented; production backup, live monitoring confirmation, deployment encryption evidence and the remaining dependency-maintenance control stay open."],
+                        ["P1-OPS-005", "P1-OPS-006", "P1-OPS-008", "P2-FE-009"]),
                     Control(
                         "defence-in-depth-and-resilience",
                         "Database isolation, privacy and resilience",

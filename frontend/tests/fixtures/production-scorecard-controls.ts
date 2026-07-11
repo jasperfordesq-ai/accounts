@@ -153,7 +153,7 @@ const CONTROLS: Record<ProductionScorecardCategoryCode, ProductionScorecardContr
       25,
       "machine",
       false,
-      ["P1-OPS-003", "P1-OPS-004", "P1-OPS-005", "P1-OPS-006", "P1-OPS-008", "P2-FE-009"],
+      ["P1-OPS-005", "P1-OPS-006", "P1-OPS-008", "P2-FE-009"],
     ),
     control(
       "defence-in-depth-and-resilience",

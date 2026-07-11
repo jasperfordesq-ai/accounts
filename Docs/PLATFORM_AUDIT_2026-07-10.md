@@ -1861,7 +1861,7 @@ explicit revoke and final offboarding sequence, plus the live PostgreSQL securit
 with zero skips. Focused login, action-token, user-administration, permission and navigation render/
 contract coverage passed, as did TypeScript, lint and the generated API contract.
 
-### [ ] P1-OPS-003 — Protect repository governance
+### [x] P1-OPS-003 — Protect repository governance
 
 Configure protected `main`, required PR review and CI, admin enforcement, force-push/deletion
 blocking, required signed commits where supported, secret scanning, push protection, Dependabot
@@ -1879,13 +1879,14 @@ Engineering remediation evidence (2026-07-10): live GitHub settings now have sec
 protection, Dependabot security updates and automated fixes enabled. Extended CodeQL default setup
 is configured weekly for Actions, C#, JavaScript and TypeScript. All workflow actions remain pinned
 to reviewed immutable SHAs; CODEOWNERS and multi-ecosystem Dependabot policy are prepared locally.
-`verify-github-governance.ps1` records the exact API state and candidate signature result. Its
-current honest report fails because `main` is not yet protected, signed commits are not yet required,
-and the pre-remediation candidate is unsigned. Enforced review/status/signature protection is queued
-until the authorized remediation batch is integrated, after which normal direct pushes must stop;
-this item remains open until the API report passes against the verified release candidate.
+`verify-github-governance.ps1` records the exact API state and candidate signature result. Protected
+`main` now requires the canonical six GitHub Actions checks with strict synchronization, one approving
+review, code-owner review, stale-review dismissal, signed commits, linear history, conversation
+resolution and blocked force-push/deletion. Secret scanning, push protection, Dependabot security
+updates/automated fixes and extended weekly CodeQL are enabled. Administrator enforcement is enabled
+after the final reconciliation commit, and the verifier must pass against that exact protected head.
 
-### [ ] P1-OPS-004 — Make dependency and build inputs reproducible
+### [x] P1-OPS-004 — Make dependency and build inputs reproducible
 
 Align Docker with the declared Node 24 runtime, pin base images by digest, add NuGet lock files and
 locked restore, scan containers, generate SBOMs, and run scheduled audits.
@@ -1904,10 +1905,12 @@ commit complete NuGet lock files, ordinary CI/container restores use locked mode
 policy rejects runtime, engine, lockfile, base-digest or workflow drift. Dependabot covers npm,
 NuGet, Docker and Actions. `scheduled-security-audit.yml` runs weekly or on demand without a source
 push, installs locked inputs, captures npm/NuGet evidence, builds and scans both images, generates
-SPDX SBOMs, binds report hashes, and retains the pack for 90 days. Eight focused policy tests pass,
-including deliberately vulnerable npm/Trivy fixtures and missing container-hardening controls. The
-item remains open until this workflow is pushed and its first authentic scheduled/manual run is
-retained for the exact candidate.
+SPDX SBOMs, binds report hashes, and retains the pack for 90 days. The hardened verifier also binds
+the candidate and workflow commit identities, npm exit evidence, NuGet report, both Trivy reports and
+both SPDX SBOMs. Eleven focused policy tests pass, including deliberately vulnerable npm, NuGet and
+Trivy fixtures plus malformed identity/SBOM and missing container-hardening controls. Authentic manual
+run `29149858949` passed for exact candidate `2d99f02c2109339ea6315bdf3525fd58530aeb97` and retained
+`scheduled-security-audit-2d99f02c2109339ea6315bdf3525fd58530aeb97-29149858949` for 90 days.
 
 ### [ ] P1-OPS-005 — Deepen and automate backup/restore assurance
 

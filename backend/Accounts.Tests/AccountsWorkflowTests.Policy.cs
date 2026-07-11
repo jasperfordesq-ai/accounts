@@ -1803,6 +1803,9 @@ public partial class AccountsWorkflowTests
         Assert.Contains("bypass_pull_request_allowances", governanceVerifier);
         Assert.Contains("reviewBypassAllowanceCount", governanceVerifier);
         Assert.Contains("reviewBypassShapeValid", governanceVerifier);
+        Assert.Contains("reviewBypassUnsupportedForUserRepository", governanceVerifier);
+        Assert.Contains("repositoryState.owner.type -ceq \"User\"", governanceVerifier);
+        Assert.Contains("organization-only shape for personal repositories", governanceVerifier);
         Assert.Contains("$requiredCheckAppId = 15368", governanceVerifier);
         Assert.Contains("exactly one app-bound checks row", governanceVerifier);
         Assert.Contains("$branchState.commit.sha -cne $CommitSha", governanceVerifier);

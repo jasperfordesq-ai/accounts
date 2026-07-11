@@ -932,7 +932,7 @@ public class ProductionReadinessReportTests
             control => control.Code == "supply-chain-and-operations");
         Assert.False(supplyChainOperations.Passed);
         Assert.Equal(
-            ["P1-OPS-003", "P1-OPS-004", "P1-OPS-005", "P1-OPS-006", "P1-OPS-008", "P2-FE-009"],
+            ["P1-OPS-005", "P1-OPS-006", "P1-OPS-008", "P2-FE-009"],
             supplyChainOperations.BlockingAuditItemIds);
         Assert.DoesNotContain("repository governance", supplyChainOperations.Evidence[0], StringComparison.OrdinalIgnoreCase);
         Assert.Contains("production backup", supplyChainOperations.Evidence[0], StringComparison.OrdinalIgnoreCase);
