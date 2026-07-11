@@ -54,10 +54,38 @@ function Invoke-Compose([string[]]$Arguments) {
     }
 }
 
-$composeInventoryText = @((Invoke-Compose @("ps", "--format", "json"))) -join [Environment]::NewLine
+$composeInventoryText = (@((Invoke-Compose @("ps", "--format", "json"))) -join [Environment]::NewLine).Trim()
 try {
-    $parsedComposeInventory = $composeInventoryText | ConvertFrom-Json
-    $composeInventory = @($parsedComposeInventory)
+    if ([string]::IsNullOrWhiteSpace($composeInventoryText)) {
+        throw "Compose returned an empty service inventory."
+    }
+
+    if ($composeInventoryText.StartsWith("[", [StringComparison]::Ordinal)) {
+        $parsedComposeInventory = $composeInventoryText | ConvertFrom-Json
+        $composeInventory = @($parsedComposeInventory)
+    } else {
+        $composeInventory = @(
+            $composeInventoryText -split "`r?`n" |
+                Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+                ForEach-Object { $_ | ConvertFrom-Json }
+        )
+    }
+    if ($composeInventory.Count -eq 0) {
+        throw "Compose returned no service rows."
+    }
+    foreach ($row in $composeInventory) {
+        if ($null -eq $row -or $row -isnot [System.Management.Automation.PSCustomObject]) {
+            throw "Compose returned a non-object service row."
+        }
+        foreach ($field in @("Project", "Service", "State")) {
+            $property = $row.PSObject.Properties[$field]
+            if ($null -eq $property -or
+                $property.Value -isnot [string] -or
+                [string]::IsNullOrWhiteSpace([string]$property.Value)) {
+                throw "Compose service row field '$field' must be a nonblank string."
+            }
+        }
+    }
 } catch {
     throw "Unable to inspect the candidate Compose service inventory as JSON."
 }

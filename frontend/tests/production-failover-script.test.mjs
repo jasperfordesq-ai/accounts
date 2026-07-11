@@ -58,13 +58,44 @@ test("production failover drill fails closed when an interruption is not detecte
   }
 });
 
-async function createHarness({ ignoreStop = "" } = {}) {
+test("production failover drill accepts Docker Compose newline-delimited JSON inventory", async () => {
+  const harness = await createHarness({ inventoryFormat: "ndjson" });
+  try {
+    const result = await harness.run();
+    assert.equal(result.code, 0, result.output);
+    const report = JSON.parse(await readFile(harness.reportPath, "utf8"));
+    assert.equal(report.status, "passed");
+    assert.equal(report.observations.length, 5);
+  } finally {
+    await harness.dispose();
+  }
+});
+
+test("production failover drill refuses invalid service inventories before interruption", async (context) => {
+  for (const inventoryScenario of ["empty", "malformed", "mixed", "duplicate", "wrong-project", "non-running"]) {
+    await context.test(inventoryScenario, async () => {
+      const harness = await createHarness({ inventoryScenario });
+      try {
+        const result = await harness.run();
+        assert.notEqual(result.code, 0, result.output);
+        assert.deepEqual(JSON.parse(await readFile(harness.statePath, "utf8")), { api: true, db: true });
+        assert.equal(await readFile(harness.actionLogPath, "utf8"), "", "invalid inventory must not issue stop/start commands");
+      } finally {
+        await harness.dispose();
+      }
+    });
+  }
+});
+
+async function createHarness({ ignoreStop = "", inventoryFormat = "array", inventoryScenario = "valid" } = {}) {
   const directory = await mkdtemp(join(tmpdir(), "accounts-failover-test-"));
   const statePath = join(directory, "state.json");
+  const actionLogPath = join(directory, "actions.log");
   const reportPath = join(directory, "production-failover-report.json");
   const composePath = join(directory, "compose.production.yml");
   const helperPath = join(directory, "fake-docker.mjs");
   await writeFile(statePath, '{"api":true,"db":true}\n', "utf8");
+  await writeFile(actionLogPath, "", "utf8");
   await writeFile(composePath, "services: {}\n", "utf8");
   await writeFile(helperPath, fakeDockerSource, "utf8");
 
@@ -90,6 +121,7 @@ async function createHarness({ ignoreStop = "" } = {}) {
 
   return {
     statePath,
+    actionLogPath,
     reportPath,
     async run() {
       const executable = process.platform === "win32" ? "powershell.exe" : "pwsh";
@@ -112,8 +144,11 @@ async function createHarness({ ignoreStop = "" } = {}) {
         ...process.env,
         PATH: `${directory}${delimiter}${process.env.PATH ?? ""}`,
         FAILOVER_STATE_FILE: statePath,
+        FAILOVER_ACTION_LOG_FILE: actionLogPath,
         FAILOVER_IGNORE_STOP: ignoreStop,
         FAILOVER_PROJECT: "accounts-test",
+        FAILOVER_INVENTORY_FORMAT: inventoryFormat,
+        FAILOVER_INVENTORY_SCENARIO: inventoryScenario,
       });
     },
     async dispose() {
@@ -135,20 +170,35 @@ function spawnAndCollect(command, args, env) {
 }
 
 const fakeDockerSource = `
-import { readFile, writeFile } from "node:fs/promises";
+import { appendFile, readFile, writeFile } from "node:fs/promises";
 
 const statePath = process.env.FAILOVER_STATE_FILE;
+const actionLogPath = process.env.FAILOVER_ACTION_LOG_FILE;
 const args = process.argv.slice(2);
 if (args.includes("ps") && args.includes("json")) {
-  console.log(JSON.stringify([
+  let rows = [
     { Project: process.env.FAILOVER_PROJECT, Service: "api", State: "running" },
     { Project: process.env.FAILOVER_PROJECT, Service: "db", State: "running" },
-  ]));
+  ];
+  switch (process.env.FAILOVER_INVENTORY_SCENARIO) {
+    case "empty": rows = []; break;
+    case "malformed": console.log("{not-json"); process.exit(0);
+    case "mixed": rows.push(null, {}, ["unexpected"]); break;
+    case "duplicate": rows.push({ ...rows[0] }); break;
+    case "wrong-project": rows[0].Project = "wrong-project"; break;
+    case "non-running": rows[1].State = "exited"; break;
+  }
+  if (process.env.FAILOVER_INVENTORY_FORMAT === "ndjson") {
+    for (const row of rows) console.log(JSON.stringify(row));
+  } else {
+    console.log(JSON.stringify(rows));
+  }
   process.exit(0);
 }
 const action = args.find((argument) => argument === "stop" || argument === "start");
 const service = process.argv.at(-1);
 if (!statePath || !action || !["api", "db"].includes(service)) process.exit(2);
+if (actionLogPath) await appendFile(actionLogPath, \`\${action} \${service}\\n\`, "utf8");
 const state = JSON.parse(await readFile(statePath, "utf8"));
 if (!(action === "stop" && process.env.FAILOVER_IGNORE_STOP === service)) state[service] = action === "start";
 await writeFile(statePath, JSON.stringify(state), "utf8");

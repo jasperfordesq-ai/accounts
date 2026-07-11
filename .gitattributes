@@ -10,5 +10,7 @@ Dockerfile.frontend text eol=lf
 backend/Accounts.Tests/AccountsWorkflowTests.Policy.cs text eol=lf
 scripts/verify-ci-actions.mjs text eol=lf
 scripts/smoke-production.ps1 text eol=lf
+scripts/test-production-failover.ps1 text eol=lf
+frontend/tests/production-failover-script.test.mjs text eol=lf
 Docs/operations/production-runbook.md text eol=lf
 deploy/caddy/Caddyfile.example text eol=lf
