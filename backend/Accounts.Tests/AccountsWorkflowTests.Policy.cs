@@ -3054,6 +3054,9 @@ public partial class AccountsWorkflowTests
         Assert.Contains("restoredFromEncryptedCopy", verifyScript);
         Assert.Contains("schemaChecks", verifyScript);
         Assert.Contains("figureChecks", verifyScript);
+        Assert.Contains("opening balance net total", verifyScript);
+        Assert.Contains("sum(`\"Debit`\" - `\"Credit`\")", verifyScript);
+        Assert.DoesNotContain("sum(`\"Amount`\"), 0)::text from opening_balances", verifyScript);
         Assert.Contains("fingerprintChecks", verifyScript);
         Assert.Contains("auditIntegrityChecks", verifyScript);
         Assert.Contains("recoveryMetrics", verifyScript);

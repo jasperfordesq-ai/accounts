@@ -244,7 +244,7 @@ try {
     $figureChecks = @(
         Assert-RestoredValueMatchesSource "imported transaction amount total" "select coalesce(sum(`"Amount`"), 0)::text from imported_transactions;"
         Assert-RestoredValueMatchesSource "adjustment amount total" "select coalesce(sum(`"Amount`"), 0)::text from adjustments;"
-        Assert-RestoredValueMatchesSource "opening balance total" "select coalesce(sum(`"Amount`"), 0)::text from opening_balances;"
+        Assert-RestoredValueMatchesSource "opening balance net total" "select coalesce(sum(`"Debit`" - `"Credit`"), 0)::text from opening_balances;"
         Assert-RestoredValueMatchesSource "CRO retained artifact bytes" "select coalesce(sum(octet_length(`"AccountsPdfArtifact`")), 0)::text from cro_filing_packages;"
         Assert-RestoredValueMatchesSource "Revenue retained artifact bytes" "select coalesce(sum(octet_length(`"IxbrlArtifact`")), 0)::text from revenue_filing_packages;"
     )
