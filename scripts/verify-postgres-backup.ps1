@@ -190,7 +190,24 @@ if ($backupManifest.plaintextDumpRetained -ne $false) {
     throw "Backup manifest must prove the plaintext dump was removed after encryption."
 }
 $backupCreatedAtUtc = [DateTimeOffset]::MinValue
-if (-not [DateTimeOffset]::TryParse([string]$backupManifest.createdAtUtc, [ref]$backupCreatedAtUtc)) {
+$backupCreatedAtValue = $backupManifest.createdAtUtc
+$backupCreatedAtParsed = $false
+if ($backupCreatedAtValue -is [DateTimeOffset]) {
+    $backupCreatedAtUtc = [DateTimeOffset]$backupCreatedAtValue
+    $backupCreatedAtParsed = $true
+} elseif ($backupCreatedAtValue -is [DateTime]) {
+    # PowerShell 7.5+ may materialize ISO JSON strings as DateTime values. Avoid
+    # casting them back to culture-formatted strings, which can discard fractions.
+    $backupCreatedAtUtc = [DateTimeOffset]([DateTime]$backupCreatedAtValue)
+    $backupCreatedAtParsed = $true
+} else {
+    $backupCreatedAtParsed = [DateTimeOffset]::TryParse(
+        [string]$backupCreatedAtValue,
+        [Globalization.CultureInfo]::InvariantCulture,
+        [Globalization.DateTimeStyles]::RoundtripKind,
+        [ref]$backupCreatedAtUtc)
+}
+if (-not $backupCreatedAtParsed) {
     throw "Backup manifest createdAtUtc is invalid."
 }
 if ($backupCreatedAtUtc.Offset -ne [TimeSpan]::Zero) {

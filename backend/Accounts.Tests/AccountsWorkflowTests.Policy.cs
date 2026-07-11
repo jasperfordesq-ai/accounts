@@ -3052,6 +3052,9 @@ public partial class AccountsWorkflowTests
         Assert.Contains("tableChecks", verifyScript);
         Assert.Contains("backupEncryption", verifyScript);
         Assert.Contains("restoredFromEncryptedCopy", verifyScript);
+        Assert.Contains("$backupCreatedAtValue -is [DateTime]", verifyScript);
+        Assert.Contains("which can discard fractions", verifyScript);
+        Assert.Contains("[Globalization.DateTimeStyles]::RoundtripKind", verifyScript);
         Assert.Contains("schemaChecks", verifyScript);
         Assert.Contains("figureChecks", verifyScript);
         Assert.Contains("opening balance net total", verifyScript);
