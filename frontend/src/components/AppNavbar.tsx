@@ -53,7 +53,7 @@ export function AppNavbar() {
         </Link>
 
         {/* Desktop nav */}
-        <div className="hidden md:flex items-center gap-2">
+        <div className="hidden min-w-0 items-center gap-2 lg:flex">
           <ActionLink
             href="/"
             variant={isActive("/") ? "secondary" : "ghost"}
@@ -97,7 +97,7 @@ export function AppNavbar() {
                 <div
                   role="status"
                   aria-live="polite"
-                  className="hidden max-w-48 text-xs leading-snug text-red-600 dark:text-red-400 md:block xl:max-w-52"
+                  className="hidden max-w-48 text-xs leading-snug text-red-600 dark:text-red-400 lg:block xl:max-w-52"
                 >
                   {logoutError}
                 </div>
@@ -127,7 +127,7 @@ export function AppNavbar() {
         </div>
 
         {/* Mobile hamburger */}
-        <div className="flex md:hidden items-center gap-2">
+        <div className="flex items-center gap-2 lg:hidden">
           <ThemeToggle />
           <Button
             ref={mobileMenuButtonRef}
@@ -148,7 +148,7 @@ export function AppNavbar() {
         <div
           role="status"
           aria-live="polite"
-          className="mx-auto mt-3 max-w-7xl rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs leading-snug text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300 md:hidden"
+          className="mx-auto mt-3 max-w-7xl rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs leading-snug text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300 lg:hidden"
         >
           {logoutError}
         </div>
@@ -156,7 +156,7 @@ export function AppNavbar() {
 
       {/* Mobile menu */}
       {mobileOpen && (
-        <div id="primary-mobile-navigation" role="group" aria-label="Mobile primary navigation" className="md:hidden border-t border-gray-200 dark:border-neutral-700 mt-3 pt-3 pb-1 animate-slide-down">
+        <div id="primary-mobile-navigation" role="group" aria-label="Mobile primary navigation" className="mt-3 border-t border-gray-200 pb-1 pt-3 dark:border-neutral-700 lg:hidden animate-slide-down">
           <div className="flex flex-col gap-1">
             <ActionLink
               href="/"

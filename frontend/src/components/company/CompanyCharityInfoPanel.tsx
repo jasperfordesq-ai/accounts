@@ -431,7 +431,7 @@ function CheckboxField({
         type="checkbox"
         checked={checked}
         onChange={(event) => onChange(event.target.checked)}
-        className="rounded border-[var(--control-border)] text-emerald-700 focus:ring-emerald-500"
+        className="workbench-checkbox"
       />
       {label}
     </label>

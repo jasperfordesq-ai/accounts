@@ -569,7 +569,7 @@ function MoneyField({ label, value, required = false, onChange }: { label: strin
 }
 
 function Flag({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) {
-  return <label className="flex min-h-11 items-start gap-2 rounded-md border border-[var(--control-border)] bg-[var(--surface-subtle)] px-3 py-2 text-sm text-[var(--foreground)]"><input className="mt-0.5 h-4 w-4" type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} /><span>{label}</span></label>;
+  return <label className="flex min-h-11 items-start gap-2 rounded-md border border-[var(--control-border)] bg-[var(--surface-subtle)] px-3 py-2 text-sm text-[var(--foreground)]"><input className="workbench-checkbox mt-0.5" type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} /><span>{label}</span></label>;
 }
 
 function groupFields(fields: CorporationTaxFilingSupportResponse["worksheet"]["fields"]) {

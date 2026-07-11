@@ -40,7 +40,7 @@ export function YearEndGoingConcernSection({
           id="going-concern-confirmed"
           checked={confirmed}
           onChange={(event) => onConfirmedChange(event.target.checked)}
-          className="h-5 w-5 rounded border-[var(--control-border)] text-emerald-600 focus:ring-emerald-500"
+          className="workbench-checkbox"
         />
         <label htmlFor="going-concern-confirmed" className="text-sm font-medium text-gray-900 dark:text-gray-100">
           The directors confirm the company is a going concern

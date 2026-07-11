@@ -290,9 +290,10 @@ export function ShareCapitalCard({
                 <input
                   type="checkbox"
                   id="share-fully-paid"
+                  aria-label="Fully paid"
                   checked={form.isFullyPaid}
                   onChange={(e) => setForm({ ...form, isFullyPaid: e.target.checked })}
-                  className="rounded border-[var(--control-border)] text-emerald-600 focus:ring-emerald-500"
+                  className="workbench-checkbox"
                 />
                 <label htmlFor="share-fully-paid" className="text-xs font-medium text-gray-600 dark:text-gray-400">
                   Fully paid

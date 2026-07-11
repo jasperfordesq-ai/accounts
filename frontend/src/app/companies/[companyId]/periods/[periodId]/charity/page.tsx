@@ -531,6 +531,7 @@ export default function CharityReportingPage({
                         type="checkbox"
                         checked={trusteeReviewAccepted}
                         onChange={(event) => setTrusteeReviewAccepted(event.target.checked)}
+                        className="workbench-checkbox"
                       />
                       Population accepted
                     </label>

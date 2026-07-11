@@ -328,7 +328,7 @@ function NumberField({ label, value, onChange }: { label: string; value: number;
 }
 
 function CheckboxField({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) {
-  return <label className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300"><input type="checkbox" className="mt-0.5 rounded border-[var(--control-border)] text-emerald-600 focus:ring-emerald-500" checked={checked} onChange={(event) => onChange(event.target.checked)} /><span>{label}</span></label>;
+  return <label className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300"><input type="checkbox" className="workbench-checkbox mt-0.5" checked={checked} onChange={(event) => onChange(event.target.checked)} /><span>{label}</span></label>;
 }
 
 function DerivedAmount({ label, amount }: { label: string; amount: number }) {

@@ -337,7 +337,7 @@ export function LoansManager({
               type="checkbox"
               checked={form.isDirectorLoan}
               onChange={(e) => setForm({ ...form, isDirectorLoan: e.target.checked })}
-              className="rounded border-[var(--control-border)] text-emerald-600 focus:ring-emerald-500"
+              className="workbench-checkbox"
               aria-label="This is a director loan"
             />
             Loan from a director

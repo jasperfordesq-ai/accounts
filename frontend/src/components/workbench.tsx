@@ -370,7 +370,7 @@ export function WorkbenchErrorState({
         <button
           type="button"
           onClick={onRetry}
-          className="inline-flex min-h-10 items-center gap-2 rounded-md border border-red-300 bg-red-600 px-3 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500 dark:border-red-800"
+          className="inline-flex min-h-10 items-center gap-2 rounded-md border border-[var(--control-border)] bg-[var(--surface-strong)] px-3 text-sm font-semibold text-[var(--foreground)] shadow-sm transition hover:border-[var(--ring)] hover:bg-[var(--surface-subtle)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500"
         >
           <RefreshCw className="h-4 w-4" />
           {retryLabel}

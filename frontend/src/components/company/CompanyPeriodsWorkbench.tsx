@@ -69,7 +69,7 @@ export function CompanyPeriodsWorkbench({
               type="checkbox"
               checked={isFirstYear}
               onChange={(event) => onFirstYearChange(event.target.checked)}
-              className="rounded border-[var(--control-border)] text-emerald-700 focus:ring-emerald-500"
+              className="workbench-checkbox"
             />
             First year
           </label>

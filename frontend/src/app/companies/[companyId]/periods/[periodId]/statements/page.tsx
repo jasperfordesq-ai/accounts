@@ -88,6 +88,9 @@ export default function StatementsPage({
   const [sources, setSources] = useState<StatementSourceSummary[] | null>(null);
   const [shellState, setShellState] = useState<ResourceState>(INITIAL_RESOURCE_STATE);
   const [statementState, setStatementState] = useState<ResourceState>(INITIAL_RESOURCE_STATE);
+  const periodMatchesRoute = period?.id === pId && period.companyId === cId;
+  const canLoadDirectorsReport = periodMatchesRoute
+    && Boolean(period?.filingRegime?.electedRegime);
 
   const loadShell = useCallback(async (onlyKeys?: string[]) => {
     const request = shellRequestSequence.begin();
@@ -118,7 +121,9 @@ export default function StatementsPage({
       "tax-filing-support": () => getCorporationTaxFilingSupport(cId, pId),
       "cash-flow": () => getCashFlowStatement(cId, pId),
       equity: () => getEquityChanges(cId, pId),
-      "directors-report": () => getDirectorsReportData(cId, pId),
+      "directors-report": () => canLoadDirectorsReport
+        ? getDirectorsReportData(cId, pId)
+        : Promise.resolve(null),
       sources: () => getStatementSources(cId, pId),
     };
     const keys = (onlyKeys ?? Object.keys(loaders)) as Array<keyof typeof loaders>;
@@ -139,18 +144,22 @@ export default function StatementsPage({
       failedResourceKeys: result.failedResourceKeys,
       errors: result.errors,
     }, current.hasRetainedData || Object.keys(result.values).length > 0));
-  }, [cId, pId, statementRequestSequence]);
-
-  const loadData = useCallback(async () => {
-    await Promise.all([loadShell(), loadStatements()]);
-  }, [loadShell, loadStatements]);
+  }, [cId, pId, canLoadDirectorsReport, statementRequestSequence]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      void loadData();
+      void loadShell();
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [loadData]);
+  }, [loadShell]);
+
+  useEffect(() => {
+    if (!periodMatchesRoute) return;
+    const timer = window.setTimeout(() => {
+      void loadStatements();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadStatements, periodMatchesRoute]);
 
   useEffect(() => () => {
     shellRequestSequence.invalidate();

@@ -294,6 +294,16 @@ export const yearEndReviewConfirmationSchema = z.object({
   }
 });
 
+export const payrollSummarySchema = z.object({
+  id: positiveIdSchema.optional(),
+  periodId: positiveIdSchema.optional(),
+  grossWages: nonNegativeMoneySchema,
+  directorsFees: nonNegativeMoneySchema,
+  employerPrsi: nonNegativeMoneySchema,
+  pensionContributions: nonNegativeMoneySchema,
+  staffCount: nonNegativeIntegerSchema,
+});
+
 export const yearEndSummarySchema = z.object({
   debtors: z.object({ count: nonNegativeIntegerSchema, total: moneySchema }),
   creditors: z.object({ count: nonNegativeIntegerSchema, total: moneySchema }),

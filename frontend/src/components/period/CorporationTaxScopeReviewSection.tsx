@@ -156,7 +156,7 @@ export function CorporationTaxScopeReviewSection({
 function Flag({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) {
   return (
     <label className="flex items-start gap-2 rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-700 dark:border-neutral-700 dark:text-gray-300">
-      <input className="mt-0.5" type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
+      <input className="workbench-checkbox mt-0.5" type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
       <span>{label}</span>
     </label>
   );

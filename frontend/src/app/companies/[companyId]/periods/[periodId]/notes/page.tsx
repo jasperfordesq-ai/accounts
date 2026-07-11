@@ -581,7 +581,7 @@ export default function NotesPage({
                           onChange={() => handleToggleIncluded(note)}
                           disabled={isSaving}
                           title={note.isIncluded ? "Exclude this note from the financial statements" : "Include this note in the financial statements"}
-                          className="rounded border-[var(--control-border)] text-emerald-600 focus:ring-emerald-500 dark:bg-neutral-800"
+                          className="workbench-checkbox"
                         />
                         <span className="text-xs text-[var(--muted-foreground)]">
                           Include

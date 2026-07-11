@@ -696,11 +696,6 @@ html {
   color: var(--card-foreground);
 }
 
-/* Force all Card-like containers to pick up dark background */
-.dark [class*="shadow-sm"][class*="border"] {
-  background-color: var(--card);
-}
-
 /* Ensure all text in dark mode has readable contrast */
 .dark h1, .dark h2, .dark h3, .dark h4, .dark h5, .dark h6 {
   color: var(--foreground);
@@ -711,6 +706,67 @@ html {
   background-color: #262626;
   color: #fafafa;
   border-color: var(--control-border);
+}
+
+/* MoneyInput owns one explicit composite boundary; keep its inner field transparent so
+   contrast checks and users perceive the wrapper, prefix and value as one control. */
+.dark [data-money-input="true"] {
+  background-color: transparent;
+  border-color: transparent;
+}
+
+.workbench-checkbox {
+  appearance: none;
+  display: grid;
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 auto;
+  place-content: center;
+  border: 1px solid var(--control-border);
+  border-radius: 0.25rem;
+  background: var(--surface);
+  color: var(--accent-foreground);
+  transition: background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.workbench-checkbox::before {
+  width: 0.55rem;
+  height: 0.55rem;
+  content: "";
+  background: currentColor;
+  clip-path: polygon(14% 44%, 0 59%, 38% 100%, 100% 16%, 84% 0, 37% 62%);
+  transform: scale(0);
+  transform-origin: center;
+  transition: transform 100ms ease;
+}
+
+.dark .workbench-checkbox {
+  border-color: var(--control-border);
+  background: var(--surface);
+}
+
+.workbench-checkbox:checked,
+.dark .workbench-checkbox:checked {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+
+.workbench-checkbox:checked::before {
+  transform: scale(1);
+}
+
+.workbench-checkbox:disabled,
+.dark .workbench-checkbox:disabled {
+  cursor: not-allowed;
+  border-color: var(--control-border);
+  background: var(--surface-strong);
+  color: var(--muted-foreground);
+}
+
+.workbench-checkbox:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
 }
 
 .dark select option {

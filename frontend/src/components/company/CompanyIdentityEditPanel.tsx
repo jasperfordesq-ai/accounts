@@ -173,7 +173,7 @@ function CheckboxField({
         checked={checked}
         onChange={(event) => onChange(event.target.checked)}
         aria-label={ariaLabel}
-        className="rounded border-[var(--control-border)] text-emerald-700 focus:ring-emerald-500"
+        className="workbench-checkbox"
       />
       {label}
     </label>

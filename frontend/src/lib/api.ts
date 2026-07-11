@@ -1739,9 +1739,10 @@ export const deleteFixedAsset = (companyId: number, id: number) =>
 
 // Payroll
 export const getPayroll = (companyId: number, periodId: number) =>
-  apiFetch<PayrollSummary>(`/api/companies/${companyId}/periods/${periodId}/payroll`).catch(
-    () => null,
-  );
+  apiFetch<PayrollSummary | null>(`/api/companies/${companyId}/periods/${periodId}/payroll`, {
+    responseSchema: apiContracts.payrollSummarySchema.nullable(),
+    responseContract: "payroll summary",
+  });
 export const savePayroll = (companyId: number, periodId: number, data: PayrollSummary) =>
   apiFetch<PayrollSummary>(`/api/companies/${companyId}/periods/${periodId}/payroll`, {
     method: "PUT",

@@ -353,6 +353,7 @@ export default function ClassifyPage({
               <input
                 type="checkbox"
                 checked={memberAuditNotice}
+                className="workbench-checkbox"
                 onChange={async (e) => {
                   setMemberAuditNotice(e.target.checked);
                   try {
@@ -362,7 +363,6 @@ export default function ClassifyPage({
                     toast.error("Failed to save audit notice");
                   }
                 }}
-                className="rounded border-[var(--control-border)] text-emerald-600 focus:ring-emerald-500"
                 aria-label="Member audit notice received"
                 title="Member audit notice received"
               />

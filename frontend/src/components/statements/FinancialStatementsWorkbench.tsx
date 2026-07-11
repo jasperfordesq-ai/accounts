@@ -1143,7 +1143,21 @@ export function FinancialStatementsWorkbench({
             )}
           </div>
         ) : (
-          <EmptyState message="Directors' report data is not available yet." resourceKey="directors-report" resourceState={statementState} onRetry={onRetryStatements} />
+          <EmptyState
+            message={period?.filingRegime
+              ? "Directors' report data is not available yet."
+              : "Complete the filing-regime classification before reviewing the directors' report."}
+            guidance={period?.filingRegime
+              ? undefined
+              : "Choose the statutory size and filing regime for this period first."}
+            actionHref={period?.filingRegime
+              ? undefined
+              : `/companies/${companyId}/periods/${periodId}/classify`}
+            actionLabel={period?.filingRegime ? undefined : "Open classification"}
+            resourceKey="directors-report"
+            resourceState={statementState}
+            onRetry={onRetryStatements}
+          />
         )}
       </Card.Content>
     </Card>
@@ -1231,11 +1245,17 @@ function Divider({ double = false }: { double?: boolean }) {
 
 function EmptyState({
   message,
+  guidance,
+  actionHref,
+  actionLabel,
   resourceKey,
   resourceState,
   onRetry,
 }: {
   message: string;
+  guidance?: string;
+  actionHref?: string;
+  actionLabel?: string;
   resourceKey?: string;
   resourceState?: ResourceState;
   onRetry?: () => void | Promise<void>;
@@ -1254,8 +1274,13 @@ function EmptyState({
       <FileText className="w-10 h-10 text-[var(--muted-foreground)] mx-auto mb-3" />
       <p className="text-sm text-[var(--muted-foreground)]">{message}</p>
       <p className="text-xs text-[var(--muted-foreground)] mt-1">
-        Complete the year-end process and generate adjustments first.
+        {guidance ?? "Complete the year-end process and generate adjustments first."}
       </p>
+      {actionHref && actionLabel ? (
+        <ActionLink href={actionHref} variant="outline" size="sm" className="mt-4">
+          {actionLabel}
+        </ActionLink>
+      ) : null}
     </div>
   );
 }

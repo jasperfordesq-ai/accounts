@@ -519,6 +519,7 @@ function TransactionTable({
             checked={allVisibleTransactionsSelected}
             onChange={(event) => onSelectVisibleTransactions(event.target.checked)}
             aria-label="Select current page"
+            className="workbench-checkbox"
           />
           Select all transactions on this page
         </label>
@@ -542,6 +543,7 @@ function TransactionTable({
                   checked={selectedTransactionIds.includes(transaction.id)}
                   onChange={(event) => onToggleTransactionSelection(transaction.id, event.target.checked)}
                   aria-label={`Select ${transaction.description}`}
+                  className="workbench-checkbox"
                 />
               ) : (
                 <span key="select" className="text-xs text-[var(--muted-foreground)]">Read only</span>

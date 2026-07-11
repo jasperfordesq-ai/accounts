@@ -491,7 +491,7 @@ function OfficerEditor({ index, officer, canRemove, onChange, onRemove }: { inde
         <Controlled label="Other-directorship evidence reference" id={`${prefix}-directorships`} value={officer.otherDirectorshipsEvidenceReference} required onChange={(value) => onChange({ ...officer, otherDirectorshipsEvidenceReference: value })} />
       </div>
       <AddressFields idPrefix={`${prefix}-address`} value={officer.address} onChange={(address) => onChange({ ...officer, address })} />
-      <label className="flex items-start gap-2 text-sm font-medium"><input type="checkbox" className="mt-1" checked={officer.protectedIdentifierEntryConfirmed} onChange={(event) => onChange({ ...officer, protectedIdentifierEntryConfirmed: event.target.checked })} /><span>I confirm the protected PPSN/IPN/RBO step was completed in CORE and no raw identifier was copied into this platform.</span></label>
+      <label className="flex items-start gap-2 text-sm font-medium"><input type="checkbox" className="workbench-checkbox mt-1" checked={officer.protectedIdentifierEntryConfirmed} onChange={(event) => onChange({ ...officer, protectedIdentifierEntryConfirmed: event.target.checked })} /><span>I confirm the protected PPSN/IPN/RBO step was completed in CORE and no raw identifier was copied into this platform.</span></label>
     </div>
   );
 }
@@ -536,7 +536,7 @@ function Controlled({ label, id, value, onChange, required = false, type = "text
 }
 
 function Check({ name, label, defaultChecked = false }: { name: string; label: string; defaultChecked?: boolean }) {
-  return <label className="flex items-start gap-2 rounded-md border border-[var(--control-border)] bg-[var(--surface-subtle)] p-3 text-sm font-medium"><input name={name} type="checkbox" className="mt-1" defaultChecked={defaultChecked} /><span>{label}</span></label>;
+  return <label className="flex items-start gap-2 rounded-md border border-[var(--control-border)] bg-[var(--surface-subtle)] p-3 text-sm font-medium"><input name={name} type="checkbox" className="workbench-checkbox mt-1" defaultChecked={defaultChecked} /><span>{label}</span></label>;
 }
 
 export function RevenueSnapshotForm({ workspace, predecessor, busy, onSave, onCancel }: {
