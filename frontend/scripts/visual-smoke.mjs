@@ -755,6 +755,7 @@ async function checkThemeContrast(page, routeName) {
     const parsedColorCache = new Map();
     const gradientColorCache = new Map();
     const effectiveOpacityCache = new WeakMap();
+    const sampledUiBoundaries = new WeakSet();
     const unresolvedSamples = new Set();
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
       acceptNode(node) {
@@ -879,17 +880,28 @@ async function checkThemeContrast(page, routeName) {
       });
     }
 
-    function recordUiComponentSample(element) {
+    function recordUiComponentSample(element, sourceElement = element, boundaryRequired = requiresVisualBoundary(sourceElement)) {
+      const sourceOpacity = effectiveOpacityFor(sourceElement);
+      if (sourceOpacity <= 0) return;
+      if (sourceOpacity > 0 && sourceOpacity < 0.9995) {
+        sampledUiBoundaries.add(element);
+        recordUnresolvedSample(sourceElement, sourceElement.getAttribute("aria-label") || sourceElement.textContent || sourceElement.tagName, "UI component", "partial CSS opacity requires explicit contrast-safe colours");
+        return;
+      }
+      if (sampledUiBoundaries.has(element)) return;
+
       const style = window.getComputedStyle(element);
       const effectiveOpacity = effectiveOpacityFor(element);
       if (effectiveOpacity <= 0) return;
       if (effectiveOpacity > 0 && effectiveOpacity < 0.9995) {
-        recordUnresolvedSample(element, element.getAttribute("aria-label") || element.textContent || element.tagName, "UI component", "partial CSS opacity requires explicit contrast-safe colours");
+        sampledUiBoundaries.add(element);
+        recordUnresolvedSample(sourceElement, sourceElement.getAttribute("aria-label") || sourceElement.textContent || sourceElement.tagName, "UI component", "partial CSS opacity requires explicit contrast-safe colours");
         return;
       }
       const outside = effectiveBackgroundsFor(element.parentElement ?? element);
       if (outside.unresolved) {
-        recordUnresolvedSample(element, element.getAttribute("aria-label") || element.textContent || element.tagName, "UI component", outside.unresolved);
+        sampledUiBoundaries.add(element);
+        recordUnresolvedSample(sourceElement, sourceElement.getAttribute("aria-label") || sourceElement.textContent || sourceElement.tagName, "UI component", outside.unresolved);
         return;
       }
       if (outside.colors.length === 0) return;
@@ -901,7 +913,8 @@ async function checkThemeContrast(page, routeName) {
       if ((background && background.a > 0.05) || hasBackgroundImage) {
         const inside = effectiveBackgroundsFor(element);
         if (inside.unresolved) {
-          recordUnresolvedSample(element, element.getAttribute("aria-label") || element.textContent || element.tagName, "UI component", inside.unresolved);
+          sampledUiBoundaries.add(element);
+          recordUnresolvedSample(sourceElement, sourceElement.getAttribute("aria-label") || sourceElement.textContent || sourceElement.tagName, "UI component", inside.unresolved);
           return;
         }
         if (inside.colors.length > 0) {
@@ -911,25 +924,77 @@ async function checkThemeContrast(page, routeName) {
         }
       }
 
-      const borderWidth = Math.max(
-        Number.parseFloat(style.borderTopWidth) || 0,
-        Number.parseFloat(style.borderRightWidth) || 0,
-        Number.parseFloat(style.borderBottomWidth) || 0,
-        Number.parseFloat(style.borderLeftWidth) || 0,
-      );
-      const border = parseCssColor(style.borderTopColor);
-      if (borderWidth > 0 && style.borderTopStyle !== "none" && border && border.a > 0.05) {
-        indicators.push(Math.min(...outside.colors.map((color) =>
-          contrastRatio(composite(border, color), color))));
+      const borderRatios = ["Top", "Right", "Bottom", "Left"].flatMap((side) => {
+        const width = Number.parseFloat(style[`border${side}Width`]) || 0;
+        const borderStyle = style[`border${side}Style`];
+        const border = parseCssColor(style[`border${side}Color`]);
+        if (width <= 0 || borderStyle === "none" || borderStyle === "hidden" || !border || border.a <= 0.05) {
+          return [];
+        }
+        return [Math.min(...outside.colors.map((color) =>
+          contrastRatio(composite(border, color), color)))];
+      });
+      if (borderRatios.length > 0) {
+        indicators.push(Math.max(...borderRatios));
       }
 
-      if (indicators.length === 0) return;
+      if (indicators.length === 0) {
+        if (element === sourceElement && boundaryRequired) {
+          const compositeBoundary = compositeBoundaryFor(sourceElement);
+          if (compositeBoundary) {
+            recordUiComponentSample(compositeBoundary, sourceElement, true);
+            return;
+          }
+        }
+
+        if (boundaryRequired) {
+          sampledUiBoundaries.add(element);
+          recordUnresolvedSample(sourceElement, sourceElement.getAttribute("aria-label") || sourceElement.textContent || sourceElement.tagName, "UI component", "interactive control has no machine-verifiable visual boundary");
+        }
+        return;
+      }
+
+      sampledUiBoundaries.add(element);
       uiSamples.push({
-        label: labelFor(element, element.getAttribute("aria-label") || element.textContent || element.tagName),
+        label: labelFor(sourceElement, sourceElement.getAttribute("aria-label") || sourceElement.textContent || sourceElement.tagName),
         ratio: Math.max(...indicators),
         requiredRatio: minimums.uiComponent + (gradientGuardRequired ? minimums.gradientGuardBand : 0),
-        detail: `UI component${element.matches(":disabled, [aria-disabled='true']") ? " (disabled)" : ""}`,
+        detail: `UI component${sourceElement.matches(":disabled, [aria-disabled='true']") ? " (disabled)" : ""}${element === sourceElement ? "" : " (composite boundary)"}`,
       });
+    }
+
+    function requiresVisualBoundary(element) {
+      if (element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement) return true;
+      if (element instanceof HTMLInputElement) {
+        return !["hidden", "button", "submit", "reset", "image", "checkbox", "radio", "range", "color"].includes(element.type);
+      }
+      return element.matches("[role='checkbox'], [role='radio'], [role='switch']");
+    }
+
+    function compositeBoundaryFor(element) {
+      const genericBoundary = element.closest("[data-contrast-boundary]");
+      if (genericBoundary && genericBoundary !== element && root.contains(genericBoundary)) {
+        const boundaryControls = Array.from(genericBoundary.querySelectorAll([
+          "input",
+          "textarea",
+          "select",
+          "[role='checkbox']",
+          "[role='radio']",
+          "[role='switch']",
+        ].join(","))).filter((candidate) => requiresVisualBoundary(candidate));
+        if (boundaryControls.length === 1 && boundaryControls[0] === element) return genericBoundary;
+      }
+
+      const knownBoundary = element.closest([
+        "[data-slot='input-group']",
+        "[data-slot='search-field-group']",
+        "[data-slot='number-field-group']",
+        "[data-slot='date-input-group']",
+        "[data-slot='color-input-group']",
+        "[data-slot='combo-box-input-group']",
+        "[data-slot='input-otp-group']",
+      ].join(","));
+      return knownBoundary && knownBoundary !== element && root.contains(knownBoundary) ? knownBoundary : null;
     }
 
     function effectiveBackgroundsFor(element) {

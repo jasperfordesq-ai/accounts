@@ -51,5 +51,7 @@ test("browser contrast collection includes interactive, placeholder, disabled, a
   assert.match(visualSmokeSource, /getComputedStyle\(element, "::placeholder"\)/);
   assert.match(visualSmokeSource, /matches\(":disabled, \[aria-disabled='true'\]"\)/);
   assert.match(visualSmokeSource, /gradientColors\(style\.backgroundImage\)/);
+  assert.match(visualSmokeSource, /interactive control has no machine-verifiable visual boundary/);
+  assert.match(visualSmokeSource, /\[data-contrast-boundary\]/);
   assert.match(visualSmokeSource, /ratio < sample\.requiredRatio/);
 });

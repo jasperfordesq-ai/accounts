@@ -9,6 +9,8 @@ import {
 } from "../../scripts/visual-smoke.mjs";
 
 const applicationStyles = readFileSync(new URL("../../src/app/globals.css", import.meta.url), "utf8");
+const heroUiStyles = readFileSync(new URL("../../node_modules/@heroui/styles/dist/heroui.min.css", import.meta.url), "utf8");
+const applicationOverrides = applicationStyles.replace(/^@import[^\n]*\r?\n/gm, "");
 
 async function withPage(markup, action) {
   const browser = await chromium.launch({ headless: true });
@@ -67,6 +69,120 @@ test("real Chromium samples a modern CSS colour control boundary", async () => {
   assert.equal(result.status, "passed");
   assert.equal(result.sampledUiComponentCount, 1);
   assert.ok(result.minimumUiComponentContrastRatio >= 3);
+});
+
+test("application HeroUI fields retain a visible 3:1 boundary in both themes", async () => {
+  for (const theme of ["", "dark"]) {
+    const result = await withPage(`<!doctype html>
+      <html class="${theme}">
+        <head><style>${heroUiStyles}\n${applicationOverrides}</style></head>
+        <body style="margin: 0; background: var(--background)">
+          <main style="background: var(--surface); padding: 12px">
+            <label for="candidate-name" style="color: var(--foreground)">Candidate name</label>
+            <input id="candidate-name" class="input input--primary" value="Example Limited" />
+          </main>
+        </body>
+      </html>`, (page) => checkThemeContrast(page, `application-field-boundary-${theme || "light"}`));
+
+    assert.equal(result.status, "passed");
+    assert.equal(result.sampledUiComponentCount, 1);
+    assert.ok(result.minimumUiComponentContrastRatio >= 3);
+  }
+});
+
+test("real Chromium delegates a transparent input to one explicit composite boundary", async () => {
+  const result = await withPage(documentShell(`
+    <label for="composite-input" style="color: rgb(17, 24, 39)">Composite input</label>
+    <div data-contrast-boundary style="border: 2px solid rgb(89, 89, 89); padding: 2px">
+      <input id="composite-input" value="Retained value" style="color: rgb(17, 24, 39); background: transparent; border: 0" />
+    </div>
+  `), (page) => checkThemeContrast(page, "explicit-composite-boundary"));
+
+  assert.equal(result.status, "passed");
+  assert.equal(result.sampledUiComponentCount, 1);
+  assert.ok(result.minimumUiComponentContrastRatio >= 3);
+});
+
+test("real Chromium rejects a transparent input without a verifiable boundary", async () => {
+  await assert.rejects(
+    () => withPage(documentShell(`
+      <label for="boundaryless-input" style="color: rgb(17, 24, 39)">Boundaryless input</label>
+      <input id="boundaryless-input" value="Retained value" style="color: rgb(17, 24, 39); background: transparent; border: 0" />
+    `), (page) => checkThemeContrast(page, "boundaryless-input")),
+    /interactive control has no machine-verifiable visual boundary/,
+  );
+});
+
+test("real Chromium rejects a weak explicit composite boundary", async () => {
+  await assert.rejects(
+    () => withPage(documentShell(`
+      <label for="weak-composite-input" style="color: rgb(17, 24, 39)">Weak composite input</label>
+      <div data-contrast-boundary style="border: 1px solid rgb(238, 238, 238); padding: 2px">
+        <input id="weak-composite-input" value="Retained value" style="color: rgb(17, 24, 39); background: transparent; border: 0" />
+      </div>
+    `), (page) => checkThemeContrast(page, "weak-composite-boundary")),
+    /UI component \(composite boundary\)/,
+  );
+});
+
+test("real Chromium rejects a broad generic boundary shared by unrelated fields", async () => {
+  await assert.rejects(
+    () => withPage(documentShell(`
+      <div data-contrast-boundary style="border: 3px solid rgb(17, 24, 39); padding: 8px">
+        <label for="first-unrelated-field" style="color: rgb(17, 24, 39)">First field</label>
+        <input id="first-unrelated-field" style="background: transparent; border: 0" />
+        <label for="second-unrelated-field" style="color: rgb(17, 24, 39)">Second field</label>
+        <input id="second-unrelated-field" style="background: transparent; border: 0" />
+      </div>
+    `), (page) => checkThemeContrast(page, "broad-generic-boundary")),
+    /interactive control has no machine-verifiable visual boundary/,
+  );
+});
+
+test("real Chromium evaluates the colour of the border side that is actually rendered", async () => {
+  await assert.rejects(
+    () => withPage(documentShell(`
+      <label for="weak-right-edge" style="color: rgb(17, 24, 39)">Weak right edge</label>
+      <input id="weak-right-edge" value="Retained value" style="color: rgb(17, 24, 39); background: transparent; border: 0 solid rgb(17, 24, 39); border-right: 1px solid rgb(238, 238, 238)" />
+    `), (page) => checkThemeContrast(page, "weak-rendered-border-side")),
+    /UI component/,
+  );
+});
+
+test("real Chromium accepts a strong rendered underline as the control boundary", async () => {
+  const result = await withPage(documentShell(`
+    <label for="strong-underline" style="color: rgb(17, 24, 39)">Strong underline</label>
+    <input id="strong-underline" value="Retained value" style="color: rgb(17, 24, 39); background: transparent; border: 0 solid transparent; border-bottom: 2px solid rgb(89, 89, 89)" />
+  `), (page) => checkThemeContrast(page, "strong-rendered-underline"));
+
+  assert.equal(result.status, "passed");
+  assert.equal(result.sampledUiComponentCount, 1);
+  assert.ok(result.minimumUiComponentContrastRatio >= 3);
+});
+
+test("real Chromium retains per-control opacity failures behind one composite boundary", async () => {
+  await assert.rejects(
+    () => withPage(documentShell(`
+      <p style="color: rgb(17, 24, 39)">Composite field evidence</p>
+      <div data-contrast-boundary style="border: 2px solid rgb(89, 89, 89); padding: 2px">
+        <input aria-label="First segment" style="background: transparent; border: 0" />
+        <input aria-label="Second segment" style="background: transparent; border: 0; opacity: 0.5" />
+      </div>
+    `), (page) => checkThemeContrast(page, "composite-child-opacity")),
+    /partial CSS opacity requires explicit contrast-safe colours/,
+  );
+});
+
+test("real Chromium does not let a weak input borrow an unrelated strong container", async () => {
+  await assert.rejects(
+    () => withPage(documentShell(`
+      <div style="border: 3px solid rgb(17, 24, 39); padding: 8px">
+        <label for="weak-contained-input" style="color: rgb(17, 24, 39)">Weak contained input</label>
+        <input id="weak-contained-input" value="Retained value" style="color: rgb(17, 24, 39); background: rgb(250, 250, 250); border: 1px solid rgb(238, 238, 238)" />
+      </div>
+    `), (page) => checkThemeContrast(page, "unrelated-strong-container")),
+    /UI component/,
+  );
 });
 
 test("application button states retain semantic contrast and disabled precedence in both themes", async () => {

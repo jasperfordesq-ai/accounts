@@ -13,6 +13,8 @@
   --muted-foreground: #667067;
   --border: #d9e1d8;
   --control-border: #667067;
+  --field-border: var(--control-border);
+  --field-border-width: 1px;
   --ring: #0d9488;
   --accent: #245b4d;
   --accent-foreground: #ffffff;
@@ -44,6 +46,8 @@
   --muted-foreground: #aab5aa;
   --border: #344033;
   --control-border: #aab5aa;
+  --field-border: var(--control-border);
+  --field-border-width: 1px;
   --ring: #2dd4bf;
   --accent: #34d399;
   --accent-foreground: #06281f;
