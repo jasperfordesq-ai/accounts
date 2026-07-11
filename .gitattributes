@@ -45,6 +45,7 @@ frontend/src/app/change-password/page.tsx text eol=lf
 frontend/src/components/AuthProvider.tsx text eol=lf
 frontend/tests/render/auth-revalidation.test.tsx text eol=lf
 frontend/tests/browser/visual-smoke-contrast.test.mjs text eol=lf
+frontend/tests/render/workbench.test.tsx text eol=lf
 frontend/src/lib/apiContracts.ts text eol=lf
 frontend/src/lib/openapiContract.ts text eol=lf
 frontend/tests/api-runtime-contracts.test.mjs text eol=lf

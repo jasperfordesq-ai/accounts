@@ -88,6 +88,12 @@ html {
   border-radius: 4px;
 }
 
+input::placeholder,
+textarea::placeholder {
+  color: var(--muted-foreground);
+  opacity: 1;
+}
+
 /* Skeleton animation */
 @keyframes skeleton-pulse {
   0%, 100% { opacity: 1; }

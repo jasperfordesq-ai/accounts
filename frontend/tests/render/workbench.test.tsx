@@ -517,7 +517,9 @@ describe("workbench primitives", () => {
       />,
     );
 
-    await user.type(screen.getByRole("searchbox", { name: "Filter Accountant deadline queue" }), "ixbrl");
+    const filter = screen.getByRole("searchbox", { name: "Filter Accountant deadline queue" });
+    expect(filter).toHaveClass("placeholder:text-[var(--muted-foreground)]");
+    await user.type(filter, "ixbrl");
 
     expect(screen.getByText("1 of 2 rows")).toBeInTheDocument();
     expect(screen.getByText("Alpha Accounts Limited")).toBeInTheDocument();
