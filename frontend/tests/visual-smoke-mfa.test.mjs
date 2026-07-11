@@ -65,6 +65,9 @@ test("visual smoke fails when a privileged login reaches the dashboard without f
 test("visual smoke diagnostics never read whole form text", async () => {
   const source = await readFile(new URL("../scripts/visual-smoke.mjs", import.meta.url), "utf8");
   assert.doesNotMatch(source, /locator\(["']form["']\)\.innerText/);
+  assert.doesNotMatch(source, /page\.getByRole\(["']alert["']\)/);
+  assert.doesNotMatch(source, /document\.querySelector\(["']\[role=[^)]*alert/);
+  assert.match(source, /form \[role=[^\]]*alert/);
 });
 
 test("visual smoke consumes and deletes a mode-0600 runner MFA handoff", async () => {

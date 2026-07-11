@@ -51,6 +51,10 @@ function mainText(page, text, options = {}) {
   return page.locator("main").getByText(text, options).first();
 }
 
+function loginErrorAlert(page) {
+  return page.locator('form [role="alert"]');
+}
+
 const TOTP_PERIOD_MS = 30_000;
 const LOGIN_UI_STATES = new Set([
   "credentials",
@@ -89,7 +93,7 @@ async function observedLoginUiState(page) {
   if (await page.locator('input[autocomplete="one-time-code"]').isVisible().catch(() => false)) {
     return "mfa-challenge";
   }
-  if (await page.getByRole("alert").isVisible().catch(() => false)) {
+  if (await loginErrorAlert(page).isVisible().catch(() => false)) {
     return "authentication-error";
   }
   if (await page.locator('input[type="email"]').isVisible().catch(() => false)) {
@@ -268,11 +272,11 @@ async function login(page, baseUrl, email, password, mfaState) {
       await page.waitForFunction(() => (
         window.location.pathname !== "/login"
         || document.querySelector('input[autocomplete="one-time-code"]')
-        || document.querySelector('[role="alert"]')
+        || document.querySelector('form [role="alert"]')
       ), undefined, { timeout: 15_000 });
 
       if (new URL(page.url()).pathname.startsWith("/login")) {
-        const alert = page.getByRole("alert");
+        const alert = loginErrorAlert(page);
         if (await alert.isVisible().catch(() => false)) {
           throw new Error("Login page reported an authentication error.");
         }
@@ -293,14 +297,14 @@ async function login(page, baseUrl, email, password, mfaState) {
         await page.waitForFunction(() => (
           window.location.pathname !== "/login"
           || Array.from(document.querySelectorAll("button")).some((button) => button.textContent?.includes("I have stored these codes"))
-          || document.querySelector('[role="alert"]')
+          || document.querySelector('form [role="alert"]')
         ), undefined, { timeout: 15_000 });
 
         const recoveryContinuation = page.getByRole("button", { name: "I have stored these codes" });
         if (await recoveryContinuation.isVisible().catch(() => false)) {
           await recoveryContinuation.click();
         } else if (new URL(page.url()).pathname.startsWith("/login")) {
-          const mfaAlert = page.getByRole("alert");
+          const mfaAlert = loginErrorAlert(page);
           if (await mfaAlert.isVisible().catch(() => false)) {
             throw new Error("Login page reported an MFA verification error.");
           }
