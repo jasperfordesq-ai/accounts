@@ -1092,6 +1092,7 @@ public class ProductionReadinessReportTests
         Assert.Contains("humanEvidenceCompletion", report.HumanReleaseEvidenceCloseout[3].Detail);
         Assert.Contains("productionScorecardCompletion", report.HumanReleaseEvidenceCloseout[3].Detail);
         Assert.Contains("1,000/1,000", report.HumanReleaseEvidenceCloseout[3].Detail);
+        Assert.Contains("zero blocking failures", report.HumanReleaseEvidenceCloseout[3].Detail);
         Assert.Equal("scripts/verify-release-artifact-pack.ps1", report.HumanReleaseEvidenceCloseout[4].Artifact);
 
         var trackCodes = report.CompletionTracks.Select(track => track.Code).ToHashSet(StringComparer.Ordinal);

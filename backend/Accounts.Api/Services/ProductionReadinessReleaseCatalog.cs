@@ -788,7 +788,7 @@ public partial class ProductionReadinessReportService
                 "confirm-human-evidence-completion",
                 "Confirm human completion",
                 4,
-                $"Confirm {templateCount} accepted humanEvidenceCompletion rows and productionScorecardCompletion status complete at 1,000/1,000 with zero open engineering or human/external controls in release-evidence-report.json.",
+                $"Confirm {templateCount} accepted humanEvidenceCompletion rows and productionScorecardCompletion status complete at 1,000/1,000 with zero open engineering or human/external controls and zero blocking failures in release-evidence-report.json.",
                 "release-evidence-report.json",
                 true),
             new(
