@@ -6,3 +6,5 @@ frontend/src/lib/generated/accounts-api-v1.ts text eol=lf
 Dockerfile.frontend text eol=lf
 backend/Accounts.Tests/AccountsWorkflowTests.Policy.cs text eol=lf
 scripts/verify-ci-actions.mjs text eol=lf
+Docs/operations/production-runbook.md text eol=lf
+deploy/caddy/Caddyfile.example text eol=lf

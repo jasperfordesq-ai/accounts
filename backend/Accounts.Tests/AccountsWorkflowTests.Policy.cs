@@ -1714,7 +1714,7 @@ public partial class AccountsWorkflowTests
         Assert.Contains("overwrites X-Forwarded-Proto", runbook);
         Assert.Contains("127.0.0.1:${FRONTEND_PORT:-3000}:3000", compose);
         Assert.Contains("{$ACCOUNTS_CADDY_GLOBAL_OPTIONS}", caddy);
-        Assert.Contains("reverse_proxy 127.0.0.1:{$FRONTEND_PORT:3000}", caddy);
+        Assert.Contains("reverse_proxy {$ACCOUNTS_FRONTEND_UPSTREAM:127.0.0.1:3000}", caddy);
         Assert.Contains("header_up X-Forwarded-For {remote_host}", caddy);
         Assert.Contains("header_up X-Forwarded-Host {host}", caddy);
         Assert.Contains("header_up X-Forwarded-Proto {scheme}", caddy);
@@ -1862,6 +1862,7 @@ public partial class AccountsWorkflowTests
         Assert.DoesNotContain("docker compose -f compose.production.yml config\n", productionConfigJob);
         Assert.Contains("caddy validate --config /etc/caddy/Caddyfile", productionConfigJob);
         Assert.Contains("deploy/caddy/Caddyfile.example", productionConfigJob);
+        Assert.Contains("caddy:2@sha256:af5fdcd76f2db5e4e974ee92f96ee8c0fc3edb55bd4ba5032547cbf3f65e486d", productionConfigJob);
         Assert.DoesNotContain("docker build", productionConfigJob);
         Assert.DoesNotContain("docker/build-push-action", productionConfigJob);
         Assert.Contains("ACCOUNTS_API_IMAGE: ghcr.io/example/accounts-api@sha256:", productionConfigJob);
@@ -1965,7 +1966,12 @@ public partial class AccountsWorkflowTests
         Assert.DoesNotContain("docker compose -f compose.production.yml up -d --build", productionSmokeJob);
         Assert.Contains("127.0.0.1 accounts-smoke.local", productionSmokeJob);
         Assert.Contains("accounts-production-smoke-ingress", productionSmokeJob);
-        Assert.Contains("--network host", productionSmokeJob);
+        Assert.Contains("frontend_network=\"$(docker inspect", productionSmokeJob);
+        Assert.Contains("--network \"$frontend_network\"", productionSmokeJob);
+        Assert.Contains("-p 127.0.0.1:443:443", productionSmokeJob);
+        Assert.Contains("ACCOUNTS_FRONTEND_UPSTREAM=frontend:3000", productionSmokeJob);
+        Assert.DoesNotContain("--network host", productionSmokeJob);
+        Assert.Contains("caddy:2@sha256:af5fdcd76f2db5e4e974ee92f96ee8c0fc3edb55bd4ba5032547cbf3f65e486d", productionSmokeJob);
         Assert.Contains("ACCOUNTS_CADDY_GLOBAL_OPTIONS=local_certs", productionSmokeJob);
         Assert.Contains("update-ca-certificates", productionSmokeJob);
         Assert.Contains("Run production smoke script", productionSmokeJob);

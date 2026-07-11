@@ -54,6 +54,11 @@ requireText(
   "CI must serialize superseded runs independently by event and branch or pull request.",
 );
 requireText("cancel-in-progress: true", "CI must cancel superseded runs in the same concurrency group.");
+const caddyImage = "caddy:2@sha256:af5fdcd76f2db5e4e974ee92f96ee8c0fc3edb55bd4ba5032547cbf3f65e486d";
+requireText(caddyImage, "The CI HTTPS ingress image must be pinned to the reviewed Caddy digest.");
+if (count(caddyImage) !== 2) {
+  failures.push("Both Caddy validation and HTTPS smoke must use the reviewed immutable image digest.");
+}
 
 if (count(`uses: docker/build-push-action@${approvedReferences.get("docker/build-push-action")}`) !== 2) {
   failures.push("CI must invoke the container builder exactly once for backend and once for frontend.");

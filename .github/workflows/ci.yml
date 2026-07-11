@@ -365,8 +365,8 @@ jobs:
           docker run --rm
           -v "${{ github.workspace }}/deploy/caddy/Caddyfile.example:/etc/caddy/Caddyfile:ro"
           -e ACCOUNTS_HOSTNAME=accounts.example.ie
-          -e FRONTEND_PORT=3000
-          caddy:2
+          -e ACCOUNTS_FRONTEND_UPSTREAM=127.0.0.1:3000
+          caddy:2@sha256:af5fdcd76f2db5e4e974ee92f96ee8c0fc3edb55bd4ba5032547cbf3f65e486d
           caddy validate --config /etc/caddy/Caddyfile
 
   production-smoke:
@@ -707,16 +707,21 @@ jobs:
           set -euo pipefail
 
           mkdir -p .tmp/production-smoke-caddy/data .tmp/production-smoke-caddy/config
+          frontend_container="$(docker compose -f compose.production.yml ps -q frontend)"
+          frontend_network="$(docker inspect --format '{{range $name, $_ := .NetworkSettings.Networks}}{{$name}}{{end}}' "$frontend_container")"
+          test -n "$frontend_network"
           docker run -d \
             --name accounts-production-smoke-ingress \
-            --network host \
+            --network "$frontend_network" \
+            -p 127.0.0.1:80:80 \
+            -p 127.0.0.1:443:443 \
             -v "${{ github.workspace }}/deploy/caddy/Caddyfile.example:/etc/caddy/Caddyfile:ro" \
             -v "${{ github.workspace }}/.tmp/production-smoke-caddy/data:/data" \
             -v "${{ github.workspace }}/.tmp/production-smoke-caddy/config:/config" \
             -e ACCOUNTS_HOSTNAME=accounts-smoke.local \
-            -e FRONTEND_PORT=3000 \
+            -e ACCOUNTS_FRONTEND_UPSTREAM=frontend:3000 \
             -e ACCOUNTS_CADDY_GLOBAL_OPTIONS=local_certs \
-            caddy:2
+            caddy:2@sha256:af5fdcd76f2db5e4e974ee92f96ee8c0fc3edb55bd4ba5032547cbf3f65e486d
 
           for attempt in {1..30}; do
             if curl -kfsS https://accounts-smoke.local/health/ready >/dev/null 2>&1; then

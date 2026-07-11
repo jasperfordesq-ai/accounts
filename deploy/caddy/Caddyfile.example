@@ -1,9 +1,10 @@
 # Example HTTPS ingress for the production Docker Compose stack.
 #
 # The frontend service is published only on 127.0.0.1 by compose.production.yml.
+# Override ACCOUNTS_FRONTEND_UPSTREAM only when the ingress joins the private
+# frontend Docker network, as the CI HTTPS harness does.
 # Set TRUST_PROXY_HEADERS=true only when the ingress overwrites the forwarded
 # headers below and no untrusted client can connect directly to the frontend port.
-
 {
 	{$ACCOUNTS_CADDY_GLOBAL_OPTIONS}
 }
@@ -17,7 +18,7 @@
 		Referrer-Policy "no-referrer"
 	}
 
-	reverse_proxy 127.0.0.1:{$FRONTEND_PORT:3000} {
+	reverse_proxy {$ACCOUNTS_FRONTEND_UPSTREAM:127.0.0.1:3000} {
 		header_up Host {host}
 		header_up X-Forwarded-For {remote_host}
 		header_up X-Forwarded-Host {host}
