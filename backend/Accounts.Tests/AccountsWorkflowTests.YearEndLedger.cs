@@ -1881,6 +1881,51 @@ public partial class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task PayrollRead_ReturnsExplicitEmptyStateWithoutHidingInvalidPeriodAccess()
+    {
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var context = AuthenticatedRequest(
+            "Accountant",
+            HttpMethods.Get,
+            $"/api/companies/{period.CompanyId}/periods/{period.Id}/payroll");
+
+        var empty = await YearEndEndpoints.GetPayrollSummaryEndpointAsync(
+            period.CompanyId,
+            period.Id,
+            db,
+            context);
+        Assert.Equal(StatusCodes.Status200OK, ResultStatusCode(empty));
+        Assert.Null(Assert.IsAssignableFrom<IValueHttpResult>(empty).Value);
+
+        db.PayrollSummaries.Add(new PayrollSummary
+        {
+            PeriodId = period.Id,
+            GrossWages = 12_000m,
+            DirectorsFees = 1_500m,
+            EmployerPrsi = 1_320m,
+            PensionContributions = 600m,
+            StaffCount = 5
+        });
+        await db.SaveChangesAsync();
+
+        var populated = await YearEndEndpoints.GetPayrollSummaryEndpointAsync(
+            period.CompanyId,
+            period.Id,
+            db,
+            context);
+        Assert.Equal(StatusCodes.Status200OK, ResultStatusCode(populated));
+        Assert.Equal(12_000m, Assert.IsType<PayrollSummary>(Assert.IsAssignableFrom<IValueHttpResult>(populated).Value).GrossWages);
+
+        var mismatchedCompany = await YearEndEndpoints.GetPayrollSummaryEndpointAsync(
+            period.CompanyId + 10_000,
+            period.Id,
+            db,
+            context);
+        Assert.Equal(StatusCodes.Status404NotFound, ResultStatusCode(mismatchedCompany));
+    }
+
+    [Fact]
     public void YearEndPeriodReadEndpoints_UseExplicitPeriodOwnershipGuards()
     {
         var source = YearEndEndpointsSource().Replace("\r\n", "\n");
@@ -1913,10 +1958,17 @@ public partial class AccountsWorkflowTests
         }
 
         var payrollSnippet = EndpointSnippet(source, "payroll.MapGet");
-        Assert.Contains("GetPeriodOwnedValueAsync", payrollSnippet);
-        Assert.Contains("HttpContext context", payrollSnippet);
-        Assert.Contains("db.PayrollSummaries.Where(p => p.PeriodId == periodId)", payrollSnippet);
-        Assert.DoesNotContain("FirstOrDefaultAsync", payrollSnippet);
+        Assert.Contains("GetPayrollSummaryEndpointAsync", payrollSnippet);
+
+        var payrollRead = BlockSnippet(
+            source,
+            "public static async Task<IResult> GetPayrollSummaryEndpointAsync",
+            "public static async Task<IResult> UpsertPayrollSummaryEndpointAsync");
+        Assert.Contains("CompanyEndpointAccess.CanAccessCompanyPeriodAsync(context, db, companyId, periodId)", payrollRead);
+        Assert.Contains("AsNoTracking()", payrollRead);
+        Assert.Contains("FirstOrDefaultAsync(item => item.PeriodId == periodId)", payrollRead);
+        Assert.Contains("TypedResults.Ok(payroll)", payrollRead);
+        AssertOccursBefore(payrollRead, "CompanyEndpointAccess.CanAccessCompanyPeriodAsync(context, db, companyId, periodId)", "FirstOrDefaultAsync(item => item.PeriodId == periodId)");
 
         var summarySnippet = BlockSnippet(source, "app.MapGet($\"{basePath}/year-end-summary\"", "}).WithTags(\"Year-End Summary\")");
         Assert.Contains("HttpContext context", summarySnippet);
@@ -1927,9 +1979,6 @@ public partial class AccountsWorkflowTests
 
         var listHelper = MethodSnippet(source, "private static async Task<IResult> ListPeriodOwnedRowsAsync");
         AssertHelperChecksDirectPeriodAccessBeforeMaterializing(listHelper, "query.ToListAsync()");
-
-        var valueHelper = MethodSnippet(source, "private static async Task<IResult> GetPeriodOwnedValueAsync");
-        AssertHelperChecksDirectPeriodAccessBeforeMaterializing(valueHelper, "query.FirstOrDefaultAsync()");
 
         var periodWriteHelper = MethodSnippet(source, "private static async Task<IResult?> RequirePeriodWriteAccessAsync");
         Assert.Contains("CompanyEndpointAccess.CanAccessCompanyPeriodAsync(context, db, companyId, periodId)", periodWriteHelper);
