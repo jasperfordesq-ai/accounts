@@ -474,7 +474,9 @@ describe("FilingReviewCentre", () => {
     );
 
     expect(screen.getByText("Specialist evidence gates")).toBeInTheDocument();
-    expect(screen.getByText("Charity reporting evidence")).toBeInTheDocument();
+    const charityGate = screen.getByText("Charity reporting evidence").closest("article");
+    expect(charityGate).toHaveClass("min-w-0", "max-w-full");
+    expect(charityGate?.firstElementChild).toHaveClass("flex-col", "sm:flex-row");
     expect(screen.getByText("Auditor handoff")).toBeInTheDocument();
     expect(screen.getByText("Signed auditor report evidence is required before final output generation.")).toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: /Charities Regulator annual report guidance/ })[0]).toHaveAttribute(

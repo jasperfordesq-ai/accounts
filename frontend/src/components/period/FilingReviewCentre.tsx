@@ -762,8 +762,8 @@ function SpecialistEvidenceGateCard({ step }: { step: FilingReadinessSignOffStep
   const tone = signOffStepTone(step.state);
 
   return (
-    <article className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
-      <div className="flex items-start justify-between gap-3">
+    <article className="min-w-0 max-w-full rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
+      <div className="flex min-w-0 flex-col items-start gap-3 sm:flex-row sm:justify-between">
         <div className="flex min-w-0 items-start gap-2">
           {step.state === "blocked" ? (
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-300" />
