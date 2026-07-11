@@ -7,6 +7,7 @@ param(
     [int]$PeriodId = 0,
     [switch]$CheckDownloads,
     [switch]$CheckMonitoringErrorRouting,
+    [switch]$AllowEphemeralMfaEnrollment,
     [string]$OutputDirectory = (Join-Path ([System.IO.Path]::GetTempPath()) "accounts-smoke"),
     [int]$TimeoutSeconds = 30,
     [int]$DownloadTimeoutSeconds = 120,
@@ -354,6 +355,49 @@ $loginResponse = Invoke-WebRequest `
     -WebSession $session `
     -TimeoutSec $TimeoutSeconds
 
+if ([int]$loginResponse.StatusCode -eq 202) {
+    $challenge = $loginResponse.Content | ConvertFrom-Json
+    if ([string]::IsNullOrWhiteSpace([string]$challenge.challengeToken)) {
+        throw "MFA login response did not include a challenge token."
+    }
+    $effectiveTotpSecret = if ([bool]$challenge.requiresEnrollment) {
+        if (-not $AllowEphemeralMfaEnrollment) {
+            throw "The smoke account requires MFA enrollment. Enrol it out of band and provide SMOKE_TOTP_SECRET; -AllowEphemeralMfaEnrollment is only for a disposable CI bootstrap account."
+        }
+        if ([string]::IsNullOrWhiteSpace([string]$challenge.enrollmentSecret)) {
+            throw "MFA enrollment response did not include an enrollment secret."
+        }
+        [string]$challenge.enrollmentSecret
+    } else {
+        $TotpSecret
+    }
+    if ([string]::IsNullOrWhiteSpace($effectiveTotpSecret)) {
+        throw "The smoke account requires MFA. Set SMOKE_TOTP_SECRET or -TotpSecret for an already-enrolled account."
+    }
+
+    Write-Host "Completing privileged-account MFA through frontend proxy..."
+    $mfaBody = @{
+        challengeToken = [string]$challenge.challengeToken
+        totpCode = New-TotpCode $effectiveTotpSecret
+        recoveryCode = $null
+    } | ConvertTo-Json
+    $loginResponse = Invoke-WebRequest `
+        -Uri "$base/api/auth/mfa/challenge" `
+        -Method Post `
+        -ContentType "application/json" `
+        -Body $mfaBody `
+        -UseBasicParsing `
+        -WebSession $session `
+        -TimeoutSec $TimeoutSeconds
+    $mfaBody = $null
+    $effectiveTotpSecret = $null
+    $challenge = $null
+}
+
+if ([int]$loginResponse.StatusCode -ne 200) {
+    throw "Authentication did not complete successfully. HTTP status: $($loginResponse.StatusCode)."
+}
+
 if (-not $AllowInsecureHttp) {
     Assert-SecurityHeader -Response $loginResponse -Name "Strict-Transport-Security" -ExpectedText "max-age=31536000"
     Assert-SetCookieAttribute -Response $loginResponse -CookieName "accounts_session" -Attribute "Secure"
@@ -393,42 +437,6 @@ $productionReadinessReport = Invoke-RestMethod `
     -Method Get `
     -WebSession $session `
     -TimeoutSec $TimeoutSeconds
-
-if ([int]$loginResponse.StatusCode -eq 202) {
-    $challenge = $loginResponse.Content | ConvertFrom-Json
-    if ([string]::IsNullOrWhiteSpace([string]$challenge.challengeToken)) {
-        throw "MFA login response did not include a challenge token."
-    }
-    $effectiveTotpSecret = if ([bool]$challenge.requiresEnrollment) {
-        [string]$challenge.enrollmentSecret
-    } else {
-        $TotpSecret
-    }
-    if ([string]::IsNullOrWhiteSpace($effectiveTotpSecret)) {
-        throw "The smoke account requires MFA. Set SMOKE_TOTP_SECRET or -TotpSecret for an already-enrolled account."
-    }
-
-    Write-Host "Completing privileged-account MFA through frontend proxy..."
-    $mfaBody = @{
-        challengeToken = [string]$challenge.challengeToken
-        totpCode = New-TotpCode $effectiveTotpSecret
-        recoveryCode = $null
-    } | ConvertTo-Json
-    $loginResponse = Invoke-WebRequest `
-        -Uri "$base/api/auth/mfa/challenge" `
-        -Method Post `
-        -ContentType "application/json" `
-        -Body $mfaBody `
-        -UseBasicParsing `
-        -WebSession $session `
-        -TimeoutSec $TimeoutSeconds
-    $mfaBody = $null
-    $effectiveTotpSecret = $null
-}
-
-if ([int]$loginResponse.StatusCode -ne 200) {
-    throw "Authentication did not complete successfully. HTTP status: $($loginResponse.StatusCode)."
-}
 
 if ([string]::IsNullOrWhiteSpace([string]$productionReadinessReport.overallStatus)) {
     throw "Production readiness report did not include overallStatus."

@@ -65,8 +65,15 @@ requireText(
   "The CI HTTPS ingress must also join the private frontend network before it starts.",
 );
 requireText("--noproxy '*' --resolve accounts-smoke.local:443:127.0.0.1", "The HTTPS ingress probe must deterministically target runner loopback without a proxy.");
+requireText(
+  "NODE_EXTRA_CA_CERTS: ${{ github.workspace }}/.tmp/production-smoke-caddy/caddy-local-root.crt",
+  "The Node capacity profile must trust the exact generated Caddy root certificate.",
+);
 if (workflow.includes("--network host")) {
   failures.push("The CI HTTPS ingress must not use host networking.");
+}
+if (/^\s+no_proxy:/m.test(workflow)) {
+  failures.push("Use the canonical uppercase NO_PROXY key; GitHub treats case variants as duplicate environment keys.");
 }
 
 if (count(`uses: docker/build-push-action@${approvedReferences.get("docker/build-push-action")}`) !== 2) {

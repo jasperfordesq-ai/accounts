@@ -1978,12 +1978,14 @@ public partial class AccountsWorkflowTests
         Assert.Contains("caddy:2@sha256:af5fdcd76f2db5e4e974ee92f96ee8c0fc3edb55bd4ba5032547cbf3f65e486d", productionSmokeJob);
         Assert.Contains("ACCOUNTS_CADDY_GLOBAL_OPTIONS=local_certs", productionSmokeJob);
         Assert.Contains("update-ca-certificates", productionSmokeJob);
+        Assert.Contains("NODE_EXTRA_CA_CERTS: ${{ github.workspace }}/.tmp/production-smoke-caddy/caddy-local-root.crt", productionSmokeJob);
         Assert.Contains("Run production smoke script", productionSmokeJob);
         Assert.Contains("./scripts/smoke-production.ps1", productionSmokeJob);
         Assert.Contains("-BaseUrl https://accounts-smoke.local", productionSmokeJob);
         Assert.Contains("-Email $env:BOOTSTRAP_OWNER_EMAIL", productionSmokeJob);
         Assert.Contains("-Password $bootstrapOwnerPassword", productionSmokeJob);
         Assert.Contains("-OutputDirectory (Join-Path $env:RUNNER_TEMP \"accounts-smoke\")", productionSmokeJob);
+        Assert.Contains("-AllowEphemeralMfaEnrollment", productionSmokeJob);
         Assert.Contains("-CheckMonitoringErrorRouting", productionSmokeJob);
         Assert.Contains("Upload monitoring error routing evidence", productionSmokeJob);
         Assert.Contains("name: monitoring-error-routing-smoke", productionSmokeJob);
@@ -3065,6 +3067,18 @@ public partial class AccountsWorkflowTests
         Assert.Contains("ConvertFrom-Base32", smokeScript);
         Assert.Contains("SMOKE_TOTP_SECRET", smokeScript);
         Assert.Contains("Completing privileged-account MFA", smokeScript);
+        Assert.Contains("[switch]$AllowEphemeralMfaEnrollment", smokeScript);
+        Assert.Contains("-AllowEphemeralMfaEnrollment is only for a disposable CI bootstrap account", smokeScript);
+        var mfaChallengeIndex = smokeScript.IndexOf("if ([int]$loginResponse.StatusCode -eq 202)", StringComparison.Ordinal);
+        var cookieAssertionIndex = smokeScript.IndexOf("Assert-SetCookieAttribute -Response $loginResponse", StringComparison.Ordinal);
+        var authenticatedSessionIndex = smokeScript.IndexOf("Checking authenticated session", StringComparison.Ordinal);
+        Assert.True(mfaChallengeIndex >= 0 && mfaChallengeIndex < cookieAssertionIndex,
+            "The smoke must complete a privileged MFA challenge before it expects session cookies.");
+        Assert.True(mfaChallengeIndex < authenticatedSessionIndex,
+            "The smoke must complete a privileged MFA challenge before it calls authenticated endpoints.");
+        Assert.True(
+            smokeScript.IndexOf("if (-not $AllowEphemeralMfaEnrollment)", StringComparison.Ordinal) > mfaChallengeIndex,
+            "MFA enrollment must fail closed unless the caller explicitly identifies a disposable CI account.");
         Assert.Contains("/api/auth/me", smokeScript);
         Assert.Contains("accounts_csrf", smokeScript);
         Assert.Contains("Assert-SetCookieAttribute", smokeScript);

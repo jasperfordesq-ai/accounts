@@ -164,7 +164,9 @@ const strictTransportSecurity = "max-age=31536000; includeSubDomains; preload";
     headers: upstreamHeaders,
   });
 
-  const response = proxyResponseForUpstream(upstream, upstreamHeaders, { allowSetCookie: true });
+  const response = proxyResponseForUpstream(upstream, upstreamHeaders, {
+    allowSetCookie: allowSetCookieForProxyResponse("POST", ["auth", "mfa", "challenge"], upstream.status),
+  });
   const setCookies = response.headers.getSetCookie();
   const body = await response.json();
 
@@ -181,9 +183,14 @@ const strictTransportSecurity = "max-age=31536000; includeSubDomains; preload";
   assert.equal(allowSetCookieForProxyResponse("POST", ["auth", "login"], 200), true);
   assert.equal(allowSetCookieForProxyResponse("POST", ["auth", "logout"], 204), true);
   assert.equal(allowSetCookieForProxyResponse("POST", ["auth", "password"], 200), true);
+  assert.equal(allowSetCookieForProxyResponse("POST", ["auth", "mfa", "challenge"], 200), true);
 
   assert.equal(allowSetCookieForProxyResponse("GET", ["auth", "me"], 200), false);
   assert.equal(allowSetCookieForProxyResponse("POST", ["auth", "login"], 401), false);
+  assert.equal(allowSetCookieForProxyResponse("POST", ["auth", "mfa", "challenge"], 401), false);
+  assert.equal(allowSetCookieForProxyResponse("GET", ["auth", "mfa", "challenge"], 200), false);
+  assert.equal(allowSetCookieForProxyResponse("POST", ["auth", "mfa", "enroll"], 200), false);
+  assert.equal(allowSetCookieForProxyResponse("POST", ["auth", "mfa", "challenge", "extra"], 200), false);
   assert.equal(allowSetCookieForProxyResponse("GET", ["auth", "login"], 200), false);
   assert.equal(allowSetCookieForProxyResponse("POST", ["auth", "unknown"], 200), false);
   assert.equal(allowSetCookieForProxyResponse("POST", ["companies"], 200), false);

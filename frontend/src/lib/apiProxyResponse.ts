@@ -26,9 +26,11 @@ export function allowSetCookieForProxyResponse(method: string, path: string[], s
   if (status < 200 || status >= 300) return false;
 
   const [area, operation, ...extraSegments] = path.map((segment) => segment.toLowerCase());
-  return area === "auth"
-    && extraSegments.length === 0
-    && authSetCookieEndpoints.has(operation ?? "");
+  if (area !== "auth") return false;
+  if (operation === "mfa") {
+    return extraSegments.length === 1 && extraSegments[0] === "challenge";
+  }
+  return extraSegments.length === 0 && authSetCookieEndpoints.has(operation ?? "");
 }
 
 function appendSetCookieHeaders(source: Headers, target: Headers) {

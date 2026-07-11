@@ -1,10 +1,14 @@
+.gitattributes text eol=lf
 backend/Accounts.Tests/Fixtures/golden-corpus-independent-v1.json text eol=lf
 backend/Accounts.Tests/Fixtures/corporation-tax-independent-v1.json text eol=lf
 backend/Accounts.Api/OpenApi/accounts-api-v1.json text eol=lf
 frontend/src/lib/generated/accounts-api-v1.ts text eol=lf
+frontend/src/lib/apiProxyResponse.ts text eol=lf
+frontend/scripts/verify-api-proxy.mjs text eol=lf
 .github/workflows/ci.yml text eol=lf
 Dockerfile.frontend text eol=lf
 backend/Accounts.Tests/AccountsWorkflowTests.Policy.cs text eol=lf
 scripts/verify-ci-actions.mjs text eol=lf
+scripts/smoke-production.ps1 text eol=lf
 Docs/operations/production-runbook.md text eol=lf
 deploy/caddy/Caddyfile.example text eol=lf

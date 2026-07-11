@@ -25,7 +25,7 @@ Validate the Caddy configuration before a release:
 caddy validate --config .\deploy\caddy\Caddyfile.example
 ```
 
-CI also runs the production smoke test through this Caddyfile instead of calling the frontend port directly. The workflow maps `accounts-smoke.local` to `127.0.0.1`, creates the Caddy container on Docker's standard bridge so only runner-loopback ports are published, then attaches it to the internal Compose frontend network before startup with `ACCOUNTS_FRONTEND_UPSTREAM=frontend:3000`. The probe explicitly bypasses proxies and resolves the smoke hostname to loopback; the workflow enables `ACCOUNTS_CADDY_GLOBAL_OPTIONS=local_certs`, trusts the generated local CA, and runs `smoke-production.ps1` against `https://accounts-smoke.local`. This avoids host networking while preserving the private upstream hop and the same ingress contract. Do not set `local_certs` in production unless you intentionally operate with an internally trusted private CA; the normal production path should use the public hostname and Caddy's public certificate automation.
+CI also runs the production smoke test through this Caddyfile instead of calling the frontend port directly. The workflow maps `accounts-smoke.local` to `127.0.0.1`, creates the Caddy container on Docker's standard bridge so only runner-loopback ports are published, then attaches it to the internal Compose frontend network before startup with `ACCOUNTS_FRONTEND_UPSTREAM=frontend:3000`. The probe explicitly bypasses proxies and resolves the smoke hostname to loopback; the workflow enables `ACCOUNTS_CADDY_GLOBAL_OPTIONS=local_certs`, trusts the generated local CA for curl, PowerShell and the Node capacity probe, and runs `smoke-production.ps1` against `https://accounts-smoke.local`. This avoids host networking while preserving the private upstream hop and the same ingress contract. Do not set `local_certs` in production unless you intentionally operate with an internally trusted private CA; the normal production path should use the public hostname and Caddy's public certificate automation.
 
 The ingress emits HSTS for the public HTTPS hostname. Keep `ACCOUNTS_ALLOWED_ORIGIN` aligned to the public HTTPS origin used by the reverse proxy, for example `https://accounts.example.ie`. Leave the frontend `ENABLE_HSTS=false` when HSTS is owned by the ingress; set `ENABLE_HSTS=true` only when TLS terminates directly at the Next.js frontend and the domain is ready for the `includeSubDomains; preload` commitment.
 
@@ -494,11 +494,14 @@ $env:SMOKE_TOTP_SECRET = "<read from the separate MFA secret store for an enroll
 .\scripts\smoke-production.ps1
 ```
 
-The smoke completes the privileged-account MFA challenge through the frontend proxy. On a fresh CI
-bootstrap it consumes the one-time enrollment secret returned over the protected session and never
-writes that secret or the generated recovery codes to evidence. For an already-enrolled production
-smoke account, provide `SMOKE_TOTP_SECRET` (or `-TotpSecret`) from the separate authorized MFA secret
-store; do not place it in the repository, command history, logs, or retained smoke artifacts.
+The smoke completes the privileged-account MFA challenge through the frontend proxy. By default it
+rejects an account that still requires enrollment: enrol the production smoke account out of band,
+retain its authenticator and recovery credentials through the approved identity process, and provide
+`SMOKE_TOTP_SECRET` (or `-TotpSecret`) from the separate authorized MFA secret store. Do not place it
+in the repository, command history, logs, or retained smoke artifacts. Only the disposable CI
+bootstrap passes `-AllowEphemeralMfaEnrollment`; that path consumes the one-time enrollment secret
+without writing the secret or generated recovery codes to evidence and must never be used for a
+persistent operator or production account.
 
 To prove production error routing, deploy the stack with `MONITORING_ERROR_SMOKE_ENABLED=true` for the smoke window and run:
 
