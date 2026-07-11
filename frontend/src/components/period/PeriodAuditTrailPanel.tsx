@@ -179,7 +179,12 @@ function AuditPayload({ label, payload }: { label: string; payload: string }) {
   return (
     <div>
       <p className="mb-1 text-xs font-medium text-[var(--muted-foreground)]">{label}</p>
-      <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-all rounded-md border border-[var(--border)] bg-[var(--surface)] p-3 text-xs text-[var(--foreground)]">
+      <pre
+        role="region"
+        aria-label={`${label} audit payload`}
+        tabIndex={0}
+        className="max-h-40 overflow-auto whitespace-pre-wrap break-all rounded-md border border-[var(--border)] bg-[var(--surface)] p-3 text-xs text-[var(--foreground)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500"
+      >
         {formatAuditPayload(payload)}
       </pre>
     </div>

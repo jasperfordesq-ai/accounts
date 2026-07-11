@@ -7,6 +7,7 @@ import { chromium } from "@playwright/test";
 import postcss from "postcss";
 import tailwindcss from "@tailwindcss/postcss";
 import {
+  checkAccessibility,
   checkThemeContrast,
   unexpectedVisualSmokeBrowserErrors,
 } from "../../scripts/visual-smoke.mjs";
@@ -25,7 +26,8 @@ const compiledThemeProbeStyles = (await postcss([tailwindcss()]).process(`
 async function withPage(markup, action) {
   const browser = await chromium.launch({ headless: true });
   try {
-    const page = await browser.newPage({ viewport: { width: 1000, height: 800 } });
+    const context = await browser.newContext({ viewport: { width: 1000, height: 800 } });
+    const page = await context.newPage();
     await page.setContent(markup);
     return await action(page);
   } finally {
@@ -34,8 +36,9 @@ async function withPage(markup, action) {
 }
 
 const documentShell = (content) => `<!doctype html>
-<html>
+<html lang="en">
   <head>
+    <title>Accounts accessibility probe</title>
     <style>
       body, main { margin: 0; background: rgb(255, 255, 255); }
       input::placeholder { color: rgb(89, 89, 89); opacity: 1; }
@@ -43,6 +46,31 @@ const documentShell = (content) => `<!doctype html>
   </head>
   <body><main>${content}</main></body>
 </html>`;
+
+test("real Chromium axe scan accepts a labelled WCAG 2.2 A/AA form", async () => {
+  const result = await withPage(documentShell(`
+    <h1>Accountant review</h1>
+    <label for="review-note">Review note</label>
+    <textarea id="review-note"></textarea>
+    <button type="button">Save review</button>
+  `), (page) => checkAccessibility(page, "axe-labelled-form"));
+
+  assert.equal(result.status, "passed");
+  assert.equal(result.violationCount, 0);
+  assert.ok(result.passCount > 0);
+});
+
+test("real Chromium axe scan rejects an unnamed field without exposing its value", async () => {
+  const secret = "client-secret-value-must-not-leak";
+  await assert.rejects(
+    () => withPage(documentShell(`<input value="${secret}" />`), (page) => checkAccessibility(page, "axe-unnamed-field")),
+    (error) => {
+      assert.match(String(error), /label/);
+      assert.doesNotMatch(String(error), new RegExp(secret));
+      return true;
+    },
+  );
+});
 
 test("selected application theme overrides the operating-system colour scheme", async () => {
   const stylesFor = async (page, selectedTheme, osTheme) => {

@@ -456,6 +456,45 @@ public sealed class AccountingConcurrencyPostgresTests : IAsyncLifetime
         Assert.DoesNotContain("database detail", root.GetRawText(), StringComparison.OrdinalIgnoreCase);
     }
 
+    [PostgresFact]
+    public async Task ImmediateSecondSave_UsesPostgresTimestampPrecisionWithoutFalseConflict()
+    {
+        await using var db = CreateDb();
+        var tenant = new Tenant
+        {
+            Name = "Timestamp precision test firm",
+            Slug = $"timestamp-precision-{Guid.NewGuid():N}"
+        };
+        var company = new Company
+        {
+            Id = Interlocked.Increment(ref nextIsolatedCompanyId),
+            Tenant = tenant,
+            LegalName = "Timestamp Precision Test Limited",
+            CroNumber = Guid.NewGuid().ToString("N")[..20],
+            CompanyType = CompanyType.Private,
+            IncorporationDate = new DateOnly(2025, 1, 1),
+            AnnualReturnDate = new DateOnly(2025, 9, 15),
+            IsTrading = true
+        };
+        var period = new AccountingPeriod
+        {
+            Id = Interlocked.Increment(ref nextIsolatedPeriodId),
+            Company = company,
+            PeriodStart = new DateOnly(2025, 1, 1),
+            PeriodEnd = new DateOnly(2025, 12, 31),
+            IsFirstYear = true
+        };
+        db.Add(period);
+        await db.SaveChangesAsync();
+
+        period.Status = PeriodStatus.Filed;
+        period.LockedAt = DateTime.UtcNow;
+        period.LockedBy = "seed.workflow@accounts.local";
+        await db.SaveChangesAsync();
+
+        Assert.Equal(PeriodStatus.Filed, period.Status);
+    }
+
     private AccountsDbContext CreateDb(bool protectWrites = true, string? applicationName = null)
     {
         var connectionString = ScopedConnectionString;

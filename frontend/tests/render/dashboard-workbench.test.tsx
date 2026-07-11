@@ -36,6 +36,24 @@ describe("DashboardWorkbench", () => {
     expect(screen.queryByText("Dashboard")).not.toBeInTheDocument();
   });
 
+  it("places the daily accountant queue before reminder-delivery operations", () => {
+    render(
+      <DashboardWorkbench
+        companies={[sampleCompany()]}
+        deadlines={{ 7: sampleDeadline() }}
+        canCreateCompany={false}
+        canRecoverCompany={false}
+        canReviewReleaseEvidence={false}
+        readinessReport={null}
+        canManageDeadlineRisk
+      />,
+    );
+
+    const workQueue = screen.getByText("Accountant Work Queue");
+    const reminderRisk = screen.getByRole("heading", { name: "Reminder delivery at risk" });
+    expect(workQueue.compareDocumentPosition(reminderRisk) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("keeps operational errors visible inside the workbench shell", () => {
     render(
       <DashboardWorkbench

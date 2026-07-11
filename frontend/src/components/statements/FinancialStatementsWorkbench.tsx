@@ -508,8 +508,8 @@ export function FinancialStatementsWorkbench({
             </p>
             {bs.fixedAssets.categories.length > 0 && (
               <div className="border border-gray-200 dark:border-neutral-700 rounded-lg overflow-hidden mb-2">
-                <div className="grid grid-cols-4 gap-2 bg-gray-50 dark:bg-neutral-800 px-3 py-1.5 text-xs font-medium text-[var(--muted-foreground)]">
-                  <div>Category</div>
+                <div className="grid grid-cols-[minmax(0,1fr)_repeat(3,minmax(4.75rem,auto))] gap-1 bg-gray-50 px-2 py-1.5 text-xs font-medium text-[var(--muted-foreground)] dark:bg-neutral-800 sm:gap-2 sm:px-3">
+                  <div className="min-w-0">Category</div>
                   <div className="text-right">Cost</div>
                   <div className="text-right">Depn</div>
                   <div className="text-right">NBV</div>
@@ -517,16 +517,16 @@ export function FinancialStatementsWorkbench({
                 {bs.fixedAssets.categories.map((cat) => (
                   <div
                     key={cat.category}
-                    className="grid grid-cols-4 gap-2 px-3 py-1.5 text-sm border-t border-gray-100 dark:border-neutral-700"
+                    className="grid grid-cols-[minmax(0,1fr)_repeat(3,minmax(4.75rem,auto))] gap-1 border-t border-gray-100 px-2 py-1.5 text-xs dark:border-neutral-700 sm:gap-2 sm:px-3 sm:text-sm"
                   >
-                    <div className="text-gray-700 dark:text-gray-300">{cat.category}</div>
-                    <div className="text-right font-mono text-gray-900 dark:text-gray-100">
+                    <div className="min-w-0 break-words text-gray-700 dark:text-gray-300">{cat.category}</div>
+                    <div className="whitespace-nowrap text-right font-mono text-gray-900 dark:text-gray-100">
                       {eur(cat.cost)}
                     </div>
-                    <div className="text-right font-mono text-gray-900 dark:text-gray-100">
+                    <div className="whitespace-nowrap text-right font-mono text-gray-900 dark:text-gray-100">
                       {eur(cat.depreciation)}
                     </div>
-                    <div className="text-right font-mono text-gray-900 dark:text-gray-100">
+                    <div className="whitespace-nowrap text-right font-mono text-gray-900 dark:text-gray-100">
                       {eur(cat.nbv)}
                     </div>
                   </div>
@@ -846,7 +846,12 @@ export function FinancialStatementsWorkbench({
               <ul className="mt-2 space-y-1">
                 {tax.sources.map((source) => (
                   <li key={source.code}>
-                    <a className="text-emerald-700 underline dark:text-emerald-300" href={source.url} target="_blank" rel="noreferrer">
+                    <a
+                      className="inline-flex min-h-6 items-center rounded-sm text-emerald-700 underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 dark:text-emerald-300"
+                      href={source.url}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
                       {source.title}
                     </a>
                   </li>

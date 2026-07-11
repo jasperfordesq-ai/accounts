@@ -916,7 +916,7 @@ public class ProductionReadinessReportTests
         Assert.Contains(scores["frontend-accountant-workbench"].Controls, control =>
             control.Code == "accessible-responsive-workbench"
             && !control.Passed
-            && control.BlockingAuditItemIds.SequenceEqual(["P1-UX-001", "P1-UX-002", "P1-UX-003", "P1-A11Y-001", "P1-VIS-002", "P1-FE-011"]));
+            && control.BlockingAuditItemIds.SequenceEqual(["P1-UX-001", "P1-UX-003", "P1-A11Y-001", "P1-VIS-002", "P1-FE-011"]));
         Assert.Contains(scores["backend-statutory-accounting-engine"].Controls, control =>
             control.Code == "final-release-containment"
             && control.Passed
@@ -1214,8 +1214,10 @@ public class ProductionReadinessReportTests
         Assert.Contains(scores["frontend-accountant-workbench"].CurrentEvidence, evidence =>
             evidence.Contains("nonblank pixel diversity", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["frontend-accountant-workbench"].CurrentEvidence, evidence =>
-            evidence.Contains("per-screenshot layout-check pass results", StringComparison.OrdinalIgnoreCase)
-            && evidence.Contains("theme-contrast", StringComparison.OrdinalIgnoreCase));
+            evidence.Contains("per-screenshot layout", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("axe-core WCAG 2.2 A/AA", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("theme-contrast", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("responsive-workflow", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["frontend-accountant-workbench"].CurrentEvidence, evidence =>
             evidence.Contains("visual-qa-signoff-template.md", StringComparison.OrdinalIgnoreCase)
             && evidence.Contains("nonblank pixel", StringComparison.OrdinalIgnoreCase));

@@ -977,6 +977,9 @@ public static class SeedData
 
     private static async Task EnsureSizeClassificationAsync(AccountsDbContext db, int periodId, decimal turnover, decimal balanceSheetTotal, int avgEmployees, CompanySizeClass priorYearClass, CompanySizeClass calculatedClass, string notes)
     {
+        var period = await db.AccountingPeriods
+            .Include(item => item.Company)
+            .FirstAsync(item => item.Id == periodId);
         var classification = await db.SizeClassifications.FirstOrDefaultAsync(s => s.PeriodId == periodId);
         if (classification is null)
         {
@@ -988,9 +991,42 @@ public static class SeedData
         classification.BalanceSheetTotal = balanceSheetTotal;
         classification.AvgEmployees = avgEmployees;
         classification.PriorYearClass = priorYearClass;
+        classification.RawCurrentClass = calculatedClass;
+        classification.RawPriorClass = priorYearClass;
+        classification.RawCurrentMicroQualified = calculatedClass <= CompanySizeClass.Micro;
+        classification.RawCurrentSmallQualified = calculatedClass <= CompanySizeClass.Small;
+        classification.RawCurrentMediumQualified = calculatedClass <= CompanySizeClass.Medium;
+        classification.RawPriorMicroQualified = priorYearClass <= CompanySizeClass.Micro;
+        classification.RawPriorSmallQualified = priorYearClass <= CompanySizeClass.Small;
+        classification.RawPriorMediumQualified = priorYearClass <= CompanySizeClass.Medium;
+        classification.PeriodLengthInYears = SeedPeriodLengthInYears(period.PeriodStart, period.PeriodEnd);
+        classification.AnnualisedTurnover = decimal.Round(
+            turnover / classification.PeriodLengthInYears,
+            2,
+            MidpointRounding.AwayFromZero);
+        classification.ThresholdElectionEffectiveFrom = new DateOnly(2024, 1, 1);
+        classification.ThresholdScheduleEffectiveFrom = period.PeriodStart >= new DateOnly(2024, 1, 1)
+            ? new DateOnly(2024, 1, 1)
+            : new DateOnly(2017, 1, 1);
+        classification.ThresholdScheduleCode = period.PeriodStart >= new DateOnly(2024, 1, 1)
+            ? "SI-301-2024"
+            : "CA-2014-2017-HISTORICAL";
         classification.CalculatedClass = calculatedClass;
+        classification.DecisionInputFingerprintSha256 = SizeClassificationService.ComputeInputFingerprint(
+            period,
+            classification,
+            classification.ThresholdElectionEffectiveFrom.Value);
         classification.QualificationNotes = notes;
         await db.SaveChangesAsync();
+    }
+
+    private static decimal SeedPeriodLengthInYears(DateOnly start, DateOnly end)
+    {
+        var exclusiveEnd = end.AddDays(1);
+        var months = (exclusiveEnd.Year - start.Year) * 12 + exclusiveEnd.Month - start.Month;
+        if (exclusiveEnd.Day == start.Day && months > 0)
+            return months / 12m;
+        return decimal.Divide(end.DayNumber - start.DayNumber + 1, 365.2425m);
     }
 
     private static async Task EnsureFilingRegimeAsync(AccountsDbContext db, int periodId, bool canUseMicro, bool canFileAbridged, bool auditExempt, ElectedRegime electedRegime, string[] notes, string[] statements)

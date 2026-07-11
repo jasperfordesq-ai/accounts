@@ -109,7 +109,7 @@ const CONTROLS: Record<ProductionScorecardCategoryCode, ProductionScorecardContr
       25,
       "machine",
       false,
-      ["P1-UX-001", "P1-UX-002", "P1-UX-003", "P1-A11Y-001", "P1-VIS-002", "P1-FE-011"],
+      ["P1-UX-001", "P1-UX-003", "P1-A11Y-001", "P1-VIS-002", "P1-FE-011"],
     ),
     control(
       "complete-visual-acceptance",

@@ -17,6 +17,9 @@ import {
   VISUAL_SMOKE_UI_COMPONENT_OPTIONAL_STATE_IDS,
   VISUAL_SMOKE_INVENTORY_VERSION,
   visualSmokeContrastCheck,
+  visualSmokeAccessibilityCheck,
+  visualSmokeAccessibilityTags,
+  visualSmokeResponsiveAcceptanceCheck,
   visualSmokeLayoutChecks,
   visualSmokeReviewChecks,
   visualSmokeStateInventory,
@@ -102,6 +105,17 @@ export async function verifyVisualSmokeManifest(manifestPath, options = {}) {
     failures.push("visual smoke manifest viewportDimensions must be exactly 390x844, 768x1024 and 1440x1000");
   }
 
+  if (manifest.accessibilityCheck !== visualSmokeAccessibilityCheck) {
+    failures.push(`visual smoke manifest accessibilityCheck must be ${visualSmokeAccessibilityCheck}`);
+  }
+
+  if (!sameJson(manifest.accessibilityTags, visualSmokeAccessibilityTags)) {
+    failures.push("visual smoke manifest accessibilityTags must match the canonical WCAG 2.2 A/AA tag inventory");
+  }
+  if (manifest.responsiveAcceptanceCheck !== visualSmokeResponsiveAcceptanceCheck) {
+    failures.push(`visual smoke manifest responsiveAcceptanceCheck must be ${visualSmokeResponsiveAcceptanceCheck}`);
+  }
+
   if (manifest.expectedScreenshotCount !== screenshots.length) {
     failures.push(`visual smoke manifest screenshot count mismatch: expected ${manifest.expectedScreenshotCount}, found ${screenshots.length}`);
   }
@@ -126,6 +140,10 @@ export async function verifyVisualSmokeManifest(manifestPath, options = {}) {
 
   if (!manifest.reviewProtocol?.requiredEvidence?.includes("per-screenshot automated theme contrast smoke evidence")) {
     failures.push("visual smoke manifest review protocol must require per-screenshot automated theme contrast smoke evidence");
+  }
+
+  if (!manifest.reviewProtocol?.requiredEvidence?.includes("per-screenshot axe-core WCAG 2.2 A/AA evidence")) {
+    failures.push("visual smoke manifest review protocol must require per-screenshot axe-core WCAG 2.2 A/AA evidence");
   }
 
   if (!manifest.reviewProtocol?.requiredEvidence?.includes("canonical state inventory and exact URL/tab evidence")) {
@@ -232,6 +250,8 @@ export async function verifyVisualSmokeManifest(manifestPath, options = {}) {
       reviewStatus: screenshot.reviewStatus,
       layoutCheckResults: Array.isArray(screenshot.layoutCheckResults) ? screenshot.layoutCheckResults : [],
       themeContrastResult: screenshot.themeContrastResult ?? null,
+      accessibilityResult: screenshot.accessibilityResult ?? null,
+      responsiveAcceptanceResult: screenshot.responsiveAcceptanceResult ?? null,
     });
   }
 
@@ -330,6 +350,8 @@ export async function verifyVisualSmokeManifest(manifestPath, options = {}) {
     }
 
     validateThemeContrastResult(actual.themeContrastResult, actual, failures);
+    validateAccessibilityResult(actual.accessibilityResult, actual, failures);
+    validateResponsiveAcceptanceResult(actual.responsiveAcceptanceResult, actual, failures);
   }
 
   for (const audit of manifest.routeAudits ?? []) {
@@ -418,6 +440,25 @@ export async function verifyVisualSmokeManifest(manifestPath, options = {}) {
     minimumContrastRatio: Math.min(
       ...screenshotSummaries.map((screenshot) => Number(screenshot.themeContrastResult?.minimumContrastRatio ?? 0)),
     ),
+    accessibilityChecksPassed: true,
+    accessibilityCheck: visualSmokeAccessibilityCheck,
+    accessibilityTags: visualSmokeAccessibilityTags,
+    accessibilityCheckResultCount: screenshotSummaries.filter(
+      (screenshot) => screenshot.accessibilityResult?.check === visualSmokeAccessibilityCheck,
+    ).length,
+    accessibilityViolationCount: screenshotSummaries.reduce(
+      (total, screenshot) => total + Number(screenshot.accessibilityResult?.violationCount ?? 0),
+      0,
+    ),
+    accessibilityIncompleteRuleCount: screenshotSummaries.reduce(
+      (total, screenshot) => total + Number(screenshot.accessibilityResult?.incompleteCount ?? 0),
+      0,
+    ),
+    responsiveAcceptanceChecksPassed: true,
+    responsiveAcceptanceCheck: visualSmokeResponsiveAcceptanceCheck,
+    responsiveAcceptanceCheckResultCount: screenshotSummaries.filter(
+      (screenshot) => screenshot.responsiveAcceptanceResult?.check === visualSmokeResponsiveAcceptanceCheck,
+    ).length,
     semanticDistinctnessPassed: true,
     semanticContentHashCount: new Set(screenshotSummaries.map((screenshot) => screenshot.semanticContentSha256)).size,
     routeCoverage: expectedVisualSmokeRouteAudits().map((audit) => ({
@@ -445,6 +486,70 @@ export async function verifyVisualSmokeManifest(manifestPath, options = {}) {
   }
 
   return report;
+}
+
+function validateAccessibilityResult(result, screenshot, failures) {
+  const fileName = screenshot.fileName;
+  if (!result) {
+    failures.push(`visual smoke screenshot ${fileName} is missing axe-core accessibility result.`);
+    return;
+  }
+  if (result.check !== visualSmokeAccessibilityCheck) {
+    failures.push(`visual smoke screenshot ${fileName} accessibilityResult.check must be ${visualSmokeAccessibilityCheck}.`);
+  }
+  if (result.status !== "passed") {
+    failures.push(`visual smoke screenshot ${fileName} accessibilityResult.status must be passed.`);
+  }
+  if (result.engine !== "axe-core" || !/^4\.12\.[0-9]+$/.test(String(result.engineVersion ?? ""))) {
+    failures.push(`visual smoke screenshot ${fileName} must record the pinned axe-core 4.12 engine.`);
+  }
+  if (result.standard !== "WCAG 2.2 A/AA" || !sameJson(result.tags, visualSmokeAccessibilityTags)) {
+    failures.push(`visual smoke screenshot ${fileName} must record the canonical WCAG 2.2 A/AA tag inventory.`);
+  }
+  if (Number(result.violationCount) !== 0 || !Array.isArray(result.violations) || result.violations.length !== 0) {
+    failures.push(`visual smoke screenshot ${fileName} must have zero axe-core WCAG violations.`);
+  }
+  if (Number(result.passCount) <= 0) {
+    failures.push(`visual smoke screenshot ${fileName} accessibilityResult.passCount must be greater than zero.`);
+  }
+  if (!Number.isSafeInteger(Number(result.incompleteCount)) || Number(result.incompleteCount) < 0) {
+    failures.push(`visual smoke screenshot ${fileName} accessibilityResult.incompleteCount must be a non-negative integer.`);
+  }
+  if (!Array.isArray(result.incompleteRules) || result.incompleteRules.length !== Number(result.incompleteCount)) {
+    failures.push(`visual smoke screenshot ${fileName} accessibilityResult.incompleteRules must match incompleteCount.`);
+  }
+}
+
+function validateResponsiveAcceptanceResult(result, screenshot, failures) {
+  const fileName = screenshot.fileName;
+  if (!result || result.check !== visualSmokeResponsiveAcceptanceCheck || result.status !== "passed") {
+    failures.push(`visual smoke screenshot ${fileName} must retain a passed responsive workflow acceptance result.`);
+    return;
+  }
+  if (Number(result.documentHeight) <= 0 || Number(result.viewportHeight) !== Number(screenshot.minimumViewportHeight)) {
+    failures.push(`visual smoke screenshot ${fileName} responsive acceptance dimensions must match the captured viewport.`);
+  }
+  const assertions = new Set((Array.isArray(result.assertions) ? result.assertions : [])
+    .filter((assertion) => assertion?.status === "passed")
+    .map((assertion) => assertion.check));
+  const required = [];
+  if (screenshot.stateId === "dashboard") required.push("dashboard-work-before-release-evidence");
+  if (screenshot.stateId === "dashboard" && screenshot.viewportName === "desktop") {
+    required.push("dashboard-first-action-within-desktop-viewport");
+  }
+  if (screenshot.stateId === "production-readiness" && screenshot.viewportName === "mobile") {
+    required.push(
+      "readiness-priority-surface-within-two-mobile-viewports",
+      "readiness-initial-height-within-eight-mobile-viewports",
+      "readiness-supporting-ledgers-collapsed-initially",
+    );
+    if (Number(result.documentViewportRatio) > 8) {
+      failures.push(`visual smoke screenshot ${fileName} initial document height must not exceed eight viewports.`);
+    }
+  }
+  for (const check of required) {
+    if (!assertions.has(check)) failures.push(`visual smoke screenshot ${fileName} is missing responsive assertion ${check}.`);
+  }
 }
 
 function validateThemeContrastResult(result, screenshot, failures) {

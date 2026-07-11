@@ -495,7 +495,7 @@ public partial class ProductionReadinessReportService(AccountsDbContext db)
                     "Production readiness, dashboard, company, period, filing review, financial statements and workbench preview routes are in the visual smoke plan.",
                     "Shared workbench primitives and route-level render tests cover the main accountant journey.",
                     "Dense tables, workflow rails, blocker summaries and permission-denied states are surfaced in the workbench.",
-                    "node scripts/verify-visual-smoke-artifacts.mjs now writes visual-smoke-evidence-report.json covering screenshot hashes, byte sizes, PNG dimensions, nonblank pixel diversity, per-screenshot layout-check pass results, automated theme-contrast smoke results and route/theme/viewport completeness before human review.",
+                    "node scripts/verify-visual-smoke-artifacts.mjs now writes visual-smoke-evidence-report.json covering screenshot hashes, byte sizes, PNG dimensions, nonblank pixel diversity, per-screenshot layout, axe-core WCAG 2.2 A/AA, theme-contrast and responsive-workflow results, and route/theme/viewport completeness before human review.",
                     "Docs/release-evidence/visual-qa-signoff-template.md and scripts/verify-release-evidence.ps1 now require named reviewers to record the visual smoke nonblank pixel and contrast metrics before visual QA evidence can pass.",
                     "Visual QA sign-off now requires exact pass decisions for every canonical state across light and dark themes at mobile, tablet and desktop viewports.",
                     "Visual QA route capture cells now reject accepted-style ambiguous text so reviewer limitations must stay in retained route notes or references.",
@@ -504,7 +504,7 @@ public partial class ProductionReadinessReportService(AccountsDbContext db)
                     "Visual QA release evidence now requires exact visual-smoke manifest, visual evidence report and accountant workbench evidence report filenames before sign-off evidence can pass.",
                     "Visual QA top-level evidence now rejects placeholder reviewer name, reviewer role and reviewer signature fields before human visual sign-off evidence can pass.",
                     "node scripts/verify-accountant-workbench-evidence.mjs now writes accountant-workbench-evidence-report.json proving route, workflow-stage, theme, viewport, layout-check and review-check coverage.",
-                    "scripts/verify-release-artifact-pack.ps1 and scripts/verify-ci-machine-evidence-pack.ps1 reject visual evidence unless every screenshot reports passed console-error, horizontal-overflow, visible-text-overlap and automated theme-contrast smoke checks.",
+                    "scripts/verify-release-artifact-pack.ps1 and scripts/verify-ci-machine-evidence-pack.ps1 reject visual evidence unless every screenshot reports passed console-error, horizontal-overflow, visible-text-overlap, axe-core WCAG 2.2 A/AA, automated theme-contrast and responsive-workflow checks.",
                     "Visual smoke and accountant-workbench evidence now retain and re-verify each route's expected accountant decision text across light/dark mobile/tablet/desktop screenshots.",
                     "Release artifact and CI machine evidence pack verifiers now require exact visual-smoke top-level themes, viewports, planned viewport dimensions, layout/contrast result counts, minimum contrast ratio, retained screenshot bytes and per-route coverage before retained visual evidence can pass.",
                     "Release artifact and CI machine evidence pack verifiers now require the exact visual-smoke screenshot matrix for every route, theme and viewport, including route keys, file names, expected accountant decision text and required-review status.",
@@ -522,7 +522,7 @@ public partial class ProductionReadinessReportService(AccountsDbContext db)
                 ],
                 [
                     "Complete named visual QA review against the 192-capture light/dark mobile/tablet/desktop canonical state manifest and visual-smoke-evidence-report.json.",
-                    "Continue route-by-route polish for density, dark mode, mobile flow and table scanability.",
+                    "Complete manual keyboard, screen-reader, focus-indicator, contrast and responsive usability review without waiving axe-incomplete rules.",
                     "Record qualified-accountant route acceptance for outputs, gates, wording and evidence."
                 ],
                 ["frontend-ui-ux", "frontend-code"],
@@ -559,7 +559,7 @@ public partial class ProductionReadinessReportService(AccountsDbContext db)
                         28,
                         "machine",
                         true,
-                        ["Visual smoke artifacts retain screenshots, dimensions, hashes, layout checks and contrast checks."]),
+                        ["Visual smoke artifacts retain screenshots, dimensions, hashes, layout checks, axe-core WCAG 2.2 A/AA results, contrast checks and responsive workflow assertions for all 192 canonical captures."]),
                     Control(
                         "role-aware-ui-baseline",
                         "Role-aware UI baseline",
@@ -587,8 +587,8 @@ public partial class ProductionReadinessReportService(AccountsDbContext db)
                         25,
                         "machine",
                         false,
-                        ["Sorting and destructive-action controls are implemented; WCAG 2.2 A/AA, keyboard, canonical viewport and remaining route-level fail-closed acceptance remain open."],
-                        ["P1-UX-001", "P1-UX-002", "P1-UX-003", "P1-A11Y-001", "P1-VIS-002", "P1-FE-011"]),
+                        ["All 192 canonical captures pass automated axe-core WCAG 2.2 A/AA and responsive workflow checks; genuine manual keyboard, screen-reader, focus/contrast and qualified-accountant acceptance remain open."],
+                        ["P1-UX-001", "P1-UX-003", "P1-A11Y-001", "P1-VIS-002", "P1-FE-011"]),
                     Control(
                         "complete-visual-acceptance",
                         "Complete visual-state matrix and named review",

@@ -20,6 +20,9 @@ import {
   VISUAL_SMOKE_ARTIFACT_NAME,
   VISUAL_SMOKE_INVENTORY_VERSION,
   visualSmokeLayoutChecks,
+  visualSmokeAccessibilityCheck,
+  visualSmokeAccessibilityTags,
+  visualSmokeResponsiveAcceptanceCheck,
   visualSmokeReviewChecks,
   visualSmokeReviewProtocol,
   visualSmokeStateInventory,
@@ -50,6 +53,9 @@ describe("canonical visual smoke plan", () => {
     assert.equal(MIN_NORMAL_TEXT_CONTRAST_RATIO, 4.5);
     assert.equal(MIN_LARGE_TEXT_CONTRAST_RATIO, 3);
     assert.equal(MIN_UI_COMPONENT_CONTRAST_RATIO, 3);
+    assert.equal(visualSmokeAccessibilityCheck, "axe-wcag-2.2-a-aa");
+    assert.deepEqual(visualSmokeAccessibilityTags, ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"]);
+    assert.equal(visualSmokeResponsiveAcceptanceCheck, "responsive-workflow-acceptance");
   });
 
   it("covers every named material route, all eight statement tabs and every exceptional state", () => {
@@ -113,6 +119,8 @@ describe("canonical visual smoke plan", () => {
       layoutChecks: visualSmokeLayoutChecks,
       layoutCheckResults: artifacts[0].layoutCheckResults,
       themeContrastResult: artifacts[0].themeContrastResult,
+      accessibilityResult: artifacts[0].accessibilityResult,
+      responsiveAcceptanceResult: artifacts[0].responsiveAcceptanceResult,
     });
     assert.equal(filing?.canonicalUrlTemplate, "/companies/{companyId}/periods/{periodId}?tab=filing");
     assert.deepEqual(filing?.canonicalTabState, { kind: "period-tab", id: "filing", label: "Filing" });
@@ -160,8 +168,10 @@ describe("canonical visual smoke plan", () => {
     assert.equal(visualSmokeReviewProtocol.status, "required-review");
     assert.ok(visualSmokeReviewChecks.includes("canonical-url-tab-state"));
     assert.ok(visualSmokeReviewChecks.includes("semantic-capture-distinctness"));
+    assert.ok(visualSmokeReviewChecks.includes("axe-wcag-2.2-a-aa"));
     assert.ok(visualSmokeReviewProtocol.requiredEvidence.includes("192 canonical material-state screenshots"));
     assert.ok(visualSmokeReviewProtocol.requiredEvidence.includes("named visual QA reviewer sign-off"));
+    assert.ok(visualSmokeReviewProtocol.requiredEvidence.includes("per-screenshot axe-core WCAG 2.2 A/AA evidence"));
   });
 
   it("strips discovered deep-link queries before creating canonical period and filing states", async () => {

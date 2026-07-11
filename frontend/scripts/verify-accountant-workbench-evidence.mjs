@@ -10,6 +10,8 @@ import {
   MIN_UI_COMPONENT_CONTRAST_RATIO,
   MIN_VISUAL_SMOKE_CONTRAST_RATIO,
   visualSmokeContrastCheck,
+  visualSmokeAccessibilityCheck,
+  visualSmokeAccessibilityTags,
   visualSmokeLayoutChecks,
   visualSmokeReviewChecks,
   visualSmokeRoutes,
@@ -168,6 +170,26 @@ export async function verifyAccountantWorkbenchEvidence(options = {}) {
           }
         }
       }
+
+      const accessibilityResult = screenshot.accessibilityResult;
+      if (!accessibilityResult) {
+        failures.push(`route ${route.name} screenshot ${screenshot.fileName ?? "(unnamed)"} is missing axe-core accessibility result.`);
+      } else {
+        if (accessibilityResult.check !== visualSmokeAccessibilityCheck
+          || accessibilityResult.status !== "passed"
+          || accessibilityResult.engine !== "axe-core") {
+          failures.push(`route ${route.name} screenshot ${screenshot.fileName ?? "(unnamed)"} accessibility result must be a passed axe-core check.`);
+        }
+        if (accessibilityResult.standard !== "WCAG 2.2 A/AA"
+          || JSON.stringify(accessibilityResult.tags) !== JSON.stringify(visualSmokeAccessibilityTags)) {
+          failures.push(`route ${route.name} screenshot ${screenshot.fileName ?? "(unnamed)"} accessibility result must cover WCAG 2.2 A/AA.`);
+        }
+        if (Number(accessibilityResult.violationCount) !== 0
+          || !Array.isArray(accessibilityResult.violations)
+          || accessibilityResult.violations.length !== 0) {
+          failures.push(`route ${route.name} screenshot ${screenshot.fileName ?? "(unnamed)"} accessibility result must retain zero violations.`);
+        }
+      }
     }
 
     if (!route.workflowStages?.length) {
@@ -192,6 +214,13 @@ export async function verifyAccountantWorkbenchEvidence(options = {}) {
       ),
       expectedTextEvidenceCount: screenshots.filter((screenshot) => screenshot.expectedText === route.expectedText).length,
       contrastCheckResultCount: screenshots.filter((screenshot) => screenshot.themeContrastResult?.check === visualSmokeContrastCheck).length,
+      accessibilityCheckResultCount: screenshots.filter(
+        (screenshot) => screenshot.accessibilityResult?.check === visualSmokeAccessibilityCheck,
+      ).length,
+      accessibilityViolationCount: screenshots.reduce(
+        (total, screenshot) => total + Number(screenshot.accessibilityResult?.violationCount ?? 0),
+        0,
+      ),
       minimumContrastRatio: Math.min(...screenshots.map((screenshot) => Number(screenshot.themeContrastResult?.minimumContrastRatio ?? 0))),
       requiredReviewChecks: coverage?.requiredReviewChecks ?? [],
       reviewStatus: coverage?.reviewStatus ?? "missing",
@@ -250,11 +279,17 @@ export async function verifyAccountantWorkbenchEvidence(options = {}) {
         "visual smoke screenshots carry stable routeKey",
         "visual smoke screenshots carry passed layout check results",
         "visual smoke screenshots carry passed automated theme contrast results",
+        "visual smoke screenshots carry passed axe-core WCAG 2.2 A/AA results",
       ],
       layoutCheckEvidence: visualSmokeLayoutChecks.map((check) => `${check}:passed`),
       contrastCheckEvidence: [
         `${visualSmokeContrastCheck}:passed`,
         `minimum-ratio:${MIN_VISUAL_SMOKE_CONTRAST_RATIO}`,
+      ],
+      accessibilityCheckEvidence: [
+        `${visualSmokeAccessibilityCheck}:passed`,
+        ...visualSmokeAccessibilityTags.map((tag) => `${tag}:covered`),
+        "violations:0",
       ],
       routeAcceptanceEvidence: routeAcceptance.flatMap((route) => route.requiredAcceptanceEvidence),
       routeAcceptanceSignOffGate: ROUTE_ACCEPTANCE_SIGN_OFF_GATE,

@@ -8,6 +8,7 @@ import { deflateSync } from "node:zlib";
 import {
   MIN_VISUAL_SMOKE_CONTRAST_RATIO,
   visualSmokeContrastCheck,
+  visualSmokeAccessibilityCheck,
   visualSmokeLayoutChecks,
   visualSmokeViewports,
 } from "../scripts/visual-smoke-plan.mjs";
@@ -183,6 +184,11 @@ describe("visual smoke artifact evidence", () => {
       assert.equal(result.themeContrastChecksPassed, true);
       assert.equal(result.contrastCheckResultCount, screenshots.length);
       assert.equal(result.minimumContrastRatio, MIN_VISUAL_SMOKE_CONTRAST_RATIO);
+      assert.equal(result.accessibilityChecksPassed, true);
+      assert.equal(result.accessibilityCheckResultCount, screenshots.length);
+      assert.equal(result.accessibilityViolationCount, 0);
+      assert.equal(result.responsiveAcceptanceChecksPassed, true);
+      assert.equal(result.responsiveAcceptanceCheckResultCount, screenshots.length);
       assert.equal(result.routeCoverage.find((route) => route.routeName === "dashboard")?.screenshotCount, 6);
       assert.equal(result.screenshots.length, 192);
       assert.equal(result.screenshots[0].imageWidth, 390);
@@ -198,6 +204,8 @@ describe("visual smoke artifact evidence", () => {
       );
       assert.equal(result.screenshots[0].themeContrastResult.check, visualSmokeContrastCheck);
       assert.equal(result.screenshots[0].themeContrastResult.minimumContrastRatio, MIN_VISUAL_SMOKE_CONTRAST_RATIO);
+      assert.equal(result.screenshots[0].accessibilityResult.check, visualSmokeAccessibilityCheck);
+      assert.equal(result.screenshots[0].accessibilityResult.violationCount, 0);
       assert.equal(JSON.parse(await readFile(reportPath, "utf8")).status, "passed");
     } finally {
       await rm(dir, { recursive: true, force: true });
@@ -220,6 +228,28 @@ describe("visual smoke artifact evidence", () => {
       await assert.rejects(
         () => verifyVisualSmokeManifest(manifestPath),
         /visual smoke screenshot login-light-mobile\.png themeContrastResult\.minimumContrastRatio must be at least 3/,
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects manifest screenshots with axe-core WCAG violations", async () => {
+    const { verifyVisualSmokeManifest, withScreenshotEvidence } = await import("../scripts/visual-smoke-artifacts.mjs");
+    const dir = await mkTempDir();
+    const manifestPath = path.join(dir, "visual-smoke-manifest.json");
+    const screenshots = await completeScreenshots(dir, withScreenshotEvidence);
+    screenshots[0].accessibilityResult = {
+      ...screenshots[0].accessibilityResult,
+      status: "failed",
+      violationCount: 1,
+      violations: [{ id: "label", impact: "serious", nodeCount: 1 }],
+    };
+    await writeManifest(manifestPath, screenshots);
+    try {
+      await assert.rejects(
+        () => verifyVisualSmokeManifest(manifestPath),
+        /login-light-mobile\.png must have zero axe-core WCAG violations/,
       );
     } finally {
       await rm(dir, { recursive: true, force: true });
@@ -521,6 +551,7 @@ async function writeManifest(manifestPath, screenshots, routeAudits, requiredEvi
   "screenshot PNG dimensions",
   "screenshot nonblank pixel diversity evidence",
   "per-screenshot automated theme contrast smoke evidence",
+  "per-screenshot axe-core WCAG 2.2 A/AA evidence",
 ]) {
   const {
     expectedVisualSmokeManifest,

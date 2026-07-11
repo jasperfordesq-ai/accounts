@@ -560,6 +560,28 @@ test("parseProductionReadinessReport rejects visual review protocols without aut
   );
 });
 
+test("parseProductionReadinessReport rejects visual review protocols without axe evidence", () => {
+  const payload = sampleReport();
+  payload.visualQaCoverage.reviewProtocol.requiredEvidence =
+    payload.visualQaCoverage.reviewProtocol.requiredEvidence.filter((item) => item !== "per-screenshot axe-core WCAG 2.2 A/AA evidence");
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: visualQaCoverage\.reviewProtocol\.requiredEvidence - must include per-screenshot axe-core WCAG 2\.2 A\/AA evidence/,
+  );
+});
+
+test("parseProductionReadinessReport rejects visual review protocols without responsive acceptance evidence", () => {
+  const payload = sampleReport();
+  payload.visualQaCoverage.reviewProtocol.requiredEvidence =
+    payload.visualQaCoverage.reviewProtocol.requiredEvidence.filter((item) => item !== "per-screenshot responsive workflow acceptance evidence");
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /Invalid production readiness report contract: visualQaCoverage\.reviewProtocol\.requiredEvidence - must include per-screenshot responsive workflow acceptance evidence/,
+  );
+});
+
 test("parseProductionReadinessReport rejects visual review protocols without verifier report evidence", () => {
   const payload = sampleReport();
   payload.visualQaCoverage.reviewProtocol.requiredEvidence =
@@ -1255,7 +1277,7 @@ function productionScorecard() {
         status: "visual-acceptance-required",
         currentEvidence: [
           "Visual smoke plan covers the accountant journey.",
-          "visual-smoke-evidence-report.json proves screenshot hash, byte-size, PNG dimension, nonblank pixel diversity, per-screenshot layout-check pass results, automated theme-contrast smoke results and route/theme/viewport coverage.",
+          "visual-smoke-evidence-report.json proves screenshot hash, byte-size, PNG dimension, nonblank pixel diversity, per-screenshot layout, axe-core WCAG 2.2 A/AA, theme-contrast and responsive-workflow results, and route/theme/viewport coverage.",
           "visual-qa-signoff-template.md and verify-release-evidence.ps1 require reviewers to record visual smoke nonblank pixel and contrast metrics before visual QA evidence can pass.",
           "Visual QA sign-off requires exact pass decisions for every canonical state across light and dark themes at mobile, tablet and desktop viewports.",
           "Visual QA route capture cells reject accepted-style ambiguous text so reviewer limitations must stay in retained route notes or references.",
@@ -1276,7 +1298,11 @@ function productionScorecard() {
           "Release artifact and CI machine evidence pack verifiers require exact accountant-workbench required coverage for workflow stages, themes, viewports, review checks, layout checks, expected-text checks, layout/contrast evidence and retained visual evidence files.",
           "Frontend parser invariants now require the CI machine evidence pack, production smoke, readiness verification, visual smoke and manual release-verification rows before rendering readiness data.",
         ],
-        remainingGaps: ["Complete named visual QA review against the 192-capture light/dark mobile/tablet/desktop canonical state manifest and visual-smoke-evidence-report.json."],
+        remainingGaps: [
+          "Complete named visual QA review against the 192-capture light/dark mobile/tablet/desktop canonical state manifest and visual-smoke-evidence-report.json.",
+          "Complete manual keyboard, screen-reader, focus-indicator, contrast and responsive usability review without waiving axe-incomplete rules.",
+          "Record qualified-accountant route acceptance for outputs, gates, wording and evidence.",
+        ],
         completionTrackCodes: ["frontend-ui-ux", "frontend-code"],
         releaseBlockerCodes: [
           "frontend-ui-ux:light-dark-visual-regression",

@@ -92,8 +92,20 @@ describe("FinancialStatementsWorkbench", () => {
 
     expect(screen.getByRole("tab", { name: /Tax Computation/ })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByText("Corporation Tax Support Data")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Revenue corporation tax" })).toHaveClass("min-h-6");
     await user.click(screen.getByRole("tab", { name: /Source Trail/ }));
     expect(onStatementTabChange).toHaveBeenCalledWith("sources");
+  });
+
+  it("reserves non-overlapping amount columns for the mobile fixed-assets schedule", () => {
+    render(<FinancialStatementsWorkbench {...props()} selectedStatementTab="balance-sheet" />);
+
+    const category = screen.getByText("Computer equipment");
+    expect(category.parentElement).toHaveClass(
+      "grid-cols-[minmax(0,1fr)_repeat(3,minmax(4.75rem,auto))]",
+      "text-xs",
+    );
+    expect(screen.getByText("€10,000.00")).toHaveClass("whitespace-nowrap");
   });
 
   it("explains the filing-regime prerequisite without presenting it as a failed request", () => {

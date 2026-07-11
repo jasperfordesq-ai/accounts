@@ -14,6 +14,7 @@ export function DashboardProductionSummary({
   const ready = report.overallStatus === "ready" && releaseBlockers.length === 0;
 
   return (
+    <div data-dashboard-platform-release-status="true">
     <ReviewPanel
       title="Platform release status"
       description="Compact engineering assurance summary; full evidence lives in the production-readiness workspace."
@@ -47,6 +48,7 @@ export function DashboardProductionSummary({
         </div>
       </div>
     </ReviewPanel>
+    </div>
   );
 }
 

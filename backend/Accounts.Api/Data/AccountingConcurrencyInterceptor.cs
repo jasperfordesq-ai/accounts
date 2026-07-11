@@ -535,7 +535,11 @@ public sealed class AccountingConcurrencyInterceptor : SaveChangesInterceptor
         if (expected is byte[] leftBytes && actual is byte[] rightBytes)
             return leftBytes.AsSpan().SequenceEqual(rightBytes);
         if (expected is DateTime leftDate && actual is DateTime rightDate)
-            return leftDate.ToUniversalTime().Ticks == rightDate.ToUniversalTime().Ticks;
+            // PostgreSQL timestamp precision is one microsecond while DateTime carries 100 ns ticks.
+            // EF retains the original in-memory ticks after an insert, so an immediate legitimate
+            // second save must compare at the provider precision instead of reporting a false conflict.
+            return leftDate.ToUniversalTime().Ticks / TimeSpan.TicksPerMicrosecond
+                == rightDate.ToUniversalTime().Ticks / TimeSpan.TicksPerMicrosecond;
         if (expected is decimal || actual is decimal)
             return Convert.ToDecimal(expected, CultureInfo.InvariantCulture)
                 == Convert.ToDecimal(actual, CultureInfo.InvariantCulture);

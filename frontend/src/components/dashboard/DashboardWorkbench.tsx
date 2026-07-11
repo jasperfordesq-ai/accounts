@@ -106,6 +106,14 @@ export function DashboardWorkbench({
             {companies.length > 0 && (
               <ResourceStateNotice state={resolvedDeadlineState} label="filing deadlines" onRetry={onRetryDeadlines} />
             )}
+            <AccountantDashboardQueue
+              companies={companies}
+              deadlines={deadlines}
+              deadlineUnavailableCompanyIds={unavailableDeadlineIds}
+              deadlineStates={deadlineStates}
+              productionReleaseBlockers={readinessReport?.releaseBlockerRegister ?? []}
+            />
+
             {canManageDeadlineRisk && (
               <DeadlineRiskQueue
                 items={deadlineRiskItems}
@@ -118,13 +126,6 @@ export function DashboardWorkbench({
                 onRunDelivery={onRunDeadlineDelivery}
               />
             )}
-            <AccountantDashboardQueue
-              companies={companies}
-              deadlines={deadlines}
-              deadlineUnavailableCompanyIds={unavailableDeadlineIds}
-              deadlineStates={deadlineStates}
-              productionReleaseBlockers={readinessReport?.releaseBlockerRegister ?? []}
-            />
 
             <DashboardPracticeSummary
               companies={companies}

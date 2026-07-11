@@ -37,7 +37,7 @@ The control-derived implementation score after the verified autonomous engineeri
 
 This is a release-blocked engineering score, not a filing-readiness declaration. No points have
 been restored for independent statutory/golden-corpus acceptance, named accountant or source-law
-review, real external ROS validation, complete browser/visual/accessibility acceptance, real
+review, real external ROS validation, named browser/visual/accessibility acceptance, real
 monitoring/backup operations, durable published human evidence, or the remaining combined
 supply-chain/resilience controls. The backend score is supported by a strict 1,031-test PostgreSQL
 Release run with zero failures/skips; the frontend score is supported by 277 unit and 225 render
@@ -1339,12 +1339,15 @@ to `/production-readiness`; the full evidence remains on that dedicated route. D
 leads with deadlines, reviewer ownership and next action, while retaining an explicit warning that
 real filing use remains professionally gated. Three focused render tests pass, including a DOM-order
 assertion that the first work queue precedes release status. Four dashboard contract tests also
-prove that company/deadline loading no longer waits for the much larger release report. TypeScript passes after the
-concurrent charity-workbench contract handoff. This item remains open until a fresh 1440×1000/mobile
-visual capture and named accountant usability review confirm the first actionable row and clear first
-action without scrolling; targeted dashboard ESLint also passes.
+prove that company/deadline loading no longer waits for the much larger release report. TypeScript
+passes after the concurrent charity-workbench contract handoff. On 11 July 2026 the authenticated
+visual-smoke run proved in both themes that the accountant queue precedes release evidence at every
+canonical viewport and that the first dashboard action ends inside the initial 1440×1000 viewport.
+During that run the reminder-delivery queue was moved after daily accountant work so the numeric
+assertion would reflect the real first action rather than a marker alone. This item remains open only
+for the named accountant usability review of first-action clarity; targeted dashboard ESLint passes.
 
-### [ ] P1-UX-002 — Restructure production readiness using progressive disclosure
+### [x] P1-UX-002 — Restructure production readiness using progressive disclosure
 
 Add grouped navigation, a sticky/table-of-contents surface, search, anchor links, collapsed sections,
 and a persistent blocker summary. Keep all evidence printable and reachable without rendering every
@@ -1381,9 +1384,12 @@ Engineering evidence implemented 10 July 2026:
   human/external blocking semantics. Focused render tests, 63 readiness contract/source tests,
   TypeScript and targeted ESLint pass.
 
-This item remains open pending a fresh 390×844 browser capture that measures the two-viewport
-priority-surface requirement and the eight-viewport initial full-page-height ceiling. The current
-session exposed no in-app browser target, so those numeric visual assertions have not been claimed.
+Completion evidence (2026-07-11): the fresh authenticated 390×844 light/dark captures now enforce
+the numeric acceptance contract in the browser. The priority blocker/navigation surface finishes
+within two viewports, all seven supporting ledgers remain closed initially, and the complete initial
+page height is no more than eight viewport heights. Those assertions are retained per screenshot in
+`responsiveAcceptanceResult` and are re-verified by both visual evidence-pack verifiers. Browser
+console, overflow, overlap, contrast and axe checks also pass for both mobile readiness captures.
 
 ### [ ] P1-UX-003 — Repair mobile tables, grids, and tab affordances
 
@@ -1426,10 +1432,12 @@ Engineering evidence implemented 10 July 2026:
   (`ardMonth` removal and required `calculatedDueDate`) that must be reconciled before claiming the
   branch-wide TypeScript gate again.
 
-This item remains open pending a fresh 390×844 browser capture across the named routes that proves
-zero page-level horizontal overflow, verifies focused actions remain visible during internal scroll,
-and records light/dark visual acceptance. Those viewport and human visual assertions have not been
-inferred from jsdom or source checks.
+The fresh authenticated 11 July 2026 matrix proves zero page-level horizontal overflow across every
+one of the 192 canonical light/dark mobile/tablet/desktop captures. It also exposed and closed real
+responsive defects in fixed-asset statement columns and categorisation selectors before the final
+run passed. This item remains open only for the named human keyboard/visual review that confirms
+focused actions remain visible during internal scrolling; that human assertion is not inferred from
+the automated viewport evidence.
 
 ### [ ] P1-A11Y-001 — Complete semantic and keyboard accessibility
 
@@ -1470,7 +1478,7 @@ Evidence:
   transaction selection, adjustment approval, filing recording, mobile-navigation Escape/focus
   return, and dialog Tab/Shift+Tab/Escape/focus return.
 
-Automated verification on 10 July 2026:
+Automated verification on 10-11 July 2026:
 
 - `npx.cmd tsc --noEmit --incremental false` — passed.
 - `npm.cmd run lint` — zero errors and zero warnings.
@@ -1481,11 +1489,18 @@ Automated verification on 10 July 2026:
   required period/director-loan fields and wording in separately owned protected work, not an A11Y
   assertion or an in-scope product regression.
 
-This item remains open. The repository has no axe dependency or retained automated WCAG route-state
-report, and no named reviewer has completed the required manual screen-reader pass across login,
-onboarding, categorisation, review and filing recording. Static/jsdom evidence cannot close those
-human and real-browser assistive-technology gates or prove zero unwaived WCAG 2.2 A/AA findings on
-every production route and material state.
+The repository now pins `@axe-core/playwright` and runs axe against every canonical browser capture
+using WCAG 2.0/2.1/2.2 A/AA tags. The authenticated 11 July matrix retained 192/192 passed axe
+results with zero violations. It also retained 31 incomplete-rule results for explicit human review
+rather than treating them as passes. That run exposed and closed keyboard-focusability defects in
+filing-review audit JSON regions and WCAG target-size defects in tax source links. The visual,
+accountant-workbench, CI-machine-pack and release-pack verifiers reject missing, stale or failed axe
+evidence.
+
+This item remains open because no named reviewer has completed the required keyboard-only and
+screen-reader journeys across login, onboarding, categorisation, review and filing recording, and
+the axe-incomplete rules still require authentic assessment. Automated evidence does not claim to
+replace assistive-technology review or human focus-order/indicator acceptance.
 
 ### [x] P1-UX-004 — Remove inert sorting
 
@@ -1580,10 +1595,17 @@ verifier, release-artifact-pack verifier and CI-machine-pack verifier now agree 
 require all six light/dark mobile/tablet/desktop combinations, and reject legacy counts, missing
 state rows, viewport drift, URL/tab drift, semantic duplication and incomplete human-review cells.
 
-This item remains open. No fresh authenticated 192-capture browser artifact has yet proved every
-route/state against a live stack, and no named visual reviewer has accepted those screenshots.
-Source tests, synthetic evidence and the deterministic preview do not substitute for those rendered
-and human assertions.
+The fresh authenticated 11 July 2026 run against the isolated production-like Docker stack captured
+and verified all 192 required state/theme/viewport combinations. `visual-smoke-evidence-report.json`
+reports 32 routes, 192 screenshots, 192 passed layout/contrast/axe/responsive results, zero axe
+violations, exact viewport dimensions, distinct semantic hashes and retained PNG hashes. The
+seven-route accountant workbench subset separately passed all 42 captures. The run found and closed
+real issues in dashboard hierarchy, statement columns, categorisation controls, filing audit-region
+keyboard focus, tax-link target size and year-end component-boundary evidence before final success.
+
+This item remains open only for the named visual reviewer to accept the retained screenshots and
+the explicit axe-incomplete/manual review results. Machine success is not recorded as human visual
+acceptance.
 
 ### [ ] P1-VIS-002 — Raise contrast and motion checks to WCAG AA
 
@@ -1617,9 +1639,13 @@ Engineering remediation evidence (2026-07-10; contrast/human gate remains open):
   runs in CI immediately after the pinned browser install. Targeted ESLint, CI action policy and both
   PowerShell parsers pass.
 
-This item remains open for a fresh real-browser light/dark route-state run against the expanded
-collector, automated focus-indicator state sampling, and named human contrast/focus review. Those
-rendered/human assertions have not been inferred from source tests.
+The fresh 11 July 2026 real-browser run exercised the expanded collector over all 192 canonical
+captures in both themes and all three viewports. Every capture passed normal/large text and UI
+component contrast thresholds, with sample counts and minimum ratios retained for pack verification;
+the run also drove UI-boundary polish where a year-end desktop/tablet state previously had no
+machine-verifiable component boundary. This item remains open for automated focus-indicator state
+sampling and named human contrast/focus review. The rendered contrast evidence does not substitute
+for those focus and human assertions.
 
 ### [x] P1-UX-005 — Protect destructive actions
 

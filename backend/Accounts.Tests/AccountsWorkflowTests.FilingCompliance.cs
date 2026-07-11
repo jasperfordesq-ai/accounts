@@ -2391,6 +2391,22 @@ public partial class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task SeedData_PopulatesCompleteSizeDecisionEvidenceForFrontendContracts()
+    {
+        await using var db = CreateDbContext();
+        await SeedData.SeedAsync(db, seedDemoUsers: false, seedSampleCompanies: false);
+
+        var classification = await db.SizeClassifications.SingleAsync();
+        Assert.True(classification.PeriodLengthInYears > 0m);
+        Assert.True(classification.AnnualisedTurnover > 0m);
+        Assert.Equal("SI-301-2024", classification.ThresholdScheduleCode);
+        Assert.Equal(64, classification.DecisionInputFingerprintSha256?.Length);
+        Assert.True(classification.RawCurrentMicroQualified);
+        Assert.True(classification.RawCurrentSmallQualified);
+        Assert.True(classification.RawCurrentMediumQualified);
+    }
+
+    [Fact]
     public async Task FilingWorkflow_IxbrlGenerationFailureDoesNotPersistGeneratedSuccess()
     {
         await using var db = CreateDbContext();

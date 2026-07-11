@@ -4205,6 +4205,8 @@ public partial class AccountsWorkflowTests
         Assert.Contains("requiredCoverage.layoutCheckEvidence", machineEvidencePack);
         Assert.Contains("requiredCoverage.contrastCheckEvidence", script);
         Assert.Contains("requiredCoverage.contrastCheckEvidence", machineEvidencePack);
+        Assert.Contains("requiredCoverage.accessibilityCheckEvidence", script);
+        Assert.Contains("requiredCoverage.accessibilityCheckEvidence", machineEvidencePack);
         Assert.Contains("expectedAccountantWorkbenchRouteAcceptance", script);
         Assert.Contains("expectedAccountantWorkbenchRouteAcceptance", machineEvidencePack);
         Assert.Contains("Assert-AccountantWorkbenchRouteAcceptance", script);
@@ -4233,6 +4235,8 @@ public partial class AccountsWorkflowTests
         Assert.Contains("routeReadiness.$($expected.routeName).layoutCheckResultCount must be 18", machineEvidencePack);
         Assert.Contains("routeReadiness.$($expected.routeName).contrastCheckResultCount must be 6", script);
         Assert.Contains("routeReadiness.$($expected.routeName).contrastCheckResultCount must be 6", machineEvidencePack);
+        Assert.Contains("must retain 6 passed accessibility results with zero violations", script);
+        Assert.Contains("must retain 6 passed accessibility results with zero violations", machineEvidencePack);
         Assert.Contains("routeReadiness.$($expected.routeName).minimumContrastRatio must be at least 3", script);
         Assert.Contains("routeReadiness.$($expected.routeName).minimumContrastRatio must be at least 3", machineEvidencePack);
         Assert.Contains("routeReadiness.$($expected.routeName).reviewStatus must be required-review", script);
@@ -4267,6 +4271,14 @@ public partial class AccountsWorkflowTests
         Assert.Contains("visual-smoke-evidence-report.json themeContrastChecksPassed must be true", machineEvidencePack);
         Assert.Contains("visual-smoke-evidence-report.json minimumContrastRatio must be at least 3", script);
         Assert.Contains("visual-smoke-evidence-report.json minimumContrastRatio must be at least 3", machineEvidencePack);
+        Assert.Contains("must retain 192 passed accessibility results with zero violations", script);
+        Assert.Contains("must retain 192 passed accessibility results with zero violations", machineEvidencePack);
+        Assert.Contains("must retain 192 passed responsive workflow acceptance results", script);
+        Assert.Contains("must retain 192 passed responsive workflow acceptance results", machineEvidencePack);
+        Assert.Contains("dashboard-first-action-within-desktop-viewport", script);
+        Assert.Contains("dashboard-first-action-within-desktop-viewport", machineEvidencePack);
+        Assert.Contains("readiness-initial-height-within-eight-mobile-viewports", script);
+        Assert.Contains("readiness-initial-height-within-eight-mobile-viewports", machineEvidencePack);
         foreach (var stateIdWithoutUiComponent in new[]
         {
             "state-loading",

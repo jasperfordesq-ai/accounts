@@ -443,10 +443,10 @@ public partial class ProductionReadinessReportService
             "Design reviewer",
             "required-review",
             "visual-qa-screenshot-review",
-            "Block release if a canonical material route/state combination is missing, duplicated, semantically identical to another intended state, or has console, overflow, overlap, contrast, responsive-density or human-review defects.",
+            "Block release if a canonical material route/state combination is missing, duplicated, semantically identical to another intended state, or has console, overflow, overlap, WCAG accessibility, contrast, responsive-density or human-review defects.",
             [
                 "Every canonical material route/state is captured in light and dark themes at 390x844 mobile, 768x1024 tablet and 1440x1000 desktop viewports.",
-                "Every capture retains its expected text, exact canonical URL/tab state, console/overflow/overlap/contrast results, dimensions, SHA-256 hash and pending human-review status.",
+                "Every capture retains its expected text, exact canonical URL/tab state, console/overflow/overlap/axe/contrast results, responsive workflow acceptance, dimensions, SHA-256 hash and pending human-review status.",
                 "No canonical route/theme/viewport combination is missing or duplicated, and no two intended states in the same theme/viewport are semantically identical.",
                 "A named visual QA reviewer records screenshot-manifest acceptance before real filing release."
             ],
@@ -461,6 +461,8 @@ public partial class ProductionReadinessReportService
                 "screenshot PNG dimensions",
                 "screenshot nonblank pixel diversity evidence",
                 "per-screenshot automated theme contrast smoke evidence",
+                "per-screenshot axe-core WCAG 2.2 A/AA evidence",
+                "per-screenshot responsive workflow acceptance evidence",
                 "state audit summary",
                 "named visual QA reviewer sign-off"
             ]);

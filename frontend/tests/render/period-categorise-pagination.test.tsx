@@ -37,6 +37,8 @@ describe("PeriodCategoriseWorkspace pagination", () => {
     );
 
     expect(screen.getByRole("table", { name: "Transactions to categorise" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Filter category" })).toHaveClass("w-full", "min-w-0", "max-w-full");
+    expect(screen.getByRole("combobox", { name: "Bank Account" })).toHaveClass("w-full");
     expect(screen.getByRole("region", { name: "Transactions to categorise scrollable table" }))
       .toHaveAttribute("data-responsive", "card");
     expect(container.querySelector('td[data-label="Date"]')).toHaveTextContent("3/1/2025");

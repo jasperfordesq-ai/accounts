@@ -658,7 +658,7 @@ function CategorySelect({
       value={value}
       onChange={(event) => onChange(event.target.value)}
       disabled={disabled}
-      className={`rounded-md border border-[var(--control-border)] bg-white px-3 py-2 text-sm text-gray-900 dark:bg-neutral-900 dark:text-gray-100 ${className ?? ""}`}
+      className={`w-full min-w-0 max-w-full rounded-md border border-[var(--control-border)] bg-white px-3 py-2 text-sm text-gray-900 dark:bg-neutral-900 dark:text-gray-100 ${className ?? ""}`}
       aria-label={ariaLabel}
     >
       <option value="">{allLabel ?? placeholder}</option>
@@ -676,7 +676,7 @@ function FilterField({ label, children }: { label: string; children: ReactElemen
   const controlId = children.props.id ?? `${generatedId}-control`;
 
   return (
-    <div>
+    <div className="min-w-0">
       <label htmlFor={controlId} className="block text-xs font-medium text-[var(--muted-foreground)] mb-1">{label}</label>
       {cloneElement(children, { id: controlId })}
     </div>

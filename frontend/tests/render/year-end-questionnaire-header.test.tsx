@@ -16,7 +16,10 @@ describe("YearEndQuestionnaireHeader", () => {
       />,
     );
 
-    expect(screen.getByRole("link", { name: "Back to Period Workspace" })).toHaveAttribute("href", "/companies/7/periods/3");
+    expect(screen.getByRole("link", { name: "Back to Period Workspace" }))
+      .toHaveAttribute("href", "/companies/7/periods/3");
+    expect(screen.getByRole("link", { name: "Back to Period Workspace" }))
+      .toHaveClass("border", "border-[var(--control-border)]", "min-h-10");
     expect(screen.getByRole("heading", { name: "Year-End Questionnaire" })).toBeInTheDocument();
     expect(screen.getByText("Connacht Visual Limited - 1 Jan 2026 - 31 Dec 2026")).toBeInTheDocument();
     expect(screen.getByText("8 of 12 sections completed")).toBeInTheDocument();

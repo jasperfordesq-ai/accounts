@@ -1488,6 +1488,7 @@ function assertProductionReadinessInvariants(report: ProductionReadinessReport) 
       "accountant-workflow-hierarchy",
       "table-scanability",
       "theme-contrast",
+      "axe-wcag-2.2-a-aa",
       "responsive-density",
       "loading-error-empty-states",
       "canonical-url-tab-state",
@@ -2994,6 +2995,18 @@ function assertVisualQaArtifacts(report: ProductionReadinessReport) {
   if (!reviewProtocol.requiredEvidence.includes("per-screenshot automated theme contrast smoke evidence")) {
     throw new Error(
       "Invalid production readiness report contract: visualQaCoverage.reviewProtocol.requiredEvidence - must include per-screenshot automated theme contrast smoke evidence",
+    );
+  }
+
+  if (!reviewProtocol.requiredEvidence.includes("per-screenshot axe-core WCAG 2.2 A/AA evidence")) {
+    throw new Error(
+      "Invalid production readiness report contract: visualQaCoverage.reviewProtocol.requiredEvidence - must include per-screenshot axe-core WCAG 2.2 A/AA evidence",
+    );
+  }
+
+  if (!reviewProtocol.requiredEvidence.includes("per-screenshot responsive workflow acceptance evidence")) {
+    throw new Error(
+      "Invalid production readiness report contract: visualQaCoverage.reviewProtocol.requiredEvidence - must include per-screenshot responsive workflow acceptance evidence",
     );
   }
 

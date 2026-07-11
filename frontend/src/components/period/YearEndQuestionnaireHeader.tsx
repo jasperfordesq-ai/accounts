@@ -42,7 +42,7 @@ export function YearEndQuestionnaireHeader({
       <div className="mb-6">
         <Link
           href={backHref}
-          className="inline-flex items-center gap-1.5 text-sm text-emerald-700 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300 mb-3"
+          className="mb-3 inline-flex min-h-10 items-center gap-1.5 rounded-md border border-[var(--control-border)] bg-[var(--surface)] px-3 text-sm font-semibold text-emerald-700 transition hover:border-[var(--ring)] hover:text-emerald-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 dark:text-emerald-300 dark:hover:text-emerald-200"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to Period Workspace

@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { chromium, expect } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
 import { withScreenshotEvidence } from "./visual-smoke-artifacts.mjs";
 import { findOverlappingTextBlocks, formatLayoutIssues } from "./visual-smoke-layout.mjs";
 import {
@@ -15,9 +16,12 @@ import {
   MIN_NORMAL_TEXT_CONTRAST_RATIO,
   MIN_UI_COMPONENT_CONTRAST_RATIO,
   passedVisualSmokeContrastResult,
+  passedVisualSmokeAccessibilityResult,
   passedVisualSmokeLayoutResults,
+  passedVisualSmokeResponsiveAcceptanceResult,
   resolveVisualSmokeStateHref,
   visualSmokeLayoutChecks,
+  visualSmokeAccessibilityTags,
   visualSmokeStateInventory,
   visualSmokeThemes,
   visualSmokeViewports,
@@ -1336,6 +1340,96 @@ async function settleFiniteAnimations(page) {
   }));
 }
 
+async function checkAccessibility(page, routeName) {
+  const result = await new AxeBuilder({ page })
+    .withTags(visualSmokeAccessibilityTags)
+    .analyze();
+  const summarizeRules = (rules) => rules.map((rule) => ({
+    id: rule.id,
+    impact: rule.impact ?? "unknown",
+    nodeCount: Array.isArray(rule.nodes) ? rule.nodes.length : 0,
+    targets: (Array.isArray(rule.nodes) ? rule.nodes : [])
+      .flatMap((node) => Array.isArray(node.target) ? node.target : [])
+      .filter((target) => typeof target === "string")
+      .slice(0, 20),
+  }));
+  const violations = summarizeRules(result.violations);
+  if (violations.length > 0) {
+    const diagnostics = violations
+      .map((violation) => `- ${violation.id} (${violation.impact}, ${violation.nodeCount} node(s)): ${violation.targets.join(", ") || "targets unavailable"}`)
+      .join("\n");
+    throw new Error(`${routeName} has axe-core WCAG 2.2 A/AA violations:\n${diagnostics}`);
+  }
+
+  return passedVisualSmokeAccessibilityResult({
+    engineVersion: result.testEngine?.version ?? "unknown",
+    passCount: result.passes.length,
+    incompleteCount: result.incomplete.length,
+    incompleteRules: summarizeRules(result.incomplete),
+    inapplicableCount: result.inapplicable.length,
+  });
+}
+
+async function checkResponsiveWorkflowAcceptance(page, state, routeName) {
+  const result = await page.evaluate((stateId) => {
+    const viewportHeight = window.innerHeight;
+    const documentHeight = document.documentElement.scrollHeight;
+    const assertions = [];
+    const failure = (message) => ({ documentHeight, viewportHeight, assertions, failure: message });
+    const pageTop = (element) => element.getBoundingClientRect().top + window.scrollY;
+    const pageBottom = (element) => element.getBoundingClientRect().bottom + window.scrollY;
+
+    if (stateId === "dashboard") {
+      const workQueue = document.querySelector('[data-dashboard-accountant-work-queue="true"]');
+      const firstAction = document.querySelector('[data-dashboard-first-action="true"]');
+      const releaseStatus = document.querySelector('[data-dashboard-platform-release-status="true"]');
+      if (!workQueue || !firstAction || !releaseStatus) {
+        return failure("dashboard acceptance markers are missing");
+      }
+      if (pageTop(workQueue) >= pageTop(releaseStatus)) {
+        return failure("accountant work queue must precede platform release status");
+      }
+      assertions.push({ check: "dashboard-work-before-release-evidence", status: "passed" });
+      if (window.innerWidth === 1440) {
+        const queueTop = pageTop(workQueue);
+        const firstActionBottom = pageBottom(firstAction);
+        if (queueTop < 0 || firstActionBottom > viewportHeight) {
+          return failure(`desktop accountant queue and first action must be visible without scrolling (queue top ${Math.round(queueTop)}px, first action bottom ${Math.round(firstActionBottom)}px, viewport ${viewportHeight}px)`);
+        }
+        assertions.push({ check: "dashboard-first-action-within-desktop-viewport", status: "passed" });
+      }
+    }
+
+    if (stateId === "production-readiness" && window.innerWidth === 390) {
+      const prioritySurface = document.querySelector('[data-mobile-priority-surface="true"]');
+      const root = document.querySelector('[data-readiness-progressive-disclosure="true"]');
+      const supportingLedgers = Array.from(document.querySelectorAll('[data-supporting-ledger="collapsed-initially"] > details'));
+      if (!prioritySurface || !root || supportingLedgers.length !== 7) {
+        return failure("production readiness progressive-disclosure markers are incomplete");
+      }
+      if (pageBottom(prioritySurface) > viewportHeight * 2) {
+        return failure("readiness blocker summary and navigation must finish within two mobile viewports");
+      }
+      assertions.push({ check: "readiness-priority-surface-within-two-mobile-viewports", status: "passed" });
+      if (documentHeight > viewportHeight * 8) {
+        return failure("readiness initial page height must not exceed eight mobile viewports");
+      }
+      assertions.push({ check: "readiness-initial-height-within-eight-mobile-viewports", status: "passed" });
+      if (supportingLedgers.some((details) => details.open)) {
+        return failure("supporting readiness ledgers must be collapsed initially");
+      }
+      assertions.push({ check: "readiness-supporting-ledgers-collapsed-initially", status: "passed" });
+    }
+
+    return { documentHeight, viewportHeight, assertions, failure: null };
+  }, state.id);
+
+  if (result.failure) {
+    throw new Error(`${routeName} failed responsive workflow acceptance: ${result.failure}.`);
+  }
+  return passedVisualSmokeResponsiveAcceptanceResult(result);
+}
+
 async function captureRoute({ page, state, routeName, href, expectedText, expectedStateText, outputPath }) {
   const consoleErrors = [];
   const pageErrors = [];
@@ -1390,6 +1484,8 @@ async function captureRoute({ page, state, routeName, href, expectedText, expect
     await checkNoPageOverflow(page, routeName);
     await checkNoTextOverlap(page, routeName);
     const themeContrastResult = await checkThemeContrast(page, routeName);
+    const accessibilityResult = await checkAccessibility(page, routeName);
+    const responsiveAcceptanceResult = await checkResponsiveWorkflowAcceptance(page, state, routeName);
     const semanticContentEvidence = await readSemanticContentEvidence(page);
     await page.screenshot({ path: outputPath, fullPage: true });
 
@@ -1408,6 +1504,8 @@ async function captureRoute({ page, state, routeName, href, expectedText, expect
     return {
       layoutCheckResults: passedVisualSmokeLayoutResults(),
       themeContrastResult,
+      accessibilityResult,
+      responsiveAcceptanceResult,
       observedUrl,
       observedTabState,
       ...semanticContentEvidence,
@@ -1522,6 +1620,16 @@ async function run() {
   const password = requiredArg("password");
   const outputDir = path.resolve(arg("output-dir", "artifacts/visual-smoke"));
   const headless = arg("headed", "false") !== "true";
+  const requestedStateId = arg("state-id", "");
+  const requestedViewportName = arg("viewport-name", "");
+  const selectedStates = requestedStateId
+    ? visualSmokeStateInventory.filter((state) => state.id === requestedStateId)
+    : visualSmokeStateInventory;
+  const selectedViewports = requestedViewportName
+    ? visualSmokeViewports.filter((viewport) => viewport.name === requestedViewportName)
+    : visualSmokeViewports;
+  if (selectedStates.length === 0) throw new Error(`Unknown visual smoke state id: ${requestedStateId}`);
+  if (selectedViewports.length === 0) throw new Error(`Unknown visual smoke viewport name: ${requestedViewportName}`);
   const defaultMfaHandoffPath = process.env.RUNNER_TEMP
     ? path.join(process.env.RUNNER_TEMP, "accounts-visual-auth", "totp-handoff.json")
     : "";
@@ -1532,7 +1640,7 @@ async function run() {
   const captures = [];
 
   try {
-    for (const viewport of visualSmokeViewports) {
+    for (const viewport of selectedViewports) {
       for (const theme of visualSmokeThemes) {
         const context = await browser.newContext({
           viewport: { width: viewport.width, height: viewport.height },
@@ -1544,7 +1652,7 @@ async function run() {
         const anonymousRouteBases = {
           login: "/login",
         };
-        for (const state of visualSmokeStateInventory.filter((item) => item.authMode === "anonymous")) {
+        for (const state of selectedStates.filter((item) => item.authMode === "anonymous")) {
           await captureState({
             page,
             state,
@@ -1560,7 +1668,7 @@ async function run() {
         await login(page, baseUrl, email, password, mfaState);
         const routeBases = await discoverRoutes(page, baseUrl);
 
-        for (const state of visualSmokeStateInventory.filter((item) => item.authMode === "authenticated")) {
+        for (const state of selectedStates.filter((item) => item.authMode === "authenticated")) {
           await captureState({
             page,
             state,
@@ -1637,6 +1745,8 @@ async function captureState({ page, state, routeBases, baseUrl, outputDir, theme
     layoutChecks: visualSmokeLayoutChecks,
     layoutCheckResults: smokeCheckResults.layoutCheckResults,
     themeContrastResult: smokeCheckResults.themeContrastResult,
+    accessibilityResult: smokeCheckResults.accessibilityResult,
+    responsiveAcceptanceResult: smokeCheckResults.responsiveAcceptanceResult,
   }));
 }
 
@@ -1695,6 +1805,8 @@ function relativePageUrl(page) {
 
 export {
   assertRequiredMfaCompleted,
+  checkAccessibility,
+  checkResponsiveWorkflowAcceptance,
   checkThemeContrast,
   companyHrefFromPeriodHref,
   consumeEphemeralMfaHandoff,

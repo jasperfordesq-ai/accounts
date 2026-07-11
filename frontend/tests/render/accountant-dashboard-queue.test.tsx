@@ -50,6 +50,7 @@ describe("AccountantDashboardQueue", () => {
     expect(within(releaseBlockers).getByText("Run qualified-accountant acceptance on the golden corpus.")).toBeInTheDocument();
     expect(within(releaseBlockers).getByRole("link", { name: "Open production readiness" })).toHaveAttribute("href", "/production-readiness");
     const triage = screen.getByRole("region", { name: "Queue triage" });
+    expect(triage.compareDocumentPosition(workflow) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(within(triage).getByText("Highest-risk client")).toBeInTheDocument();
     expect(within(triage).getByText("Atlantic Public Limited Company")).toBeInTheDocument();
     expect(within(triage).getByText("What is wrong")).toBeInTheDocument();

@@ -57,6 +57,7 @@ export function AccountantDashboardQueue({
   const unassignedReviewerCount = rows.filter((row) => !row.company.assignedReviewerName?.trim()).length;
 
   return (
+    <div data-dashboard-accountant-work-queue="true">
     <ReviewPanel
       title="Accountant Work Queue"
       description="Active production work across the firm."
@@ -68,6 +69,7 @@ export function AccountantDashboardQueue({
         </div>
       ) : (
         <div className="space-y-4">
+          <QueueTriage row={rows[0]} />
           <AccountantWorkflowRail activeStage={dashboardActiveStage(rows)} />
           <MetricStrip
             metrics={[
@@ -94,7 +96,6 @@ export function AccountantDashboardQueue({
             ]}
           />
           <ReleaseBlockerSummary blockers={productionReleaseBlockers} />
-          <QueueTriage row={rows[0]} />
           <ReviewerActionQueue rows={rows} missingReviewerCount={unassignedReviewerCount} />
           <DataGrid
             caption="Accountant work queue"
@@ -155,6 +156,7 @@ export function AccountantDashboardQueue({
         </div>
       )}
     </ReviewPanel>
+    </div>
   );
 }
 
@@ -263,6 +265,7 @@ function QueueTriage({ row }: { row: QueueRow }) {
         <p className="mb-1 text-[11px] font-semibold uppercase text-[var(--muted-foreground)]">What must I do next</p>
         <Link
           href={row.nextActionHref}
+          data-dashboard-first-action="true"
           className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-[var(--control-border)] bg-[var(--surface)] px-3 text-sm font-semibold text-[var(--foreground)] shadow-sm transition hover:border-[var(--ring)]"
         >
           {row.nextActionLabel}

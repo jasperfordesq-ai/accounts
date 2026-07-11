@@ -43,6 +43,8 @@ describe("PeriodAuditTrailPanel", () => {
     expect(screen.getByText("Review actions and evidence changes for this period. Every retained event is reachable.")).toBeInTheDocument();
     expect(screen.getByText("size-classification.saved")).toBeInTheDocument();
     expect(screen.getByText("SizeClassification #4")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Old value audit payload" })).toHaveAttribute("tabindex", "0");
+    expect(screen.getByRole("region", { name: "New value audit payload" })).toHaveAttribute("tabindex", "0");
     expect(screen.getByText("reviewer@example.ie")).toBeInTheDocument();
     expect(screen.getByText("filing.approved")).toBeInTheDocument();
     expect(screen.getByText("System")).toBeInTheDocument();

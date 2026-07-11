@@ -11,6 +11,7 @@ import {
   expectedVisualSmokeScreenshotCount,
   MIN_VISUAL_SMOKE_CONTRAST_RATIO,
   passedVisualSmokeContrastResult,
+  passedVisualSmokeAccessibilityResult,
   visualSmokeLayoutChecks,
   visualSmokeReviewChecks,
   visualSmokeRoutes,
@@ -117,6 +118,29 @@ describe("accountant workbench evidence report", () => {
       await assert.rejects(
         () => verifyAccountantWorkbenchEvidence({ visualReportPath }),
         /route dashboard screenshot dashboard-light-desktop\.png theme contrast status must be passed/,
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects visual evidence with an axe-core WCAG violation", async () => {
+    const { verifyAccountantWorkbenchEvidence } = await import("../scripts/verify-accountant-workbench-evidence.mjs");
+    const dir = await mkTempDir();
+    const visualReportPath = path.join(dir, "visual-smoke-evidence-report.json");
+    const report = visualSmokeReport();
+    const screenshot = report.screenshots.find((item) =>
+      item.routeName === "dashboard" && item.theme === "light" && item.viewportName === "desktop");
+    screenshot.accessibilityResult = {
+      ...screenshot.accessibilityResult,
+      violationCount: 1,
+      violations: [{ id: "label", impact: "serious", nodeCount: 1 }],
+    };
+    await writeFile(visualReportPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+    try {
+      await assert.rejects(
+        () => verifyAccountantWorkbenchEvidence({ visualReportPath }),
+        /dashboard-light-desktop\.png accessibility result must retain zero violations/,
       );
     } finally {
       await rm(dir, { recursive: true, force: true });
@@ -270,6 +294,7 @@ function visualSmokeReport() {
             sampledUiComponentCount: 4,
             sampledGradientTextCount: 1,
           }),
+          accessibilityResult: passedVisualSmokeAccessibilityResult({ passCount: 24 }),
         })),
   };
 }

@@ -27,6 +27,15 @@ export const visualSmokeLayoutChecks = [
 ];
 
 export const visualSmokeContrastCheck = "theme-contrast";
+export const visualSmokeAccessibilityCheck = "axe-wcag-2.2-a-aa";
+export const visualSmokeResponsiveAcceptanceCheck = "responsive-workflow-acceptance";
+export const visualSmokeAccessibilityTags = [
+  "wcag2a",
+  "wcag2aa",
+  "wcag21a",
+  "wcag21aa",
+  "wcag22aa",
+];
 
 export const MIN_VISUAL_SMOKE_CONTRAST_RATIO = 3;
 export const MIN_NORMAL_TEXT_CONTRAST_RATIO = 4.5;
@@ -90,10 +99,67 @@ export function passedVisualSmokeContrastResult({
   };
 }
 
+export function passedVisualSmokeAccessibilityResult({
+  engineVersion = "4.12.1",
+  passCount = 1,
+  incompleteCount = 0,
+  incompleteRules = [],
+  inapplicableCount = 0,
+} = {}) {
+  return {
+    check: visualSmokeAccessibilityCheck,
+    status: "passed",
+    engine: "axe-core",
+    engineVersion,
+    standard: "WCAG 2.2 A/AA",
+    tags: visualSmokeAccessibilityTags,
+    violationCount: 0,
+    violations: [],
+    passCount,
+    incompleteCount,
+    incompleteRules,
+    inapplicableCount,
+    evidence: "axe-core found no WCAG 2.2 A/AA violations in the rendered canonical route/state before screenshot capture; incomplete rules remain explicit for human review.",
+  };
+}
+
+export function passedVisualSmokeResponsiveAcceptanceResult({
+  documentHeight = 1,
+  viewportHeight = 1,
+  assertions = [],
+} = {}) {
+  return {
+    check: visualSmokeResponsiveAcceptanceCheck,
+    status: "passed",
+    documentHeight,
+    viewportHeight,
+    documentViewportRatio: Number((documentHeight / viewportHeight).toFixed(3)),
+    assertions,
+    evidence: "Route-specific responsive workflow assertions passed before screenshot capture.",
+  };
+}
+
+export function visualSmokeResponsiveAssertionsFor(stateId, viewportName) {
+  const assertions = [];
+  if (stateId === "dashboard") assertions.push("dashboard-work-before-release-evidence");
+  if (stateId === "dashboard" && viewportName === "desktop") {
+    assertions.push("dashboard-first-action-within-desktop-viewport");
+  }
+  if (stateId === "production-readiness" && viewportName === "mobile") {
+    assertions.push(
+      "readiness-priority-surface-within-two-mobile-viewports",
+      "readiness-initial-height-within-eight-mobile-viewports",
+      "readiness-supporting-ledgers-collapsed-initially",
+    );
+  }
+  return assertions.map((check) => ({ check, status: "passed" }));
+}
+
 export const visualSmokeReviewChecks = [
   "accountant-workflow-hierarchy",
   "table-scanability",
   "theme-contrast",
+  "axe-wcag-2.2-a-aa",
   "responsive-density",
   "loading-error-empty-states",
   "canonical-url-tab-state",
@@ -449,10 +515,10 @@ export const visualSmokeReviewProtocol = {
   reviewerRole: "Design reviewer",
   status: "required-review",
   signOffGate: "visual-qa-screenshot-review",
-  failurePolicy: "Block release if a canonical material route/state combination is missing, duplicated, semantically identical to another intended state, or has console, overflow, overlap, contrast, responsive-density or human-review defects.",
+  failurePolicy: "Block release if a canonical material route/state combination is missing, duplicated, semantically identical to another intended state, or has console, overflow, overlap, WCAG accessibility, contrast, responsive-density or human-review defects.",
   acceptanceCriteria: [
     "Every canonical material route/state is captured in light and dark themes at 390x844 mobile, 768x1024 tablet and 1440x1000 desktop viewports.",
-    "Every capture retains its expected text, exact canonical URL/tab state, console/overflow/overlap/contrast results, dimensions, SHA-256 hash and pending human-review status.",
+    "Every capture retains its expected text, exact canonical URL/tab state, console/overflow/overlap/axe/contrast results, dimensions, SHA-256 hash and pending human-review status.",
     "No canonical route/theme/viewport combination is missing or duplicated, and no two intended states in the same theme/viewport are semantically identical.",
     "A named visual QA reviewer records screenshot-manifest acceptance before real filing release.",
   ],
@@ -467,6 +533,8 @@ export const visualSmokeReviewProtocol = {
     "screenshot PNG dimensions",
     "screenshot nonblank pixel diversity evidence",
     "per-screenshot automated theme contrast smoke evidence",
+    "per-screenshot axe-core WCAG 2.2 A/AA evidence",
+    "per-screenshot responsive workflow acceptance evidence",
     "state audit summary",
     "named visual QA reviewer sign-off",
   ],
@@ -538,6 +606,12 @@ export function expectedVisualSmokeArtifacts(outputDir = "artifacts/visual-smoke
           layoutChecks: visualSmokeLayoutChecks,
           layoutCheckResults: passedVisualSmokeLayoutResults(),
           themeContrastResult: passedVisualSmokeContrastResult(),
+          accessibilityResult: passedVisualSmokeAccessibilityResult(),
+          responsiveAcceptanceResult: passedVisualSmokeResponsiveAcceptanceResult({
+            documentHeight: viewport.height,
+            viewportHeight: viewport.height,
+            assertions: visualSmokeResponsiveAssertionsFor(state.id, viewport.name),
+          }),
         };
       }),
     ),
@@ -575,6 +649,9 @@ export function expectedVisualSmokeManifest(outputDir = "artifacts/visual-smoke"
     themes: visualSmokeThemes,
     viewportDimensions: visualSmokeViewports,
     layoutChecks: visualSmokeLayoutChecks,
+    accessibilityCheck: visualSmokeAccessibilityCheck,
+    accessibilityTags: visualSmokeAccessibilityTags,
+    responsiveAcceptanceCheck: visualSmokeResponsiveAcceptanceCheck,
     reviewChecks: visualSmokeReviewChecks,
     reviewProtocol: visualSmokeReviewProtocol,
     stateInventory: expectedVisualSmokeRouteAudits(),

@@ -251,7 +251,8 @@ $expectedAccountantWorkbenchExpectedTextChecks = @(
     "visual smoke routeKey matches planned routeKey",
     "visual smoke screenshots carry stable routeKey",
     "visual smoke screenshots carry passed layout check results",
-    "visual smoke screenshots carry passed automated theme contrast results"
+    "visual smoke screenshots carry passed automated theme contrast results",
+    "visual smoke screenshots carry passed axe-core WCAG 2.2 A/AA results"
 )
 
 $expectedAccountantWorkbenchEvidenceFiles = @(
@@ -400,6 +401,7 @@ function Assert-AccountantWorkbenchRequiredCoverage {
     $expectedLayoutCheckEvidence = $expectedAccountantWorkbenchLayoutChecks | ForEach-Object { "$($_):passed" }
     Assert-ArrayContainsExactly @((Get-JsonProperty $AccountantWorkbench @("requiredCoverage", "layoutCheckEvidence"))) $expectedLayoutCheckEvidence "accountant-workbench-evidence-report.json requiredCoverage.layoutCheckEvidence" $Failures
     Assert-ArrayContainsExactly @((Get-JsonProperty $AccountantWorkbench @("requiredCoverage", "contrastCheckEvidence"))) @("theme-contrast:passed", "minimum-ratio:3") "accountant-workbench-evidence-report.json requiredCoverage.contrastCheckEvidence" $Failures
+    Assert-ArrayContainsExactly @((Get-JsonProperty $AccountantWorkbench @("requiredCoverage", "accessibilityCheckEvidence"))) @("axe-wcag-2.2-a-aa:passed", "wcag2a:covered", "wcag2aa:covered", "wcag21a:covered", "wcag21aa:covered", "wcag22aa:covered", "violations:0") "accountant-workbench-evidence-report.json requiredCoverage.accessibilityCheckEvidence" $Failures
 }
 
 function Assert-AccountantWorkbenchRouteAcceptance {
@@ -442,6 +444,9 @@ function Assert-AccountantWorkbenchRouteAcceptance {
             }
             if ([int]$readiness.contrastCheckResultCount -ne 6) {
                 Add-Failure $Failures "accountant-workbench-evidence-report.json routeReadiness.$($expected.routeName).contrastCheckResultCount must be 6."
+            }
+            if ([int]$readiness.accessibilityCheckResultCount -ne 6 -or [int]$readiness.accessibilityViolationCount -ne 0) {
+                Add-Failure $Failures "accountant-workbench-evidence-report.json routeReadiness.$($expected.routeName) must retain 6 passed accessibility results with zero violations."
             }
             if ([decimal]$readiness.minimumContrastRatio -lt 3.0) {
                 Add-Failure $Failures "accountant-workbench-evidence-report.json routeReadiness.$($expected.routeName).minimumContrastRatio must be at least 3."
@@ -510,6 +515,9 @@ function Assert-VisualSmokeDimensionEvidence {
         "visible-text-overlap"
     )
     $expectedContrastCheck = "theme-contrast"
+    $expectedAccessibilityCheck = "axe-wcag-2.2-a-aa"
+    $expectedAccessibilityTags = @("wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa")
+    $expectedResponsiveAcceptanceCheck = "responsive-workflow-acceptance"
     $minimumContrastRatio = [decimal]3.0
     $uiComponentOptionalStateIds = @(
         "state-loading",
@@ -559,6 +567,20 @@ function Assert-VisualSmokeDimensionEvidence {
     }
     if ([decimal](Get-JsonProperty $VisualSmoke @("minimumContrastRatio")) -lt $minimumContrastRatio) {
         Add-Failure $Failures "visual-smoke-evidence-report.json minimumContrastRatio must be at least 3."
+    }
+    if ([string](Get-JsonProperty $VisualSmoke @("accessibilityCheck")) -ne $expectedAccessibilityCheck -or
+        [string](Get-JsonProperty $VisualSmoke @("accessibilityChecksPassed")) -ne "True") {
+        Add-Failure $Failures "visual-smoke-evidence-report.json accessibility check must be axe-wcag-2.2-a-aa and passed."
+    }
+    Assert-ArrayContainsExactly @((Get-JsonProperty $VisualSmoke @("accessibilityTags"))) $expectedAccessibilityTags "visual-smoke-evidence-report.json accessibilityTags" $Failures
+    if ([int](Get-JsonProperty $VisualSmoke @("accessibilityCheckResultCount")) -ne 192 -or
+        [int](Get-JsonProperty $VisualSmoke @("accessibilityViolationCount")) -ne 0) {
+        Add-Failure $Failures "visual-smoke-evidence-report.json must retain 192 passed accessibility results with zero violations."
+    }
+    if ([string](Get-JsonProperty $VisualSmoke @("responsiveAcceptanceCheck")) -ne $expectedResponsiveAcceptanceCheck -or
+        [string](Get-JsonProperty $VisualSmoke @("responsiveAcceptanceChecksPassed")) -ne "True" -or
+        [int](Get-JsonProperty $VisualSmoke @("responsiveAcceptanceCheckResultCount")) -ne 192) {
+        Add-Failure $Failures "visual-smoke-evidence-report.json must retain 192 passed responsive workflow acceptance results."
     }
     if ([int](Get-JsonProperty $VisualSmoke @("totalBytes")) -le 0) {
         Add-Failure $Failures "visual-smoke-evidence-report.json totalBytes must prove retained screenshot bytes."
@@ -677,6 +699,8 @@ function Assert-VisualSmokeDimensionEvidence {
         $pngIdatByteSize = Get-JsonProperty $screenshot @("pngIdatByteSize")
         $layoutCheckResults = @(Get-JsonProperty $screenshot @("layoutCheckResults"))
         $themeContrastResult = Get-JsonProperty $screenshot @("themeContrastResult")
+        $accessibilityResult = Get-JsonProperty $screenshot @("accessibilityResult")
+        $responsiveAcceptanceResult = Get-JsonProperty $screenshot @("responsiveAcceptanceResult")
         $stateId = [string](Get-JsonProperty $screenshot @("stateId"))
         $routeName = [string](Get-JsonProperty $screenshot @("routeName"))
         $materialRoute = Get-JsonProperty $screenshot @("materialRoute")
@@ -824,6 +848,53 @@ function Assert-VisualSmokeDimensionEvidence {
             }
         }
 
+        if ($null -eq $accessibilityResult) {
+            Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.accessibilityResult must be present."
+        } else {
+            if ([string](Get-JsonProperty $accessibilityResult @("check")) -ne $expectedAccessibilityCheck -or
+                [string](Get-JsonProperty $accessibilityResult @("status")) -ne "passed" -or
+                [string](Get-JsonProperty $accessibilityResult @("engine")) -ne "axe-core") {
+                Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.accessibilityResult must be a passed axe-core WCAG check."
+            }
+            if ([string](Get-JsonProperty $accessibilityResult @("engineVersion")) -notmatch '^4\.12\.[0-9]+$' -or
+                [string](Get-JsonProperty $accessibilityResult @("standard")) -ne "WCAG 2.2 A/AA") {
+                Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.accessibilityResult must identify axe-core 4.12 and WCAG 2.2 A/AA."
+            }
+            Assert-ArrayContainsExactly @((Get-JsonProperty $accessibilityResult @("tags"))) $expectedAccessibilityTags "visual-smoke-evidence-report.json screenshots.accessibilityResult.tags" $Failures
+            $accessibilityViolations = @((Get-JsonProperty $accessibilityResult @("violations")) | Where-Object { $null -ne $_ })
+            if ([int](Get-JsonProperty $accessibilityResult @("violationCount")) -ne 0 -or
+                $accessibilityViolations.Count -ne 0 -or
+                [int](Get-JsonProperty $accessibilityResult @("passCount")) -le 0) {
+                Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.accessibilityResult must retain zero violations and positive passes."
+            }
+        }
+
+        if ($null -eq $responsiveAcceptanceResult) {
+            Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.responsiveAcceptanceResult must be present."
+        } else {
+            if ([string](Get-JsonProperty $responsiveAcceptanceResult @("check")) -ne $expectedResponsiveAcceptanceCheck -or
+                [string](Get-JsonProperty $responsiveAcceptanceResult @("status")) -ne "passed" -or
+                [int](Get-JsonProperty $responsiveAcceptanceResult @("viewportHeight")) -ne [int]$expected.height -or
+                [int](Get-JsonProperty $responsiveAcceptanceResult @("documentHeight")) -le 0) {
+                Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.responsiveAcceptanceResult must be passed with captured dimensions."
+            }
+            $responsiveAssertions = @((Get-JsonProperty $responsiveAcceptanceResult @("assertions")) | Where-Object { [string](Get-JsonProperty $_ @("status")) -eq "passed" } | ForEach-Object { [string](Get-JsonProperty $_ @("check")) })
+            if ($stateId -eq "dashboard") {
+                Assert-ArrayContains $responsiveAssertions "dashboard-work-before-release-evidence" "visual-smoke-evidence-report.json dashboard responsive assertions" $Failures
+            }
+            if ($stateId -eq "dashboard" -and $viewportName -eq "desktop") {
+                Assert-ArrayContains $responsiveAssertions "dashboard-first-action-within-desktop-viewport" "visual-smoke-evidence-report.json dashboard desktop responsive assertions" $Failures
+            }
+            if ($stateId -eq "production-readiness" -and $viewportName -eq "mobile") {
+                foreach ($requiredAssertion in @("readiness-priority-surface-within-two-mobile-viewports", "readiness-initial-height-within-eight-mobile-viewports", "readiness-supporting-ledgers-collapsed-initially")) {
+                    Assert-ArrayContains $responsiveAssertions $requiredAssertion "visual-smoke-evidence-report.json production readiness mobile responsive assertions" $Failures
+                }
+                if ([decimal](Get-JsonProperty $responsiveAcceptanceResult @("documentViewportRatio")) -gt 8) {
+                    Add-Failure $Failures "visual-smoke-evidence-report.json production readiness mobile documentViewportRatio must not exceed 8."
+                }
+            }
+        }
+
         $index += 1
     }
 }
@@ -859,6 +930,10 @@ function Assert-VisualSmokeManifestEvidence {
     }
 
     Assert-ArrayContainsExactly @((Get-JsonProperty $VisualManifest @("layoutChecks"))) $expectedAccountantWorkbenchLayoutChecks "visual-smoke-manifest.json layoutChecks" $Failures
+    if ([string](Get-JsonProperty $VisualManifest @("accessibilityCheck")) -ne "axe-wcag-2.2-a-aa" -or
+        [string](Get-JsonProperty $VisualManifest @("responsiveAcceptanceCheck")) -ne "responsive-workflow-acceptance") {
+        Add-Failure $Failures "visual-smoke-manifest.json must declare the canonical accessibility and responsive acceptance checks."
+    }
     Assert-ArrayContainsExactly @((Get-JsonProperty $VisualManifest @("reviewChecks"))) $expectedAccountantWorkbenchReviewChecks "visual-smoke-manifest.json reviewChecks" $Failures
     Assert-ArrayContainsExactly @((Get-JsonProperty $VisualManifest @("themes"))) $expectedAccountantWorkbenchThemes "visual-smoke-manifest.json themes" $Failures
     Assert-ArrayContainsExactly @((Get-JsonProperty $VisualManifest @("requiredMaterialRoutes"))) $expectedVisualMaterialRoutes "visual-smoke-manifest.json requiredMaterialRoutes" $Failures
