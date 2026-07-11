@@ -6,7 +6,11 @@ import {
   collectRepoInputs,
   evaluateBuildInputs,
 } from "../../scripts/verify-build-inputs.mjs";
-import { evaluateSecurityAudit } from "../../scripts/verify-security-audit-report.mjs";
+import {
+  evaluateSecurityAudit,
+  validateSecurityAuditIdentity,
+  validateSpdxSbom,
+} from "../../scripts/verify-security-audit-report.mjs";
 import { evaluateContainerHardening } from "../../scripts/container-hardening-policy.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -107,6 +111,56 @@ test("zero-vulnerability evidence passes the security policy", () => {
     }),
     [],
   );
+});
+
+test("scheduled audit identity is bound to the exact main workflow commit", () => {
+  const sha = "a".repeat(40);
+  const identity = {
+    candidateCommitSha: sha,
+    workflowCommitSha: sha,
+    runId: "12345",
+    runAttempt: "1",
+    runUrl: "https://github.com/example/accounts/actions/runs/12345",
+    repository: "example/accounts",
+    eventName: "workflow_dispatch",
+    ref: "refs/heads/main",
+    workflowRef: "example/accounts/.github/workflows/scheduled-security-audit.yml@refs/heads/main",
+  };
+  assert.deepEqual(validateSecurityAuditIdentity(identity), []);
+  assert.ok(validateSecurityAuditIdentity({ ...identity, workflowCommitSha: "b".repeat(40) })
+    .some((failure) => failure.includes("must equal")));
+  assert.ok(validateSecurityAuditIdentity({ ...identity, ref: "refs/heads/feature" })
+    .some((failure) => failure.includes("refs/heads/main")));
+});
+
+test("NuGet high vulnerabilities and malformed SPDX evidence fail closed", () => {
+  const failures = evaluateSecurityAudit({
+    npmAudit: { metadata: { vulnerabilities: { high: 0, critical: 0 } } },
+    nugetAudit: {
+      version: 1,
+      parameters: "--vulnerable --include-transitive",
+      projects: [{
+        path: "/repo/backend/Accounts.Api/Accounts.Api.csproj",
+        frameworks: [{
+          framework: "net10.0",
+          transitivePackages: [{
+            id: "Fixture.Package",
+            vulnerabilities: [{ severity: "High", advisoryurl: "https://example.invalid/advisory" }],
+          }],
+        }],
+      }],
+    },
+    trivyReports: {},
+  });
+  assert.ok(failures.some((failure) => failure.includes("NuGet contains blocked vulnerabilities: HIGH=1")));
+  assert.ok(validateSpdxSbom("fixture-sbom.json", { spdxVersion: "SPDX-2.3" })
+    .some((failure) => failure.includes("SPDX document root")));
+  assert.deepEqual(validateSpdxSbom("fixture-sbom.json", {
+    spdxVersion: "SPDX-2.3",
+    SPDXID: "SPDXRef-DOCUMENT",
+    name: "fixture",
+    packages: [{ SPDXID: "SPDXRef-Package" }],
+  }), []);
 });
 
 test("malformed or truncated Trivy evidence fails closed", () => {

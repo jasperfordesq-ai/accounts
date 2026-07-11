@@ -108,6 +108,9 @@ export function evaluateBuildInputs(inputs) {
   for (const required of [
     "schedule:",
     "workflow_dispatch:",
+    "candidate_commit_sha:",
+    "Candidate SHA must equal the workflow commit SHA.",
+    "ref: ${{ inputs.candidate_commit_sha || github.sha }}",
     "npm audit",
     "dotnet restore backend/Accounts.slnx --locked-mode",
     "aquasecurity/trivy-action@",
@@ -115,6 +118,13 @@ export function evaluateBuildInputs(inputs) {
     "actions/upload-artifact@",
     "retention-days:",
     "node scripts/verify-security-audit-report.mjs",
+    "--npm-exit-code",
+    "--nuget",
+    "--candidate-sha",
+    "--workflow-sha",
+    "--workflow-ref",
+    "backend-sbom.spdx.json",
+    "frontend-sbom.spdx.json",
   ]) {
     if (!scheduledWorkflow.includes(required)) {
       failures.push(`Scheduled security audit is missing: ${required}`);

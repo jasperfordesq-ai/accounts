@@ -5,6 +5,8 @@ import { pathToFileURL } from "node:url";
 
 const blockedSeverities = new Set(["high", "critical"]);
 const knownSeverities = new Set(["unknown", "low", "medium", "high", "critical"]);
+const shaPattern = /^[0-9a-f]{40}$/;
+const positiveIntegerPattern = /^[1-9][0-9]*$/;
 
 function trivyVulnerabilities(name, report, failures) {
   if (!report || typeof report !== "object" || Array.isArray(report)) {
@@ -66,7 +68,96 @@ function trivyVulnerabilities(name, report, failures) {
   return vulnerabilities;
 }
 
-export function evaluateSecurityAudit({ npmAudit, trivyReports }) {
+function collectNugetVulnerabilities(value, context, failures, findings) {
+  if (!value || typeof value !== "object") return;
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => collectNugetVulnerabilities(item, `${context}[${index}]`, failures, findings));
+    return;
+  }
+  for (const [key, child] of Object.entries(value)) {
+    if (key.toLowerCase() !== "vulnerabilities") {
+      collectNugetVulnerabilities(child, `${context}.${key}`, failures, findings);
+      continue;
+    }
+    if (!Array.isArray(child)) {
+      failures.push(`${context}.${key} must be an array when present.`);
+      continue;
+    }
+    child.forEach((finding, index) => {
+      const findingContext = `${context}.${key}[${index}]`;
+      if (!finding || typeof finding !== "object" || Array.isArray(finding)) {
+        failures.push(`${findingContext} must be an object.`);
+        return;
+      }
+      const severity = typeof finding.severity === "string" ? finding.severity.trim().toLowerCase() : "";
+      if (!knownSeverities.has(severity)) {
+        failures.push(`${findingContext}.severity must be a recognized NuGet severity.`);
+        return;
+      }
+      findings.push({ ...finding, severity });
+    });
+  }
+}
+
+function nugetVulnerabilities(report, failures) {
+  if (!report || typeof report !== "object" || Array.isArray(report)) {
+    failures.push("NuGet vulnerability report root must be an object.");
+    return [];
+  }
+  if (report.version !== 1) failures.push("NuGet vulnerability report must use version 1.");
+  if (typeof report.parameters !== "string" || !report.parameters.includes("--vulnerable")) {
+    failures.push("NuGet vulnerability report must record the --vulnerable parameter.");
+  }
+  if (!Array.isArray(report.projects) || report.projects.length === 0) {
+    failures.push("NuGet vulnerability report must contain a non-empty projects array.");
+    return [];
+  }
+  for (const [index, project] of report.projects.entries()) {
+    if (!project || typeof project !== "object" || Array.isArray(project)
+      || typeof project.path !== "string" || project.path.trim() === "") {
+      failures.push(`NuGet projects[${index}] must identify a non-empty project path.`);
+    }
+  }
+  const findings = [];
+  collectNugetVulnerabilities(report.projects, "NuGet.projects", failures, findings);
+  return findings;
+}
+
+export function validateSpdxSbom(name, report) {
+  const failures = [];
+  if (!report || typeof report !== "object" || Array.isArray(report)) {
+    return [`${name} root must be an SPDX JSON object.`];
+  }
+  if (typeof report.spdxVersion !== "string" || !report.spdxVersion.startsWith("SPDX-")) {
+    failures.push(`${name} must identify an SPDX version.`);
+  }
+  if (report.SPDXID !== "SPDXRef-DOCUMENT") failures.push(`${name} must identify the SPDX document root.`);
+  if (typeof report.name !== "string" || report.name.trim() === "") failures.push(`${name} must have a non-empty name.`);
+  if (!Array.isArray(report.packages) || report.packages.length === 0) {
+    failures.push(`${name} must contain a non-empty packages array.`);
+  }
+  return failures;
+}
+
+export function validateSecurityAuditIdentity(identity) {
+  const failures = [];
+  if (!shaPattern.test(identity.candidateCommitSha ?? "")) failures.push("candidate commit SHA must be 40 lowercase hexadecimal characters.");
+  if (!shaPattern.test(identity.workflowCommitSha ?? "")) failures.push("workflow commit SHA must be 40 lowercase hexadecimal characters.");
+  if (identity.candidateCommitSha !== identity.workflowCommitSha) failures.push("candidate commit SHA must equal the workflow commit SHA.");
+  if (!positiveIntegerPattern.test(String(identity.runId ?? ""))) failures.push("run ID must be a positive integer.");
+  if (!positiveIntegerPattern.test(String(identity.runAttempt ?? ""))) failures.push("run attempt must be a positive integer.");
+  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(identity.repository ?? "")) failures.push("repository must be owner/name.");
+  const expectedRunUrl = `https://github.com/${identity.repository}/actions/runs/${identity.runId}`;
+  if (identity.runUrl !== expectedRunUrl) failures.push("run URL must match the repository and run ID.");
+  if (!new Set(["schedule", "workflow_dispatch"]).has(identity.eventName)) failures.push("event name must be schedule or workflow_dispatch.");
+  if (identity.ref !== "refs/heads/main") failures.push("security audit must run from refs/heads/main.");
+  if (identity.workflowRef !== `${identity.repository}/.github/workflows/scheduled-security-audit.yml@refs/heads/main`) {
+    failures.push("workflow ref must identify scheduled-security-audit.yml on main.");
+  }
+  return failures;
+}
+
+export function evaluateSecurityAudit({ npmAudit, nugetAudit, trivyReports }) {
   const failures = [];
   const npmCounts = npmAudit?.metadata?.vulnerabilities;
   if (!npmCounts || typeof npmCounts !== "object") {
@@ -79,6 +170,20 @@ export function evaluateSecurityAudit({ npmAudit, trivyReports }) {
       } else if (count > 0) {
         failures.push(`npm audit contains ${count} ${severity.toUpperCase()} vulnerability record(s).`);
       }
+    }
+  }
+
+  if (nugetAudit !== undefined) {
+    const blocked = nugetVulnerabilities(nugetAudit, failures)
+      .filter((finding) => blockedSeverities.has(finding.severity));
+    if (blocked.length > 0) {
+      const bySeverity = blocked.reduce((counts, finding) => {
+        const severity = finding.severity.toUpperCase();
+        counts[severity] = (counts[severity] ?? 0) + 1;
+        return counts;
+      }, {});
+      failures.push(`NuGet contains blocked vulnerabilities: ${Object.entries(bySeverity)
+        .map(([severity, count]) => `${severity}=${count}`).join(", ")}.`);
     }
   }
 
@@ -104,16 +209,29 @@ export function evaluateSecurityAudit({ npmAudit, trivyReports }) {
 }
 
 function parseArgs(argv) {
-  const result = { trivy: [] };
+  const result = { trivy: [], sbom: [] };
   for (let index = 0; index < argv.length; index += 1) {
     const value = argv[index];
     if (value === "--npm") result.npm = argv[++index];
+    else if (value === "--npm-exit-code") result.npmExitCode = argv[++index];
+    else if (value === "--nuget") result.nuget = argv[++index];
     else if (value === "--trivy") result.trivy.push(argv[++index]);
+    else if (value === "--sbom") result.sbom.push(argv[++index]);
     else if (value === "--report") result.report = argv[++index];
+    else if (value === "--candidate-sha") result.candidateCommitSha = argv[++index];
+    else if (value === "--workflow-sha") result.workflowCommitSha = argv[++index];
+    else if (value === "--run-id") result.runId = argv[++index];
+    else if (value === "--run-attempt") result.runAttempt = argv[++index];
+    else if (value === "--run-url") result.runUrl = argv[++index];
+    else if (value === "--repository") result.repository = argv[++index];
+    else if (value === "--event-name") result.eventName = argv[++index];
+    else if (value === "--ref") result.ref = argv[++index];
+    else if (value === "--workflow-ref") result.workflowRef = argv[++index];
     else throw new Error(`Unknown argument: ${value}`);
   }
-  if (!result.npm || result.trivy.length === 0 || !result.report) {
-    throw new Error("Usage: --npm <npm-audit.json> --trivy <trivy.json> [--trivy ...] --report <report.json>");
+  const required = ["npm", "npmExitCode", "nuget", "report", "candidateCommitSha", "workflowCommitSha", "runId", "runAttempt", "runUrl", "repository", "eventName", "ref", "workflowRef"];
+  if (required.some((key) => !result[key]) || result.trivy.length !== 2 || result.sbom.length !== 2) {
+    throw new Error("Security audit verification requires npm, npm exit code, NuGet, two Trivy reports, two SPDX SBOMs, exact workflow identity and a report path.");
   }
   return result;
 }
@@ -131,28 +249,55 @@ function readEvidence(filePath) {
 function main() {
   const args = parseArgs(process.argv.slice(2));
   const npm = readEvidence(args.npm);
+  const npmExitCode = fs.readFileSync(args.npmExitCode, "utf8").trim();
+  const npmExitCodeEvidence = readEvidence(args.npmExitCode);
+  const nuget = readEvidence(args.nuget);
   const trivy = Object.fromEntries(args.trivy.map((filePath) => {
     const evidence = readEvidence(filePath);
     return [evidence.path, evidence];
   }));
-  const failures = evaluateSecurityAudit({
+  const sbom = Object.fromEntries(args.sbom.map((filePath) => {
+    const evidence = readEvidence(filePath);
+    return [evidence.path, evidence];
+  }));
+  const identity = {
+    candidateCommitSha: args.candidateCommitSha,
+    workflowCommitSha: args.workflowCommitSha,
+    runId: args.runId,
+    runAttempt: args.runAttempt,
+    runUrl: args.runUrl,
+    repository: args.repository,
+    eventName: args.eventName,
+    ref: args.ref,
+    workflowRef: args.workflowRef,
+  };
+  const failures = validateSecurityAuditIdentity(identity);
+  if (npmExitCode !== "0") failures.push("npm audit exit code must be 0.");
+  failures.push(...evaluateSecurityAudit({
     npmAudit: npm.json,
+    nugetAudit: nuget.json,
     trivyReports: Object.fromEntries(
       Object.entries(trivy).map(([name, evidence]) => [name, evidence.json]),
     ),
-  });
+  }));
+  for (const [name, evidence] of Object.entries(sbom)) {
+    failures.push(...validateSpdxSbom(name, evidence.json));
+  }
+  const manifestEntry = (evidence) => ({ path: evidence.path, sha256: evidence.sha256, byteSize: evidence.byteSize });
   const report = {
     generatedAtUtc: new Date().toISOString(),
     status: failures.length === 0 ? "passed" : "failed",
+    identity,
     policy: { blockedSeverities: [...blockedSeverities].map((item) => item.toUpperCase()) },
     inputs: {
-      npm: { path: npm.path, sha256: npm.sha256, byteSize: npm.byteSize },
+      npm: manifestEntry(npm),
+      npmExitCode: manifestEntry(npmExitCodeEvidence),
+      nuget: manifestEntry(nuget),
       trivy: Object.fromEntries(
-        Object.entries(trivy).map(([name, evidence]) => [name, {
-          path: evidence.path,
-          sha256: evidence.sha256,
-          byteSize: evidence.byteSize,
-        }]),
+        Object.entries(trivy).map(([name, evidence]) => [name, manifestEntry(evidence)]),
+      ),
+      sbom: Object.fromEntries(
+        Object.entries(sbom).map(([name, evidence]) => [name, manifestEntry(evidence)]),
       ),
     },
     failures,

@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: "31 4 * * 1"
   workflow_dispatch:
+    inputs:
+      candidate_commit_sha:
+        description: Exact protected-main commit to audit
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -14,11 +19,24 @@ jobs:
     runs-on: ubuntu-latest
     env:
       EVIDENCE_DIR: /tmp/scheduled-security-audit-${{ github.run_id }}
+      CANDIDATE_SHA: ${{ inputs.candidate_commit_sha || github.sha }}
+      RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
       - name: Check out repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           persist-credentials: false
+          ref: ${{ inputs.candidate_commit_sha || github.sha }}
+
+      - name: Bind audit to the exact protected-main workflow commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "Candidate SHA must be 40 lowercase hexadecimal characters." >&2; exit 1; }
+          [[ "$GITHUB_SHA" == "$CANDIDATE_SHA" ]] || { echo "Candidate SHA must equal the workflow commit SHA." >&2; exit 1; }
+          [[ "$(git rev-parse HEAD)" == "$CANDIDATE_SHA" ]] || { echo "Checked-out commit does not match the candidate SHA." >&2; exit 1; }
+          [[ "$GITHUB_REF" == "refs/heads/main" ]] || { echo "Security audit must run from protected main." >&2; exit 1; }
+          [[ "$GITHUB_EVENT_NAME" == "schedule" || "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]] || { echo "Unsupported security-audit event." >&2; exit 1; }
 
       - name: Prepare evidence directory
         shell: bash
@@ -126,15 +144,28 @@ jobs:
         run: >-
           node scripts/verify-security-audit-report.mjs
           --npm "$EVIDENCE_DIR/npm-audit.json"
+          --npm-exit-code "$EVIDENCE_DIR/npm-audit-exit-code.txt"
+          --nuget "$EVIDENCE_DIR/nuget-vulnerabilities.json"
           --trivy "$EVIDENCE_DIR/backend-trivy.json"
           --trivy "$EVIDENCE_DIR/frontend-trivy.json"
+          --sbom "$EVIDENCE_DIR/backend-sbom.spdx.json"
+          --sbom "$EVIDENCE_DIR/frontend-sbom.spdx.json"
+          --candidate-sha "$CANDIDATE_SHA"
+          --workflow-sha "$GITHUB_SHA"
+          --run-id "$GITHUB_RUN_ID"
+          --run-attempt "$GITHUB_RUN_ATTEMPT"
+          --run-url "$RUN_URL"
+          --repository "$GITHUB_REPOSITORY"
+          --event-name "$GITHUB_EVENT_NAME"
+          --ref "$GITHUB_REF"
+          --workflow-ref "$GITHUB_WORKFLOW_REF"
           --report "$EVIDENCE_DIR/scheduled-security-audit-report.json"
 
       - name: Retain scheduled security evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: scheduled-security-audit-${{ github.run_id }}
+          name: scheduled-security-audit-${{ env.CANDIDATE_SHA }}-${{ github.run_id }}
           path: ${{ env.EVIDENCE_DIR }}
           if-no-files-found: error
           retention-days: 90
