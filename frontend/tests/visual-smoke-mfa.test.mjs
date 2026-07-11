@@ -10,6 +10,7 @@ import {
   nextFreshTotpCode,
   safeLoginFailureDiagnostic,
   totpCodeForCounter,
+  visualFixtureIdempotencyKey,
 } from "../scripts/visual-smoke.mjs";
 
 const RFC_SECRET = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ";
@@ -176,4 +177,21 @@ test("smoke writes the disposable MFA handoff only after authenticated checks an
   assert.ok(writeIndex > logoutCheckIndex, "MFA handoff must not exist until every smoke assertion has passed");
   assert.match(source, /mfaVerified[^\r\n]*true/);
   assert.match(source, /mfaMethod[^\r\n]*totp/);
+});
+
+test("visual smoke company setup retains idempotent mutations and the evidence-backed ARD contract", async () => {
+  const source = await readFile(new URL("../scripts/visual-smoke.mjs", import.meta.url), "utf8");
+  const companyKey = visualFixtureIdempotencyKey("company", "11111111-1111-4111-8111-111111111111");
+  const periodKey = visualFixtureIdempotencyKey("period", "22222222-2222-4222-8222-222222222222");
+  assert.match(companyKey, /^[A-Za-z0-9._:-]{8,128}$/);
+  assert.match(periodKey, /^[A-Za-z0-9._:-]{8,128}$/);
+  assert.notEqual(companyKey, periodKey);
+  assert.ok(source.includes('headers.set("Idempotency-Key", requestIdempotencyKey)'));
+  assert.ok(source.includes('idempotencyKey: visualFixtureIdempotencyKey("company")'));
+  assert.ok(source.includes('idempotencyKey: visualFixtureIdempotencyKey("period")'));
+  assert.match(source, /annualReturnDate: "2025-09-30"/);
+  assert.match(source, /annualReturnDateEffectiveFrom: "2025-09-30"/);
+  assert.match(source, /annualReturnDateSource: "CroRecord"/);
+  assert.match(source, /annualReturnDateEvidenceReference: "CI-VISUAL-SMOKE-CRO-ARD-FIXTURE"/);
+  assert.doesNotMatch(source, /ardMonth:/);
 });

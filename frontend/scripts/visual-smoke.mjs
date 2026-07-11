@@ -1,4 +1,4 @@
-import { createHash, createHmac } from "node:crypto";
+import { createHash, createHmac, randomUUID } from "node:crypto";
 import { lstat, mkdir, readFile, realpath, unlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -354,8 +354,8 @@ function periodPathFromHref(href, baseUrl) {
   return new URL(href, `${baseUrl}/`).pathname;
 }
 
-async function apiJson(page, pathName, { method = "GET", body } = {}) {
-  return page.evaluate(async ({ requestPath, requestMethod, requestBody }) => {
+async function apiJson(page, pathName, { method = "GET", body, idempotencyKey } = {}) {
+  return page.evaluate(async ({ requestPath, requestMethod, requestBody, requestIdempotencyKey }) => {
     const headers = new Headers({ "Content-Type": "application/json" });
     const unsafeMethod = !["GET", "HEAD", "OPTIONS", "TRACE"].includes(requestMethod.toUpperCase());
 
@@ -366,6 +366,9 @@ async function apiJson(page, pathName, { method = "GET", body } = {}) {
         .find((part) => part.startsWith("accounts_csrf="));
       if (!csrfCookie) throw new Error("Missing accounts_csrf cookie for visual smoke fixture setup.");
       headers.set("X-CSRF-Token", decodeURIComponent(csrfCookie.slice("accounts_csrf=".length)));
+    }
+    if (requestIdempotencyKey) {
+      headers.set("Idempotency-Key", requestIdempotencyKey);
     }
 
     const response = await fetch(requestPath, {
@@ -381,12 +384,26 @@ async function apiJson(page, pathName, { method = "GET", body } = {}) {
     }
 
     return text ? JSON.parse(text) : null;
-  }, { requestPath: pathName, requestMethod: method, requestBody: body });
+  }, {
+    requestPath: pathName,
+    requestMethod: method,
+    requestBody: body,
+    requestIdempotencyKey: idempotencyKey,
+  });
+}
+
+function visualFixtureIdempotencyKey(operation, nonce = randomUUID()) {
+  const key = `visual-${operation}-${nonce}`;
+  if (!/^[A-Za-z0-9._:-]{8,128}$/.test(key)) {
+    throw new Error("Visual smoke fixture idempotency keys must match the API header contract.");
+  }
+  return key;
 }
 
 async function createSmokeCompany(page) {
   const company = await apiJson(page, "/api/companies", {
     method: "POST",
+    idempotencyKey: visualFixtureIdempotencyKey("company"),
     body: {
       legalName: "CI Visual Accounts Limited",
       tradingName: "Visual Smoke",
@@ -395,7 +412,10 @@ async function createSmokeCompany(page) {
       companyType: "Private",
       incorporationDate: "2024-01-01",
       financialYearStartMonth: 1,
-      ardMonth: 9,
+      annualReturnDate: "2025-09-30",
+      annualReturnDateEffectiveFrom: "2025-09-30",
+      annualReturnDateSource: "CroRecord",
+      annualReturnDateEvidenceReference: "CI-VISUAL-SMOKE-CRO-ARD-FIXTURE",
       registeredOfficeAddress1: "1 Visual Street",
       registeredOfficeCity: "Dublin",
       registeredOfficeCounty: "Dublin",
@@ -431,6 +451,7 @@ async function createSmokeCompany(page) {
 
   const period = await apiJson(page, `/api/companies/${company.id}/periods`, {
     method: "POST",
+    idempotencyKey: visualFixtureIdempotencyKey("period"),
     body: {
       periodStart: "2024-01-01",
       periodEnd: "2024-12-31",
@@ -1371,6 +1392,7 @@ export {
   safeLoginFailureDiagnostic,
   unexpectedVisualSmokeBrowserErrors,
   totpCodeForCounter,
+  visualFixtureIdempotencyKey,
 };
 
 const invokedAsScript = process.argv[1]
