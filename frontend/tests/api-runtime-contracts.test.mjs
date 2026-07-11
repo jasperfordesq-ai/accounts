@@ -16,6 +16,7 @@ import {
   mfaChallengeSchema,
   notesDisclosureSchema,
   parseApiContract,
+  payrollSummarySchema,
   profitAndLossSchema,
   sofaSchema,
   transactionPageSchema,
@@ -30,6 +31,7 @@ import {
   getFilingWorkflowStatus,
   getCorporationTaxFilingSupport,
   getNotes,
+  getPayroll,
   getPeriod,
   getProfitAndLoss,
   getSofa,
@@ -142,6 +144,41 @@ test("year-end and adjustment aggregates reject internally inconsistent response
     () => parse(adjustmentSummarySchema, { ...summary, approved: 1 }),
     /do not reconcile/,
   );
+});
+
+test("optional payroll evidence distinguishes an empty working paper from transport and contract failures", async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => new Response("null", {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+    assert.equal(await getPayroll(3, 7), null);
+
+    globalThis.fetch = async () => new Response(JSON.stringify({
+      grossWages: -1,
+      directorsFees: 0,
+      employerPrsi: 0,
+      pensionContributions: 0,
+      staffCount: 0,
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+    await assert.rejects(
+      () => getPayroll(3, 7),
+      (error) => error instanceof ApiContractError
+        && error.contract === "payroll summary"
+        && error.issuePath === "grossWages",
+    );
+
+    globalThis.fetch = async () => new Response("", { status: 404 });
+    await assert.rejects(() => getPayroll(99, 7), /requested resource was not found/i);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.equal(parse(payrollSummarySchema.nullable(), null), null);
 });
 
 test("financial statement contracts reconcile every displayed subtotal", () => {

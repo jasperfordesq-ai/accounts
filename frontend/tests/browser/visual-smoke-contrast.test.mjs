@@ -19,7 +19,7 @@ assert.ok(darkVariantDirective, "globals.css should define a class-driven dark v
 const compiledThemeProbeStyles = (await postcss([tailwindcss()]).process(`
   @import "tailwindcss";
   ${darkVariantDirective}
-  @source inline("bg-white text-gray-900 dark:bg-neutral-900 dark:text-gray-100 border border-transparent hover:border-[var(--control-border)] hover:bg-gray-50/50");
+  @source inline("bg-white text-gray-900 text-[var(--foreground)] dark:bg-neutral-900 dark:text-gray-100 border border-transparent border-[var(--control-border)] border-[var(--accent)] bg-[var(--surface-strong)] bg-[var(--accent)] text-[var(--accent-foreground)] shadow-sm hover:border-[var(--control-border)] hover:border-[var(--ring)] hover:bg-gray-50/50 hover:bg-[var(--surface-subtle)]");
 `, { from: fileURLToPath(new URL("../../src/app/theme-probe.css", import.meta.url)) })).css;
 
 async function withPage(markup, action) {
@@ -87,6 +87,82 @@ test("hovered accordion headers retain a contrast-safe interaction boundary", as
   assert.equal(result.status, "passed");
   assert.equal(result.sampledUiComponentCount, 1);
   assert.ok(result.minimumUiComponentContrastRatio >= 3);
+});
+
+test("shared retry actions retain a contrast-safe boundary in both themes", async () => {
+  for (const theme of ["", "dark"]) {
+    const result = await withPage(`<!doctype html>
+      <html class="${theme}">
+        <head><style>${compiledThemeProbeStyles}\n${applicationOverrides}</style></head>
+        <body style="margin: 0; background: var(--background)">
+          <main style="background: var(--surface); padding: 12px">
+            <button class="border border-[var(--control-border)] bg-[var(--surface-strong)] text-[var(--foreground)] hover:border-[var(--ring)] hover:bg-[var(--surface-subtle)]">
+              Retry
+            </button>
+          </main>
+        </body>
+      </html>`, (page) => checkThemeContrast(page, `shared-retry-${theme || "light"}`));
+
+    assert.equal(result.status, "passed");
+    assert.equal(result.sampledUiComponentCount, 1);
+    assert.ok(result.minimumNormalTextContrastRatio >= 4.5);
+    assert.ok(result.minimumUiComponentContrastRatio >= 3);
+  }
+});
+
+test("primary action links keep their semantic background instead of inheriting a card override", async () => {
+  for (const theme of ["", "dark"]) {
+    const result = await withPage(`<!doctype html>
+      <html class="${theme}">
+        <head><style>${compiledThemeProbeStyles}\n${applicationOverrides}</style></head>
+        <body style="margin: 0; background: var(--background)">
+          <main style="background: var(--surface); padding: 12px">
+            <a href="/working-papers" class="border border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-foreground)] shadow-sm">
+              Working papers
+            </a>
+          </main>
+        </body>
+      </html>`, (page) => checkThemeContrast(page, `primary-action-link-${theme || "light"}`));
+
+    assert.equal(result.status, "passed");
+    assert.equal(result.sampledInteractiveTextCount, 1);
+    assert.equal(result.sampledUiComponentCount, 1);
+    assert.ok(result.minimumNormalTextContrastRatio >= 4.5);
+    assert.ok(result.minimumUiComponentContrastRatio >= 3);
+  }
+});
+
+test("money and native checkbox inputs retain explicit dark-theme control boundaries", async () => {
+  for (const theme of ["", "dark"]) {
+    const result = await withPage(`<!doctype html>
+      <html class="${theme}">
+        <head><style>${compiledThemeProbeStyles}\n${applicationOverrides}</style></head>
+        <body style="margin: 0; background: var(--background)">
+          <main style="background: var(--surface); padding: 12px">
+            <label for="nominal-value" style="color: var(--foreground)">Nominal value per share</label>
+            <div data-contrast-boundary="money-input" style="border: 1px solid var(--control-border); background: var(--surface); padding: 2px">
+              <input id="nominal-value" data-money-input="true" value="1.00" style="background: transparent; border: 0; color: var(--foreground)" />
+            </div>
+            <label style="color: var(--foreground)">
+              <input aria-label="Fully paid" type="checkbox" checked class="workbench-checkbox" />
+              Fully paid
+            </label>
+            <label style="color: var(--foreground)">
+              <input aria-label="Partly paid" type="checkbox" class="workbench-checkbox" />
+              Partly paid
+            </label>
+            <label style="color: var(--foreground)">
+              <input aria-label="Locked paid state" type="checkbox" checked disabled class="workbench-checkbox" />
+              Locked paid state
+            </label>
+          </main>
+        </body>
+      </html>`, (page) => checkThemeContrast(page, `share-capital-inputs-${theme || "light"}`));
+
+    assert.equal(result.status, "passed");
+    assert.equal(result.sampledUiComponentCount, 4);
+    assert.ok(result.minimumUiComponentContrastRatio >= 3);
+  }
 });
 
 test("real Chromium contrast collection covers text, controls, placeholders, disabled state, and gradients", async () => {

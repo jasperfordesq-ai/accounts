@@ -134,6 +134,16 @@ export const REQUIRED_VISUAL_SMOKE_UI_STATES = [
   "conflict",
 ];
 
+// These deterministic preview states intentionally contain navigation text but no form control,
+// button, tab or other visual component boundary inside <main>. Text contrast still applies.
+export const VISUAL_SMOKE_UI_COMPONENT_OPTIONAL_STATE_IDS = [
+  "state-loading",
+  "state-empty",
+  "state-permission-denied",
+  "state-read-only",
+  "state-stale",
+];
+
 const routeTab = (id, label) => ({ kind: "route", id, label });
 const periodTab = (id, label) => ({ kind: "period-tab", id, label });
 const statementTab = (id, label) => ({ kind: "statement-tab", id, label });
@@ -290,6 +300,7 @@ export const visualSmokeStateInventory = [
     ...accountantRoute("production-readiness"),
     canonicalPathTemplate: "/production-readiness",
     canonicalTabState: routeTab("readiness", "Production readiness"),
+    expectedStateText: "Release remains gated",
   }),
   inventoryState({
     ...accountantRoute("company-detail"),

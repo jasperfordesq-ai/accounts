@@ -110,6 +110,9 @@ test("permission-sensitive route wiring prevents routine 403s and inert controls
   assert.match(preview, /Mark accountant approved preview/);
 
   const navbar = source("src/components/AppNavbar.tsx");
+  assert.match(navbar, /hidden min-w-0 items-center gap-2 lg:flex/, "dense desktop navigation must not activate at tablet width");
+  assert.match(navbar, /flex items-center gap-2 lg:hidden/, "the compact navigation must remain available through tablet width");
+  assert.doesNotMatch(navbar, /hidden md:flex/, "the full tenant navigation must not overflow the 768px tablet viewport");
   assert.match(navbar, /canCreateCompany &&/);
   assert.match(navbar, /href="\/change-password"/);
   assert.match(navbar, /isOwner &&[\s\S]*?href="\/settings\/users"/);

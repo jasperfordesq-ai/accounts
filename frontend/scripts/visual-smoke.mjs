@@ -467,8 +467,10 @@ async function createSmokeCompany(page) {
   };
 }
 
+const VISUAL_SMOKE_DASHBOARD_DISCOVERY_TEXT = "Platform release status";
+
 async function discoverRoutes(page, baseUrl) {
-  await expect(mainText(page, "Production Readiness")).toBeVisible({ timeout: 30_000 });
+  await expect(mainText(page, VISUAL_SMOKE_DASHBOARD_DISCOVERY_TEXT)).toBeVisible({ timeout: 30_000 });
   let periodHref = await optionalFirstHref(page, 'a[href^="/companies/"][href*="/periods/"]');
   let companyHref = companyHrefFromPeriodHref(periodHref);
   companyHref ??= await optionalFirstHref(
@@ -1480,11 +1482,38 @@ function unexpectedVisualSmokeBrowserErrors({ state, consoleErrors, pageErrors, 
     if (responseIndex >= 0) {
       unmatchedResponses.splice(responseIndex, 1);
     } else {
-      errors.push(`console: ${message.text}`);
+      const responseRoute = safeVisualSmokeResponseRoute(message.location?.url);
+      errors.push(`console: ${message.text}${responseRoute ? ` at ${responseRoute}` : ""}`);
     }
   }
 
+  for (const response of unmatchedResponses) {
+    errors.push(
+      `response: ${String(response.method || "UNKNOWN").toUpperCase()} ` +
+      `${safeVisualSmokeResponseRoute(response.url) || "/{redacted}"} returned ${response.status}`,
+    );
+  }
+
   return errors;
+}
+
+function safeVisualSmokeResponseRoute(rawUrl) {
+  try {
+    const url = new URL(String(rawUrl || ""));
+    if (!url.pathname.startsWith("/api/") && !url.pathname.startsWith("/_next/")) {
+      return "/{redacted}";
+    }
+
+    const segments = url.pathname.split("/").filter(Boolean).map((segment) => {
+      const decoded = decodeURIComponent(segment);
+      if (/^\d+$/.test(decoded)) return "{id}";
+      if (/^[a-z]+(?:[.-][a-z]+)*$/.test(decoded)) return decoded;
+      return "{redacted}";
+    });
+    return segments.length === 0 ? "/" : `/${segments.join("/")}`;
+  } catch {
+    return "";
+  }
 }
 
 async function run() {
@@ -1674,6 +1703,8 @@ export {
   periodPathFromHref,
   resolveVisualSmokeStateHref,
   safeLoginFailureDiagnostic,
+  safeVisualSmokeResponseRoute,
+  VISUAL_SMOKE_DASHBOARD_DISCOVERY_TEXT,
   unexpectedVisualSmokeBrowserErrors,
   totpCodeForCounter,
   visualFixtureIdempotencyKey,

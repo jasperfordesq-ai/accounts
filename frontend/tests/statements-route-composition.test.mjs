@@ -13,6 +13,14 @@ test("financial statements route delegates preview UI to a focused workbench com
   assert.match(routeSource, /<FinancialStatementsWorkbench[\s\S]*trialBalance=\{trialBalance\}/);
   assert.match(routeSource, /<FinancialStatementsWorkbench[\s\S]*onRetry=\{\(\) => loadShell\(shellState\.failedResourceKeys\)\}/);
   assert.match(routeSource, /<FinancialStatementsWorkbench[\s\S]*onRetryStatements=\{\(\) => loadStatements\(statementState\.failedResourceKeys\)\}/);
+  assert.match(routeSource, /canLoadDirectorsReport[\s\S]*\? getDirectorsReportData\(cId, pId\)[\s\S]*: Promise\.resolve\(null\)/,
+    "the route must not issue a predictably failing directors-report request before a filing regime exists");
+  assert.doesNotMatch(routeSource, /Promise\.all\(\[loadShell\(\), loadStatements\(\)\]\)/,
+    "statement reads should wait for the authorized period and its filing-regime prerequisite");
+  assert.match(routeSource, /periodMatchesRoute = period\?\.id === pId && period\.companyId === cId/,
+    "statement reads must not reuse stale period state after dynamic-route navigation");
+  assert.match(routeSource, /if \(!periodMatchesRoute\) return;[\s\S]*void loadStatements\(\)/,
+    "statement reads should begin only after the period shell resolves for the active route");
   assert.doesNotMatch(routeSource, /<TabsRoot>/);
   assert.doesNotMatch(routeSource, /Financial statements tabs/);
   assert.doesNotMatch(routeSource, /<table className="w-full text-sm/);

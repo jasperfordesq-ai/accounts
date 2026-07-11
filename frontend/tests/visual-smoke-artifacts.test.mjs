@@ -254,6 +254,47 @@ describe("visual smoke artifact evidence", () => {
     }
   });
 
+  it("allows no UI boundary only for canonical text-only states and rejects it elsewhere", async () => {
+    const { verifyVisualSmokeManifest, withScreenshotEvidence } = await import("../scripts/visual-smoke-artifacts.mjs");
+    const dir = await mkTempDir();
+    const manifestPath = path.join(dir, "visual-smoke-manifest.json");
+    const screenshots = await completeScreenshots(dir, withScreenshotEvidence);
+    const textOnlyScreenshots = screenshots.map((screenshot) => screenshot.stateId === "state-loading"
+      ? {
+          ...screenshot,
+          themeContrastResult: {
+            ...screenshot.themeContrastResult,
+            sampledUiComponentCount: 0,
+            minimumUiComponentContrastRatio: 0,
+          },
+        }
+      : screenshot);
+
+    try {
+      await writeManifest(manifestPath, textOnlyScreenshots);
+      const result = await verifyVisualSmokeManifest(manifestPath);
+      assert.equal(result.status, "passed");
+
+      const invalid = textOnlyScreenshots.map((screenshot) => screenshot.stateId === "login"
+        ? {
+            ...screenshot,
+            themeContrastResult: {
+              ...screenshot.themeContrastResult,
+              sampledUiComponentCount: 0,
+              minimumUiComponentContrastRatio: 0,
+            },
+          }
+        : screenshot);
+      await writeManifest(manifestPath, invalid);
+      await assert.rejects(
+        () => verifyVisualSmokeManifest(manifestPath),
+        /login-light-mobile\.png themeContrastResult\.sampledUiComponentCount must prove at least one UI component sample/,
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("rejects manifest screenshots without passed layout check results", async () => {
     const { verifyVisualSmokeManifest, withScreenshotEvidence } = await import("../scripts/visual-smoke-artifacts.mjs");
     const dir = await mkTempDir();

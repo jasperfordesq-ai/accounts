@@ -42,14 +42,14 @@ import {
   assert.ok(mobileMenuIndex > 0, "navbar should keep the mobile menu marker for this guard");
   const mobileHeader = appNavbar.slice(0, mobileMenuIndex);
   assert.match(mobileHeader, /logoutError && user/);
-  assert.match(mobileHeader, /md:hidden/);
+  assert.match(mobileHeader, /lg:hidden/);
   assert.match(mobileHeader, /role="status"/);
 
-  const desktopStatusMatch = appNavbar.match(/className="([^"]*md:block[^"]*)"/);
-  assert.ok(desktopStatusMatch, "desktop logout status should be visible from the md breakpoint");
+  const desktopStatusMatch = appNavbar.match(/className="([^"]*lg:block[^"]*)"/);
+  assert.ok(desktopStatusMatch, "desktop logout status should follow the full navigation at the lg breakpoint");
   assert.equal(
-    /\blg:block\b/.test(desktopStatusMatch[1]),
+    /\bmd:block\b/.test(desktopStatusMatch[1]),
     false,
-    "desktop logout status must not wait until lg while desktop nav starts at md",
+    "desktop logout status must not activate before the full navigation at tablet width",
   );
 }

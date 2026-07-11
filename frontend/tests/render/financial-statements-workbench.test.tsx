@@ -95,6 +95,31 @@ describe("FinancialStatementsWorkbench", () => {
     await user.click(screen.getByRole("tab", { name: /Source Trail/ }));
     expect(onStatementTabChange).toHaveBeenCalledWith("sources");
   });
+
+  it("explains the filing-regime prerequisite without presenting it as a failed request", () => {
+    render(
+      <FinancialStatementsWorkbench
+        {...props()}
+        directorsReport={null}
+        selectedStatementTab="directors-report"
+      />,
+    );
+
+    expect(screen.getByText(
+      "Complete the filing-regime classification before reviewing the directors' report.",
+    )).toBeInTheDocument();
+    expect(screen.getByText(
+      "Choose the statutory size and filing regime for this period first.",
+    )).toBeInTheDocument();
+    expect(screen.queryByText(
+      "Complete the year-end process and generate adjustments first.",
+    )).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open classification" })).toHaveAttribute(
+      "href",
+      "/companies/7/periods/3/classify",
+    );
+    expect(screen.queryByRole("button", { name: /retry directors-report/i })).not.toBeInTheDocument();
+  });
 });
 
 function props(): Parameters<typeof FinancialStatementsWorkbench>[0] {

@@ -511,6 +511,13 @@ function Assert-VisualSmokeDimensionEvidence {
     )
     $expectedContrastCheck = "theme-contrast"
     $minimumContrastRatio = [decimal]3.0
+    $uiComponentOptionalStateIds = @(
+        "state-loading",
+        "state-empty",
+        "state-permission-denied",
+        "state-read-only",
+        "state-stale"
+    )
 
     Assert-ArrayContainsExactly @((Get-JsonProperty $VisualSmoke @("themes"))) $expectedThemes "visual-smoke-evidence-report.json themes" $Failures
     Assert-ArrayContainsExactly @((Get-JsonProperty $VisualSmoke @("viewports"))) @($expectedViewports | ForEach-Object { $_.name }) "visual-smoke-evidence-report.json viewports" $Failures
@@ -783,8 +790,13 @@ function Assert-VisualSmokeDimensionEvidence {
             if ([int](Get-JsonProperty $themeContrastResult @("sampledInteractiveTextCount")) -le 0) {
                 Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.themeContrastResult.sampledInteractiveTextCount must be greater than zero."
             }
-            if ([int](Get-JsonProperty $themeContrastResult @("sampledUiComponentCount")) -le 0) {
+            $sampledUiComponentCount = [int](Get-JsonProperty $themeContrastResult @("sampledUiComponentCount"))
+            $minimumUiComponentContrastRatio = [decimal](Get-JsonProperty $themeContrastResult @("minimumUiComponentContrastRatio"))
+            if ($sampledUiComponentCount -le 0 -and $stateId -notin $uiComponentOptionalStateIds) {
                 Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.themeContrastResult.sampledUiComponentCount must be greater than zero."
+            }
+            if ($sampledUiComponentCount -le 0 -and $minimumUiComponentContrastRatio -ne 0) {
+                Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.themeContrastResult.minimumUiComponentContrastRatio must be zero when no UI component is rendered."
             }
             if ([decimal](Get-JsonProperty $themeContrastResult @("minimumContrastRatio")) -lt $minimumContrastRatio) {
                 Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.themeContrastResult.minimumContrastRatio must be at least 3."
@@ -807,7 +819,7 @@ function Assert-VisualSmokeDimensionEvidence {
             if ([decimal](Get-JsonProperty $themeContrastResult @("minimumLargeTextContrastRatio")) -lt 3) {
                 Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.themeContrastResult.minimumLargeTextContrastRatio must be at least 3."
             }
-            if ([decimal](Get-JsonProperty $themeContrastResult @("minimumUiComponentContrastRatio")) -lt 3) {
+            if ($sampledUiComponentCount -gt 0 -and $minimumUiComponentContrastRatio -lt 3) {
                 Add-Failure $Failures "visual-smoke-evidence-report.json screenshots.themeContrastResult.minimumUiComponentContrastRatio must be at least 3."
             }
         }

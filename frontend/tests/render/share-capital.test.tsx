@@ -22,6 +22,9 @@ describe("ShareCapitalCard", () => {
 
     expect(await screen.findByRole("button", { name: /issue shares/i })).toBeInTheDocument();
     expect(screen.getByLabelText("Number of shares issued")).toBeInTheDocument();
+    expect(screen.getByLabelText("Nominal value per share").closest("[data-contrast-boundary='money-input']"))
+      .toHaveClass("border-[var(--control-border)]");
+    expect(screen.getByLabelText("Fully paid")).toHaveClass("workbench-checkbox");
     expect(screen.getByText(/no share capital recorded yet/i)).toBeInTheDocument();
   });
 

@@ -14,6 +14,7 @@ import {
   MIN_VISUAL_SMOKE_CONTRAST_RATIO,
   REQUIRED_VISUAL_SMOKE_MATERIAL_ROUTES,
   REQUIRED_VISUAL_SMOKE_UI_STATES,
+  VISUAL_SMOKE_UI_COMPONENT_OPTIONAL_STATE_IDS,
   VISUAL_SMOKE_INVENTORY_VERSION,
   visualSmokeContrastCheck,
   visualSmokeLayoutChecks,
@@ -328,7 +329,7 @@ export async function verifyVisualSmokeManifest(manifestPath, options = {}) {
       }
     }
 
-    validateThemeContrastResult(actual.themeContrastResult, actual.fileName, failures);
+    validateThemeContrastResult(actual.themeContrastResult, actual, failures);
   }
 
   for (const audit of manifest.routeAudits ?? []) {
@@ -446,7 +447,9 @@ export async function verifyVisualSmokeManifest(manifestPath, options = {}) {
   return report;
 }
 
-function validateThemeContrastResult(result, fileName, failures) {
+function validateThemeContrastResult(result, screenshot, failures) {
+  const fileName = screenshot.fileName;
+  const uiComponentsOptional = VISUAL_SMOKE_UI_COMPONENT_OPTIONAL_STATE_IDS.includes(screenshot.stateId);
   if (!result) {
     failures.push(`visual smoke screenshot ${fileName} is missing automated theme contrast result.`);
     return;
@@ -476,13 +479,16 @@ function validateThemeContrastResult(result, fileName, failures) {
     failures.push(`visual smoke screenshot ${fileName} themeContrastResult.sampledNormalTextCount must be greater than zero.`);
   }
 
-  for (const [field, label] of [
-    ["sampledInteractiveTextCount", "interactive text"],
-    ["sampledUiComponentCount", "UI component"],
-  ]) {
-    if (Number(result[field]) <= 0) {
-      failures.push(`visual smoke screenshot ${fileName} themeContrastResult.${field} must prove at least one ${label} sample.`);
-    }
+  if (Number(result.sampledInteractiveTextCount) <= 0) {
+    failures.push(`visual smoke screenshot ${fileName} themeContrastResult.sampledInteractiveTextCount must prove at least one interactive text sample.`);
+  }
+
+  const sampledUiComponentCount = Number(result.sampledUiComponentCount);
+  if (sampledUiComponentCount <= 0 && !uiComponentsOptional) {
+    failures.push(`visual smoke screenshot ${fileName} themeContrastResult.sampledUiComponentCount must prove at least one UI component sample.`);
+  }
+  if (sampledUiComponentCount <= 0 && Number(result.minimumUiComponentContrastRatio) !== 0) {
+    failures.push(`visual smoke screenshot ${fileName} themeContrastResult.minimumUiComponentContrastRatio must be zero when no UI component is rendered.`);
   }
 
   if (Number(result.requiredMinimumContrastRatio) !== MIN_VISUAL_SMOKE_CONTRAST_RATIO) {
@@ -504,11 +510,14 @@ function validateThemeContrastResult(result, fileName, failures) {
   for (const [field, expected] of [
     ["minimumNormalTextContrastRatio", MIN_NORMAL_TEXT_CONTRAST_RATIO],
     ["minimumLargeTextContrastRatio", MIN_LARGE_TEXT_CONTRAST_RATIO],
-    ["minimumUiComponentContrastRatio", MIN_UI_COMPONENT_CONTRAST_RATIO],
   ]) {
     if (Number(result[field]) < expected) {
       failures.push(`visual smoke screenshot ${fileName} themeContrastResult.${field} must be at least ${expected}.`);
     }
+  }
+
+  if (sampledUiComponentCount > 0 && Number(result.minimumUiComponentContrastRatio) < MIN_UI_COMPONENT_CONTRAST_RATIO) {
+    failures.push(`visual smoke screenshot ${fileName} themeContrastResult.minimumUiComponentContrastRatio must be at least ${MIN_UI_COMPONENT_CONTRAST_RATIO}.`);
   }
 
   if (Number(result.minimumContrastRatio) < MIN_VISUAL_SMOKE_CONTRAST_RATIO) {

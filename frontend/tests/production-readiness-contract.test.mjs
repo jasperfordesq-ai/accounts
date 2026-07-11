@@ -363,6 +363,21 @@ test("parseProductionReadinessReport accepts the golden corpus evidence-pack con
   assert.deepEqual(dashboardDesktopArtifact.layoutChecks, ["browser-console-errors", "page-horizontal-overflow", "visible-text-overlap"]);
 });
 
+test("production readiness normalizes serializer-omitted nullable material routes", () => {
+  const report = sampleReport();
+  const state = report.visualQaCoverage.stateInventory.find((item) => item.materialRoute === null);
+  const artifact = report.visualQaCoverage.artifacts.find((item) => item.materialRoute === null);
+  assert.ok(state, "fixture should include a state without a material route");
+  assert.ok(artifact, "fixture should include an artifact without a material route");
+  delete state.materialRoute;
+  delete artifact.materialRoute;
+
+  const parsed = parseProductionReadinessReport(report);
+
+  assert.equal(parsed.visualQaCoverage.stateInventory.find((item) => item.stateId === state.stateId)?.materialRoute, null);
+  assert.equal(parsed.visualQaCoverage.artifacts.find((item) => item.fileName === artifact.fileName)?.materialRoute, null);
+});
+
 test("parseProductionReadinessReport rejects missing golden corpus evidence packs", () => {
   const payload = sampleReport();
   delete payload.goldenFilingCorpus[0].evidencePack;
