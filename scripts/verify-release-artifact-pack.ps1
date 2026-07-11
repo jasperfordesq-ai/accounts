@@ -232,6 +232,7 @@ $expectedAccountantWorkbenchReviewChecks = @(
     "accountant-workflow-hierarchy",
     "table-scanability",
     "theme-contrast",
+    "axe-wcag-2.2-a-aa",
     "responsive-density",
     "loading-error-empty-states",
     "canonical-url-tab-state",

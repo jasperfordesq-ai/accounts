@@ -4243,6 +4243,8 @@ public partial class AccountsWorkflowTests
         Assert.Contains("routeReadiness.$($expected.routeName).reviewStatus must be required-review", machineEvidencePack);
         Assert.Contains("expectedAccountantWorkbenchReviewChecks", script);
         Assert.Contains("expectedAccountantWorkbenchReviewChecks", machineEvidencePack);
+        Assert.Matches(@"(?s)\$expectedAccountantWorkbenchReviewChecks\s*=\s*@\([^)]*""axe-wcag-2\.2-a-aa""", script);
+        Assert.Matches(@"(?s)\$expectedAccountantWorkbenchReviewChecks\s*=\s*@\([^)]*""axe-wcag-2\.2-a-aa""", machineEvidencePack);
         Assert.Contains("routeReadiness.$($expected.routeName).requiredReviewChecks", script);
         Assert.Contains("routeReadiness.$($expected.routeName).requiredReviewChecks", machineEvidencePack);
         Assert.Contains("visual smoke screenshots carry route expected accountant decision text", script);
