@@ -19,8 +19,8 @@ import {
 import { ReviewPanel, StatusBadge } from "@/components/workbench";
 
 const inputClass = "mt-1 w-full rounded-md border border-[var(--control-border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--foreground)] outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20";
-const buttonClass = "inline-flex min-h-10 items-center justify-center rounded-md bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:border disabled:border-[var(--control-border)] disabled:bg-[var(--muted)] disabled:text-[var(--muted-foreground)]";
-const secondaryButtonClass = "inline-flex min-h-10 items-center justify-center rounded-md border border-[var(--control-border)] bg-[var(--surface)] px-4 py-2 text-sm font-semibold text-[var(--foreground)] hover:bg-[var(--surface-subtle)] disabled:cursor-not-allowed disabled:bg-[var(--muted)] disabled:text-[var(--muted-foreground)]";
+const buttonClass = "inline-flex min-h-10 items-center justify-center rounded-md bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:border disabled:border-[var(--control-border)] disabled:bg-[var(--muted-surface)] disabled:text-[var(--muted-foreground)]";
+const secondaryButtonClass = "inline-flex min-h-10 items-center justify-center rounded-md border border-[var(--control-border)] bg-[var(--surface)] px-4 py-2 text-sm font-semibold text-[var(--foreground)] hover:bg-[var(--surface-subtle)] disabled:cursor-not-allowed disabled:bg-[var(--muted-surface)] disabled:text-[var(--muted-foreground)]";
 
 type AddressDraft = {
   line1: string;

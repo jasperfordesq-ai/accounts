@@ -206,7 +206,7 @@ export function FilingReviewCentre({
                 value={croSubmissionReference}
                 onChange={(event) => onCroSubmissionReferenceChange(event.target.value)}
                 disabled={!evidenceAvailable || filingStatus.cro.status === "Accepted"}
-                className="h-9 w-full rounded-md border border-[var(--control-border)] bg-[var(--surface)] px-3 text-sm text-[var(--foreground)] outline-none transition focus:border-[var(--ring)] focus:ring-2 focus:ring-teal-100 disabled:bg-[var(--muted)] disabled:text-[var(--muted-foreground)] dark:focus:ring-teal-900/40"
+                className="h-9 w-full rounded-md border border-[var(--control-border)] bg-[var(--surface)] px-3 text-sm text-[var(--foreground)] outline-none transition focus:border-[var(--ring)] focus:ring-2 focus:ring-teal-100 disabled:bg-[var(--muted-surface)] disabled:text-[var(--muted-foreground)] dark:focus:ring-teal-900/40"
                 placeholder="CORE-2026-0001"
               />
             </div>

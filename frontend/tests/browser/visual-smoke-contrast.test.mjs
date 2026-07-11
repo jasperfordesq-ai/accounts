@@ -79,13 +79,16 @@ test("application HeroUI fields retain a visible 3:1 boundary in both themes", a
         <body style="margin: 0; background: var(--background)">
           <main style="background: var(--surface); padding: 12px">
             <label for="candidate-name" style="color: var(--foreground)">Candidate name</label>
-            <input id="candidate-name" class="input input--primary" value="Example Limited" />
+            <input id="candidate-name" class="input input--primary" placeholder="Example Limited" />
+            <p class="description">HeroUI muted description</p>
           </main>
         </body>
       </html>`, (page) => checkThemeContrast(page, `application-field-boundary-${theme || "light"}`));
 
     assert.equal(result.status, "passed");
     assert.equal(result.sampledUiComponentCount, 1);
+    assert.equal(result.sampledPlaceholderCount, 1);
+    assert.ok(result.minimumNormalTextContrastRatio >= 4.5);
     assert.ok(result.minimumUiComponentContrastRatio >= 3);
   }
 });

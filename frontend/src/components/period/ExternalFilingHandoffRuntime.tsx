@@ -29,7 +29,7 @@ import {
 } from "@/components/period/ExternalFilingHandoffForms";
 import { PermissionDeniedPanel, ReviewPanel, WorkbenchLoadingState } from "@/components/workbench";
 
-const commandButtonClass = "inline-flex min-h-10 items-center justify-center rounded-md border border-[var(--control-border)] bg-[var(--surface)] px-4 py-2 text-sm font-semibold text-[var(--foreground)] hover:bg-[var(--surface-subtle)] disabled:cursor-not-allowed disabled:bg-[var(--muted)] disabled:text-[var(--muted-foreground)]";
+const commandButtonClass = "inline-flex min-h-10 items-center justify-center rounded-md border border-[var(--control-border)] bg-[var(--surface)] px-4 py-2 text-sm font-semibold text-[var(--foreground)] hover:bg-[var(--surface-subtle)] disabled:cursor-not-allowed disabled:bg-[var(--muted-surface)] disabled:text-[var(--muted-foreground)]";
 
 type Composer =
   | { kind: "authority" }

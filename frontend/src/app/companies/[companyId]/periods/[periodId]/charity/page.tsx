@@ -552,7 +552,7 @@ export default function CharityReportingPage({
                   type="button"
                   onClick={() => updateWorkflow("sofa", () => recordCharityReportGenerated(cId, pId, "sofa"), "Retained SoFA PDF generated")}
                   disabled={workflowEvidenceUnavailable || filingStatus?.sofaGenerated || updatingWorkflow !== null || !artifactStatus?.package?.trusteeReviewAccepted || artifactStatus?.decision.manualProfessionalHandoffRequired}
-                  className="flex items-center justify-between rounded-lg border border-[var(--control-border)] px-3 py-2 text-left text-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:bg-[var(--muted)] dark:hover:bg-neutral-800"
+                  className="flex items-center justify-between rounded-lg border border-[var(--control-border)] px-3 py-2 text-left text-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:bg-[var(--muted-surface)] dark:hover:bg-neutral-800"
                 >
                   <span className="font-medium text-gray-900 dark:text-gray-100">Generate retained SoFA PDF</span>
                   <Chip size="sm" variant="soft" color={filingStatus?.sofaGenerated ? "success" : "warning"}>{filingStatus?.sofaGenerated ? "Done" : "Open"}</Chip>
@@ -561,7 +561,7 @@ export default function CharityReportingPage({
                   type="button"
                   onClick={() => updateWorkflow("tar", () => recordCharityReportGenerated(cId, pId, "trustees-report"), "Retained Trustees' Annual Report PDF generated")}
                   disabled={workflowEvidenceUnavailable || filingStatus?.trusteesReportGenerated || updatingWorkflow !== null || !artifactStatus?.package?.trusteeReviewAccepted || artifactStatus?.decision.manualProfessionalHandoffRequired}
-                  className="flex items-center justify-between rounded-lg border border-[var(--control-border)] px-3 py-2 text-left text-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:bg-[var(--muted)] dark:hover:bg-neutral-800"
+                  className="flex items-center justify-between rounded-lg border border-[var(--control-border)] px-3 py-2 text-left text-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:bg-[var(--muted-surface)] dark:hover:bg-neutral-800"
                 >
                   <span className="font-medium text-gray-900 dark:text-gray-100">Generate retained Trustees&apos; Annual Report PDF</span>
                   <Chip size="sm" variant="soft" color={filingStatus?.trusteesReportGenerated ? "success" : "warning"}>{filingStatus?.trusteesReportGenerated ? "Done" : "Open"}</Chip>
