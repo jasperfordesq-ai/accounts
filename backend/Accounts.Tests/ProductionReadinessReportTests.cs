@@ -2,6 +2,8 @@ using Accounts.Api.Data;
 using Accounts.Api.Services;
 using Microsoft.EntityFrameworkCore;
 using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Text.RegularExpressions;
 using Xunit;
 
 namespace Accounts.Tests;
@@ -902,7 +904,19 @@ public class ProductionReadinessReportTests
             control.Code == "external-ixbrl-acceptance"
             && !control.Passed
             && control.AssuranceClass == "human-external"
-            && control.BlockingAuditItemIds.Contains("P0-STAT-002"));
+            && control.BlockingAuditItemIds.SequenceEqual(["HUMAN-003"]));
+        Assert.Contains(scores["backend-statutory-accounting-engine"].Controls, control =>
+            control.Code == "statutory-output-correctness"
+            && !control.Passed
+            && control.BlockingAuditItemIds.SequenceEqual(["P1-STAT-007", "P1-TAX-001", "P1-TAX-002"]));
+        Assert.Contains(scores["backend-statutory-accounting-engine"].Controls, control =>
+            control.Code == "professional-artifact-approval"
+            && !control.Passed
+            && control.BlockingAuditItemIds.SequenceEqual(["HUMAN-004", "HUMAN-005"]));
+        Assert.Contains(scores["frontend-accountant-workbench"].Controls, control =>
+            control.Code == "accessible-responsive-workbench"
+            && !control.Passed
+            && control.BlockingAuditItemIds.SequenceEqual(["P1-UX-001", "P1-UX-002", "P1-UX-003", "P1-A11Y-001", "P1-VIS-002", "P1-FE-011"]));
         Assert.Contains(scores["backend-statutory-accounting-engine"].Controls, control =>
             control.Code == "final-release-containment"
             && control.Passed
@@ -913,6 +927,37 @@ public class ProductionReadinessReportTests
             && control.Passed
             && control.Status == "passed"
             && control.BlockingAuditItemIds.Count == 0);
+        var supplyChainOperations = Assert.Single(
+            scores["security-auth-tenant-platform-guardrails"].Controls,
+            control => control.Code == "supply-chain-and-operations");
+        Assert.False(supplyChainOperations.Passed);
+        Assert.Equal(
+            ["P1-OPS-003", "P1-OPS-004", "P1-OPS-005", "P1-OPS-006", "P1-OPS-008", "P2-FE-009"],
+            supplyChainOperations.BlockingAuditItemIds);
+        Assert.DoesNotContain("repository governance", supplyChainOperations.Evidence[0], StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("production backup", supplyChainOperations.Evidence[0], StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(scores["security-auth-tenant-platform-guardrails"].CurrentEvidence, evidence =>
+            evidence.Contains("signed candidate", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("verify-github-governance.ps1", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(scores["security-auth-tenant-platform-guardrails"].CurrentEvidence, evidence =>
+            evidence.Contains("scheduled vulnerability scans", StringComparison.OrdinalIgnoreCase)
+            && evidence.Contains("SPDX SBOM", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(scores["security-auth-tenant-platform-guardrails"].RemainingGaps, gap =>
+            gap.Contains("production backup/restore", StringComparison.OrdinalIgnoreCase)
+            && gap.Contains("deployment ingress", StringComparison.OrdinalIgnoreCase)
+            && gap.Contains("encryption-at-rest", StringComparison.OrdinalIgnoreCase));
+        var defenceInDepth = Assert.Single(
+            scores["security-auth-tenant-platform-guardrails"].Controls,
+            control => control.Code == "defence-in-depth-and-resilience");
+        Assert.False(defenceInDepth.Passed);
+        Assert.Equal(
+            ["P2-EVID-001", "P2-OPS-010"],
+            defenceInDepth.BlockingAuditItemIds);
+        Assert.Contains("database-enforced tenant isolation", defenceInDepth.Evidence[0], StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("privacy/retention/incident workflows", defenceInDepth.Evidence[0], StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("scheduled delivery/platform metrics", defenceInDepth.Evidence[0], StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("durable authentic release evidence", defenceInDepth.Evidence[0], StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("production-like capacity/failover/recovery", defenceInDepth.Evidence[0], StringComparison.OrdinalIgnoreCase);
         Assert.Contains(scores["architecture-documentation"].CurrentEvidence, evidence =>
             evidence.Contains("verify-release-evidence.ps1", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["architecture-documentation"].CurrentEvidence, evidence =>
@@ -1284,6 +1329,63 @@ public class ProductionReadinessReportTests
             && evidence.Contains("production-readiness-verification-report.json", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(scores["backend-statutory-accounting-engine"].RemainingGaps, gap =>
             gap.Contains("manual handoff", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task ProductionScorecard_BlockersExactlyMatchOpenCanonicalAuditItems()
+    {
+        await using var db = CreateDbContext();
+        var report = await new ProductionReadinessReportService(db).GetReportAsync();
+        var audit = File.ReadAllText(FindCanonicalAuditPath());
+        var auditMatches = Regex.Matches(
+                audit,
+                @"(?m)^### \[(?<mark>[x ])\] (?<id>(?:P\d-[A-Z0-9]+-[0-9]+|HUMAN-[0-9]+))\b")
+            .Cast<Match>()
+            .ToArray();
+        var duplicateAuditIds = auditMatches
+            .GroupBy(match => match.Groups["id"].Value, StringComparer.Ordinal)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Key)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        Assert.True(
+            duplicateAuditIds.Length == 0,
+            $"Canonical audit IDs must be unique: {string.Join(", ", duplicateAuditIds)}");
+        var auditStates = auditMatches
+            .ToDictionary(
+                match => match.Groups["id"].Value,
+                match => match.Groups["mark"].Value,
+                StringComparer.Ordinal);
+        var controls = report.ProductionScorecard.Categories
+            .SelectMany(category => category.Controls)
+            .ToArray();
+
+        Assert.NotEmpty(auditStates);
+        Assert.All(
+            controls.Where(control => control.Passed),
+            control => Assert.Empty(control.BlockingAuditItemIds));
+        Assert.All(
+            controls.Where(control => !control.Passed),
+            control => Assert.NotEmpty(control.BlockingAuditItemIds));
+        Assert.All(
+            controls,
+            control => Assert.Equal(
+                control.BlockingAuditItemIds.Count,
+                control.BlockingAuditItemIds.Distinct(StringComparer.Ordinal).Count()));
+
+        var blockerIds = controls
+            .SelectMany(control => control.BlockingAuditItemIds)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        var openAuditIds = auditStates
+            .Where(item => item.Value == " ")
+            .Select(item => item.Key)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.NotEmpty(openAuditIds);
+        Assert.Equal(openAuditIds, blockerIds);
     }
 
     [Fact]
@@ -3072,5 +3174,30 @@ public class ProductionReadinessReportTests
         var property = value.GetType().GetProperty(propertyName);
         Assert.NotNull(property);
         return Assert.IsType<decimal>(property!.GetValue(value));
+    }
+
+    private static string FindCanonicalAuditPath([CallerFilePath] string sourceFile = "")
+    {
+        var starts = new[]
+        {
+            Environment.GetEnvironmentVariable("GITHUB_WORKSPACE"),
+            Directory.GetCurrentDirectory(),
+            Path.GetDirectoryName(sourceFile),
+            AppContext.BaseDirectory
+        };
+
+        foreach (var start in starts.Where(candidate => !string.IsNullOrWhiteSpace(candidate)))
+        {
+            var directory = new DirectoryInfo(start!);
+            while (directory is not null)
+            {
+                var candidate = Path.Combine(directory.FullName, "Docs", "PLATFORM_AUDIT_2026-07-10.md");
+                if (File.Exists(candidate))
+                    return candidate;
+                directory = directory.Parent;
+            }
+        }
+
+        throw new InvalidOperationException("Could not locate the canonical production-readiness audit.");
     }
 }

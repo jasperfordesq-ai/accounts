@@ -56,7 +56,7 @@ const CONTROLS: Record<ProductionScorecardCategoryCode, ProductionScorecardContr
       30,
       "code",
       false,
-      ["P0-STAT-001", "P1-STAT-005", "P1-STAT-006", "P1-STAT-007", "P1-STAT-008", "P1-STAT-009"],
+      ["P1-STAT-007", "P1-TAX-001", "P1-TAX-002"],
     ),
     control(
       "external-ixbrl-acceptance",
@@ -64,7 +64,7 @@ const CONTROLS: Record<ProductionScorecardCategoryCode, ProductionScorecardContr
       35,
       "human-external",
       false,
-      ["P0-STAT-002", "HUMAN-003"],
+      ["HUMAN-003"],
     ),
     control(
       "professional-artifact-approval",
@@ -72,7 +72,7 @@ const CONTROLS: Record<ProductionScorecardCategoryCode, ProductionScorecardContr
       20,
       "human-external",
       false,
-      ["P0-STAT-003", "P0-STAT-004", "HUMAN-004", "HUMAN-005"],
+      ["HUMAN-004", "HUMAN-005"],
     ),
     control(
       "independent-golden-corpus",
@@ -109,7 +109,7 @@ const CONTROLS: Record<ProductionScorecardCategoryCode, ProductionScorecardContr
       25,
       "machine",
       false,
-      ["P1-UX-001", "P1-UX-002", "P1-UX-003", "P1-A11Y-001", "P1-UX-004", "P1-VIS-002", "P1-UX-005"],
+      ["P1-UX-001", "P1-UX-002", "P1-UX-003", "P1-A11Y-001", "P1-VIS-002", "P1-FE-011"],
     ),
     control(
       "complete-visual-acceptance",
@@ -153,7 +153,7 @@ const CONTROLS: Record<ProductionScorecardCategoryCode, ProductionScorecardContr
       25,
       "machine",
       false,
-      ["P0-OPS-001", "P1-OPS-003", "P1-OPS-004", "P1-OPS-005", "P1-OPS-006", "P1-OPS-008", "P1-OPS-009", "P1-AUD-001"],
+      ["P1-OPS-003", "P1-OPS-004", "P1-OPS-005", "P1-OPS-006", "P1-OPS-008", "P2-FE-009"],
     ),
     control(
       "defence-in-depth-and-resilience",
@@ -161,7 +161,7 @@ const CONTROLS: Record<ProductionScorecardCategoryCode, ProductionScorecardContr
       10,
       "machine",
       false,
-      ["P2-SEC-004", "P2-EVID-001", "P2-PRIV-001", "P2-OPS-010", "P2-OPS-011"],
+      ["P2-EVID-001", "P2-OPS-010"],
     ),
   ],
 };

@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { parseProductionReadinessReport } from "../src/lib/api.ts";
 import { productionScorecardControls } from "./fixtures/production-scorecard-controls.ts";
 import {
@@ -944,6 +945,43 @@ test("parseProductionReadinessReport rejects open controls without blocking audi
   );
 });
 
+test("production scorecard fixture blockers exactly match open canonical audit items", () => {
+  const audit = readFileSync(
+    new URL("../../Docs/PLATFORM_AUDIT_2026-07-10.md", import.meta.url),
+    "utf8",
+  );
+  const auditMatches = [...audit.matchAll(/^### \[([x ])\] ((?:P\d-[A-Z0-9]+-[0-9]+|HUMAN-[0-9]+))\b/gm)];
+  const auditIds = auditMatches.map((match) => match[2]);
+  assert.equal(new Set(auditIds).size, auditIds.length, "canonical audit IDs must be unique");
+  const auditStates = new Map(auditMatches.map((match) => [match[2], match[1]]));
+  const controls = productionScorecard().categories.flatMap((category) => category.controls);
+
+  for (const control of controls) {
+    if (control.passed) {
+      assert.deepEqual(control.blockingAuditItemIds, [], `passed control ${control.code} must not retain blockers`);
+    } else {
+      assert.ok(control.blockingAuditItemIds.length > 0, `open control ${control.code} must retain blockers`);
+    }
+    assert.equal(
+      new Set(control.blockingAuditItemIds).size,
+      control.blockingAuditItemIds.length,
+      `control ${control.code} must not duplicate blocker IDs`,
+    );
+  }
+
+  const blockerIds = [...new Set(
+    controls.flatMap((control) => control.blockingAuditItemIds),
+  )].sort();
+  const openAuditIds = [...auditStates]
+    .filter(([, mark]) => mark === " ")
+    .map(([id]) => id)
+    .sort();
+
+  assert.ok(auditStates.size > 0, "canonical audit item states should be discoverable");
+  assert.ok(blockerIds.length > 0, "open scorecard controls should retain blockers");
+  assert.deepEqual(blockerIds, openAuditIds);
+});
+
 test("parseProductionReadinessReport rejects scorecard evidence policy without candidate-bound hashes", () => {
   const payload = sampleReport();
   payload.productionScorecard.evidencePolicy = "Points are awarded when a reviewer says they pass.";
@@ -1139,7 +1177,7 @@ function productionScorecard() {
     currentScore: 783,
     targetScore: 1000,
     status: "remediation-required",
-    nextGate: "Close the remaining statutory/tax, visual/accessibility, governance/operations, resilience, maintainability and authentic human/external evidence findings before release.",
+    nextGate: "Close the remaining statutory/tax, visual/accessibility, operations/deployment, resilience, maintainability and authentic human/external evidence findings before release.",
     scoreBasis: "independent-audit-control-ledger-v1",
     auditBaselineDate: "2026-07-10",
     auditedCommit: "7ea54cc6d1769ced568ac1568d190cc2bb4b16d1",

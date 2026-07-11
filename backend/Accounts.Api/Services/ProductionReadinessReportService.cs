@@ -460,8 +460,8 @@ public partial class ProductionReadinessReportService(AccountsDbContext db)
                         30,
                         "code",
                         false,
-                        ["Docs/PLATFORM_AUDIT_2026-07-10.md statutory output acceptance criteria."],
-                        ["P0-STAT-001", "P1-STAT-005", "P1-STAT-006", "P1-STAT-007", "P1-STAT-008", "P1-STAT-009"]),
+                        ["The implemented statutory-output controls are covered by retained machine evidence; the remaining director-loan, tax-calculation and filing-acceptance findings require genuine qualified-accountant and external evidence."],
+                        ["P1-STAT-007", "P1-TAX-001", "P1-TAX-002"]),
                     Control(
                         "external-ixbrl-acceptance",
                         "Complete externally validated Revenue iXBRL",
@@ -469,7 +469,7 @@ public partial class ProductionReadinessReportService(AccountsDbContext db)
                         "human-external",
                         false,
                         ["The external ROS/iXBRL template requires validator response, taxonomy hash and exact artifact hash."],
-                        ["P0-STAT-002", "HUMAN-003"]),
+                        ["HUMAN-003"]),
                     Control(
                         "professional-artifact-approval",
                         "Verified professional approval and signed auditor evidence",
@@ -477,7 +477,7 @@ public partial class ProductionReadinessReportService(AccountsDbContext db)
                         "human-external",
                         false,
                         ["Qualified-accountant and manual-handoff templates require genuine professional identities and signed evidence."],
-                        ["P0-STAT-003", "P0-STAT-004", "HUMAN-004", "HUMAN-005"]),
+                        ["HUMAN-004", "HUMAN-005"]),
                     Control(
                         "independent-golden-corpus",
                         "Independently derived golden corpus",
@@ -587,8 +587,8 @@ public partial class ProductionReadinessReportService(AccountsDbContext db)
                         25,
                         "machine",
                         false,
-                        ["WCAG 2.2 A/AA, keyboard and canonical viewport acceptance remain open."],
-                        ["P1-UX-001", "P1-UX-002", "P1-UX-003", "P1-A11Y-001", "P1-UX-004", "P1-VIS-002", "P1-UX-005"]),
+                        ["Sorting and destructive-action controls are implemented; WCAG 2.2 A/AA, keyboard, canonical viewport and remaining route-level fail-closed acceptance remain open."],
+                        ["P1-UX-001", "P1-UX-002", "P1-UX-003", "P1-A11Y-001", "P1-VIS-002", "P1-FE-011"]),
                     Control(
                         "complete-visual-acceptance",
                         "Complete visual-state matrix and named review",
@@ -612,6 +612,8 @@ public partial class ProductionReadinessReportService(AccountsDbContext db)
                     "release-artifact-pack-report.json now records release candidate identity, per-report and reviewer-handoff SHA-256/byte-size evidence, plus a release-evidence workspace summary with the 21-file prepared workspace, six pending human blockers, six unassigned reviewer assignment rows, reviewerAssignmentPickupFileGuidanceCount and the per-gate reviewerAssignmentPickupFiles inventory.",
                     "CI runs scripts/verify-ci-machine-evidence-pack.ps1 and retains ci-machine-evidence-pack-report.json with exact commit/run identity, SHA-256 inventory for dependency, safety, certificate-verified PostgreSQL transport, monitoring, structured log, backup/restore, no-direct, readiness and visual/workbench evidence, plus a prepared reviewer-workspace summary proving the 21-file workspace and six unassigned reviewer assignment rows with complete per-gate pickup-file guidance.",
                     "CI now restores the repository-pinned EF tool, rejects pending model changes, migrates fresh PostgreSQL 16.4 and the supported previous-release floor, preserves five representative data/evidence groups, proves transactional failure rollback, and retains candidate-bound migration reports beside encrypted restore evidence.",
+                    "Repository policy requires a signed candidate, strict synchronized CI checks, pull-request and code-owner review, stale-review dismissal, administrator enforcement, and blocked force-push/deletion; verify-github-governance.ps1 records the live GitHub API state.",
+                    "Runtime images use locked and digest-pinned inputs, remove npm/Corepack/Yarn/pnpm tooling from the final frontend runtime, and are covered by retained scheduled vulnerability scans and SPDX SBOM evidence.",
                     "scripts/verify-production-readiness-report.ps1 now requires default-CI and manual release manifest rows, including the no-direct CRO/ROS control, CI machine evidence pack and release artifact pack, before accepting a captured readiness report.",
                     "scripts/verify-release-artifact-pack.ps1 now rejects release packs unless the retained production-readiness-verification-report.json proves every required default-CI and manual release manifest row.",
                     "scripts/verify-release-artifact-pack.ps1 and scripts/verify-ci-machine-evidence-pack.ps1 now reject visual evidence packs unless visual-smoke-evidence-report.json carries planned PNG viewport dimensions, passed layout-check results and automated theme-contrast smoke results for every screenshot.",
@@ -625,7 +627,8 @@ public partial class ProductionReadinessReportService(AccountsDbContext db)
                 [
                     "Confirm the controlled monitoring smoke event inside the configured provider and retain operator evidence.",
                     "Run and retain the full release-artifact-pack-report.json after release-evidence-report.json is completed with named human sign-offs.",
-                    "Retain provider-console monitoring confirmation for the exact release candidate."
+                    "Retain provider-console monitoring confirmation for the exact release candidate.",
+                    "Retain production backup/restore, deployment ingress and encryption-at-rest/key-ownership evidence for the exact environment."
                 ],
                 ["backend-code"],
                 ["backend-code:production-monitoring"],
@@ -692,16 +695,16 @@ public partial class ProductionReadinessReportService(AccountsDbContext db)
                         25,
                         "machine",
                         false,
-                        ["The migration drift/upgrade/rollback gate is implemented; build-once digest promotion, repository governance, reproducible builds, backup, monitoring and remaining container gates stay open."],
-                        ["P0-OPS-001", "P1-OPS-003", "P1-OPS-004", "P1-OPS-005", "P1-OPS-006", "P1-OPS-008", "P1-OPS-009", "P1-AUD-001"]),
+                        ["Build-once digest promotion, reproducible locked inputs, restricted readiness evidence and domain audit coverage are implemented; exact-candidate protected-branch governance, scheduled scan/SBOM evidence, production backup, live monitoring confirmation, deployment encryption evidence and the remaining dependency-maintenance control stay open."],
+                        ["P1-OPS-003", "P1-OPS-004", "P1-OPS-005", "P1-OPS-006", "P1-OPS-008", "P2-FE-009"]),
                     Control(
                         "defence-in-depth-and-resilience",
                         "Database isolation, privacy and resilience",
                         10,
                         "machine",
                         false,
-                        ["Database RLS, durable signed evidence, privacy, capacity and scheduled delivery acceptance remain open."],
-                        ["P2-SEC-004", "P2-EVID-001", "P2-PRIV-001", "P2-OPS-010", "P2-OPS-011"])
+                        ["Database-enforced tenant isolation, privacy/retention/incident workflows and scheduled delivery/platform metrics are implemented; durable authentic release evidence and production-like capacity/failover/recovery acceptance remain open."],
+                        ["P2-EVID-001", "P2-OPS-010"])
                 ])
         };
 
@@ -709,7 +712,7 @@ public partial class ProductionReadinessReportService(AccountsDbContext db)
             categories.Sum(category => category.CurrentScore),
             categories.Sum(category => category.TargetScore),
             "remediation-required",
-            "Close the remaining statutory/tax, visual/accessibility, governance/operations, resilience, maintainability and authentic human/external evidence findings before release.",
+            "Close the remaining statutory/tax, visual/accessibility, operations/deployment, resilience, maintainability and authentic human/external evidence findings before release.",
             "independent-audit-control-ledger-v1",
             new DateOnly(2026, 7, 10),
             "7ea54cc6d1769ced568ac1568d190cc2bb4b16d1",

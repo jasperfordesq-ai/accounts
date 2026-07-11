@@ -161,7 +161,7 @@ function productionScorecardFixture() {
     currentScore: 783,
     targetScore: 1000,
     status: "remediation-required",
-    nextGate: "Close the remaining statutory/tax, visual/accessibility, governance/operations, resilience, maintainability and authentic human/external evidence findings before release.",
+    nextGate: "Close the remaining statutory/tax, visual/accessibility, operations/deployment, resilience, maintainability and authentic human/external evidence findings before release.",
     scoreBasis: "independent-audit-control-ledger-v1",
     auditBaselineDate: "2026-07-10",
     auditedCommit: "7ea54cc6d1769ced568ac1568d190cc2bb4b16d1",

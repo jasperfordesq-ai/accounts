@@ -41,8 +41,11 @@ describe("ProductionReadinessWorkbench", () => {
     expectText("250 / 350");
     expectText("203 / 250");
     expectText("215 / 250");
+    expectText("strict synchronized CI checks");
+    expectText("scheduled vulnerability scans and SPDX SBOM evidence");
+    expectText("production backup/restore, deployment ingress and encryption-at-rest/key-ownership evidence");
     expectText("Complete externally validated Revenue iXBRL");
-    expectText("Blocking audit items: P0-STAT-002, HUMAN-003");
+    expectText("Blocking audit items: HUMAN-003");
     expectText("Central exact-hash final release containment");
     expectText(/Next score gate/);
     expect(screen.getByRole("searchbox", { name: "Filter Next assurance actions" })).toBeInTheDocument();
@@ -397,7 +400,7 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
     currentScore: 783,
     targetScore: 1000,
     status: "remediation-required",
-    nextGate: "Close the remaining statutory/tax, visual/accessibility, governance/operations, resilience, maintainability and authentic human/external evidence findings before release.",
+    nextGate: "Close the remaining statutory/tax, visual/accessibility, operations/deployment, resilience, maintainability and authentic human/external evidence findings before release.",
     scoreBasis: "independent-audit-control-ledger-v1",
     auditBaselineDate: "2026-07-10",
     auditedCommit: "7ea54cc6d1769ced568ac1568d190cc2bb4b16d1",
@@ -503,6 +506,8 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
         targetScore: 250,
         status: "operator-confirmation-required",
         currentEvidence: [
+          "Repository policy requires a signed candidate, strict synchronized CI checks, pull-request and code-owner review, stale-review dismissal, administrator enforcement, and blocked force-push/deletion; verify-github-governance.ps1 records the live GitHub API state.",
+          "Runtime images use locked and digest-pinned inputs, remove npm/Corepack/Yarn/pnpm tooling from the final frontend runtime, and are covered by retained scheduled vulnerability scans and SPDX SBOM evidence.",
           "Auth, tenant and platform release gates are represented in readiness evidence.",
           "CI retains no-direct-filing-submission-report.json for the no-direct CRO/ROS submission verifier.",
           "no-direct-filing-submission-report.json records release candidate commit/run identity and pack verifiers reject stale no-direct evidence.",
@@ -520,7 +525,10 @@ function productionScorecard(): ProductionReadinessReport["productionScorecard"]
           "Monitoring-provider confirmation evidence requires real provider/event/correlation references, an HTTPS provider base URL, a matched structured-log smoke line and an explicit accepted operator decision.",
           "Release evidence reviewer workspaces now prefill monitoring provider machine evidence from retained CI smoke/log reports while leaving provider confirmation, operator identity, decision and signature fields blank.",
         ],
-        remainingGaps: ["Confirm the controlled monitoring smoke event inside the configured provider and retain the full release-artifact-pack-report.json after release-evidence-report.json is completed with named human sign-offs."],
+        remainingGaps: [
+          "Retain production backup/restore, deployment ingress and encryption-at-rest/key-ownership evidence for the exact environment.",
+          "Confirm the controlled monitoring smoke event inside the configured provider and retain the full release-artifact-pack-report.json after release-evidence-report.json is completed with named human sign-offs.",
+        ],
         completionTrackCodes: ["backend-code"],
         releaseBlockerCodes: ["backend-code:qualified-accountant-signoff"],
         controls: productionScorecardControls("security-auth-tenant-platform-guardrails"),
