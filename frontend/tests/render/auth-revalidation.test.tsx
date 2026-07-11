@@ -74,6 +74,33 @@ describe("AuthProvider background revalidation", () => {
     ));
   });
 
+  it("allows an authenticated user to open voluntary password rotation", async () => {
+    routeState.pathname = "/change-password";
+    getCurrentUser.mockResolvedValue(user());
+    render(
+      <AuthProvider>
+        <p>Password rotation form</p>
+      </AuthProvider>,
+    );
+
+    expect(await screen.findByText("Password rotation form")).toBeInTheDocument();
+    expect(replace).not.toHaveBeenCalled();
+  });
+
+  it("still forces a user with an outstanding initial-password rotation onto that page", async () => {
+    getCurrentUser.mockResolvedValue({ ...user(), mustChangePassword: true });
+    render(
+      <AuthProvider>
+        <p>Blocked workbench</p>
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(
+      expect.stringMatching(/^\/change-password\?returnTo=/),
+    ));
+    expect(screen.queryByText("Blocked workbench")).not.toBeInTheDocument();
+  });
+
   it("retains the authenticated workbench when a focus revalidation gets a 500", async () => {
     getCurrentUser
       .mockResolvedValueOnce(user())

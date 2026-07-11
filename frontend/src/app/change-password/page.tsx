@@ -52,7 +52,7 @@ export default function ChangePasswordPage() {
               Set a new password
             </Card.Title>
             <Card.Description className="text-gray-500 dark:text-gray-400">
-              Update the initial account password before continuing.
+              Choose a new password using your current password.
             </Card.Description>
           </div>
         </Card.Header>

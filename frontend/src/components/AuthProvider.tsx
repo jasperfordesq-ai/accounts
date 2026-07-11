@@ -191,11 +191,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    if (user && !user.mustChangePassword && isPasswordChangePage) {
-      router.replace(returnToFromLocation(
-        typeof window === "undefined" ? undefined : new URLSearchParams(window.location.search)
-      ));
-    }
   }, [authServiceError, isLoginPage, isPasswordChangePage, isPublicPage, loading, router, user]);
 
   const login = useCallback(async (email: string, password: string) => {
@@ -354,6 +349,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         </AuthContext.Provider>
       );
     }
+    return (
+      <AuthContext.Provider value={value}>
+        <FullPageSpinner />
+      </AuthContext.Provider>
+    );
+  }
+
+  if (user?.mustChangePassword && !isPasswordChangePage) {
     return (
       <AuthContext.Provider value={value}>
         <FullPageSpinner />
