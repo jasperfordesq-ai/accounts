@@ -557,7 +557,7 @@ public partial class ProductionReadinessReportService
             new(
                 [
                     "full accounts PDF blocker evidence",
-                    "auditor report requirement (pending genuine evidence)",
+                    "auditor report evidence requirement (pending genuine evidence)",
                     "cash flow statement requirement",
                     "statement of changes in equity requirement",
                     "iXBRL XML",
@@ -626,7 +626,7 @@ public partial class ProductionReadinessReportService
                 "Medium-company audit-required path blocked to manual handoff until auditor report and professional review evidence are present.",
                 [
                     "full accounts PDF blocker evidence",
-                    "auditor report requirement (pending genuine evidence)",
+                    "auditor report evidence requirement (pending genuine evidence)",
                     "cash flow statement requirement",
                     "statement of changes in equity requirement",
                     "iXBRL XML",

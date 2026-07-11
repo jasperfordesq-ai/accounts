@@ -1712,7 +1712,7 @@ public class ProductionReadinessReportTests
             expectedArtifacts:
             [
                 "full accounts PDF blocker evidence",
-                "auditor report requirement (pending genuine evidence)",
+                "auditor report evidence requirement (pending genuine evidence)",
                 "cash flow statement requirement",
                 "statement of changes in equity requirement",
                 "iXBRL XML",
@@ -1780,6 +1780,9 @@ public class ProductionReadinessReportTests
             && StringProperty(proof, "ExpectedEvidence").Contains("director and secretary", StringComparison.OrdinalIgnoreCase));
 
         var medium = Assert.Single(report.GoldenFilingCorpus, scenario => scenario.Code == "medium-audit-required");
+        Assert.Contains(
+            "auditor report evidence requirement (pending genuine evidence)",
+            medium.EvidencePack.OutputArtifacts);
         Assert.Contains(ObjectListProperty(medium.EvidencePack, "ExpectedProofPoints"), proof =>
             StringProperty(proof, "Area") == "auditor-handoff"
             && StringProperty(proof, "ExpectedEvidence").Contains("signed auditor", StringComparison.OrdinalIgnoreCase));

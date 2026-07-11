@@ -646,7 +646,7 @@ public partial class ProductionReadinessReportService
             State("password-change", "Password change", "Authenticated password rotation form.", "changePassword", "/change-password", "Set a new password", ["Setup"], "password-change"),
             AccountantState("dashboard", "/", canonicalTabState: Tab("route", "dashboard", "Dashboard root")),
             State("onboarding", "Company onboarding", "Blank company onboarding workflow at its legal-identity step.", "onboarding", "/companies/new", "New Company", ["Setup"], "onboarding", uiState: "blank-form"),
-            AccountantState("production-readiness", "/production-readiness", canonicalTabState: Tab("route", "readiness", "Production readiness")),
+            AccountantState("production-readiness", "/production-readiness", canonicalTabState: Tab("route", "readiness", "Production readiness"), expectedStateText: "Release remains gated"),
             AccountantState("company-detail", "/companies/{companyId}", canonicalTabState: Tab("route", "company", "Company command centre")),
             AccountantState("period-workspace", "/companies/{companyId}/periods/{periodId}", canonicalTabState: Tab("period-tab", "import", "Import"), expectedStateText: "Import Transactions"),
             State("classification", "Company size classification", "Period classification interview and statutory decision evidence.", "classification", "/companies/{companyId}/periods/{periodId}/classify", "Company Size Classification", ["Classify"], "classification"),

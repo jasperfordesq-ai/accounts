@@ -2415,13 +2415,13 @@ public partial class AccountsWorkflowTests
         Assert.DoesNotContain("\n      router.replace(\"/login\");\n    } catch", normalisedAuthProvider);
         Assert.Contains("logoutError", appNavbar);
         Assert.Contains("aria-live=\"polite\"", appNavbar);
-        Assert.Contains("md:block", appNavbar);
-        Assert.DoesNotContain("lg:block", appNavbar);
+        Assert.Contains("lg:block", appNavbar);
+        Assert.DoesNotContain("md:block", appNavbar);
         var mobileMenuIndex = normalisedNavbar.IndexOf("{/* Mobile menu */}", StringComparison.Ordinal);
         Assert.True(mobileMenuIndex > 0, "Navbar should keep the mobile menu section marker for source guards.");
         var mobileHeader = normalisedNavbar[..mobileMenuIndex];
         Assert.Contains("logoutError && user", mobileHeader);
-        Assert.Contains("md:hidden", mobileHeader);
+        Assert.Contains("lg:hidden", mobileHeader);
         Assert.Contains("role=\"status\"", mobileHeader);
         Assert.Contains("test:auth", packageJson);
         Assert.DoesNotContain("catch {\n      // The local shell should still clear stale session state", normalisedAuthProvider);
@@ -4258,6 +4258,22 @@ public partial class AccountsWorkflowTests
         Assert.Contains("visual-smoke-evidence-report.json themeContrastChecksPassed must be true", machineEvidencePack);
         Assert.Contains("visual-smoke-evidence-report.json minimumContrastRatio must be at least 3", script);
         Assert.Contains("visual-smoke-evidence-report.json minimumContrastRatio must be at least 3", machineEvidencePack);
+        foreach (var stateIdWithoutUiComponent in new[]
+        {
+            "state-loading",
+            "state-empty",
+            "state-permission-denied",
+            "state-read-only",
+            "state-stale"
+        })
+        {
+            Assert.Contains($"\"{stateIdWithoutUiComponent}\"", script);
+            Assert.Contains($"\"{stateIdWithoutUiComponent}\"", machineEvidencePack);
+        }
+        Assert.Contains("$sampledUiComponentCount -le 0 -and $stateId -notin $uiComponentOptionalStateIds", script);
+        Assert.Contains("$sampledUiComponentCount -le 0 -and $stateId -notin $uiComponentOptionalStateIds", machineEvidencePack);
+        Assert.Contains("minimumUiComponentContrastRatio must be zero when no UI component is rendered", script);
+        Assert.Contains("minimumUiComponentContrastRatio must be zero when no UI component is rendered", machineEvidencePack);
         Assert.Contains("visual-smoke-evidence-report.json totalBytes must prove retained screenshot bytes", script);
         Assert.Contains("visual-smoke-evidence-report.json totalBytes must prove retained screenshot bytes", machineEvidencePack);
         Assert.Contains("visual-smoke-evidence-report.json viewportDimensions must include exactly", script);
