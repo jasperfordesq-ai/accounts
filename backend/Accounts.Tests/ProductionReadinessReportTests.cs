@@ -2916,6 +2916,7 @@ public class ProductionReadinessReportTests
             Assert.Contains("accountant-workflow-hierarchy", StringListProperty(routeAudit, "ReviewChecks"));
             Assert.Contains("table-scanability", StringListProperty(routeAudit, "ReviewChecks"));
             Assert.Contains("theme-contrast", StringListProperty(routeAudit, "ReviewChecks"));
+            Assert.Contains("axe-wcag-2.2-a-aa", StringListProperty(routeAudit, "ReviewChecks"));
             Assert.Contains("responsive-density", StringListProperty(routeAudit, "ReviewChecks"));
             Assert.Contains("loading-error-empty-states", StringListProperty(routeAudit, "ReviewChecks"));
             Assert.Contains("canonical-url-tab-state", StringListProperty(routeAudit, "ReviewChecks"));
