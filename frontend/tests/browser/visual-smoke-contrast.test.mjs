@@ -19,7 +19,7 @@ assert.ok(darkVariantDirective, "globals.css should define a class-driven dark v
 const compiledThemeProbeStyles = (await postcss([tailwindcss()]).process(`
   @import "tailwindcss";
   ${darkVariantDirective}
-  @source inline("bg-white text-gray-900 dark:bg-neutral-900 dark:text-gray-100");
+  @source inline("bg-white text-gray-900 dark:bg-neutral-900 dark:text-gray-100 border border-transparent hover:border-[var(--control-border)] hover:bg-gray-50/50");
 `, { from: fileURLToPath(new URL("../../src/app/theme-probe.css", import.meta.url)) })).css;
 
 async function withPage(markup, action) {
@@ -66,6 +66,27 @@ test("selected application theme overrides the operating-system colour scheme", 
     assert.notEqual(selectedDarkOnLightOs.backgroundColor, selectedLightOnDarkOs.backgroundColor);
     assert.notEqual(selectedDarkOnLightOs.color, selectedLightOnDarkOs.color);
   });
+});
+
+test("hovered accordion headers retain a contrast-safe interaction boundary", async () => {
+  const result = await withPage(`<!doctype html>
+    <html>
+      <head><style>${compiledThemeProbeStyles}</style></head>
+      <body style="margin: 0; --control-border: #667067">
+        <main style="background: white; padding: 12px">
+          <button aria-label="Expand Debtors & Prepayments section" class="border border-transparent hover:border-[var(--control-border)] hover:bg-gray-50/50">
+            Debtors &amp; Prepayments
+          </button>
+        </main>
+      </body>
+    </html>`, async (page) => {
+    await page.getByRole("button").hover();
+    return checkThemeContrast(page, "accordion-hover-boundary");
+  });
+
+  assert.equal(result.status, "passed");
+  assert.equal(result.sampledUiComponentCount, 1);
+  assert.ok(result.minimumUiComponentContrastRatio >= 3);
 });
 
 test("real Chromium contrast collection covers text, controls, placeholders, disabled state, and gradients", async () => {

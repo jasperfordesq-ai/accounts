@@ -49,7 +49,7 @@ export function YearEndQuestionnaireSection({
     <Card className="bg-white dark:bg-neutral-900 shadow-sm border border-gray-200 dark:border-neutral-700">
       <button
         type="button"
-        className="w-full text-left px-6 py-4 flex items-center gap-4 hover:bg-gray-50/50 dark:hover:bg-neutral-800/50 transition-colors"
+        className="flex w-full items-center gap-4 border border-transparent px-6 py-4 text-left transition-colors hover:border-[var(--control-border)] hover:bg-gray-50/50 focus-visible:border-[var(--control-border)] dark:hover:bg-neutral-800/50"
         onClick={toggleOpen}
         aria-expanded={open}
         aria-controls={panelId}

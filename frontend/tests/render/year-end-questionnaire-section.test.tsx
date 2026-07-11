@@ -22,6 +22,12 @@ describe("YearEndQuestionnaireSection", () => {
     );
 
     const trigger = screen.getByRole("button", { name: "Expand Tax balances section" });
+    expect(trigger).toHaveClass(
+      "border",
+      "border-transparent",
+      "hover:border-[var(--control-border)]",
+      "focus-visible:border-[var(--control-border)]",
+    );
     const panelId = trigger.getAttribute("aria-controls");
 
     expect(trigger).toHaveAttribute("aria-expanded", "false");
