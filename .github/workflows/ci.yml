@@ -389,6 +389,7 @@ jobs:
       TRUST_PROXY_HEADERS: "true"
       FRONTEND_PORT: "3000"
       NO_PROXY: accounts-smoke.local,127.0.0.1,localhost
+      no_proxy: accounts-smoke.local,127.0.0.1,localhost
       BOOTSTRAP_TENANT_NAME: CI Firm
       BOOTSTRAP_TENANT_SLUG: ci-firm
       BOOTSTRAP_OWNER_EMAIL: owner@example.ie
@@ -710,9 +711,9 @@ jobs:
           frontend_container="$(docker compose -f compose.production.yml ps -q frontend)"
           frontend_network="$(docker inspect --format '{{range $name, $_ := .NetworkSettings.Networks}}{{$name}}{{end}}' "$frontend_container")"
           test -n "$frontend_network"
-          docker run -d \
+          docker create \
             --name accounts-production-smoke-ingress \
-            --network "$frontend_network" \
+            --network bridge \
             -p 127.0.0.1:80:80 \
             -p 127.0.0.1:443:443 \
             -v "${{ github.workspace }}/deploy/caddy/Caddyfile.example:/etc/caddy/Caddyfile:ro" \
@@ -722,12 +723,16 @@ jobs:
             -e ACCOUNTS_FRONTEND_UPSTREAM=frontend:3000 \
             -e ACCOUNTS_CADDY_GLOBAL_OPTIONS=local_certs \
             caddy:2@sha256:af5fdcd76f2db5e4e974ee92f96ee8c0fc3edb55bd4ba5032547cbf3f65e486d
+          docker network connect "$frontend_network" accounts-production-smoke-ingress
+          docker start accounts-production-smoke-ingress
 
+          caddy_probe=(--noproxy '*' --resolve accounts-smoke.local:443:127.0.0.1)
           for attempt in {1..30}; do
-            if curl -kfsS https://accounts-smoke.local/health/ready >/dev/null 2>&1; then
+            if curl "${caddy_probe[@]}" -kfsS https://accounts-smoke.local/health/ready >/dev/null 2>&1; then
               break
             fi
             if [ "$attempt" -eq 30 ]; then
+              curl "${caddy_probe[@]}" -kv https://accounts-smoke.local/health/ready || true
               docker logs accounts-production-smoke-ingress
               exit 1
             fi
@@ -759,7 +764,8 @@ jobs:
 
           sudo cp .tmp/production-smoke-caddy/caddy-local-root.crt /usr/local/share/ca-certificates/accounts-production-smoke-caddy.crt
           sudo update-ca-certificates
-          curl --fail --silent --show-error https://accounts-smoke.local/health/ready >/dev/null
+          curl --noproxy '*' --resolve accounts-smoke.local:443:127.0.0.1 \
+            --fail --silent --show-error https://accounts-smoke.local/health/ready >/dev/null
 
       - name: Run production smoke script
         shell: pwsh

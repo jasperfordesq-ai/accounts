@@ -1910,6 +1910,7 @@ public partial class AccountsWorkflowTests
         Assert.DoesNotContain("ACCOUNTS_FRONTEND_IMAGE: accounts-frontend-ci:${{ github.sha }}", productionSmokeJob);
         Assert.Contains("FRONTEND_PORT: \"3000\"", productionSmokeJob);
         Assert.Contains("NO_PROXY: accounts-smoke.local,127.0.0.1,localhost", productionSmokeJob);
+        Assert.Contains("no_proxy: accounts-smoke.local,127.0.0.1,localhost", productionSmokeJob);
         Assert.Contains("Generate ephemeral production smoke secrets", productionSmokeJob);
         Assert.Contains("::add-mask::", productionSmokeJob);
         Assert.Contains("GITHUB_ENV", productionSmokeJob);
@@ -1967,9 +1968,13 @@ public partial class AccountsWorkflowTests
         Assert.Contains("127.0.0.1 accounts-smoke.local", productionSmokeJob);
         Assert.Contains("accounts-production-smoke-ingress", productionSmokeJob);
         Assert.Contains("frontend_network=\"$(docker inspect", productionSmokeJob);
-        Assert.Contains("--network \"$frontend_network\"", productionSmokeJob);
+        Assert.Contains("docker create", productionSmokeJob);
+        Assert.Contains("--network bridge", productionSmokeJob);
+        Assert.Contains("docker network connect \"$frontend_network\" accounts-production-smoke-ingress", productionSmokeJob);
+        Assert.Contains("docker start accounts-production-smoke-ingress", productionSmokeJob);
         Assert.Contains("-p 127.0.0.1:443:443", productionSmokeJob);
         Assert.Contains("ACCOUNTS_FRONTEND_UPSTREAM=frontend:3000", productionSmokeJob);
+        Assert.Contains("--noproxy '*' --resolve accounts-smoke.local:443:127.0.0.1", productionSmokeJob);
         Assert.DoesNotContain("--network host", productionSmokeJob);
         Assert.Contains("caddy:2@sha256:af5fdcd76f2db5e4e974ee92f96ee8c0fc3edb55bd4ba5032547cbf3f65e486d", productionSmokeJob);
         Assert.Contains("ACCOUNTS_CADDY_GLOBAL_OPTIONS=local_certs", productionSmokeJob);

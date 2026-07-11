@@ -59,6 +59,15 @@ requireText(caddyImage, "The CI HTTPS ingress image must be pinned to the review
 if (count(caddyImage) !== 2) {
   failures.push("Both Caddy validation and HTTPS smoke must use the reviewed immutable image digest.");
 }
+requireText("--network bridge", "The CI HTTPS ingress must expose loopback ports through a non-internal bridge.");
+requireText(
+  'docker network connect "$frontend_network" accounts-production-smoke-ingress',
+  "The CI HTTPS ingress must also join the private frontend network before it starts.",
+);
+requireText("--noproxy '*' --resolve accounts-smoke.local:443:127.0.0.1", "The HTTPS ingress probe must deterministically target runner loopback without a proxy.");
+if (workflow.includes("--network host")) {
+  failures.push("The CI HTTPS ingress must not use host networking.");
+}
 
 if (count(`uses: docker/build-push-action@${approvedReferences.get("docker/build-push-action")}`) !== 2) {
   failures.push("CI must invoke the container builder exactly once for backend and once for frontend.");
