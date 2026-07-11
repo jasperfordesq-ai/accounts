@@ -4,9 +4,66 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 const blockedSeverities = new Set(["high", "critical"]);
+const knownSeverities = new Set(["unknown", "low", "medium", "high", "critical"]);
 
-function trivyVulnerabilities(report) {
-  return (report.Results ?? []).flatMap((result) => result.Vulnerabilities ?? []);
+function trivyVulnerabilities(name, report, failures) {
+  if (!report || typeof report !== "object" || Array.isArray(report)) {
+    failures.push(`${name} root must be a Trivy JSON object.`);
+    return [];
+  }
+  if (report.SchemaVersion !== 2) {
+    failures.push(`${name} must use Trivy SchemaVersion 2.`);
+  }
+  if (typeof report.ArtifactName !== "string" || report.ArtifactName.trim() === "") {
+    failures.push(`${name} must identify a non-empty scanned ArtifactName.`);
+  }
+  if (report.ArtifactType !== "container_image") {
+    failures.push(`${name} ArtifactType must be container_image.`);
+  }
+  if (!Array.isArray(report.Results) || report.Results.length === 0) {
+    failures.push(`${name} must contain a non-empty Trivy Results array.`);
+    return [];
+  }
+
+  const vulnerabilities = [];
+  for (const [resultIndex, result] of report.Results.entries()) {
+    if (!result || typeof result !== "object" || Array.isArray(result)) {
+      failures.push(`${name} Results[${resultIndex}] must be an object.`);
+      continue;
+    }
+    for (const property of ["Target", "Class", "Type"]) {
+      if (typeof result[property] !== "string" || result[property].trim() === "") {
+        failures.push(`${name} Results[${resultIndex}].${property} must be a non-empty string.`);
+      }
+    }
+    if (!Object.hasOwn(result, "Vulnerabilities")) {
+      // Clean Trivy targets omit the optional Vulnerabilities property.
+      continue;
+    }
+    if (!Array.isArray(result.Vulnerabilities)) {
+      failures.push(`${name} Results[${resultIndex}].Vulnerabilities must be an array when present.`);
+      continue;
+    }
+    for (const [findingIndex, finding] of result.Vulnerabilities.entries()) {
+      const context = `${name} Results[${resultIndex}].Vulnerabilities[${findingIndex}]`;
+      if (!finding || typeof finding !== "object" || Array.isArray(finding)) {
+        failures.push(`${context} must be an object.`);
+        continue;
+      }
+      if (typeof finding.VulnerabilityID !== "string" || finding.VulnerabilityID.trim() === "") {
+        failures.push(`${context}.VulnerabilityID must be a non-empty string.`);
+      }
+      const severity = typeof finding.Severity === "string"
+        ? finding.Severity.trim().toLowerCase()
+        : "";
+      if (!knownSeverities.has(severity)) {
+        failures.push(`${context}.Severity must be a recognized Trivy severity.`);
+        continue;
+      }
+      vulnerabilities.push({ ...finding, Severity: severity.toUpperCase() });
+    }
+  }
+  return vulnerabilities;
 }
 
 export function evaluateSecurityAudit({ npmAudit, trivyReports }) {
@@ -26,12 +83,8 @@ export function evaluateSecurityAudit({ npmAudit, trivyReports }) {
   }
 
   for (const [name, report] of Object.entries(trivyReports)) {
-    if (!Array.isArray(report?.Results)) {
-      failures.push(`${name} is not a complete Trivy JSON report.`);
-      continue;
-    }
-    const blocked = trivyVulnerabilities(report).filter((item) =>
-      blockedSeverities.has(String(item.Severity ?? "").toLowerCase()),
+    const blocked = trivyVulnerabilities(name, report, failures).filter((item) =>
+      blockedSeverities.has(item.Severity.toLowerCase()),
     );
     if (blocked.length > 0) {
       const bySeverity = blocked.reduce((counts, item) => {

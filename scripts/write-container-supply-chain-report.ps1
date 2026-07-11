@@ -67,15 +67,111 @@ function Get-FileEvidence([string]$Path, [string]$Label) {
     }
 }
 
+function Test-IsJsonObject($Value) {
+    return $null -ne $Value -and
+        $Value.GetType().FullName -eq "System.Management.Automation.PSCustomObject"
+}
+
+function Test-IsSchemaVersionTwo($Value) {
+    if ($null -eq $Value -or $Value.GetType().FullName -notin @(
+        "System.Byte", "System.SByte", "System.Int16", "System.UInt16",
+        "System.Int32", "System.UInt32", "System.Int64", "System.UInt64"
+    )) {
+        return $false
+    }
+    return [decimal]$Value -eq 2
+}
+
+function Test-IsNonEmptyJsonString($Value) {
+    return $Value -is [string] -and -not [string]::IsNullOrWhiteSpace($Value)
+}
+
 function Get-ScanEvidence([string]$Path, [string]$Reference, [string]$Label) {
     $file = Get-FileEvidence $Path "$Label Trivy scan"
     $scan = Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
-    $vulnerabilities = @(
-        @($scan.Results) |
-            ForEach-Object { @($_.Vulnerabilities) } |
-            Where-Object { $null -ne $_ }
+    if (-not (Test-IsJsonObject $scan)) {
+        throw "$Label Trivy scan root must be a JSON object."
+    }
+
+    $schemaVersionProperty = $scan.PSObject.Properties["SchemaVersion"]
+    if ($null -eq $schemaVersionProperty -or -not (Test-IsSchemaVersionTwo $schemaVersionProperty.Value)) {
+        throw "$Label Trivy scan SchemaVersion must be 2."
+    }
+    $artifactNameProperty = $scan.PSObject.Properties["ArtifactName"]
+    if ($null -eq $artifactNameProperty -or
+        -not (Test-IsNonEmptyJsonString $artifactNameProperty.Value) -or
+        $artifactNameProperty.Value -cne $Reference) {
+        throw "$Label Trivy scan ArtifactName must match the exact scanned image reference."
+    }
+    $artifactTypeProperty = $scan.PSObject.Properties["ArtifactType"]
+    if ($null -eq $artifactTypeProperty -or
+        -not (Test-IsNonEmptyJsonString $artifactTypeProperty.Value) -or
+        $artifactTypeProperty.Value -cne "container_image") {
+        throw "$Label Trivy scan ArtifactType must be container_image."
+    }
+
+    $resultsProperty = $scan.PSObject.Properties["Results"]
+    if ($null -eq $resultsProperty -or $resultsProperty.Value -isnot [System.Array]) {
+        throw "$Label Trivy scan must contain a Results array."
+    }
+
+    $results = @($resultsProperty.Value)
+    if ($results.Count -eq 0) {
+        throw "$Label Trivy scan Results array must not be empty."
+    }
+
+    $vulnerabilities = [System.Collections.Generic.List[object]]::new()
+    foreach ($result in $results) {
+        if (-not (Test-IsJsonObject $result)) {
+            throw "$Label Trivy scan Results entries must be JSON objects."
+        }
+
+        $targetProperty = $result.PSObject.Properties["Target"]
+        if ($null -eq $targetProperty -or -not (Test-IsNonEmptyJsonString $targetProperty.Value)) {
+            throw "$Label Trivy scan Results entries must identify a non-empty Target."
+        }
+        foreach ($requiredPropertyName in @("Class", "Type")) {
+            $requiredProperty = $result.PSObject.Properties[$requiredPropertyName]
+            if ($null -eq $requiredProperty -or -not (Test-IsNonEmptyJsonString $requiredProperty.Value)) {
+                throw "$Label Trivy scan Results entries must contain a non-empty $requiredPropertyName."
+            }
+        }
+
+        $vulnerabilitiesProperty = $result.PSObject.Properties["Vulnerabilities"]
+        if ($null -eq $vulnerabilitiesProperty) {
+            # Trivy omits this property for a clean target. A non-empty Results inventory and
+            # Target still prove that the scanner evaluated the image component.
+            continue
+        }
+        if ($null -eq $vulnerabilitiesProperty.Value -or $vulnerabilitiesProperty.Value -isnot [System.Array]) {
+            throw "$Label Trivy Vulnerabilities must be an array when present."
+        }
+
+        foreach ($vulnerability in @($vulnerabilitiesProperty.Value)) {
+            if (-not (Test-IsJsonObject $vulnerability)) {
+                throw "$Label Trivy Vulnerabilities entries must be JSON objects."
+            }
+
+            $severityProperty = $vulnerability.PSObject.Properties["Severity"]
+            if ($null -eq $severityProperty -or -not (Test-IsNonEmptyJsonString $severityProperty.Value)) {
+                throw "$Label Trivy Vulnerabilities entries must contain a non-empty Severity."
+            }
+            $vulnerabilityIdProperty = $vulnerability.PSObject.Properties["VulnerabilityID"]
+            if ($null -eq $vulnerabilityIdProperty -or -not (Test-IsNonEmptyJsonString $vulnerabilityIdProperty.Value)) {
+                throw "$Label Trivy Vulnerabilities entries must contain a non-empty VulnerabilityID."
+            }
+            $severity = ([string]$severityProperty.Value).ToUpperInvariant()
+            if ($severity -notin @("UNKNOWN", "LOW", "MEDIUM", "HIGH", "CRITICAL")) {
+                throw "$Label Trivy Vulnerabilities entry has an unsupported Severity '$severity'."
+            }
+            $vulnerabilities.Add($vulnerability)
+        }
+    }
+
+    $highCritical = @(
+        $vulnerabilities |
+            Where-Object { ([string]$_.Severity).ToUpperInvariant() -in @("HIGH", "CRITICAL") }
     )
-    $highCritical = @($vulnerabilities | Where-Object { [string]$_.Severity -in @("HIGH", "CRITICAL") })
     if ($highCritical.Count -ne 0) {
         throw "$Label image scan contains $($highCritical.Count) HIGH/CRITICAL vulnerabilities."
     }

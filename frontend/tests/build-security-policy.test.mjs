@@ -54,8 +54,19 @@ test("deliberately vulnerable npm and container fixtures fail the security polic
     },
     trivyReports: {
       "fixture-trivy.json": {
+        SchemaVersion: 2,
+        ArtifactName: "fixture-image@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        ArtifactType: "container_image",
         Results: [
           {
+            Target: "clean operating-system target",
+            Class: "os-pkgs",
+            Type: "alpine",
+          },
+          {
+            Target: "application packages",
+            Class: "lang-pkgs",
+            Type: "node-pkg",
             Vulnerabilities: [
               { VulnerabilityID: "CVE-2099-0001", Severity: "CRITICAL" },
             ],
@@ -75,12 +86,62 @@ test("zero-vulnerability evidence passes the security policy", () => {
         metadata: { vulnerabilities: { low: 0, moderate: 0, high: 0, critical: 0 } },
       },
       trivyReports: {
-        "backend-trivy.json": { Results: [] },
-        "frontend-trivy.json": { Results: [] },
+        "backend-trivy.json": {
+          SchemaVersion: 2,
+          ArtifactName: "backend-image@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          ArtifactType: "container_image",
+          Results: [{ Target: "backend", Class: "lang-pkgs", Type: "dotnet-core" }],
+        },
+        "frontend-trivy.json": {
+          SchemaVersion: 2,
+          ArtifactName: "frontend-image@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          ArtifactType: "container_image",
+          Results: [{
+            Target: "frontend",
+            Class: "lang-pkgs",
+            Type: "node-pkg",
+            Vulnerabilities: [],
+          }],
+        },
       },
     }),
     [],
   );
+});
+
+test("malformed or truncated Trivy evidence fails closed", () => {
+  const report = (overrides = {}) => ({
+    SchemaVersion: 2,
+    ArtifactName: "image@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    ArtifactType: "container_image",
+    Results: [{ Target: "image", Class: "os-pkgs", Type: "alpine" }],
+    ...overrides,
+  });
+  const failures = evaluateSecurityAudit({
+    npmAudit: {
+      metadata: { vulnerabilities: { low: 0, moderate: 0, high: 0, critical: 0 } },
+    },
+    trivyReports: {
+      "empty-results.json": report({ Results: [] }),
+      "null-vulnerabilities.json": report({
+        Results: [{ Target: "image", Class: "os-pkgs", Type: "alpine", Vulnerabilities: null }],
+      }),
+      "unknown-severity.json": report({
+        Results: [{
+          Target: "image",
+          Class: "os-pkgs",
+          Type: "alpine",
+          Vulnerabilities: [{ VulnerabilityID: "CVE-2099-0002", Severity: "UNBOUNDED" }],
+        }],
+      }),
+      "wrong-type.json": report({ ArtifactType: "filesystem" }),
+    },
+  });
+
+  assert.ok(failures.some((failure) => failure.includes("non-empty Trivy Results array")));
+  assert.ok(failures.some((failure) => failure.includes("Vulnerabilities must be an array")));
+  assert.ok(failures.some((failure) => failure.includes("recognized Trivy severity")));
+  assert.ok(failures.some((failure) => failure.includes("ArtifactType must be container_image")));
 });
 
 test("the normalized production topology satisfies the container hardening policy", () => {

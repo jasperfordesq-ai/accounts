@@ -23,6 +23,25 @@ function Assert-False($Value, [string]$Context) {
     if ($Value -ne $false) { Add-Failure "$Context must be false." }
 }
 
+function Test-IsJsonObject($Value) {
+    return $null -ne $Value -and
+        $Value.GetType().FullName -eq "System.Management.Automation.PSCustomObject"
+}
+
+function Test-IsSchemaVersionTwo($Value) {
+    if ($null -eq $Value -or $Value.GetType().FullName -notin @(
+        "System.Byte", "System.SByte", "System.Int16", "System.UInt16",
+        "System.Int32", "System.UInt32", "System.Int64", "System.UInt64"
+    )) {
+        return $false
+    }
+    return [decimal]$Value -eq 2
+}
+
+function Test-IsNonEmptyJsonString($Value) {
+    return $Value -is [string] -and -not [string]::IsNullOrWhiteSpace($Value)
+}
+
 function Assert-FileEvidence($FileEvidence, [string]$Directory, [string]$Context) {
     if ($null -eq $FileEvidence) {
         Add-Failure "$Context file evidence is required."
@@ -59,22 +78,92 @@ function Get-RetainedFilePath($FileEvidence, [string]$Directory, [string]$Contex
     return $path
 }
 
-function Assert-ScanFile($FileEvidence, [string]$Directory, [string]$Context) {
+function Assert-ScanFile(
+    $FileEvidence,
+    [string]$Directory,
+    [string]$ExpectedReference,
+    [string]$Context
+) {
     $path = Get-RetainedFilePath $FileEvidence $Directory $Context
     if ([string]::IsNullOrWhiteSpace($path)) { return }
 
     try {
         $scan = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+        if (-not (Test-IsJsonObject $scan)) {
+            throw "root must be a JSON object"
+        }
+        $schemaVersionProperty = $scan.PSObject.Properties["SchemaVersion"]
+        if ($null -eq $schemaVersionProperty -or -not (Test-IsSchemaVersionTwo $schemaVersionProperty.Value)) {
+            throw "SchemaVersion must be 2"
+        }
+        $artifactNameProperty = $scan.PSObject.Properties["ArtifactName"]
+        if ($null -eq $artifactNameProperty -or
+            -not (Test-IsNonEmptyJsonString $artifactNameProperty.Value) -or
+            $artifactNameProperty.Value -cne $ExpectedReference) {
+            throw "ArtifactName must match the exact scanned image reference"
+        }
+        $artifactTypeProperty = $scan.PSObject.Properties["ArtifactType"]
+        if ($null -eq $artifactTypeProperty -or
+            -not (Test-IsNonEmptyJsonString $artifactTypeProperty.Value) -or
+            $artifactTypeProperty.Value -cne "container_image") {
+            throw "ArtifactType must be container_image"
+        }
+        $resultsProperty = $scan.PSObject.Properties["Results"]
+        if ($null -eq $resultsProperty -or $resultsProperty.Value -isnot [System.Array]) {
+            throw "Results must be an array"
+        }
+        $results = @($resultsProperty.Value)
+        if ($results.Count -eq 0) {
+            throw "Results must not be empty"
+        }
+
+        $vulnerabilities = [System.Collections.Generic.List[object]]::new()
+        foreach ($result in $results) {
+            if (-not (Test-IsJsonObject $result)) {
+                throw "Results entries must be JSON objects"
+            }
+            foreach ($requiredPropertyName in @("Target", "Class", "Type")) {
+                $requiredProperty = $result.PSObject.Properties[$requiredPropertyName]
+                if ($null -eq $requiredProperty -or -not (Test-IsNonEmptyJsonString $requiredProperty.Value)) {
+                    throw "Results entries must contain a non-empty $requiredPropertyName"
+                }
+            }
+
+            $vulnerabilitiesProperty = $result.PSObject.Properties["Vulnerabilities"]
+            if ($null -eq $vulnerabilitiesProperty) {
+                continue
+            }
+            if ($null -eq $vulnerabilitiesProperty.Value -or $vulnerabilitiesProperty.Value -isnot [System.Array]) {
+                throw "Vulnerabilities must be an array when present"
+            }
+            foreach ($vulnerability in @($vulnerabilitiesProperty.Value)) {
+                if (-not (Test-IsJsonObject $vulnerability)) {
+                    throw "Vulnerabilities entries must be JSON objects"
+                }
+                $vulnerabilityIdProperty = $vulnerability.PSObject.Properties["VulnerabilityID"]
+                if ($null -eq $vulnerabilityIdProperty -or -not (Test-IsNonEmptyJsonString $vulnerabilityIdProperty.Value)) {
+                    throw "Vulnerabilities entries must contain a non-empty VulnerabilityID"
+                }
+                $severityProperty = $vulnerability.PSObject.Properties["Severity"]
+                if ($null -eq $severityProperty -or -not (Test-IsNonEmptyJsonString $severityProperty.Value)) {
+                    throw "Vulnerabilities entries must contain a non-empty Severity"
+                }
+                $severity = ([string]$severityProperty.Value).ToUpperInvariant()
+                if ($severity -notin @("UNKNOWN", "LOW", "MEDIUM", "HIGH", "CRITICAL")) {
+                    throw "Vulnerabilities entry has an unsupported Severity '$severity'"
+                }
+                $vulnerabilities.Add($vulnerability)
+            }
+        }
         $highCritical = @(
-            @($scan.Results) |
-                ForEach-Object { @($_.Vulnerabilities) } |
-                Where-Object { $null -ne $_ -and [string]$_.Severity -in @("HIGH", "CRITICAL") }
+            $vulnerabilities |
+                Where-Object { ([string]$_.Severity).ToUpperInvariant() -in @("HIGH", "CRITICAL") }
         )
         if ($highCritical.Count -ne 0) {
             Add-Failure "$Context retained Trivy report contains HIGH/CRITICAL vulnerabilities."
         }
     } catch {
-        Add-Failure "$Context retained Trivy report is not valid JSON."
+        Add-Failure "$Context retained Trivy report is invalid: $($_.Exception.Message)."
     }
 }
 
@@ -205,7 +294,7 @@ foreach ($image in $images) {
         Add-Failure "$context.scan.highCriticalVulnerabilityCount must be zero."
     }
     Assert-FileEvidence $image.scan.file $directory "$context.scan"
-    Assert-ScanFile $image.scan.file $directory "$context.scan"
+    Assert-ScanFile $image.scan.file $directory ([string]$image.scan.imageReference) "$context.scan"
     $retainedFileNames.Add([string]$image.scan.file.fileName) | Out-Null
 
     if ([string]$image.sbom.format -ne "spdx-json" -or [string]$image.sbom.spdxVersion -notmatch '^SPDX-') {

@@ -2058,6 +2058,7 @@ public partial class AccountsWorkflowTests
         var workflow = File.ReadAllText(Path.Combine(root, ".github", "workflows", "ci.yml"));
         var actionPolicy = File.ReadAllText(Path.Combine(root, "scripts", "verify-ci-actions.mjs"));
         var writerPath = Path.Combine(root, "scripts", "write-container-supply-chain-report.ps1");
+        var writerTestsPath = Path.Combine(root, "scripts", "test-container-supply-chain-report.ps1");
         var verifierPath = Path.Combine(root, "scripts", "verify-container-supply-chain-report.ps1");
         var machinePack = File.ReadAllText(Path.Combine(root, "scripts", "verify-ci-machine-evidence-pack.ps1"));
         var releasePack = File.ReadAllText(Path.Combine(root, "scripts", "verify-release-artifact-pack.ps1"));
@@ -2065,8 +2066,10 @@ public partial class AccountsWorkflowTests
         var imageExample = File.ReadAllText(Path.Combine(root, "deploy", "production-images.env.example"));
 
         Assert.True(File.Exists(writerPath));
+        Assert.True(File.Exists(writerTestsPath));
         Assert.True(File.Exists(verifierPath));
         var writer = File.ReadAllText(writerPath);
+        var writerTests = File.ReadAllText(writerTestsPath);
         var verifier = File.ReadAllText(verifierPath);
 
         var actionUsages = Regex.Matches(workflow, @"^\s*uses:\s*[^@\s]+@([^\s#]+)", RegexOptions.Multiline);
@@ -2125,11 +2128,24 @@ public partial class AccountsWorkflowTests
         }
 
         Assert.Contains("highCriticalVulnerabilityCount", writer);
+        Assert.Contains("Trivy omits this property for a clean target", writer);
+        Assert.Contains("Results array must not be empty", writer);
+        Assert.Contains("non-empty Severity", writer);
+        Assert.Contains("New-CleanScan", writerTests);
+        Assert.Contains("CVE-SYNTHETIC-HIGH", writerTests);
+        Assert.Contains("CVE-SYNTHETIC-CRITICAL", writerTests);
+        Assert.Contains("Assert-VerifierRejectsRetainedBlockedFinding", writerTests);
+        Assert.Contains("must contain a Results array", writerTests);
+        Assert.Contains("test-container-supply-chain-report.ps1", workflow);
+        Assert.Contains("test-container-supply-chain-report.ps1", actionPolicy);
         Assert.Contains("builtInvocationCount = 1", writer);
         Assert.Contains("productionSmokeUsedExactDigestReferences", writer);
         Assert.Contains("status must be passed for release evidence", verifier);
         Assert.Contains("Unpromoted evidence status must be explicitly blocked", verifier);
         Assert.Contains("retained Trivy report contains HIGH/CRITICAL vulnerabilities", verifier);
+        Assert.Contains("ArtifactName must match the exact scanned image reference", verifier);
+        Assert.Contains("Results must not be empty", verifier);
+        Assert.Contains("Vulnerabilities must be an array when present", verifier);
         Assert.Contains("retained SBOM must be SPDX JSON", verifier);
         Assert.Contains("retained GitHub provenance bundle", verifier);
         Assert.Contains("evidenceReport", verifier);

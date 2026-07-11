@@ -37,6 +37,10 @@ jobs:
       - name: Validate reproducible build inputs
         run: node scripts/verify-build-inputs.mjs
 
+      - name: Test container supply-chain evidence parser
+        shell: pwsh
+        run: ./scripts/test-container-supply-chain-report.ps1
+
   backend:
     name: Backend
     runs-on: ubuntu-latest

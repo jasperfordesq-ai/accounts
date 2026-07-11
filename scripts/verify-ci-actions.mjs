@@ -116,6 +116,7 @@ requireText('docker pull "$ACCOUNTS_API_IMAGE"', "Production smoke must pull the
 requireText('docker pull "$ACCOUNTS_FRONTEND_IMAGE"', "Production smoke must pull the exact frontend digest.");
 requireText("./scripts/write-container-supply-chain-report.ps1", "CI must emit the machine-checkable container supply-chain report.");
 requireText("./scripts/verify-container-supply-chain-report.ps1", "CI must verify container supply-chain evidence before release packing.");
+requireText("./scripts/test-container-supply-chain-report.ps1", "CI must exercise clean and malformed Trivy evidence parser shapes.");
 requireText("name: container-supply-chain", "CI must retain the container supply-chain artifact.");
 requireText('pattern: "!*.dockerbuild"', "CI evidence download must exclude Buildx record artifacts.");
 requireText(
