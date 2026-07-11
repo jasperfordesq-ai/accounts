@@ -808,7 +808,9 @@ async function checkThemeContrast(page, routeName) {
 }
 
 async function captureRoute({ page, state, routeName, href, expectedText, expectedStateText, outputPath }) {
-  const routeErrors = [];
+  const consoleErrors = [];
+  const pageErrors = [];
+  const failedResponses = [];
   const onConsole = (message) => {
     const text = message.text();
     const isLocalDevNonceHydrationWarning =
@@ -817,12 +819,26 @@ async function captureRoute({ page, state, routeName, href, expectedText, expect
       text.includes("nonce=");
 
     if (message.type() === "error" && !isLocalDevNonceHydrationWarning) {
-      routeErrors.push(`console: ${text}`);
+      consoleErrors.push({
+        type: message.type(),
+        text,
+        location: message.location(),
+      });
     }
   };
-  const onPageError = (error) => routeErrors.push(`pageerror: ${error.message}`);
+  const onPageError = (error) => pageErrors.push(error.message);
+  const onResponse = (response) => {
+    if (response.status() >= 400) {
+      failedResponses.push({
+        url: response.url(),
+        status: response.status(),
+        method: response.request().method(),
+      });
+    }
+  };
   page.on("console", onConsole);
   page.on("pageerror", onPageError);
+  page.on("response", onResponse);
 
   try {
     await page.goto(href, { waitUntil: "domcontentloaded" });
@@ -847,6 +863,14 @@ async function captureRoute({ page, state, routeName, href, expectedText, expect
     const semanticContentEvidence = await readSemanticContentEvidence(page);
     await page.screenshot({ path: outputPath, fullPage: true });
 
+    const routeErrors = unexpectedVisualSmokeBrowserErrors({
+      state,
+      consoleErrors,
+      pageErrors,
+      failedResponses,
+      pageUrl: page.url(),
+    });
+
     if (routeErrors.length > 0) {
       throw new Error(`${routeName} emitted browser errors:\n${routeErrors.join("\n")}`);
     }
@@ -861,7 +885,78 @@ async function captureRoute({ page, state, routeName, href, expectedText, expect
   } finally {
     page.off("console", onConsole);
     page.off("pageerror", onPageError);
+    page.off("response", onResponse);
   }
+}
+
+function isExpectedAnonymousSessionProbeConsoleError({ state, message, failedResponses, pageUrl }) {
+  return expectedAnonymousSessionProbeResponseIndex({
+    state,
+    message,
+    failedResponses,
+    pageUrl,
+  }) >= 0;
+}
+
+function expectedAnonymousSessionProbeResponseIndex({ state, message, failedResponses, pageUrl }) {
+  if (
+    state?.id !== "login"
+    || state?.authMode !== "anonymous"
+    || message?.type !== "error"
+    || !/^Failed to load resource: the server responded with a status of 401 \([^)]*\)$/.test(message?.text ?? "")
+  ) {
+    return -1;
+  }
+
+  try {
+    const pageLocation = new URL(pageUrl);
+    const resourceLocation = new URL(message.location?.url ?? "");
+    if (
+      pageLocation.pathname !== "/login"
+      || pageLocation.search !== ""
+      || pageLocation.hash !== ""
+      || resourceLocation.origin !== pageLocation.origin
+      || resourceLocation.pathname !== "/api/auth/me"
+      || resourceLocation.search !== ""
+      || resourceLocation.hash !== ""
+    ) {
+      return -1;
+    }
+
+    return failedResponses.findIndex((response) => {
+      if (response.status !== 401 || response.method !== "GET") {
+        return false;
+      }
+      try {
+        return new URL(response.url).href === resourceLocation.href;
+      } catch {
+        return false;
+      }
+    });
+  } catch {
+    return -1;
+  }
+}
+
+function unexpectedVisualSmokeBrowserErrors({ state, consoleErrors, pageErrors, failedResponses, pageUrl }) {
+  const unmatchedResponses = [...failedResponses];
+  const errors = pageErrors.map((message) => `pageerror: ${message}`);
+
+  for (const message of consoleErrors) {
+    const responseIndex = expectedAnonymousSessionProbeResponseIndex({
+      state,
+      message,
+      failedResponses: unmatchedResponses,
+      pageUrl,
+    });
+    if (responseIndex >= 0) {
+      unmatchedResponses.splice(responseIndex, 1);
+    } else {
+      errors.push(`console: ${message.text}`);
+    }
+  }
+
+  return errors;
 }
 
 async function run() {
@@ -1037,7 +1132,14 @@ function relativePageUrl(page) {
   return `${url.pathname}${url.search}`;
 }
 
-export { checkThemeContrast, companyHrefFromPeriodHref, periodPathFromHref, resolveVisualSmokeStateHref };
+export {
+  checkThemeContrast,
+  companyHrefFromPeriodHref,
+  isExpectedAnonymousSessionProbeConsoleError,
+  periodPathFromHref,
+  resolveVisualSmokeStateHref,
+  unexpectedVisualSmokeBrowserErrors,
+};
 
 const invokedAsScript = process.argv[1]
   && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;

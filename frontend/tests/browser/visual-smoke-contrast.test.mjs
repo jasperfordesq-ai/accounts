@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
+import http from "node:http";
 import test from "node:test";
 import { chromium } from "@playwright/test";
-import { checkThemeContrast } from "../../scripts/visual-smoke.mjs";
+import {
+  checkThemeContrast,
+  unexpectedVisualSmokeBrowserErrors,
+} from "../../scripts/visual-smoke.mjs";
 
 async function withPage(markup, action) {
   const browser = await chromium.launch({ headless: true });
@@ -68,4 +72,76 @@ test("real Chromium rejects indistinguishable interactive boundaries", async () 
     `), (page) => checkThemeContrast(page, "ui-boundary-failure")),
     /UI component/,
   );
+});
+
+test("real Chromium permits only the paired anonymous session 401 and retains other browser errors", async () => {
+  const server = http.createServer((request, response) => {
+    if (request.url === "/api/auth/me") {
+      response.writeHead(401, { "content-type": "application/json" });
+      response.end("{}");
+      return;
+    }
+    if (request.url === "/api/unexpected") {
+      response.writeHead(403, { "content-type": "application/json" });
+      response.end("{}");
+      return;
+    }
+    response.writeHead(200, { "content-type": "text/html" });
+    response.end(`<!doctype html><script>
+      fetch('/api/auth/me');
+      fetch('/api/unexpected');
+      setTimeout(() => { throw new Error('synthetic page failure'); }, 10);
+    </script>`);
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+
+  let browser;
+  try {
+    browser = await chromium.launch({ headless: true });
+    const origin = `http://127.0.0.1:${server.address().port}`;
+    const page = await browser.newPage();
+    const consoleErrors = [];
+    const pageErrors = [];
+    const failedResponses = [];
+    page.on("console", (message) => {
+      if (message.type() === "error") {
+        consoleErrors.push({ type: message.type(), text: message.text(), location: message.location() });
+      }
+    });
+    page.on("pageerror", (error) => pageErrors.push(error.message));
+    page.on("response", (response) => {
+      if (response.status() >= 400) {
+        failedResponses.push({
+          url: response.url(),
+          status: response.status(),
+          method: response.request().method(),
+        });
+      }
+    });
+
+    const expectedSessionResponse = page.waitForResponse(
+      (response) => response.url() === `${origin}/api/auth/me` && response.status() === 401,
+    );
+    const expectedUnexpectedResponse = page.waitForResponse(
+      (response) => response.url() === `${origin}/api/unexpected` && response.status() === 403,
+    );
+    const expectedPageError = page.waitForEvent("pageerror", { timeout: 5_000 });
+    await page.goto(`${origin}/login`);
+    await Promise.all([expectedSessionResponse, expectedUnexpectedResponse, expectedPageError]);
+    const errors = unexpectedVisualSmokeBrowserErrors({
+      state: { id: "login", authMode: "anonymous" },
+      consoleErrors,
+      pageErrors,
+      failedResponses,
+      pageUrl: page.url(),
+    });
+
+    assert.equal(consoleErrors.some((message) => message.location.url === `${origin}/api/auth/me`), true);
+    assert.equal(errors.some((error) => error.includes("status of 401")), false);
+    assert.equal(errors.some((error) => error.includes("status of 403")), true);
+    assert.equal(errors.some((error) => error === "pageerror: synthetic page failure"), true);
+  } finally {
+    await browser?.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
 });
