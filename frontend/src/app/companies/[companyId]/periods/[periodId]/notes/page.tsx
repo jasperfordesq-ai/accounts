@@ -346,7 +346,7 @@ export default function NotesPage({
           Notes to the Financial Statements
         </h1>
         {company && period && (
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          <p className="text-sm text-[var(--muted-foreground)] mt-1">
             {company.legalName} &mdash;{" "}
             {new Date(period.periodStart).toLocaleDateString("en-IE")} to{" "}
             {new Date(period.periodEnd).toLocaleDateString("en-IE")}
@@ -397,7 +397,7 @@ export default function NotesPage({
                 Refresh
               </Button>
             </div>
-            <div className="flex items-center gap-3 text-sm text-gray-500 dark:text-gray-400">
+            <div className="flex items-center gap-3 text-sm text-[var(--muted-foreground)]">
               <span>
                 {notes.length} note{notes.length !== 1 ? "s" : ""} total
               </span>
@@ -488,7 +488,7 @@ export default function NotesPage({
         <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
           <Card.Content className="text-center py-12">
             <FileText className="w-10 h-10 text-[var(--muted-foreground)] mx-auto mb-3" />
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+            <p className="text-sm text-[var(--muted-foreground)]">
               No notes have been created yet.
             </p>
             <p className="text-xs text-[var(--muted-foreground)] mt-1">
@@ -583,7 +583,7 @@ export default function NotesPage({
                           title={note.isIncluded ? "Exclude this note from the financial statements" : "Include this note in the financial statements"}
                           className="rounded border-[var(--control-border)] text-emerald-600 focus:ring-emerald-500 dark:bg-neutral-800"
                         />
-                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                        <span className="text-xs text-[var(--muted-foreground)]">
                           Include
                         </span>
                       </label>}
@@ -638,7 +638,7 @@ export default function NotesPage({
                   )}
 
                   {note.reviewEvidence && (
-                    <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+                    <p className="mt-3 text-xs text-[var(--muted-foreground)]">
                       Review evidence: {note.reviewEvidence}
                     </p>
                   )}
@@ -707,7 +707,7 @@ export default function NotesPage({
                         Discard
                       </Button>
                       <CheckCircle2 className="w-4 h-4 text-amber-500" />
-                      <span className="text-xs text-amber-600 dark:text-amber-400">
+                      <span className="text-xs text-amber-800 dark:text-amber-300">
                         Unsaved changes
                       </span>
                     </div>

@@ -219,7 +219,7 @@ export default function ClassifyPage({
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
           Company Size Classification
         </h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+        <p className="text-sm text-[var(--muted-foreground)] mt-1">
           {company?.legalName ?? "Company"} &mdash;{" "}
           {period
             ? `${new Date(period.periodStart).toLocaleDateString("en-IE")} to ${new Date(period.periodEnd).toLocaleDateString("en-IE")}`
@@ -305,7 +305,7 @@ export default function ClassifyPage({
                 <option value="2024-01-01">Apply adjusted thresholds from financial years beginning in 2024</option>
                 <option value="2023-01-01">Elect adjusted thresholds from financial years beginning in 2023</option>
               </select>
-              <p className="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">
+              <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">
                 Prior-period raw figures and the prior effective class are derived from retained accounting periods; they cannot be supplied here.
               </p>
             </div>
@@ -534,7 +534,7 @@ export default function ClassifyPage({
                         )}
                       </Button>
                       {regimeConfirmed && (
-                        <span className="text-sm text-emerald-600 dark:text-emerald-400 font-medium">
+                        <span className="text-sm font-medium text-[var(--emerald-700)]">
                           {regimeLabel(selectedRegime, result.availableRegimes)} regime has been set for this period.
                         </span>
                       )}
@@ -585,25 +585,25 @@ export default function ClassifyPage({
               )}
               <div className="grid grid-cols-3 gap-4 text-center">
                 <div className="rounded-lg bg-gray-50 dark:bg-neutral-800 p-3">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Turnover</p>
+                  <p className="text-xs text-[var(--muted-foreground)]">Turnover</p>
                   <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                     {formatCurrency(period.sizeClassification.turnover)}
                   </p>
                 </div>
                 <div className="rounded-lg bg-gray-50 dark:bg-neutral-800 p-3">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Balance Sheet</p>
+                  <p className="text-xs text-[var(--muted-foreground)]">Balance Sheet</p>
                   <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                     {formatCurrency(period.sizeClassification.balanceSheetTotal)}
                   </p>
                 </div>
                 <div className="rounded-lg bg-gray-50 dark:bg-neutral-800 p-3">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Avg Employees</p>
+                  <p className="text-xs text-[var(--muted-foreground)]">Avg Employees</p>
                   <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                     {period.sizeClassification.avgEmployees}
                   </p>
                 </div>
               </div>
-              <p className="text-xs leading-5 text-gray-500 dark:text-gray-400 text-center">
+              <p className="text-xs leading-5 text-[var(--muted-foreground)] text-center">
                 Threshold schedule {period.sizeClassification.thresholdScheduleCode ?? "not yet recorded"}
                 {period.sizeClassification.thresholdScheduleEffectiveFrom
                   ? `, effective ${new Date(`${period.sizeClassification.thresholdScheduleEffectiveFrom}T00:00:00Z`).toLocaleDateString("en-IE")}`
@@ -623,7 +623,7 @@ export default function ClassifyPage({
 function DecisionEvidence({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">{label}</dt>
+      <dt className="text-xs font-medium uppercase tracking-wide text-[var(--muted-foreground)]">{label}</dt>
       <dd className="mt-1 font-semibold text-gray-900 dark:text-gray-100">{value}</dd>
     </div>
   );

@@ -19,7 +19,7 @@ export function PeriodYearEndWorkspace({ yearEnd, questionnaireHref }: PeriodYea
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
               <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Year-End Questionnaire</h3>
-              <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+              <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">
                 Walk through all 9 sections to capture debtors, creditors, assets, payroll, tax, and more.
               </p>
             </div>
@@ -80,7 +80,7 @@ export function PeriodYearEndWorkspace({ yearEnd, questionnaireHref }: PeriodYea
         <Card className="shadow-sm border border-gray-200 bg-white dark:border-neutral-700 dark:bg-neutral-900">
           <Card.Content className="py-8 text-center">
             <BarChart3 className="mx-auto mb-3 h-10 w-10 text-[var(--muted-foreground)]" />
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+            <p className="text-sm text-[var(--muted-foreground)]">
               Year-end summary data is not yet available for this period.
             </p>
             <p className="mt-1 text-xs text-[var(--muted-foreground)]">
@@ -120,7 +120,7 @@ function YearEndCompletenessCard({ yearEnd }: { yearEnd: YearEndSummary }) {
         </ProgressBar>
         {yearEnd.completeness.incomplete.length > 0 && (
           <div className="mt-4">
-            <p className="mb-2 text-xs font-medium text-gray-500 dark:text-gray-400">Incomplete items:</p>
+            <p className="mb-2 text-xs font-medium text-[var(--muted-foreground)]">Incomplete items:</p>
             <div className="flex flex-wrap gap-1.5">
               {yearEnd.completeness.incomplete.map((item) => (
                 <Chip key={item} color="warning" variant="soft" size="sm">
@@ -139,9 +139,9 @@ function SummaryCard({ title, value, subtitle }: { title: string; value: string;
   return (
     <Card className="shadow-sm border border-gray-200 bg-white dark:border-neutral-700 dark:bg-neutral-900">
       <Card.Content className="p-4">
-        <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">{title}</p>
+        <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted-foreground)]">{title}</p>
         <p className="mt-1 text-2xl font-bold text-gray-900 dark:text-gray-100">{value}</p>
-        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{subtitle}</p>
+        <p className="mt-1 text-xs text-[var(--muted-foreground)]">{subtitle}</p>
       </Card.Content>
     </Card>
   );

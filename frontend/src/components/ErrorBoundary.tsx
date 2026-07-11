@@ -45,7 +45,7 @@ export class ErrorBoundary extends Component<Props, State> {
           <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">
             Something went wrong
           </h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md mb-4">
+          <p className="text-sm text-[var(--muted-foreground)] max-w-md mb-4">
             An unexpected error occurred. Please try again.
           </p>
           <Button variant="outline" size="sm" onPress={this.handleReset}>

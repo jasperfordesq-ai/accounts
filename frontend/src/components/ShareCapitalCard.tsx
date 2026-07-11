@@ -300,7 +300,7 @@ export function ShareCapitalCard({
               </div>
             </div>
             <div className="mt-3 flex items-center justify-between">
-              <span className="text-xs text-gray-500 dark:text-gray-400">
+              <span className="text-xs text-[var(--muted-foreground)]">
                 Total value: <span className="font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(previewTotal)}</span>
               </span>
               <div className="flex items-center gap-2">

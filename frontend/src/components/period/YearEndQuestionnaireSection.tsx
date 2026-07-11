@@ -70,7 +70,7 @@ export function YearEndQuestionnaireSection({
               </Chip>
             )}
           </div>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{subtitle}</p>
+          <p className="text-xs text-[var(--muted-foreground)] mt-0.5">{subtitle}</p>
         </div>
         {open ? (
           <ChevronDown className="w-5 h-5 text-[var(--muted-foreground)] shrink-0" />
@@ -101,7 +101,7 @@ export function YearEndQuestionnaireSection({
                   <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">{reviewDisabledReason}</p>
                 )}
                 {isReviewed && review?.confirmedBy && (
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                  <p className="text-xs text-[var(--muted-foreground)]">
                     Confirmed by {review.confirmedBy}
                     {review.confirmedAt && ` on ${new Date(review.confirmedAt).toLocaleDateString("en-IE")}`}
                   </p>

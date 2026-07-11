@@ -1156,7 +1156,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
                 <p className="font-medium">{item.scenarioLabel}</p>
                 <code className="mt-1 block break-all text-[11px] text-[var(--muted-foreground)]">{item.scenarioCode}</code>
                 {item.manualProfessionalReviewRequired && (
-                  <p className="mt-1 text-xs font-semibold text-[var(--danger)]">Manual handoff required</p>
+                  <p className="mt-1 text-xs font-semibold text-red-700 dark:text-red-300">Manual handoff required</p>
                 )}
               </div>,
               <div key="route" className="min-w-44 whitespace-normal">

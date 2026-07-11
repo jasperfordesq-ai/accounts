@@ -262,7 +262,7 @@ export function DirectorLoansManager({
               <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
                 <div className="min-w-0">
                   <p className="font-medium text-gray-900 dark:text-gray-100">{counterpartyName(row)}</p>
-                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--muted-foreground)]">
                     <span>{humanise(row.arrangementType)}</span>
                     <span>Maximum {formatCurrency(row.maxBalanceDuringYear)}</span>
                     <span>Closing {formatCurrency(row.closingBalance)}</span>

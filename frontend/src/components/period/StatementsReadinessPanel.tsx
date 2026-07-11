@@ -129,7 +129,7 @@ function StatementsReadinessEmptyState() {
   return (
     <div className="text-center py-8">
       <FileText className="w-10 h-10 text-[var(--muted-foreground)] mx-auto mb-3" />
-      <p className="text-sm text-gray-500 dark:text-gray-400">Readiness data is not available yet.</p>
+      <p className="text-sm text-[var(--muted-foreground)]">Readiness data is not available yet.</p>
       <p className="text-xs text-[var(--muted-foreground)] mt-1">Complete the year-end process and generate adjustments first.</p>
     </div>
   );

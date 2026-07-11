@@ -105,7 +105,7 @@ export default function LoginPage() {
             <Card.Title className="text-xl text-gray-900 dark:text-gray-100">
               Sign in
             </Card.Title>
-            <Card.Description className="text-gray-500 dark:text-gray-400">
+            <Card.Description className="text-[var(--muted-foreground)]">
               Access your firm workspace and client accounts.
             </Card.Description>
           </div>

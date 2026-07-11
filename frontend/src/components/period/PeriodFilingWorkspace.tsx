@@ -204,7 +204,7 @@ export function PeriodFilingWorkspace({
               <ClipboardList className="w-5 h-5 text-purple-600 dark:text-purple-400" />
               <div>
                 <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Review Notes</h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                <p className="text-xs text-[var(--muted-foreground)] mt-0.5">
                   Review and finalise notes before filing.
                 </p>
               </div>

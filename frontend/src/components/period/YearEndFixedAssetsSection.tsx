@@ -57,7 +57,7 @@ export function YearEndFixedAssetsSection({
                     </span>
                   )}
                   {asset.disposalDate && (
-                    <span className="text-xs text-amber-600 dark:text-amber-400">
+                    <span className="text-xs text-amber-800 dark:text-amber-300">
                       Disposed {new Date(asset.disposalDate).toLocaleDateString("en-IE")}
                     </span>
                   )}
@@ -258,7 +258,7 @@ export function YearEndFixedAssetsSection({
               disabled={!draft.disposalDate}
             />
           </div>
-          <p className="col-span-6 text-xs text-gray-500 dark:text-gray-400">
+          <p className="col-span-6 text-xs text-[var(--muted-foreground)]">
             Disposal proceeds must also be matched to the posted bank transaction so the asset ledger and cash flow reconcile.
           </p>
         </div>

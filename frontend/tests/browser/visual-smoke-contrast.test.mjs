@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import http from "node:http";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
+import postcss from "postcss";
+import tailwindcss from "@tailwindcss/postcss";
 import {
   checkThemeContrast,
   unexpectedVisualSmokeBrowserErrors,
@@ -11,6 +14,13 @@ import {
 const applicationStyles = readFileSync(new URL("../../src/app/globals.css", import.meta.url), "utf8");
 const heroUiStyles = readFileSync(new URL("../../node_modules/@heroui/styles/dist/heroui.min.css", import.meta.url), "utf8");
 const applicationOverrides = applicationStyles.replace(/^@import[^\n]*\r?\n/gm, "");
+const darkVariantDirective = applicationStyles.match(/^@custom-variant dark[^\n]+$/m)?.[0];
+assert.ok(darkVariantDirective, "globals.css should define a class-driven dark variant");
+const compiledThemeProbeStyles = (await postcss([tailwindcss()]).process(`
+  @import "tailwindcss";
+  ${darkVariantDirective}
+  @source inline("bg-white text-gray-900 dark:bg-neutral-900 dark:text-gray-100");
+`, { from: fileURLToPath(new URL("../../src/app/theme-probe.css", import.meta.url)) })).css;
 
 async function withPage(markup, action) {
   const browser = await chromium.launch({ headless: true });
@@ -33,6 +43,30 @@ const documentShell = (content) => `<!doctype html>
   </head>
   <body><main>${content}</main></body>
 </html>`;
+
+test("selected application theme overrides the operating-system colour scheme", async () => {
+  const stylesFor = async (page, selectedTheme, osTheme) => {
+    await page.emulateMedia({ colorScheme: osTheme });
+    await page.setContent(`<!doctype html>
+      <html class="${selectedTheme}">
+        <head><style>${compiledThemeProbeStyles}</style></head>
+        <body><div id="theme-probe" class="bg-white text-gray-900 dark:bg-neutral-900 dark:text-gray-100">Theme probe</div></body>
+      </html>`);
+    return page.locator("#theme-probe").evaluate((element) => ({
+      backgroundColor: getComputedStyle(element).backgroundColor,
+      color: getComputedStyle(element).color,
+    }));
+  };
+
+  await withPage("<!doctype html>", async (page) => {
+    const selectedLightOnDarkOs = await stylesFor(page, "", "dark");
+    const selectedDarkOnLightOs = await stylesFor(page, "dark", "light");
+
+    assert.equal(selectedLightOnDarkOs.backgroundColor, "rgb(255, 255, 255)");
+    assert.notEqual(selectedDarkOnLightOs.backgroundColor, selectedLightOnDarkOs.backgroundColor);
+    assert.notEqual(selectedDarkOnLightOs.color, selectedLightOnDarkOs.color);
+  });
+});
 
 test("real Chromium contrast collection covers text, controls, placeholders, disabled state, and gradients", async () => {
   const result = await withPage(documentShell(`
@@ -245,7 +279,7 @@ test("application button states retain semantic contrast and disabled precedence
           });
         });
         const muted = theme === "dark" ? "rgb(32, 40, 32)" : "rgb(238, 242, 237)";
-        const mutedForeground = theme === "dark" ? "rgb(170, 181, 170)" : "rgb(102, 112, 103)";
+        const mutedForeground = theme === "dark" ? "rgb(170, 181, 170)" : "rgb(96, 106, 97)";
         assert.equal(computed[2].backgroundColor, muted);
         assert.equal(computed[2].color, mutedForeground);
         assert.equal(computed[3].backgroundColor, muted);

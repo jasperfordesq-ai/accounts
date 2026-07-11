@@ -24,7 +24,7 @@ export function YearEndPayrollSection({
 }: YearEndPayrollSectionProps) {
   return (
     <>
-      <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">
+      <p className="mb-4 text-xs text-[var(--muted-foreground)]">
         Record payroll and staff costs for the statutory accounts, notes, and corporation tax working papers.
       </p>
       {canWrite ? <><div className="grid grid-cols-2 gap-4">
@@ -101,11 +101,11 @@ export function YearEndPayrollSection({
         </Button>
       </div></> : (
         <dl className="grid grid-cols-2 gap-3 text-sm text-gray-700 dark:text-gray-300">
-          <div><dt className="text-xs text-gray-500">Staff</dt><dd>{form.staffCount}</dd></div>
-          <div><dt className="text-xs text-gray-500">Employee gross wages</dt><dd>{form.grossWages}</dd></div>
-          <div><dt className="text-xs text-gray-500">Directors&apos; salaries and fees</dt><dd>{form.directorsFees}</dd></div>
-          <div><dt className="text-xs text-gray-500">Employer PRSI</dt><dd>{form.employerPrsi}</dd></div>
-          <div><dt className="text-xs text-gray-500">Pension contributions</dt><dd>{form.pensionContributions}</dd></div>
+          <div><dt className="text-xs text-[var(--muted-foreground)]">Staff</dt><dd>{form.staffCount}</dd></div>
+          <div><dt className="text-xs text-[var(--muted-foreground)]">Employee gross wages</dt><dd>{form.grossWages}</dd></div>
+          <div><dt className="text-xs text-[var(--muted-foreground)]">Directors&apos; salaries and fees</dt><dd>{form.directorsFees}</dd></div>
+          <div><dt className="text-xs text-[var(--muted-foreground)]">Employer PRSI</dt><dd>{form.employerPrsi}</dd></div>
+          <div><dt className="text-xs text-[var(--muted-foreground)]">Pension contributions</dt><dd>{form.pensionContributions}</dd></div>
         </dl>
       )}
     </>

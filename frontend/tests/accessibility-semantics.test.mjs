@@ -14,6 +14,22 @@ const protectedDirectorLoanFiles = new Set([
 ]);
 
 describe("critical journey accessibility semantics", () => {
+  it("uses the semantic muted foreground instead of weak gray or slate text utilities", async () => {
+    const offenders = [];
+
+    for (const file of await tsxSourceFiles()) {
+      const source = await readFile(file, "utf8");
+      const relative = path.relative(sourceRoot, file).replaceAll("\\", "/");
+      source.split(/\r?\n/).forEach((line, index) => {
+        if (/\btext-(?:gray|slate)-500\b/.test(line)) {
+          offenders.push(`${relative}:${index + 1}`);
+        }
+      });
+    }
+
+    assert.deepEqual(offenders, [], `weak gray/slate text utilities:\n${offenders.join("\n")}`);
+  });
+
   it("uses explicit disabled colours instead of whole-control opacity", async () => {
     const offenders = [];
 
@@ -189,6 +205,26 @@ describe("critical journey accessibility semantics", () => {
     ]) {
       assert.ok(charityTabs.includes(marker), `charity tabs should retain ${marker}`);
     }
+  });
+
+  it("forces a light palette for browser printing and restores the selected theme", async () => {
+    const providers = await readFile(path.join(sourceRoot, "app", "providers.tsx"), "utf8");
+    const printThemeBridge = await readFile(path.join(sourceRoot, "components", "PrintThemeBridge.tsx"), "utf8");
+    const globalStyles = await readFile(path.join(sourceRoot, "app", "globals.css"), "utf8");
+
+    for (const marker of [
+      'window.matchMedia("print")',
+      'window.addEventListener("beforeprint", applyLightPrintTheme)',
+      'window.addEventListener("afterprint", restoreTheme)',
+      'document.documentElement.classList.remove("dark")',
+      'document.documentElement.classList.add("dark")',
+    ]) {
+      assert.ok(printThemeBridge.includes(marker), `browser print theme bridge should retain ${marker}`);
+    }
+    assert.ok(providers.includes("<PrintThemeBridge />"), "the print theme bridge should be mounted once at the application root");
+    assert.match(globalStyles, /@custom-variant dark \(&:where\(\.dark, \.dark \*\)\);/);
+    assert.match(globalStyles, /@media print\s*{[\s\S]*:root,[\s\S]*\.dark\s*{[\s\S]*color-scheme:\s*light/);
+    assert.match(globalStyles, /@media print\s*{[\s\S]*--muted-foreground:\s*#606a61/);
   });
 });
 

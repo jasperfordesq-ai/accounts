@@ -439,7 +439,7 @@ export default function CharityReportingPage({
           <Heart className="w-7 h-7 text-emerald-600 dark:text-emerald-400" />
           Charity Reporting
         </h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+        <p className="text-sm text-[var(--muted-foreground)] mt-1">
           {company?.legalName} &mdash; period-specific charity reporting decision &mdash;{" "}
           {period ? `${new Date(period.periodStart).toLocaleDateString("en-IE")} to ${new Date(period.periodEnd).toLocaleDateString("en-IE")}` : ""}
         </p>
@@ -489,7 +489,7 @@ export default function CharityReportingPage({
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Trustee population review</p>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  <p className="mt-1 text-xs text-[var(--muted-foreground)]">
                     Includes directors appointed by period end who had not resigned before period start. Missing appointment dates block review.
                   </p>
                 </div>
@@ -683,19 +683,19 @@ export default function CharityReportingPage({
               <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
                 <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
                   <Card.Content className="p-4 text-center">
-                    <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Total Income</p>
+                    <p className="text-xs text-[var(--muted-foreground)] uppercase tracking-wide">Total Income</p>
                     <p className="text-xl font-bold text-emerald-700 dark:text-emerald-400 mt-1">{eur(sofa.totalIncoming)}</p>
                   </Card.Content>
                 </Card>
                 <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
                   <Card.Content className="p-4 text-center">
-                    <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Total Expenditure</p>
+                    <p className="text-xs text-[var(--muted-foreground)] uppercase tracking-wide">Total Expenditure</p>
                     <p className="text-xl font-bold text-red-700 dark:text-red-400 mt-1">{eur(sofa.totalExpended)}</p>
                   </Card.Content>
                 </Card>
                 <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
                   <Card.Content className="p-4 text-center">
-                    <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Net Movement</p>
+                    <p className="text-xs text-[var(--muted-foreground)] uppercase tracking-wide">Net Movement</p>
                     <p className={`text-xl font-bold mt-1 ${sofa.netMovement >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
                       {eur(sofa.netMovement)}
                     </p>
@@ -703,7 +703,7 @@ export default function CharityReportingPage({
                 </Card>
                 <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
                   <Card.Content className="p-4 text-center">
-                    <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Total Funds</p>
+                    <p className="text-xs text-[var(--muted-foreground)] uppercase tracking-wide">Total Funds</p>
                     <p className="text-xl font-bold text-gray-900 dark:text-gray-100 mt-1">{eur(sofa.totalClosingFunds)}</p>
                   </Card.Content>
                 </Card>
@@ -758,7 +758,7 @@ export default function CharityReportingPage({
                 <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
                   <Card.Content className="text-center py-12">
                     <DollarSign className="w-10 h-10 text-[var(--muted-foreground)] mx-auto mb-3" />
-                    <p className="text-sm text-gray-500 dark:text-gray-400">No fund balances entered yet.</p>
+                    <p className="text-sm text-[var(--muted-foreground)]">No fund balances entered yet.</p>
                     <p className="text-xs text-[var(--muted-foreground)] mt-1">Go to the Fund Balances tab to add funds.</p>
                   </Card.Content>
                 </Card>
@@ -768,7 +768,7 @@ export default function CharityReportingPage({
             <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
               <Card.Content className="text-center py-12">
                 <DollarSign className="w-10 h-10 text-[var(--muted-foreground)] mx-auto mb-3" />
-                <p className="text-sm text-gray-500 dark:text-gray-400">
+                <p className="text-sm text-[var(--muted-foreground)]">
                   {evidenceState.failedResourceKeys.includes("sofa")
                     ? "Statement of Financial Activities evidence failed to load."
                     : "Statement of Financial Activities not available."}
@@ -853,7 +853,7 @@ export default function CharityReportingPage({
               {funds.length === 0 ? (
                 <div className="text-center py-8">
                   <FileText className="w-10 h-10 text-[var(--muted-foreground)] mx-auto mb-3" />
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                  <p className="text-sm text-[var(--muted-foreground)]">
                     {evidenceState.failedResourceKeys.includes("funds") ? "Fund balance evidence failed to load." : "No fund balances recorded."}
                   </p>
                   <p className="text-xs text-[var(--muted-foreground)] mt-1">
@@ -880,9 +880,9 @@ export default function CharityReportingPage({
                             {fund.fundType}
                           </Chip>
                         </div>
-                        <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
+                        <div className="flex items-center gap-4 text-xs text-[var(--muted-foreground)]">
                           <span>Opening: {eur(fund.openingBalance)}</span>
-                          <span className="text-emerald-600 dark:text-emerald-400">In: {eur(fund.incomingResources)}</span>
+                          <span className="text-[var(--emerald-700)]">In: {eur(fund.incomingResources)}</span>
                           <span className="text-red-600 dark:text-red-400">Out: {eur(fund.resourcesExpended)}</span>
                           <span className="font-medium text-gray-900 dark:text-gray-100">Closing: {eur(fund.closingBalance)}</span>
                         </div>
@@ -922,21 +922,21 @@ export default function CharityReportingPage({
                 <Card.Content className="p-5">
                   <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
                     <div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Charity Number</p>
+                      <p className="text-xs text-[var(--muted-foreground)] uppercase tracking-wide">Charity Number</p>
                       <p className="text-sm font-medium text-gray-900 dark:text-gray-100 mt-1">{tar.charityNumber || "—"}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">SORP decision</p>
+                      <p className="text-xs text-[var(--muted-foreground)] uppercase tracking-wide">SORP decision</p>
                       <Chip size="sm" variant="soft" color={artifactStatus?.decision.manualProfessionalHandoffRequired ? "warning" : "success"} className="mt-1">
                         {artifactStatus?.decision.frameworkCode ?? "Unavailable"}{artifactStatus?.decision.tier ? ` / Tier ${artifactStatus.decision.tier}` : ""}
                       </Chip>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Filing Deadline</p>
+                      <p className="text-xs text-[var(--muted-foreground)] uppercase tracking-wide">Filing Deadline</p>
                       <p className="text-sm font-medium text-gray-900 dark:text-gray-100 mt-1">{tar.filingDeadline}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Trustees</p>
+                      <p className="text-xs text-[var(--muted-foreground)] uppercase tracking-wide">Trustees</p>
                       <p className="text-sm font-medium text-gray-900 dark:text-gray-100 mt-1">{tar.trustees.length}</p>
                     </div>
                   </div>
@@ -951,7 +951,7 @@ export default function CharityReportingPage({
                     {tar.trustees.map((trustee) => (
                       <div key={trustee.officerId} className="rounded-lg border border-gray-200 p-3 text-sm dark:border-neutral-700">
                         <p className="font-medium text-gray-900 dark:text-gray-100"><Users className="mr-1 inline h-3.5 w-3.5" />{trustee.name}</p>
-                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        <p className="mt-1 text-xs text-[var(--muted-foreground)]">
                           Appointed {new Date(`${trustee.appointedDate}T00:00:00`).toLocaleDateString("en-IE")}
                           {trustee.resignedDate ? `; resigned ${new Date(`${trustee.resignedDate}T00:00:00`).toLocaleDateString("en-IE")}` : ""}
                         </p>
@@ -966,11 +966,11 @@ export default function CharityReportingPage({
                 <Card.Header><Card.Title className="text-gray-900 dark:text-gray-100">Objectives &amp; Activities</Card.Title></Card.Header>
                 <Card.Content className="space-y-3">
                   <div>
-                    <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Charitable Objectives</p>
+                    <p className="text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wide mb-1">Charitable Objectives</p>
                     <p className="text-sm text-gray-900 dark:text-gray-100">{tar.charitableObjectives}</p>
                   </div>
                   <div>
-                    <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Principal Activities</p>
+                    <p className="text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wide mb-1">Principal Activities</p>
                     <p className="text-sm text-gray-900 dark:text-gray-100">{tar.principalActivities}</p>
                   </div>
                 </Card.Content>
@@ -982,19 +982,19 @@ export default function CharityReportingPage({
                 <Card.Content>
                   <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
                     <div className="rounded-lg bg-emerald-50 dark:bg-emerald-900/20 p-4 text-center">
-                      <p className="text-xs text-gray-500 dark:text-gray-400">Total Income</p>
+                      <p className="text-xs text-[var(--muted-foreground)]">Total Income</p>
                       <p className="text-lg font-bold text-emerald-700 dark:text-emerald-400 mt-1">{eur(tar.totalIncome)}</p>
                     </div>
                     <div className="rounded-lg bg-red-50 dark:bg-red-900/20 p-4 text-center">
-                      <p className="text-xs text-gray-500 dark:text-gray-400">Total Expenditure</p>
+                      <p className="text-xs text-[var(--muted-foreground)]">Total Expenditure</p>
                       <p className="text-lg font-bold text-red-700 dark:text-red-400 mt-1">{eur(tar.totalExpenditure)}</p>
                     </div>
                     <div className="rounded-lg bg-blue-50 dark:bg-blue-900/20 p-4 text-center">
-                      <p className="text-xs text-gray-500 dark:text-gray-400">Net Movement</p>
+                      <p className="text-xs text-[var(--muted-foreground)]">Net Movement</p>
                       <p className={`text-lg font-bold mt-1 ${tar.netMovement >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>{eur(tar.netMovement)}</p>
                     </div>
                     <div className="rounded-lg bg-gray-50 dark:bg-neutral-800 p-4 text-center">
-                      <p className="text-xs text-gray-500 dark:text-gray-400">Closing Funds</p>
+                      <p className="text-xs text-[var(--muted-foreground)]">Closing Funds</p>
                       <p className="text-lg font-bold text-gray-900 dark:text-gray-100 mt-1">{eur(tar.closingFunds)}</p>
                     </div>
                   </div>
@@ -1012,9 +1012,9 @@ export default function CharityReportingPage({
                     </span>
                   </div>
                   {tar.governanceCodeNote && (
-                    <p className="text-sm text-gray-500 dark:text-gray-400 pl-8">{tar.governanceCodeNote}</p>
+                    <p className="text-sm text-[var(--muted-foreground)] pl-8">{tar.governanceCodeNote}</p>
                   )}
-                  <p className="text-sm text-gray-500 dark:text-gray-400 pl-8">
+                  <p className="text-sm text-[var(--muted-foreground)] pl-8">
                     Evidence {tar.governanceEvidenceReference}; reviewed by {tar.governanceReviewedBy} at {new Date(tar.governanceReviewedAtUtc).toLocaleString("en-IE")}.
                   </p>
 
@@ -1025,7 +1025,7 @@ export default function CharityReportingPage({
                     </span>
                   </div>
                   {tar.trusteeExpensesDetails && (
-                    <p className="text-sm text-gray-500 dark:text-gray-400 pl-8">{tar.trusteeExpensesDetails}</p>
+                    <p className="text-sm text-[var(--muted-foreground)] pl-8">{tar.trusteeExpensesDetails}</p>
                   )}
 
                   <div className="flex items-center gap-3">
@@ -1035,7 +1035,7 @@ export default function CharityReportingPage({
                     </span>
                   </div>
                   {tar.internationalTransferDetails && (
-                    <p className="text-sm text-gray-500 dark:text-gray-400 pl-8">{tar.internationalTransferDetails}</p>
+                    <p className="text-sm text-[var(--muted-foreground)] pl-8">{tar.internationalTransferDetails}</p>
                   )}
                 </Card.Content>
               </Card>
@@ -1044,7 +1044,7 @@ export default function CharityReportingPage({
             <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
               <Card.Content className="text-center py-12">
                 <Users className="w-10 h-10 text-[var(--muted-foreground)] mx-auto mb-3" />
-                <p className="text-sm text-gray-500 dark:text-gray-400">
+                <p className="text-sm text-[var(--muted-foreground)]">
                   {evidenceState.failedResourceKeys.includes("trustees-report")
                     ? "Trustees' Annual Report evidence failed to load."
                     : "Trustees' Annual Report not available."}

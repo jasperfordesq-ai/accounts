@@ -106,7 +106,7 @@ export function PeriodAdjustmentsWorkspace({
           ) : adjustments.length === 0 ? (
             <div className="py-8 text-center">
               <Calculator className="mx-auto mb-3 h-10 w-10 text-[var(--muted-foreground)]" />
-              <p className="text-sm text-gray-500 dark:text-gray-400">
+              <p className="text-sm text-[var(--muted-foreground)]">
                 {canWrite
                   ? "No adjustments yet. Use Generate Adjustments to create them."
                   : "No adjustment evidence has been recorded for this period."}
@@ -177,7 +177,7 @@ function AdjustmentSummaryCard({ adjSummary }: { adjSummary: AdjustmentSummary |
             {countMetrics.map((metric) => (
               <div key={metric.label} className={`rounded-lg p-4 text-center ${metric.tileClassName}`}>
                 <p className={`text-2xl font-bold ${metric.valueClassName}`}>{metric.value}</p>
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{metric.label}</p>
+                <p className="mt-1 text-xs text-[var(--muted-foreground)]">{metric.label}</p>
               </div>
             ))}
           </div>
@@ -196,7 +196,7 @@ function AdjustmentSummaryCard({ adjSummary }: { adjSummary: AdjustmentSummary |
 function ImpactMetric({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-lg bg-gray-50 p-4 dark:bg-neutral-800">
-      <p className="text-xs text-gray-500 dark:text-gray-400">{label}</p>
+      <p className="text-xs text-[var(--muted-foreground)]">{label}</p>
       <p className={`mt-1 text-lg font-bold ${value >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
         {formatCurrency(value)}
       </p>
@@ -256,7 +256,7 @@ function AdjustmentFilters({
 function FilterField({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">{label}</span>
+      <span className="mb-1 block text-xs font-medium text-[var(--muted-foreground)]">{label}</span>
       {children}
     </label>
   );
@@ -288,9 +288,9 @@ function AdjustmentReviewCard({
               </Chip>
             </div>
             {adjustment.reason && (
-              <p className="mb-1 text-xs text-gray-500 dark:text-gray-400">{adjustment.reason}</p>
+              <p className="mb-1 text-xs text-[var(--muted-foreground)]">{adjustment.reason}</p>
             )}
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[var(--muted-foreground)]">
               <AdjustmentAmount label="Amount" value={adjustment.amount} />
               <AdjustmentAmount label="Profit" value={adjustment.impactOnProfit} signed />
               <AdjustmentAmount label="Assets" value={adjustment.impactOnAssets} signed />

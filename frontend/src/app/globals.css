@@ -1,6 +1,8 @@
 @import "tailwindcss";
 @import "@heroui/styles";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: #f7f8f5;
   --foreground: #18201b;
@@ -9,7 +11,7 @@
   --surface: #ffffff;
   --surface-subtle: #f0f4ef;
   --surface-strong: #e3ece3;
-  --muted-foreground: #667067;
+  --muted-foreground: #606a61;
   --muted: var(--muted-foreground);
   --muted-surface: #eef2ed;
   --border: #d9e1d8;
@@ -279,7 +281,7 @@ textarea::placeholder {
   margin-top: 0.25rem;
   font-size: 0.8125rem;
   line-height: 1.45;
-  color: #6b7280;
+  color: var(--muted-foreground);
 }
 
 .card__content {
@@ -590,6 +592,23 @@ textarea::placeholder {
 
 /* Print styles */
 @media print {
+  :root,
+  .dark {
+    color-scheme: light;
+    --background: #ffffff;
+    --foreground: #18201b;
+    --card: #ffffff;
+    --card-foreground: #18201b;
+    --surface: #ffffff;
+    --surface-subtle: #f0f4ef;
+    --surface-strong: #e3ece3;
+    --muted-foreground: #606a61;
+    --muted: var(--muted-foreground);
+    --muted-surface: #eef2ed;
+    --border: #d9e1d8;
+    --control-border: #606a61;
+  }
+
   .no-print {
     display: none !important;
   }

@@ -352,7 +352,7 @@ export default function NewCompanyPage() {
           <Building2 className="w-7 h-7 text-emerald-600 dark:text-emerald-400" />
           New Company
         </h1>
-        <p className="text-gray-500 dark:text-gray-400 mt-1">
+        <p className="text-[var(--muted-foreground)] mt-1">
           Set up a new company for statutory accounts production
         </p>
       </div>
@@ -401,7 +401,7 @@ export default function NewCompanyPage() {
       <Card className="bg-white dark:bg-neutral-900 shadow-sm border border-gray-200 dark:border-neutral-700">
         <Card.Header>
           <Card.Title className="text-gray-900 dark:text-gray-100">{STEP_LABELS[step]}</Card.Title>
-          <Card.Description className="text-gray-500 dark:text-gray-400">
+          <Card.Description className="text-[var(--muted-foreground)]">
             {step === 0 && "Enter the company's legal and registration details"}
             {step === 1 && "Configure the company's structural characteristics"}
             {step === 2 && "Set the registered office address and financial periods"}
@@ -526,7 +526,7 @@ export default function NewCompanyPage() {
                   </OnboardingCheckbox>
                 </div>
                 {isTrading && isDormant && (
-                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+                  <p className="mt-2 text-xs text-amber-800 dark:text-amber-300">
                     A company is usually either trading or dormant, not both.
                   </p>
                 )}
@@ -593,7 +593,7 @@ export default function NewCompanyPage() {
                 <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
                   Regulatory Exclusions (Fifth Schedule)
                 </h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                <p className="text-xs text-[var(--muted-foreground)] mb-3">
                   If any apply, the company is ineligible for micro/small exemptions and must file full accounts.
                 </p>
                 <div className="grid grid-cols-2 gap-3">
@@ -691,7 +691,7 @@ export default function NewCompanyPage() {
                 <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
                   First Accounting Period
                 </h3>
-                <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+                <p className="mb-3 text-xs text-[var(--muted-foreground)]">
                   The first period begins on the incorporation date and is created atomically with the company.
                 </p>
                 <div className="mb-4 grid grid-cols-2 gap-4">
@@ -794,7 +794,7 @@ export default function NewCompanyPage() {
                   {fieldErrors.annualReturnDateEvidenceReference && (
                     <p id="annual-return-date-evidence-error" role="alert" className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.annualReturnDateEvidenceReference}</p>
                   )}
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  <p className="mt-1 text-xs text-[var(--muted-foreground)]">
                     Enter the exact date shown by CRO CORE. The platform will not infer a day from a month.
                   </p>
                 </div>
@@ -804,7 +804,7 @@ export default function NewCompanyPage() {
                 <h3 className="mb-1 text-sm font-semibold text-gray-700 dark:text-gray-300">
                   Opening Bank & Chart of Accounts
                 </h3>
-                <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+                <p className="mb-3 text-xs text-[var(--muted-foreground)]">
                   A complete default chart of accounts and this opening bank account are created in the same transaction.
                 </p>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

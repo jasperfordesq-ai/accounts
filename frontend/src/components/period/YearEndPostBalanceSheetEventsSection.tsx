@@ -49,7 +49,7 @@ export function YearEndPostBalanceSheetEventsSection({
                     {event.isAdjusting ? "Adjusting" : "Non-adjusting"}
                   </Chip>
                   {event.financialImpact != null && event.financialImpact !== 0 && (
-                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                    <span className="text-xs text-[var(--muted-foreground)]">
                       Impact: {formatCurrency(event.financialImpact)}
                     </span>
                   )}

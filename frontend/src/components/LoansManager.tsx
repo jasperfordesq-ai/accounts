@@ -325,7 +325,7 @@ export function LoansManager({
             onValueChange={(value) => setForm({ ...form, dueWithinYear: value })}
           />
           <div className="col-span-3 flex items-center justify-between pb-2">
-            <span className="text-xs text-gray-500 dark:text-gray-400">
+            <span className="text-xs text-[var(--muted-foreground)]">
               Due &gt; 1yr:{" "}
               <span className="font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(dueAfterYear)}</span>
             </span>

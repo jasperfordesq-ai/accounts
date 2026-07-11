@@ -30,7 +30,7 @@ export function YearEndTaxBalancesSection({
 }: YearEndTaxBalancesSectionProps) {
   return (
     <div className="space-y-6">
-      <p className="text-xs text-gray-500 dark:text-gray-400">
+      <p className="text-xs text-[var(--muted-foreground)]">
         Capture tax creditor/debtor balances for corporation tax, VAT, and payroll taxes at year-end.
       </p>
       {TAX_ROWS.map(({ key, label }) => {
@@ -97,9 +97,9 @@ export function YearEndTaxBalancesSection({
               </div>
             </div> : (
               <dl className="grid grid-cols-3 gap-3 text-sm text-gray-700 dark:text-gray-300">
-                <div><dt className="text-xs text-gray-500">Liability</dt><dd>{form.liability}</dd></div>
-                <div><dt className="text-xs text-gray-500">Paid</dt><dd>{form.paid}</dd></div>
-                <div><dt className="text-xs text-gray-500">Balance</dt><dd>{form.balance}</dd></div>
+                <div><dt className="text-xs text-[var(--muted-foreground)]">Liability</dt><dd>{form.liability}</dd></div>
+                <div><dt className="text-xs text-[var(--muted-foreground)]">Paid</dt><dd>{form.paid}</dd></div>
+                <div><dt className="text-xs text-[var(--muted-foreground)]">Balance</dt><dd>{form.balance}</dd></div>
               </dl>
             )}
           </div>

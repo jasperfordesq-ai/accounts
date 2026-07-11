@@ -1261,7 +1261,7 @@ export function YearEndQuestionnaireRoute({
           <label htmlFor="directors-report-principal-activities" className="block text-sm font-medium text-gray-800 dark:text-gray-200">
             Approved principal-activities narrative
           </label>
-          <p id="directors-report-principal-activities-help" className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          <p id="directors-report-principal-activities-help" className="mt-1 text-xs text-[var(--muted-foreground)]">
             Use the wording approved by the directors for this reporting period (minimum 20 characters).
           </p>
           <textarea
@@ -1298,7 +1298,7 @@ export function YearEndQuestionnaireRoute({
             <label htmlFor="directors-report-audit-information" className="block text-sm font-medium text-gray-800 dark:text-gray-200">
               Director confirmation and evidence reference
             </label>
-            <p id="directors-report-audit-information-help" className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            <p id="directors-report-audit-information-help" className="mt-1 text-xs text-[var(--muted-foreground)]">
               Identify the director confirmations, enquiries and retained working-paper or board-minute reference (minimum 20 characters).
             </p>
             <textarea

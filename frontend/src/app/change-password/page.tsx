@@ -51,7 +51,7 @@ export default function ChangePasswordPage() {
             <Card.Title className="text-xl text-gray-900 dark:text-gray-100">
               Set a new password
             </Card.Title>
-            <Card.Description className="text-gray-500 dark:text-gray-400">
+            <Card.Description className="text-[var(--muted-foreground)]">
               Choose a new password using your current password.
             </Card.Description>
           </div>

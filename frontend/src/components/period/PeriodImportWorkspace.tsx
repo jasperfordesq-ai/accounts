@@ -127,7 +127,7 @@ export function PeriodImportWorkspace({
               <Scale className="w-5 h-5 text-blue-600 dark:text-blue-400" />
               <div>
                 <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Company Size Classification</h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">
                   Determine micro/small/medium/large status and filing regime.
                 </p>
               </div>
@@ -215,12 +215,12 @@ export function PeriodImportWorkspace({
             )}
 
             {bankAccounts.length === 0 ? (
-              <div className="rounded-md border border-dashed border-gray-300 px-4 py-6 text-sm text-gray-500 dark:border-neutral-700 dark:text-gray-400">
+              <div className="rounded-md border border-dashed border-gray-300 px-4 py-6 text-sm text-[var(--muted-foreground)] dark:border-neutral-700">
                 No bank accounts linked yet. Add the account that matches the year-end bank statement before importing transactions.
               </div>
             ) : (
               <div className="overflow-hidden rounded-md border border-gray-200 dark:border-neutral-700">
-                <div className="hidden grid-cols-12 gap-2 bg-gray-50 px-4 py-2 text-xs font-semibold uppercase text-gray-500 dark:bg-neutral-800 dark:text-gray-400 md:grid">
+                <div className="hidden grid-cols-12 gap-2 bg-gray-50 px-4 py-2 text-xs font-semibold uppercase text-[var(--muted-foreground)] dark:bg-neutral-800 md:grid">
                   <div className="col-span-5">Account</div>
                   <div className="col-span-2">Currency</div>
                   <div className="col-span-3 text-right">Opening balance</div>
@@ -234,7 +234,7 @@ export function PeriodImportWorkspace({
                     >
                       <div className="min-w-0 md:col-span-5">
                         <p className="font-medium text-gray-900 dark:text-gray-100">{bankAccount.name}</p>
-                        <p className="truncate text-xs text-gray-500 dark:text-gray-400">{bankAccount.iban || "No IBAN recorded"}</p>
+                        <p className="truncate text-xs text-[var(--muted-foreground)]">{bankAccount.iban || "No IBAN recorded"}</p>
                       </div>
                       <MobileField label="Currency" className="md:col-span-2">
                         <span className="text-gray-600 dark:text-gray-300">{bankAccount.currency}</span>
@@ -266,7 +266,7 @@ export function PeriodImportWorkspace({
                 <Settings className="w-5 h-5 text-amber-600 dark:text-amber-400" />
                 <div>
                   <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Chart of Accounts</h3>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">No categories configured. Seed the default Irish chart of accounts.</p>
+                  <p className="text-xs text-[var(--muted-foreground)] mt-0.5">No categories configured. Seed the default Irish chart of accounts.</p>
                 </div>
               </div>
               {canWrite && (
@@ -344,7 +344,7 @@ export function PeriodImportWorkspace({
           </div>}
 
           <div className="mt-4 overflow-hidden rounded-md border border-gray-200 dark:border-neutral-700">
-            <div className="hidden grid-cols-12 gap-2 bg-gray-50 px-4 py-2 text-xs font-semibold uppercase text-gray-500 dark:bg-neutral-800 dark:text-gray-400 md:grid">
+            <div className="hidden grid-cols-12 gap-2 bg-gray-50 px-4 py-2 text-xs font-semibold uppercase text-[var(--muted-foreground)] dark:bg-neutral-800 md:grid">
               <div className="col-span-5">Account</div>
               <div className="col-span-2 text-right">Debit</div>
               <div className="col-span-2 text-right">Credit</div>
@@ -352,14 +352,14 @@ export function PeriodImportWorkspace({
               <div className="col-span-1 text-right">Action</div>
             </div>
             {openingBalances.length === 0 ? (
-              <div className="px-4 py-5 text-sm text-gray-500 dark:text-gray-400">
+              <div className="px-4 py-5 text-sm text-[var(--muted-foreground)]">
                 No reviewed opening balances entered yet. Bank account opening balances are included automatically, but reserves/equity need an explicit balancing entry.
               </div>
             ) : (
               openingBalances.map((balance) => (
                 <div key={balance.id} className="grid gap-3 border-t border-gray-100 px-4 py-3 text-sm dark:border-neutral-800 md:grid-cols-12 md:gap-2">
                   <div className="md:col-span-5">
-                    <span className="font-mono text-xs text-gray-500">{balance.accountCategory.code}</span>{" "}
+                    <span className="font-mono text-xs text-[var(--muted-foreground)]">{balance.accountCategory.code}</span>{" "}
                     <span className="font-medium text-gray-900 dark:text-gray-100">{balance.accountCategory.name}</span>
                   </div>
                   <MobileField label="Debit" className="md:col-span-2 md:text-right">
@@ -369,7 +369,7 @@ export function PeriodImportWorkspace({
                     <span className="font-mono">{balance.credit ? formatCurrency(balance.credit) : "-"}</span>
                   </MobileField>
                   <MobileField label="Evidence" className="md:col-span-2" title={balance.sourceNote ?? ""}>
-                    <span className="min-w-0 truncate text-xs text-gray-500">
+                    <span className="min-w-0 truncate text-xs text-[var(--muted-foreground)]">
                       {balance.reviewed ? "Reviewed" : "Unreviewed"}{balance.sourceNote ? ` - ${balance.sourceNote}` : ""}
                     </span>
                   </MobileField>
@@ -466,13 +466,13 @@ export function PeriodImportWorkspace({
                 <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
                   Drag and drop a CSV file here, or click to browse
                 </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                <p className="text-xs text-[var(--muted-foreground)] mt-1">
                   Supports AIB, BOI, Revolut, and Stripe CSV formats
                 </p>
               </>
             )}
           </div></> : (
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+            <p className="text-sm text-[var(--muted-foreground)]">
               Imported transaction evidence remains visible elsewhere in the period workspace. Uploading requires Owner or Accountant access.
             </p>
           )}
@@ -501,7 +501,7 @@ export function PeriodImportWorkspace({
                 <ImportMetric tone="gray" value={uploadResult.duplicateCandidates} label="Needs Duplicate Review" />
                 <ImportMetric tone="blue" value={uploadResult.autoCategorised} label="Auto-Categorised" />
               </div>
-              <p className="break-words text-xs text-gray-500 dark:text-gray-400">
+              <p className="break-words text-xs text-[var(--muted-foreground)]">
                 {uploadResult.importBatchId ? `Batch #${uploadResult.importBatchId} · ` : ""}{uploadResult.sourceFilename} · {uploadResult.sourceFileBytes.toLocaleString("en-IE")} bytes · SHA-256 <span className="font-mono" title={uploadResult.sourceFileSha256}>{uploadResult.sourceFileSha256.slice(0, 12)}…</span>
               </p>
               {uploadResult.warnings.length > 0 && (
@@ -515,7 +515,7 @@ export function PeriodImportWorkspace({
               )}
             </div>
           ) : (
-            <div className="flex items-center gap-3 text-sm text-gray-500 dark:text-gray-400">
+            <div className="flex items-center gap-3 text-sm text-[var(--muted-foreground)]">
               <HelpCircle className="w-5 h-5" />
               <span>No imports have been processed for this period yet.</span>
             </div>
@@ -550,7 +550,7 @@ function BankFormField({
 
   return (
     <div className={className}>
-      <label htmlFor={controlId} className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">{label}</label>
+      <label htmlFor={controlId} className="mb-1 block text-xs font-medium text-[var(--muted-foreground)]">{label}</label>
       {cloneElement(children, { id: controlId })}
     </div>
   );
@@ -569,7 +569,7 @@ function MobileField({
 }) {
   return (
     <div className={`grid grid-cols-[8rem_minmax(0,1fr)] items-center gap-3 md:block ${className ?? ""}`} title={title}>
-      <span className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 md:hidden">{label}</span>
+      <span className="text-xs font-semibold uppercase text-[var(--muted-foreground)] md:hidden">{label}</span>
       {children}
     </div>
   );
@@ -593,7 +593,7 @@ function ImportMetric({
   return (
     <div className={`rounded-lg p-4 text-center ${classes}`}>
       <p className="text-2xl font-bold">{value}</p>
-      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{label}</p>
+      <p className="text-xs text-[var(--muted-foreground)] mt-1">{label}</p>
     </div>
   );
 }

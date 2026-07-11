@@ -47,7 +47,7 @@ export function YearEndRelatedPartyTransactionsSection({
                   <Chip variant="soft" size="sm" color="default">{transaction.relationship}</Chip>
                   <Chip variant="soft" size="sm" color="default">{transaction.transactionType}</Chip>
                   {transaction.balanceOwed != null && transaction.balanceOwed !== 0 && (
-                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                    <span className="text-xs text-[var(--muted-foreground)]">
                       Balance owed: {formatCurrency(transaction.balanceOwed)}
                     </span>
                   )}

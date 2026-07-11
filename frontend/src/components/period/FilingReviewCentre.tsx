@@ -248,7 +248,7 @@ export function FilingReviewCentre({
       ) : (
         <div className="text-center py-8">
           <Shield className="w-10 h-10 text-[var(--muted-foreground)] mx-auto mb-3" />
-          <p className="text-sm text-gray-500 dark:text-gray-400">
+          <p className="text-sm text-[var(--muted-foreground)]">
             {evidenceAvailable ? "Filing status is not available yet." : "Filing status evidence failed to load."}
           </p>
           <p className="text-xs text-[var(--muted-foreground)] mt-1">

@@ -7,6 +7,7 @@ import { AuthProvider } from "@/components/AuthProvider";
 import { UnsavedChangesProvider } from "@/components/UnsavedChangesProvider";
 import { useGuardedRouter } from "@/lib/useUnsavedChanges";
 import { ClientMonitoringBridge } from "@/components/ClientMonitoringBridge";
+import { PrintThemeBridge } from "@/components/PrintThemeBridge";
 
 function ApplicationProviders({ children }: { children: React.ReactNode }) {
   const router = useGuardedRouter();
@@ -14,6 +15,7 @@ function ApplicationProviders({ children }: { children: React.ReactNode }) {
   return (
     <RouterProvider navigate={(path) => router.push(path)}>
       <ClientMonitoringBridge />
+      <PrintThemeBridge />
       <ErrorBoundary>
         <AuthProvider>{children}</AuthProvider>
       </ErrorBoundary>

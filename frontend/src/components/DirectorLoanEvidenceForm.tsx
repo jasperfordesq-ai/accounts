@@ -122,7 +122,7 @@ export function DirectorLoanEvidenceForm({
 
       <fieldset className={sectionClass}>
         <legend className="px-1 text-sm font-semibold text-gray-900 dark:text-gray-100">2. Dated balance ledger</legend>
-        <p className="text-xs text-gray-500 dark:text-gray-400">
+        <p className="text-xs text-[var(--muted-foreground)]">
           Advances and repayments are derived from this dated evidence ledger. The maximum and closing balances cannot be typed over.
         </p>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -223,7 +223,7 @@ export function DirectorLoanEvidenceForm({
 
       <fieldset className={sectionClass}>
         <legend className="px-1 text-sm font-semibold text-gray-900 dark:text-gray-100">5. Arrangement-level professional review</legend>
-        <p className="text-xs text-gray-500 dark:text-gray-400">This decision does not replace the separate release-level qualified-accountant approval.</p>
+        <p className="text-xs text-[var(--muted-foreground)]">This decision does not replace the separate release-level qualified-accountant approval.</p>
         <div className="grid gap-3 sm:grid-cols-2">
           <SelectField
             label="Review decision"
@@ -332,5 +332,5 @@ function CheckboxField({ label, checked, onChange }: { label: string; checked: b
 }
 
 function DerivedAmount({ label, amount }: { label: string; amount: number }) {
-  return <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900/60"><p className="text-xs text-gray-500 dark:text-gray-400">{label}</p><p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" }).format(amount)}</p></div>;
+  return <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900/60"><p className="text-xs text-[var(--muted-foreground)]">{label}</p><p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" }).format(amount)}</p></div>;
 }

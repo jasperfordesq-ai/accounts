@@ -118,7 +118,7 @@ export function ConfirmModal({
       ? "text-red-500"
       : variant === "warning"
         ? "text-amber-500"
-        : "text-gray-500";
+        : "text-[var(--muted-foreground)]";
 
   const confirmVariant = variant === "danger" ? "danger" : "primary";
 
@@ -154,7 +154,7 @@ export function ConfirmModal({
             </h2>
             <p
               id={descriptionId}
-              className="text-sm text-gray-500 dark:text-gray-400 mt-1"
+              className="text-sm text-[var(--muted-foreground)] mt-1"
             >
               {description}
             </p>

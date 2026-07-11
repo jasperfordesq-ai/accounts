@@ -356,7 +356,7 @@ export function FinancialStatementsWorkbench({
                   <tr key={source.code} className="border-b border-gray-100 align-top dark:border-neutral-800">
                     <td className="px-3 py-2 min-w-72">
                       <div className="font-medium text-gray-900 dark:text-gray-100">
-                        <span className="font-mono text-gray-500">{source.code}</span> {source.name}
+                        <span className="font-mono text-[var(--muted-foreground)]">{source.code}</span> {source.name}
                       </div>
                       <div className="mt-1 flex flex-wrap gap-1">
                         <Chip size="sm" variant="soft" color="default">{source.type}</Chip>
@@ -364,7 +364,7 @@ export function FinancialStatementsWorkbench({
                         {source.adjustmentCount > 0 && <Chip size="sm" variant="soft" color="warning">{source.adjustmentCount} journals</Chip>}
                       </div>
                       {source.sourceNotes.length > 0 && (
-                        <ul className="mt-2 space-y-0.5 text-[11px] text-gray-500 dark:text-gray-400">
+                        <ul className="mt-2 space-y-0.5 text-[11px] text-[var(--muted-foreground)]">
                           {source.sourceNotes.slice(0, 3).map((note) => (
                             <li key={note}>{note}</li>
                           ))}
@@ -417,7 +417,7 @@ export function FinancialStatementsWorkbench({
             />
             <StatementRow label="Other Income" amount={pnl.otherIncome} />
             <div className="pt-2">
-              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
+              <p className="text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wide mb-1">
                 Overheads
               </p>
               {pnl.overheads.map((oh) => (
@@ -447,7 +447,7 @@ export function FinancialStatementsWorkbench({
             />
             {pnl.yearEndAdjustments.length > 0 && (
               <div className="pt-2">
-                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
+                <p className="text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wide mb-1">
                   Posted Year-End Journal Evidence
                 </p>
                 {pnl.yearEndAdjustments.map((adj, idx) => (
@@ -503,12 +503,12 @@ export function FinancialStatementsWorkbench({
         {bs ? (
           <div className="max-w-lg mx-auto space-y-1">
             {/* Fixed Assets */}
-            <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide pb-1">
+            <p className="text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wide pb-1">
               Fixed Assets
             </p>
             {bs.fixedAssets.categories.length > 0 && (
               <div className="border border-gray-200 dark:border-neutral-700 rounded-lg overflow-hidden mb-2">
-                <div className="grid grid-cols-4 gap-2 bg-gray-50 dark:bg-neutral-800 px-3 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400">
+                <div className="grid grid-cols-4 gap-2 bg-gray-50 dark:bg-neutral-800 px-3 py-1.5 text-xs font-medium text-[var(--muted-foreground)]">
                   <div>Category</div>
                   <div className="text-right">Cost</div>
                   <div className="text-right">Depn</div>
@@ -541,7 +541,7 @@ export function FinancialStatementsWorkbench({
 
             {/* Current Assets */}
             <div className="pt-3">
-              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide pb-1">
+              <p className="text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wide pb-1">
                 Current Assets
               </p>
               <StatementRow label="Stock" amount={bs.currentAssets.stock} indent />
@@ -566,7 +566,7 @@ export function FinancialStatementsWorkbench({
 
             {/* Creditors: amounts falling due within one year */}
             <div className="pt-3">
-              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide pb-1">
+              <p className="text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wide pb-1">
                 Creditors: amounts falling due within one year
               </p>
               <StatementRow
@@ -614,7 +614,7 @@ export function FinancialStatementsWorkbench({
 
             {/* Creditors after year */}
             <div className="pt-3">
-              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide pb-1">
+              <p className="text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wide pb-1">
                 Creditors: amounts falling due after more than one year
               </p>
               <StatementRow label="Loans" amount={bs.creditorsAfterYear.loans} indent />
@@ -636,7 +636,7 @@ export function FinancialStatementsWorkbench({
 
             {/* Capital and Reserves */}
             <div className="pt-3">
-              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide pb-1">
+              <p className="text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wide pb-1">
                 Capital and Reserves
               </p>
               <StatementRow
@@ -758,7 +758,7 @@ export function FinancialStatementsWorkbench({
 
             {tax.adjustments.length > 0 && (
               <div className="pt-2">
-                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
+                <p className="text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wide mb-1">
                   Tax Adjustments
                 </p>
                 {tax.adjustments.map((adj, idx) => (
@@ -782,7 +782,7 @@ export function FinancialStatementsWorkbench({
             )}
 
             <Divider />
-            <p className="pt-2 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+            <p className="pt-2 text-xs font-medium uppercase tracking-wide text-[var(--muted-foreground)]">
               Taxable streams and loss movement
             </p>
             <StatementRow label="Trading profit before loss relief" amount={tax.tradingProfitBeforeLossRelief} />
@@ -801,7 +801,7 @@ export function FinancialStatementsWorkbench({
             />
 
             <div className="pt-2">
-              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
+              <p className="text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wide mb-1">
                 Corporation Tax
               </p>
               <StatementRow
@@ -892,7 +892,7 @@ export function FinancialStatementsWorkbench({
             <StatementRow label="Net Cash from Operating Activities" amount={cashFlow.netCashFromOperating} bold highlight />
 
             <Divider />
-            <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide pt-2 pb-1">
+            <p className="text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wide pt-2 pb-1">
               Investing Activities
             </p>
             <StatementRow label="Capital Expenditure (Purchases)" amount={-Math.abs(cashFlow.capitalExpenditurePurchases)} indent />
@@ -901,7 +901,7 @@ export function FinancialStatementsWorkbench({
             <StatementRow label="Net Cash from Investing Activities" amount={cashFlow.netCashFromInvesting} bold />
 
             <Divider />
-            <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide pt-2 pb-1">
+            <p className="text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wide pt-2 pb-1">
               Financing Activities
             </p>
             <StatementRow label="Loan Repayments" amount={-Math.abs(cashFlow.loanRepayments)} indent />
@@ -1021,7 +1021,7 @@ export function FinancialStatementsWorkbench({
               <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">
                 {directorsReport.companyName}
               </h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              <p className="text-sm text-[var(--muted-foreground)] mt-1">
                 Directors&apos; Report for the period{" "}
                 {new Date(directorsReport.periodStart).toLocaleDateString("en-IE")} to{" "}
                 {new Date(directorsReport.periodEnd).toLocaleDateString("en-IE")}
@@ -1046,7 +1046,7 @@ export function FinancialStatementsWorkbench({
                 {directorsReport.directorServicePeriods.map((director) => (
                   <li key={`${director.name}-${director.appointedDate}`} className="text-sm text-gray-700 dark:text-gray-300">
                     <span className="font-medium">{director.name}</span>
-                    <span className="block text-xs text-gray-500 dark:text-gray-400">
+                    <span className="block text-xs text-[var(--muted-foreground)]">
                       Served from {new Date(director.appointedDate).toLocaleDateString("en-IE")}
                       {director.resignedDate ? ` to ${new Date(director.resignedDate).toLocaleDateString("en-IE")}` : " and remained in office at period end"}
                     </span>
@@ -1059,7 +1059,7 @@ export function FinancialStatementsWorkbench({
                 </p>
               )}
               {directorsReport.secretaryName && (
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+                <p className="text-sm text-[var(--muted-foreground)] mt-2">
                   Company Secretary: {directorsReport.secretaryName}
                   {directorsReport.secretaryServicePeriod
                     ? ` (from ${new Date(directorsReport.secretaryServicePeriod.appointedDate).toLocaleDateString("en-IE")})`
@@ -1080,7 +1080,7 @@ export function FinancialStatementsWorkbench({
                 {directorsReport.principalActivities}
               </p>
               {directorsReport.principalActivitiesReviewedBy && directorsReport.principalActivitiesReviewedAt && (
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                <p className="mt-1 text-xs text-[var(--muted-foreground)]">
                   Reviewed by {directorsReport.principalActivitiesReviewedBy} on {new Date(directorsReport.principalActivitiesReviewedAt).toLocaleString("en-IE")}.
                 </p>
               )}
@@ -1252,7 +1252,7 @@ function EmptyState({
   return (
     <div className="text-center py-12">
       <FileText className="w-10 h-10 text-[var(--muted-foreground)] mx-auto mb-3" />
-      <p className="text-sm text-gray-500 dark:text-gray-400">{message}</p>
+      <p className="text-sm text-[var(--muted-foreground)]">{message}</p>
       <p className="text-xs text-[var(--muted-foreground)] mt-1">
         Complete the year-end process and generate adjustments first.
       </p>

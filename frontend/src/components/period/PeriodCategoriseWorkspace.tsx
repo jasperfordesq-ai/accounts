@@ -184,7 +184,7 @@ export function PeriodCategoriseWorkspace({
               <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
                 <div>
                   <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Bulk categorisation</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                  <p className="text-xs text-[var(--muted-foreground)]">
                     {selectedTransactionIds.length} selected across pages; {selectedOnCurrentPage} of {visibleTransactionIds.length}
                     {" "}on this page. Select current page never selects every matching result. Changing a filter clears the selection.
                   </p>
@@ -281,7 +281,7 @@ function TransactionRulesPanel({
       <div className="mb-3 flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
         <div>
           <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Transaction Rules</h3>
-          <p className="text-xs text-gray-500 dark:text-gray-400">
+          <p className="text-xs text-[var(--muted-foreground)]">
             Match recurring bank descriptions to account categories for future imports.
           </p>
         </div>
@@ -325,7 +325,7 @@ function TransactionRulesPanel({
                 <div className="text-gray-600 dark:text-gray-300 md:col-span-5">
                   {category ? categoryLabel(category) : `Category ${rule.categoryId}`}
                 </div>
-                <div className="text-gray-500 dark:text-gray-400 md:col-span-1 md:text-right">Priority {rule.priority}</div>
+                <div className="text-[var(--muted-foreground)] md:col-span-1 md:text-right">Priority {rule.priority}</div>
                 {canWrite && (
                   <div className="md:col-span-1 md:text-right">
                     <Button variant="ghost" size="sm" aria-label={`Delete rule ${rule.pattern}`} onPress={() => requestDestructiveAction({
@@ -544,7 +544,7 @@ function TransactionTable({
                   aria-label={`Select ${transaction.description}`}
                 />
               ) : (
-                <span key="select" className="text-xs text-gray-500 dark:text-gray-400">Read only</span>
+                <span key="select" className="text-xs text-[var(--muted-foreground)]">Read only</span>
               ),
               <time key="date" dateTime={transaction.date} className="text-gray-600 dark:text-gray-400">
                 {new Date(transaction.date).toLocaleDateString("en-IE")}
@@ -583,7 +583,7 @@ function TransactionTable({
                   <p className="mt-1 text-[11px] text-blue-600 dark:text-blue-400">Manual</p>
                 )}
               </div>,
-              <span key="confidence" className="text-xs text-gray-500 dark:text-gray-400">
+              <span key="confidence" className="text-xs text-[var(--muted-foreground)]">
                 {transaction.confidenceScore != null ? `${Math.round(transaction.confidenceScore * 100)}%` : "Not scored"}
               </span>,
             ],
@@ -675,7 +675,7 @@ function FilterField({ label, children }: { label: string; children: ReactElemen
 
   return (
     <div>
-      <label htmlFor={controlId} className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{label}</label>
+      <label htmlFor={controlId} className="block text-xs font-medium text-[var(--muted-foreground)] mb-1">{label}</label>
       {cloneElement(children, { id: controlId })}
     </div>
   );
@@ -699,7 +699,7 @@ function MetricCard({
   return (
     <div className={`rounded-lg p-4 text-center ${classes}`}>
       <p className="text-2xl font-bold">{value}</p>
-      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{label}</p>
+      <p className="text-xs text-[var(--muted-foreground)] mt-1">{label}</p>
     </div>
   );
 }

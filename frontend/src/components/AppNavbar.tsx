@@ -84,12 +84,12 @@ export function AppNavbar() {
           )}
           {user && (
             <div className="ml-2 flex max-w-xl items-center gap-2 border-l border-gray-200 pl-3 dark:border-neutral-700">
-              <UserCircle className="h-5 w-5 shrink-0 text-gray-500 dark:text-gray-400" />
+              <UserCircle className="h-5 w-5 shrink-0 text-[var(--muted-foreground)]" />
               <div className="min-w-0 leading-tight">
                 <div className="truncate text-sm font-medium text-gray-900 dark:text-gray-100">
                   {user.displayName}
                 </div>
-                <div className="truncate text-xs text-gray-500 dark:text-gray-400">
+                <div className="truncate text-xs text-[var(--muted-foreground)]">
                   {user.role} / {user.tenantName}
                 </div>
               </div>
@@ -195,12 +195,12 @@ export function AppNavbar() {
             {user && (
               <div className="mt-2 border-t border-gray-200 pt-3 dark:border-neutral-700">
                 <div className="mb-2 flex items-start gap-2 px-2">
-                  <UserCircle className="mt-0.5 h-5 w-5 shrink-0 text-gray-500 dark:text-gray-400" />
+                  <UserCircle className="mt-0.5 h-5 w-5 shrink-0 text-[var(--muted-foreground)]" />
                   <div className="min-w-0 leading-tight">
                     <div className="truncate text-sm font-medium text-gray-900 dark:text-gray-100">
                       {user.displayName}
                     </div>
-                    <div className="truncate text-xs text-gray-500 dark:text-gray-400">
+                    <div className="truncate text-xs text-[var(--muted-foreground)]">
                       {user.role} / {user.tenantName}
                     </div>
                   </div>

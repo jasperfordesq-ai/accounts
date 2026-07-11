@@ -306,7 +306,7 @@ export function CompanyDetailWorkbench({
                   placeholder="Give a specific reason (minimum 20 characters)."
                   className="mt-1.5 w-full resize-y rounded-lg border border-[var(--control-border)] bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500 dark:bg-neutral-800 dark:text-gray-100"
                 />
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                <p className="mt-1 text-xs text-[var(--muted-foreground)]">
                   {quarantineReason.trim().length}/20 minimum characters
                 </p>
               </div>
