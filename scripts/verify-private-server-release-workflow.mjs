@@ -53,6 +53,10 @@ requireText("Verify checked-out main matches candidate", "Preparation must compa
 requireText('"$(git rev-parse HEAD)" == "$CANDIDATE_SHA"', "Preparation must fail unless checked-out main exactly matches the resolved candidate SHA.");
 requireText("--name container-supply-chain", "The exact candidate supply-chain artifact must be downloaded.");
 requireText("./scripts/verify-container-supply-chain-report.ps1", "Promoted supply-chain evidence must be verified.");
+requireText(
+  '-ReportPath (Join-Path $env:RUNNER_TEMP "private-server-release-prepare-verification.json")',
+  "Preparation re-verification must not overwrite the trusted CI verification artifact.",
+);
 requireText("./scripts/verify-private-compose.ps1", "The Private Server topology must be verified before release.");
 requireText("docker logout ghcr.io", "The workflow must prove anonymous public GHCR pulls.");
 requireText("docker pull --platform linux/amd64 \"$backend\"", "The exact backend digest must be pulled for x64.");

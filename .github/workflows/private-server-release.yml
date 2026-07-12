@@ -90,6 +90,7 @@ jobs:
         run: |
           ./scripts/verify-container-supply-chain-report.ps1 `
             -EvidencePath (Join-Path $env:RUNNER_TEMP "container-supply-chain/container-supply-chain-report.json") `
+            -ReportPath (Join-Path $env:RUNNER_TEMP "private-server-release-prepare-verification.json") `
             -CommitSha "${{ steps.candidate.outputs.sha }}" `
             -GitHubActionsRunUrl "${{ steps.candidate.outputs.run-url }}"
           ./scripts/verify-private-compose.ps1
