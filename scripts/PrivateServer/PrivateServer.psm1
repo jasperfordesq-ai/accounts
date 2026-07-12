@@ -699,8 +699,8 @@ function Read-FbReleaseManifest {
     }
     foreach ($required in @(
         "FilingBridge.cmd", "compose.private.yml", ".env.private.example",
-        "scripts/private-server.ps1", "scripts/PrivateServer/PrivateServer.psm1",
-        "Docs/deployment/README.md", "Docs/deployment/private-server.md",
+        "scripts/private-server.ps1", "scripts/PrivateServer/PrivateServer.psm1", "scripts/smoke-production.ps1",
+        "Docs/deployment/README.md", "Docs/deployment/private-server.md", "Docs/deployment/LOCAL_WINDOWS_READINESS.md",
         "deploy/private/release-manifest.schema.json", "README.md", "LICENSE", "NOTICE",
         "THIRD_PARTY_NOTICES.md", "CONTRIBUTORS.md")) {
         if (-not $manifestFiles.ContainsKey($required.ToLowerInvariant())) { throw "release.json omits required release file: $required" }
@@ -1844,8 +1844,15 @@ function Assert-FbBackupHash {
 function Read-FbBackupAuthenticationKey {
     param($State)
     $path = Join-Path ([string]$State.secretDirectory) "backup_authentication_key"
+    return Read-FbBackupAuthenticationKeyFile $path "The installation backup-authentication key is missing. No backup was restored."
+}
+
+function Read-FbBackupAuthenticationKeyFile {
+    param([string]$Path, [string]$MissingMessage = "The recovery authentication key file is missing.")
+    if ([string]::IsNullOrWhiteSpace($Path)) { throw $MissingMessage }
+    $path = ConvertTo-FbFullPath $Path
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
-        throw "The installation backup-authentication key is missing. No backup was restored. Replacement-host restore is not yet supported."
+        throw $MissingMessage
     }
     try { $key = [Convert]::FromBase64String((Read-FbUtf8Text $path).Trim()) } catch { throw "The installation backup-authentication key is invalid." }
     if ($key.Length -lt 32) { throw "The installation backup-authentication key is too short." }
@@ -1906,22 +1913,28 @@ function Add-FbBackupAuthentication {
 
 function Assert-FbBackupAuthentication {
     param($State, $Manifest)
+    $key = Read-FbBackupAuthenticationKey $State
+    try { Assert-FbBackupAuthenticationWithKey $key $Manifest }
+    finally { [Array]::Clear($key, 0, $key.Length) }
+}
+
+function Assert-FbBackupAuthenticationWithKey {
+    param([byte[]]$Key, $Manifest)
     $authentication = Get-FbProperty $Manifest "authentication"
     if ([string](Get-FbProperty $authentication "algorithm" "") -cne "HMAC-SHA256") {
         throw "Backup has no supported installation authentication. No database restore was attempted."
     }
     $supplied = [string](Get-FbProperty $authentication "value" "")
-    $key = Read-FbBackupAuthenticationKey $State
     try {
-        $expectedKeyId = (Get-FbSha256Text ([Convert]::ToBase64String($key))).Substring(0, 16)
+        $expectedKeyId = (Get-FbSha256Text ([Convert]::ToBase64String($Key))).Substring(0, 16)
         if ([string](Get-FbProperty $authentication "keyId" "") -cne $expectedKeyId) {
-            throw "Backup was not authenticated by this Private Server installation. Replacement-host restore is not yet supported."
+            throw "Backup was not authenticated by the supplied recovery trust anchor."
         }
-        $expected = Get-FbHmacSha256 $key (Get-FbBackupAuthenticationMessage $Manifest)
+        $expected = Get-FbHmacSha256 $Key (Get-FbBackupAuthenticationMessage $Manifest)
         if (-not (Test-FbFixedTimeHexEqual $expected $supplied)) {
             throw "Backup authentication failed. The recovery set was modified or did not originate from this installation; no database restore was attempted."
         }
-    } finally { [Array]::Clear($key, 0, $key.Length) }
+    } finally { }
 }
 
 function Invoke-FbBackup {
@@ -2768,6 +2781,352 @@ function Invoke-FbOwnerRecovery {
     $escapedToken = $null
 }
 
+function Invoke-FbExportRecoveryKey {
+    param(
+        $State,
+        [string]$OutputDirectory,
+        [string]$Confirmation,
+        [switch]$NonInteractive,
+        [switch]$DryRun
+    )
+    $expected = "EXPORT RECOVERY KEY $($State.instanceId)"
+    Confirm-FbTypedAction $expected $Confirmation "Export the separate trust anchor required for replacement-host recovery." -NonInteractive:$NonInteractive
+    $resolvedOutput = Resolve-FbManagedOutputDirectory $OutputDirectory $State "RecoveryKeys" "FilingBridge Recovery Keys"
+    if ($DryRun) {
+        Write-Host "DRY RUN: export the installation backup-authentication trust anchor to $resolvedOutput"
+        Write-Host "DRY RUN: the key must be retained separately from encrypted backups and the age identity"
+        return
+    }
+    Initialize-FbManagedOutputDirectory $resolvedOutput $State "RecoveryKeys"
+    $source = Join-Path ([string]$State.secretDirectory) "backup_authentication_key"
+    $key = Read-FbBackupAuthenticationKey $State
+    try {
+        $keyId = (Get-FbSha256Text ([Convert]::ToBase64String($key))).Substring(0, 16)
+        $destination = Join-Path $resolvedOutput ("filingbridge-{0}-recovery-authentication-{1}.key" -f ([string]$State.instanceId).Replace('-', '').Substring(0, 12), $keyId)
+        if (Test-Path -LiteralPath $destination) { throw "Recovery authentication key already exists at $destination; no file was replaced." }
+        Write-FbTextExclusive -Path $destination -Value ((Read-FbUtf8Text $source).Trim() + [Environment]::NewLine)
+        Set-FbRestrictedAcl $destination
+        Write-Host "Recovery authentication key exported: $destination"
+        Write-Warning "Store this trust anchor separately from both the encrypted recovery set and its age identity. Anyone holding all three can recover the installation."
+    } finally { [Array]::Clear($key, 0, $key.Length) }
+}
+
+function Get-FbBootIdentity {
+    if ($null -ne $script:PrivateServerCommandInvoker -and -not [string]::IsNullOrWhiteSpace($env:FILINGBRIDGE_TEST_BOOT_ID)) {
+        return [string]$env:FILINGBRIDGE_TEST_BOOT_ID
+    }
+    if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) { throw "The reboot acceptance check is supported only on Windows." }
+    $operatingSystem = Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction Stop
+    $lastBoot = [DateTimeOffset]$operatingSystem.LastBootUpTime
+    return $lastBoot.ToUniversalTime().ToString("o")
+}
+
+function Get-FbAcceptanceDirectory {
+    param($State)
+    $directory = Join-Path ([string]$State.stateDirectory) "acceptance"
+    if (-not (Test-Path -LiteralPath $directory -PathType Container)) {
+        New-Item -ItemType Directory -Path $directory | Out-Null
+    }
+    Set-FbRestrictedAcl $directory
+    return $directory
+}
+
+function Invoke-FbRebootCheck {
+    param($State, [string]$ComposeFile, [string]$Action, [string]$OutputDirectory, [switch]$DryRun)
+    $normalizedAction = if ([string]::IsNullOrWhiteSpace($Action)) { "status" } else { $Action.Trim().ToLowerInvariant() }
+    if ($normalizedAction -notin @("prepare", "verify", "status")) { throw "reboot-check action must be prepare, verify, or status." }
+    $acceptanceDirectory = Get-FbAcceptanceDirectory $State
+    $pendingPath = Join-Path $acceptanceDirectory "reboot-check.pending.json"
+    if ($normalizedAction -eq "status") {
+        if (Test-Path -LiteralPath $pendingPath -PathType Leaf) { Write-Host (Read-FbUtf8Text $pendingPath) }
+        else { Write-Host "No reboot acceptance check is pending." }
+        return
+    }
+    if ($DryRun) {
+        Write-Host "DRY RUN: $normalizedAction the Windows reboot persistence acceptance check"
+        return
+    }
+    if ($normalizedAction -eq "prepare") {
+        if (Test-Path -LiteralPath $pendingPath -PathType Leaf) { throw "A reboot acceptance check is already pending. Verify it after reboot before preparing another." }
+        $running = @(Get-FbRunningServices $State $ComposeFile)
+        foreach ($required in @("db", "api", "frontend")) { if ($running -notcontains $required) { throw "Cannot prepare reboot evidence because '$required' is not running." } }
+        Wait-FbHttpHealth -Port ([int]$State.port)
+        $tables = @(Get-FbImportantTableEvidence $State $ComposeFile "accounts" "Read important-table fingerprints from the database before Windows reboot")
+        $record = [ordered]@{
+            schemaVersion = "filingbridge.private-server.reboot-check/v1"; status = "pending"
+            instanceId = [string]$State.instanceId; releaseVersion = [string]$State.releaseVersion
+            releaseCommitSha = [string]$State.releaseCommitSha; preparedAtUtc = (Get-Date).ToUniversalTime().ToString("o")
+            bootIdentityBefore = Get-FbBootIdentity; expectedServices = @("db", "api", "frontend")
+            importantTablesBefore = $tables
+        }
+        Write-FbJsonAtomic -Path $pendingPath -Value $record
+        Set-FbRestrictedAcl $pendingPath
+        Write-Host "Reboot check prepared. Reboot Windows normally, wait for Docker Desktop, then run: FilingBridge.cmd reboot-check verify"
+        return
+    }
+    if (-not (Test-Path -LiteralPath $pendingPath -PathType Leaf)) { throw "No prepared reboot acceptance record was found." }
+    $pending = (Read-FbUtf8Text $pendingPath) | ConvertFrom-Json
+    if ([string]$pending.instanceId -cne [string]$State.instanceId -or [string]$pending.status -cne "pending") { throw "Pending reboot evidence does not belong to this installation." }
+    $bootAfter = Get-FbBootIdentity
+    if ($bootAfter -ceq [string]$pending.bootIdentityBefore) { throw "Windows has not rebooted since this check was prepared." }
+    $running = @(Get-FbRunningServices $State $ComposeFile)
+    foreach ($required in @("db", "api", "frontend")) { if ($running -notcontains $required) { throw "Reboot persistence failed because '$required' did not return automatically." } }
+    Wait-FbHttpHealth -Port ([int]$State.port)
+    $tablesAfter = @(Get-FbImportantTableEvidence $State $ComposeFile "accounts" "Read important-table fingerprints from the database after Windows reboot")
+    Assert-FbImportantTableEvidenceMatches -Expected @($pending.importantTablesBefore) -Actual $tablesAfter -Description "Windows reboot persistence"
+    $completed = [ordered]@{
+        schemaVersion = "filingbridge.private-server.reboot-check/v1"; status = "passed"
+        instanceId = [string]$State.instanceId; releaseVersion = [string]$State.releaseVersion
+        releaseCommitSha = [string]$State.releaseCommitSha; preparedAtUtc = [string]$pending.preparedAtUtc
+        verifiedAtUtc = (Get-Date).ToUniversalTime().ToString("o"); bootIdentityBefore = [string]$pending.bootIdentityBefore
+        bootIdentityAfter = $bootAfter; servicesRunning = @("db", "api", "frontend")
+        readinessUri = "http://127.0.0.1:$($State.port)/health/ready"; importantTablesMatched = $true
+        importantTablesBefore = @($pending.importantTablesBefore); importantTablesAfter = $tablesAfter
+    }
+    $completedPath = Join-Path $acceptanceDirectory ("reboot-check-{0}.json" -f (Get-Date).ToUniversalTime().ToString("yyyyMMdd-HHmmssfff"))
+    Write-FbJsonAtomic -Path $completedPath -Value $completed
+    Set-FbRestrictedAcl $completedPath
+    Remove-Item -LiteralPath $pendingPath -Force
+    if (-not [string]::IsNullOrWhiteSpace($OutputDirectory)) {
+        $resolvedOutput = Resolve-FbManagedOutputDirectory $OutputDirectory $State "Acceptance" "FilingBridge Acceptance"
+        Initialize-FbManagedOutputDirectory $resolvedOutput $State "Acceptance"
+        Copy-Item -LiteralPath $completedPath -Destination (Join-Path $resolvedOutput ([IO.Path]::GetFileName($completedPath)))
+    }
+    Write-Host "Windows reboot persistence passed with unchanged business-data fingerprints: $completedPath"
+}
+
+function Invoke-FbLocalCheck {
+    param($State, [string]$ComposeFile, [string]$OutputDirectory, [switch]$DryRun)
+    if ($DryRun) {
+        Write-Host "DRY RUN: verify runtime ownership, health, loopback-only frontend publication, absent API/database host ports, and business-data fingerprints"
+        return
+    }
+    $running = @(Get-FbRunningServices $State $ComposeFile)
+    foreach ($required in @("db", "api", "frontend")) { if ($running -notcontains $required) { throw "Local acceptance failed because '$required' is not running." } }
+    Wait-FbHttpHealth -Port ([int]$State.port)
+    $frontendPort = Invoke-FbCompose $State $ComposeFile @("port", "frontend", "3000") "Inspect frontend published port" -IgnoreExitCode
+    if ($frontendPort.ExitCode -ne 0 -or @($frontendPort.Output).Count -ne 1 -or [string]$frontendPort.Output[0] -cne "127.0.0.1:$($State.port)") {
+        throw "Local acceptance requires the frontend to publish exactly 127.0.0.1:$($State.port)."
+    }
+    $unpublished = [ordered]@{}
+    foreach ($entry in @([pscustomobject]@{ service = "api"; port = "8080" }, [pscustomobject]@{ service = "db"; port = "5432" })) {
+        $probe = Invoke-FbCompose $State $ComposeFile @("port", $entry.service, $entry.port) "Inspect $($entry.service) unpublished port" -IgnoreExitCode
+        if ($probe.ExitCode -eq 0 -and @($probe.Output | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) }).Count -gt 0) {
+            throw "Local acceptance failed because $($entry.service) has a host-published port."
+        }
+        $unpublished[$entry.service] = $true
+    }
+    $tables = @(Get-FbImportantTableEvidence $State $ComposeFile "accounts" "Read important-table fingerprints from the local acceptance database")
+    $report = [ordered]@{
+        schemaVersion = "filingbridge.private-server.local-check/v1"; status = "passed"
+        instanceId = [string]$State.instanceId; releaseVersion = [string]$State.releaseVersion
+        releaseCommitSha = [string]$State.releaseCommitSha; checkedAtUtc = (Get-Date).ToUniversalTime().ToString("o")
+        deploymentMode = "PrivateServer"; runningServices = @("db", "api", "frontend")
+        frontendBinding = "127.0.0.1:$($State.port)"; apiHostPortPublished = $false; databaseHostPortPublished = $false
+        readinessUri = "http://127.0.0.1:$($State.port)/health/ready"; readinessPassed = $true
+        tenantQualifiedLoginConfigured = $true; workspaceSlug = [string]$State.tenantSlug
+        businessDataFingerprintCount = $tables.Count; importantTables = $tables
+        statutoryBoundary = "No direct CRO/ROS submission; qualified-accountant review remains required for real filing reliance."
+    }
+    $acceptanceDirectory = Get-FbAcceptanceDirectory $State
+    $path = Join-Path $acceptanceDirectory ("local-check-{0}.json" -f (Get-Date).ToUniversalTime().ToString("yyyyMMdd-HHmmssfff"))
+    Write-FbJsonAtomic -Path $path -Value $report
+    Set-FbRestrictedAcl $path
+    if (-not [string]::IsNullOrWhiteSpace($OutputDirectory)) {
+        $resolvedOutput = Resolve-FbManagedOutputDirectory $OutputDirectory $State "Acceptance" "FilingBridge Acceptance"
+        Initialize-FbManagedOutputDirectory $resolvedOutput $State "Acceptance"
+        Copy-Item -LiteralPath $path -Destination (Join-Path $resolvedOutput ([IO.Path]::GetFileName($path)))
+    }
+    Write-Host "Local Private Server acceptance passed: $path"
+}
+
+function Invoke-FbRecoverHost {
+    param(
+        [string]$StateDirectory,
+        [string]$RepositoryRoot,
+        [string]$ReleaseManifest,
+        [string]$BackupPath,
+        [string]$AgeIdentityFile,
+        [string]$RecoveryAuthenticationKeyFile,
+        [string]$Confirmation,
+        [int]$Port,
+        [switch]$BuildLocal,
+        [switch]$NonInteractive,
+        [switch]$DryRun,
+        [switch]$SkipPrerequisiteChecks
+    )
+    if ($SkipPrerequisiteChecks -and $null -eq $script:PrivateServerCommandInvoker) {
+        throw "Skipping prerequisite checks is available only through the injected operator test seam."
+    }
+    if ([string]::IsNullOrWhiteSpace($BackupPath)) { throw "-BackupPath is required for replacement-host recovery." }
+    if ([string]::IsNullOrWhiteSpace($AgeIdentityFile)) { throw "-AgeIdentityFile is required for replacement-host recovery." }
+    if ([string]::IsNullOrWhiteSpace($RecoveryAuthenticationKeyFile)) { throw "-RecoveryAuthenticationKeyFile is required for replacement-host recovery." }
+    $resolvedStateDirectory = Resolve-FbStateDirectory $StateDirectory
+    if (Test-FbPathWithin $resolvedStateDirectory $RepositoryRoot) { throw "Private Server state must be outside the release/source directory." }
+    if (Test-Path -LiteralPath $resolvedStateDirectory) { throw "Replacement-host recovery refuses to overwrite existing state at $resolvedStateDirectory." }
+    $resolvedBackup = ConvertTo-FbFullPath $BackupPath
+    $externalPath = "$resolvedBackup.manifest.json"
+    if (-not (Test-Path -LiteralPath $resolvedBackup -PathType Leaf) -or -not (Test-Path -LiteralPath $externalPath -PathType Leaf)) {
+        throw "The encrypted backup and its envelope manifest are both required."
+    }
+    $external = (Read-FbUtf8Text $externalPath) | ConvertFrom-Json
+    if ([string](Get-FbProperty $external "schemaVersion" "") -ne "filingbridge.private-server.backup-envelope/v1" -or
+        (Get-FbProperty $external "completeRecoverySet" $false) -ne $true -or
+        (Get-FbProperty $external "encrypted" $false) -ne $true -or
+        [string](Get-FbProperty $external "encryption" "") -ne "age") {
+        throw "Replacement-host recovery requires a complete age-encrypted recovery set."
+    }
+    $sourceInstanceId = [string](Get-FbProperty $external "instanceId" "")
+    $sourceGuid = [Guid]::Empty
+    if (-not [Guid]::TryParse($sourceInstanceId, [ref]$sourceGuid)) { throw "Backup envelope has no valid source installation identity." }
+    Confirm-FbTypedAction "RECOVER HOST $sourceInstanceId" $Confirmation "Recovering onto another host must occur only while the source installation is offline." -NonInteractive:$NonInteractive
+    Assert-FbBackupHash $resolvedBackup $external
+    $trustKey = Read-FbBackupAuthenticationKeyFile $RecoveryAuthenticationKeyFile "The separately retained recovery authentication key is required."
+    try { Assert-FbBackupAuthenticationWithKey $trustKey $external }
+    finally { [Array]::Clear($trustKey, 0, $trustKey.Length) }
+
+    Assert-FbPrerequisites -StateDirectory $resolvedStateDirectory -RepositoryRoot $RepositoryRoot -Port $Port -SkipExternalChecks:$SkipPrerequisiteChecks
+    $composeFile = Get-FbComposeFile $RepositoryRoot
+    $newInstanceId = [Guid]::NewGuid().ToString("D")
+    $release = if ($BuildLocal) {
+        if (-not [string]::IsNullOrWhiteSpace($ReleaseManifest)) { throw "-BuildLocal and -ReleaseManifest cannot be combined." }
+        if ($DryRun) {
+            [pscustomobject]@{ path = ""; sha256 = ""; version = "source-build"; commitSha = ""; reviewed = $false; integrityStatus = "source-build-unreviewed"; images = [pscustomobject]@{ api = "filingbridge-private-api:<generated>"; frontend = "filingbridge-private-frontend:<generated>"; postgres = "postgres:16.4-alpine" } }
+        } else { New-FbLocalBuildRelease -RepositoryRoot $RepositoryRoot -InstanceId $newInstanceId }
+    } else {
+        Read-FbReleaseManifest -Path (Get-FbReleaseManifestPath $ReleaseManifest $RepositoryRoot) -RepositoryRoot $RepositoryRoot
+    }
+    if (-not (Test-FbBackupReleaseCompatibility ([string]$external.releaseVersion) ([string]$release.version))) {
+        throw "Backup release '$($external.releaseVersion)' is not compatible with recovery release '$($release.version)'. Use the same or a newer semantic release."
+    }
+    if ($DryRun) {
+        Write-Host "DRY RUN: authenticate and decrypt the complete recovery set"
+        Write-Host "DRY RUN: create a new isolated installation identity and PostgreSQL volume"
+        Write-Host "DRY RUN: restore and fingerprint-check the database, preserve cryptographic continuity, rotate browser sessions, migrate forward, and health-check"
+        return
+    }
+
+    $staging = Join-Path ([IO.Path]::GetTempPath()) ("filingbridge-recover-host-" + [Guid]::NewGuid().ToString("N"))
+    $state = $null
+    $composeStarted = $false
+    try {
+        New-Item -ItemType Directory -Path $staging | Out-Null
+        Set-FbRestrictedAcl $staging
+        $trustedBackup = Join-Path $staging "authenticated-recovery-set.fbbackup.age"
+        Copy-Item -LiteralPath $resolvedBackup -Destination $trustedBackup
+        Set-FbRestrictedAcl $trustedBackup
+        Assert-FbBackupHash $trustedBackup ([pscustomobject]@{ backupFileName = [IO.Path]::GetFileName($trustedBackup); backupSha256 = [string]$external.backupSha256; byteSize = [long]$external.byteSize })
+        $expanded = Expand-FbEncryptedBackup $trustedBackup $AgeIdentityFile (Join-Path $staging "decrypted")
+        $internal = Assert-FbInternalBackupInventory $expanded
+        if ([string]$internal.instanceId -cne $sourceInstanceId -or [string]$internal.releaseVersion -cne [string]$external.releaseVersion -or
+            [string](Get-FbProperty $internal "releaseCommitSha" "") -cne [string](Get-FbProperty $external "releaseCommitSha" "")) {
+            throw "Backup envelope and encrypted recovery identity do not agree."
+        }
+        $recoveredSecrets = Join-Path $expanded "state\secrets"
+        $recoveredKey = Read-FbBackupAuthenticationKeyFile (Join-Path $recoveredSecrets "backup_authentication_key")
+        $suppliedKey = Read-FbBackupAuthenticationKeyFile $RecoveryAuthenticationKeyFile
+        try {
+            if (-not (Test-FbFixedTimeHexEqual (Get-FbSha256Text ([Convert]::ToBase64String($recoveredKey))) (Get-FbSha256Text ([Convert]::ToBase64String($suppliedKey))))) {
+                throw "Encrypted recovery contents do not contain the separately retained authentication trust anchor."
+            }
+        } finally { [Array]::Clear($recoveredKey, 0, $recoveredKey.Length); [Array]::Clear($suppliedKey, 0, $suppliedKey.Length) }
+        $oldState = (Read-FbUtf8Text (Join-Path $expanded "state\server.json")) | ConvertFrom-Json
+        if ([string](Get-FbProperty $oldState "instanceId" "") -cne $sourceInstanceId) { throw "Recovered state and backup identity do not agree." }
+        if ([int](Get-FbProperty $oldState "formatVersion" 0) -ne $script:SupportedStateFormat) { throw "Recovered state format is not supported by this release." }
+        $expectedSourceShort = $sourceGuid.ToString("N").Substring(0, 12)
+        if ([string](Get-FbProperty $oldState "mfaKeyId" "") -cne "mfa-$expectedSourceShort" -or
+            [string](Get-FbProperty $oldState "auditKeyId" "") -cne "audit-$expectedSourceShort") {
+            throw "Recovered MFA/audit key identity does not match the authenticated source installation."
+        }
+        $recoveredTenantSlug = [string](Get-FbProperty $oldState "tenantSlug" "")
+        if ($recoveredTenantSlug -cnotmatch '^[a-z0-9](?:[a-z0-9-]{1,48}[a-z0-9])$') { throw "Recovered workspace slug is invalid." }
+        foreach ($value in @([string]$oldState.tenantName, [string]$oldState.ownerEmail, [string]$oldState.ownerName)) {
+            if ([string]::IsNullOrWhiteSpace($value) -or $value.Length -gt 160 -or $value -match "[\r\n\x00]") { throw "Recovered tenant/Owner identity is invalid." }
+        }
+        if ([string]$oldState.ownerEmail -notmatch '^[^\s@]+@[^\s@]+\.[^\s@]+$') { throw "Recovered Owner email is invalid." }
+
+        $secretDirectory = Join-Path $resolvedStateDirectory "secrets"
+        New-Item -ItemType Directory -Path $secretDirectory -Force:$false | Out-Null
+        Set-FbRestrictedAcl $resolvedStateDirectory
+        Set-FbRestrictedAcl $secretDirectory
+        foreach ($required in @(Get-FbRequiredRecoveryPaths | Where-Object { $_ -like "state/secrets/*" })) {
+            $name = Split-Path $required -Leaf
+            Copy-Item -LiteralPath (Join-Path $recoveredSecrets $name) -Destination (Join-Path $secretDirectory $name)
+            Set-FbRestrictedAcl (Join-Path $secretDirectory $name)
+        }
+        Write-FbTextExclusive -Path (Join-Path $secretDirectory "private_initial_owner_password") -Value "RECOVERED-HOST-NO-INITIAL-PASSWORD"
+        Set-FbRestrictedAcl (Join-Path $secretDirectory "private_initial_owner_password")
+        [IO.File]::WriteAllText((Join-Path $secretDirectory "auth_session_signing_key"), (New-PrivateServerRandomSecret), $script:Utf8NoBom)
+        Set-FbRestrictedAcl (Join-Path $secretDirectory "auth_session_signing_key")
+        $installedComposeFile = Join-Path $resolvedStateDirectory "compose.private.installed.yml"
+        Write-FbTextAtomic -Path $installedComposeFile -Value (Read-FbUtf8Text $composeFile)
+        Set-FbRestrictedAcl $installedComposeFile
+        if (-not $BuildLocal -and (Get-FileHash -LiteralPath $installedComposeFile -Algorithm SHA256).Hash.ToLowerInvariant() -cne [string]$release.composeSha256) {
+            throw "compose.private.yml changed after release verification; host recovery refused mutable source."
+        }
+        $now = (Get-Date).ToUniversalTime().ToString("o")
+        $localOrigin = "http://localhost:$Port"
+        $state = [pscustomobject][ordered]@{
+            formatVersion = $script:SupportedStateFormat; status = "recovering"; instanceId = $newInstanceId
+            composeProject = "filingbridge-" + $newInstanceId.Replace("-", "").Substring(0, 12)
+            stateDirectory = $resolvedStateDirectory; releaseDirectory = $RepositoryRoot; secretDirectory = $secretDirectory
+            environmentFile = Join-Path $resolvedStateDirectory $script:EnvironmentFileName; installedComposeFile = $installedComposeFile
+            composeFileSha256 = (Get-FileHash -LiteralPath $installedComposeFile -Algorithm SHA256).Hash.ToLowerInvariant()
+            port = $Port; localOrigin = $localOrigin; publicOrigin = $localOrigin
+            tenantName = [string]$oldState.tenantName; tenantSlug = [string]$oldState.tenantSlug
+            ownerEmail = [string]$oldState.ownerEmail; ownerName = [string]$oldState.ownerName
+            mfaKeyId = [string]$oldState.mfaKeyId; auditKeyId = [string]$oldState.auditKeyId
+            releaseVersion = [string]$release.version; releaseCommitSha = [string]$release.commitSha
+            releaseManifest = [string]$release.path; releaseManifestSha256 = [string]$release.sha256
+            reviewedRelease = [bool]$release.reviewed; releaseIntegrityStatus = [string]$release.integrityStatus; images = $release.images
+            tailscaleEnabled = $false; tailscaleDnsName = ""; backupRecipient = [string](Get-FbProperty $external "recipient" "")
+            recoveredFromInstanceId = $sourceInstanceId; recoveredAtUtc = $now; createdAtUtc = $now; updatedAtUtc = $now
+        }
+        Write-FbEnvironmentFile $state
+        Save-FbState $state
+        $null = Invoke-FbCompose $state $installedComposeFile @("config", "--quiet") "Validate the recovered Private Server topology"
+        if (-not $BuildLocal) { $null = Invoke-FbCompose $state $installedComposeFile @("pull", "--policy", "always") "Pull exact recovery release images" -Mutating }
+        $null = Invoke-FbCompose $state $installedComposeFile @("up", "-d", "--wait", "--wait-timeout", "300", "db") "Start a new isolated PostgreSQL service for host recovery" -Mutating
+        $composeStarted = $true
+        $expectedTables = @(Get-FbProperty (Get-FbProperty $external "databaseVerification") "importantTables" @())
+        if ($expectedTables.Count -ne 5) { throw "Recovery envelope lacks the five required business-data fingerprints." }
+        $dump = Join-Path $expanded "database\accounts.dump"
+        $null = Test-FbDatabaseDumpRestore -State $state -ComposeFile $installedComposeFile -HostDumpPath $dump -ExpectedImportantTables $expectedTables
+        $candidate = "fb_host_recovery_" + [Guid]::NewGuid().ToString("N").Substring(0, 12)
+        Restore-FbCandidateDatabase $state $installedComposeFile $dump $candidate
+        Switch-FbDatabase $state $installedComposeFile $candidate ("empty_before_host_recovery_" + [Guid]::NewGuid().ToString("N").Substring(0, 8))
+        $null = Invoke-FbCompose $state $installedComposeFile @("run", "--rm", "--no-deps", "role-provision") "Reapply the least-privileged database login after host recovery" -Mutating
+        $null = Invoke-FbCompose $state $installedComposeFile @("run", "--rm", "--no-deps", "migrate") "Apply forward-only migrations after host recovery" -Mutating
+        $null = Invoke-FbCompose $state $installedComposeFile @("up", "-d", "--no-deps", "--wait", "--wait-timeout", "300", "api", "frontend") "Start the recovered Private Server runtime" -Mutating
+        Wait-FbHttpHealth -Port $Port
+        $actualTables = @(Get-FbImportantTableEvidence $state $installedComposeFile "accounts" "Read important-table fingerprints from the recovered database")
+        Assert-FbImportantTableEvidenceMatches -Expected $expectedTables -Actual $actualTables -Description "Replacement-host recovery"
+        $state.status = "ready"
+        Save-FbState $state
+        Write-Host "Replacement-host recovery completed and passed database fingerprint and health checks at $localOrigin"
+        Write-Host "All pre-recovery browser sessions were invalidated. Source installation $sourceInstanceId must remain offline."
+    } catch {
+        $recoveryFailure = $_
+        $writerStopFailure = ""
+        if ($null -ne $state -and $composeStarted) {
+            try {
+                $null = Invoke-FbCompose $state ([string]$state.installedComposeFile) @("stop", "--timeout", "60", "frontend", "api") "Keep writers stopped after failed host recovery" -Mutating
+                Assert-FbWritersQuiesced $state ([string]$state.installedComposeFile) "Replacement-host recovery"
+            } catch { $writerStopFailure = $_.Exception.Message }
+        }
+        if ($null -ne $state) {
+            try {
+                $state.status = if ([string]::IsNullOrWhiteSpace($writerStopFailure)) { "hostRecoveryFailed" } else { "hostRecoveryRecoveryRequired" }
+                Save-FbState $state
+            } catch { }
+        }
+        if (-not [string]::IsNullOrWhiteSpace($writerStopFailure)) {
+            throw "Replacement-host recovery failed and application-writer shutdown could not be proven. Do not use the recovered service; stop its Docker project before diagnosis. Original failure: $($recoveryFailure.Exception.Message) Writer-stop failure: $writerStopFailure"
+        }
+        throw "Replacement-host recovery failed with application writers stopped. $($recoveryFailure.Exception.Message)"
+    } finally { Remove-FbTemporaryDirectory $staging }
+}
+
 function Invoke-FbVerifyBackupCommand {
     param($State, [string]$ComposeFile, [string]$BackupPath, [string]$AgeIdentityFile, [switch]$AllowPlaintextDatabaseOnlyRestore)
     $previouslyRunning = @(Get-FbRunningServices $State $ComposeFile)
@@ -2977,6 +3336,10 @@ Usage:
   FilingBridge.cmd backup -PlaintextDatabaseOnly [-OutputDirectory <dir>]
   FilingBridge.cmd verify-backup -BackupPath <path> [-AgeIdentityFile <identity>]
   FilingBridge.cmd restore -BackupPath <path> [-AgeIdentityFile <identity>]
+  FilingBridge.cmd export-recovery-key -OutputDirectory <separate-offline-directory>
+  FilingBridge.cmd recover-host -BackupPath <path> -AgeIdentityFile <identity> -RecoveryAuthenticationKeyFile <key>
+  FilingBridge.cmd reboot-check prepare | verify | status
+  FilingBridge.cmd local-check [-OutputDirectory <evidence-directory>]
   FilingBridge.cmd update -ReleaseManifest <release.json> [-BackupRecipient <recipient>] [-AgeIdentityFile <identity>]
   FilingBridge.cmd owner-recovery [-OwnerEmail <email>]
   FilingBridge.cmd tailscale enable | disable | status
@@ -2988,6 +3351,8 @@ Safety:
   and uninstall preserve data; purge-data and restore require an exact installation-
   specific confirmation. Complete portable backups use age encryption. Explicit
   plaintext backups contain only PostgreSQL and are not sufficient for host loss.
+  Replacement-host recovery requires a complete encrypted backup, its separate age
+  identity, and an exported recovery authentication key. Keep all three separately.
 
 Private Server does not submit to CRO/ROS and does not replace qualified-accountant,
 source-law, external-validation, or public-production acceptance gates.
@@ -3012,6 +3377,7 @@ function Invoke-FilingBridgePrivateServer {
         [string]$BackupPath,
         [string]$BackupRecipient,
         [string]$AgeIdentityFile,
+        [string]$RecoveryAuthenticationKeyFile,
         [string]$Confirmation,
         [int]$TailLines = 250,
         [switch]$DryRun,
@@ -3029,13 +3395,17 @@ function Invoke-FilingBridgePrivateServer {
         $DryRun = $true
     }
     if ($normalized -in @("help", "-h", "--help", "/?")) { Write-Host (Get-PrivateServerHelp); return }
-    $supported = @("setup", "start", "status", "stop", "logs", "backup", "verify-backup", "restore", "update", "owner-recovery", "tailscale", "diagnose", "support-bundle", "uninstall", "purge-data")
+    $supported = @("setup", "start", "status", "stop", "logs", "backup", "verify-backup", "restore", "export-recovery-key", "recover-host", "reboot-check", "local-check", "update", "owner-recovery", "tailscale", "diagnose", "support-bundle", "uninstall", "purge-data")
     if ($normalized -notin $supported) { throw "Unknown command '$Command'. Run 'FilingBridge.cmd help' for supported commands." }
     $installationLock = Enter-FbInstallationLock $StateDirectory
     try {
         $RepositoryRoot = [IO.Path]::GetFullPath($RepositoryRoot)
         if ($normalized -eq "setup") {
             Invoke-FbSetup $StateDirectory $RepositoryRoot $ReleaseManifest $TenantName $TenantSlug $OwnerEmail $OwnerName $PublicOrigin $Port -DryRun:$DryRun -NonInteractive:$NonInteractive -BuildLocal:$BuildLocal -SkipPrerequisiteChecks:$SkipPrerequisiteChecks
+            return
+        }
+        if ($normalized -eq "recover-host") {
+            Invoke-FbRecoverHost $StateDirectory $RepositoryRoot $ReleaseManifest $BackupPath $AgeIdentityFile $RecoveryAuthenticationKeyFile $Confirmation $Port -BuildLocal:$BuildLocal -NonInteractive:$NonInteractive -DryRun:$DryRun -SkipPrerequisiteChecks:$SkipPrerequisiteChecks
             return
         }
         $allowNonReady = $normalized -in @("status", "stop", "logs", "diagnose", "support-bundle", "uninstall", "purge-data", "update", "owner-recovery", "restore")
@@ -3066,6 +3436,9 @@ function Invoke-FilingBridgePrivateServer {
             "backup" { $null = Invoke-FbBackup $state $composeFile $OutputDirectory $BackupRecipient -PlaintextDatabaseOnly:$PlaintextDatabaseOnly -DryRun:$DryRun }
             "verify-backup" { Invoke-FbVerifyBackupCommand $state $composeFile $BackupPath $AgeIdentityFile -AllowPlaintextDatabaseOnlyRestore:$AllowPlaintextDatabaseOnlyRestore }
             "restore" { Invoke-FbRestore $state $composeFile $BackupPath $AgeIdentityFile $Confirmation -NonInteractive:$NonInteractive -AllowPlaintextDatabaseOnlyRestore:$AllowPlaintextDatabaseOnlyRestore -DryRun:$DryRun }
+            "export-recovery-key" { Invoke-FbExportRecoveryKey $state $OutputDirectory $Confirmation -NonInteractive:$NonInteractive -DryRun:$DryRun }
+            "reboot-check" { Invoke-FbRebootCheck $state $composeFile $Action $OutputDirectory -DryRun:$DryRun }
+            "local-check" { Invoke-FbLocalCheck $state $composeFile $OutputDirectory -DryRun:$DryRun }
             "update" { Invoke-FbUpdate $state $composeFile $RepositoryRoot $ReleaseManifest $OutputDirectory $BackupRecipient $AgeIdentityFile -PlaintextDatabaseOnly:$PlaintextDatabaseOnly -BuildLocal:$BuildLocal -DryRun:$DryRun }
             "owner-recovery" { Invoke-FbOwnerRecovery $state $composeFile $OwnerEmail $Confirmation -NonInteractive:$NonInteractive -DryRun:$DryRun }
             "tailscale" { Invoke-FbTailscale $state $composeFile $Action -DryRun:$DryRun }

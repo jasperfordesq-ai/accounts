@@ -42,6 +42,9 @@ param(
     [Alias("age-identity")]
     [string]$AgeIdentityFile,
 
+    [Alias("recovery-authentication-key")]
+    [string]$RecoveryAuthenticationKeyFile,
+
     [string]$Confirmation,
 
     [Alias("tail")]
@@ -90,6 +93,7 @@ $arguments = @{
     BackupPath                        = $BackupPath
     BackupRecipient                   = $BackupRecipient
     AgeIdentityFile                   = $AgeIdentityFile
+    RecoveryAuthenticationKeyFile    = $RecoveryAuthenticationKeyFile
     Confirmation                      = $Confirmation
     TailLines                         = $TailLines
     DryRun                            = $DryRun

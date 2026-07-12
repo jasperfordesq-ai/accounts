@@ -177,7 +177,9 @@ try {
             ".env.private.example",
             "scripts/private-server.ps1",
             "scripts/PrivateServer/PrivateServer.psm1",
+            "scripts/smoke-production.ps1",
             "Docs/deployment/private-server.md",
+            "Docs/deployment/LOCAL_WINDOWS_READINESS.md",
             "LICENSE",
             "NOTICE")) {
             if (-not $seen.Contains($required)) {

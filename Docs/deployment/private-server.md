@@ -65,7 +65,9 @@ Required:
 - a Windows account permitted to use Docker; and
 - Tailscale only when private access from another device is required; and
 - the vetted `age` command plus a separately retained age identity/recipient when complete
-  encrypted recovery sets are required. `age` is not needed for setup or routine start; and
+  encrypted recovery sets are required. `age` is not needed for setup or routine start;
+- a separately exported FilingBridge recovery-authentication key, stored apart from both the
+  encrypted backup and age identity, before replacement-host recovery can be relied on; and
 - a complete recovery payload below the current 1.9 GB `Compress-Archive` safety ceiling. Larger
   databases can still produce authenticated database-only dumps, but this preview has no complete
   host-loss set above that ceiling.
@@ -239,6 +241,7 @@ Create a backup outside the release/source directory:
 ```powershell
 .\FilingBridge.cmd backup -BackupRecipient <age-recipient> -OutputDirectory "D:\FilingBridge Backups"
 .\FilingBridge.cmd verify-backup -BackupPath <path-to-fbbackup.age> -AgeIdentityFile <path-to-age-key>
+.\FilingBridge.cmd export-recovery-key -OutputDirectory "E:\FilingBridge Trust Anchor"
 ```
 
 The supported workflow records which services were running, quiesces application writers, creates
@@ -261,8 +264,10 @@ bootstrap password is never included.
 Only restore a set created and authenticated by this exact installation. Anyone can encrypt data to
 an age public recipient, so age encryption by itself does not establish who created a backup. The
 installation HMAC is verified before a dump is copied into private staging or passed to PostgreSQL.
-Replacement-host restore remains unsupported because the replacement does not yet have a supported
-way to establish the original authentication key.
+`export-recovery-key` exports that HMAC trust anchor under a typed, installation-specific
+confirmation. Store it separately from both the encrypted recovery set and age identity: possession
+of all three is sufficient to recover the installation. The command refuses to overwrite an
+existing key file.
 
 An explicitly requested plaintext local database dump is a convenience copy, not a complete
 off-host recovery set. Create it only with `-PlaintextDatabaseOnly`; verification/restore requires
@@ -294,9 +299,31 @@ key; and starts the app for a loopback health check. It proves selected importan
 fingerprints, not every table or generated-artifact byte; it does not claim an audit-integrity
 checkpoint verification or sample PDF/iXBRL generation.
 
-Replacement-host/bare-metal restore is not implemented in this preview. The encrypted companion is
-retained so that workflow can be added without losing key continuity, but do not claim host-loss
-recovery until a supported bootstrap command and clean-host drill exist.
+## Replacement-host recovery
+
+The coding path is implemented, but it has not yet passed a real clean/replacement-host drill:
+
+```powershell
+.\FilingBridge.cmd recover-host `
+  -BackupPath <path-to-fbbackup.age> `
+  -AgeIdentityFile <path-to-age-key> `
+  -RecoveryAuthenticationKeyFile <path-to-exported-recovery-key> `
+  -ReleaseManifest .\release.json
+```
+
+The source installation must be offline. The command requires an empty state path, a complete
+age-encrypted set, the separate age identity, the separately exported HMAC trust anchor, and the
+same or a newer compatible release. It authenticates and re-hashes the ciphertext before
+decryption, rejects a recovered key that differs from the external trust anchor, creates a new
+installation/Compose identity and empty PostgreSQL volume, independently restore-tests the dump,
+selects the recovered database, preserves MFA/audit/identity key continuity, rotates browser
+sessions, applies forward migrations, starts the runtime, and compares the live important-table
+fingerprints with the authenticated backup evidence. A failed attempt remains explicitly blocked
+as `hostRecoveryFailed` for diagnosis or deliberate purge.
+
+Do not delete the source host until this exact workflow has passed on the intended replacement
+machine and retained business artifacts have been inspected. Implementation and mock/adversarial
+tests are not a substitute for that drill.
 
 ## Updates and rollback limits
 
@@ -328,6 +355,7 @@ runs `git pull` against a working tree.
 ```powershell
 .\FilingBridge.cmd diagnose
 .\FilingBridge.cmd support-bundle
+.\FilingBridge.cmd local-check
 ```
 
 Diagnostics check state/config shape, required secret-file presence (including backup
@@ -343,6 +371,18 @@ environment files, bearer tokens, Owner/workspace identity and unbounded logs. I
 application log sample receives best-effort credential/email/IP/path redaction, but arbitrary
 exception messages can still contain client or accounting metadata. Treat the bundle as sensitive,
 review every file manually, and share it only through an approved private channel.
+
+`local-check` writes an ACL-restricted JSON acceptance report proving all three owned services are
+running, loopback readiness passes, the frontend is published exactly on IPv4 loopback, API and
+PostgreSQL have no host ports, and the five authenticated business-data fingerprints are readable.
+It does not log in as a human user.
+
+For an authenticated Owner journey, the compiled release includes `scripts\smoke-production.ps1`.
+Set `SMOKE_TENANT_SLUG`, `SMOKE_LOGIN_EMAIL`, `SMOKE_LOGIN_PASSWORD`, and—after enrolment—
+`SMOKE_TOTP_SECRET`, then run it against `http://localhost:3500` with `-AllowInsecureHttp`. Add
+`-CompanyId`, `-PeriodId`, and `-CheckDownloads` to exercise PDF and iXBRL downloads for a safe test
+period. Do not use `-AllowEphemeralMfaEnrollment` on a retained installation; that switch is only
+for disposable CI bootstrap accounts.
 
 ## Offline behaviour
 
@@ -374,13 +414,18 @@ connectivity.
   encrypted/off-host backup destination and retention schedule; backup files are not pruned by the
   operator.
 - Use a UPS where unexpected power loss is material.
-- After Windows, Docker or Tailscale updates, reboot and verify `status` plus a second-device login.
+- Before a planned acceptance reboot run `.\FilingBridge.cmd reboot-check prepare`. After Windows
+  returns and Docker Desktop has started, run `.\FilingBridge.cmd reboot-check verify`. The verifier
+  rejects a same-boot run and retains evidence only when all services returned automatically,
+  loopback readiness passed, and pre/post-reboot business-data fingerprints match. Also perform a
+  second-device login if Tailscale Serve is enabled.
 
-Moving to a replacement Windows host is not yet a supported restore workflow. Preserve encrypted
-recovery sets and their age identity, but do not delete the original host until a future clean-host
-restore command has been implemented and drilled. A later Linux VM or public service is a separate
-Public Production migration using its strict TLS/provider/ingress contract, not a copy of this
-Windows Compose profile.
+Moving to a replacement Windows host now has the explicit `recover-host` coding path described
+above. Preserve encrypted recovery sets, their age identity, and the separately exported
+authentication key in distinct protected locations. The path remains operational-preview only
+until it passes a clean-host drill. A later Linux VM or public service is a separate Public
+Production migration using its strict TLS/provider/ingress contract, not a copy of this Windows
+Compose profile.
 
 Docker runtime restart policies and persistent Tailscale Serve configuration help recovery, but the
 clean-Windows acceptance test—not a configuration claim—is the evidence that this installation
@@ -436,8 +481,10 @@ no API, database, LAN or public port was published.
 That drill is useful current-host engineering evidence, not clean-machine or filing acceptance. It
 used the explicitly incomplete plaintext database-only backup path, not an encrypted complete
 recovery set, and it did not exercise a reviewed published bundle, genuine prior-version update,
-forced update failure, reboot, offline accountant journey, second-device Serve access or
-replacement-host restore.
+reboot, offline accountant journey, second-device Serve access or replacement-host recovery. The
+operator test suite now forces update failure and recovery and exercises the replacement-host and
+reboot evidence contracts through injected deterministic seams; those are coding evidence, not
+live-host acceptance.
 
 Private Server is not live-certified until a clean Windows x64 VM or equivalent proves setup,
 unique secrets, one tenant/Owner and no demo state, Owner password/MFA lifecycle, two additional

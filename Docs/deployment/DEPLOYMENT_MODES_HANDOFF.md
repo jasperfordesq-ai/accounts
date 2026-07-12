@@ -201,15 +201,18 @@ authentication. The vetted `age` command and a recipient are required for that c
 set. Complete payloads currently have a 1.9 GB `Compress-Archive` ceiling. A plaintext database-only
 dump is available only through an explicit acknowledgement and is not a complete host-loss set.
 
-Restore is implemented only for the same installation. It verifies the envelope/inventory and a
+Same-installation restore verifies the envelope/inventory and a
 disposable database restore, preserves the current database, switches to a candidate, reapplies
 roles and forward migrations, rotates the session key, and health-checks the loopback app. It does
 not prove all-table/all-row equivalence, retained artifact byte continuity, or sample PDF/iXBRL
 output.
 
-**Replacement-host/bare-metal restore is not implemented.** The companion is retained for future
-key continuity, but no clean-host bootstrap command or drill currently establishes host-loss
-recovery.
+Replacement-host recovery now has a supported coding path: `export-recovery-key` creates a
+separately retained HMAC trust anchor, and `recover-host` requires that anchor plus the complete
+age-encrypted set and age identity. It creates a new isolated installation/volume, authenticates
+before decryption, independently restore-tests the dump, preserves MFA/audit/identity continuity,
+rotates sessions, migrates forward, health-checks, and compares live business-data fingerprints.
+It is **not live-accepted** until the exact path passes on a clean replacement Windows host.
 
 Update requires a verified pre-update backup, the separately supplied age identity, exact target
 manifest/images, a strictly forward semantic release identity, controlled migration, and loopback
@@ -278,8 +281,9 @@ The following are **not** proven and must remain open:
 - full routine workflow without ordinary internet connectivity;
 - encrypted complete-recovery-set backup/same-installation restore with artifact-level business
   checks (only the explicitly incomplete plaintext database-only path was drilled);
-- update from a real prior version plus forced migration/health failure recovery;
-- replacement-host/bare-metal restore; and
+- update from a real prior version plus live forced migration/health failure recovery (the
+  deterministic operator suite now proves the coded failure/restore state machine);
+- clean-host execution of the implemented replacement-host recovery path; and
 - unchanged exact-candidate Public Production and statutory release evidence.
 
 ## Acceptance checklist
@@ -287,8 +291,8 @@ The following are **not** proven and must remain open:
 - [x] Explicit `Development` / `PrivateServer` / `PublicProduction` configuration contract exists.
 - [x] `compose.private.yml` contains compiled services, one-shot jobs, named data, and no
       API/database host ports.
-- [x] Private setup/lifecycle, diagnostic, backup, restore, update, Owner recovery, Tailscale,
-      uninstall, and purge commands exist.
+- [x] Private setup/lifecycle, diagnostic, backup, same/replacement-host restore, update, Owner
+      recovery, Tailscale, reboot/local acceptance, uninstall, and purge commands exist.
 - [x] Private and public guides, mode chooser, proxy-neutral runbook, and optional Caddy/Apache/Nginx
       public examples exist.
 - [x] Private Compose, operator, release, frontend, backend, and workflow regression checks are
@@ -307,7 +311,9 @@ The following are **not** proven and must remain open:
 - [ ] Real encrypted backup and same-installation restore drill passes with retained evidence.
 - [ ] Prior-version update and forced-failure recovery drill passes.
 - [ ] Offline routine workflow is exercised and documented honestly.
-- [ ] Replacement-host recovery is implemented and clean-host drilled before it is claimed.
+- [x] Replacement-host recovery, separate trust-anchor export, post-recovery fingerprint checks,
+      and adversarial coding tests are implemented.
+- [ ] Replacement-host recovery is clean-host drilled before host-loss recovery is claimed live.
 - [ ] Public Production exact-candidate validation remains green.
 - [ ] All audit human/external gates remain blocking until genuine evidence is supplied.
 
@@ -323,7 +329,7 @@ The following are **not** proven and must remain open:
    Tailscale, reboot, offline, update, backup, or recovery success from mocked/static tests.
 6. Do not expose `compose.yml`, enable Funnel, publish Kestrel/PostgreSQL, switch Private Server to
    Development, or add a private reverse proxy.
-7. Do not claim replacement-host restore until a supported bootstrap path and clean-host drill
-   exist.
+7. Do not claim replacement-host recovery as live-accepted until `recover-host` passes on a clean
+   Windows host with retained artifact/business-data inspection.
 8. Keep `Docs/PLATFORM_AUDIT_2026-07-10.md` authoritative. Private deployment progress does not
    restore the 600/1,000 baseline or satisfy named professional/external acceptance.

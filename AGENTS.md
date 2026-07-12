@@ -77,6 +77,18 @@ This solo-owner posture does not weaken the runtime tenant, authentication, RLS,
 backup, or deployment-mode boundaries. It exists so the owner can continue local Private Server
 evaluation and coding without a structurally impossible self-approval gate.
 
+## Local Windows 1,000/1,000 workstream — 12 July 2026
+
+The owner has adopted the 900/1,000 local-machine baseline and directed the coding side toward
+1,000/1,000. The score, deductions and evidence rule are canonical in
+`Docs/deployment/LOCAL_WINDOWS_READINESS.md`. Coding now includes machine-readable `local-check`
+and real-reboot `reboot-check` commands, separate recovery-trust export, authenticated
+replacement-host bootstrap, deterministic forced-update-failure recovery coverage, and the
+authenticated smoke script in compiled bundles. Do not award the remaining points merely because
+the code or mocks pass: the exact candidate still needs the live clean-install, reboot, encrypted
+restore, genuine update/failure, owner journey and replacement-host evidence listed in that file.
+This local score never changes the independent 600/1,000 statutory/Public Production audit.
+
 ## Active Goal Handoff
 
 Goal: finish the Irish statutory accounts platform so it is production-ready code-wise,
