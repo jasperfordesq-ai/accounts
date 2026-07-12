@@ -402,8 +402,48 @@ function Write-EphemeralMfaHandoff([string]$Path, [string]$Secret, [int64]$LastA
     }
 }
 
-function Write-OwnerWorkflowReport([string]$Path, $Report) {
+function Reserve-OwnerWorkflowReport([string]$Path) {
     $resolved = [IO.Path]::GetFullPath($Path)
+    $reservation = "$resolved.reserved"
+    $parent = Split-Path -Parent $resolved
+    if (-not (Test-Path -LiteralPath $parent -PathType Container)) {
+        New-Item -ItemType Directory -Path $parent -Force | Out-Null
+    }
+    if (Test-Path -LiteralPath $resolved) {
+        throw "Owner workflow report already exists at $resolved; no login or account mutation was attempted. Use a new output directory."
+    }
+    $bytes = [Text.UTF8Encoding]::new($false).GetBytes(("reservedAtUtc={0}{1}" -f [DateTimeOffset]::UtcNow.ToString("o"), [Environment]::NewLine))
+    try {
+        if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) {
+            $stream = [IO.File]::Open($reservation, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+        } else {
+            $options = [IO.FileStreamOptions]::new()
+            $options.Access = [IO.FileAccess]::Write
+            $options.Mode = [IO.FileMode]::CreateNew
+            $options.Share = [IO.FileShare]::None
+            $options.Options = [IO.FileOptions]::WriteThrough
+            $options.UnixCreateMode = [IO.UnixFileMode]::UserRead -bor [IO.UnixFileMode]::UserWrite
+            $stream = [IO.FileStream]::new($reservation, $options)
+        }
+        try { $stream.Write($bytes, 0, $bytes.Length); $stream.Flush($true) } finally { $stream.Dispose() }
+    } catch {
+        throw "Owner workflow evidence directory is already reserved by another or interrupted run; no login or account mutation was attempted: $reservation"
+    } finally {
+        [Array]::Clear($bytes, 0, $bytes.Length)
+    }
+    if (Test-Path -LiteralPath $resolved) {
+        Remove-Item -LiteralPath $reservation -Force -ErrorAction SilentlyContinue
+        throw "Owner workflow report appeared while its path was being reserved; no login or account mutation was attempted. Use a new output directory."
+    }
+    return $reservation
+}
+
+function Write-OwnerWorkflowReport([string]$Path, [string]$ReservationPath, $Report) {
+    $resolved = [IO.Path]::GetFullPath($Path)
+    $resolvedReservation = [IO.Path]::GetFullPath($ReservationPath)
+    if ($resolvedReservation -cne "$resolved.reserved" -or -not (Test-Path -LiteralPath $resolvedReservation -PathType Leaf)) {
+        throw "Owner workflow report reservation is missing or does not match the evidence target."
+    }
     $parent = Split-Path -Parent $resolved
     if (-not (Test-Path -LiteralPath $parent -PathType Container)) {
         New-Item -ItemType Directory -Path $parent -Force | Out-Null
@@ -439,6 +479,7 @@ function Write-OwnerWorkflowReport([string]$Path, $Report) {
         Remove-Item -LiteralPath $resolved -Force -ErrorAction SilentlyContinue
         throw
     }
+    Remove-Item -LiteralPath $resolvedReservation -Force
     return $resolved
 }
 
@@ -618,9 +659,13 @@ $passwordRotated = $false
 if ($AllowEphemeralMfaEnrollment -and [string]::IsNullOrWhiteSpace($EphemeralMfaHandoffPath) -and -not [string]::IsNullOrWhiteSpace($env:RUNNER_TEMP)) {
     $EphemeralMfaHandoffPath = Join-Path $env:RUNNER_TEMP "accounts-visual-auth/totp-handoff.json"
 }
-$retainedMfaReservedPath = if ($AllowRetainedMfaEnrollment) {
-    Reserve-RetainedMfaHandoff $RetainedMfaHandoffPath
-} else { "" }
+$ownerWorkflowReservationPath = Reserve-OwnerWorkflowReport $ownerWorkflowReportTarget
+$retainedMfaReservedPath = try {
+    if ($AllowRetainedMfaEnrollment) { Reserve-RetainedMfaHandoff $RetainedMfaHandoffPath } else { "" }
+} catch {
+    Remove-Item -LiteralPath $ownerWorkflowReservationPath -Force -ErrorAction SilentlyContinue
+    throw
+}
 
 Write-Host "Checking frontend and upstream readiness..."
 $readyResponse = Invoke-WebRequest `
@@ -1002,6 +1047,7 @@ if ($CheckDownloads) {
 }
 $ownerWorkflowReportPath = Write-OwnerWorkflowReport `
     -Path $ownerWorkflowReportTarget `
+    -ReservationPath $ownerWorkflowReservationPath `
     -Report ([ordered]@{
         schemaVersion = "filingbridge.private-server.owner-workflow/v1"
         status = "passed"

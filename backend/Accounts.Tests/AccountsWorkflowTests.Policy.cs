@@ -3145,10 +3145,15 @@ public partial class AccountsWorkflowTests
         Assert.Contains("Complete-RetainedMfaHandoff", smokeScript);
         Assert.Contains("Retained MFA handoff requires a new dedicated parent directory", smokeScript);
         Assert.Contains("no login or account mutation was attempted", smokeScript);
+        Assert.Contains("Reserve-OwnerWorkflowReport $ownerWorkflowReportTarget", smokeScript);
+        Assert.Contains("already reserved by another or interrupted run", smokeScript);
         var retainedPreflightIndex = smokeScript.LastIndexOf("Reserve-RetainedMfaHandoff $RetainedMfaHandoffPath", StringComparison.Ordinal);
+        var reportReservationIndex = smokeScript.LastIndexOf("Reserve-OwnerWorkflowReport $ownerWorkflowReportTarget", StringComparison.Ordinal);
         var loginIndex = smokeScript.IndexOf("Signing in through frontend proxy", StringComparison.Ordinal);
         Assert.True(retainedPreflightIndex >= 0 && retainedPreflightIndex < loginIndex,
             "Retained MFA path and ACL preflight must happen before login or enrollment mutation.");
+        Assert.True(reportReservationIndex >= 0 && reportReservationIndex < loginIndex,
+            "Owner workflow report must be atomically reserved before login or account mutation.");
         var mfaChallengeIndex = smokeScript.IndexOf("if ([int]$loginResponse.StatusCode -eq 202)", StringComparison.Ordinal);
         var cookieAssertionIndex = smokeScript.IndexOf("Assert-SetCookieAttribute -Response $loginResponse", StringComparison.Ordinal);
         var authenticatedSessionIndex = smokeScript.IndexOf("Checking authenticated session", StringComparison.Ordinal);

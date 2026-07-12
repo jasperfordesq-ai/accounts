@@ -39,6 +39,13 @@ $reportWriterAst = $ast.FindAll({
 }, $true) | Select-Object -First 1
 Assert-True ($null -ne $reportWriterAst) "smoke-production.ps1 must define Write-OwnerWorkflowReport."
 . ([scriptblock]::Create($reportWriterAst.Extent.Text))
+$reportReserveAst = $ast.FindAll({
+    param($node)
+    $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
+        $node.Name -ceq "Reserve-OwnerWorkflowReport"
+}, $true) | Select-Object -First 1
+Assert-True ($null -ne $reportReserveAst) "smoke-production.ps1 must define Reserve-OwnerWorkflowReport."
+. ([scriptblock]::Create($reportReserveAst.Extent.Text))
 $retainedInitializerAst = $ast.FindAll({
     param($node)
     $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
@@ -100,7 +107,9 @@ try {
     Assert-True (-not (Test-Path -LiteralPath $outsidePath)) "An outside-root handoff must not be created."
 
     $reportPath = Join-Path $temporaryRoot "owner-workflow-report.json"
-    $writtenReport = Write-OwnerWorkflowReport $reportPath ([ordered]@{
+    $reportReservation = Reserve-OwnerWorkflowReport $reportPath
+    Assert-ThrowsContaining { Reserve-OwnerWorkflowReport $reportPath } "already reserved"
+    $writtenReport = Write-OwnerWorkflowReport $reportPath $reportReservation ([ordered]@{
         schemaVersion = "filingbridge.private-server.owner-workflow/v1"
         status = "passed"
         passwordRotated = $true
@@ -110,8 +119,8 @@ try {
     $report = Get-Content -LiteralPath $reportPath -Raw | ConvertFrom-Json
     Assert-True ($report.schemaVersion -ceq "filingbridge.private-server.owner-workflow/v1" -and $report.passwordRotated -eq $true -and $report.mfaVerified -eq $true) "The retained Owner report must preserve password and MFA evidence."
     Assert-ThrowsContaining {
-        Write-OwnerWorkflowReport $reportPath ([ordered]@{ status = "replacement" })
-    } "already exists"
+        Write-OwnerWorkflowReport $reportPath $reportReservation ([ordered]@{ status = "replacement" })
+    } "reservation is missing"
     Assert-True (((Get-Content -LiteralPath $reportPath -Raw | ConvertFrom-Json).schemaVersion) -ceq "filingbridge.private-server.owner-workflow/v1") "Owner evidence must never be overwritten."
 
     $script:AllowRetainedMfaEnrollment = $true
