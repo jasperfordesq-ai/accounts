@@ -39,6 +39,11 @@ Copyright:
 
 Contributors:
 - Jasper Ford
+- hOUR Timebank CLG (Ireland) - organisational contributor
+
+Contributor acknowledgement identifies project participation; it does not by
+itself transfer copyright, project stewardship, trademark rights, or authority
+to offer separate licensing terms.
 
 ================================================================================
 AGPL SECTION 7 ADDITIONAL TERMS
@@ -76,6 +81,7 @@ Canonical attribution wording:
 
   Powered by Irish Accounts
   Created by Jasper Ford
+  Contributors include hOUR Timebank CLG (Ireland)
   Licensed under AGPL v3-or-later
   Source: https://github.com/jasperfordesq-ai/accounts
 
@@ -88,6 +94,10 @@ complete corresponding source.
 Where the application has a global footer, mobile drawer, persistent app
 navigation, or equivalent legal-notice area, it must include an Irish
 Accounts attribution and source-code link.
+
+Canonical footer wording:
+
+  Built on Irish Accounts by Jasper Ford with hOUR Timebank CLG (Ireland)
 
 --------------------------------------------------------------------------------
 2. Modified-Version Notices - AGPL Section 7(c)

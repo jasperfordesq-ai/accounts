@@ -11,6 +11,7 @@ attribution policy in [NOTICE](NOTICE).
 ## Contributors
 
 - **Jasper Ford** - Creator, main contributor, and primary author
+- **hOUR Timebank CLG (Ireland)** - Organisational contributor
 
 ## Machine-Readable Format
 
