@@ -3138,7 +3138,22 @@ public partial class AccountsWorkflowTests
         Assert.Contains("SMOKE_TOTP_SECRET", smokeScript);
         Assert.Contains("Completing privileged-account MFA", smokeScript);
         Assert.Contains("[switch]$AllowEphemeralMfaEnrollment", smokeScript);
-        Assert.Contains("-AllowEphemeralMfaEnrollment is only for a disposable CI bootstrap account", smokeScript);
+        Assert.Contains("[switch]$AllowRetainedMfaEnrollment", smokeScript);
+        Assert.Contains("filingbridge.private-server.owner-mfa-handoff/v1", smokeScript);
+        Assert.Contains("Protected pending Owner MFA seed written before enrollment completion", smokeScript);
+        Assert.Contains("Reserve-RetainedMfaHandoff", smokeScript);
+        Assert.Contains("Complete-RetainedMfaHandoff", smokeScript);
+        Assert.Contains("Retained MFA handoff requires a new dedicated parent directory", smokeScript);
+        Assert.Contains("no login or account mutation was attempted", smokeScript);
+        Assert.Contains("Reserve-OwnerWorkflowReport $ownerWorkflowReportTarget", smokeScript);
+        Assert.Contains("already reserved by another or interrupted run", smokeScript);
+        var retainedPreflightIndex = smokeScript.LastIndexOf("Reserve-RetainedMfaHandoff $RetainedMfaHandoffPath", StringComparison.Ordinal);
+        var reportReservationIndex = smokeScript.LastIndexOf("Reserve-OwnerWorkflowReport $ownerWorkflowReportTarget", StringComparison.Ordinal);
+        var loginIndex = smokeScript.IndexOf("Signing in through frontend proxy", StringComparison.Ordinal);
+        Assert.True(retainedPreflightIndex >= 0 && retainedPreflightIndex < loginIndex,
+            "Retained MFA path and ACL preflight must happen before login or enrollment mutation.");
+        Assert.True(reportReservationIndex >= 0 && reportReservationIndex < loginIndex,
+            "Owner workflow report must be atomically reserved before login or account mutation.");
         var mfaChallengeIndex = smokeScript.IndexOf("if ([int]$loginResponse.StatusCode -eq 202)", StringComparison.Ordinal);
         var cookieAssertionIndex = smokeScript.IndexOf("Assert-SetCookieAttribute -Response $loginResponse", StringComparison.Ordinal);
         var authenticatedSessionIndex = smokeScript.IndexOf("Checking authenticated session", StringComparison.Ordinal);
@@ -3148,13 +3163,22 @@ public partial class AccountsWorkflowTests
             "The smoke must complete a privileged MFA challenge before it calls authenticated endpoints.");
         Assert.True(
             smokeScript.IndexOf(
-                "if (-not $AllowEphemeralMfaEnrollment)",
+                "if (-not $AllowEphemeralMfaEnrollment -and -not $AllowRetainedMfaEnrollment)",
                 mfaChallengeIndex,
                 StringComparison.Ordinal) > mfaChallengeIndex,
             "MFA enrollment must fail closed unless the caller explicitly identifies a disposable CI account.");
         Assert.Contains("/api/auth/me", smokeScript);
         Assert.Contains("$currentUser.mfaVerified -ne $true", smokeScript);
         Assert.Contains("$currentUser.mfaMethod -cne \"totp\"", smokeScript);
+        Assert.Contains("[string]$NewPassword = $env:SMOKE_NEW_PASSWORD", smokeScript);
+        Assert.Contains("/api/auth/password", smokeScript);
+        Assert.Contains("Owner password rotation returned an account that still requires a password change", smokeScript);
+        Assert.Contains("filingbridge.private-server.owner-workflow/v1", smokeScript);
+        Assert.Contains("owner-workflow-report.json", smokeScript);
+        var passwordRotationIndex = smokeScript.IndexOf("Rotating the Owner password", StringComparison.Ordinal);
+        var companyListIndex = smokeScript.IndexOf("Checking company list", StringComparison.Ordinal);
+        Assert.True(passwordRotationIndex > authenticatedSessionIndex && passwordRotationIndex < companyListIndex,
+            "The smoke must rotate a mandatory Owner password before accessing accounting data.");
         var postLogoutAssertionIndex = smokeScript.IndexOf(
             "Expected /api/auth/me to be unauthorized after logout",
             StringComparison.Ordinal);
