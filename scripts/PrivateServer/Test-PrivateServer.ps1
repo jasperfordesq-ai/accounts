@@ -536,4 +536,8 @@ try {
     Remove-Variable FbFakeState -Scope Global -ErrorAction SilentlyContinue
 }
 
+# The lock-contention regression intentionally observes a nonzero child native
+# exit. Clear that expected probe result so dot-sourcing this successful test in
+# a GitHub Actions pwsh step cannot inherit a false process failure.
+$global:LASTEXITCODE = 0
 Write-Host "Private Server operator contract tests passed."
