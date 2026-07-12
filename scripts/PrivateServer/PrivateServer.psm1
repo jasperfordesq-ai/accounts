@@ -1144,6 +1144,38 @@ function Get-FbOwnedRuntimeContainerId {
     return $containerId
 }
 
+function Get-FbHostPortBindings {
+    param($State, [string]$ComposeFile, [string]$Service)
+    $containerId = Get-FbOwnedRuntimeContainerId $State $ComposeFile $Service
+    $inspection = Invoke-FbNative -FilePath "docker" -Arguments @(
+        "inspect", "--format", "{{json .HostConfig.PortBindings}}", $containerId
+    ) -Description "Inspect $Service host port bindings"
+    $line = (($inspection.Output | Select-Object -Last 1) -join "").Trim()
+    if ($inspection.ExitCode -ne 0 -or [string]::IsNullOrWhiteSpace($line)) {
+        throw "Local acceptance could not inspect '$Service' host port bindings."
+    }
+    try { $bindingsByPort = $line | ConvertFrom-Json -ErrorAction Stop } catch {
+        throw "Local acceptance received malformed '$Service' host port binding evidence."
+    }
+    if ($null -eq $bindingsByPort) { return @() }
+    $bindings = New-Object System.Collections.Generic.List[object]
+    foreach ($property in @($bindingsByPort.PSObject.Properties)) {
+        if ([string]$property.Name -cnotmatch '^[1-9][0-9]{0,4}/(?:tcp|udp)$') {
+            throw "Local acceptance received an invalid '$Service' container-port binding key."
+        }
+        foreach ($binding in @($property.Value)) {
+            if ($null -eq $binding) { continue }
+            $hostIp = [string](Get-FbProperty $binding "HostIp" "")
+            $hostPort = [string](Get-FbProperty $binding "HostPort" "")
+            if ($hostIp -match "[\r\n\x00]" -or $hostPort -cnotmatch '^[1-9][0-9]{0,4}$' -or [int]$hostPort -gt 65535) {
+                throw "Local acceptance received malformed '$Service' host port binding evidence."
+            }
+            $bindings.Add([pscustomobject][ordered]@{ containerPort = [string]$property.Name; hostIp = $hostIp; hostPort = $hostPort })
+        }
+    }
+    return $bindings.ToArray()
+}
+
 function Start-FbExistingRuntimeContainers {
     param($State, [string]$ComposeFile, [string[]]$Services, [string]$Description, [switch]$DryRun)
     $requested = @($Services)
@@ -2996,12 +3028,12 @@ function Invoke-FbLocalCheck {
         throw "Local acceptance requires the frontend to publish exactly 127.0.0.1:$($State.port)."
     }
     $unpublished = [ordered]@{}
-    foreach ($entry in @([pscustomobject]@{ service = "api"; port = "8080" }, [pscustomobject]@{ service = "db"; port = "5432" })) {
-        $probe = Invoke-FbCompose $State $ComposeFile @("port", $entry.service, $entry.port) "Inspect $($entry.service) unpublished port" -IgnoreExitCode
-        if ($probe.ExitCode -eq 0 -and @($probe.Output | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) }).Count -gt 0) {
-            throw "Local acceptance failed because $($entry.service) has a host-published port."
+    foreach ($service in @("api", "db")) {
+        $bindings = @(Get-FbHostPortBindings $State $ComposeFile $service)
+        if ($bindings.Count -gt 0) {
+            throw "Local acceptance failed because $service has a host-published port."
         }
-        $unpublished[$entry.service] = $true
+        $unpublished[$service] = $true
     }
     $tables = @(Get-FbImportantTableEvidence $State $ComposeFile "accounts" "Read important-table fingerprints from the local acceptance database")
     $report = [ordered]@{
