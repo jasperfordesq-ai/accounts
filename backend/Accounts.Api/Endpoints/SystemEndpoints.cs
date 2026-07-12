@@ -113,7 +113,10 @@ public static class SystemEndpoints
 
         var eventId = errorReporter.CaptureUnexpectedException(
             new MonitoringSmokeException(),
-            new ErrorReportContext(context.Request.Method, context.Request.Path, context.TraceIdentifier));
+            new ErrorReportContext(
+                context.Request.Method,
+                "/api/system/monitoring/error-smoke",
+                context.TraceIdentifier));
 
         logger.LogWarning(
             "Controlled monitoring smoke event emitted by owner user {UserId} with provider {Provider} and event id {EventId} (correlationId {CorrelationId})",
@@ -151,10 +154,13 @@ public static class SystemEndpoints
         var route = MonitoringEventSanitizer.SafeClientPath(rawRoute);
 
         var exception = new ClientMonitoringException();
+        var correlationId = MonitoringEventSanitizer.SafeClientCorrelationId(
+            input.CorrelationId,
+            context.TraceIdentifier);
         var rawContext = new ErrorReportContext(
             "CLIENT",
             route,
-            string.IsNullOrWhiteSpace(input.CorrelationId) ? context.TraceIdentifier : input.CorrelationId,
+            correlationId,
             eventCode);
         var safe = MonitoringEventSanitizer.Sanitize(exception, rawContext);
         var safeContext = new ErrorReportContext(

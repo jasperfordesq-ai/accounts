@@ -48,7 +48,9 @@ requireText(".workflow_id", "Candidate resolution must bind the run to the canon
 requireText("== \"push\"", "The candidate must come from a trusted push event.");
 requireText("== \"main\"", "The candidate must come from main.");
 requireText("== \"success\"", "The candidate CI run must have succeeded.");
-requireText("ref: ${{ steps.candidate.outputs.sha }}", "Checkout must use the exact resolved candidate SHA.");
+requireText("ref: refs/heads/main", "Candidate checkouts must use the constant protected main ref.");
+requireText("Verify checked-out main matches candidate", "Preparation must compare checked-out main with the resolved candidate SHA.");
+requireText('"$(git rev-parse HEAD)" == "$CANDIDATE_SHA"', "Preparation must fail unless checked-out main exactly matches the resolved candidate SHA.");
 requireText("--name container-supply-chain", "The exact candidate supply-chain artifact must be downloaded.");
 requireText("./scripts/verify-container-supply-chain-report.ps1", "Promoted supply-chain evidence must be verified.");
 requireText("./scripts/verify-private-compose.ps1", "The Private Server topology must be verified before release.");
@@ -120,7 +122,7 @@ if (prepareStart < 0 || publishStart < 0 || publishStart <= prepareStart) {
     ['CANDIDATE_SHA: ${{ steps.protected-candidate.outputs.sha }}', "Protected validation and publication must use the independently resolved candidate SHA."],
     ['CANDIDATE_RUN_URL: ${{ steps.protected-candidate.outputs.run-url }}', "Protected validation and publication must use the independently resolved run URL."],
     ["Check out exact candidate for byte comparison only", "The protected job must check out the exact independently resolved candidate as inert comparison data."],
-    ["ref: ${{ steps.protected-candidate.outputs.sha }}", "The protected comparison checkout must use the independently resolved candidate SHA."],
+    ["ref: refs/heads/main", "The protected comparison checkout must use the constant protected main ref."],
     ["path: protected-candidate-source", "The protected comparison checkout must use a distinct source directory."],
     ["persist-credentials: false", "The protected comparison checkout must not persist write-capable credentials."],
     ["CANDIDATE_SOURCE_ROOT: ${{ github.workspace }}/protected-candidate-source", "Protected validation must receive the exact candidate comparison checkout path."],

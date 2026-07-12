@@ -44,7 +44,10 @@ public class ExceptionMiddleware(
             // identifiers, or secrets. Safe dimensions retain grouping and correlation value.
             var safe = MonitoringEventSanitizer.Sanitize(
                 ex,
-                new ErrorReportContext(context.Request.Method, context.Request.Path, context.TraceIdentifier));
+                new ErrorReportContext(
+                    context.Request.Method,
+                    MonitoringEventSanitizer.SafeServerRoute(context.GetEndpoint()),
+                    context.TraceIdentifier));
             logger.LogError(
                 "Unhandled {ExceptionType} handling {Method} {Path} (correlationId {CorrelationId}, stackFingerprint {StackFingerprint})",
                 safe.ExceptionType,
@@ -54,7 +57,10 @@ public class ExceptionMiddleware(
                 safe.StackFingerprint);
             errorReporter?.CaptureUnexpectedException(
                 ex,
-                new ErrorReportContext(context.Request.Method, context.Request.Path, context.TraceIdentifier));
+                new ErrorReportContext(
+                    context.Request.Method,
+                    MonitoringEventSanitizer.SafeServerRoute(context.GetEndpoint()),
+                    context.TraceIdentifier));
 
             // Outside Development the client message is generic so no exception detail (which may carry
             // connection strings, secrets or PII) leaks; the correlation id is the safe triage handle.
@@ -68,7 +74,10 @@ public class ExceptionMiddleware(
     {
         var safe = MonitoringEventSanitizer.Sanitize(
             exception,
-            new ErrorReportContext(context.Request.Method, context.Request.Path, context.TraceIdentifier));
+            new ErrorReportContext(
+                context.Request.Method,
+                MonitoringEventSanitizer.SafeServerRoute(context.GetEndpoint()),
+                context.TraceIdentifier));
         logger.LogWarning(
             "{Outcome} {ExceptionType} handling {Method} {Path} (correlationId {CorrelationId}, stackFingerprint {StackFingerprint})",
             outcome,

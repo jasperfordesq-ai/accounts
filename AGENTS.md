@@ -63,6 +63,20 @@ acceptance goal below. A successful private installation must not be represented
 CRO/Revenue filing acceptance or used to close qualified-accountant/external evidence
 gates. The independent audit baseline remains **600/1,000**.
 
+## Solo-owner repository posture — 12 July 2026
+
+The user has chosen an honest solo-owner GitHub workflow for the current local/private coding goal.
+`main` must still require pull requests, synchronized CI, signed linear history, resolved review
+conversations, and blocked force-push/deletion. It does not require a second-person approval or
+code-owner approval while `jasperfordesq-ai` is the repository's only collaborator and code owner.
+Do not represent this as independent repository review. `P1-OPS-003` is open again, and any future
+Public Production or 1,000/1,000 claim must add a genuine independent reviewer and restore the
+review/code-owner requirements before collecting candidate-bound governance evidence.
+
+This solo-owner posture does not weaken the runtime tenant, authentication, RLS, audit, filing,
+backup, or deployment-mode boundaries. It exists so the owner can continue local Private Server
+evaluation and coding without a structurally impossible self-approval gate.
+
 ## Active Goal Handoff
 
 Goal: finish the Irish statutory accounts platform so it is production-ready code-wise,

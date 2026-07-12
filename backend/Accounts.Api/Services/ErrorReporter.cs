@@ -31,12 +31,12 @@ public sealed class StructuredLogErrorReporter(ILogger<StructuredLogErrorReporte
             UnexpectedExceptionEvent,
             "Sanitized unexpected application event {EventReference} {EventCode} {ExceptionType} {HttpMethod} {RequestPath} {CorrelationId} {StackFingerprint}",
             reference,
-            safe.EventCode,
-            safe.ExceptionType,
-            safe.Method,
-            safe.Path,
-            safe.CorrelationId,
-            safe.StackFingerprint);
+            MonitoringEventSanitizer.SafeLogField(safe.EventCode),
+            MonitoringEventSanitizer.SafeLogField(safe.ExceptionType),
+            MonitoringEventSanitizer.SafeLogField(safe.Method),
+            MonitoringEventSanitizer.SafeLogField(safe.Path),
+            MonitoringEventSanitizer.SafeLogField(safe.CorrelationId),
+            MonitoringEventSanitizer.SafeLogField(safe.StackFingerprint));
         return reference;
     }
 }
@@ -48,12 +48,12 @@ public sealed class SentryErrorReporter : IErrorReporter
         var safe = MonitoringEventSanitizer.Sanitize(exception, context);
         var eventId = SentrySdk.CaptureException(new RedactedMonitoringException(), scope =>
         {
-            scope.SetTag("correlation_id", safe.CorrelationId);
-            scope.SetTag("http_method", safe.Method);
-            scope.SetTag("request_path", safe.Path);
-            scope.SetTag("exception_type", safe.ExceptionType);
-            scope.SetTag("stack_fingerprint", safe.StackFingerprint);
-            scope.SetTag("event_code", safe.EventCode);
+            scope.SetTag("correlation_id", MonitoringEventSanitizer.SafeLogField(safe.CorrelationId));
+            scope.SetTag("http_method", MonitoringEventSanitizer.SafeLogField(safe.Method));
+            scope.SetTag("request_path", MonitoringEventSanitizer.SafeLogField(safe.Path));
+            scope.SetTag("exception_type", MonitoringEventSanitizer.SafeLogField(safe.ExceptionType));
+            scope.SetTag("stack_fingerprint", MonitoringEventSanitizer.SafeLogField(safe.StackFingerprint));
+            scope.SetTag("event_code", MonitoringEventSanitizer.SafeLogField(safe.EventCode));
         });
         return eventId.ToString();
     }
@@ -72,6 +72,7 @@ public static partial class MonitoringEventSanitizer
     private const int MaxPathSegmentLength = 64;
     private static readonly HashSet<string> AllowedClientRouteSegments = new(StringComparer.OrdinalIgnoreCase)
     {
+        "api",
         "about",
         "change-password",
         "charity",
@@ -121,6 +122,33 @@ public static partial class MonitoringEventSanitizer
         return segments.Length == 0 ? "/" : "/" + string.Join('/', segments);
     }
 
+    public static string SafeServerRoute(Endpoint? endpoint)
+    {
+        var rawPattern = (endpoint as RouteEndpoint)?.RoutePattern.RawText;
+        if (string.IsNullOrWhiteSpace(rawPattern))
+            return "/{unmatched}";
+
+        var segments = rawPattern
+            .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(segment => segment.StartsWith('{') && segment.EndsWith('}')
+                ? "{id}"
+                : SafeServerRouteSegment(segment))
+            .ToArray();
+        return segments.Length == 0 ? "/" : "/" + string.Join('/', segments);
+    }
+
+    public static string SafeClientCorrelationId(string? clientCorrelationId, string? serverCorrelationId)
+    {
+        if (string.IsNullOrWhiteSpace(clientCorrelationId))
+            return SafeCorrelationId(serverCorrelationId);
+
+        var digest = SHA256.HashData(Encoding.UTF8.GetBytes(clientCorrelationId.Trim()));
+        return "client-corr-" + Convert.ToHexString(digest).ToLowerInvariant()[..24];
+    }
+
+    public static string SafeLogField(string? value)
+        => (value ?? "").Replace('\r', '_').Replace('\n', '_');
+
     public static SentryEvent ScrubSentryEvent(SentryEvent sentryEvent)
     {
         ArgumentNullException.ThrowIfNull(sentryEvent);
@@ -129,7 +157,7 @@ public static partial class MonitoringEventSanitizer
         sentryEvent.ServerName = null;
         sentryEvent.TransactionName = sentryEvent.TransactionName is null
             ? null
-            : SafePath(sentryEvent.TransactionName);
+            : SafeClientPath(sentryEvent.TransactionName);
         foreach (var key in sentryEvent.Tags.Keys.Where(key => !AllowedEventTags.Contains(key)).ToArray())
             sentryEvent.UnsetTag(key);
         return sentryEvent;
@@ -145,9 +173,18 @@ public static partial class MonitoringEventSanitizer
     private static string SafeMethod(string? method)
     {
         var candidate = method?.Trim().ToUpperInvariant() ?? "";
-        return candidate.Length is > 0 and <= 16 && candidate.All(character => character is >= 'A' and <= 'Z')
-            ? candidate
-            : "UNKNOWN";
+        return candidate switch
+        {
+            "CLIENT" => "CLIENT",
+            "DELETE" => "DELETE",
+            "GET" => "GET",
+            "HEAD" => "HEAD",
+            "OPTIONS" => "OPTIONS",
+            "PATCH" => "PATCH",
+            "POST" => "POST",
+            "PUT" => "PUT",
+            _ => "UNKNOWN"
+        };
     }
 
     private static string SafePath(string? rawPath)
@@ -190,6 +227,13 @@ public static partial class MonitoringEventSanitizer
         return AllowedClientRouteSegments.Contains(decoded) ? decoded.ToLowerInvariant() : "{redacted}";
     }
 
+    private static string SafeServerRouteSegment(string segment)
+    {
+        if (segment.Length is 0 or > MaxPathSegmentLength)
+            return "{redacted}";
+        return PathSegmentUnsafeCharacters().Replace(segment, "_");
+    }
+
     private static string SafeCorrelationId(string? correlationId)
     {
         var candidate = correlationId?.Trim() ?? "";
@@ -201,9 +245,18 @@ public static partial class MonitoringEventSanitizer
     private static string SafeEventCode(string? eventCode)
     {
         var candidate = eventCode?.Trim().ToLowerInvariant() ?? "";
-        return candidate.Length is > 0 and <= 64 && EventCodePattern().IsMatch(candidate)
-            ? candidate
-            : "invalid-event-code";
+        return candidate switch
+        {
+            "api-contract-rejection" => "api-contract-rejection",
+            "api-network-failure" => "api-network-failure",
+            "api-server-rejection" => "api-server-rejection",
+            "api-timeout" => "api-timeout",
+            "auth-service-unavailable" => "auth-service-unavailable",
+            "render-exception" => "render-exception",
+            "unexpected-exception" => "unexpected-exception",
+            "unhandled-client-exception" => "unhandled-client-exception",
+            _ => "invalid-event-code"
+        };
     }
 
     private static string Fingerprint(string exceptionType, string? stackTrace)
@@ -221,8 +274,6 @@ public static partial class MonitoringEventSanitizer
     [GeneratedRegex("^[A-Za-z0-9._-]+$")]
     private static partial Regex CorrelationIdPattern();
 
-    [GeneratedRegex("^[a-z0-9][a-z0-9._-]*$")]
-    private static partial Regex EventCodePattern();
 }
 
 public sealed class RedactedMonitoringException() : Exception("Unexpected application exception; message and request data redacted.")

@@ -1914,7 +1914,7 @@ explicit revoke and final offboarding sequence, plus the live PostgreSQL securit
 with zero skips. Focused login, action-token, user-administration, permission and navigation render/
 contract coverage passed, as did TypeScript, lint and the generated API contract.
 
-### [x] P1-OPS-003 — Protect repository governance
+### [ ] P1-OPS-003 — Protect repository governance
 
 Configure protected `main`, required PR review and CI, admin enforcement, force-push/deletion
 blocking, required signed commits where supported, secret scanning, push protection, Dependabot
@@ -1938,6 +1938,17 @@ review, code-owner review, stale-review dismissal, signed commits, linear histor
 resolution and blocked force-push/deletion. Secret scanning, push protection, Dependabot security
 updates/automated fixes and extended weekly CodeQL are enabled. Administrator enforcement is enabled
 after the final reconciliation commit, and the verifier must pass against that exact protected head.
+
+Solo-owner posture update (2026-07-12): the user narrowed the immediate goal to local/private
+evaluation and continued coding on a personal Windows machine. The repository currently has one
+collaborator and one code owner, so requiring a second approving/code-owner review created an
+impossible self-approval gate. The live `main` policy therefore retains mandatory pull requests,
+strict CI, signed linear history, resolved conversations, administrator enforcement, and blocked
+force-push/deletion, but no longer requires an approving review or code-owner review. This control
+is reopened because that is not independent repository governance. It may be closed only after a
+genuine second reviewer with write access is added, CODEOWNERS is updated, the review requirements
+are restored, and exact-candidate governance evidence passes. Local Private Server evaluation does
+not require or imply that closure.
 
 ### [x] P1-OPS-004 — Make dependency and build inputs reproducible
 

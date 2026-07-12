@@ -35,11 +35,37 @@ public sealed class ClientMonitoringTests
         Assert.Equal("CLIENT", reporter.Context!.Method);
         Assert.Equal("/companies/{id}/periods/{id}/{redacted}", reporter.Context.Path);
         Assert.Equal("render-exception", reporter.Context.EventCode);
-        Assert.StartsWith("corr-", reporter.Context.CorrelationId);
+        Assert.StartsWith("client-corr-", reporter.Context.CorrelationId);
         Assert.DoesNotContain("client@example.ie", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("NeverSendThis", json, StringComparison.Ordinal);
         Assert.DoesNotContain("client@example.ie", JsonSerializer.Serialize(reporter.Context), StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("NeverSendThis", reporter.Exception!.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ClientEventAliasesSafeLookingCorrelationTextBeforeLoggingOrProviderCapture()
+    {
+        var reporter = new RecordingErrorReporter();
+        var result = SystemEndpoints.EmitClientMonitoringEvent(
+            AuthenticatedContext("Accountant"),
+            new ClientMonitoringEventInput(
+                "api-server-rejection",
+                "/companies/ConnachtTrading/periods/ClientReference2026",
+                "JasperFord-ClientSecret"),
+            reporter,
+            NullLogger.Instance);
+
+        Assert.Equal(
+            StatusCodes.Status202Accepted,
+            Assert.IsAssignableFrom<IStatusCodeHttpResult>(result).StatusCode);
+        Assert.NotNull(reporter.Context);
+        var serialized = JsonSerializer.Serialize(reporter.Context);
+        Assert.Equal("/companies/{redacted}/periods/{redacted}", reporter.Context!.Path);
+        Assert.Matches("^client-corr-[0-9a-f]{24}$", reporter.Context.CorrelationId);
+        Assert.DoesNotContain("JasperFord", serialized, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("ClientSecret", serialized, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("ConnachtTrading", serialized, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("ClientReference2026", serialized, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

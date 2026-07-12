@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.AspNetCore.Routing.Patterns;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Configuration;
@@ -636,6 +637,12 @@ public partial class AccountsWorkflowTests
         var context = new DefaultHttpContext();
         context.Request.Method = "POST";
         context.Request.Path = "/api/companies/1/periods/2/adjustments/generate";
+        context.SetEndpoint(new RouteEndpoint(
+            _ => Task.CompletedTask,
+            RoutePatternFactory.Parse("/api/companies/{companyId:int}/periods/{periodId:int}/adjustments/generate"),
+            0,
+            EndpointMetadataCollection.Empty,
+            "adjustment generation"));
         context.TraceIdentifier = "corr-id-7f3a";
         var services = new ServiceCollection();
         services.AddSingleton<IHostEnvironment>(new TestEnvironment("Production"));
@@ -669,7 +676,7 @@ public partial class AccountsWorkflowTests
         var reported = Assert.Single(errorReporter.Reports);
         Assert.Equal(secret, reported.Exception.Message);
         Assert.Equal("POST", reported.Context.Method);
-        Assert.Equal("/api/companies/1/periods/2/adjustments/generate", reported.Context.Path);
+        Assert.Equal("/api/companies/{id}/periods/{id}/adjustments/generate", reported.Context.Path);
         Assert.Equal("corr-id-7f3a", reported.Context.CorrelationId);
     }
 
