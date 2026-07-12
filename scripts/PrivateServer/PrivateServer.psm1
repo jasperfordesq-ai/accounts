@@ -2856,7 +2856,8 @@ function Invoke-FbRebootCheck {
             schemaVersion = "filingbridge.private-server.reboot-check/v1"; status = "pending"
             instanceId = [string]$State.instanceId; releaseVersion = [string]$State.releaseVersion
             releaseCommitSha = [string]$State.releaseCommitSha; preparedAtUtc = (Get-Date).ToUniversalTime().ToString("o")
-            bootIdentityBefore = Get-FbBootIdentity; expectedServices = @("db", "api", "frontend")
+            bootIdentityFormat = "opaque-boot-identity/v1"; bootIdentityBefore = Get-FbBootIdentity
+            expectedServices = @("db", "api", "frontend")
             importantTablesBefore = $tables
         }
         Write-FbJsonAtomic -Path $pendingPath -Value $record
@@ -2867,6 +2868,9 @@ function Invoke-FbRebootCheck {
     if (-not (Test-Path -LiteralPath $pendingPath -PathType Leaf)) { throw "No prepared reboot acceptance record was found." }
     $pending = (Read-FbUtf8Text $pendingPath) | ConvertFrom-Json
     if ([string]$pending.instanceId -cne [string]$State.instanceId -or [string]$pending.status -cne "pending") { throw "Pending reboot evidence does not belong to this installation." }
+    if ([string](Get-FbProperty $pending "bootIdentityFormat" "") -cne "opaque-boot-identity/v1") {
+        throw "Pending reboot evidence uses an unsupported boot identity format. Remove it and run reboot-check prepare again before rebooting."
+    }
     $bootAfter = Get-FbBootIdentity
     if ($bootAfter -ceq [string]$pending.bootIdentityBefore) { throw "Windows has not rebooted since this check was prepared." }
     $running = @(Get-FbRunningServices $State $ComposeFile)
@@ -2878,7 +2882,8 @@ function Invoke-FbRebootCheck {
         schemaVersion = "filingbridge.private-server.reboot-check/v1"; status = "passed"
         instanceId = [string]$State.instanceId; releaseVersion = [string]$State.releaseVersion
         releaseCommitSha = [string]$State.releaseCommitSha; preparedAtUtc = [string]$pending.preparedAtUtc
-        verifiedAtUtc = (Get-Date).ToUniversalTime().ToString("o"); bootIdentityBefore = [string]$pending.bootIdentityBefore
+        verifiedAtUtc = (Get-Date).ToUniversalTime().ToString("o"); bootIdentityFormat = "opaque-boot-identity/v1"
+        bootIdentityBefore = [string]$pending.bootIdentityBefore
         bootIdentityAfter = $bootAfter; servicesRunning = @("db", "api", "frontend")
         readinessUri = "http://127.0.0.1:$($State.port)/health/ready"; importantTablesMatched = $true
         importantTablesBefore = @($pending.importantTablesBefore); importantTablesAfter = $tablesAfter

@@ -498,6 +498,15 @@ try {
     Invoke-FilingBridgePrivateServer -Command reboot-check -Action prepare -RepositoryRoot $repositoryRoot -StateDirectory $recoveredStateDirectory 6>$null
     $pendingReboot = Join-Path $recoveredStateDirectory "acceptance\reboot-check.pending.json"
     Assert-True (Test-Path -LiteralPath $pendingReboot -PathType Leaf) "reboot preparation must retain pre-reboot identity and data fingerprints"
+    $pendingRebootRecord = ([IO.File]::ReadAllText($pendingReboot, $testUtf8)) | ConvertFrom-Json
+    Assert-True ($pendingRebootRecord.bootIdentityFormat -eq "opaque-boot-identity/v1") "reboot preparation must version its opaque boot identity"
+    $pendingRebootRecord.PSObject.Properties.Remove("bootIdentityFormat")
+    [IO.File]::WriteAllText($pendingReboot, (($pendingRebootRecord | ConvertTo-Json -Depth 12) + [Environment]::NewLine), [Text.UTF8Encoding]::new($false))
+    Assert-Throws {
+        Invoke-FilingBridgePrivateServer -Command reboot-check -Action verify -RepositoryRoot $repositoryRoot -StateDirectory $recoveredStateDirectory 6>$null
+    } 'unsupported boot identity format' "legacy or changed boot identity formats must fail closed instead of faking a reboot"
+    Remove-Item -LiteralPath $pendingReboot -Force
+    Invoke-FilingBridgePrivateServer -Command reboot-check -Action prepare -RepositoryRoot $repositoryRoot -StateDirectory $recoveredStateDirectory 6>$null
     Assert-Throws {
         Invoke-FilingBridgePrivateServer -Command reboot-check -Action verify -RepositoryRoot $repositoryRoot -StateDirectory $recoveredStateDirectory 6>$null
     } 'has not rebooted' "reboot verification must reject a check completed in the same Windows boot"
