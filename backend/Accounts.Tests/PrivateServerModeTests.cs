@@ -75,6 +75,32 @@ public sealed class PrivateServerModeTests
     }
 
     [Fact]
+    public void PrivateServerRecoveryAndLocalAcceptance_AreExplicitAndReleasePackaged()
+    {
+        var root = RepositoryRoot();
+        var module = File.ReadAllText(Path.Combine(root, "scripts", "PrivateServer", "PrivateServer.psm1"));
+        var dispatcher = File.ReadAllText(Path.Combine(root, "scripts", "private-server.ps1"));
+        var builder = File.ReadAllText(Path.Combine(root, "scripts", "build-private-server-release.ps1"));
+        var verifier = File.ReadAllText(Path.Combine(root, "scripts", "verify-private-server-release.ps1"));
+        var guide = File.ReadAllText(Path.Combine(root, "Docs", "deployment", "private-server.md"));
+        var readiness = File.ReadAllText(Path.Combine(root, "Docs", "deployment", "LOCAL_WINDOWS_READINESS.md"));
+
+        Assert.Contains("export-recovery-key", module, StringComparison.Ordinal);
+        Assert.Contains("recover-host", module, StringComparison.Ordinal);
+        Assert.Contains("reboot-check", module, StringComparison.Ordinal);
+        Assert.Contains("local-check", module, StringComparison.Ordinal);
+        Assert.Contains("RecoveryAuthenticationKeyFile", dispatcher, StringComparison.Ordinal);
+        Assert.Contains("Assert-FbBackupAuthenticationWithKey", module, StringComparison.Ordinal);
+        Assert.Contains("Read important-table fingerprints from the recovered database", module, StringComparison.Ordinal);
+        Assert.Contains("Windows has not rebooted since this check was prepared", module, StringComparison.Ordinal);
+        Assert.Contains("scripts/smoke-production.ps1", builder, StringComparison.Ordinal);
+        Assert.Contains("scripts/smoke-production.ps1", verifier, StringComparison.Ordinal);
+        Assert.Contains("The coding path is implemented, but it has not yet passed", guide, StringComparison.Ordinal);
+        Assert.Contains("Rule for awarding 1,000/1,000", readiness, StringComparison.Ordinal);
+        Assert.Contains("qualified-accountant", readiness, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void ProductionSafety_DoesNotApplyPrivateRelaxationsToPublicOrIncorrectlyCasedMode()
     {
         var publicService = CreatePrivateSafetyService(new Dictionary<string, string?>

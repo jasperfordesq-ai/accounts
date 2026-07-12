@@ -1,5 +1,9 @@
 # Choose a FilingBridge deployment mode
 
+The owner-focused Windows evaluation score and exact 1,000/1,000 evidence contract are recorded in
+[LOCAL_WINDOWS_READINESS.md](LOCAL_WINDOWS_READINESS.md). That local score is separate from Public
+Production and statutory acceptance.
+
 FilingBridge has three deliberately separate operating modes. Choose the guide from the
 exposure and operator model, not from which command happens to start successfully.
 

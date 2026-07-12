@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 
 const workflowPath = new URL("../.github/workflows/private-server-release.yml", import.meta.url);
-const workflow = await readFile(workflowPath, "utf8");
+const workflow = (await readFile(workflowPath, "utf8")).replace(/\r\n/g, "\n");
 const failures = [];
 
 const approvedActions = new Map([
@@ -145,8 +145,10 @@ if (prepareStart < 0 || publishStart < 0 || publishStart <= prepareStart) {
     ".env.private.example",
     "scripts/private-server.ps1",
     "scripts/PrivateServer/PrivateServer.psm1",
+    "scripts/smoke-production.ps1",
     "Docs/deployment/README.md",
     "Docs/deployment/private-server.md",
+    "Docs/deployment/LOCAL_WINDOWS_READINESS.md",
     "deploy/private/release-manifest.schema.json",
     "README.md",
     "LICENSE",

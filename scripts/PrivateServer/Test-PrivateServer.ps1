@@ -128,7 +128,7 @@ Assert-True ($password -match '[!@#%*_=+\-]') "Owner password must contain a sym
 $redacted = Protect-PrivateServerText 'password=example token: abc Authorization: Bearer opaque ?token=queryvalue'
 Assert-True ($redacted -notmatch 'example|abc|opaque|queryvalue') "redactor must remove common credential forms"
 $help = Get-PrivateServerHelp
-foreach ($command in @("setup", "start", "status", "stop", "logs", "backup", "verify-backup", "restore", "update", "owner-recovery", "tailscale", "diagnose", "support-bundle", "uninstall", "purge-data", "DryRun")) {
+foreach ($command in @("setup", "start", "status", "stop", "logs", "backup", "verify-backup", "restore", "export-recovery-key", "recover-host", "reboot-check", "local-check", "update", "owner-recovery", "tailscale", "diagnose", "support-bundle", "uninstall", "purge-data", "DryRun")) {
     Assert-True ($help -match [regex]::Escape($command)) "help must document $command"
 }
 Assert-True ($help -match 'does not submit to CRO/ROS') "help must preserve the no-direct-filing boundary"
@@ -144,12 +144,20 @@ $global:FbFakeContainerIds = @{
     frontend = ("f" * 64)
 }
 $global:FbFakeState = $null
+$global:FbExpectedOwnershipProject = ""
+$global:FbExpectedOwnershipInstance = ""
+$global:FbFakeRebootStartMinutes = 5
 $global:FbFakeTailscaleStatus = '{"version":"etag-empty"}'
 $global:FbMutateReleaseComposeOnValidate = ""
+$global:FbFailDescriptionPattern = ""
+$global:FbExpectedFrontendPort = 3500
 $fakeInvoker = {
     param($FilePath, $Arguments, $Description, $Mutating)
     $argumentStrings = @($Arguments | ForEach-Object { [string]$_ })
     $global:FbOperatorCalls.Add([pscustomobject]@{ file = $FilePath; arguments = $argumentStrings; description = $Description; mutating = $Mutating })
+    if (-not [string]::IsNullOrWhiteSpace($global:FbFailDescriptionPattern) -and $Description -match $global:FbFailDescriptionPattern) {
+        return [pscustomobject]@{ ExitCode = 17; Output = @("synthetic controlled failure") }
+    }
     if ($Description -in @("Validate the isolated Private Server topology", "Pull exact update image digests") -and -not [string]::IsNullOrWhiteSpace($global:FbMutateReleaseComposeOnValidate)) {
         [IO.File]::AppendAllText($global:FbMutateReleaseComposeOnValidate, "`n# synthetic post-verification source mutation", [Text.UTF8Encoding]::new($false))
         $global:FbMutateReleaseComposeOnValidate = ""
@@ -174,13 +182,27 @@ $fakeInvoker = {
         return [pscustomobject]@{ ExitCode = 1; Output = @("unknown synthetic container") }
     }
     if ($Description -match '^Resolve existing (db|api|frontend) runtime container$') {
+        $projectIndex = [Array]::IndexOf($argumentStrings, "--project-name")
+        $environmentIndex = [Array]::IndexOf($argumentStrings, "--env-file")
+        $global:FbExpectedOwnershipProject = [string]$argumentStrings[$projectIndex + 1]
+        $environmentPath = [string]$argumentStrings[$environmentIndex + 1]
+        $ownershipState = ([IO.File]::ReadAllText((Join-Path (Split-Path -Parent $environmentPath) "server.json"), [Text.UTF8Encoding]::new($false, $true))) | ConvertFrom-Json
+        $global:FbExpectedOwnershipInstance = [string]$ownershipState.instanceId
         return [pscustomobject]@{ ExitCode = 0; Output = @($global:FbFakeContainerIds[$Matches[1]]) }
     }
     if ($Description -match '^Verify existing (db|api|frontend) runtime container ownership$') {
         $service = $Matches[1]
         return [pscustomobject]@{
             ExitCode = 0
-            Output = @("$($global:FbFakeState.composeProject)|$service|PrivateServer|$($global:FbFakeState.instanceId)")
+            Output = @("$global:FbExpectedOwnershipProject|$service|PrivateServer|$global:FbExpectedOwnershipInstance")
+        }
+    }
+    if ($Description -match '^Read (db|api|frontend) reboot runtime evidence$') {
+        $service = $Matches[1]
+        $boot = [DateTimeOffset]::Parse([string]$env:FILINGBRIDGE_TEST_BOOT_ID, [Globalization.CultureInfo]::InvariantCulture)
+        return [pscustomobject]@{
+            ExitCode = 0
+            Output = @("$($global:FbFakeContainerIds[$service])|$($boot.AddMinutes($global:FbFakeRebootStartMinutes).ToUniversalTime().ToString('o'))")
         }
     }
     if ($Description -eq 'Inspect Private Server containers') {
@@ -188,6 +210,12 @@ $fakeInvoker = {
     }
     if ($Description -eq 'Record current Private Server service state') {
         return [pscustomobject]@{ ExitCode = 0; Output = $global:FbFakeServices }
+    }
+    if ($Description -eq 'Inspect frontend published port') {
+        return [pscustomobject]@{ ExitCode = 0; Output = @("127.0.0.1:$global:FbExpectedFrontendPort") }
+    }
+    if ($Description -match '^Inspect (api|db) unpublished port$') {
+        return [pscustomobject]@{ ExitCode = 1; Output = @() }
     }
     if ($Description -eq "Create a PostgreSQL custom-format dump directly in private host staging") {
         $volumeIndex = [Array]::IndexOf($argumentStrings, "--volume")
@@ -203,7 +231,7 @@ $fakeInvoker = {
     if ($Description -eq "Verify EF migration history in the disposable database") {
         return [pscustomobject]@{ ExitCode = 0; Output = @("12") }
     }
-    if ($Description -match '^Read important-table fingerprints from ') {
+    if ($Description -match '^Read important-table fingerprints') {
         return [pscustomobject]@{ ExitCode = 0; Output = @('{"tables":[{"table":"accounting_periods","rowCount":2,"fingerprint":"11111111111111111111111111111111"},{"table":"audit_logs","rowCount":3,"fingerprint":"22222222222222222222222222222222"},{"table":"companies","rowCount":1,"fingerprint":"33333333333333333333333333333333"},{"table":"tenants","rowCount":1,"fingerprint":"44444444444444444444444444444444"},{"table":"user_accounts","rowCount":1,"fingerprint":"55555555555555555555555555555555"}]}') }
     }
     if ($Description -eq "Run physical-host Owner recovery") {
@@ -246,7 +274,8 @@ try {
     $requiredReleaseFiles = @(
         "FilingBridge.cmd", "compose.private.yml", ".env.private.example",
         "scripts/private-server.ps1", "scripts/PrivateServer/PrivateServer.psm1",
-        "Docs/deployment/README.md", "Docs/deployment/private-server.md",
+        "scripts/smoke-production.ps1",
+        "Docs/deployment/README.md", "Docs/deployment/private-server.md", "Docs/deployment/LOCAL_WINDOWS_READINESS.md",
         "deploy/private/release-manifest.schema.json", "README.md", "LICENSE", "NOTICE",
         "THIRD_PARTY_NOTICES.md", "CONTRIBUTORS.md")
     foreach ($relative in $requiredReleaseFiles) {
@@ -448,6 +477,92 @@ try {
     Assert-True ([string]$decryptCall[0].arguments[-1] -ne $complete[0].FullName) "age must never reopen the attacker-writable original path after authentication"
     Assert-True ([string]$decryptCall[0].arguments[-1] -match 'authenticated-recovery-set\.fbbackup\.age$') "age must read only the re-hashed ACL-restricted copy"
 
+    $recoveryKeyDirectory = Join-Path $testRoot "separate-recovery-trust"
+    Invoke-FilingBridgePrivateServer -Command export-recovery-key -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory -OutputDirectory $recoveryKeyDirectory -Confirmation ("EXPORT RECOVERY KEY " + $state.instanceId) -NonInteractive 3>$null 6>$null
+    $recoveryKeys = @(Get-ChildItem -LiteralPath $recoveryKeyDirectory -Filter "*.key" -File -Recurse)
+    Assert-True ($recoveryKeys.Count -eq 1) "recovery trust export must publish one separately retainable key"
+    Assert-True ([IO.File]::ReadAllText($recoveryKeys[0].FullName, $testUtf8).Trim() -eq [IO.File]::ReadAllText((Join-Path $state.secretDirectory "backup_authentication_key"), $testUtf8).Trim()) "exported recovery trust anchor must match the installation backup authenticator"
+    $wrongRecoveryKey = Join-Path $testRoot "wrong-recovery.key"
+    [IO.File]::WriteAllText($wrongRecoveryKey, (New-PrivateServerRandomSecret), [Text.UTF8Encoding]::new($false))
+    Assert-Throws {
+        Invoke-FilingBridgePrivateServer -Command recover-host -RepositoryRoot $repositoryRoot -StateDirectory (Join-Path $testRoot "wrong-host-state") -BackupPath $complete[0].FullName -AgeIdentityFile $identityPath -RecoveryAuthenticationKeyFile $wrongRecoveryKey -Confirmation ("RECOVER HOST " + $state.instanceId) -BuildLocal -NonInteractive -SkipPrerequisiteChecks -Port 35495 6>$null
+    } 'trust anchor' "replacement-host recovery must reject a different separately retained authentication key before decryption"
+
+    $recoveredStateDirectory = Join-Path $testRoot "recovered-host-state"
+    $global:FbOperatorCalls.Clear()
+    Invoke-FilingBridgePrivateServer -Command recover-host -RepositoryRoot $repositoryRoot -StateDirectory $recoveredStateDirectory -BackupPath $complete[0].FullName -AgeIdentityFile $identityPath -RecoveryAuthenticationKeyFile $recoveryKeys[0].FullName -Confirmation ("RECOVER HOST " + $state.instanceId) -BuildLocal -NonInteractive -SkipPrerequisiteChecks -Port 35496 6>$null
+    $recoveredState = ([IO.File]::ReadAllText((Join-Path $recoveredStateDirectory "server.json"), $testUtf8)) | ConvertFrom-Json
+    $global:FbFakeState = $recoveredState
+    Assert-True ($recoveredState.status -eq "ready") "replacement-host recovery must finish in ready state only after health and fingerprint checks"
+    Assert-True ($recoveredState.recoveredFromInstanceId -eq $state.instanceId) "replacement-host state must retain the source installation identity"
+    Assert-True ($recoveredState.instanceId -ne $state.instanceId) "replacement host must use a new isolated installation and Compose identity"
+    Assert-True ($recoveredState.tenantSlug -eq $state.tenantSlug) "replacement host must preserve tenant-qualified login identity"
+    Assert-True ([IO.File]::ReadAllText((Join-Path $recoveredState.secretDirectory "mfa_encryption_key"), $testUtf8) -eq [IO.File]::ReadAllText((Join-Path $state.secretDirectory "mfa_encryption_key"), $testUtf8)) "replacement host must preserve MFA decryption continuity"
+    Assert-True ([IO.File]::ReadAllText((Join-Path $recoveredState.secretDirectory "auth_session_signing_key"), $testUtf8) -ne [IO.File]::ReadAllText((Join-Path $state.secretDirectory "auth_session_signing_key"), $testUtf8)) "replacement host must invalidate all captured browser sessions"
+    $hostRecoveryCalls = ($global:FbOperatorCalls | ForEach-Object { $_.description }) -join "`n"
+    Assert-True ($hostRecoveryCalls -match 'disposable verification database') "replacement-host recovery must independently restore-test the database before selection"
+    Assert-True ($hostRecoveryCalls -match 'Read important-table fingerprints from the recovered database') "replacement-host recovery must compare live post-start business-data fingerprints"
+
+    $global:FbExpectedFrontendPort = 35496
+    Invoke-FilingBridgePrivateServer -Command local-check -RepositoryRoot $repositoryRoot -StateDirectory $recoveredStateDirectory 6>$null
+    $localReports = @(Get-ChildItem -LiteralPath (Join-Path $recoveredStateDirectory "acceptance") -Filter "local-check-*.json" -File)
+    Assert-True ($localReports.Count -eq 1) "local acceptance must retain one machine-readable report"
+    $localReport = ([IO.File]::ReadAllText($localReports[0].FullName, $testUtf8)) | ConvertFrom-Json
+    Assert-True ($localReport.status -eq "passed" -and $localReport.frontendBinding -eq "127.0.0.1:35496") "local acceptance must prove exact IPv4 loopback frontend publication"
+    Assert-True ($localReport.apiHostPortPublished -eq $false -and $localReport.databaseHostPortPublished -eq $false) "local acceptance must prove API and database host ports remain absent"
+    Assert-True ($localReport.businessDataFingerprintCount -eq 5) "local acceptance must retain all five business-data fingerprints"
+
+    $env:FILINGBRIDGE_TEST_BOOT_ID = "2026-07-12T01:00:00.0000000Z"
+    Invoke-FilingBridgePrivateServer -Command reboot-check -Action prepare -RepositoryRoot $repositoryRoot -StateDirectory $recoveredStateDirectory 6>$null
+    $pendingReboot = Join-Path $recoveredStateDirectory "acceptance\reboot-check.pending.json"
+    Assert-True (Test-Path -LiteralPath $pendingReboot -PathType Leaf) "reboot preparation must retain pre-reboot identity and data fingerprints"
+    $pendingRebootRecord = ([IO.File]::ReadAllText($pendingReboot, $testUtf8)) | ConvertFrom-Json
+    Assert-True ($pendingRebootRecord.bootIdentityFormat -eq "opaque-boot-identity/v1") "reboot preparation must version its opaque boot identity"
+    $pendingRebootRecord.PSObject.Properties.Remove("bootIdentityFormat")
+    [IO.File]::WriteAllText($pendingReboot, (($pendingRebootRecord | ConvertTo-Json -Depth 12) + [Environment]::NewLine), [Text.UTF8Encoding]::new($false))
+    Assert-Throws {
+        Invoke-FilingBridgePrivateServer -Command reboot-check -Action verify -RepositoryRoot $repositoryRoot -StateDirectory $recoveredStateDirectory 6>$null
+    } 'unsupported boot identity format' "legacy or changed boot identity formats must fail closed instead of faking a reboot"
+    Remove-Item -LiteralPath $pendingReboot -Force
+    Invoke-FilingBridgePrivateServer -Command reboot-check -Action prepare -RepositoryRoot $repositoryRoot -StateDirectory $recoveredStateDirectory 6>$null
+    $releaseBoundState = ([IO.File]::ReadAllText((Join-Path $recoveredStateDirectory "server.json"), $testUtf8)) | ConvertFrom-Json
+    $originalReleaseCommit = [string]$releaseBoundState.releaseCommitSha
+    $releaseBoundState.releaseCommitSha = "changed-after-prepare"
+    [IO.File]::WriteAllText((Join-Path $recoveredStateDirectory "server.json"), (($releaseBoundState | ConvertTo-Json -Depth 12) + [Environment]::NewLine), [Text.UTF8Encoding]::new($false))
+    Assert-Throws {
+        Invoke-FilingBridgePrivateServer -Command reboot-check -Action verify -RepositoryRoot $repositoryRoot -StateDirectory $recoveredStateDirectory 6>$null
+    } 'release or Compose identity changed' "reboot verification must stay bound to the prepared release and Compose identity"
+    $releaseBoundState.releaseCommitSha = $originalReleaseCommit
+    [IO.File]::WriteAllText((Join-Path $recoveredStateDirectory "server.json"), (($releaseBoundState | ConvertTo-Json -Depth 12) + [Environment]::NewLine), [Text.UTF8Encoding]::new($false))
+    Assert-Throws {
+        Invoke-FilingBridgePrivateServer -Command reboot-check -Action verify -RepositoryRoot $repositoryRoot -StateDirectory $recoveredStateDirectory 6>$null
+    } 'has not rebooted' "reboot verification must reject a check completed in the same Windows boot"
+    $env:FILINGBRIDGE_TEST_BOOT_ID = "2026-07-12T02:00:00.0000000Z"
+    $global:FbFakeRebootStartMinutes = 31
+    Assert-Throws {
+        Invoke-FilingBridgePrivateServer -Command reboot-check -Action verify -RepositoryRoot $repositoryRoot -StateDirectory $recoveredStateDirectory 6>$null
+    } 'automatically restarted within 30 minutes' "reboot verification must reject services started outside the automatic Docker startup window"
+    $global:FbFakeRebootStartMinutes = 5
+    Invoke-FilingBridgePrivateServer -Command reboot-check -Action verify -RepositoryRoot $repositoryRoot -StateDirectory $recoveredStateDirectory 6>$null
+    Assert-True (-not (Test-Path -LiteralPath $pendingReboot)) "successful reboot verification must consume the pending marker"
+    $rebootReports = @(Get-ChildItem -LiteralPath (Join-Path $recoveredStateDirectory "acceptance") -Filter "reboot-check-*.json" -File)
+    Assert-True ($rebootReports.Count -eq 1) "successful reboot verification must retain one machine-readable report"
+    $rebootReport = ([IO.File]::ReadAllText($rebootReports[0].FullName, $testUtf8)) | ConvertFrom-Json
+    Assert-True ($rebootReport.status -eq "passed" -and $rebootReport.importantTablesMatched -eq $true) "reboot evidence must prove service health and unchanged business-data fingerprints"
+    Assert-True ($rebootReport.acceptanceContract -eq "release-bound-auto-restart/v1" -and @($rebootReport.runtimeAfter).Count -eq 3) "reboot evidence must bind the release and retain automatic container-restart timing"
+    Remove-Item Env:\FILINGBRIDGE_TEST_BOOT_ID -ErrorAction SilentlyContinue
+
+    $failedRecoveryStateDirectory = Join-Path $testRoot "failed-recovered-host-state"
+    $global:FbFailDescriptionPattern = '^Start the recovered Private Server runtime$'
+    Assert-Throws {
+        Invoke-FilingBridgePrivateServer -Command recover-host -RepositoryRoot $repositoryRoot -StateDirectory $failedRecoveryStateDirectory -BackupPath $complete[0].FullName -AgeIdentityFile $identityPath -RecoveryAuthenticationKeyFile $recoveryKeys[0].FullName -Confirmation ("RECOVER HOST " + $state.instanceId) -BuildLocal -NonInteractive -SkipPrerequisiteChecks -Port 35497 6>$null
+    } 'writers stopped' "failed replacement-host health/start must prove application writers were stopped before returning"
+    $global:FbFailDescriptionPattern = ""
+    $failedRecoveryState = ([IO.File]::ReadAllText((Join-Path $failedRecoveryStateDirectory "server.json"), $testUtf8)) | ConvertFrom-Json
+    Assert-True ($failedRecoveryState.status -eq "hostRecoveryFailed") "failed replacement-host recovery with proven writer shutdown must retain an explicit blocked state"
+    Assert-True ($global:FbFakeServices -notcontains "api" -and $global:FbFakeServices -notcontains "frontend") "failed replacement-host recovery must leave application writers stopped"
+    $global:FbFakeServices = @("db", "api", "frontend")
+
     Assert-Throws { Invoke-FilingBridgePrivateServer -Command restore -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory -BackupPath $dump[0].FullName -Confirmation "wrong" -NonInteractive -AllowPlaintextDatabaseOnlyRestore 6>$null } 'did not match' "restore must require exact typed confirmation"
     Invoke-FilingBridgePrivateServer -Command restore -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory -BackupPath $dump[0].FullName -Confirmation ("RESTORE " + $state.instanceId) -NonInteractive -AllowPlaintextDatabaseOnlyRestore -DryRun 6>$null
     $state.status = "updateFailed"
@@ -487,6 +602,28 @@ try {
     Assert-True ((Get-FileHash $updateSnapshot -Algorithm SHA256).Hash -ne (Get-FileHash (Join-Path $releaseRoot "compose.private.yml") -Algorithm SHA256).Hash) "update test seam must mutate only the source Compose after snapshot creation"
     Copy-Item -LiteralPath (Join-Path $repositoryRoot "compose.private.yml") -Destination (Join-Path $releaseRoot "compose.private.yml") -Force
 
+    $nextManifest = [IO.File]::ReadAllText($syntheticManifestPath, $testUtf8) | ConvertFrom-Json
+    $nextManifest.version = "1.2.4"
+    $nextManifest.candidate.commitSha = "c" * 40
+    foreach ($file in @($nextManifest.files)) {
+        $candidateFile = Join-Path $releaseRoot ([string]$file.path)
+        $file.byteSize = (Get-Item -LiteralPath $candidateFile -Force).Length
+        $file.sha256 = (Get-FileHash -LiteralPath $candidateFile -Algorithm SHA256).Hash.ToLowerInvariant()
+    }
+    [IO.File]::WriteAllText($syntheticManifestPath, (($nextManifest | ConvertTo-Json -Depth 12) + [Environment]::NewLine), [Text.UTF8Encoding]::new($false))
+    $global:FbFailDescriptionPattern = '^Run controlled forward migrations for the update$'
+    Assert-Throws {
+        Invoke-FilingBridgePrivateServer -Command update -RepositoryRoot $releaseRoot -StateDirectory $stateDirectory -ReleaseManifest $syntheticManifestPath -OutputDirectory $backupDirectory -PlaintextDatabaseOnly -NonInteractive 3>$null 6>$null
+    } 'verified pre-update backup' "a forced migration failure must retain a verified recovery point and stop writers"
+    $global:FbFailDescriptionPattern = ""
+    $failedUpdateState = ([IO.File]::ReadAllText($statePath, $testUtf8)) | ConvertFrom-Json
+    Assert-True ($failedUpdateState.status -eq "updateFailed") "forced update failure must leave an explicit recoverable state"
+    Assert-True (Test-Path -LiteralPath ([string]$failedUpdateState.lastPreUpdateBackup) -PathType Leaf) "forced update failure must retain its exact pre-update backup"
+    Assert-True ($global:FbFakeServices -notcontains "api" -and $global:FbFakeServices -notcontains "frontend") "forced update failure must leave all application writers stopped"
+    Invoke-FilingBridgePrivateServer -Command restore -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory -BackupPath ([string]$failedUpdateState.lastPreUpdateBackup) -Confirmation ("RESTORE " + $state.instanceId) -NonInteractive -AllowPlaintextDatabaseOnlyRestore 3>$null 6>$null
+    $recoveredUpdateState = ([IO.File]::ReadAllText($statePath, $testUtf8)) | ConvertFrom-Json
+    Assert-True ($recoveredUpdateState.status -eq "ready") "explicit restore after forced update failure must return the installation to ready state"
+
     $global:FbOperatorCalls.Clear()
     Invoke-FilingBridgePrivateServer -Command owner-recovery -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory -OwnerEmail "owner@example.ie" -Confirmation "RECOVER PRIVATE SERVER OWNER" -NonInteractive 6>$null
     $recoveryArguments = ($global:FbOperatorCalls | ForEach-Object { $_.arguments -join " " }) -join "`n"
@@ -522,6 +659,7 @@ try {
 
     Assert-Throws { Invoke-FilingBridgePrivateServer -Command "not-a-command" -RepositoryRoot $repositoryRoot } 'Unknown command' "unknown commands must be rejected"
 } finally {
+    Remove-Item Env:\FILINGBRIDGE_TEST_BOOT_ID -ErrorAction SilentlyContinue
     Reset-PrivateServerCommandInvoker
     if (Test-Path -LiteralPath $testRoot) {
         $resolved = [IO.Path]::GetFullPath($testRoot)
