@@ -250,9 +250,11 @@ try {
         "deploy/private/release-manifest.schema.json", "README.md", "LICENSE", "NOTICE",
         "THIRD_PARTY_NOTICES.md", "CONTRIBUTORS.md")
     foreach ($relative in $requiredReleaseFiles) {
+        $source = Join-Path $repositoryRoot $relative
         $destination = Join-Path $releaseRoot $relative
         New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
-        Copy-Item -LiteralPath (Join-Path $repositoryRoot $relative) -Destination $destination
+        Assert-True (Test-Path -LiteralPath $source -PathType Leaf) "release fixture source must exist: $relative"
+        [IO.File]::Copy($source, $destination, $false)
     }
     $releaseManifestObject = [ordered]@{
         schemaVersion = "filingbridge.private-server.release/v1"
@@ -269,7 +271,7 @@ try {
             $releaseFile = Join-Path $releaseRoot $_
             [ordered]@{
                 path = $_.Replace('\', '/')
-                byteSize = (Get-Item -LiteralPath $releaseFile).Length
+                byteSize = (Get-Item -LiteralPath $releaseFile -Force).Length
                 sha256 = (Get-FileHash -LiteralPath $releaseFile -Algorithm SHA256).Hash.ToLowerInvariant()
             }
         })
@@ -354,7 +356,9 @@ try {
     $savedErrorActionPreference = $ErrorActionPreference
     try {
         $ErrorActionPreference = "Continue"
-        $secondCommandOutput = @(& powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $dispatcherPath stop -StateDirectory $stateDirectory -DryRun 2>&1 | ForEach-Object { [string]$_ })
+        $childPowerShell = (Get-Process -Id $PID).Path
+        if ([string]::IsNullOrWhiteSpace($childPowerShell)) { throw "Could not resolve the current PowerShell executable for the lifecycle-lock subprocess test." }
+        $secondCommandOutput = @(& $childPowerShell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $dispatcherPath stop -StateDirectory $stateDirectory -DryRun 2>&1 | ForEach-Object { [string]$_ })
         $secondCommandExit = $LASTEXITCODE
     } finally {
         $ErrorActionPreference = $savedErrorActionPreference

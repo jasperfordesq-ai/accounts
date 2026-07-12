@@ -38,7 +38,7 @@ function Invoke-Git([object[]]$Arguments) {
 function New-EvidenceFile([string]$Name, [string]$Content) {
     $path = Join-Path $evidenceRoot $Name
     [IO.File]::WriteAllText($path, $Content, [Text.UTF8Encoding]::new($false))
-    $item = Get-Item -LiteralPath $path
+    $item = Get-Item -LiteralPath $path -Force
     return [pscustomobject][ordered]@{
         fileName = $Name
         byteSize = [long]$item.Length

@@ -86,16 +86,20 @@ try {
     if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
         Add-Failure $failures "release.json is missing from the archive root."
     } else {
-        $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+        $manifestText = Get-Content -LiteralPath $manifestPath -Raw
+        $manifest = $manifestText | ConvertFrom-Json
         if ([string]$manifest.schemaVersion -ne "filingbridge.private-server.release/v1") {
             Add-Failure $failures "release.json schemaVersion is invalid."
         }
         if ([string]$manifest.version -cnotmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?$') {
             Add-Failure $failures "release.json version is invalid."
         }
+        $generatedAtProperties = [Regex]::Matches($manifestText, '"generatedAtUtc"\s*:')
+        $generatedAtMatch = [Regex]::Match($manifestText, '"generatedAtUtc"\s*:\s*"(?<value>[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{7}Z)"')
         $generatedAt = [DateTimeOffset]::MinValue
-        if (-not [DateTimeOffset]::TryParseExact(
-                [string]$manifest.generatedAtUtc,
+        if ($generatedAtProperties.Count -ne 1 -or -not $generatedAtMatch.Success -or
+            -not [DateTimeOffset]::TryParseExact(
+                $generatedAtMatch.Groups['value'].Value,
                 'o',
                 [Globalization.CultureInfo]::InvariantCulture,
                 [Globalization.DateTimeStyles]::None,
@@ -147,7 +151,7 @@ try {
                 Add-Failure $failures "Manifested release file is missing or outside the archive: $relative"
                 continue
             }
-            $item = Get-Item -LiteralPath $fullPath
+            $item = Get-Item -LiteralPath $fullPath -Force
             if ([long]$entry.byteSize -ne $item.Length -or
                 [string]$entry.sha256 -cne (Get-FileHash -LiteralPath $fullPath -Algorithm SHA256).Hash.ToLowerInvariant()) {
                 Add-Failure $failures "Manifested release file hash/size mismatch: $relative"

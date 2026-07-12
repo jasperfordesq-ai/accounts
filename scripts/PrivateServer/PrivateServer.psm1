@@ -183,7 +183,7 @@ function Write-FbJsonAtomic {
 function Set-FbRestrictedAcl {
     param([Parameter(Mandatory = $true)][string]$Path)
     if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
-        $mode = if ((Get-Item -LiteralPath $Path).PSIsContainer) { "700" } else { "600" }
+        $mode = if ((Get-Item -LiteralPath $Path -Force).PSIsContainer) { "700" } else { "600" }
         $null = Invoke-FbNative -FilePath "chmod" -Arguments @($mode, "--", $Path) -Description "Restrict private state permissions" -Mutating
         return
     }
@@ -335,6 +335,31 @@ function Test-FbFixedTimeHexEqual {
 function New-FbNativeResult {
     param([int]$ExitCode, [object[]]$Output)
     return [pscustomobject]@{ ExitCode = $ExitCode; Output = @($Output | ForEach-Object { [string]$_ }) }
+}
+
+function Get-FbRawUtcTimestampProperty {
+    param([string]$Json, [string]$PropertyName, [switch]$RequireRoundTrip)
+    $property = '"' + [Regex]::Escape($PropertyName) + '"\s*:'
+    if ([Regex]::Matches($Json, $property).Count -ne 1) { return "" }
+    $timestamp = if ($RequireRoundTrip) {
+        '[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{7}Z'
+    } else {
+        '[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,7})?Z'
+    }
+    $match = [Regex]::Match($Json, $property + '\s*"(?<value>' + $timestamp + ')"')
+    if (-not $match.Success) { return "" }
+    return $match.Groups['value'].Value
+}
+
+function ConvertTo-FbCanonicalUtcTimestampText {
+    param($Value)
+    if ($Value -is [DateTime]) {
+        return ([DateTime]$Value).ToUniversalTime().ToString("o", [Globalization.CultureInfo]::InvariantCulture)
+    }
+    if ($Value -is [DateTimeOffset]) {
+        return ([DateTimeOffset]$Value).ToUniversalTime().ToString("o", [Globalization.CultureInfo]::InvariantCulture)
+    }
+    return [string]$Value
 }
 
 function ConvertTo-FbWindowsNativeArgument {
@@ -618,13 +643,17 @@ function Read-FbReleaseManifest {
     if (-not $Path.Equals($canonicalManifest, [StringComparison]::OrdinalIgnoreCase)) {
         throw "A compiled release must use the canonical release.json at the extracted release root. Nested or partial manifests are refused; use -BuildLocal explicitly for a source tree."
     }
-    $manifest = (Read-FbUtf8Text $Path) | ConvertFrom-Json
+    $manifestText = Read-FbUtf8Text $Path
+    $manifest = $manifestText | ConvertFrom-Json
     if ([string](Get-FbProperty $manifest "schemaVersion" "") -ne "filingbridge.private-server.release/v1") {
         throw "release.json has an unsupported schemaVersion."
     }
     $version = [string](Get-FbProperty $manifest "version" "")
     if ($version -cnotmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?$') { throw "release.json version is not a canonical semantic version." }
-    $generatedAtUtc = [string](Get-FbProperty $manifest "generatedAtUtc" "")
+    # PowerShell 7 coerces ISO JSON strings to DateTime and then formats them with
+    # the current culture when cast back to string. Validate the single raw JSON
+    # string so PS5 and PS7 enforce the same UTC contract.
+    $generatedAtUtc = Get-FbRawUtcTimestampProperty $manifestText "generatedAtUtc"
     $generatedTimestamp = [DateTimeOffset]::MinValue
     if (-not $generatedAtUtc.EndsWith("Z", [StringComparison]::Ordinal) -or -not [DateTimeOffset]::TryParse($generatedAtUtc, [ref]$generatedTimestamp)) {
         throw "release.json generatedAtUtc must be a UTC timestamp."
@@ -663,7 +692,7 @@ function Read-FbReleaseManifest {
         $expectedSize = [long](Get-FbProperty $file "byteSize" -1)
         $expectedHash = [string](Get-FbProperty $file "sha256" "")
         if ($expectedSize -lt 1 -or $expectedHash -cnotmatch '^[a-f0-9]{64}$') { throw "release.json has invalid size/hash evidence for: $relativePath" }
-        if ((Get-Item -LiteralPath $fullPath).Length -ne $expectedSize) { throw "Release file byte size mismatch: $relativePath" }
+        if ((Get-Item -LiteralPath $fullPath -Force).Length -ne $expectedSize) { throw "Release file byte size mismatch: $relativePath" }
         $actualHash = (Get-FileHash -LiteralPath $fullPath -Algorithm SHA256).Hash.ToLowerInvariant()
         if ($actualHash -ne $expectedHash) { throw "Release file SHA-256 mismatch: $relativePath" }
         $manifestFiles[$relativeKey] = [pscustomobject]@{ byteSize = $expectedSize; sha256 = $expectedHash }
@@ -676,7 +705,7 @@ function Read-FbReleaseManifest {
         "THIRD_PARTY_NOTICES.md", "CONTRIBUTORS.md")) {
         if (-not $manifestFiles.ContainsKey($required.ToLowerInvariant())) { throw "release.json omits required release file: $required" }
     }
-    foreach ($actualFile in @(Get-ChildItem -LiteralPath $RepositoryRoot -File -Recurse)) {
+    foreach ($actualFile in @(Get-ChildItem -LiteralPath $RepositoryRoot -File -Recurse -Force)) {
         $actualRelative = $actualFile.FullName.Substring($RepositoryRoot.TrimEnd('\', '/').Length).TrimStart('\', '/').Replace('\', '/')
         if ($actualRelative -eq "release.json") { continue }
         if (-not $manifestFiles.ContainsKey($actualRelative.ToLowerInvariant())) { throw "Release directory contains an unmanifested file: $actualRelative" }
@@ -1521,7 +1550,7 @@ function New-FbDatabaseDump {
         "run", "--rm", "--no-deps", "--entrypoint", "/bin/sh", "--volume", $mount.volume,
         "role-provision", "-ec", $dumpScript, "filingbridge-backup", $mount.containerPath
     ) "Create a PostgreSQL custom-format dump directly in private host staging" -Mutating -DryRun:$DryRun
-    if (-not $DryRun -and (-not (Test-Path -LiteralPath $HostDumpPath -PathType Leaf) -or (Get-Item -LiteralPath $HostDumpPath).Length -le 0)) {
+    if (-not $DryRun -and (-not (Test-Path -LiteralPath $HostDumpPath -PathType Leaf) -or (Get-Item -LiteralPath $HostDumpPath -Force).Length -le 0)) {
         throw "PostgreSQL backup output is missing or empty."
     }
 }
@@ -1673,12 +1702,14 @@ function Test-FbManagedOutputDirectory {
 
 function Assert-FbSafeManagedOutputPath {
     param([string]$Path, $State, [string]$Description)
-    $resolved = [IO.Path]::GetFullPath($Path).TrimEnd('\', '/')
+    $fullPath = [IO.Path]::GetFullPath($Path)
+    $pathRoot = [IO.Path]::GetPathRoot($fullPath)
+    if (-not [string]::IsNullOrWhiteSpace($pathRoot) -and $fullPath.Equals($pathRoot, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "$Description may not be a filesystem root. Choose a dedicated leaf directory."
+    }
+    $resolved = $fullPath.TrimEnd('\', '/')
     if ($resolved.Length -gt 165) {
         throw "$Description is too deep for atomic backup/support filenames on legacy Windows path handling. Choose a shorter dedicated directory."
-    }
-    if ($resolved.Equals([IO.Path]::GetPathRoot($resolved).TrimEnd('\', '/'), [StringComparison]::OrdinalIgnoreCase)) {
-        throw "$Description may not be a filesystem root. Choose a dedicated leaf directory."
     }
     foreach ($protected in @(
         [string]$State.stateDirectory,
@@ -1751,7 +1782,7 @@ function Get-FbBackupOutputDirectory {
 function Get-FbBackupFileInventory {
     param([string]$Root)
     $items = New-Object System.Collections.Generic.List[object]
-    foreach ($file in @(Get-ChildItem -LiteralPath $Root -File -Recurse | Sort-Object FullName)) {
+    foreach ($file in @(Get-ChildItem -LiteralPath $Root -File -Recurse -Force | Sort-Object FullName)) {
         $relative = $file.FullName.Substring($Root.TrimEnd('\', '/').Length).TrimStart('\', '/').Replace('\', '/')
         $items.Add([pscustomobject][ordered]@{
             path = $relative
@@ -1775,7 +1806,7 @@ function New-FbCompleteRecoveryPayload {
     $installedCompose = [string](Get-FbProperty $State "installedComposeFile" "")
     if ([string]::IsNullOrWhiteSpace($installedCompose) -or -not (Test-Path -LiteralPath $installedCompose -PathType Leaf)) { throw "Installed Compose snapshot is missing; complete recovery backup refused." }
     Copy-Item -LiteralPath $installedCompose -Destination (Join-Path $stateDirectory "compose.private.installed.yml")
-    foreach ($secret in @(Get-ChildItem -LiteralPath ([string]$State.secretDirectory) -File)) {
+    foreach ($secret in @(Get-ChildItem -LiteralPath ([string]$State.secretDirectory) -File -Force)) {
         if ($secret.Name -eq "private_initial_owner_password") { continue }
         Copy-Item -LiteralPath $secret.FullName -Destination (Join-Path $secretDirectory $secret.Name)
     }
@@ -1805,7 +1836,7 @@ function Assert-FbBackupHash {
     if ($expected -cnotmatch '^[a-f0-9]{64}$') { throw "Backup manifest has no valid SHA-256 digest." }
     $actual = (Get-FileHash -LiteralPath $BackupPath -Algorithm SHA256).Hash.ToLowerInvariant()
     if ($actual -ne $expected) { throw "Backup SHA-256 does not match its manifest." }
-    if ([long](Get-FbProperty $ExternalManifest "byteSize" -1) -ne (Get-Item -LiteralPath $BackupPath).Length) {
+    if ([long](Get-FbProperty $ExternalManifest "byteSize" -1) -ne (Get-Item -LiteralPath $BackupPath -Force).Length) {
         throw "Backup byte size does not match its manifest."
     }
 }
@@ -1824,7 +1855,22 @@ function Read-FbBackupAuthenticationKey {
 function Get-FbBackupAuthenticationMessage {
     param($Manifest)
     $databaseVerification = Get-FbProperty $Manifest "databaseVerification" @{}
-    $verificationJson = $databaseVerification | ConvertTo-Json -Depth 12 -Compress
+    $canonicalImportantTables = @(@(Get-FbProperty $databaseVerification "importantTables" @()) | ForEach-Object {
+        [ordered]@{
+            table = [string](Get-FbProperty $_ "table" "")
+            rowCount = [long](Get-FbProperty $_ "rowCount" -1)
+            fingerprint = [string](Get-FbProperty $_ "fingerprint" "")
+        }
+    })
+    $canonicalVerification = [ordered]@{
+        database = [string](Get-FbProperty $databaseVerification "database" "")
+        tableCount = [int](Get-FbProperty $databaseVerification "tableCount" 0)
+        migrationCount = [int](Get-FbProperty $databaseVerification "migrationCount" 0)
+        importantTables = $canonicalImportantTables
+        fingerprintsMatched = [bool](Get-FbProperty $databaseVerification "fingerprintsMatched" $false)
+        verifiedAtUtc = ConvertTo-FbCanonicalUtcTimestampText (Get-FbProperty $databaseVerification "verifiedAtUtc" "")
+    }
+    $verificationJson = $canonicalVerification | ConvertTo-Json -Depth 12 -Compress
     $lines = @(
         "schemaVersion=$([string](Get-FbProperty $Manifest 'schemaVersion' ''))",
         "status=$([string](Get-FbProperty $Manifest 'status' ''))",
@@ -1840,7 +1886,7 @@ function Get-FbBackupAuthenticationMessage {
         "backupSha256=$([string](Get-FbProperty $Manifest 'backupSha256' ''))",
         "byteSize=$([Convert]::ToString([long](Get-FbProperty $Manifest 'byteSize' -1), [Globalization.CultureInfo]::InvariantCulture))",
         "databaseVerificationSha256=$(Get-FbSha256Text $verificationJson)",
-        "createdAtUtc=$([string](Get-FbProperty $Manifest 'createdAtUtc' ''))"
+        "createdAtUtc=$(ConvertTo-FbCanonicalUtcTimestampText (Get-FbProperty $Manifest 'createdAtUtc' ''))"
     )
     return ($lines -join "`n")
 }
@@ -1946,7 +1992,7 @@ function Invoke-FbBackup {
                 releaseCommitSha = [string]$State.releaseCommitSha
                 backupFileName = [IO.Path]::GetFileName($final)
                 backupSha256 = (Get-FileHash -LiteralPath $final -Algorithm SHA256).Hash.ToLowerInvariant()
-                byteSize = (Get-Item -LiteralPath $final).Length
+                byteSize = (Get-Item -LiteralPath $final -Force).Length
                 databaseVerification = $verification
                 createdAtUtc = (Get-Date).ToUniversalTime().ToString("o")
             }
@@ -1961,7 +2007,7 @@ function Invoke-FbBackup {
         $payload = Join-Path $staging "payload"
         $null = New-FbCompleteRecoveryPayload $State $dumpPath $payload $verification
         $archive = Join-Path $staging "$leafBase.zip"
-        $payloadBytes = [long](@(Get-ChildItem -LiteralPath $payload -File -Recurse | Measure-Object -Property Length -Sum).Sum)
+        $payloadBytes = [long](@(Get-ChildItem -LiteralPath $payload -File -Recurse -Force | Measure-Object -Property Length -Sum).Sum)
         if ($payloadBytes -gt $script:MaximumCompleteBackupArchiveBytes) {
             throw "The complete recovery payload is larger than the supported 1.9 GB Compress-Archive safety limit. Create and retain the authenticated database-only backup, then contact support for a streamed complete-backup workflow."
         }
@@ -1969,7 +2015,7 @@ function Invoke-FbBackup {
         $partial = Join-Path $resolvedOutput (".$leafBase.fbbackup.age.partial")
         $final = Join-Path $resolvedOutput "$leafBase.fbbackup.age"
         $null = Invoke-FbNative -FilePath "age" -Arguments @("--recipient", $BackupRecipient, "--output", $partial, $archive) -Description "Encrypt the complete recovery set with age" -Mutating
-        if (-not (Test-Path -LiteralPath $partial -PathType Leaf) -or (Get-Item -LiteralPath $partial).Length -le 0) { throw "Encrypted recovery set is missing or empty." }
+        if (-not (Test-Path -LiteralPath $partial -PathType Leaf) -or (Get-Item -LiteralPath $partial -Force).Length -le 0) { throw "Encrypted recovery set is missing or empty." }
         Move-Item -LiteralPath $partial -Destination $final
         $manifest = [ordered]@{
             schemaVersion = "filingbridge.private-server.backup-envelope/v1"
@@ -1983,7 +2029,7 @@ function Invoke-FbBackup {
             releaseCommitSha = [string]$State.releaseCommitSha
             backupFileName = [IO.Path]::GetFileName($final)
             backupSha256 = (Get-FileHash -LiteralPath $final -Algorithm SHA256).Hash.ToLowerInvariant()
-            byteSize = (Get-Item -LiteralPath $final).Length
+            byteSize = (Get-Item -LiteralPath $final -Force).Length
             databaseVerification = $verification
             createdAtUtc = (Get-Date).ToUniversalTime().ToString("o")
         }
@@ -2108,7 +2154,7 @@ function Assert-FbInternalBackupInventory {
         $path = [IO.Path]::GetFullPath((Join-Path $ExpandedPath $relative))
         if (-not (Test-FbPathWithin $path $ExpandedPath)) { throw "Recovery-set inventory path escapes its envelope." }
         if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Recovery-set file is missing: $relative" }
-        if ((Get-Item -LiteralPath $path).Length -ne [long](Get-FbProperty $file "byteSize" -1)) { throw "Recovery-set byte size mismatch: $relative" }
+        if ((Get-Item -LiteralPath $path -Force).Length -ne [long](Get-FbProperty $file "byteSize" -1)) { throw "Recovery-set byte size mismatch: $relative" }
         $hash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
         if ($hash -ne [string](Get-FbProperty $file "sha256" "")) { throw "Recovery-set SHA-256 mismatch: $relative" }
     }
@@ -2116,7 +2162,7 @@ function Assert-FbInternalBackupInventory {
         if (-not $manifestPaths.ContainsKey($required.ToLowerInvariant())) { throw "Recovery-set manifest omits required file: $required" }
     }
     $actualPaths = @{}
-    foreach ($actual in @(Get-ChildItem -LiteralPath $ExpandedPath -File -Recurse)) {
+    foreach ($actual in @(Get-ChildItem -LiteralPath $ExpandedPath -File -Recurse -Force)) {
         $relative = $actual.FullName.Substring($ExpandedPath.TrimEnd('\', '/').Length).TrimStart('\', '/').Replace('\', '/')
         if ($relative -eq "manifest.json") { continue }
         $key = $relative.ToLowerInvariant()
@@ -2266,7 +2312,7 @@ function Invoke-FbVerifyBackup {
             Set-FbRestrictedAcl $trustedDump
             $trustedHash = (Get-FileHash -LiteralPath $trustedDump -Algorithm SHA256).Hash.ToLowerInvariant()
             if ($trustedHash -cne [string](Get-FbProperty $external "backupSha256" "") -or
-                (Get-Item -LiteralPath $trustedDump).Length -ne [long](Get-FbProperty $external "byteSize" -1)) {
+                (Get-Item -LiteralPath $trustedDump -Force).Length -ne [long](Get-FbProperty $external "byteSize" -1)) {
                 throw "Backup changed while it was copied into authenticated private staging; no database restore was attempted."
             }
             $verification = Test-FbDatabaseDumpRestore -State $State -ComposeFile $ComposeFile -HostDumpPath $trustedDump -ExpectedImportantTables $externalImportantTables
@@ -2286,7 +2332,7 @@ function Invoke-FbVerifyBackup {
         Set-FbRestrictedAcl $trustedEncrypted
         $trustedHash = (Get-FileHash -LiteralPath $trustedEncrypted -Algorithm SHA256).Hash.ToLowerInvariant()
         if ($trustedHash -cne [string](Get-FbProperty $external "backupSha256" "") -or
-            (Get-Item -LiteralPath $trustedEncrypted).Length -ne [long](Get-FbProperty $external "byteSize" -1)) {
+            (Get-Item -LiteralPath $trustedEncrypted -Force).Length -ne [long](Get-FbProperty $external "byteSize" -1)) {
             throw "Encrypted backup changed while it was copied into authenticated private staging; no archive or database restore was attempted."
         }
         $expanded = Expand-FbEncryptedBackup $trustedEncrypted $AgeIdentityFile (Join-Path $staging "decrypted")
@@ -2365,7 +2411,7 @@ function New-FbMergedSecretDirectory {
     $temporary = Join-Path ([string]$State.stateDirectory) ("secrets.restore-" + [Guid]::NewGuid().ToString("N"))
     New-Item -ItemType Directory -Path $temporary | Out-Null
     Set-FbRestrictedAcl $temporary
-    foreach ($current in @(Get-ChildItem -LiteralPath ([string]$State.secretDirectory) -File)) {
+    foreach ($current in @(Get-ChildItem -LiteralPath ([string]$State.secretDirectory) -File -Force)) {
         Copy-Item -LiteralPath $current.FullName -Destination (Join-Path $temporary $current.Name)
     }
     if (-not [string]::IsNullOrWhiteSpace($ExpandedPath)) {
@@ -2380,7 +2426,7 @@ function New-FbMergedSecretDirectory {
     # including sessions captured at the backup point. Other recovery-critical keys
     # retain audit/MFA/identity continuity; only the session-signing key is rotated.
     [IO.File]::WriteAllText((Join-Path $temporary "auth_session_signing_key"), (New-PrivateServerRandomSecret), $script:Utf8NoBom)
-    foreach ($file in @(Get-ChildItem -LiteralPath $temporary -File)) { Set-FbRestrictedAcl $file.FullName }
+    foreach ($file in @(Get-ChildItem -LiteralPath $temporary -File -Force)) { Set-FbRestrictedAcl $file.FullName }
     return $temporary
 }
 

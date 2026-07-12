@@ -123,7 +123,7 @@ foreach ($entry in $retainedEvidence) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
         throw "Verified supply-chain evidence is missing: $fileName"
     }
-    $item = Get-Item -LiteralPath $path
+    $item = Get-Item -LiteralPath $path -Force
     $hash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
     if ([long]$entry.byteSize -ne $item.Length -or [string]$entry.sha256 -cne $hash) {
         throw "Verified supply-chain evidence hash/size mismatch: $fileName"
@@ -179,7 +179,7 @@ try {
         Copy-Item -LiteralPath (Join-Path $evidenceDirectory $fileName) -Destination (Join-Path $evidenceStage $fileName)
     }
 
-    $files = @(Get-ChildItem -LiteralPath $stageRoot -File -Recurse | Sort-Object FullName | ForEach-Object {
+    $files = @(Get-ChildItem -LiteralPath $stageRoot -File -Recurse -Force | Sort-Object FullName | ForEach-Object {
         $relative = $_.FullName.Substring($stageRoot.TrimEnd('\', '/').Length).TrimStart('\', '/').Replace('\', '/')
         [ordered]@{
             path = $relative
