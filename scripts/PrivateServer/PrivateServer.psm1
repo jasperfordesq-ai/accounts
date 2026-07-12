@@ -1139,7 +1139,7 @@ function Get-FbOwnedRuntimeContainerId {
     $actual = (($labels.Output | Select-Object -Last 1) -join "").Trim()
     $expected = "$($State.composeProject)|$Service|PrivateServer|$($State.instanceId)"
     if ($actual -cne $expected) {
-        throw "Runtime container '$Service' does not carry the exact saved project, service, deployment-mode, and installation ownership labels."
+        throw "Runtime container '$Service' does not carry the exact saved project, service, deployment-mode, and installation ownership labels (expected '$expected'; received '$actual')."
     }
     return $containerId
 }
@@ -2812,13 +2812,62 @@ function Invoke-FbExportRecoveryKey {
 }
 
 function Get-FbBootIdentity {
+    return [string](Get-FbBootEvidence).identity
+}
+
+function Assert-FbImportantTableRowCountsMatch {
+    param([object[]]$Expected, [object[]]$Actual, [string]$Description)
+    $expectedItems = @($Expected | Sort-Object { [string](Get-FbProperty $_ "table" "") })
+    $actualItems = @($Actual | Sort-Object { [string](Get-FbProperty $_ "table" "") })
+    if ($expectedItems.Count -ne 5 -or $actualItems.Count -ne 5) { throw "$Description is incomplete." }
+    for ($index = 0; $index -lt $expectedItems.Count; $index++) {
+        $expectedTable = [string](Get-FbProperty $expectedItems[$index] "table" "")
+        if ($expectedTable -cne [string](Get-FbProperty $actualItems[$index] "table" "") -or
+            [long](Get-FbProperty $expectedItems[$index] "rowCount" -1) -ne [long](Get-FbProperty $actualItems[$index] "rowCount" -2)) {
+            throw "$Description differs for important table '$expectedTable'."
+        }
+    }
+}
+
+function Get-FbBootEvidence {
     if ($null -ne $script:PrivateServerCommandInvoker -and -not [string]::IsNullOrWhiteSpace($env:FILINGBRIDGE_TEST_BOOT_ID)) {
-        return "test-boot-" + (Get-FbSha256Text ([string]$env:FILINGBRIDGE_TEST_BOOT_ID)).Substring(0, 24)
+        $testBoot = [DateTimeOffset]::MinValue
+        if (-not [DateTimeOffset]::TryParse([string]$env:FILINGBRIDGE_TEST_BOOT_ID, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::AssumeUniversal, [ref]$testBoot)) {
+            throw "The injected reboot-test identity must be an ISO-8601 timestamp."
+        }
+        return [pscustomobject][ordered]@{
+            identity = "test-boot-" + (Get-FbSha256Text ([string]$env:FILINGBRIDGE_TEST_BOOT_ID)).Substring(0, 24)
+            startedAtUtc = $testBoot.ToUniversalTime().ToString("o")
+        }
     }
     if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) { throw "The reboot acceptance check is supported only on Windows." }
     $operatingSystem = Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction Stop
     $lastBoot = [DateTimeOffset]$operatingSystem.LastBootUpTime
-    return "windows-boot-" + $lastBoot.ToUniversalTime().Ticks.ToString([Globalization.CultureInfo]::InvariantCulture)
+    return [pscustomobject][ordered]@{
+        identity = "windows-boot-" + $lastBoot.ToUniversalTime().Ticks.ToString([Globalization.CultureInfo]::InvariantCulture)
+        startedAtUtc = $lastBoot.ToUniversalTime().ToString("o")
+    }
+}
+
+function Get-FbRebootRuntimeEvidence {
+    param($State, [string]$ComposeFile)
+    $evidence = New-Object System.Collections.Generic.List[object]
+    foreach ($service in @("db", "api", "frontend")) {
+        $containerId = Get-FbOwnedRuntimeContainerId $State $ComposeFile $service
+        $inspection = Invoke-FbNative -FilePath "docker" -Arguments @(
+            "inspect", "--format", "{{.Id}}|{{.State.StartedAt}}", $containerId
+        ) -Description "Read $service reboot runtime evidence"
+        $value = (($inspection.Output | Select-Object -Last 1) -join "").Trim()
+        $match = [regex]::Match($value, '^(?<id>[a-f0-9]{12,64})\|(?<started>[^|]+)$')
+        $started = [DateTimeOffset]::MinValue
+        if ($inspection.ExitCode -ne 0 -or -not $match.Success -or
+            -not [DateTimeOffset]::TryParse($match.Groups['started'].Value, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::AssumeUniversal, [ref]$started)) {
+            throw "Reboot evidence for '$service' could not be interpreted safely."
+        }
+        if ($match.Groups['id'].Value -cne $containerId) { throw "Reboot evidence for '$service' did not match its owned container." }
+        $evidence.Add([pscustomobject][ordered]@{ service = $service; containerId = $containerId; startedAtUtc = $started.ToUniversalTime().ToString("o") })
+    }
+    return $evidence.ToArray()
 }
 
 function Get-FbAcceptanceDirectory {
@@ -2852,12 +2901,17 @@ function Invoke-FbRebootCheck {
         foreach ($required in @("db", "api", "frontend")) { if ($running -notcontains $required) { throw "Cannot prepare reboot evidence because '$required' is not running." } }
         Wait-FbHttpHealth -Port ([int]$State.port)
         $tables = @(Get-FbImportantTableEvidence $State $ComposeFile "accounts" "Read important-table fingerprints from the database before Windows reboot")
+        $bootBefore = Get-FbBootEvidence
         $record = [ordered]@{
-            schemaVersion = "filingbridge.private-server.reboot-check/v1"; status = "pending"
+            schemaVersion = "filingbridge.private-server.reboot-check/v2"; status = "pending"
             instanceId = [string]$State.instanceId; releaseVersion = [string]$State.releaseVersion
             releaseCommitSha = [string]$State.releaseCommitSha; preparedAtUtc = (Get-Date).ToUniversalTime().ToString("o")
-            bootIdentityFormat = "opaque-boot-identity/v1"; bootIdentityBefore = Get-FbBootIdentity
+            composeProject = [string]$State.composeProject; composeFileSha256 = [string]$State.composeFileSha256
+            acceptanceContract = "release-bound-auto-restart/v1"
+            bootIdentityFormat = "opaque-boot-identity/v1"; bootIdentityBefore = [string]$bootBefore.identity
+            bootStartedAtBeforeUtc = [string]$bootBefore.startedAtUtc
             expectedServices = @("db", "api", "frontend")
+            runtimeBefore = @(Get-FbRebootRuntimeEvidence $State $ComposeFile)
             importantTablesBefore = $tables
         }
         Write-FbJsonAtomic -Path $pendingPath -Value $record
@@ -2871,20 +2925,48 @@ function Invoke-FbRebootCheck {
     if ([string](Get-FbProperty $pending "bootIdentityFormat" "") -cne "opaque-boot-identity/v1") {
         throw "Pending reboot evidence uses an unsupported boot identity format. Remove it and run reboot-check prepare again before rebooting."
     }
-    $bootAfter = Get-FbBootIdentity
-    if ($bootAfter -ceq [string]$pending.bootIdentityBefore) { throw "Windows has not rebooted since this check was prepared." }
+    if ([string](Get-FbProperty $pending "schemaVersion" "") -cne "filingbridge.private-server.reboot-check/v2" -or
+        [string](Get-FbProperty $pending "acceptanceContract" "") -cne "release-bound-auto-restart/v1") {
+        throw "Pending reboot evidence uses an unsupported acceptance contract. Remove it and prepare the check again."
+    }
+    foreach ($identity in @(
+        @("releaseVersion", [string]$State.releaseVersion),
+        @("releaseCommitSha", [string]$State.releaseCommitSha),
+        @("composeProject", [string]$State.composeProject),
+        @("composeFileSha256", [string]$State.composeFileSha256)
+    )) {
+        if ([string](Get-FbProperty $pending $identity[0] "") -cne $identity[1]) {
+            throw "The installed release or Compose identity changed after reboot evidence was prepared. Prepare and perform a new reboot check for this release."
+        }
+    }
+    $bootAfter = Get-FbBootEvidence
+    if ([string]$bootAfter.identity -ceq [string]$pending.bootIdentityBefore) { throw "Windows has not rebooted since this check was prepared." }
     $running = @(Get-FbRunningServices $State $ComposeFile)
     foreach ($required in @("db", "api", "frontend")) { if ($running -notcontains $required) { throw "Reboot persistence failed because '$required' did not return automatically." } }
+    $runtimeAfter = @(Get-FbRebootRuntimeEvidence $State $ComposeFile)
+    $bootStartedAfter = [DateTimeOffset]::Parse([string]$bootAfter.startedAtUtc, [Globalization.CultureInfo]::InvariantCulture)
+    foreach ($current in $runtimeAfter) {
+        $before = @($pending.runtimeBefore | Where-Object { [string]$_.service -ceq [string]$current.service })
+        $started = [DateTimeOffset]::Parse([string]$current.startedAtUtc, [Globalization.CultureInfo]::InvariantCulture)
+        if ($before.Count -ne 1 -or [string]$before[0].containerId -cne [string]$current.containerId -or
+            [string]$before[0].startedAtUtc -ceq [string]$current.startedAtUtc -or
+            $started -lt $bootStartedAfter -or $started -gt $bootStartedAfter.AddMinutes(30)) {
+            throw "Reboot persistence failed because '$($current.service)' was not the prepared container automatically restarted within 30 minutes of Windows boot."
+        }
+    }
     Wait-FbHttpHealth -Port ([int]$State.port)
     $tablesAfter = @(Get-FbImportantTableEvidence $State $ComposeFile "accounts" "Read important-table fingerprints from the database after Windows reboot")
     Assert-FbImportantTableEvidenceMatches -Expected @($pending.importantTablesBefore) -Actual $tablesAfter -Description "Windows reboot persistence"
     $completed = [ordered]@{
-        schemaVersion = "filingbridge.private-server.reboot-check/v1"; status = "passed"
+        schemaVersion = "filingbridge.private-server.reboot-check/v2"; status = "passed"
         instanceId = [string]$State.instanceId; releaseVersion = [string]$State.releaseVersion
         releaseCommitSha = [string]$State.releaseCommitSha; preparedAtUtc = [string]$pending.preparedAtUtc
+        composeProject = [string]$State.composeProject; composeFileSha256 = [string]$State.composeFileSha256
+        acceptanceContract = "release-bound-auto-restart/v1"
         verifiedAtUtc = (Get-Date).ToUniversalTime().ToString("o"); bootIdentityFormat = "opaque-boot-identity/v1"
         bootIdentityBefore = [string]$pending.bootIdentityBefore
-        bootIdentityAfter = $bootAfter; servicesRunning = @("db", "api", "frontend")
+        bootIdentityAfter = [string]$bootAfter.identity; bootStartedAtAfterUtc = [string]$bootAfter.startedAtUtc
+        servicesRunning = @("db", "api", "frontend"); runtimeBefore = @($pending.runtimeBefore); runtimeAfter = $runtimeAfter
         readinessUri = "http://127.0.0.1:$($State.port)/health/ready"; importantTablesMatched = $true
         importantTablesBefore = @($pending.importantTablesBefore); importantTablesAfter = $tablesAfter
     }
@@ -2968,6 +3050,7 @@ function Invoke-FbRecoverHost {
     if ([string]::IsNullOrWhiteSpace($RecoveryAuthenticationKeyFile)) { throw "-RecoveryAuthenticationKeyFile is required for replacement-host recovery." }
     $resolvedStateDirectory = Resolve-FbStateDirectory $StateDirectory
     if (Test-FbPathWithin $resolvedStateDirectory $RepositoryRoot) { throw "Private Server state must be outside the release/source directory." }
+    Assert-FbNoReparseAncestor $resolvedStateDirectory "State directory"
     if (Test-Path -LiteralPath $resolvedStateDirectory) { throw "Replacement-host recovery refuses to overwrite existing state at $resolvedStateDirectory." }
     $resolvedBackup = ConvertTo-FbFullPath $BackupPath
     $externalPath = "$resolvedBackup.manifest.json"
@@ -3004,6 +3087,12 @@ function Invoke-FbRecoverHost {
     if (-not (Test-FbBackupReleaseCompatibility ([string]$external.releaseVersion) ([string]$release.version))) {
         throw "Backup release '$($external.releaseVersion)' is not compatible with recovery release '$($release.version)'. Use the same or a newer semantic release."
     }
+    $sourceReleaseCommit = [string](Get-FbProperty $external "releaseCommitSha" "")
+    if ([string]$external.releaseVersion -ceq [string]$release.version -and
+        -not [string]::IsNullOrWhiteSpace($sourceReleaseCommit) -and
+        $sourceReleaseCommit -cne [string]$release.commitSha) {
+        throw "Backup claims the recovery release version but a different release commit."
+    }
     if ($DryRun) {
         Write-Host "DRY RUN: authenticate and decrypt the complete recovery set"
         Write-Host "DRY RUN: create a new isolated installation identity and PostgreSQL volume"
@@ -3014,6 +3103,7 @@ function Invoke-FbRecoverHost {
     $staging = Join-Path ([IO.Path]::GetTempPath()) ("filingbridge-recover-host-" + [Guid]::NewGuid().ToString("N"))
     $state = $null
     $composeStarted = $false
+    $stateDirectoryCreated = $false
     try {
         New-Item -ItemType Directory -Path $staging | Out-Null
         Set-FbRestrictedAcl $staging
@@ -3050,6 +3140,8 @@ function Invoke-FbRecoverHost {
         }
         if ([string]$oldState.ownerEmail -notmatch '^[^\s@]+@[^\s@]+\.[^\s@]+$') { throw "Recovered Owner email is invalid." }
 
+        New-Item -ItemType Directory -Path $resolvedStateDirectory -Force:$false | Out-Null
+        $stateDirectoryCreated = $true
         $secretDirectory = Join-Path $resolvedStateDirectory "secrets"
         New-Item -ItemType Directory -Path $secretDirectory -Force:$false | Out-Null
         Set-FbRestrictedAcl $resolvedStateDirectory
@@ -3100,12 +3192,14 @@ function Invoke-FbRecoverHost {
         $candidate = "fb_host_recovery_" + [Guid]::NewGuid().ToString("N").Substring(0, 12)
         Restore-FbCandidateDatabase $state $installedComposeFile $dump $candidate
         Switch-FbDatabase $state $installedComposeFile $candidate ("empty_before_host_recovery_" + [Guid]::NewGuid().ToString("N").Substring(0, 8))
+        $restoredTables = @(Get-FbImportantTableEvidence $state $installedComposeFile "accounts" "Read important-table fingerprints before host-recovery migrations")
+        Assert-FbImportantTableEvidenceMatches -Expected $expectedTables -Actual $restoredTables -Description "Replacement-host restore before forward migrations"
         $null = Invoke-FbCompose $state $installedComposeFile @("run", "--rm", "--no-deps", "role-provision") "Reapply the least-privileged database login after host recovery" -Mutating
         $null = Invoke-FbCompose $state $installedComposeFile @("run", "--rm", "--no-deps", "migrate") "Apply forward-only migrations after host recovery" -Mutating
         $null = Invoke-FbCompose $state $installedComposeFile @("up", "-d", "--no-deps", "--wait", "--wait-timeout", "300", "api", "frontend") "Start the recovered Private Server runtime" -Mutating
         Wait-FbHttpHealth -Port $Port
         $actualTables = @(Get-FbImportantTableEvidence $state $installedComposeFile "accounts" "Read important-table fingerprints from the recovered database")
-        Assert-FbImportantTableEvidenceMatches -Expected $expectedTables -Actual $actualTables -Description "Replacement-host recovery"
+        Assert-FbImportantTableRowCountsMatch -Expected $expectedTables -Actual $actualTables -Description "Replacement-host recovery after forward migrations"
         $state.status = "ready"
         Save-FbState $state
         Write-Host "Replacement-host recovery completed and passed database fingerprint and health checks at $localOrigin"
@@ -3123,6 +3217,14 @@ function Invoke-FbRecoverHost {
             try {
                 $state.status = if ([string]::IsNullOrWhiteSpace($writerStopFailure)) { "hostRecoveryFailed" } else { "hostRecoveryRecoveryRequired" }
                 Save-FbState $state
+            } catch { }
+        } elseif ($stateDirectoryCreated -and (Test-Path -LiteralPath $resolvedStateDirectory -PathType Container)) {
+            try {
+                $resolvedIncomplete = [IO.Path]::GetFullPath($resolvedStateDirectory)
+                Assert-FbNoReparseAncestor $resolvedIncomplete "Incomplete recovery state directory"
+                if ($resolvedIncomplete -ne [IO.Path]::GetPathRoot($resolvedIncomplete) -and -not (Test-FbPathWithin $resolvedIncomplete $RepositoryRoot)) {
+                    Remove-Item -LiteralPath $resolvedIncomplete -Recurse -Force
+                }
             } catch { }
         }
         if (-not [string]::IsNullOrWhiteSpace($writerStopFailure)) {

@@ -144,6 +144,9 @@ $global:FbFakeContainerIds = @{
     frontend = ("f" * 64)
 }
 $global:FbFakeState = $null
+$global:FbExpectedOwnershipProject = ""
+$global:FbExpectedOwnershipInstance = ""
+$global:FbFakeRebootStartMinutes = 5
 $global:FbFakeTailscaleStatus = '{"version":"etag-empty"}'
 $global:FbMutateReleaseComposeOnValidate = ""
 $global:FbFailDescriptionPattern = ""
@@ -179,13 +182,27 @@ $fakeInvoker = {
         return [pscustomobject]@{ ExitCode = 1; Output = @("unknown synthetic container") }
     }
     if ($Description -match '^Resolve existing (db|api|frontend) runtime container$') {
+        $projectIndex = [Array]::IndexOf($argumentStrings, "--project-name")
+        $environmentIndex = [Array]::IndexOf($argumentStrings, "--env-file")
+        $global:FbExpectedOwnershipProject = [string]$argumentStrings[$projectIndex + 1]
+        $environmentPath = [string]$argumentStrings[$environmentIndex + 1]
+        $ownershipState = ([IO.File]::ReadAllText((Join-Path (Split-Path -Parent $environmentPath) "server.json"), [Text.UTF8Encoding]::new($false, $true))) | ConvertFrom-Json
+        $global:FbExpectedOwnershipInstance = [string]$ownershipState.instanceId
         return [pscustomobject]@{ ExitCode = 0; Output = @($global:FbFakeContainerIds[$Matches[1]]) }
     }
     if ($Description -match '^Verify existing (db|api|frontend) runtime container ownership$') {
         $service = $Matches[1]
         return [pscustomobject]@{
             ExitCode = 0
-            Output = @("$($global:FbFakeState.composeProject)|$service|PrivateServer|$($global:FbFakeState.instanceId)")
+            Output = @("$global:FbExpectedOwnershipProject|$service|PrivateServer|$global:FbExpectedOwnershipInstance")
+        }
+    }
+    if ($Description -match '^Read (db|api|frontend) reboot runtime evidence$') {
+        $service = $Matches[1]
+        $boot = [DateTimeOffset]::Parse([string]$env:FILINGBRIDGE_TEST_BOOT_ID, [Globalization.CultureInfo]::InvariantCulture)
+        return [pscustomobject]@{
+            ExitCode = 0
+            Output = @("$($global:FbFakeContainerIds[$service])|$($boot.AddMinutes($global:FbFakeRebootStartMinutes).ToUniversalTime().ToString('o'))")
         }
     }
     if ($Description -eq 'Inspect Private Server containers') {
@@ -214,7 +231,7 @@ $fakeInvoker = {
     if ($Description -eq "Verify EF migration history in the disposable database") {
         return [pscustomobject]@{ ExitCode = 0; Output = @("12") }
     }
-    if ($Description -match '^Read important-table fingerprints from ') {
+    if ($Description -match '^Read important-table fingerprints') {
         return [pscustomobject]@{ ExitCode = 0; Output = @('{"tables":[{"table":"accounting_periods","rowCount":2,"fingerprint":"11111111111111111111111111111111"},{"table":"audit_logs","rowCount":3,"fingerprint":"22222222222222222222222222222222"},{"table":"companies","rowCount":1,"fingerprint":"33333333333333333333333333333333"},{"table":"tenants","rowCount":1,"fingerprint":"44444444444444444444444444444444"},{"table":"user_accounts","rowCount":1,"fingerprint":"55555555555555555555555555555555"}]}') }
     }
     if ($Description -eq "Run physical-host Owner recovery") {
@@ -475,6 +492,7 @@ try {
     $global:FbOperatorCalls.Clear()
     Invoke-FilingBridgePrivateServer -Command recover-host -RepositoryRoot $repositoryRoot -StateDirectory $recoveredStateDirectory -BackupPath $complete[0].FullName -AgeIdentityFile $identityPath -RecoveryAuthenticationKeyFile $recoveryKeys[0].FullName -Confirmation ("RECOVER HOST " + $state.instanceId) -BuildLocal -NonInteractive -SkipPrerequisiteChecks -Port 35496 6>$null
     $recoveredState = ([IO.File]::ReadAllText((Join-Path $recoveredStateDirectory "server.json"), $testUtf8)) | ConvertFrom-Json
+    $global:FbFakeState = $recoveredState
     Assert-True ($recoveredState.status -eq "ready") "replacement-host recovery must finish in ready state only after health and fingerprint checks"
     Assert-True ($recoveredState.recoveredFromInstanceId -eq $state.instanceId) "replacement-host state must retain the source installation identity"
     Assert-True ($recoveredState.instanceId -ne $state.instanceId) "replacement host must use a new isolated installation and Compose identity"
@@ -507,16 +525,31 @@ try {
     } 'unsupported boot identity format' "legacy or changed boot identity formats must fail closed instead of faking a reboot"
     Remove-Item -LiteralPath $pendingReboot -Force
     Invoke-FilingBridgePrivateServer -Command reboot-check -Action prepare -RepositoryRoot $repositoryRoot -StateDirectory $recoveredStateDirectory 6>$null
+    $releaseBoundState = ([IO.File]::ReadAllText((Join-Path $recoveredStateDirectory "server.json"), $testUtf8)) | ConvertFrom-Json
+    $originalReleaseCommit = [string]$releaseBoundState.releaseCommitSha
+    $releaseBoundState.releaseCommitSha = "changed-after-prepare"
+    [IO.File]::WriteAllText((Join-Path $recoveredStateDirectory "server.json"), (($releaseBoundState | ConvertTo-Json -Depth 12) + [Environment]::NewLine), [Text.UTF8Encoding]::new($false))
+    Assert-Throws {
+        Invoke-FilingBridgePrivateServer -Command reboot-check -Action verify -RepositoryRoot $repositoryRoot -StateDirectory $recoveredStateDirectory 6>$null
+    } 'release or Compose identity changed' "reboot verification must stay bound to the prepared release and Compose identity"
+    $releaseBoundState.releaseCommitSha = $originalReleaseCommit
+    [IO.File]::WriteAllText((Join-Path $recoveredStateDirectory "server.json"), (($releaseBoundState | ConvertTo-Json -Depth 12) + [Environment]::NewLine), [Text.UTF8Encoding]::new($false))
     Assert-Throws {
         Invoke-FilingBridgePrivateServer -Command reboot-check -Action verify -RepositoryRoot $repositoryRoot -StateDirectory $recoveredStateDirectory 6>$null
     } 'has not rebooted' "reboot verification must reject a check completed in the same Windows boot"
     $env:FILINGBRIDGE_TEST_BOOT_ID = "2026-07-12T02:00:00.0000000Z"
+    $global:FbFakeRebootStartMinutes = 31
+    Assert-Throws {
+        Invoke-FilingBridgePrivateServer -Command reboot-check -Action verify -RepositoryRoot $repositoryRoot -StateDirectory $recoveredStateDirectory 6>$null
+    } 'automatically restarted within 30 minutes' "reboot verification must reject services started outside the automatic Docker startup window"
+    $global:FbFakeRebootStartMinutes = 5
     Invoke-FilingBridgePrivateServer -Command reboot-check -Action verify -RepositoryRoot $repositoryRoot -StateDirectory $recoveredStateDirectory 6>$null
     Assert-True (-not (Test-Path -LiteralPath $pendingReboot)) "successful reboot verification must consume the pending marker"
     $rebootReports = @(Get-ChildItem -LiteralPath (Join-Path $recoveredStateDirectory "acceptance") -Filter "reboot-check-*.json" -File)
     Assert-True ($rebootReports.Count -eq 1) "successful reboot verification must retain one machine-readable report"
     $rebootReport = ([IO.File]::ReadAllText($rebootReports[0].FullName, $testUtf8)) | ConvertFrom-Json
     Assert-True ($rebootReport.status -eq "passed" -and $rebootReport.importantTablesMatched -eq $true) "reboot evidence must prove service health and unchanged business-data fingerprints"
+    Assert-True ($rebootReport.acceptanceContract -eq "release-bound-auto-restart/v1" -and @($rebootReport.runtimeAfter).Count -eq 3) "reboot evidence must bind the release and retain automatic container-restart timing"
     Remove-Item Env:\FILINGBRIDGE_TEST_BOOT_ID -ErrorAction SilentlyContinue
 
     $failedRecoveryStateDirectory = Join-Path $testRoot "failed-recovered-host-state"
