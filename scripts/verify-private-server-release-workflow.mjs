@@ -93,6 +93,24 @@ if (prepareStart < 0 || publishStart < 0 || publishStart <= prepareStart) {
 } else {
   const prepareJob = workflow.slice(prepareStart, publishStart);
   const publishJob = workflow.slice(publishStart);
+  const prepareLines = prepareJob.split("\n");
+  const supplyChainVerifierInvocations = [];
+  for (let index = 0; index < prepareLines.length; index += 1) {
+    if (!prepareLines[index].includes("./scripts/verify-container-supply-chain-report.ps1")) continue;
+    const invocationLines = [prepareLines[index]];
+    while (invocationLines.at(-1).trimEnd().endsWith("`") && index + 1 < prepareLines.length) {
+      index += 1;
+      invocationLines.push(prepareLines[index]);
+    }
+    supplyChainVerifierInvocations.push(invocationLines.join("\n"));
+  }
+  if (supplyChainVerifierInvocations.length !== 1) {
+    failures.push("The preparation job must contain exactly one promoted supply-chain verifier invocation.");
+  } else if (!supplyChainVerifierInvocations[0].includes(
+    '-ReportPath (Join-Path $env:RUNNER_TEMP "private-server-release-prepare-verification.json")',
+  )) {
+    failures.push("Every preparation supply-chain verifier invocation must preserve the trusted CI verification artifact.");
+  }
   for (const [needle, message] of [
     ['"/repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml"', "The preparation job must resolve the canonical CI workflow object."],
     ['"$(jq -r \'.workflow_id\' <<<"$run_json")" == "$workflow_id"', "The preparation job must bind the run workflow ID to the canonical CI workflow object."],
