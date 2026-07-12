@@ -2813,12 +2813,12 @@ function Invoke-FbExportRecoveryKey {
 
 function Get-FbBootIdentity {
     if ($null -ne $script:PrivateServerCommandInvoker -and -not [string]::IsNullOrWhiteSpace($env:FILINGBRIDGE_TEST_BOOT_ID)) {
-        return [string]$env:FILINGBRIDGE_TEST_BOOT_ID
+        return "test-boot-" + (Get-FbSha256Text ([string]$env:FILINGBRIDGE_TEST_BOOT_ID)).Substring(0, 24)
     }
     if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) { throw "The reboot acceptance check is supported only on Windows." }
     $operatingSystem = Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction Stop
     $lastBoot = [DateTimeOffset]$operatingSystem.LastBootUpTime
-    return $lastBoot.ToUniversalTime().ToString("o")
+    return "windows-boot-" + $lastBoot.ToUniversalTime().Ticks.ToString([Globalization.CultureInfo]::InvariantCulture)
 }
 
 function Get-FbAcceptanceDirectory {
