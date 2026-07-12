@@ -3233,6 +3233,11 @@ public partial class AccountsWorkflowTests
         Assert.Contains("$baseUri.Scheme -eq \"http\" -and -not $AllowInsecureHttp", smokeScript);
         Assert.Contains("must use https", smokeScript, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("AllowInsecureHttp is only for local dry runs", smokeScript);
+        Assert.Contains("AllowInsecureHttp is restricted to an HTTP loopback URL", smokeScript);
+        Assert.Contains("AllowInsecureHttp cannot be combined with an HTTPS URL", smokeScript);
+        Assert.Contains("Import-LoopbackSecureCookies", smokeScript);
+        Assert.Contains("$BaseUri.IsLoopback", smokeScript);
+        Assert.Contains("inconsistent Secure attributes", smokeScript);
         Assert.Contains("Assert-SecurityHeader", smokeScript);
         Assert.Contains("Assert-ContentSecurityPolicy", smokeScript);
         Assert.Contains("Get-CspDirectives", smokeScript);

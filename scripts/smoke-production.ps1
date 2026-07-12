@@ -184,6 +184,50 @@ function Get-CsrfToken([Microsoft.PowerShell.Commands.WebRequestSession]$Session
     return $cookie.Value
 }
 
+function Import-LoopbackSecureCookies(
+    $Response,
+    [Microsoft.PowerShell.Commands.WebRequestSession]$Session,
+    [Uri]$BaseUri
+) {
+    if ($BaseUri.Scheme -ne "http" -or -not $BaseUri.IsLoopback) {
+        throw "Secure-cookie loopback import is restricted to an HTTP loopback URL."
+    }
+
+    $setCookies = @(Get-HeaderValues -Headers $Response.Headers -Name "Set-Cookie")
+    $secureUriBuilder = [UriBuilder]::new($BaseUri)
+    $secureUriBuilder.Scheme = "https"
+    $secureUri = $secureUriBuilder.Uri
+    $parsedCookies = [System.Net.CookieContainer]::new()
+    foreach ($header in $setCookies) {
+        try { $parsedCookies.SetCookies($secureUri, [string]$header) } catch {
+            throw "Loopback login returned malformed Set-Cookie evidence."
+        }
+    }
+    $requiredCookies = @("accounts_session", "accounts_csrf")
+    $cookiesByName = @{}
+    foreach ($cookieName in $requiredCookies) {
+        $parsed = $parsedCookies.GetCookies($secureUri)[$cookieName]
+        if ($null -eq $parsed -or [string]::IsNullOrWhiteSpace($parsed.Value)) {
+            throw "Loopback login did not return cookie '$cookieName'."
+        }
+        $cookiesByName[$cookieName] = $parsed
+    }
+    $secureCount = @($cookiesByName.Values | Where-Object Secure).Count
+    if ($secureCount -eq 0) {
+        return
+    }
+    if ($secureCount -ne $requiredCookies.Count) {
+        throw "Loopback login cookies returned inconsistent Secure attributes."
+    }
+    foreach ($cookieName in $requiredCookies) {
+        $parsed = $cookiesByName[$cookieName]
+        $cookie = [System.Net.Cookie]::new($cookieName, $parsed.Value, "/")
+        $cookie.HttpOnly = $cookieName -eq "accounts_session"
+        $cookie.Secure = $false
+        $Session.Cookies.Add($BaseUri, $cookie)
+    }
+}
+
 function Invoke-SmokeDownload(
     [string]$Url,
     [string]$OutputPath,
@@ -645,6 +689,12 @@ if ($baseUri.Scheme -notin @("http", "https")) {
 if ($baseUri.Scheme -eq "http" -and -not $AllowInsecureHttp) {
     throw "ACCOUNTS_FRONTEND_URL or -BaseUrl must use https. AllowInsecureHttp is only for local dry runs against a non-production host."
 }
+if ($baseUri.Scheme -eq "http" -and $AllowInsecureHttp -and -not $baseUri.IsLoopback) {
+    throw "AllowInsecureHttp is restricted to an HTTP loopback URL."
+}
+if ($baseUri.Scheme -eq "https" -and $AllowInsecureHttp) {
+    throw "AllowInsecureHttp cannot be combined with an HTTPS URL."
+}
 
 $base = $baseUri.AbsoluteUri.TrimEnd("/")
 $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
@@ -792,6 +842,8 @@ if (-not $AllowInsecureHttp) {
     Assert-SecurityHeader -Response $loginResponse -Name "Strict-Transport-Security" -ExpectedText "max-age=31536000"
     Assert-SetCookieAttribute -Response $loginResponse -CookieName "accounts_session" -Attribute "Secure"
     Assert-SetCookieAttribute -Response $loginResponse -CookieName "accounts_csrf" -Attribute "Secure"
+} else {
+    Import-LoopbackSecureCookies -Response $loginResponse -Session $session -BaseUri $baseUri
 }
 
 $csrfToken = Get-CsrfToken -Session $session -BaseUri $baseUri
@@ -845,6 +897,9 @@ if ($passwordRotationRequired -or -not [string]::IsNullOrWhiteSpace($NewPassword
     }
     if ([int]$passwordResponse.StatusCode -ne 200) {
         throw "Owner password rotation did not complete successfully. HTTP status: $($passwordResponse.StatusCode)."
+    }
+    if ($AllowInsecureHttp) {
+        Import-LoopbackSecureCookies -Response $passwordResponse -Session $session -BaseUri $baseUri
     }
     $currentUser = $passwordResponse.Content | ConvertFrom-Json
     if ([bool]$currentUser.mustChangePassword) {
