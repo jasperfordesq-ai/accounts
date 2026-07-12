@@ -26,7 +26,8 @@ host. The following coding work closes the previously missing implementation pat
 - forced update failure is regression-tested through writer shutdown, retained verified backup,
   explicit `updateFailed`, authenticated restore, and return to `ready`; and
 - the compiled bundle retains `scripts/smoke-production.ps1` for an authenticated Owner/MFA,
-  readiness, CSRF/logout and optional PDF/iXBRL journey.
+  first-login password rotation, readiness, CSRF/logout and optional PDF/iXBRL journey, with a
+  machine-readable `owner-workflow-report.json` that contains no password or TOTP secret.
 
 ## Rule for awarding 1,000/1,000
 

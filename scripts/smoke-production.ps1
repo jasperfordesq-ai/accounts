@@ -3,6 +3,7 @@ param(
     [string]$TenantSlug = $env:SMOKE_TENANT_SLUG,
     [string]$Email = $env:SMOKE_LOGIN_EMAIL,
     [string]$Password = $env:SMOKE_LOGIN_PASSWORD,
+    [string]$NewPassword = $env:SMOKE_NEW_PASSWORD,
     [string]$TotpSecret = $env:SMOKE_TOTP_SECRET,
     [int]$CompanyId = 0,
     [int]$PeriodId = 0,
@@ -10,6 +11,8 @@ param(
     [switch]$CheckMonitoringErrorRouting,
     [switch]$AllowEphemeralMfaEnrollment,
     [string]$EphemeralMfaHandoffPath = $env:SMOKE_EPHEMERAL_MFA_HANDOFF_PATH,
+    [switch]$AllowRetainedMfaEnrollment,
+    [string]$RetainedMfaHandoffPath = $env:SMOKE_RETAINED_MFA_HANDOFF_PATH,
     [string]$OutputDirectory = (Join-Path ([System.IO.Path]::GetTempPath()) "accounts-smoke"),
     [int]$TimeoutSeconds = 30,
     [int]$DownloadTimeoutSeconds = 120,
@@ -237,6 +240,12 @@ if ($DownloadTimeoutSeconds -le 0) {
 if ($CheckDownloads -and ($CompanyId -le 0 -or $PeriodId -le 0)) {
     throw "-CheckDownloads requires -CompanyId and -PeriodId."
 }
+if ($AllowEphemeralMfaEnrollment -and $AllowRetainedMfaEnrollment) {
+    throw "Ephemeral and retained MFA enrollment modes cannot be combined."
+}
+if ($AllowRetainedMfaEnrollment -and [string]::IsNullOrWhiteSpace($RetainedMfaHandoffPath)) {
+    throw "-AllowRetainedMfaEnrollment requires -RetainedMfaHandoffPath or SMOKE_RETAINED_MFA_HANDOFF_PATH."
+}
 
 function ConvertFrom-Base32([string]$Value) {
     $alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
@@ -389,6 +398,122 @@ function Write-EphemeralMfaHandoff([string]$Path, [string]$Secret, [int64]$LastA
     }
 }
 
+function Write-OwnerWorkflowReport([string]$Path, $Report) {
+    $resolved = [IO.Path]::GetFullPath($Path)
+    $parent = Split-Path -Parent $resolved
+    if (-not (Test-Path -LiteralPath $parent -PathType Container)) {
+        New-Item -ItemType Directory -Path $parent -Force | Out-Null
+    }
+    if (Test-Path -LiteralPath $resolved) {
+        throw "Owner workflow report already exists at $resolved; no evidence was replaced."
+    }
+    $json = ($Report | ConvertTo-Json -Depth 8) + [Environment]::NewLine
+    $bytes = [Text.UTF8Encoding]::new($false).GetBytes($json)
+    $stream = [IO.File]::Open($resolved, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+    try {
+        $stream.Write($bytes, 0, $bytes.Length)
+        $stream.Flush($true)
+    } finally {
+        $stream.Dispose()
+    }
+    try {
+        if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) {
+            $acl = New-Object Security.AccessControl.FileSecurity
+            $acl.SetAccessRuleProtection($true, $false)
+            $identity = [Security.Principal.WindowsIdentity]::GetCurrent().User
+            $rule = New-Object Security.AccessControl.FileSystemAccessRule(
+                $identity,
+                [Security.AccessControl.FileSystemRights]::FullControl,
+                [Security.AccessControl.AccessControlType]::Allow)
+            $acl.SetOwner($identity)
+            $acl.SetAccessRule($rule)
+            [IO.File]::SetAccessControl($resolved, $acl)
+        } else {
+            [IO.File]::SetUnixFileMode($resolved, [IO.UnixFileMode]::UserRead -bor [IO.UnixFileMode]::UserWrite)
+        }
+    } catch {
+        Remove-Item -LiteralPath $resolved -Force -ErrorAction SilentlyContinue
+        throw
+    }
+    return $resolved
+}
+
+function Write-RetainedMfaHandoff([string]$Path, [string]$Secret, [string[]]$RecoveryCodes, [int64]$LastAcceptedCounter) {
+    if (-not $AllowRetainedMfaEnrollment) {
+        throw "A retained MFA handoff requires -AllowRetainedMfaEnrollment."
+    }
+    if ([string]::IsNullOrWhiteSpace($Secret) -or $Secret -cnotmatch '^[A-Z2-7]{16,128}$') {
+        throw "The retained MFA enrollment secret is invalid."
+    }
+    $codes = @($RecoveryCodes | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
+    if ($codes.Count -lt 8 -or @($codes | Select-Object -Unique).Count -ne $codes.Count) {
+        throw "Retained MFA enrollment did not return the required unique recovery codes."
+    }
+    $resolved = [IO.Path]::GetFullPath($Path)
+    $parent = Split-Path -Parent $resolved
+    if (Test-Path -LiteralPath $resolved) { throw "Retained MFA handoff already exists at $resolved; no secret was replaced." }
+    if (Test-Path -LiteralPath $parent) {
+        throw "Retained MFA handoff requires a new dedicated parent directory so its ACL can be established before any secret is written: $parent"
+    }
+    $fullParent = [IO.Path]::GetFullPath($parent)
+    $root = [IO.Path]::GetPathRoot($fullParent)
+    $current = $root
+    foreach ($segment in $fullParent.Substring($root.Length).Split([char[]]@('\', '/'), [StringSplitOptions]::RemoveEmptyEntries)) {
+        $current = Join-Path $current $segment
+        if (-not (Test-Path -LiteralPath $current)) { continue }
+        $item = Get-Item -LiteralPath $current -Force
+        if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+            throw "Retained MFA handoff must not traverse a filesystem link or junction: $current"
+        }
+    }
+    New-Item -ItemType Directory -Path $parent | Out-Null
+    try {
+        if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) {
+            $directoryAcl = New-Object Security.AccessControl.DirectorySecurity
+            $directoryAcl.SetAccessRuleProtection($true, $false)
+            $identity = [Security.Principal.WindowsIdentity]::GetCurrent().User
+            $directoryRule = New-Object Security.AccessControl.FileSystemAccessRule(
+                $identity,
+                [Security.AccessControl.FileSystemRights]::FullControl,
+                [Security.AccessControl.InheritanceFlags]'ContainerInherit, ObjectInherit',
+                [Security.AccessControl.PropagationFlags]::None,
+                [Security.AccessControl.AccessControlType]::Allow)
+            $directoryAcl.SetOwner($identity)
+            $directoryAcl.SetAccessRule($directoryRule)
+            [IO.Directory]::SetAccessControl($parent, $directoryAcl)
+        } else {
+            [IO.File]::SetUnixFileMode($parent, [IO.UnixFileMode]::UserRead -bor [IO.UnixFileMode]::UserWrite -bor [IO.UnixFileMode]::UserExecute)
+        }
+        $payload = [ordered]@{
+            schemaVersion = "filingbridge.private-server.owner-mfa-handoff/v1"
+            createdAtUtc = [DateTimeOffset]::UtcNow.ToString("o")
+            secret = $Secret
+            recoveryCodes = $codes
+            lastAcceptedCounter = $LastAcceptedCounter
+        }
+        $json = ($payload | ConvertTo-Json -Depth 4) + [Environment]::NewLine
+        $bytes = [Text.UTF8Encoding]::new($false).GetBytes($json)
+        try {
+            $stream = [IO.File]::Open($resolved, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+            try { $stream.Write($bytes, 0, $bytes.Length); $stream.Flush($true) } finally { $stream.Dispose() }
+        } finally {
+            [Array]::Clear($bytes, 0, $bytes.Length)
+            $json = $null
+            $payload = $null
+        }
+        if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
+            [IO.File]::SetUnixFileMode($resolved, [IO.UnixFileMode]::UserRead -bor [IO.UnixFileMode]::UserWrite)
+        }
+        return $resolved
+    } catch {
+        if (Test-Path -LiteralPath $resolved) { Remove-Item -LiteralPath $resolved -Force -ErrorAction SilentlyContinue }
+        if ((Test-Path -LiteralPath $parent -PathType Container) -and @(Get-ChildItem -LiteralPath $parent -Force).Count -eq 0) {
+            Remove-Item -LiteralPath $parent -Force -ErrorAction SilentlyContinue
+        }
+        throw
+    }
+}
+
 try {
     $baseUri = [Uri]$BaseUrl
 } catch {
@@ -406,6 +531,11 @@ $base = $baseUri.AbsoluteUri.TrimEnd("/")
 $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
 $ephemeralEnrollmentSecret = $null
 $acceptedTotpCounter = $null
+$mfaEnrolledDuringCheck = $false
+$mfaHandoffRetained = $false
+$retainedEnrollmentSecret = $null
+$passwordRotationRequired = $false
+$passwordRotated = $false
 if ($AllowEphemeralMfaEnrollment -and [string]::IsNullOrWhiteSpace($EphemeralMfaHandoffPath) -and -not [string]::IsNullOrWhiteSpace($env:RUNNER_TEMP)) {
     $EphemeralMfaHandoffPath = Join-Path $env:RUNNER_TEMP "accounts-visual-auth/totp-handoff.json"
 }
@@ -469,14 +599,20 @@ if ([int]$loginResponse.StatusCode -eq 202) {
         throw "MFA login response did not include a challenge token."
     }
     $effectiveTotpSecret = if ([bool]$challenge.requiresEnrollment) {
-        if (-not $AllowEphemeralMfaEnrollment) {
-            throw "The smoke account requires MFA enrollment. Enrol it out of band and provide SMOKE_TOTP_SECRET; -AllowEphemeralMfaEnrollment is only for a disposable CI bootstrap account."
+        if (-not $AllowEphemeralMfaEnrollment -and -not $AllowRetainedMfaEnrollment) {
+            throw "The smoke account requires MFA enrollment. Enrol it out of band, or explicitly use the retained/ephemeral enrollment handoff appropriate to this installation."
         }
         if ([string]::IsNullOrWhiteSpace([string]$challenge.enrollmentSecret)) {
             throw "MFA enrollment response did not include an enrollment secret."
         }
-        $ephemeralEnrollmentSecret = [string]$challenge.enrollmentSecret
-        $ephemeralEnrollmentSecret
+        $mfaEnrolledDuringCheck = $true
+        if ($AllowRetainedMfaEnrollment) {
+            $retainedEnrollmentSecret = [string]$challenge.enrollmentSecret
+            $retainedEnrollmentSecret
+        } else {
+            $ephemeralEnrollmentSecret = [string]$challenge.enrollmentSecret
+            $ephemeralEnrollmentSecret
+        }
     } else {
         $TotpSecret
     }
@@ -500,6 +636,18 @@ if ([int]$loginResponse.StatusCode -eq 202) {
         -UseBasicParsing `
         -WebSession $session `
         -TimeoutSec $TimeoutSeconds
+    if (-not [string]::IsNullOrWhiteSpace($retainedEnrollmentSecret)) {
+        $completion = $loginResponse.Content | ConvertFrom-Json
+        $retainedPath = Write-RetainedMfaHandoff `
+            -Path $RetainedMfaHandoffPath `
+            -Secret $retainedEnrollmentSecret `
+            -RecoveryCodes @($completion.recoveryCodes) `
+            -LastAcceptedCounter $acceptedTotpCounter
+        $retainedEnrollmentSecret = $null
+        $completion = $null
+        $mfaHandoffRetained = $true
+        Write-Host "Retained Owner MFA handoff written: $retainedPath"
+    }
     $mfaBody = $null
     $effectiveTotpSecret = $null
     $challenge = $null
@@ -534,6 +682,50 @@ if ([string]::IsNullOrWhiteSpace($currentUser.email)) {
 if ($currentUser.mfaVerified -ne $true -or [string]$currentUser.mfaMethod -cne "totp") {
     throw "Authenticated /api/auth/me response did not prove a fresh TOTP MFA session."
 }
+
+$passwordRotationRequired = [bool]$currentUser.mustChangePassword
+if ($passwordRotationRequired -or -not [string]::IsNullOrWhiteSpace($NewPassword)) {
+    if ([string]::IsNullOrWhiteSpace($NewPassword)) {
+        throw "The authenticated Owner must rotate the temporary password. Set SMOKE_NEW_PASSWORD or -NewPassword."
+    }
+    if ($NewPassword -ceq $Password) {
+        throw "The new Owner password must differ from the temporary/current password."
+    }
+    Write-Host "Rotating the Owner password through the CSRF-protected frontend proxy..."
+    $passwordBody = @{
+        currentPassword = $Password
+        newPassword = $NewPassword
+    } | ConvertTo-Json
+    try {
+        $passwordResponse = Invoke-WebRequest `
+            -Uri "$base/api/auth/password" `
+            -Method Post `
+            -ContentType "application/json" `
+            -Headers @{ "X-CSRF-Token" = $csrfToken } `
+            -Body $passwordBody `
+            -UseBasicParsing `
+            -WebSession $session `
+            -TimeoutSec $TimeoutSeconds
+    } finally {
+        $passwordBody = $null
+        $Password = $null
+        $NewPassword = $null
+    }
+    if ([int]$passwordResponse.StatusCode -ne 200) {
+        throw "Owner password rotation did not complete successfully. HTTP status: $($passwordResponse.StatusCode)."
+    }
+    $currentUser = $passwordResponse.Content | ConvertFrom-Json
+    if ([bool]$currentUser.mustChangePassword) {
+        throw "Owner password rotation returned an account that still requires a password change."
+    }
+    $passwordRotated = $true
+    $csrfToken = Get-CsrfToken -Session $session -BaseUri $baseUri
+}
+if ([bool]$currentUser.mustChangePassword) {
+    throw "Authenticated Owner workflow cannot continue while a mandatory password change remains outstanding."
+}
+$Password = $null
+$NewPassword = $null
 
 Write-Host "Checking company list through frontend proxy..."
 Invoke-RestMethod `
@@ -705,6 +897,42 @@ if (-not [string]::IsNullOrWhiteSpace($ephemeralEnrollmentSecret) -and $null -ne
         -LastAcceptedCounter $acceptedTotpCounter
     $ephemeralEnrollmentSecret = $null
     $acceptedTotpCounter = $null
+    $mfaHandoffRetained = $true
 }
+
+$downloadEvidence = [ordered]@{ checked = [bool]$CheckDownloads }
+if ($CheckDownloads) {
+    $downloadEvidence.accountsPackage = [ordered]@{
+        fileName = [IO.Path]::GetFileName($accountsPackage)
+        byteSize = (Get-Item -LiteralPath $accountsPackage -Force).Length
+        sha256 = (Get-FileHash -LiteralPath $accountsPackage -Algorithm SHA256).Hash.ToLowerInvariant()
+    }
+    $downloadEvidence.ixbrlPackage = [ordered]@{
+        fileName = [IO.Path]::GetFileName($ixbrlPackage)
+        byteSize = (Get-Item -LiteralPath $ixbrlPackage -Force).Length
+        sha256 = (Get-FileHash -LiteralPath $ixbrlPackage -Algorithm SHA256).Hash.ToLowerInvariant()
+    }
+}
+$ownerWorkflowReportPath = Write-OwnerWorkflowReport `
+    -Path (Join-Path $OutputDirectory "owner-workflow-report.json") `
+    -Report ([ordered]@{
+        schemaVersion = "filingbridge.private-server.owner-workflow/v1"
+        status = "passed"
+        checkedAtUtc = [DateTimeOffset]::UtcNow.ToString("o")
+        baseUrl = $base
+        tenantSlug = $TenantSlug.Trim().ToLowerInvariant()
+        authenticatedSessionPassed = $true
+        passwordRotationRequired = $passwordRotationRequired
+        passwordRotated = $passwordRotated
+        mfaVerified = $true
+        mfaMethod = "totp"
+        mfaEnrolledDuringCheck = $mfaEnrolledDuringCheck
+        mfaHandoffRetained = $mfaHandoffRetained
+        companyListPassed = $true
+        downloads = $downloadEvidence
+        csrfLogoutPassed = $true
+        postLogoutUnauthorized = $true
+    })
+Write-Host "Owner workflow evidence written: $ownerWorkflowReportPath"
 
 Write-Host "Production smoke check completed."

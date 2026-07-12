@@ -188,6 +188,22 @@ test("smoke writes the disposable MFA handoff only after authenticated checks an
   assert.match(source, /mfaMethod[^\r\n]*totp/);
 });
 
+test("smoke rotates the first-login Owner password and retains secret-free evidence", async () => {
+  const source = await readFile(new URL("../../scripts/smoke-production.ps1", import.meta.url), "utf8");
+  const rotationIndex = source.indexOf("Rotating the Owner password");
+  const companyIndex = source.indexOf("Checking company list through frontend proxy");
+  const reportStart = source.indexOf('schemaVersion = "filingbridge.private-server.owner-workflow/v1"');
+  const reportEnd = source.indexOf('Write-Host "Owner workflow evidence written', reportStart);
+  assert.ok(rotationIndex >= 0 && rotationIndex < companyIndex, "password rotation must precede accounting-data access");
+  assert.match(source, /SMOKE_NEW_PASSWORD/);
+  assert.match(source, /X-CSRF-Token/);
+  assert.ok(reportStart >= 0 && reportEnd > reportStart, "Owner evidence report must be retained");
+  const reportSource = source.slice(reportStart, reportEnd);
+  assert.match(reportSource, /passwordRotated = \$passwordRotated/);
+  assert.match(reportSource, /mfaVerified = \$true/);
+  assert.doesNotMatch(reportSource, /NewPassword|SMOKE_NEW_PASSWORD|TotpSecret|enrollmentSecret/);
+});
+
 test("visual smoke company setup retains idempotent mutations and the evidence-backed ARD contract", async () => {
   const source = await readFile(new URL("../scripts/visual-smoke.mjs", import.meta.url), "utf8");
   const companyKey = visualFixtureIdempotencyKey("company", "11111111-1111-4111-8111-111111111111");

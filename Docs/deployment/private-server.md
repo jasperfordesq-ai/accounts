@@ -378,6 +378,15 @@ PostgreSQL have no host ports, and the five authenticated business-data fingerpr
 It does not log in as a human user.
 
 For an authenticated Owner journey, the compiled release includes `scripts\smoke-production.ps1`.
+For the first login, set `SMOKE_NEW_PASSWORD` as well as the temporary
+`SMOKE_LOGIN_PASSWORD`. The smoke rotates the password through the CSRF-protected frontend proxy
+before it accesses accounting data. A successful run writes `owner-workflow-report.json` with
+password-rotation, fresh MFA, session/logout and optional download-hash evidence; it never writes
+either password or the TOTP secret into that report.
+If the Owner has not enrolled MFA, use `-AllowRetainedMfaEnrollment` with a handoff path whose
+dedicated parent directory does not yet exist. The smoke creates that directory with a current-user-
+only ACL and retains the TOTP seed plus one-time recovery codes there immediately after successful
+enrollment. Move both into the Owner's password manager, then securely delete the handoff directory.
 Set `SMOKE_TENANT_SLUG`, `SMOKE_LOGIN_EMAIL`, `SMOKE_LOGIN_PASSWORD`, and—after enrolment—
 `SMOKE_TOTP_SECRET`, then run it against `http://localhost:3500` with `-AllowInsecureHttp`. Add
 `-CompanyId`, `-PeriodId`, and `-CheckDownloads` to exercise PDF and iXBRL downloads for a safe test
