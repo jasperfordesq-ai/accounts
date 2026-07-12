@@ -442,12 +442,9 @@ function Write-OwnerWorkflowReport([string]$Path, $Report) {
     return $resolved
 }
 
-function Initialize-RetainedMfaHandoff([string]$Path, [string]$Secret, [int64]$LastAcceptedCounter) {
+function Reserve-RetainedMfaHandoff([string]$Path) {
     if (-not $AllowRetainedMfaEnrollment) {
         throw "A retained MFA handoff requires -AllowRetainedMfaEnrollment."
-    }
-    if ([string]::IsNullOrWhiteSpace($Secret) -or $Secret -cnotmatch '^[A-Z2-7]{16,128}$') {
-        throw "The retained MFA enrollment secret is invalid."
     }
     $resolved = [IO.Path]::GetFullPath($Path)
     $parent = Split-Path -Parent $resolved
@@ -487,6 +484,30 @@ function Initialize-RetainedMfaHandoff([string]$Path, [string]$Secret, [int64]$L
             $directoryAcl.SetAccessRule($directoryRule)
             [IO.Directory]::SetAccessControl($parent, $directoryAcl)
         }
+        return $resolved
+    } catch {
+        if ((Test-Path -LiteralPath $parent -PathType Container) -and @(Get-ChildItem -LiteralPath $parent -Force).Count -eq 0) {
+            Remove-Item -LiteralPath $parent -Force -ErrorAction SilentlyContinue
+        }
+        throw
+    }
+}
+
+function Initialize-RetainedMfaHandoff([string]$Path, [string]$Secret, [int64]$LastAcceptedCounter) {
+    if (-not $AllowRetainedMfaEnrollment) {
+        throw "A retained MFA handoff requires -AllowRetainedMfaEnrollment."
+    }
+    if ([string]::IsNullOrWhiteSpace($Secret) -or $Secret -cnotmatch '^[A-Z2-7]{16,128}$') {
+        throw "The retained MFA enrollment secret is invalid."
+    }
+    $resolved = [IO.Path]::GetFullPath($Path)
+    $parent = Split-Path -Parent $resolved
+    if (-not (Test-Path -LiteralPath $parent -PathType Container) -or (Get-Item -LiteralPath $parent -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) {
+        throw "The preflighted retained MFA handoff directory is missing or unsafe: $parent"
+    }
+    if (Test-Path -LiteralPath $resolved) { throw "Retained MFA handoff already exists at $resolved; no secret was replaced." }
+    if (@(Get-ChildItem -LiteralPath $parent -Force).Count -ne 0) { throw "The preflighted retained MFA handoff directory is no longer empty." }
+    try {
         $payload = [ordered]@{
             schemaVersion = "filingbridge.private-server.owner-mfa-handoff/v1"
             status = "pending"
@@ -518,9 +539,6 @@ function Initialize-RetainedMfaHandoff([string]$Path, [string]$Secret, [int64]$L
         return $resolved
     } catch {
         if (Test-Path -LiteralPath $resolved) { Remove-Item -LiteralPath $resolved -Force -ErrorAction SilentlyContinue }
-        if ((Test-Path -LiteralPath $parent -PathType Container) -and @(Get-ChildItem -LiteralPath $parent -Force).Count -eq 0) {
-            Remove-Item -LiteralPath $parent -Force -ErrorAction SilentlyContinue
-        }
         throw
     }
 }
@@ -593,12 +611,16 @@ $ephemeralEnrollmentSecret = $null
 $acceptedTotpCounter = $null
 $mfaEnrolledDuringCheck = $false
 $mfaHandoffRetained = $false
+$ephemeralMfaHandoffWritten = $false
 $retainedEnrollmentSecret = $null
 $passwordRotationRequired = $false
 $passwordRotated = $false
 if ($AllowEphemeralMfaEnrollment -and [string]::IsNullOrWhiteSpace($EphemeralMfaHandoffPath) -and -not [string]::IsNullOrWhiteSpace($env:RUNNER_TEMP)) {
     $EphemeralMfaHandoffPath = Join-Path $env:RUNNER_TEMP "accounts-visual-auth/totp-handoff.json"
 }
+$retainedMfaReservedPath = if ($AllowRetainedMfaEnrollment) {
+    Reserve-RetainedMfaHandoff $RetainedMfaHandoffPath
+} else { "" }
 
 Write-Host "Checking frontend and upstream readiness..."
 $readyResponse = Invoke-WebRequest `
@@ -685,7 +707,7 @@ if ([int]$loginResponse.StatusCode -eq 202) {
     $acceptedTotpCounter = Get-TotpCounter $totpAt
     if (-not [string]::IsNullOrWhiteSpace($retainedEnrollmentSecret)) {
         $retainedPath = Initialize-RetainedMfaHandoff `
-            -Path $RetainedMfaHandoffPath `
+            -Path $retainedMfaReservedPath `
             -Secret $retainedEnrollmentSecret `
             -LastAcceptedCounter $acceptedTotpCounter
         Write-Host "Protected pending Owner MFA seed written before enrollment completion: $retainedPath"
@@ -706,7 +728,7 @@ if ([int]$loginResponse.StatusCode -eq 202) {
     if (-not [string]::IsNullOrWhiteSpace($retainedEnrollmentSecret)) {
         $completion = $loginResponse.Content | ConvertFrom-Json
         $retainedPath = Complete-RetainedMfaHandoff `
-            -Path $RetainedMfaHandoffPath `
+            -Path $retainedMfaReservedPath `
             -RecoveryCodes @($completion.recoveryCodes)
         $retainedEnrollmentSecret = $null
         $completion = $null
@@ -962,7 +984,7 @@ if (-not [string]::IsNullOrWhiteSpace($ephemeralEnrollmentSecret) -and $null -ne
         -LastAcceptedCounter $acceptedTotpCounter
     $ephemeralEnrollmentSecret = $null
     $acceptedTotpCounter = $null
-    $mfaHandoffRetained = $true
+    $ephemeralMfaHandoffWritten = $true
 }
 
 $downloadEvidence = [ordered]@{ checked = [bool]$CheckDownloads }
@@ -993,6 +1015,7 @@ $ownerWorkflowReportPath = Write-OwnerWorkflowReport `
         mfaMethod = "totp"
         mfaEnrolledDuringCheck = $mfaEnrolledDuringCheck
         mfaHandoffRetained = $mfaHandoffRetained
+        ephemeralMfaHandoffWritten = $ephemeralMfaHandoffWritten
         companyListPassed = $true
         downloads = $downloadEvidence
         csrfLogoutPassed = $true

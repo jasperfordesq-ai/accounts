@@ -3141,9 +3141,14 @@ public partial class AccountsWorkflowTests
         Assert.Contains("[switch]$AllowRetainedMfaEnrollment", smokeScript);
         Assert.Contains("filingbridge.private-server.owner-mfa-handoff/v1", smokeScript);
         Assert.Contains("Protected pending Owner MFA seed written before enrollment completion", smokeScript);
+        Assert.Contains("Reserve-RetainedMfaHandoff", smokeScript);
         Assert.Contains("Complete-RetainedMfaHandoff", smokeScript);
         Assert.Contains("Retained MFA handoff requires a new dedicated parent directory", smokeScript);
         Assert.Contains("no login or account mutation was attempted", smokeScript);
+        var retainedPreflightIndex = smokeScript.LastIndexOf("Reserve-RetainedMfaHandoff $RetainedMfaHandoffPath", StringComparison.Ordinal);
+        var loginIndex = smokeScript.IndexOf("Signing in through frontend proxy", StringComparison.Ordinal);
+        Assert.True(retainedPreflightIndex >= 0 && retainedPreflightIndex < loginIndex,
+            "Retained MFA path and ACL preflight must happen before login or enrollment mutation.");
         var mfaChallengeIndex = smokeScript.IndexOf("if ([int]$loginResponse.StatusCode -eq 202)", StringComparison.Ordinal);
         var cookieAssertionIndex = smokeScript.IndexOf("Assert-SetCookieAttribute -Response $loginResponse", StringComparison.Ordinal);
         var authenticatedSessionIndex = smokeScript.IndexOf("Checking authenticated session", StringComparison.Ordinal);
