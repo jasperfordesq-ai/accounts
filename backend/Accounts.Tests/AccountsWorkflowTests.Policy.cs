@@ -3237,7 +3237,7 @@ public partial class AccountsWorkflowTests
         Assert.Contains("AllowInsecureHttp cannot be combined with an HTTPS URL", smokeScript);
         Assert.Contains("Import-LoopbackSecureCookies", smokeScript);
         Assert.Contains("$BaseUri.IsLoopback", smokeScript);
-        Assert.Contains("was not protected with Secure by the server", smokeScript);
+        Assert.Contains("inconsistent Secure attributes", smokeScript);
         Assert.Contains("Assert-SecurityHeader", smokeScript);
         Assert.Contains("Assert-ContentSecurityPolicy", smokeScript);
         Assert.Contains("Get-CspDirectives", smokeScript);

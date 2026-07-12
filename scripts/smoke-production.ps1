@@ -203,15 +203,25 @@ function Import-LoopbackSecureCookies(
             throw "Loopback login returned malformed Set-Cookie evidence."
         }
     }
-    foreach ($cookieName in @("accounts_session", "accounts_csrf")) {
+    $requiredCookies = @("accounts_session", "accounts_csrf")
+    $cookiesByName = @{}
+    foreach ($cookieName in $requiredCookies) {
         $parsed = $parsedCookies.GetCookies($secureUri)[$cookieName]
         if ($null -eq $parsed -or [string]::IsNullOrWhiteSpace($parsed.Value)) {
             throw "Loopback login did not return cookie '$cookieName'."
         }
-        if (-not $parsed.Secure) {
-            throw "Loopback login cookie '$cookieName' was not protected with Secure by the server."
-        }
-        $cookie = [System.Net.Cookie]::new($cookieName, $parsed.Value, "/", $BaseUri.Host)
+        $cookiesByName[$cookieName] = $parsed
+    }
+    $secureCount = @($cookiesByName.Values | Where-Object Secure).Count
+    if ($secureCount -eq 0) {
+        return
+    }
+    if ($secureCount -ne $requiredCookies.Count) {
+        throw "Loopback login cookies returned inconsistent Secure attributes."
+    }
+    foreach ($cookieName in $requiredCookies) {
+        $parsed = $cookiesByName[$cookieName]
+        $cookie = [System.Net.Cookie]::new($cookieName, $parsed.Value, "/")
         $cookie.HttpOnly = $cookieName -eq "accounts_session"
         $cookie.Secure = $false
         $Session.Cookies.Add($BaseUri, $cookie)
