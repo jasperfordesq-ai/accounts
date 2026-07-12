@@ -294,6 +294,9 @@ constraint. No Tailscale route or public listener was enabled.
 The following broader deployment or statutory claims remain open; items now accepted for the
 loopback-only local score are described in the preview.4 update above:
 
+- rerunning setup on a retained real-host installation without replacing its database or Owner
+  credentials;
+- two non-Owner users completing live role-appropriate journeys before multi-user acceptance;
 - live Tailscale Serve HTTPS from a second device and least-privilege tailnet policy;
 - Windows sign-in, Docker Desktop, application, and Serve recovery after reboot;
 - full routine workflow without ordinary internet connectivity;
