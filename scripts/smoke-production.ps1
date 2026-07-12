@@ -682,6 +682,9 @@ if ($baseUri.Scheme -eq "http" -and -not $AllowInsecureHttp) {
 if ($baseUri.Scheme -eq "http" -and $AllowInsecureHttp -and -not $baseUri.IsLoopback) {
     throw "AllowInsecureHttp is restricted to an HTTP loopback URL."
 }
+if ($baseUri.Scheme -eq "https" -and $AllowInsecureHttp) {
+    throw "AllowInsecureHttp cannot be combined with an HTTPS URL."
+}
 
 $base = $baseUri.AbsoluteUri.TrimEnd("/")
 $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
