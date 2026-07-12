@@ -39,13 +39,20 @@ $reportWriterAst = $ast.FindAll({
 }, $true) | Select-Object -First 1
 Assert-True ($null -ne $reportWriterAst) "smoke-production.ps1 must define Write-OwnerWorkflowReport."
 . ([scriptblock]::Create($reportWriterAst.Extent.Text))
-$retainedWriterAst = $ast.FindAll({
+$retainedInitializerAst = $ast.FindAll({
     param($node)
     $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
-        $node.Name -ceq "Write-RetainedMfaHandoff"
+        $node.Name -ceq "Initialize-RetainedMfaHandoff"
 }, $true) | Select-Object -First 1
-Assert-True ($null -ne $retainedWriterAst) "smoke-production.ps1 must define Write-RetainedMfaHandoff."
-. ([scriptblock]::Create($retainedWriterAst.Extent.Text))
+Assert-True ($null -ne $retainedInitializerAst) "smoke-production.ps1 must define Initialize-RetainedMfaHandoff."
+. ([scriptblock]::Create($retainedInitializerAst.Extent.Text))
+$retainedCompleterAst = $ast.FindAll({
+    param($node)
+    $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
+        $node.Name -ceq "Complete-RetainedMfaHandoff"
+}, $true) | Select-Object -First 1
+Assert-True ($null -ne $retainedCompleterAst) "smoke-production.ps1 must define Complete-RetainedMfaHandoff."
+. ([scriptblock]::Create($retainedCompleterAst.Extent.Text))
 
 $originalRunnerTemp = $env:RUNNER_TEMP
 $temporaryRoot = Join-Path ([IO.Path]::GetTempPath()) ("accounts-smoke-mfa-writer-" + [Guid]::NewGuid().ToString("N"))
@@ -103,12 +110,15 @@ try {
     $script:AllowRetainedMfaEnrollment = $true
     $retainedPath = Join-Path $temporaryRoot "retained-owner-mfa/owner-mfa.json"
     $retainedCodes = 1..10 | ForEach-Object { "RECOVERY-CODE-{0:D2}" -f $_ }
-    Write-RetainedMfaHandoff $retainedPath "JBSWY3DPEHPK3PXP" $retainedCodes 46 | Out-Null
+    Initialize-RetainedMfaHandoff $retainedPath "JBSWY3DPEHPK3PXP" 46 | Out-Null
+    $pendingRetained = Get-Content -LiteralPath $retainedPath -Raw | ConvertFrom-Json
+    Assert-True ($pendingRetained.status -ceq "pending" -and $pendingRetained.secret -ceq "JBSWY3DPEHPK3PXP" -and @($pendingRetained.recoveryCodes).Count -eq 0) "Pending retained MFA handoff must preserve the seed before enrollment is committed."
+    Complete-RetainedMfaHandoff $retainedPath $retainedCodes | Out-Null
     $retained = Get-Content -LiteralPath $retainedPath -Raw | ConvertFrom-Json
     Assert-True ($retained.schemaVersion -ceq "filingbridge.private-server.owner-mfa-handoff/v1") "Retained MFA handoff must use the exact schema."
-    Assert-True ($retained.secret -ceq "JBSWY3DPEHPK3PXP" -and @($retained.recoveryCodes).Count -eq 10) "Retained MFA handoff must preserve the enrollment seed and unique recovery codes."
+    Assert-True ($retained.status -ceq "complete" -and $retained.secret -ceq "JBSWY3DPEHPK3PXP" -and @($retained.recoveryCodes).Count -eq 10) "Retained MFA handoff must preserve the enrollment seed and unique recovery codes."
     Assert-ThrowsContaining {
-        Write-RetainedMfaHandoff (Join-Path $temporaryRoot "retained-owner-mfa/second.json") "JBSWY3DPEHPK3PXP" $retainedCodes 47
+        Initialize-RetainedMfaHandoff (Join-Path $temporaryRoot "retained-owner-mfa/second.json") "JBSWY3DPEHPK3PXP" 47
     } "new dedicated parent directory"
 
     if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {

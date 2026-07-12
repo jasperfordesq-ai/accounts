@@ -246,6 +246,10 @@ if ($AllowEphemeralMfaEnrollment -and $AllowRetainedMfaEnrollment) {
 if ($AllowRetainedMfaEnrollment -and [string]::IsNullOrWhiteSpace($RetainedMfaHandoffPath)) {
     throw "-AllowRetainedMfaEnrollment requires -RetainedMfaHandoffPath or SMOKE_RETAINED_MFA_HANDOFF_PATH."
 }
+$ownerWorkflowReportTarget = [IO.Path]::GetFullPath((Join-Path $OutputDirectory "owner-workflow-report.json"))
+if (Test-Path -LiteralPath $ownerWorkflowReportTarget) {
+    throw "Owner workflow report already exists at $ownerWorkflowReportTarget; no login or account mutation was attempted. Use a new output directory."
+}
 
 function ConvertFrom-Base32([string]$Value) {
     $alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
@@ -438,16 +442,12 @@ function Write-OwnerWorkflowReport([string]$Path, $Report) {
     return $resolved
 }
 
-function Write-RetainedMfaHandoff([string]$Path, [string]$Secret, [string[]]$RecoveryCodes, [int64]$LastAcceptedCounter) {
+function Initialize-RetainedMfaHandoff([string]$Path, [string]$Secret, [int64]$LastAcceptedCounter) {
     if (-not $AllowRetainedMfaEnrollment) {
         throw "A retained MFA handoff requires -AllowRetainedMfaEnrollment."
     }
     if ([string]::IsNullOrWhiteSpace($Secret) -or $Secret -cnotmatch '^[A-Z2-7]{16,128}$') {
         throw "The retained MFA enrollment secret is invalid."
-    }
-    $codes = @($RecoveryCodes | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
-    if ($codes.Count -lt 8 -or @($codes | Select-Object -Unique).Count -ne $codes.Count) {
-        throw "Retained MFA enrollment did not return the required unique recovery codes."
     }
     $resolved = [IO.Path]::GetFullPath($Path)
     $parent = Split-Path -Parent $resolved
@@ -466,7 +466,12 @@ function Write-RetainedMfaHandoff([string]$Path, [string]$Secret, [string[]]$Rec
             throw "Retained MFA handoff must not traverse a filesystem link or junction: $current"
         }
     }
-    New-Item -ItemType Directory -Path $parent | Out-Null
+    if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) {
+        New-Item -ItemType Directory -Path $parent | Out-Null
+    } else {
+        $directoryMode = [IO.UnixFileMode]::UserRead -bor [IO.UnixFileMode]::UserWrite -bor [IO.UnixFileMode]::UserExecute
+        [IO.Directory]::CreateDirectory($parent, $directoryMode) | Out-Null
+    }
     try {
         if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) {
             $directoryAcl = New-Object Security.AccessControl.DirectorySecurity
@@ -481,28 +486,34 @@ function Write-RetainedMfaHandoff([string]$Path, [string]$Secret, [string[]]$Rec
             $directoryAcl.SetOwner($identity)
             $directoryAcl.SetAccessRule($directoryRule)
             [IO.Directory]::SetAccessControl($parent, $directoryAcl)
-        } else {
-            [IO.File]::SetUnixFileMode($parent, [IO.UnixFileMode]::UserRead -bor [IO.UnixFileMode]::UserWrite -bor [IO.UnixFileMode]::UserExecute)
         }
         $payload = [ordered]@{
             schemaVersion = "filingbridge.private-server.owner-mfa-handoff/v1"
+            status = "pending"
             createdAtUtc = [DateTimeOffset]::UtcNow.ToString("o")
             secret = $Secret
-            recoveryCodes = $codes
+            recoveryCodes = @()
             lastAcceptedCounter = $LastAcceptedCounter
         }
         $json = ($payload | ConvertTo-Json -Depth 4) + [Environment]::NewLine
         $bytes = [Text.UTF8Encoding]::new($false).GetBytes($json)
         try {
-            $stream = [IO.File]::Open($resolved, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+            if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) {
+                $stream = [IO.File]::Open($resolved, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+            } else {
+                $options = [IO.FileStreamOptions]::new()
+                $options.Access = [IO.FileAccess]::Write
+                $options.Mode = [IO.FileMode]::CreateNew
+                $options.Share = [IO.FileShare]::None
+                $options.Options = [IO.FileOptions]::WriteThrough
+                $options.UnixCreateMode = [IO.UnixFileMode]::UserRead -bor [IO.UnixFileMode]::UserWrite
+                $stream = [IO.FileStream]::new($resolved, $options)
+            }
             try { $stream.Write($bytes, 0, $bytes.Length); $stream.Flush($true) } finally { $stream.Dispose() }
         } finally {
             [Array]::Clear($bytes, 0, $bytes.Length)
             $json = $null
             $payload = $null
-        }
-        if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
-            [IO.File]::SetUnixFileMode($resolved, [IO.UnixFileMode]::UserRead -bor [IO.UnixFileMode]::UserWrite)
         }
         return $resolved
     } catch {
@@ -511,6 +522,55 @@ function Write-RetainedMfaHandoff([string]$Path, [string]$Secret, [string[]]$Rec
             Remove-Item -LiteralPath $parent -Force -ErrorAction SilentlyContinue
         }
         throw
+    }
+}
+
+function Complete-RetainedMfaHandoff([string]$Path, [string[]]$RecoveryCodes) {
+    $resolved = [IO.Path]::GetFullPath($Path)
+    $codes = @($RecoveryCodes | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
+    if ($codes.Count -lt 8 -or @($codes | Select-Object -Unique).Count -ne $codes.Count) {
+        throw "Retained MFA enrollment did not return the required unique recovery codes; the protected pending seed remains at $resolved."
+    }
+    if (-not (Test-Path -LiteralPath $resolved -PathType Leaf)) { throw "Protected pending MFA handoff is missing at $resolved." }
+    $pending = Get-Content -LiteralPath $resolved -Raw | ConvertFrom-Json
+    if ([string]$pending.schemaVersion -cne "filingbridge.private-server.owner-mfa-handoff/v1" -or
+        [string]$pending.status -cne "pending" -or [string]::IsNullOrWhiteSpace([string]$pending.secret)) {
+        throw "Protected pending MFA handoff is invalid; no secret file was replaced."
+    }
+    $parent = Split-Path -Parent $resolved
+    $temporary = Join-Path $parent (".owner-mfa-" + [Guid]::NewGuid().ToString("N") + ".tmp")
+    $payload = [ordered]@{
+        schemaVersion = "filingbridge.private-server.owner-mfa-handoff/v1"
+        status = "complete"
+        createdAtUtc = [string]$pending.createdAtUtc
+        completedAtUtc = [DateTimeOffset]::UtcNow.ToString("o")
+        secret = [string]$pending.secret
+        recoveryCodes = $codes
+        lastAcceptedCounter = [int64]$pending.lastAcceptedCounter
+    }
+    $json = ($payload | ConvertTo-Json -Depth 4) + [Environment]::NewLine
+    $bytes = [Text.UTF8Encoding]::new($false).GetBytes($json)
+    try {
+        if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) {
+            $stream = [IO.File]::Open($temporary, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+        } else {
+            $options = [IO.FileStreamOptions]::new()
+            $options.Access = [IO.FileAccess]::Write
+            $options.Mode = [IO.FileMode]::CreateNew
+            $options.Share = [IO.FileShare]::None
+            $options.Options = [IO.FileOptions]::WriteThrough
+            $options.UnixCreateMode = [IO.UnixFileMode]::UserRead -bor [IO.UnixFileMode]::UserWrite
+            $stream = [IO.FileStream]::new($temporary, $options)
+        }
+        try { $stream.Write($bytes, 0, $bytes.Length); $stream.Flush($true) } finally { $stream.Dispose() }
+        Move-Item -LiteralPath $temporary -Destination $resolved -Force
+        return $resolved
+    } finally {
+        [Array]::Clear($bytes, 0, $bytes.Length)
+        $json = $null
+        $payload = $null
+        $pending = $null
+        if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary -Force -ErrorAction SilentlyContinue }
     }
 }
 
@@ -623,6 +683,13 @@ if ([int]$loginResponse.StatusCode -eq 202) {
     Write-Host "Completing privileged-account MFA through frontend proxy..."
     $totpAt = [DateTimeOffset]::UtcNow
     $acceptedTotpCounter = Get-TotpCounter $totpAt
+    if (-not [string]::IsNullOrWhiteSpace($retainedEnrollmentSecret)) {
+        $retainedPath = Initialize-RetainedMfaHandoff `
+            -Path $RetainedMfaHandoffPath `
+            -Secret $retainedEnrollmentSecret `
+            -LastAcceptedCounter $acceptedTotpCounter
+        Write-Host "Protected pending Owner MFA seed written before enrollment completion: $retainedPath"
+    }
     $mfaBody = @{
         challengeToken = [string]$challenge.challengeToken
         totpCode = New-TotpCode $effectiveTotpSecret $totpAt
@@ -638,11 +705,9 @@ if ([int]$loginResponse.StatusCode -eq 202) {
         -TimeoutSec $TimeoutSeconds
     if (-not [string]::IsNullOrWhiteSpace($retainedEnrollmentSecret)) {
         $completion = $loginResponse.Content | ConvertFrom-Json
-        $retainedPath = Write-RetainedMfaHandoff `
+        $retainedPath = Complete-RetainedMfaHandoff `
             -Path $RetainedMfaHandoffPath `
-            -Secret $retainedEnrollmentSecret `
-            -RecoveryCodes @($completion.recoveryCodes) `
-            -LastAcceptedCounter $acceptedTotpCounter
+            -RecoveryCodes @($completion.recoveryCodes)
         $retainedEnrollmentSecret = $null
         $completion = $null
         $mfaHandoffRetained = $true
@@ -914,7 +979,7 @@ if ($CheckDownloads) {
     }
 }
 $ownerWorkflowReportPath = Write-OwnerWorkflowReport `
-    -Path (Join-Path $OutputDirectory "owner-workflow-report.json") `
+    -Path $ownerWorkflowReportTarget `
     -Report ([ordered]@{
         schemaVersion = "filingbridge.private-server.owner-workflow/v1"
         status = "passed"

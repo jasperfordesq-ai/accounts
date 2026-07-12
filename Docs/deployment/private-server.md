@@ -387,6 +387,9 @@ If the Owner has not enrolled MFA, use `-AllowRetainedMfaEnrollment` with a hand
 dedicated parent directory does not yet exist. The smoke creates that directory with a current-user-
 only ACL and retains the TOTP seed plus one-time recovery codes there immediately after successful
 enrollment. Move both into the Owner's password manager, then securely delete the handoff directory.
+The protected seed is reserved before the API commits enrollment; if a later completion step fails,
+the handoff remains marked `pending` with the seed needed to recover rather than silently locking out
+the Owner.
 Set `SMOKE_TENANT_SLUG`, `SMOKE_LOGIN_EMAIL`, `SMOKE_LOGIN_PASSWORD`, and—after enrolment—
 `SMOKE_TOTP_SECRET`, then run it against `http://localhost:3500` with `-AllowInsecureHttp`. Add
 `-CompanyId`, `-PeriodId`, and `-CheckDownloads` to exercise PDF and iXBRL downloads for a safe test
