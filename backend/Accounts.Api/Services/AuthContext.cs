@@ -29,6 +29,7 @@ public record AuthenticatedUser(
     string? MfaMethod = null)
 {
     public IReadOnlySet<int> AllowedCompanyIds { get; init; } = AllowedCompanyIds ?? new HashSet<int>();
+    public string TenantSlug { get; init; } = "";
 }
 
 public static class UserCompanyAccessPolicy

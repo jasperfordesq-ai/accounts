@@ -46,7 +46,7 @@ public sealed class UserLifecycleService(
             var email = NormalizeEmail(input.Email);
             var displayName = NormalizeDisplayName(input.DisplayName);
             var role = NormalizeRole(input.Role);
-            await EnsureEmailAvailableAsync(email, cancellationToken);
+            await EnsureEmailAvailableAsync(actor.TenantId, email, cancellationToken);
             var companyIds = await ValidateCompanyIdsAsync(actor.TenantId, input.CompanyIds, cancellationToken);
             var now = UtcNow();
             var placeholder = PasswordHasher.HashPassword(mfaSecurity.CreateOpaqueToken());
@@ -102,7 +102,7 @@ public sealed class UserLifecycleService(
             var role = NormalizeRole(input.Role);
             ValidateStrongPassword(input.TemporaryPassword);
             await EnsurePasswordSafeAsync(input.TemporaryPassword!, cancellationToken);
-            await EnsureEmailAvailableAsync(email, cancellationToken);
+            await EnsureEmailAvailableAsync(actor.TenantId, email, cancellationToken);
             var companyIds = await ValidateCompanyIdsAsync(actor.TenantId, input.CompanyIds, cancellationToken);
             var now = UtcNow();
             var password = PasswordHasher.HashPassword(input.TemporaryPassword!);
@@ -154,7 +154,7 @@ public sealed class UserLifecycleService(
             user.UpdatedAt = now;
             user.SessionVersion++;
             token.ConsumedAtUtc = now;
-            await CommitSystemEvidenceAsync(user, token.CreatedByUserId, UserLifecycleEventTypes.InvitationAccepted, new
+            await CommitSystemEvidenceAsync(user, token.CreatedByUserId, token.CreatedByActorKind, UserLifecycleEventTypes.InvitationAccepted, new
             {
                 role = user.Role,
                 active = true,
@@ -174,7 +174,7 @@ public sealed class UserLifecycleService(
                 throw new BusinessRuleException("An offboarded account cannot be recovered.");
             var now = UtcNow();
             await RevokeOutstandingTokensAsync(user.Id, UserActionPurposes.PasswordReset, now, cancellationToken);
-            RevokeSecurityState(user, now);
+            await RevokeSecurityStateAsync(user, now, cancellationToken);
             user.MustChangePassword = true;
             var rawToken = mfaSecurity.CreateOpaqueToken();
             var token = new UserActionToken
@@ -215,7 +215,7 @@ public sealed class UserLifecycleService(
             user.MustChangePassword = false;
             user.SessionVersion++;
             token.ConsumedAtUtc = now;
-            await CommitSystemEvidenceAsync(user, token.CreatedByUserId, UserLifecycleEventTypes.PasswordResetCompleted, new
+            await CommitSystemEvidenceAsync(user, token.CreatedByUserId, token.CreatedByActorKind, UserLifecycleEventTypes.PasswordResetCompleted, new
             {
                 active = true,
                 locked = user.LockedUntilUtc > now,
@@ -238,7 +238,7 @@ public sealed class UserLifecycleService(
             var now = UtcNow();
             user.IsActive = active;
             user.DeactivatedAtUtc = active ? null : now;
-            RevokeSecurityState(user, now);
+            await RevokeSecurityStateAsync(user, now, cancellationToken);
             await CommitEvidenceAsync(actor, user, active ? UserLifecycleEventTypes.Activated : UserLifecycleEventTypes.Deactivated, new
             {
                 active,
@@ -256,8 +256,12 @@ public sealed class UserLifecycleService(
             user.LockedUntilUtc = null;
             user.LastFailedLoginAt = null;
             user.FailedLoginCount = 0;
-            user.UpdatedAt = UtcNow();
-            await CommitEvidenceAsync(actor, user, UserLifecycleEventTypes.Unlocked, new { wasLocked }, cancellationToken);
+            await RevokeSecurityStateAsync(user, UtcNow(), cancellationToken);
+            await CommitEvidenceAsync(actor, user, UserLifecycleEventTypes.Unlocked, new
+            {
+                wasLocked,
+                sessionsRevoked = true
+            }, cancellationToken);
             return UserAdministrationSummary.From(user);
         }, cancellationToken);
 
@@ -273,7 +277,7 @@ public sealed class UserLifecycleService(
                 await EnsureAnotherActiveOwnerAsync(actor.TenantId, user.Id, cancellationToken);
             var previousRole = user.Role;
             user.Role = role;
-            RevokeSecurityState(user, UtcNow());
+            await RevokeSecurityStateAsync(user, UtcNow(), cancellationToken);
             await CommitEvidenceAsync(actor, user, UserLifecycleEventTypes.RoleChanged, new
             {
                 previousRole,
@@ -294,7 +298,7 @@ public sealed class UserLifecycleService(
             db.UserCompanyAccesses.RemoveRange(user.CompanyAccesses);
             user.CompanyAccesses.Clear();
             AddCompanyAssignments(user, companyIds, UtcNow());
-            RevokeSecurityState(user, UtcNow());
+            await RevokeSecurityStateAsync(user, UtcNow(), cancellationToken);
             await CommitEvidenceAsync(actor, user, UserLifecycleEventTypes.CompanyAssignmentsChanged, new
             {
                 previousCompanyIds = previous,
@@ -309,7 +313,7 @@ public sealed class UserLifecycleService(
         {
             RequireOwner(actor);
             var user = await RequireTargetAsync(actor, targetUserId, cancellationToken);
-            RevokeSecurityState(user, UtcNow());
+            await RevokeSecurityStateAsync(user, UtcNow(), cancellationToken);
             await CommitEvidenceAsync(actor, user, UserLifecycleEventTypes.SessionsRevoked, new { sessionsRevoked = true }, cancellationToken);
             return UserAdministrationSummary.From(user);
         }, cancellationToken);
@@ -330,7 +334,7 @@ public sealed class UserLifecycleService(
             db.UserCompanyAccesses.RemoveRange(user.CompanyAccesses);
             user.CompanyAccesses.Clear();
             await RevokeOutstandingTokensAsync(user.Id, null, now, cancellationToken);
-            RevokeSecurityState(user, now);
+            await RevokeSecurityStateAsync(user, now, cancellationToken);
             await CommitEvidenceAsync(actor, user, UserLifecycleEventTypes.Offboarded, new
             {
                 active = false,
@@ -343,7 +347,7 @@ public sealed class UserLifecycleService(
 
     private async Task CommitEvidenceAsync(AuthenticatedUser actor, UserAccount target, string eventType, object details, CancellationToken cancellationToken)
     {
-        AddLifecycleEvent(actor.TenantId, target.Id, actor.UserId, eventType, details);
+        AddLifecycleEvent(actor.TenantId, target.Id, actor.UserId, IdentityActorKinds.User, eventType, details);
         await db.SaveChangesAsync(cancellationToken);
         await auditService.LogAsync(
             companyId: null,
@@ -359,10 +363,11 @@ public sealed class UserLifecycleService(
             cancellationToken: cancellationToken);
     }
 
-    private async Task CommitSystemEvidenceAsync(UserAccount target, int actorUserId, string eventType, object details, CancellationToken cancellationToken)
+    private async Task CommitSystemEvidenceAsync(UserAccount target, int? actorUserId, string actorKind, string eventType, object details, CancellationToken cancellationToken)
     {
-        AddLifecycleEvent(target.TenantId, target.Id, actorUserId, eventType, details);
+        AddLifecycleEvent(target.TenantId, target.Id, actorUserId, actorKind, eventType, details);
         await db.SaveChangesAsync(cancellationToken);
+        var hostOperator = actorKind == IdentityActorKinds.PrivateServerHostOperator;
         await auditService.LogAsync(
             companyId: null,
             periodId: null,
@@ -370,19 +375,20 @@ public sealed class UserLifecycleService(
             entityId: target.Id,
             action: eventType,
             newValue: details,
-            userId: $"user:{target.Id}",
+            userId: hostOperator ? "operator:private-host" : $"user:{actorUserId}",
             tenantId: target.TenantId,
-            actorDisplayName: "Identity recovery workflow",
+            actorDisplayName: hostOperator ? "Private Server host operator" : "Identity recovery workflow",
             durableAudit: true,
             cancellationToken: cancellationToken);
     }
 
-    private void AddLifecycleEvent(int tenantId, int targetUserId, int actorUserId, string eventType, object details) =>
+    private void AddLifecycleEvent(int tenantId, int targetUserId, int? actorUserId, string actorKind, string eventType, object details) =>
         db.UserLifecycleEvents.Add(new UserLifecycleEvent
         {
             TenantId = tenantId,
             TargetUserId = targetUserId,
             ActorUserId = actorUserId,
+            ActorKind = actorKind,
             EventType = eventType,
             DetailsJson = JsonSerializer.Serialize(details, DetailsJson),
             OccurredAtUtc = UtcNow()
@@ -413,13 +419,13 @@ public sealed class UserLifecycleService(
         return target ?? throw new KeyNotFoundException("User account was not found.");
     }
 
-    private async Task EnsureEmailAvailableAsync(string email, CancellationToken cancellationToken)
+    private async Task EnsureEmailAvailableAsync(int tenantId, string email, CancellationToken cancellationToken)
     {
-        var exists = tenantBootstrap is not null
-            ? await tenantBootstrap.EmailExistsAsync(email, cancellationToken)
-            : await db.UserAccounts.IgnoreQueryFilters().AnyAsync(user => user.Email == email, cancellationToken);
+        var exists = await db.UserAccounts.AnyAsync(
+            user => user.TenantId == tenantId && user.Email == email,
+            cancellationToken);
         if (exists)
-            throw new BusinessRuleException("A user account with this email already exists.");
+            throw new BusinessRuleException("The user account could not be created with the supplied details.");
     }
 
     private async Task<int[]> ValidateCompanyIdsAsync(int tenantId, IReadOnlyList<int>? requested, CancellationToken cancellationToken)
@@ -467,11 +473,31 @@ public sealed class UserLifecycleService(
         foreach (var token in tokens) token.RevokedAtUtc = now;
     }
 
-    private void RevokeSecurityState(UserAccount user, DateTime now)
+    private async Task RevokeSecurityStateAsync(
+        UserAccount user,
+        DateTime now,
+        CancellationToken cancellationToken)
     {
         user.SessionVersion++;
         user.UpdatedAt = now;
-        foreach (var challenge in db.UserMfaChallenges.Local.Where(challenge => challenge.UserId == user.Id && challenge.ConsumedAtUtc == null))
+        if (db.Database.IsRelational())
+        {
+            await db.UserMfaChallenges
+                .Where(challenge => challenge.UserId == user.Id
+                    && challenge.ConsumedAtUtc == null
+                    && challenge.RevokedAtUtc == null)
+                .ExecuteUpdateAsync(
+                    setters => setters.SetProperty(challenge => challenge.RevokedAtUtc, now),
+                    cancellationToken);
+            return;
+        }
+
+        var challenges = await db.UserMfaChallenges
+            .Where(challenge => challenge.UserId == user.Id
+                && challenge.ConsumedAtUtc == null
+                && challenge.RevokedAtUtc == null)
+            .ToListAsync(cancellationToken);
+        foreach (var challenge in challenges)
             challenge.RevokedAtUtc = now;
     }
 
@@ -582,6 +608,7 @@ public static class UserLifecycleEventTypes
     public const string Unlocked = "UserUnlocked";
     public const string PasswordResetStarted = "UserPasswordResetStarted";
     public const string PasswordResetCompleted = "UserPasswordResetCompleted";
+    public const string PrivateOwnerRecoveryStarted = "PrivateOwnerRecoveryStarted";
     public const string RoleChanged = "UserRoleChanged";
     public const string CompanyAssignmentsChanged = "UserCompanyAssignmentsChanged";
     public const string SessionsRevoked = "UserSessionsRevoked";

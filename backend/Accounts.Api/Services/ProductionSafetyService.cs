@@ -20,10 +20,16 @@ public class ProductionSafetyService(
 {
     public IReadOnlyList<string> Validate()
     {
-        if (environment.IsDevelopment())
-            return [];
-
         var failures = new List<string>();
+        failures.AddRange(DeploymentModeContract.Validate(
+            configuration["Deployment:Mode"],
+            environment.EnvironmentName,
+            out var deploymentMode));
+        if (deploymentMode == DeploymentMode.Development && environment.IsDevelopment())
+            return failures;
+
+        var privateServer = deploymentMode == DeploymentMode.PrivateServer
+            && string.Equals(environment.EnvironmentName, Environments.Production, StringComparison.Ordinal);
         var dbStartup = databaseStartup.Value;
         var connectionString = configuration.GetConnectionString("DefaultConnection") ?? "";
         var allowedOrigins = configuration.GetSection("AllowedOrigins").Get<string[]>() ?? [];
@@ -47,26 +53,47 @@ public class ProductionSafetyService(
             failures.Add("DefaultConnection appears to use the development database password outside development.");
         }
 
-        if (dbStartup.AllowInsecureDatabaseConnection)
+        if (!privateServer && dbStartup.AllowInsecureDatabaseConnection)
         {
             failures.Add("DatabaseStartup:AllowInsecureDatabaseConnection must be false outside development; production database transport cannot opt out of certificate verification.");
         }
 
         // crypto-tls-to-db: production must authenticate PostgreSQL against a deployment CA as well
         // as encrypting the connection. Encryption without server identity validation is insufficient.
-        if (!string.IsNullOrWhiteSpace(connectionString) && !DatabaseConnectionUsesVerifiedTls(connectionString))
+        if (!string.IsNullOrWhiteSpace(connectionString)
+            && !privateServer
+            && !DatabaseConnectionUsesVerifiedTls(connectionString))
         {
             failures.Add("DefaultConnection must use certificate-verified TLS outside development (SSL Mode=VerifyFull, a Root Certificate path, and Trust Server Certificate=false).");
         }
 
+        if (!string.IsNullOrWhiteSpace(connectionString)
+            && privateServer
+            && !DatabaseConnectionUsesVerifiedTls(connectionString)
+            && !(dbStartup.AllowInsecureDatabaseConnection && DatabaseConnectionExplicitlyDisablesTls(connectionString)))
+        {
+            failures.Add("Private Server DefaultConnection must either use certificate-verified TLS or explicitly use SSL Mode=Disable with DatabaseStartup:AllowInsecureDatabaseConnection=true on the unpublished internal database network.");
+        }
+
+        if (privateServer && !Guid.TryParse(configuration["Deployment:InstallationId"], out _))
+            failures.Add("Deployment:InstallationId must be a generated GUID in Private Server mode.");
+
         if (allowedOrigins.Length == 0)
             failures.Add("AllowedOrigins must be explicitly configured outside development.");
 
-        if (allowedOrigins.Any(o => o.Contains("localhost", StringComparison.OrdinalIgnoreCase) || o.Contains("127.0.0.1", StringComparison.OrdinalIgnoreCase)))
-            failures.Add("AllowedOrigins contains localhost outside development. Configure the real application origin.");
+        if (privateServer)
+        {
+            if (allowedOrigins.Any(origin => !IsAllowedPrivateServerOrigin(origin)))
+                failures.Add("Private Server AllowedOrigins may contain only exact HTTPS *.ts.net origins or explicit-port HTTP localhost/127.0.0.1 origins, without paths, credentials, queries, or fragments.");
+        }
+        else
+        {
+            if (allowedOrigins.Any(o => o.Contains("localhost", StringComparison.OrdinalIgnoreCase) || o.Contains("127.0.0.1", StringComparison.OrdinalIgnoreCase)))
+                failures.Add("AllowedOrigins contains localhost outside development. Configure the real application origin.");
 
-        if (allowedOrigins.Any(origin => !Uri.TryCreate(origin, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps))
-            failures.Add("AllowedOrigins must contain absolute HTTPS origins outside development.");
+            if (allowedOrigins.Any(origin => !Uri.TryCreate(origin, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps))
+                failures.Add("AllowedOrigins must contain absolute HTTPS origins outside development.");
+        }
 
         var configuredHosts = allowedHosts?
             .Split([';', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) ?? [];
@@ -74,7 +101,11 @@ public class ProductionSafetyService(
         {
             failures.Add("AllowedHosts must be explicitly configured outside development.");
         }
-        else if (configuredHosts.Any(host => host == "*" || host.Equals("localhost", StringComparison.OrdinalIgnoreCase) || host.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase)))
+        else if (privateServer && configuredHosts.Any(host => !IsAllowedPrivateServerHost(host)))
+        {
+            failures.Add("Private Server AllowedHosts may contain only the internal api service name, localhost, 127.0.0.1, or exact *.ts.net host names.");
+        }
+        else if (!privateServer && configuredHosts.Any(host => host == "*" || host.Equals("localhost", StringComparison.OrdinalIgnoreCase) || host.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase)))
         {
             failures.Add("AllowedHosts must not use wildcard or localhost values outside development.");
         }
@@ -111,20 +142,32 @@ public class ProductionSafetyService(
         if (!session.SecureCookiesInProduction)
             failures.Add("AuthSession:SecureCookiesInProduction must be true outside development.");
 
-        failures.AddRange(ValidateBootstrapOwner(bootstrapOwner?.Value ?? new BootstrapOwnerConfig()));
+        var bootstrap = bootstrapOwner?.Value ?? new BootstrapOwnerConfig();
+        if (privateServer && bootstrap.Enabled)
+            failures.Add("BootstrapOwner:Enabled must be false in Private Server mode; run the separate --private-initialize command against an empty database.");
+        else
+            failures.AddRange(ValidateBootstrapOwner(bootstrap));
         failures.AddRange(AuditIntegrityCheckpointService.ValidateConfiguration(
             auditIntegrity?.Value ?? new AuditIntegrityConfig()));
         failures.AddRange(apiAccess.ValidateConfiguration());
-        failures.AddRange(ValidateMonitoringConfiguration(monitoring?.Value ?? new MonitoringConfig()));
+        failures.AddRange(privateServer
+            ? ValidatePrivateMonitoringConfiguration(monitoring?.Value ?? new MonitoringConfig())
+            : ValidateMonitoringConfiguration(monitoring?.Value ?? new MonitoringConfig()));
+        var delivery = deadlineDelivery?.Value ?? new DeadlineDeliveryConfig();
+        if (privateServer)
+            failures.AddRange(ValidatePrivateDeadlineDeliveryConfiguration(delivery));
         failures.AddRange(PlatformOperationsConfigurationValidator.Validate(
-            deadlineDelivery?.Value ?? new DeadlineDeliveryConfig(),
-            platformMetrics?.Value ?? new PlatformMetricsConfig()));
+            delivery,
+            platformMetrics?.Value ?? new PlatformMetricsConfig(),
+            allowDisabledExternalDelivery: privateServer));
         var tenantIsolation = databaseTenantIsolation?.Value ?? new DatabaseTenantIsolationConfig();
         if (!tenantIsolation.Required)
             failures.Add("DatabaseTenantIsolation:Required must be true outside development.");
         else if (!DatabaseTenantIsolationConfig.IsValid(tenantIsolation))
             failures.Add("DatabaseTenantIsolation requires the fixed application group, a distinct safe API login role, and a generated context key of at least 32 bytes.");
-        failures.AddRange(ValidateIdentitySecurity(identitySecurity?.Value ?? new IdentitySecurityConfig()));
+        failures.AddRange(ValidateIdentitySecurity(
+            identitySecurity?.Value ?? new IdentitySecurityConfig(),
+            allowOptionalRemoteBreachCheck: privateServer));
 
         return failures;
     }
@@ -136,15 +179,23 @@ public class ProductionSafetyService(
             throw new InvalidOperationException("Unsafe production configuration: " + string.Join(" ", failures));
     }
 
-    public static IReadOnlyList<string> ValidateIdentitySecurity(IdentitySecurityConfig config)
+    public static IReadOnlyList<string> ValidateIdentitySecurity(IdentitySecurityConfig config) =>
+        ValidateIdentitySecurity(config, allowOptionalRemoteBreachCheck: false);
+
+    public static IReadOnlyList<string> ValidateIdentitySecurity(
+        IdentitySecurityConfig config,
+        bool allowOptionalRemoteBreachCheck)
     {
         var failures = new List<string>();
         if (!config.RequireInProduction)
             failures.Add("IdentitySecurity:RequireInProduction must be true outside development.");
-        if (!config.BreachedPasswordCheckEnabled || !config.BreachedPasswordFailClosed)
+        if (!allowOptionalRemoteBreachCheck
+            && (!config.BreachedPasswordCheckEnabled || !config.BreachedPasswordFailClosed))
             failures.Add("IdentitySecurity breached-password checking must be enabled and fail closed outside development.");
-        if (!Uri.TryCreate(config.PwnedPasswordsRangeBaseUrl, UriKind.Absolute, out var rangeUri)
+        if (config.BreachedPasswordCheckEnabled
+            && (!Uri.TryCreate(config.PwnedPasswordsRangeBaseUrl, UriKind.Absolute, out var rangeUri)
             || rangeUri.Scheme != Uri.UriSchemeHttps)
+        )
             failures.Add("IdentitySecurity:PwnedPasswordsRangeBaseUrl must be an absolute HTTPS endpoint.");
         if (config.PwnedPasswordsTimeoutSeconds is < 1 or > 15
             || config.PwnedPasswordsMaximumResponseBytes is < 100_000 or > 5_000_000)
@@ -175,6 +226,60 @@ public class ProductionSafetyService(
             return false;
         }
     }
+
+    private static bool DatabaseConnectionExplicitlyDisablesTls(string connectionString)
+    {
+        try
+        {
+            var builder = new Npgsql.NpgsqlConnectionStringBuilder(connectionString);
+            return builder.SslMode == Npgsql.SslMode.Disable
+                && System.Text.RegularExpressions.Regex.IsMatch(
+                    connectionString,
+                    @"(?:^|;)\s*SSL\s+Mode\s*=\s*Disable\s*(?:;|$)",
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase
+                        | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool IsAllowedPrivateServerOrigin(string origin)
+    {
+        if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri)
+            || !string.IsNullOrEmpty(uri.UserInfo)
+            || uri.AbsolutePath != "/"
+            || !string.IsNullOrEmpty(uri.Query)
+            || !string.IsNullOrEmpty(uri.Fragment))
+        {
+            return false;
+        }
+
+        var loopback = uri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+            || uri.Host.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase);
+        if (loopback)
+            return uri.Scheme == Uri.UriSchemeHttp && !uri.IsDefaultPort;
+
+        return uri.Scheme == Uri.UriSchemeHttps
+            && uri.IsDefaultPort
+            && IsExactTailscaleDnsHost(uri.Host);
+    }
+
+    private static bool IsAllowedPrivateServerHost(string host)
+    {
+        var candidate = host.Trim().TrimEnd('.');
+        return candidate.Equals("api", StringComparison.Ordinal)
+            || candidate.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+            || candidate.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase)
+            || IsExactTailscaleDnsHost(candidate);
+    }
+
+    private static bool IsExactTailscaleDnsHost(string host) =>
+        host.Length > ".ts.net".Length
+        && host.EndsWith(".ts.net", StringComparison.OrdinalIgnoreCase)
+        && !host.Contains('*')
+        && Uri.CheckHostName(host) == UriHostNameType.Dns;
 
     private static IReadOnlyList<string> ValidateBootstrapOwner(BootstrapOwnerConfig bootstrap)
     {
@@ -256,6 +361,39 @@ public class ProductionSafetyService(
             failures.Add("Monitoring:IncidentRunbookPath must reference the controlled monitoring incident runbook.");
         }
 
+        return failures;
+    }
+
+    public static IReadOnlyList<string> ValidatePrivateMonitoringConfiguration(MonitoringConfig monitoring)
+    {
+        var failures = new List<string>();
+        if (!string.Equals(monitoring.ErrorTrackingProvider, "LocalStructuredLogs", StringComparison.Ordinal))
+            failures.Add("Monitoring:ErrorTrackingProvider must be LocalStructuredLogs in Private Server mode.");
+        if (!string.IsNullOrWhiteSpace(monitoring.ErrorTrackingDsn))
+            failures.Add("Monitoring:ErrorTrackingDsn must be blank in Private Server mode; sanitized failures are retained in local structured logs.");
+        if (!monitoring.StructuredJsonConsole)
+            failures.Add("Monitoring:StructuredJsonConsole must be true in Private Server mode.");
+        if (!monitoring.IncludeCorrelationId)
+            failures.Add("Monitoring:IncludeCorrelationId must be true in Private Server mode.");
+        if (monitoring.TracesSampleRate is < 0 or > 1)
+            failures.Add("Monitoring:TracesSampleRate must be between 0 and 1.");
+        if (monitoring.StructuredLogRetentionDays is < 7 or > 3650)
+            failures.Add("Monitoring:StructuredLogRetentionDays must be between 7 and 3650 days in Private Server mode.");
+        return failures;
+    }
+
+    public static IReadOnlyList<string> ValidatePrivateDeadlineDeliveryConfiguration(
+        DeadlineDeliveryConfig delivery)
+    {
+        var failures = new List<string>();
+        if (delivery.RequireInProduction)
+            failures.Add("DeadlineDelivery:RequireInProduction must be false in Private Server mode.");
+        if (delivery.Enabled)
+            failures.Add("DeadlineDelivery:Enabled must be false in Private Server mode; deadline handoff is manual and local-only.");
+        if (!string.IsNullOrWhiteSpace(delivery.ProviderEndpoint))
+            failures.Add("DeadlineDelivery:ProviderEndpoint must be blank in Private Server mode.");
+        if (!string.IsNullOrWhiteSpace(delivery.ProviderToken))
+            failures.Add("DeadlineDelivery:ProviderToken must be blank in Private Server mode.");
         return failures;
     }
 }

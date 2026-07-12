@@ -7618,6 +7618,7 @@ export interface components {
             /** Format: int32 */
             tenantId: number | string;
             tenantName: string;
+            tenantSlug: string;
             email: string;
             displayName: string;
             role: string;
@@ -8759,6 +8760,7 @@ export interface components {
             dueAfterYear?: number | string;
         };
         LoginInput: {
+            tenantSlug: null | string;
             email: null | string;
             password: null | string;
         };

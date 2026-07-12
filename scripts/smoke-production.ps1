@@ -1,5 +1,6 @@
 param(
     [string]$BaseUrl = $env:ACCOUNTS_FRONTEND_URL,
+    [string]$TenantSlug = $env:SMOKE_TENANT_SLUG,
     [string]$Email = $env:SMOKE_LOGIN_EMAIL,
     [string]$Password = $env:SMOKE_LOGIN_PASSWORD,
     [string]$TotpSecret = $env:SMOKE_TOTP_SECRET,
@@ -223,6 +224,7 @@ function Invoke-SmokeDownload(
 }
 
 Require-Value $BaseUrl "ACCOUNTS_FRONTEND_URL or -BaseUrl"
+Require-Value $TenantSlug "SMOKE_TENANT_SLUG or -TenantSlug"
 Require-Value $Email "SMOKE_LOGIN_EMAIL or -Email"
 Require-Value $Password "SMOKE_LOGIN_PASSWORD or -Password"
 
@@ -448,6 +450,7 @@ if (-not $AllowInsecureHttp) {
 
 Write-Host "Signing in through frontend proxy..."
 $loginBody = @{
+    tenantSlug = $TenantSlug.Trim().ToLowerInvariant()
     email = $Email
     password = $Password
 } | ConvertTo-Json

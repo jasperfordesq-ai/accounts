@@ -44,6 +44,33 @@ Release run with zero failures/skips; the frontend score is supported by 277 uni
 tests plus contract/lint/type/build gates. Exact remote candidate CI and governance evidence must
 still be attached before this reassessment is release evidence.
 
+## Deployment modes implementation note — 11 July 2026
+
+The repository now contains an explicit three-mode deployment contract and a Windows x64 Private
+Server operational preview. This is a separate operational workstream and does **not** change the
+audited **600/1,000** independent baseline, the evidence-derived reassessment above, or any open
+weighted control in this audit.
+
+Implemented engineering includes a compiled private Compose topology, loopback-only frontend
+publication, unexposed API/database services, generated file-backed secrets, separate migration
+and runtime database roles, forced RLS and signed tenant context, tenant-qualified login using
+workspace slug + email + password, Windows lifecycle/recovery tooling, same-installation backup and
+restore controls, release-manifest/asset verification, optional Tailscale Serve integration, and
+separate Development/Private Server/Public Production documentation. `compose.yml` remains
+Development-only and must never be exposed through Tailscale, a LAN, router forwarding, or public
+ingress.
+
+Private Server is not live-certified. A disposable current-host Windows drill passed setup,
+stop/start, the explicitly incomplete plaintext database-only backup/verify/restore path,
+source-build update, Owner recovery/reset with privileged MFA still enforced, diagnostics/support,
+purge and exact cleanup. Clean-machine installation, complete Owner/MFA and multi-user journeys,
+second-device Tailscale HTTPS, reboot recovery, offline full workflow, encrypted complete-recovery
+sets, genuine prior-version/failure recovery, and replacement-host recovery remain unproven or
+unimplemented as recorded in `Docs/deployment/DEPLOYMENT_MODES_HANDOFF.md`. Those remaining controls
+may not be inferred from the current-host drill or static/automated checks. Most importantly, private installation
+success cannot satisfy `HUMAN-001` through `HUMAN-007`, external ROS/iXBRL validation, source-law
+review, qualified-accountant acceptance, or the no-direct-filing boundary.
+
 ## Non-negotiable product boundary
 
 1. Direct CRO and ROS submission remains unsupported. The platform may only generate artifacts

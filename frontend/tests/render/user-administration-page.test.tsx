@@ -63,7 +63,8 @@ describe("Owner user administration", () => {
       displayName: "New Reviewer", email: "reviewer@example.ie", role: "Reviewer", companyIds: [],
     }));
     expect(await screen.findByText("One-time invitation link")).toBeInTheDocument();
-    expect(screen.getByText(/accept-invite\?token=single-display-token/)).toBeInTheDocument();
+    expect(screen.getByText(/accept-invite#token=single-display-token/)).toBeInTheDocument();
+    expect(screen.queryByText(/accept-invite\?token=/)).not.toBeInTheDocument();
     expect(screen.getByText(/displayed once and expires/i)).toBeInTheDocument();
   });
 });

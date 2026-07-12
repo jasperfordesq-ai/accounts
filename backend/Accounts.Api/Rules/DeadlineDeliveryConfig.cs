@@ -40,13 +40,14 @@ public static class PlatformOperationsConfigurationValidator
 {
     public static IReadOnlyList<string> Validate(
         DeadlineDeliveryConfig delivery,
-        PlatformMetricsConfig metrics)
+        PlatformMetricsConfig metrics,
+        bool allowDisabledExternalDelivery = false)
     {
         ArgumentNullException.ThrowIfNull(delivery);
         ArgumentNullException.ThrowIfNull(metrics);
         var failures = new List<string>();
 
-        if (delivery.RequireInProduction)
+        if (delivery.RequireInProduction && !allowDisabledExternalDelivery)
         {
             if (!delivery.Enabled)
                 failures.Add("DeadlineDelivery:Enabled must be true outside development so filing reminders do not depend on dashboard visits.");

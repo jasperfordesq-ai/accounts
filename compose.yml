@@ -25,6 +25,7 @@ services:
       - "5090:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Development
+      Deployment__Mode: Development
       ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=accounts;Username=accounts;Password=accounts_dev"
       AuthSession__SigningKey: "IyRih0V4m+9WHp+buroLFov10a+LGRhgg8g4J7vm3uTnRtUU6t1JenYYfZTaqT9Gl9H7FmYhGwNORssVZ/BPkg=="
       AuditIntegrity__ActiveKeyId: "development-audit-checkpoint"
@@ -54,6 +55,7 @@ services:
       dockerfile: Dockerfile.frontend
       args:
         API_URL: "http://api:8080"
+        NEXT_PUBLIC_DEMO_TENANT_SLUG: "main-demo"
         NEXT_PUBLIC_DEMO_LOGIN_EMAIL: "admin@accounts.local"
     container_name: accounts-frontend
     ports:
@@ -61,6 +63,7 @@ services:
     environment:
       API_URL: "http://api:8080"
       ACCOUNTS_API_KEY: "${ACCOUNTS_API_KEY:-accounts_dev_frontend_proxy}"
+      NEXT_PUBLIC_DEMO_TENANT_SLUG: "main-demo"
       NEXT_PUBLIC_DEMO_LOGIN_EMAIL: "admin@accounts.local"
     depends_on:
       - api

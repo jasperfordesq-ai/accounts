@@ -46,7 +46,7 @@ public sealed class PwnedPasswordSafetyService(
         if (!options.BreachedPasswordCheckEnabled) return new(PasswordSafetyStatus.Accepted);
         if (!Uri.TryCreate(options.PwnedPasswordsRangeBaseUrl, UriKind.Absolute, out var baseUri)
             || baseUri.Scheme != Uri.UriSchemeHttps)
-            return new(PasswordSafetyStatus.Unavailable);
+            return RemoteCheckUnavailable();
 
         var passwordBytes = Encoding.UTF8.GetBytes(password);
         var digest = SHA1.HashData(passwordBytes);
@@ -70,7 +70,7 @@ public sealed class PwnedPasswordSafetyService(
                 timeout.Token);
             if (!response.IsSuccessStatusCode
                 || response.Content.Headers.ContentLength > options.PwnedPasswordsMaximumResponseBytes)
-                return new(PasswordSafetyStatus.Unavailable);
+                return RemoteCheckUnavailable();
 
             await using var stream = await response.Content.ReadAsStreamAsync(timeout.Token);
             using var reader = new StreamReader(stream, Encoding.ASCII, false, 4096, leaveOpen: false);
@@ -79,7 +79,7 @@ public sealed class PwnedPasswordSafetyService(
             {
                 charactersRead += line.Length + 2;
                 if (charactersRead > options.PwnedPasswordsMaximumResponseBytes)
-                    return new(PasswordSafetyStatus.Unavailable);
+                    return RemoteCheckUnavailable();
                 var separator = line.IndexOf(':');
                 if (separator != 35) continue;
                 var candidate = line[..separator];
@@ -97,15 +97,20 @@ public sealed class PwnedPasswordSafetyService(
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            return new(PasswordSafetyStatus.Unavailable);
+            return RemoteCheckUnavailable();
         }
         catch (HttpRequestException)
         {
-            return new(PasswordSafetyStatus.Unavailable);
+            return RemoteCheckUnavailable();
         }
         catch (IOException)
         {
-            return new(PasswordSafetyStatus.Unavailable);
+            return RemoteCheckUnavailable();
         }
     }
+
+    private PasswordSafetyDecision RemoteCheckUnavailable() =>
+        options.BreachedPasswordFailClosed
+            ? new(PasswordSafetyStatus.Unavailable)
+            : new(PasswordSafetyStatus.Accepted);
 }

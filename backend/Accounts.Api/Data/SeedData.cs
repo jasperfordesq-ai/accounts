@@ -49,7 +49,7 @@ public static class SeedData
         if (seedDemoUsers)
             await EnsureDemoUsersAsync(db, tenant.Id, micro.Id);
         else
-            await RemoveDemoUsersAsync(db);
+            await RemoveDemoUsersAsync(db, tenant.Id);
 
         await EnsureTenantAuditLogAsync(db, tenant, seededCompanies.ToArray());
 
@@ -1604,7 +1604,8 @@ public static class SeedData
             if (!MeetsStrongPasswordPolicy(seed.Password))
                 throw new InvalidOperationException($"Demo password for {seed.Email} does not meet the strong password policy.");
 
-            var user = await db.UserAccounts.FirstOrDefaultAsync(u => u.Email == seed.Email);
+            var user = await db.UserAccounts.FirstOrDefaultAsync(
+                u => u.TenantId == tenantId && u.Email == seed.Email);
             if (user is null)
             {
                 user = new UserAccount
@@ -1634,10 +1635,10 @@ public static class SeedData
         await db.SaveChangesAsync();
     }
 
-    private static async Task RemoveDemoUsersAsync(AccountsDbContext db)
+    private static async Task RemoveDemoUsersAsync(AccountsDbContext db, int tenantId)
     {
         var demoUsers = await db.UserAccounts
-            .Where(u => DemoUserEmails.Contains(u.Email))
+            .Where(u => u.TenantId == tenantId && DemoUserEmails.Contains(u.Email))
             .ToListAsync();
         if (demoUsers.Count == 0)
             return;

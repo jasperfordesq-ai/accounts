@@ -123,7 +123,7 @@ public sealed class SystemReadinessProbeService
         var resolver = services.GetRequiredService<DatabaseTenantBootstrapResolver>();
         if (!string.IsNullOrWhiteSpace(email) && !string.IsNullOrWhiteSpace(tenantSlug))
         {
-            var tenantId = await resolver.ResolveLoginTenantAsync(email, cancellationToken);
+            var tenantId = await resolver.ResolveLoginTenantAsync(tenantSlug, email, cancellationToken);
             return tenantId is > 0 && await db.UserAccounts.AnyAsync(
                 user => user.IsActive
                     && user.Role.Trim().ToLower() == "owner"

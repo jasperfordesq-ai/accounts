@@ -38,7 +38,8 @@ public sealed class DatabaseTenantIsolationSqlTests
         Assert.Contains("SECURITY DEFINER", sql, StringComparison.Ordinal);
         Assert.Contains("SET search_path FROM CURRENT", sql, StringComparison.Ordinal);
         Assert.Contains("REVOKE ALL PRIVILEGES ON TABLE tenant_rls_context_keys FROM accounts_api_rls", sql, StringComparison.Ordinal);
-        Assert.Contains("REVOKE ALL ON FUNCTION accounts_resolve_login_tenant(text) FROM PUBLIC", sql, StringComparison.Ordinal);
+        Assert.Contains("REVOKE ALL ON FUNCTION accounts_resolve_login_tenant(text, text) FROM PUBLIC", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("accounts_email_exists", sql, StringComparison.Ordinal);
         Assert.Contains("accounts_delete_expired_anonymous_login_events", sql, StringComparison.Ordinal);
 
         foreach (var policy in TenantIsolationPolicyCatalog.Policies)

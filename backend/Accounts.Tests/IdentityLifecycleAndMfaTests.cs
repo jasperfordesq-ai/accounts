@@ -46,7 +46,7 @@ public sealed class IdentityLifecycleAndMfaTests
     {
         await using var fixture = await IdentityFixture.CreateAsync();
 
-        var firstFactor = await fixture.Identity.BeginLoginAsync(fixture.Owner.Email, OwnerPassword);
+        var firstFactor = await fixture.Identity.BeginLoginAsync(fixture.Tenant.Slug, fixture.Owner.Email, OwnerPassword);
 
         Assert.True(firstFactor.Succeeded);
         Assert.Null(firstFactor.User);
@@ -80,7 +80,7 @@ public sealed class IdentityLifecycleAndMfaTests
     {
         await using var fixture = await IdentityFixture.CreateAsync();
         var recoveryCodes = await EnrollOwnerAsync(fixture);
-        var login = await fixture.Identity.BeginLoginAsync(fixture.Owner.Email, OwnerPassword);
+        var login = await fixture.Identity.BeginLoginAsync(fixture.Tenant.Slug, fixture.Owner.Email, OwnerPassword);
         var challenge = Assert.IsType<MfaChallengeResponse>(login.MfaChallenge);
 
         var recovered = await fixture.Identity.CompleteChallengeAsync(challenge.ChallengeToken, null, recoveryCodes[0]);
@@ -89,7 +89,7 @@ public sealed class IdentityLifecycleAndMfaTests
         Assert.Equal("recovery", recovered.User!.MfaMethod);
         Assert.False(RecentAuthenticationMiddleware.HasRecentTotp(recovered.User, fixture.Clock.GetUtcNow(), 10));
 
-        var secondLogin = await fixture.Identity.BeginLoginAsync(fixture.Owner.Email, OwnerPassword);
+        var secondLogin = await fixture.Identity.BeginLoginAsync(fixture.Tenant.Slug, fixture.Owner.Email, OwnerPassword);
         var secondChallenge = Assert.IsType<MfaChallengeResponse>(secondLogin.MfaChallenge);
         var replay = await fixture.Identity.CompleteChallengeAsync(secondChallenge.ChallengeToken, null, recoveryCodes[0]);
         Assert.False(replay.Succeeded);
@@ -113,7 +113,7 @@ public sealed class IdentityLifecycleAndMfaTests
         Assert.True(accepted.IsActive);
         Assert.Equal(role, accepted.Role);
 
-        var login = await fixture.Identity.BeginLoginAsync(accepted.Email, NewPassword);
+        var login = await fixture.Identity.BeginLoginAsync(fixture.Tenant.Slug, accepted.Email, NewPassword);
         Assert.Equal(requiresMfa, login.MfaChallenge is not null);
         Assert.Equal(!requiresMfa, login.User is not null);
     }
@@ -191,7 +191,7 @@ public sealed class IdentityLifecycleAndMfaTests
         Assert.NotNull(offboarded.OffboardedAtUtc);
         Assert.Null(await fixture.Auth.ReadSessionAsync(cookieBeforeOffboarding, fixture.Clock.GetUtcNow().AddMinutes(1)));
         Assert.Null(await fixture.Auth.GetPrincipalAsync(client.Id));
-        Assert.False((await fixture.Identity.BeginLoginAsync(client.Email, NewPassword)).Succeeded);
+        Assert.False((await fixture.Identity.BeginLoginAsync(fixture.Tenant.Slug, client.Email, NewPassword)).Succeeded);
         await Assert.ThrowsAsync<BusinessRuleException>(() =>
             fixture.Lifecycle.CompletePasswordResetAsync(new AcceptActionTokenInput(reset.ActionToken, OwnerPassword)));
         await Assert.ThrowsAsync<BusinessRuleException>(() =>
@@ -206,6 +206,110 @@ public sealed class IdentityLifecycleAndMfaTests
         Assert.Contains(events, entry => entry.EventType == UserLifecycleEventTypes.Offboarded);
         Assert.All(events, entry => Assert.DoesNotContain(NewPassword, entry.DetailsJson, StringComparison.Ordinal));
         Assert.All(events, entry => Assert.DoesNotContain(reset.ActionToken, entry.DetailsJson, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task AccountLockAndUnlockRevokeSessionsAndPersistedMfaChallenges()
+    {
+        await using var fixture = await IdentityFixture.CreateAsync(requireMfa: false);
+        var client = await fixture.AddUserAsync("lock-cycle@example.ie", "Client", NewPassword);
+        var principal = await fixture.Auth.GetPrincipalAsync(client.Id) ?? throw new InvalidOperationException();
+        var cookieBeforeLock = fixture.Auth.CreateSessionCookieValue(
+            principal with { CsrfToken = "before-lock" },
+            fixture.Clock.GetUtcNow());
+        fixture.Db.UserMfaChallenges.Add(new UserMfaChallenge
+        {
+            TenantId = fixture.Tenant.Id,
+            UserId = client.Id,
+            Purpose = MfaChallengePurposes.Login,
+            TokenHash = new string('a', 64),
+            SessionVersion = client.SessionVersion,
+            ExpiresAtUtc = fixture.Clock.GetUtcNow().AddMinutes(5).UtcDateTime
+        });
+        await fixture.Db.SaveChangesAsync();
+
+        LoginResult failed = null!;
+        for (var attempt = 0; attempt < 5; attempt++)
+            failed = await fixture.Auth.LoginAsync(fixture.Tenant.Slug, client.Email, "Wrong Password Value 9!");
+
+        Assert.True(failed.AccountLocked);
+        Assert.Null(await fixture.Auth.ReadSessionAsync(cookieBeforeLock, fixture.Clock.GetUtcNow().AddMinutes(1)));
+        Assert.All(await fixture.Db.UserMfaChallenges.ToListAsync(), challenge => Assert.NotNull(challenge.RevokedAtUtc));
+
+        var lockedPrincipal = await fixture.Auth.GetPrincipalAsync(client.Id) ?? throw new InvalidOperationException();
+        var cookieBeforeUnlock = fixture.Auth.CreateSessionCookieValue(
+            lockedPrincipal with { CsrfToken = "before-unlock" },
+            fixture.Clock.GetUtcNow());
+        fixture.Db.UserMfaChallenges.Add(new UserMfaChallenge
+        {
+            TenantId = fixture.Tenant.Id,
+            UserId = client.Id,
+            Purpose = MfaChallengePurposes.Login,
+            TokenHash = new string('b', 64),
+            SessionVersion = client.SessionVersion,
+            ExpiresAtUtc = fixture.Clock.GetUtcNow().AddMinutes(5).UtcDateTime
+        });
+        await fixture.Db.SaveChangesAsync();
+
+        await fixture.Lifecycle.UnlockAsync(fixture.OwnerPrincipal, client.Id);
+
+        Assert.Null(await fixture.Auth.ReadSessionAsync(cookieBeforeUnlock, fixture.Clock.GetUtcNow().AddMinutes(1)));
+        Assert.All(await fixture.Db.UserMfaChallenges.ToListAsync(), challenge => Assert.NotNull(challenge.RevokedAtUtc));
+    }
+
+    [Fact]
+    public async Task SameEmailCanBeProvisionedAndAuthenticatedIndependentlyAcrossTenants()
+    {
+        await using var fixture = await IdentityFixture.CreateAsync();
+        var otherTenant = new Tenant { Name = "Other Firm", Slug = "other-firm" };
+        fixture.Db.Tenants.Add(otherTenant);
+        await fixture.Db.SaveChangesAsync();
+        var password = PasswordHasher.HashPassword(OwnerPassword);
+        fixture.Db.UserAccounts.Add(new UserAccount
+        {
+            TenantId = otherTenant.Id,
+            Tenant = otherTenant,
+            Email = "private-other-tenant@example.ie",
+            DisplayName = "Other User",
+            Role = "Client",
+            PasswordHash = password.Hash,
+            PasswordSalt = password.Salt,
+            PasswordAlgorithm = AuthService.PasswordAlgorithm,
+            PasswordLastChangedAt = fixture.Clock.GetUtcNow().UtcDateTime
+        });
+        await fixture.Db.SaveChangesAsync();
+
+        var invitation = await fixture.Lifecycle.InviteAsync(
+            fixture.OwnerPrincipal,
+            new InviteUserInput("private-other-tenant@example.ie", "New User", "Client", []));
+        await fixture.Lifecycle.AcceptInvitationAsync(new AcceptActionTokenInput(invitation.ActionToken, NewPassword));
+
+        var provisioned = await fixture.Db.UserAccounts.SingleAsync(user => user.Id == invitation.User.UserId);
+        Assert.Equal(fixture.Tenant.Id, provisioned.TenantId);
+        Assert.True((await fixture.Auth.LoginAsync(
+            fixture.Tenant.Slug,
+            "private-other-tenant@example.ie",
+            NewPassword)).Succeeded);
+        Assert.True((await fixture.Auth.LoginAsync(
+            otherTenant.Slug,
+            "private-other-tenant@example.ie",
+            OwnerPassword)).Succeeded);
+        Assert.False((await fixture.Auth.LoginAsync(
+            fixture.Tenant.Slug,
+            "private-other-tenant@example.ie",
+            OwnerPassword)).Succeeded);
+    }
+
+    [Fact]
+    public async Task SameTenantDuplicateEmailUsesGenericProvisioningFailure()
+    {
+        await using var fixture = await IdentityFixture.CreateAsync();
+
+        var failure = await Assert.ThrowsAsync<BusinessRuleException>(() => fixture.Lifecycle.InviteAsync(
+            fixture.OwnerPrincipal,
+            new InviteUserInput(fixture.Owner.Email, "Duplicate User", "Client", [])));
+        Assert.DoesNotContain("exists", failure.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(fixture.Owner.Email, failure.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -225,7 +329,7 @@ public sealed class IdentityLifecycleAndMfaTests
         Assert.Equal(fixture.Tenant.Id, user.TenantId);
         Assert.True(user.LockedUntilUtc > fixture.Clock.GetUtcNow().UtcDateTime);
         Assert.NotNull(user.MfaCredential?.EnabledAtUtc);
-        var blocked = await fixture.Identity.BeginLoginAsync(user.Email, NewPassword);
+        var blocked = await fixture.Identity.BeginLoginAsync(fixture.Tenant.Slug, user.Email, NewPassword);
         Assert.False(blocked.Succeeded);
         Assert.True(blocked.FirstFactor.AccountLocked);
     }
@@ -234,7 +338,7 @@ public sealed class IdentityLifecycleAndMfaTests
     public async Task SessionUsesSlidingIdleLimitWithoutExtendingAbsoluteLifetime()
     {
         await using var fixture = await IdentityFixture.CreateAsync(idleMinutes: 10, absoluteMinutes: 30, requireMfa: false);
-        var login = await fixture.Auth.LoginAsync(fixture.Owner.Email, OwnerPassword);
+        var login = await fixture.Auth.LoginAsync(fixture.Tenant.Slug, fixture.Owner.Email, OwnerPassword);
         var issued = fixture.Clock.GetUtcNow();
         var cookie = fixture.Auth.CreateSessionCookieValue(login.User! with { CsrfToken = "csrf" }, issued);
         var activeAtNine = await fixture.Auth.ReadSessionAsync(cookie, issued.AddMinutes(9));
@@ -323,7 +427,7 @@ public sealed class IdentityLifecycleAndMfaTests
 
     private static async Task<IReadOnlyList<string>> EnrollOwnerAsync(IdentityFixture fixture)
     {
-        var login = await fixture.Identity.BeginLoginAsync(fixture.Owner.Email, OwnerPassword);
+        var login = await fixture.Identity.BeginLoginAsync(fixture.Tenant.Slug, fixture.Owner.Email, OwnerPassword);
         var challenge = Assert.IsType<MfaChallengeResponse>(login.MfaChallenge);
         var code = fixture.Mfa.ComputeTotpForTesting(challenge.EnrollmentSecret!, fixture.Clock.GetUtcNow());
         var completion = await fixture.Identity.CompleteChallengeAsync(challenge.ChallengeToken, code, null);

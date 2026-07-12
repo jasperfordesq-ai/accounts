@@ -21,12 +21,24 @@ public sealed class IdentityAccessService(
     private readonly AuthSessionConfig config = options.Value;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
-    public async Task<IdentityLoginResult> BeginLoginAsync(string? email, string? password, CancellationToken cancellationToken = default)
+    public async Task<IdentityLoginResult> BeginLoginAsync(
+        string? tenantSlug,
+        string? email,
+        string? password,
+        CancellationToken cancellationToken = default)
     {
+        var normalizedTenantSlug = tenantSlug?.Trim().ToLowerInvariant();
         var normalizedEmail = email?.Trim().ToLowerInvariant();
-        if (tenantBootstrap is not null && !string.IsNullOrWhiteSpace(normalizedEmail))
-            await tenantBootstrap.ResolveLoginTenantAsync(normalizedEmail, cancellationToken);
-        var firstFactor = await authService.LoginAsync(email, password);
+        if (tenantBootstrap is not null
+            && !string.IsNullOrWhiteSpace(normalizedTenantSlug)
+            && !string.IsNullOrWhiteSpace(normalizedEmail))
+        {
+            await tenantBootstrap.ResolveLoginTenantAsync(
+                normalizedTenantSlug,
+                normalizedEmail,
+                cancellationToken);
+        }
+        var firstFactor = await authService.LoginAsync(tenantSlug, email, password);
         if (!firstFactor.Succeeded || firstFactor.User is null)
             return IdentityLoginResult.Failed(firstFactor);
 
@@ -38,7 +50,13 @@ public sealed class IdentityAccessService(
             .SingleAsync(candidate => candidate.Id == firstFactor.User.UserId, cancellationToken);
         var now = UtcNow();
         if (user.LockedUntilUtc > now || !user.IsActive || user.SessionVersion != firstFactor.User.SessionVersion)
-            return IdentityLoginResult.Failed(LoginResult.Failed("Invalid email or password.", user: user, accountLocked: user.LockedUntilUtc > now));
+            return IdentityLoginResult.Failed(LoginResult.Failed(
+                AuthService.InvalidLoginMessage,
+                user: user,
+                accountLocked: user.LockedUntilUtc > now,
+                failureKind: user.LockedUntilUtc > now
+                    ? LoginFailureKinds.LockedOut
+                    : LoginFailureKinds.InvalidCredentials));
 
         var enrollment = user.MfaCredential?.EnabledAtUtc is null;
         string? enrollmentSecret = null;

@@ -12,6 +12,7 @@ namespace Accounts.Api.Services;
 public class AuthService
 {
     public const string PasswordAlgorithm = "PBKDF2-SHA256-210000";
+    public const string InvalidLoginMessage = "Invalid workspace, email, or password.";
     private const int MaxFailedLoginAttempts = 5;
     private const long TicksPerMicrosecond = 10;
     private static readonly TimeSpan FailedLoginWindow = TimeSpan.FromMinutes(15);
@@ -50,30 +51,39 @@ public class AuthService
     public string CsrfCookieName =>
         string.IsNullOrWhiteSpace(config.CsrfCookieName) ? "accounts_csrf" : config.CsrfCookieName.Trim();
 
-    public async Task<LoginResult> LoginAsync(string? email, string? password)
+    public async Task<LoginResult> LoginAsync(string? tenantSlug, string? email, string? password)
     {
+        var normalizedTenantSlug = NormalizeTenantSlug(tenantSlug);
         var normalizedEmail = NormalizeEmail(email);
-        if (normalizedEmail is null || string.IsNullOrWhiteSpace(password))
-            return LoginResult.Failed("Email and password are required.", attemptedEmail: normalizedEmail);
+        if (normalizedTenantSlug is null || normalizedEmail is null || string.IsNullOrWhiteSpace(password))
+            return LoginResult.Failed(
+                InvalidLoginMessage,
+                attemptedEmail: normalizedEmail,
+                failureKind: LoginFailureKinds.MissingCredentials);
 
         var user = await db.UserAccounts
             .Include(u => u.Tenant)
             .Include(u => u.CompanyAccesses)
-            .SingleOrDefaultAsync(u => u.Email.ToLower() == normalizedEmail);
+            .SingleOrDefaultAsync(u =>
+                u.Tenant.Slug == normalizedTenantSlug
+                && u.Email == normalizedEmail);
 
         var now = DatabaseTimestampUtc();
+        // Always perform the same expensive hash verification before observing lock state. A
+        // locked account must not become distinguishable from another failed login by skipping
+        // PBKDF2 work.
+        var passwordMatches = passwordVerifier.Verify(password, user);
         if (IsLocked(user, now))
         {
             return LoginResult.Failed(
-                "Invalid email or password.",
+                InvalidLoginMessage,
                 attemptedEmail: normalizedEmail,
                 user: user,
                 accountLocked: true,
                 failedLoginCount: user!.FailedLoginCount,
-                lockedUntilUtc: user.LockedUntilUtc);
+                lockedUntilUtc: user.LockedUntilUtc,
+                failureKind: LoginFailureKinds.LockedOut);
         }
-
-        var passwordMatches = passwordVerifier.Verify(password, user);
 
         if (user is null
             || user.Tenant is null
@@ -81,18 +91,27 @@ public class AuthService
             || !passwordMatches)
         {
             var failureState = await RecordFailedLoginAsync(user, now);
+            if (failureState.LockoutStarted && user is not null)
+                await RevokeOutstandingMfaChallengesAsync(user.Id, now);
             return LoginResult.Failed(
-                "Invalid email or password.",
+                InvalidLoginMessage,
                 attemptedEmail: normalizedEmail,
                 user: user,
                 accountLocked: failureState.LockedUntilUtc > now,
                 lockoutStarted: failureState.LockoutStarted,
                 failedLoginCount: failureState.FailedLoginCount,
-                lockedUntilUtc: failureState.LockedUntilUtc);
+                lockedUntilUtc: failureState.LockedUntilUtc,
+                failureKind: failureState.LockedUntilUtc > now
+                    ? LoginFailureKinds.LockedOut
+                    : LoginFailureKinds.InvalidCredentials);
         }
 
         if (!user.IsActive)
-            return LoginResult.Failed("User account is inactive.", attemptedEmail: normalizedEmail, user: user);
+            return LoginResult.Failed(
+                InvalidLoginMessage,
+                attemptedEmail: normalizedEmail,
+                user: user,
+                failureKind: LoginFailureKinds.InactiveAccount);
 
         ResetLoginFailureState(user);
         user.LastLoginAt = now;
@@ -487,6 +506,13 @@ public class AuthService
                     && (u.LockedUntilUtc == null || u.LockedUntilUtc <= now)
                         ? lockedUntil
                         : u.LockedUntilUtc)
+                .SetProperty(u => u.SessionVersion, u =>
+                    (u.LastFailedLoginAt == null || u.LastFailedLoginAt < staleFailureCutoff
+                        ? 1
+                        : u.FailedLoginCount + 1) >= MaxFailedLoginAttempts
+                    && (u.LockedUntilUtc == null || u.LockedUntilUtc <= now)
+                        ? u.SessionVersion + 1
+                        : u.SessionVersion)
                 .SetProperty(u => u.UpdatedAt, now));
 
         var updated = await db.UserAccounts
@@ -515,6 +541,8 @@ public class AuthService
             && user.FailedLoginCount >= MaxFailedLoginAttempts;
         if (user.FailedLoginCount >= MaxFailedLoginAttempts)
             user.LockedUntilUtc = now.Add(LoginLockoutDuration);
+        if (lockoutStarted)
+            user.SessionVersion++;
 
         user.UpdatedAt = now;
         await db.SaveChangesAsync();
@@ -522,6 +550,29 @@ public class AuthService
             user.FailedLoginCount,
             user.LockedUntilUtc,
             lockoutStarted);
+    }
+
+    private async Task RevokeOutstandingMfaChallengesAsync(int userId, DateTime now)
+    {
+        if (db.Database.IsRelational())
+        {
+            await db.UserMfaChallenges
+                .Where(challenge => challenge.UserId == userId
+                    && challenge.ConsumedAtUtc == null
+                    && challenge.RevokedAtUtc == null)
+                .ExecuteUpdateAsync(setters =>
+                    setters.SetProperty(challenge => challenge.RevokedAtUtc, now));
+            return;
+        }
+
+        var challenges = await db.UserMfaChallenges
+            .Where(challenge => challenge.UserId == userId
+                && challenge.ConsumedAtUtc == null
+                && challenge.RevokedAtUtc == null)
+            .ToListAsync();
+        foreach (var challenge in challenges)
+            challenge.RevokedAtUtc = now;
+        await db.SaveChangesAsync();
     }
 
     private static void ResetLoginFailureState(UserAccount user)
@@ -560,7 +611,10 @@ public class AuthService
             .ToHashSet(),
         SessionVersion: user.SessionVersion,
         MustChangePassword: user.MustChangePassword,
-        PasswordLastChangedAt: user.PasswordLastChangedAt);
+        PasswordLastChangedAt: user.PasswordLastChangedAt)
+    {
+        TenantSlug = user.Tenant.Slug
+    };
 
     private static string? ValidateNewPassword(string currentPassword, string newPassword)
     {
@@ -581,6 +635,14 @@ public class AuthService
 
     private static string? NormalizeEmail(string? email) =>
         string.IsNullOrWhiteSpace(email) ? null : email.Trim().ToLowerInvariant();
+
+    private static string? NormalizeTenantSlug(string? tenantSlug)
+    {
+        var normalized = tenantSlug?.Trim().ToLowerInvariant();
+        return normalized is { Length: > 0 and <= 120 }
+            ? normalized
+            : null;
+    }
 
     private static string Base64UrlEncode(byte[] value) =>
         Convert.ToBase64String(value).TrimEnd('=').Replace('+', '-').Replace('/', '_');
@@ -648,7 +710,8 @@ public record LoginResult(
     bool AccountLocked = false,
     bool LockoutStarted = false,
     int FailedLoginCount = 0,
-    DateTime? LockedUntilUtc = null)
+    DateTime? LockedUntilUtc = null,
+    string? FailureKind = null)
 {
     public static LoginResult Success(AuthenticatedUser user) =>
         new(
@@ -667,7 +730,8 @@ public record LoginResult(
         bool accountLocked = false,
         bool lockoutStarted = false,
         int failedLoginCount = 0,
-        DateTime? lockedUntilUtc = null) =>
+        DateTime? lockedUntilUtc = null,
+        string failureKind = LoginFailureKinds.InvalidCredentials) =>
         new(
             false,
             null,
@@ -679,7 +743,16 @@ public record LoginResult(
             accountLocked,
             lockoutStarted,
             failedLoginCount,
-            lockedUntilUtc);
+            lockedUntilUtc,
+            failureKind);
+}
+
+public static class LoginFailureKinds
+{
+    public const string MissingCredentials = "MissingCredentials";
+    public const string InvalidCredentials = "InvalidCredentials";
+    public const string InactiveAccount = "InactiveAccount";
+    public const string LockedOut = "LockedOut";
 }
 
 public record PasswordChangeResult(bool Succeeded, AuthenticatedUser? User, string? FailureReason)

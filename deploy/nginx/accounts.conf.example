@@ -1,0 +1,33 @@
+# Optional Nginx HTTPS ingress for FilingBridge Public Production.
+# Certificates are operator-managed. All routes go to Next.js; never route
+# /api directly to Kestrel because that bypasses the service-key proxy.
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name accounts.example.ie;
+
+    ssl_certificate     /etc/letsencrypt/live/accounts.example.ie/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/accounts.example.ie/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+
+    client_max_body_size 6m;
+
+    location / {
+        proxy_http_version 1.1;
+        proxy_set_header Host $http_host;
+        proxy_set_header Forwarded "";
+        proxy_set_header X-Real-IP "";
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Host $http_host;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 120s;
+        proxy_pass http://127.0.0.1:3000;
+    }
+
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "no-referrer" always;
+    # Add includeSubDomains/preload only after the whole domain is ready.
+    add_header Strict-Transport-Security "max-age=31536000" always;
+}

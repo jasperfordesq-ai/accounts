@@ -1,164 +1,111 @@
 # Deployment Modes Workstream Handoff
 
-> **Status: design and implementation planning — not yet available.**
+> **Status: Private Server implemented as a Windows x64 operational preview; live acceptance is
+> incomplete.**
 >
-> The private-server mode described here has not been implemented. Do not expose the
-> current development Compose stack to a LAN, tailnet, or the public internet. This
-> document is the canonical handoff for a future session implementing and documenting
-> the deployment modes.
+> This document records the implemented three-mode contract, current verification boundary, and
+> remaining work. Do not interpret implementation or an automated pass as statutory acceptance,
+> live Tailscale certification, clean-machine proof, or production filing readiness.
 
 Last updated: 11 July 2026.
 
-## Why this workstream exists
+## Canonical deployment documents
 
-The original user need was deliberately modest: make annual accounts and annual-return
-preparation easier for one Irish charity, while allowing a small number of directors to
-view or review the work. During development, the repository also acquired the controls
-needed for a future public, multi-user production service. Those are different deployment
-needs and must not be forced through one setup guide.
+- [Choose a deployment mode](README.md)
+- [Development setup](../../LOCAL_SETUP.md)
+- [Private Server operator guide](private-server.md)
+- [Public Production entry guide](public-production.md)
+- [Public Production operations runbook](../operations/production-runbook.md)
 
-This workstream will make three supported modes explicit:
+## Purpose and non-negotiable boundary
 
-1. **Development** for contributors changing the code.
-2. **Private Server** for a person, charity, or small organisation sharing a compiled
-   installation only with selected users, normally through Tailscale Serve.
-3. **Public Production** for an internet-reachable service operated behind an HTTPS
-   ingress with the full public-production controls.
+FilingBridge supports three deliberately separate operator models:
 
-Public Production and Private Server use production builds. Private Server is not a
-development stack and is not a public-production release with controls silently disabled.
-It is a separate, bounded deployment contract.
+1. **Development** for contributors changing code on localhost.
+2. **Private Server** for a person or small organisation running a compiled installation on a
+   trusted Windows x64 computer, with optional access for selected users through Tailscale Serve.
+3. **Public Production** for an internet-reachable service behind a reviewed HTTPS ingress and the
+   full public operations/evidence contract.
 
-This workstream complements the independent production-readiness audit. It does not
-declare the statutory engine filing-ready, remove qualified-accountant gates, or add
-direct CRO/ROS submission.
+Private Server and Public Production run production builds. Private Server is not Development with
+different credentials, and it is not Public Production with arbitrary checks disabled. The exact
+deployment marker selects a narrow policy.
 
-## Decisions made during the planning session
+This workstream does not change the product's statutory state:
 
-### Use containers for the private server
-
-The private server will run the compiled frontend, compiled API, and PostgreSQL in
-Docker. Tailscale runs on the host and proxies to the frontend's loopback-only port.
-
-The Windows/WSL filesystem performance warning applies primarily to development setups
-that bind-mount a Windows source tree into a Linux container and run watchers or hot
-reload. The private server will have no source bind mounts, watchers, or development
-compilation. Code is copied into images at build time, and PostgreSQL uses a Docker named
-volume. An occasional image build may take longer on Windows; normal application requests
-do not repeatedly traverse the Windows source directory.
-
-For active development, a hybrid arrangement remains valid: PostgreSQL in Docker with
-the .NET API and Next.js development server running natively. That is a development
-performance choice, not the private-server architecture.
-
-### Tailscale is the private ingress
-
-The default Private Server topology is:
-
-```text
-selected director's browser
-        |
-        | private HTTPS over the tailnet
-        v
-Tailscale Serve on the host
-        |
-        | http://127.0.0.1:<private frontend port>
-        v
-compiled Next.js frontend container
-        |
-        | private Docker network
-        v
-compiled ASP.NET Core API container
-        |
-        | private Docker network
-        v
-PostgreSQL container + named volume
-```
-
-Private Server documentation must require Tailscale **Serve**, not Funnel. It must not
-require router port-forwarding, a public DNS record, IIS, Caddy, Apache, or Nginx. Each
-person still receives an individual FilingBridge application account; tailnet access is
-an additional network boundary, not a replacement for application authentication and
-roles.
-
-The intended persistent Serve configuration is equivalent to:
-
-```powershell
-tailscale serve --bg --https=443 localhost:3500
-```
-
-The setup helper should discover the actual tailnet DNS name rather than asking the user
-to type it into multiple configuration files.
-
-### Caddy is optional in public production
-
-`deploy/caddy/Caddyfile.example` is one ingress example, not an application dependency.
-Public Production may use Caddy, Apache, Nginx, an Azure ingress, or another reverse proxy
-that satisfies the documented HTTPS and forwarded-header contract. The public-production
-guide must be ingress-neutral and link to separate examples.
-
-### Private backups are optional and may be unencrypted
-
-For a private installation using the owner's own charity data, an ordinary local
-PostgreSQL dump is sufficient if the owner accepts the risk. Its purpose is recovery from
-accidental deletion, disk failure, or a bad upgrade. Encrypted off-host backups and
-formal restore evidence remain Public Production requirements, not Private Server
-installation blockers.
-
-### Preserve the filing boundary in every mode
-
-All modes may be used to exercise the accounts workflow and generate review artifacts.
-No mode directly submits to CRO or ROS. Real-world filing reliance must continue to show
-the appropriate professional/external review gates. Deployment convenience must not be
-represented as statutory acceptance.
-
-## Reference-environment observations
-
-The planning session inspected both a shared Azure Docker host and the intended local
-Windows host read-only. No containers, files, firewall rules, ingress settings, or
-databases were changed.
-
-- The Azure host confirmed that the app could coexist with other containers and use an
-  Apache/Plesk loopback proxy; it also confirmed that Caddy is unnecessary. The user later
-  selected a local-machine/Tailscale deployment as the preferred Private Server route.
-- The reference Windows machine has 8 CPU cores / 16 logical processors, 16 GB RAM,
-  roughly 120 GB free disk at inspection time, Docker Desktop and Docker Compose working,
-  suitable loopback ports free, and mains-powered sleep disabled.
-- Tailscale was not installed on the reference Windows machine at inspection time.
-- Hostnames, credentials, SSH key paths, tailnet identity, and private infrastructure
-  details are intentionally not retained in this public repository.
-
-The reference hardware is sufficient for low-traffic use by a small board. Availability
-still depends on the computer being powered, awake, connected, signed into Windows far
-enough for Docker Desktop to start, and connected to Tailscale. This is suitable for a
-small private service, not high-availability hosting.
+- direct CRO/ROS submission remains unsupported;
+- generated outputs remain review artifacts until the central release gates pass;
+- the independent audit baseline remains **600/1,000**;
+- real filing reliance still requires the named qualified-accountant, source-law, visual,
+  external ROS/iXBRL, manual-handoff, monitoring-provider, and operations evidence required by
+  `Docs/PLATFORM_AUDIT_2026-07-10.md`; and
+- a successful local installation must never be presented as legal, accounting, CRO, or Revenue
+  acceptance.
 
 ## Supported-mode contract
 
 | Property | Development | Private Server | Public Production |
 | --- | --- | --- | --- |
+| Marker | `Development` | `PrivateServer` | `PublicProduction` |
 | Primary audience | Contributors | Selected users in one small organisation | Internet-facing service operator |
-| Runtime code | Development or compiled | Compiled production images | Exact promoted production images |
+| Runtime | Development or compiled | Compiled production images | Exact promoted production images |
 | Source mounts/watchers | Allowed | Forbidden | Forbidden |
-| Intended exposure | Localhost only | Tailnet only | Public HTTPS login surface |
-| Public registration | Not a deployment promise | Disabled/unsupported | Disabled unless explicitly implemented later |
-| Demo credentials/data | Allowed and clearly labelled | Forbidden | Forbidden |
-| Frontend host binding | Developer choice | Loopback only | Loopback or trusted private ingress network |
+| Exposure | Contributor localhost only | IPv4 loopback; optional private tailnet HTTPS | Approved public HTTPS ingress |
+| Frontend host port | Development convenience | `127.0.0.1:<configured-port>` only | Loopback or trusted private ingress network |
 | API/database host ports | Allowed for development | Forbidden | Forbidden |
-| Secure cookies | Optional locally | Required | Required |
-| External monitoring | Optional | Optional | Required by the public-production contract |
-| Database transport TLS | Optional locally | Optional on the isolated Docker network | Required |
-| Backup | Disposable data acceptable | Optional ordinary backup | Encrypted off-host backup and restore evidence |
-| Image provenance | Not required | Local build or stable release | Exact CI-promoted digest and provenance |
-| Direct CRO/ROS submission | Unsupported | Unsupported | Unsupported |
+| Demo credentials/data | Allowed and labelled | Forbidden | Forbidden |
+| Cookies | Development policy | Secure session/CSRF contract retained | Secure session/CSRF contract retained |
+| User login | Workspace slug + email + password | Workspace slug + email + password | Workspace slug + email + password |
+| External providers | Optional | Disabled/local by default | Required by public contract |
+| PostgreSQL transport | Development policy | Plaintext only on isolated same-host bridge | Certificate-verified TLS |
+| RLS/database roles | Not a release boundary | Forced RLS, signed context, separate roles | Forced RLS, signed context, separate roles |
+| Backup | Disposable data acceptable | Verified encrypted recovery set by default; explicit incomplete plaintext option | Encrypted off-host evidence and named drills |
+| Direct filing | Unsupported | Unsupported | Unsupported |
 
-## Proposed configuration model
+`compose.yml` is Development only. It contains known credentials, automatic migration/seed
+allowances, sample state, and published API/database ports. Never expose it through Tailscale, a
+LAN, router forwarding, or public ingress.
 
-Do not overload `ASPNETCORE_ENVIRONMENT=Development` to make Private Server boot. That
-would enable development error behaviour, Swagger, known development allowances, and
-non-secure cookie behaviour.
+## Implemented Private Server architecture
 
-Retain production runtime semantics and add an explicit deployment mode, for example:
+```text
+local browser                         selected tailnet browser
+      |                                      |
+      | http://localhost:3500                | private HTTPS :443
+      |                                      v
+      |                               Tailscale Serve
+      |                                      |
+      +-------------------+------------------+
+                          |
+                  127.0.0.1:3500
+                          |
+              compiled Next.js :3000
+                          |
+               internal proxy/API key
+                          |
+                  Kestrel API :8080
+                          |
+      internal PostgreSQL :5432 + named volume
+```
+
+The frontend is the only service with a host port, and Compose binds it to IPv4 loopback. Kestrel
+and PostgreSQL have no host ports. Next.js injects the service key server-side and is the only
+browser ingress for `/api/*`.
+
+The API/database and frontend/API networks are `internal:true`. Docker Desktop suppresses a
+published port for a container attached only to internal networks, so the frontend also joins a
+dedicated ingress bridge. API and PostgreSQL never join that bridge. The bridge configuration is
+not claimed as a hard outbound firewall for a compromised frontend container on Docker Desktop;
+operators needing that stronger boundary must apply and test host/VM egress controls.
+
+Tailscale runs on the Windows host and, when explicitly enabled, serves the loopback frontend. The
+repository helper uses Tailscale **Serve**, never Funnel. It does not add router forwarding, a public
+Windows firewall rule, or a public reverse proxy. Caddy, IIS, Apache, and Nginx are outside the
+Private Server path.
+
+## Implemented mode and security contract
+
+Private Server runs with:
 
 ```text
 ASPNETCORE_ENVIRONMENT=Production
@@ -166,230 +113,217 @@ NODE_ENV=production
 Deployment__Mode=PrivateServer
 ```
 
-The supported values should be:
+The backend mode contract retains production error handling and validates a file-backed
+installation identity. It permits only the bounded private exceptions required by this topology:
 
-```text
-Development
-PrivateServer
-PublicProduction
-```
+- local structured JSON logs instead of a remote error-tracking provider;
+- deadline delivery disabled with no provider endpoint/token;
+- breached-password remote lookup disabled while the local deny-list remains; and
+- `sslmode=disable` only for same-host PostgreSQL on the unexposed internal bridge.
 
-The mode-aware startup validator must retain shared security controls and relax only the
-controls that do not fit the bounded private topology.
+It retains generated file-backed secrets, secure cookies, CSRF, service API-key protection,
+authentication, authorisation, tenant isolation, forced PostgreSQL RLS, signed connection context,
+separate migration/runtime database roles, audit integrity, no startup migration, no demo seed, and
+no direct filing client or endpoint.
 
-### Private Server invariants
+User identity is tenant-qualified. Email is unique within a tenant rather than globally, and login
+requires `workspace slug + email + password`. The database bootstrap function resolves only that
+slug/email pair. Generic login errors and keyed rejection telemetry remain in place.
 
-Private Server must fail startup when any of these are false:
+## Implemented repository surface
 
-- production frontend and API builds are used;
-- the session signing key, audit key, identity HMAC key, MFA key, database password, and
-  frontend/API key are generated rather than committed development values;
-- demo seeding and sample users/companies are disabled;
-- the first Owner bootstrap is explicit, idempotent, and refuses to overwrite an existing
-  charity or reset its Owner password;
-- secure session and CSRF cookies are enabled for the Tailscale HTTPS origin;
-- the allowed origin is the exact Tailscale HTTPS origin;
-- only the frontend is published, and only on `127.0.0.1`;
-- API and PostgreSQL have no host port mappings;
-- application authentication, CSRF, authorisation, tenant scoping, audit logging, and
-  destructive-action safeguards remain enabled;
-- PostgreSQL data is stored in a named persistent volume;
-- no source directory is mounted into a running application container;
-- Tailscale Funnel is not configured by repository automation.
+| File or area | Purpose |
+| --- | --- |
+| `compose.private.yml` | Compiled private topology, one-shot role/migration/initialisation jobs, health checks, exact image inputs, named data volume |
+| `.env.private.example` | Names/placeholders only; generated secrets live outside the checkout |
+| `FilingBridge.cmd` | Discoverable Windows launcher |
+| `scripts/private-server.ps1` | Command dispatcher |
+| `scripts/PrivateServer/PrivateServer.psm1` | Setup, lifecycle, Tailscale, recovery, backup/update, diagnostics, uninstall/purge implementation |
+| `scripts/verify-private-compose.ps1` | Static private topology/mode invariant verifier |
+| `scripts/test-private-compose.ps1` | Static regression plus loopback publication/network behaviour test |
+| `scripts/build-private-server-release.ps1` | Builds a versioned Windows bundle from a clean exact candidate and retained supply-chain evidence |
+| `scripts/verify-private-server-release.ps1` | ZIP safety, checksum, exact inventory, manifest, image, statutory-boundary, and file-hash verifier |
+| `.github/workflows/private-server-release.yml` | Manual two-stage candidate preparation and protected draft-release publication |
+| `deploy/private/release-manifest.schema.json` | Release manifest contract |
+| `Docs/deployment/private-server.md` | Authoritative Windows operator guide |
+| `Docs/deployment/public-production.md` | Proxy-neutral public entry guide |
+| `deploy/{caddy,apache,nginx}/` | Optional Public Production ingress examples |
 
-The private profile may make external error tracking, delivery-provider integration,
-database TLS inside the isolated Docker network, encrypted backup envelopes, immutable
-image promotion, and release-evidence publication optional. These relaxations must be
-explicit in code and documentation; do not bypass the whole production safety service.
+The Public Production examples are not Private Server dependencies.
 
-### Public Production invariants
+## Operator contract
 
-Public Production continues to use the hardened `compose.production.yml` contract:
-
-- exact promoted image digests;
-- public HTTPS through a trusted ingress;
-- private API and database networks;
-- separate migration and least-privileged application database roles;
-- verified PostgreSQL TLS;
-- generated secret files;
-- monitoring and incident routing;
-- encrypted off-host backup and restore drills;
-- controlled migrations, health checks, smoke tests, and release evidence;
-- named professional/external acceptance before real filing reliance.
-
-## Proposed repository layout
-
-```text
-compose.yml                              # Development only
-compose.private.yml                      # Planned Private Server profile
-compose.production.yml                   # Public Production
-.env.private.example                     # Names/placeholders only; no secrets
-
-Docs/deployment/README.md                # Choose a mode
-Docs/deployment/private-server.md        # Private installation and daily use
-Docs/deployment/public-production.md     # Public-production entry guide
-Docs/deployment/DEPLOYMENT_MODES_HANDOFF.md
-LOCAL_SETUP.md                           # Development guide
-Docs/operations/production-runbook.md    # Advanced public operations
-
-scripts/private-server.ps1               # setup/start/stop/status/update dispatcher
-scripts/backup-private-server.ps1        # optional ordinary dump
-scripts/restore-private-server.ps1       # explicit restore
-
-deploy/caddy/Caddyfile.example           # optional public ingress example
-deploy/apache/accounts.conf.example      # planned optional example
-deploy/nginx/accounts.conf.example       # planned optional example
-```
-
-Prefer one discoverable PowerShell entry point with subcommands over asking private users
-to remember Compose and Tailscale commands:
+The normal private operator starts from a verified versioned release bundle:
 
 ```powershell
-.\scripts\private-server.ps1 setup
-.\scripts\private-server.ps1 start
-.\scripts\private-server.ps1 status
-.\scripts\private-server.ps1 stop
-.\scripts\private-server.ps1 update
-.\scripts\private-server.ps1 backup
+.\FilingBridge.cmd setup
+.\FilingBridge.cmd start
+.\FilingBridge.cmd status
+.\FilingBridge.cmd logs
+.\FilingBridge.cmd stop
 ```
 
-`stop` must preserve the database volume. Any reset or volume-deletion command must be
-separate, explicitly destructive, and require confirmation.
+Setup is local-only by default. It checks the host and release manifest, creates generated state
+under `%LOCALAPPDATA%\FilingBridge\server`, restricts ACLs, pulls exact images, starts PostgreSQL,
+provisions the least-privileged application role, runs the migrate-only job, executes the
+empty-database private initializer once, starts the runtime, and displays the workspace slug,
+Owner email, and one-time Owner password after health succeeds. It refuses to overwrite an existing
+installation.
 
-## Documentation plan
+Additional commands are:
 
-### README
+```powershell
+.\FilingBridge.cmd tailscale enable | disable | status
+.\FilingBridge.cmd backup -BackupRecipient <age-recipient> -OutputDirectory <off-repo-directory>
+.\FilingBridge.cmd verify-backup -BackupPath <path> -AgeIdentityFile <identity>
+.\FilingBridge.cmd restore -BackupPath <path> -AgeIdentityFile <identity>
+.\FilingBridge.cmd update -ReleaseManifest <verified-release.json> `
+  -BackupRecipient <age-recipient> -AgeIdentityFile <identity> -OutputDirectory <off-repo-directory>
+.\FilingBridge.cmd owner-recovery
+.\FilingBridge.cmd diagnose
+.\FilingBridge.cmd support-bundle
+.\FilingBridge.cmd uninstall
+.\FilingBridge.cmd purge-data
+```
 
-Add a deployment-mode chooser near Quick Start. A reader must be able to select the
-correct guide in under 30 seconds. The README must label Private Server as in development
-until the profile and scripts pass their acceptance tests. It must stop implying that
-Caddy is required.
+`stop` and `uninstall` preserve data. `purge-data` is separate and confirmation-bound. Do not use
+`docker compose down -v` for troubleshooting.
 
-### Deployment index
+## Backup, restore, and update boundary
 
-Create `Docs/deployment/README.md` with:
+The default backup is an age-encrypted recovery set containing a verified PostgreSQL custom dump
+and the recovery-critical configuration/key companion. Creation quiesces writers, performs a
+disposable restore, and records schema, EF migration-history, and selected important-table
+row-count/fingerprint evidence. Dumps are streamed to ACL-restricted host staging rather than the
+database's bounded tmpfs. A per-installation HMAC authenticates the exact dump/ciphertext and
+immutable envelope before any `pg_restore`; age encryption alone is not treated as sender
+authentication. The vetted `age` command and a recipient are required for that complete encrypted
+set. Complete payloads currently have a 1.9 GB `Compress-Archive` ceiling. A plaintext database-only
+dump is available only through an explicit acknowledgement and is not a complete host-loss set.
 
-- a short decision tree;
-- the supported-mode matrix;
-- links to one canonical guide per mode;
-- availability and threat-boundary explanations;
-- a migration path from Private Server to Public Production.
+Restore is implemented only for the same installation. It verifies the envelope/inventory and a
+disposable database restore, preserves the current database, switches to a candidate, reapplies
+roles and forward migrations, rotates the session key, and health-checks the loopback app. It does
+not prove all-table/all-row equivalence, retained artifact byte continuity, or sample PDF/iXBRL
+output.
 
-### Development guide
+**Replacement-host/bare-metal restore is not implemented.** The companion is retained for future
+key continuity, but no clean-host bootstrap command or drill currently establishes host-loss
+recovery.
 
-Retitle `LOCAL_SETUP.md` visibly as Development Setup and document both full-Docker and
-hybrid native development. Warn that the known credentials and demo allowances must
-never be shared through Tailscale or exposed publicly.
+Update requires a verified pre-update backup, the separately supplied age identity, exact target
+manifest/images, a strictly forward semantic release identity, controlled migration, and loopback
+health. It rejects downgrades and version reuse before migration. It does not automate an
+authenticated login or sample statutory output. An old image cannot reverse a committed database
+migration; failed update recovery remains an explicit operator decision.
 
-### Private Server guide
+## Release and trust boundary
 
-Document, in order:
+Normal users should obtain the versioned ZIP and checksum from GitHub Releases and verify the
+immutable release plus exact asset attestation with GitHub CLI before extraction. The checksum
+detects transfer corruption. The manifest inside the ZIP proves extracted-file and image identity
+only after the release/asset trust check; it is not an independent out-of-band trust anchor.
 
-1. prerequisites on Windows, macOS, and Linux;
-2. Docker and Tailscale installation;
-3. one-time setup and secret generation;
-4. exact first-start behaviour and one-time Owner bootstrap;
-5. Tailscale Serve configuration and director access;
-6. creating individual application users and choosing roles;
-7. daily start, stop, status, logs, and health checks;
-8. updates and migration behaviour;
-9. optional ordinary backup and restore;
-10. moving the database to Public Production;
-11. troubleshooting and personal-computer availability limitations.
+The release workflow accepts an exact successful `main` run of the canonical CI workflow, exact
+application image evidence, and an exact PostgreSQL digest. Its preparation job has read-only
+repository permissions. A separate protected-environment job re-resolves the CI run, checks out the
+exact candidate SHA without persisted credentials, byte-compares every source payload with that Git
+object, independently binds the retained evidence inventory, and validates the downloaded bundle
+before obtaining the write/attestation permissions used to create a **draft** release. No Private
+Server release has been made generally available merely because this workflow exists.
 
-Do not hard-code Tailscale plan limits or pricing in the repository; link to the current
-official pages because those facts can change.
+## Current verification state
 
-### Public Production guide and runbook
+Automated coverage now exists for:
 
-Create a concise public-production entry guide and retain the existing operations runbook
-as the detailed reference. Rewrite the runbook's ingress introduction as a generic
-contract, with Caddy, Apache, and Nginx as optional examples.
+- backend Private Server mode safety, file-backed installation identity, private initialization,
+  Owner recovery, provider-free constraints, and tenant-qualified PostgreSQL identity resolution;
+- frontend workspace-slug login, proxy/header stripping, token fragments, mode-aware CSP and
+  rendered identity flows;
+- resolved private Compose invariants, exact mode values, secret-file use, lack of API/database
+  ports, and loopback-only frontend publication;
+- Windows operator path/ACL/state/secret handling, lifecycle command dispatch, backup/restore
+  safety, installation-wide lifecycle locking, authenticated-backup tamper rejection, Tailscale
+  Serve ownership checks, and destructive confirmation;
+- release bundle construction/verification, Windows PowerShell compatibility, malicious archive
+  rejection, dirty-source rejection, evidence binding, and CI action policy; and
+- preservation of the Public Production Compose contract and proxy-neutral ingress examples.
 
-## Implementation work packages
+Focused backend, frontend, operator, release, and Compose checks have passed during implementation.
+The frozen integrated frontend gate passed 316 unit tests (one intentional skip), 239 render tests
+across 71 files, lint, typecheck, a production build, and generated-contract verification for 177
+paths and 183 schemas. The final post-correction backend candidate passed 1,072/1,072 tests with the
+PostgreSQL and golden-corpus gates enabled. Private Server operator, release bundle, Compose
+mutation/live-loopback, protected release-workflow, CI action-policy, whitespace, and adversarial
+publication checks also passed. Green candidate-bound CI evidence is still required before any
+release claim.
 
-1. **Mode contract and tests**
-   - Add the deployment-mode configuration type and fail-fast validation tests.
-   - Prove Private Server keeps secure cookies, safe errors, API access control, and no
-     development bypasses.
-2. **Private Compose profile**
-   - Add compiled services, named database volume, loopback-only frontend port, private
-     networks, health checks, resource limits, and no source bind mounts.
-   - Add CI assertions that API/database ports cannot be published in this mode.
-3. **One-time setup**
-   - Generate secrets into a gitignored local file.
-   - Detect the Tailscale DNS name and set the exact HTTPS origin.
-   - Refuse to overwrite an existing configuration or charity database.
-4. **Lifecycle helper**
-   - Implement setup/start/stop/status/logs/update commands.
-   - Make failures readable to non-Docker experts.
-5. **User access**
-   - Document Tailscale invitation or machine sharing and create separate app accounts.
-   - Do not share the Owner password between directors.
-6. **Backup and migration**
-   - Add an optional unencrypted local dump/restore workflow.
-   - Prove the same database can move to Public Production.
-7. **Public ingress cleanup**
-   - Make the public docs proxy-neutral and add Apache/Nginx examples.
-8. **End-to-end verification**
-   - Validate a clean clone on Windows.
-   - Test first setup, second-start idempotency, login, director access, restart, update,
-     backup/restore, and rejection of unsafe port/credential changes.
+On 11 July 2026 a disposable current-host drill on Windows 11 Pro x64, Windows PowerShell 5.1, and
+Docker Desktop 29.2.1 passed source-build setup, loopback health, stop/start, plaintext database-only
+backup and independent verification, same-installation restore, source-build update, physical-host
+Owner recovery and reset completion, privileged-MFA enforcement, 25 diagnostics, redacted support
+bundle inspection, destructive purge, and exact resource cleanup. The drill found and drove fixes
+for benign native stderr/Windows argv handling, restart of existing containers without traversing
+removed one-shot dependencies, and the canonical `UserPasswordResetCompleted` host-audit database
+constraint. No Tailscale route or public listener was enabled.
 
-## Acceptance criteria
+The following are **not** proven and must remain open:
 
-Private Server is not complete until all of the following are objectively demonstrated:
+- clean Windows x64 machine setup from a real published bundle;
+- complete Owner MFA enrolment/authenticated-session journey followed by two separate non-Owner
+  role journeys (the current-host drill proved recovery reset and that privileged MFA stayed
+  enforced, not the full journey);
+- live Tailscale Serve HTTPS from a second device and least-privilege tailnet policy;
+- Windows sign-in, Docker Desktop, application, and Serve recovery after reboot;
+- full routine workflow without ordinary internet connectivity;
+- encrypted complete-recovery-set backup/same-installation restore with artifact-level business
+  checks (only the explicitly incomplete plaintext database-only path was drilled);
+- update from a real prior version plus forced migration/health failure recovery;
+- replacement-host/bare-metal restore; and
+- unchanged exact-candidate Public Production and statutory release evidence.
 
-- a clean clone can reach the first login without hand-editing YAML;
-- setup generates unique values and no secret is committed or printed unnecessarily;
-- rerunning setup refuses to replace an existing charity or reset credentials;
-- `docker compose config` proves only the frontend has a host port and it is loopback-only;
-- no development credential or demo seed appears in the resolved private configuration;
-- the application reports healthy through both loopback and Tailscale Serve;
-- two separate non-Owner users can sign in and receive their intended application roles;
-- a computer restart plus Windows sign-in restores Docker and the persistent Serve route;
-- ordinary stop/start and image rebuilds preserve PostgreSQL data;
-- backup/restore works when the user opts into it;
-- documented commands match the implementation and run successfully;
-- Development, Private Server, and Public Production Compose/configuration checks run in
-  CI;
-- all three mode guides preserve the no-direct-filing and professional-review boundary.
+## Acceptance checklist
 
-## Instructions for the next agent/session
+- [x] Explicit `Development` / `PrivateServer` / `PublicProduction` configuration contract exists.
+- [x] `compose.private.yml` contains compiled services, one-shot jobs, named data, and no
+      API/database host ports.
+- [x] Private setup/lifecycle, diagnostic, backup, restore, update, Owner recovery, Tailscale,
+      uninstall, and purge commands exist.
+- [x] Private and public guides, mode chooser, proxy-neutral runbook, and optional Caddy/Apache/Nginx
+      public examples exist.
+- [x] Private Compose, operator, release, frontend, backend, and workflow regression checks are
+      wired into repository/CI gates.
+- [x] A disposable current Windows host completed source setup, stop/start, plaintext database-only
+      backup/verify/restore, source update, Owner recovery/reset, diagnostics/support, purge, and
+      exact cleanup without public exposure.
+- [x] Exact local post-correction backend/frontend/repository gates passed with executed counts.
+- [ ] Green candidate-bound CI evidence retained after publication.
+- [ ] Clean Windows x64 release-bundle setup reaches tenant-qualified first login without YAML edits.
+- [ ] Rerunning setup refuses to replace an existing database or Owner credentials on a real host.
+- [ ] Two non-Owner users complete live role-appropriate journeys.
+- [ ] Live loopback and second-device Tailscale Serve HTTPS checks pass without public exposure.
+- [ ] Windows reboot and Docker/Tailscale restart preserve service/data (current-host stop/start and
+      source-build update passed; reboot and genuine release update remain open).
+- [ ] Real encrypted backup and same-installation restore drill passes with retained evidence.
+- [ ] Prior-version update and forced-failure recovery drill passes.
+- [ ] Offline routine workflow is exercised and documented honestly.
+- [ ] Replacement-host recovery is implemented and clean-host drilled before it is claimed.
+- [ ] Public Production exact-candidate validation remains green.
+- [ ] All audit human/external gates remain blocking until genuine evidence is supplied.
 
-1. Read repository-root `AGENTS.md` and `CLAUDE.md` completely.
-2. Read this handoff before proposing another deployment architecture.
-3. Inspect `git status` and preserve all pre-existing user changes; this repository had a
-   substantial dirty worktree during the planning session.
-4. Do not treat `compose.yml` as shareable: it contains development-only configuration.
-5. Do not make Private Server a wrapper around the full 33-variable/15-secret public
-   production setup.
-6. Do not bypass every production safety check by setting the API environment to
-   Development. Implement a narrow, explicit mode contract.
-7. Do not add Caddy, IIS, Apache, or Nginx to the Private Server path. Tailscale Serve is
-   its ingress.
-8. Do not use Tailscale Funnel or publish API/database ports.
-9. Add tests with each implementation slice and verify the documented clean-clone path.
-10. Update this handoff's status and checklist as work lands; never describe planned files
-    or commands as available before they pass verification.
-11. Keep the independent production-readiness audit truthful. Private deployment success
-    does not close statutory, external-validation, monitoring-provider, backup-drill, or
-    qualified-accountant controls for public filing reliance.
+## Continuation instructions
 
-## Current status at handoff
-
-- [x] User intent and three-mode model agreed.
-- [x] Docker-versus-native decision recorded.
-- [x] Tailscale/private-ingress decision recorded.
-- [x] Caddy clarified as optional for public production.
-- [x] Documentation structure and acceptance criteria planned.
-- [ ] Deployment-mode configuration implemented.
-- [ ] `compose.private.yml` implemented.
-- [ ] Private setup/lifecycle scripts implemented.
-- [ ] Private backup/restore helpers implemented.
-- [ ] Private Server guide implemented and clean-clone tested.
-- [ ] Public Production entry guide implemented.
-- [ ] Production runbook made ingress-neutral.
-- [ ] Apache and Nginx ingress examples implemented.
-- [ ] CI mode-contract and Compose checks implemented.
-- [ ] End-to-end Windows/Tailscale acceptance completed.
+1. Read root `AGENTS.md`, `CLAUDE.md`, this handoff, and `private-server.md` completely.
+2. Inspect the worktree and preserve unrelated/user changes.
+3. Run the exact final backend test project with PostgreSQL/golden-corpus gates, the full frontend
+   gate, all Private Server script tests, Compose verification, release/workflow verification, and
+   CI policy verification. Record explicit counts and exact candidate identity.
+4. Fix failures without weakening the mode, tenant, statutory, or evidence boundaries.
+5. Use a clean Windows x64 VM or equivalent for the remaining live acceptance matrix. Do not infer
+   Tailscale, reboot, offline, update, backup, or recovery success from mocked/static tests.
+6. Do not expose `compose.yml`, enable Funnel, publish Kestrel/PostgreSQL, switch Private Server to
+   Development, or add a private reverse proxy.
+7. Do not claim replacement-host restore until a supported bootstrap path and clean-host drill
+   exist.
+8. Keep `Docs/PLATFORM_AUDIT_2026-07-10.md` authoritative. Private deployment progress does not
+   restore the 600/1,000 baseline or satisfy named professional/external acceptance.

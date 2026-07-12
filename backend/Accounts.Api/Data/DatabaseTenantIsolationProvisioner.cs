@@ -1,5 +1,6 @@
 using System.Data;
 using System.Data.Common;
+using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -46,6 +47,8 @@ public sealed class DatabaseTenantIsolationProvisioner(
 
             await using (var roleCommand = connection.CreateCommand())
             {
+                var schemaName = await ScalarStringAsync(connection, "SELECT current_schema()", cancellationToken)
+                    ?? throw new InvalidOperationException("The PostgreSQL current schema could not be resolved.");
                 roleCommand.CommandText = $"""
                     ALTER ROLE {QuoteIdentifier(options.ApplicationLoginRole)}
                         LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION INHERIT;
@@ -59,6 +62,7 @@ public sealed class DatabaseTenantIsolationProvisioner(
                         FROM {QuoteIdentifier(options.ApplicationGroupRole)};
                     GRANT SELECT ON TABLE "__EFMigrationsHistory"
                         TO {QuoteIdentifier(options.ApplicationGroupRole)};
+                    {BuildPrivilegeRepairSql(schemaName, options.ApplicationLoginRole)}
                     """;
                 await roleCommand.ExecuteNonQueryAsync(cancellationToken);
             }
@@ -121,5 +125,79 @@ public sealed class DatabaseTenantIsolationProvisioner(
         command.Parameters.Add(parameter);
     }
 
+    private static string BuildPrivilegeRepairSql(string schemaName, string applicationLoginRole)
+    {
+        var schema = QuoteIdentifier(schemaName);
+        var applicationGroup = QuoteIdentifier(TenantIsolationPolicyCatalog.ApplicationGroupRole);
+        var administratorGroup = QuoteIdentifier(TenantIsolationPolicyCatalog.AdministratorGroupRole);
+        var applicationLogin = QuoteIdentifier(applicationLoginRole);
+        var sql = new StringBuilder(32_000);
+        sql.Append("REVOKE CREATE ON SCHEMA ").Append(schema).Append(" FROM PUBLIC, ")
+            .Append(applicationGroup).Append(", ").Append(applicationLogin).AppendLine(";")
+            .Append("GRANT USAGE ON SCHEMA ").Append(schema).Append(" TO ")
+            .Append(applicationGroup).Append(", ").Append(administratorGroup).AppendLine(";");
+
+        foreach (var policy in TenantIsolationPolicyCatalog.Policies)
+        {
+            var table = QuoteIdentifier(policy.TableName);
+            sql.Append("REVOKE ALL PRIVILEGES ON TABLE ").Append(table).Append(" FROM PUBLIC, ")
+                .Append(applicationLogin).AppendLine(";")
+                .Append("GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE ").Append(table).Append(" TO ")
+                .Append(applicationGroup).Append(", ").Append(administratorGroup).AppendLine(";");
+        }
+
+        sql.Append("REVOKE ALL PRIVILEGES ON TABLE tenant_rls_context_keys FROM PUBLIC, ")
+            .Append(applicationGroup).Append(", ").Append(applicationLogin).AppendLine(";")
+            .Append("GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE tenant_rls_context_keys TO ")
+            .Append(administratorGroup).AppendLine(";");
+
+        foreach (var function in new[]
+        {
+            "accounts_current_tenant_id()",
+            "accounts_resolve_login_tenant(text, text)",
+            "accounts_resolve_action_token_tenant(text, text)",
+            "accounts_resolve_mfa_challenge_tenant(text)",
+            "accounts_list_tenant_ids_for_jobs()",
+            "accounts_delete_expired_anonymous_login_events()"
+        })
+        {
+            sql.Append("REVOKE ALL ON FUNCTION ").Append(function).Append(" FROM PUBLIC, ")
+                .Append(applicationLogin).AppendLine(";")
+                .Append("GRANT EXECUTE ON FUNCTION ").Append(function).Append(" TO ")
+                .Append(applicationGroup);
+            if (function == "accounts_current_tenant_id()") sql.Append(", ").Append(administratorGroup);
+            sql.AppendLine(";");
+        }
+
+        sql.Append($$"""
+            DO $sequence_privileges$
+            DECLARE
+                sequence_name text;
+            BEGIN
+                FOR sequence_name IN
+                    SELECT sequence_entry.relname
+                    FROM pg_catalog.pg_class AS sequence_entry
+                    JOIN pg_catalog.pg_namespace AS namespace_entry
+                      ON namespace_entry.oid = sequence_entry.relnamespace
+                    WHERE namespace_entry.nspname = current_schema()
+                      AND sequence_entry.relkind = 'S'
+                LOOP
+                    EXECUTE format(
+                        'REVOKE ALL PRIVILEGES ON SEQUENCE %I.%I FROM PUBLIC, %I',
+                        current_schema(), sequence_name, {{QuoteLiteral(applicationLoginRole)}});
+                    EXECUTE format(
+                        'GRANT USAGE, SELECT ON SEQUENCE %I.%I TO %I, %I',
+                        current_schema(), sequence_name,
+                        {{QuoteLiteral(TenantIsolationPolicyCatalog.ApplicationGroupRole)}},
+                        {{QuoteLiteral(TenantIsolationPolicyCatalog.AdministratorGroupRole)}});
+                END LOOP;
+            END
+            $sequence_privileges$;
+            """);
+        return sql.ToString();
+    }
+
     private static string QuoteIdentifier(string value) => $"\"{value.Replace("\"", "\"\"")}\"";
+
+    private static string QuoteLiteral(string value) => $"'{value.Replace("'", "''", StringComparison.Ordinal)}'";
 }

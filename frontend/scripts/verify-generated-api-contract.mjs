@@ -44,6 +44,15 @@ for (const [path, method] of [
   assert.ok(requestSchema, `OpenAPI is missing the typed request body for ${method.toUpperCase()} ${path}`);
 }
 
+const loginInput = schema.components?.schemas?.LoginInput;
+assert.ok(loginInput, "OpenAPI is missing LoginInput");
+assert.deepEqual(
+  [...(loginInput.required ?? [])].sort(),
+  ["email", "password", "tenantSlug"],
+  "LoginInput must require a workspace slug, email, and password",
+);
+assert.ok(loginInput.properties?.tenantSlug, "LoginInput must expose tenantSlug");
+
 const temporaryDirectory = mkdtempSync(join(tmpdir(), "accounts-openapi-types-"));
 try {
   const temporaryOutput = join(temporaryDirectory, "accounts-api-v1.ts");

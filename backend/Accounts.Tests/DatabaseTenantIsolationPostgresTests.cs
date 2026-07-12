@@ -102,6 +102,66 @@ public sealed class DatabaseTenantIsolationPostgresTests : IAsyncLifetime
     }
 
     [PostgresFact]
+    public async Task ProvisionerRepairsTableSequenceAndResolverPrivilegesAfterNoAclRestore()
+    {
+        var adminConnection = administratorConnectionString
+            ?? throw new InvalidOperationException($"{ConnectionEnvVar} is required.");
+        var appConnection = applicationConnectionString
+            ?? throw new InvalidOperationException($"{ConnectionEnvVar} is required.");
+        var tenantSlug = "acl-repair-" + Guid.NewGuid().ToString("N");
+        const string email = "acl-repair@example.invalid";
+
+        await using (var admin = new NpgsqlConnection(adminConnection))
+        {
+            await admin.OpenAsync();
+            await using var revoke = admin.CreateCommand();
+            revoke.CommandText = $"""
+                REVOKE USAGE ON SCHEMA "{schemaName}" FROM "{TenantIsolationPolicyCatalog.ApplicationGroupRole}", "{applicationRole}";
+                REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA "{schemaName}" FROM "{TenantIsolationPolicyCatalog.ApplicationGroupRole}", "{applicationRole}";
+                REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA "{schemaName}" FROM "{TenantIsolationPolicyCatalog.ApplicationGroupRole}", "{applicationRole}";
+                REVOKE ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA "{schemaName}" FROM "{TenantIsolationPolicyCatalog.ApplicationGroupRole}", "{applicationRole}";
+                """;
+            await revoke.ExecuteNonQueryAsync();
+        }
+
+        await using (var repair = CreateDb(adminConnection))
+        {
+            await new DatabaseTenantIsolationProvisioner(repair, Options.Create(Configuration())).EnsureAsync();
+            var tenant = new Tenant { Name = "ACL Repair", Slug = tenantSlug };
+            repair.Tenants.Add(tenant);
+            await repair.SaveChangesAsync();
+            repair.UserAccounts.Add(User(tenant.Id, email));
+            await repair.SaveChangesAsync();
+        }
+
+        int resolvedTenantId;
+        var tenantContext = new DatabaseTenantContext(new HttpContextAccessor());
+        var interceptor = new TenantRlsConnectionInterceptor(tenantContext, Options.Create(Configuration()));
+        await using (var connection = new NpgsqlConnection(appConnection))
+        {
+            await connection.OpenAsync();
+            await using var resolve = connection.CreateCommand();
+            resolve.CommandText = "SELECT accounts_resolve_login_tenant(@slug, @email)";
+            resolve.Parameters.AddWithValue("slug", tenantSlug);
+            resolve.Parameters.AddWithValue("email", email);
+            resolvedTenantId = Assert.IsType<int>(await resolve.ExecuteScalarAsync());
+        }
+        tenantContext.SetResolvedTenant(resolvedTenantId);
+        var appOptions = new DbContextOptionsBuilder<AccountsDbContext>()
+            .UseNpgsql(appConnection)
+            .AddInterceptors(interceptor)
+            .Options;
+        await using (var appDb = new AccountsDbContext(appOptions))
+        {
+            var company = Company(resolvedTenantId, "ACL Repair Limited");
+            appDb.Companies.Add(company);
+            await appDb.SaveChangesAsync();
+            Assert.True(company.Id > 0);
+            Assert.Equal(1, await appDb.Companies.CountAsync());
+        }
+    }
+
+    [PostgresFact]
     public async Task DefectiveRawAndIgnoreFilterQueriesCannotCrossTenantOrForgeContext()
     {
         var adminConnection = administratorConnectionString
@@ -110,6 +170,8 @@ public sealed class DatabaseTenantIsolationPostgresTests : IAsyncLifetime
             ?? throw new InvalidOperationException($"{ConnectionEnvVar} is required.");
         int firstTenantId;
         int secondTenantId;
+        string firstTenantSlug;
+        string secondTenantSlug;
         int firstCompanyId;
         int secondCompanyId;
 
@@ -121,10 +183,13 @@ public sealed class DatabaseTenantIsolationPostgresTests : IAsyncLifetime
             await setup.SaveChangesAsync();
             firstTenantId = firstTenant.Id;
             secondTenantId = secondTenant.Id;
+            firstTenantSlug = firstTenant.Slug;
+            secondTenantSlug = secondTenant.Slug;
 
-            setup.UserAccounts.AddRange(
-                User(firstTenantId, "rls-one@example.invalid"),
-                User(secondTenantId, "rls-two@example.invalid"));
+            var firstUser = User(firstTenantId, "shared-user@example.invalid");
+            var inactiveSecondUser = User(secondTenantId, "shared-user@example.invalid");
+            inactiveSecondUser.IsActive = false;
+            setup.UserAccounts.AddRange(firstUser, inactiveSecondUser);
             var firstCompany = Company(firstTenantId, "RLS One Limited");
             var secondCompany = Company(secondTenantId, "RLS Two Limited");
             setup.Companies.AddRange(firstCompany, secondCompany);
@@ -195,8 +260,19 @@ public sealed class DatabaseTenantIsolationPostgresTests : IAsyncLifetime
             await emptyInterceptor.ApplyToOpenConnectionAsync(anonymous);
             Assert.Equal(firstTenantId, await ScalarIntAsync(
                 anonymous,
-                "SELECT accounts_resolve_login_tenant(@email)",
-                new NpgsqlParameter("email", "rls-one@example.invalid")));
+                "SELECT accounts_resolve_login_tenant(@tenant_slug, @email)",
+                new NpgsqlParameter("tenant_slug", firstTenantSlug),
+                new NpgsqlParameter("email", "shared-user@example.invalid")));
+            Assert.Equal(secondTenantId, await ScalarIntAsync(
+                anonymous,
+                "SELECT accounts_resolve_login_tenant(@tenant_slug, @email)",
+                new NpgsqlParameter("tenant_slug", secondTenantSlug),
+                new NpgsqlParameter("email", "shared-user@example.invalid")));
+            var globalEmailProbe = await Assert.ThrowsAsync<PostgresException>(() => ScalarIntAsync(
+                anonymous,
+                "SELECT accounts_email_exists(@email)::integer",
+                new NpgsqlParameter("email", "shared-user@example.invalid")));
+            Assert.Equal(PostgresErrorCodes.UndefinedFunction, globalEmailProbe.SqlState);
             Assert.Equal(0, await ScalarIntAsync(anonymous, "SELECT count(*)::integer FROM user_accounts"));
             Assert.Equal(1, await ExecuteAsync(
                 anonymous,

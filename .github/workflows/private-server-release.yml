@@ -1,0 +1,540 @@
+name: Prepare Private Server Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Semantic Private Server version, for example 0.1.0-preview.1
+        required: true
+        type: string
+      candidate_run_id:
+        description: Successful trusted-main CI run containing promoted container evidence
+        required: true
+        type: string
+      postgres_image:
+        description: Reviewed exact postgres@sha256 digest reference
+        required: true
+        type: string
+
+concurrency:
+  group: private-server-release-${{ inputs.version }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  prepare:
+    name: Verify candidate and prepare release asset
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.candidate.outputs.sha }}
+      run-url: ${{ steps.candidate.outputs.run-url }}
+      workflow-id: ${{ steps.candidate.outputs.workflow-id }}
+    steps:
+      - name: Resolve trusted candidate
+        id: candidate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ inputs.candidate_run_id }}
+        run: |
+          set -euo pipefail
+          [[ "$RUN_ID" =~ ^[1-9][0-9]*$ ]] || { echo "candidate_run_id must be numeric" >&2; exit 1; }
+          run_json="$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' "/repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID")"
+          workflow_json="$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' "/repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml")"
+          workflow_id="$(jq -er '.id | numbers | select(. > 0)' <<<"$workflow_json")"
+          [[ "$(jq -r '.name' <<<"$workflow_json")" == "CI" && "$(jq -r '.path' <<<"$workflow_json")" == ".github/workflows/ci.yml" && "$(jq -r '.state' <<<"$workflow_json")" == "active" ]] || { echo "Canonical CI workflow identity is invalid." >&2; exit 1; }
+          [[ "$(jq -r '.workflow_id' <<<"$run_json")" == "$workflow_id" && "$(jq -r '.path' <<<"$run_json")" == ".github/workflows/ci.yml" ]] || { echo "Candidate run is not from the canonical CI workflow identity." >&2; exit 1; }
+          [[ "$(jq -r '.name' <<<"$run_json")" == "CI" ]] || { echo "Candidate run is not CI." >&2; exit 1; }
+          [[ "$(jq -r '.event' <<<"$run_json")" == "push" ]] || { echo "Candidate run is not a trusted push." >&2; exit 1; }
+          [[ "$(jq -r '.head_branch' <<<"$run_json")" == "main" ]] || { echo "Candidate is not from main." >&2; exit 1; }
+          [[ "$(jq -r '.status' <<<"$run_json")" == "completed" && "$(jq -r '.conclusion' <<<"$run_json")" == "success" ]] || { echo "Candidate CI is not successful." >&2; exit 1; }
+          [[ "$(jq -r '.repository.full_name' <<<"$run_json")" == "$GITHUB_REPOSITORY" && "$(jq -r '.head_repository.full_name' <<<"$run_json")" == "$GITHUB_REPOSITORY" ]] || { echo "Candidate repository identity is invalid." >&2; exit 1; }
+          candidate_sha="$(jq -r '.head_sha' <<<"$run_json")"
+          run_url="$(jq -r '.html_url' <<<"$run_json")"
+          [[ "$candidate_sha" =~ ^[0-9a-f]{40}$ ]] || { echo "Candidate SHA is malformed." >&2; exit 1; }
+          [[ "$run_url" == "https://github.com/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" ]] || { echo "Candidate run URL is invalid." >&2; exit 1; }
+          printf 'sha=%s\nrun-url=%s\nworkflow-id=%s\n' "$candidate_sha" "$run_url" "$workflow_id" >> "$GITHUB_OUTPUT"
+
+      - name: Check out exact candidate
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          ref: ${{ steps.candidate.outputs.sha }}
+          persist-credentials: false
+
+      - name: Download promoted container evidence
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ inputs.candidate_run_id }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/container-supply-chain"
+          gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --name container-supply-chain --dir "$RUNNER_TEMP/container-supply-chain"
+
+      - name: Verify promoted evidence and private topology
+        shell: pwsh
+        run: |
+          ./scripts/verify-container-supply-chain-report.ps1 `
+            -EvidencePath (Join-Path $env:RUNNER_TEMP "container-supply-chain/container-supply-chain-report.json") `
+            -CommitSha "${{ steps.candidate.outputs.sha }}" `
+            -GitHubActionsRunUrl "${{ steps.candidate.outputs.run-url }}"
+          ./scripts/verify-private-compose.ps1
+
+      - name: Prove public x64 image pulls
+        shell: bash
+        env:
+          POSTGRES_IMAGE: ${{ inputs.postgres_image }}
+        run: |
+          set -euo pipefail
+          [[ "$POSTGRES_IMAGE" =~ ^postgres@sha256:[0-9a-f]{64}$ ]] || { echo "postgres_image must be an exact digest reference" >&2; exit 1; }
+          report="$RUNNER_TEMP/container-supply-chain/container-supply-chain-report.json"
+          backend="$(jq -r '.images[] | select(.component == "backend") | .exactDigestReference' "$report")"
+          frontend="$(jq -r '.images[] | select(.component == "frontend") | .exactDigestReference' "$report")"
+          docker logout ghcr.io >/dev/null 2>&1 || true
+          docker pull --platform linux/amd64 "$backend"
+          docker pull --platform linux/amd64 "$frontend"
+          docker pull --platform linux/amd64 "$POSTGRES_IMAGE"
+          docker run --rm --platform linux/amd64 --entrypoint sh "$POSTGRES_IMAGE" -ec '
+            test -f /etc/alpine-release
+            case "$(postgres --version)" in
+              "postgres (PostgreSQL) 16."*) ;;
+              *) echo "Private Server requires the reviewed PostgreSQL 16 Alpine runtime." >&2; exit 1 ;;
+            esac
+          '
+
+      - name: Build and verify release asset
+        id: bundle
+        shell: pwsh
+        env:
+          VERSION: ${{ inputs.version }}
+          POSTGRES_IMAGE: ${{ inputs.postgres_image }}
+        run: |
+          $output = Join-Path $env:RUNNER_TEMP "private-server-release"
+          $json = ./scripts/build-private-server-release.ps1 `
+            -Version $env:VERSION `
+            -CandidateCommitSha "${{ steps.candidate.outputs.sha }}" `
+            -GitHubActionsRunUrl "${{ steps.candidate.outputs.run-url }}" `
+            -SupplyChainEvidenceDirectory (Join-Path $env:RUNNER_TEMP "container-supply-chain") `
+            -PostgresImage $env:POSTGRES_IMAGE `
+            -OutputDirectory $output | ConvertFrom-Json
+          ./scripts/verify-private-server-release.ps1 `
+            -ArchivePath $json.archivePath `
+            -ExpectedVersion $env:VERSION `
+            -ExpectedCommitSha "${{ steps.candidate.outputs.sha }}" `
+            -ExpectedGitHubActionsRunUrl "${{ steps.candidate.outputs.run-url }}"
+          "archive=$($json.archivePath)" >> $env:GITHUB_OUTPUT
+          "checksum=$($json.checksumPath)" >> $env:GITHUB_OUTPUT
+
+      - name: Upload verified release candidate artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: private-server-release-${{ inputs.version }}
+          path: |
+            ${{ steps.bundle.outputs.archive }}
+            ${{ steps.bundle.outputs.checksum }}
+          if-no-files-found: error
+          retention-days: 30
+
+  publish-draft:
+    name: Attest and create protected draft release
+    runs-on: ubuntu-latest
+    needs:
+      - prepare
+    environment: private-server-release
+    permissions:
+      contents: write
+      actions: read
+      id-token: write
+      attestations: write
+    steps:
+      - name: Download prepared release asset
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v8
+        with:
+          name: private-server-release-${{ inputs.version }}
+          path: ${{ runner.temp }}/private-server-release
+
+      - name: Re-resolve trusted candidate independently
+        id: protected-candidate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ inputs.candidate_run_id }}
+          PREPARED_SHA: ${{ needs.prepare.outputs.sha }}
+          PREPARED_RUN_URL: ${{ needs.prepare.outputs.run-url }}
+          PREPARED_WORKFLOW_ID: ${{ needs.prepare.outputs.workflow-id }}
+        run: |
+          set -euo pipefail
+          [[ "$RUN_ID" =~ ^[1-9][0-9]*$ ]] || { echo "candidate_run_id must be numeric" >&2; exit 1; }
+          run_json="$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' "/repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID")"
+          workflow_json="$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' "/repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml")"
+          workflow_id="$(jq -er '.id | numbers | select(. > 0)' <<<"$workflow_json")"
+          [[ "$(jq -r '.name' <<<"$workflow_json")" == "CI" && "$(jq -r '.path' <<<"$workflow_json")" == ".github/workflows/ci.yml" && "$(jq -r '.state' <<<"$workflow_json")" == "active" ]] || { echo "Canonical CI workflow identity is invalid." >&2; exit 1; }
+          [[ "$(jq -r '.workflow_id' <<<"$run_json")" == "$workflow_id" && "$(jq -r '.path' <<<"$run_json")" == ".github/workflows/ci.yml" ]] || { echo "Candidate run is not from the canonical CI workflow identity." >&2; exit 1; }
+          [[ "$(jq -r '.name' <<<"$run_json")" == "CI" ]] || { echo "Candidate run is not CI." >&2; exit 1; }
+          [[ "$(jq -r '.event' <<<"$run_json")" == "push" ]] || { echo "Candidate run is not a trusted push." >&2; exit 1; }
+          [[ "$(jq -r '.head_branch' <<<"$run_json")" == "main" ]] || { echo "Candidate is not from main." >&2; exit 1; }
+          [[ "$(jq -r '.status' <<<"$run_json")" == "completed" && "$(jq -r '.conclusion' <<<"$run_json")" == "success" ]] || { echo "Candidate CI is not successful." >&2; exit 1; }
+          [[ "$(jq -r '.repository.full_name' <<<"$run_json")" == "$GITHUB_REPOSITORY" && "$(jq -r '.head_repository.full_name' <<<"$run_json")" == "$GITHUB_REPOSITORY" ]] || { echo "Candidate repository identity is invalid." >&2; exit 1; }
+          candidate_sha="$(jq -r '.head_sha' <<<"$run_json")"
+          run_url="$(jq -r '.html_url' <<<"$run_json")"
+          [[ "$candidate_sha" =~ ^[0-9a-f]{40}$ ]] || { echo "Candidate SHA is malformed." >&2; exit 1; }
+          [[ "$run_url" == "https://github.com/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" ]] || { echo "Candidate run URL is invalid." >&2; exit 1; }
+          [[ "$candidate_sha" == "$PREPARED_SHA" && "$run_url" == "$PREPARED_RUN_URL" && "$workflow_id" == "$PREPARED_WORKFLOW_ID" ]] || { echo "Protected candidate resolution differs from preparation." >&2; exit 1; }
+          printf 'sha=%s\nrun-url=%s\nworkflow-id=%s\n' "$candidate_sha" "$run_url" "$workflow_id" >> "$GITHUB_OUTPUT"
+
+      - name: Check out exact candidate for byte comparison only
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          ref: ${{ steps.protected-candidate.outputs.sha }}
+          path: protected-candidate-source
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Download trusted candidate container evidence independently
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ inputs.candidate_run_id }}
+        run: |
+          set -euo pipefail
+          [[ "$RUN_ID" =~ ^[1-9][0-9]*$ ]] || { echo "candidate_run_id must be numeric" >&2; exit 1; }
+          mkdir -p "$RUNNER_TEMP/container-supply-chain-protected"
+          gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --name container-supply-chain --dir "$RUNNER_TEMP/container-supply-chain-protected"
+
+      - name: Independently recheck asset identity and inventory
+        id: bundle
+        shell: pwsh
+        env:
+          VERSION: ${{ inputs.version }}
+          CANDIDATE_SHA: ${{ steps.protected-candidate.outputs.sha }}
+          CANDIDATE_RUN_URL: ${{ steps.protected-candidate.outputs.run-url }}
+          CANDIDATE_SOURCE_ROOT: ${{ github.workspace }}/protected-candidate-source
+          POSTGRES_IMAGE: ${{ inputs.postgres_image }}
+        run: |
+          $semanticVersionPattern = '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?$'
+          if ($env:VERSION -cnotmatch $semanticVersionPattern) {
+            throw "Private Server release version must be valid semantic version syntax."
+          }
+          $archive = Join-Path $env:RUNNER_TEMP "private-server-release/FilingBridge-PrivateServer-$env:VERSION.zip"
+          $checksum = "$archive.sha256"
+          if (-not (Test-Path -LiteralPath $archive -PathType Leaf) -or -not (Test-Path -LiteralPath $checksum -PathType Leaf)) {
+            throw "Prepared release archive/checksum is missing."
+          }
+          $expectedLine = "^([0-9a-f]{64})  $([Regex]::Escape([IO.Path]::GetFileName($archive)))$"
+          $line = (Get-Content -LiteralPath $checksum -TotalCount 1).Trim()
+          $archiveHash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($line -cnotmatch $expectedLine -or $archiveHash -cne $Matches[1]) {
+            throw "Prepared release checksum is invalid."
+          }
+          Add-Type -AssemblyName System.IO.Compression
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $archiveNames = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+          $archiveStream = [IO.File]::OpenRead($archive)
+          try {
+            $zip = [IO.Compression.ZipArchive]::new($archiveStream, [IO.Compression.ZipArchiveMode]::Read, $false)
+            try {
+              if ($zip.Entries.Count -gt 1000) { throw "Prepared release archive contains too many entries." }
+              [long]$totalExpandedBytes = 0
+              foreach ($entry in $zip.Entries) {
+                $entryName = $entry.FullName.Replace('\', '/')
+                $pathForSegments = if ($entryName.EndsWith('/', [StringComparison]::Ordinal)) { $entryName.Substring(0, $entryName.Length - 1) } else { $entryName }
+                $unsafeSegment = @($pathForSegments.Split('/') | Where-Object { $_ -in @('', '.', '..') }).Count -gt 0
+                $totalExpandedBytes += [long]$entry.Length
+                $unixFileType = (([int64]$entry.ExternalAttributes -shr 16) -band 0xF000)
+                if ([string]::IsNullOrWhiteSpace($entryName) -or
+                    $entryName.StartsWith('/', [StringComparison]::Ordinal) -or
+                    $entryName.Contains(':') -or
+                    $unsafeSegment -or
+                    -not $archiveNames.Add($entryName) -or
+                    $unixFileType -eq 0xA000 -or
+                    $entry.Length -gt 536870912 -or
+                    $totalExpandedBytes -gt 1073741824) {
+                  throw "Prepared release archive contains an unsafe or duplicate archive entry."
+                }
+              }
+            } finally { $zip.Dispose() }
+          } finally { $archiveStream.Dispose() }
+          $expanded = Join-Path $env:RUNNER_TEMP "private-server-release-recheck"
+          Expand-Archive -LiteralPath $archive -DestinationPath $expanded
+          $manifest = Get-Content -LiteralPath (Join-Path $expanded "release.json") -Raw | ConvertFrom-Json
+          $evidenceRoot = Join-Path $env:RUNNER_TEMP "container-supply-chain-protected"
+          $reportPath = Join-Path $evidenceRoot "container-supply-chain-report.json"
+          $verificationPath = Join-Path $evidenceRoot "container-supply-chain-verification-report.json"
+          if (-not (Test-Path -LiteralPath $reportPath -PathType Leaf) -or -not (Test-Path -LiteralPath $verificationPath -PathType Leaf)) {
+            throw "Trusted candidate supply-chain evidence is missing."
+          }
+          $report = Get-Content -LiteralPath $reportPath -Raw | ConvertFrom-Json
+          $verification = Get-Content -LiteralPath $verificationPath -Raw | ConvertFrom-Json
+          $reportItem = Get-Item -LiteralPath $reportPath
+          $reportHash = (Get-FileHash -LiteralPath $reportPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ([string]$report.status -cne 'passed' -or [string]$report.promotionMode -cne 'promoted' -or
+              $report.releaseEligible -ne $true -or @($report.blockingFailures).Count -ne 0 -or
+              [string]$report.candidate.commitSha -cne $env:CANDIDATE_SHA -or
+              [string]$report.candidate.githubActionsRunUrl -cne $env:CANDIDATE_RUN_URL -or
+              [string]$verification.status -cne 'passed' -or $verification.releaseEligible -ne $true -or
+              $verification.allowUnpromoted -eq $true -or [string]$verification.promotionMode -cne 'promoted' -or
+              @($verification.failures).Count -ne 0 -or
+              [string]$verification.commitSha -cne $env:CANDIDATE_SHA -or
+              [string]$verification.githubActionsRunUrl -cne $env:CANDIDATE_RUN_URL -or
+              [string]$verification.evidenceReport.fileName -cne 'container-supply-chain-report.json' -or
+              [long]$verification.evidenceReport.byteSize -ne $reportItem.Length -or
+              [string]$verification.evidenceReport.sha256 -cne $reportHash) {
+            throw "Trusted candidate supply-chain evidence is invalid or mismatched."
+          }
+          $retainedEvidence = @($verification.retainedEvidenceFiles)
+          if ($retainedEvidence.Count -lt 6) {
+            throw "Trusted verification must retain backend/frontend scan, SBOM, and provenance evidence."
+          }
+          $retainedNames = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+          foreach ($retained in $retainedEvidence) {
+            $fileName = [string]$retained.fileName
+            if ([string]::IsNullOrWhiteSpace($fileName) -or
+                [IO.Path]::GetFileName($fileName) -cne $fileName -or
+                -not $retainedNames.Add($fileName) -or
+                [long]$retained.byteSize -lt 1 -or
+                [string]$retained.sha256 -cnotmatch '^[0-9a-f]{64}$') {
+              throw "Trusted verification contains unsafe, duplicate, or invalid retained evidence metadata."
+            }
+            $retainedPath = Join-Path $evidenceRoot $fileName
+            if (-not (Test-Path -LiteralPath $retainedPath -PathType Leaf) -or
+                (Get-Item -LiteralPath $retainedPath).Length -ne [long]$retained.byteSize -or
+                (Get-FileHash -LiteralPath $retainedPath -Algorithm SHA256).Hash.ToLowerInvariant() -cne [string]$retained.sha256) {
+              throw "Trusted retained evidence is missing or mismatched: $fileName"
+            }
+          }
+          $backendEvidence = @($report.images | Where-Object component -CEQ 'backend')
+          $frontendEvidence = @($report.images | Where-Object component -CEQ 'frontend')
+          if ($backendEvidence.Count -ne 1 -or $frontendEvidence.Count -ne 1 -or
+              @($verification.verifiedImageDigests).Count -ne 2 -or
+              @($verification.verifiedImageDigests) -cnotcontains [string]$backendEvidence[0].exactDigestReference -or
+              @($verification.verifiedImageDigests) -cnotcontains [string]$frontendEvidence[0].exactDigestReference) {
+            throw "Trusted candidate image evidence is incomplete or ambiguous."
+          }
+          foreach ($imageEvidence in @($backendEvidence[0], $frontendEvidence[0])) {
+            foreach ($selectedFile in @($imageEvidence.scan.file, $imageEvidence.sbom.file, $imageEvidence.provenance.file)) {
+              $selectedName = [string]$selectedFile.fileName
+              $verifiedSelected = @($retainedEvidence | Where-Object fileName -CEQ $selectedName)
+              if (-not $retainedNames.Contains($selectedName) -or
+                  $verifiedSelected.Count -ne 1 -or
+                  [long]$verifiedSelected[0].byteSize -ne [long]$selectedFile.byteSize -or
+                  [string]$verifiedSelected[0].sha256 -cne [string]$selectedFile.sha256) {
+                throw "Selected image evidence is not exactly bound to trusted retained evidence: $selectedName"
+              }
+            }
+          }
+          $generatedAt = [DateTimeOffset]::MinValue
+          if ([string]$manifest.schemaVersion -cne "filingbridge.private-server.release/v1" -or
+              [string]$manifest.version -cnotmatch $semanticVersionPattern -or
+              [string]$manifest.version -cne $env:VERSION -or
+              -not ([string]$manifest.generatedAtUtc).EndsWith('Z', [StringComparison]::Ordinal) -or
+              -not [DateTimeOffset]::TryParseExact([string]$manifest.generatedAtUtc, 'o', [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::None, [ref]$generatedAt) -or
+              $generatedAt.Offset -ne [TimeSpan]::Zero -or
+              @($manifest.supportedHosts).Count -ne 1 -or
+              [string]$manifest.supportedHosts[0] -cne 'windows-x64' -or
+              [string]$manifest.candidate.commitSha -cne $env:CANDIDATE_SHA -or
+              [string]$manifest.candidate.githubActionsRunUrl -cne $env:CANDIDATE_RUN_URL) {
+            throw "Prepared release candidate identity is invalid."
+          }
+          if ([string]$manifest.images.backend.exactDigestReference -cnotmatch '^ghcr\.io/jasperfordesq-ai/accounts-api@sha256:[0-9a-f]{64}$' -or
+              [string]$manifest.images.frontend.exactDigestReference -cnotmatch '^ghcr\.io/jasperfordesq-ai/accounts-frontend@sha256:[0-9a-f]{64}$' -or
+              [string]$manifest.images.postgres.exactDigestReference -cnotmatch '^postgres@sha256:[0-9a-f]{64}$' -or
+              [string]$manifest.images.backend.exactDigestReference -cne [string]$backendEvidence[0].exactDigestReference -or
+              [string]$manifest.images.frontend.exactDigestReference -cne [string]$frontendEvidence[0].exactDigestReference -or
+              [string]$manifest.images.postgres.exactDigestReference -cne $env:POSTGRES_IMAGE) {
+            throw "Prepared release image identity is invalid."
+          }
+          if ([string]$manifest.statutoryAssurance.status -cne 'release-blocked' -or
+              $manifest.statutoryAssurance.noDirectSubmission -ne $true -or
+              $manifest.statutoryAssurance.qualifiedAccountantRequired -ne $true) {
+            throw "Prepared release lost its statutory safety boundary."
+          }
+          $manifestFiles = @($manifest.files)
+          if ($manifestFiles.Count -lt 1) {
+            throw "Prepared release manifest files inventory must be nonempty."
+          }
+          $candidateSourceRoot = [IO.Path]::GetFullPath($env:CANDIDATE_SOURCE_ROOT)
+          if (-not (Test-Path -LiteralPath $candidateSourceRoot -PathType Container)) {
+            throw "Exact candidate source checkout is missing."
+          }
+          $sourceHeadOutput = @(& git -C $candidateSourceRoot rev-parse HEAD 2>$null)
+          $sourceHeadExitCode = $LASTEXITCODE
+          $sourceHead = if ($sourceHeadOutput.Count -eq 1) { [string]$sourceHeadOutput[0] } else { '' }
+          if ($sourceHeadExitCode -ne 0 -or $sourceHead.Trim() -cne $env:CANDIDATE_SHA) {
+            throw "Source checkout does not match the independently resolved candidate commit."
+          }
+          $sourceStatus = @(& git -C $candidateSourceRoot status --porcelain=v1 --untracked-files=all 2>$null)
+          if ($LASTEXITCODE -ne 0 -or $sourceStatus.Count -ne 0) {
+            throw "Source checkout is not a clean representation of the candidate commit."
+          }
+          $manifested = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+          $manifestedExact = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+          foreach ($entry in $manifestFiles) {
+            $relative = [string]$entry.path
+            $segments = @($relative.Split('/'))
+            if ([string]::IsNullOrWhiteSpace($relative) -or
+                $relative.StartsWith('/', [StringComparison]::Ordinal) -or
+                $relative.Contains('\') -or
+                $relative.Contains(':') -or
+                $relative -match '[\x00-\x1F\x7F]' -or
+                @($segments | Where-Object { $_ -in @('', '.', '..') }).Count -gt 0 -or
+                [long]$entry.byteSize -lt 1 -or
+                [string]$entry.sha256 -cnotmatch '^[0-9a-f]{64}$' -or
+                -not $manifested.Add($relative)) {
+              throw "Prepared release manifest contains an unsafe/duplicate path."
+            }
+            [void]$manifestedExact.Add($relative)
+            $path = [IO.Path]::GetFullPath((Join-Path $expanded $relative))
+            if (-not $path.StartsWith([IO.Path]::GetFullPath($expanded) + [IO.Path]::DirectorySeparatorChar, [StringComparison]::Ordinal) -or
+                -not (Test-Path -LiteralPath $path -PathType Leaf) -or
+                (Get-Item -LiteralPath $path).Length -ne [long]$entry.byteSize -or
+                (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant() -cne [string]$entry.sha256) {
+              throw "Prepared release manifested file is missing or mismatched: $relative"
+            }
+          }
+          $evidencePrefix = 'evidence/container-supply-chain/'
+          foreach ($sourceEntry in @($manifestFiles | Where-Object { -not ([string]$_.path).StartsWith($evidencePrefix, [StringComparison]::Ordinal) })) {
+            $sourceRelative = [string]$sourceEntry.path
+            $trackedStageOutput = @(& git -C $candidateSourceRoot ls-files --stage -- $sourceRelative 2>$null)
+            $trackedStageExitCode = $LASTEXITCODE
+            $trackedStagePattern = '^(?:100644|100755) [0-9a-f]{40,64} 0\t' + [Regex]::Escape($sourceRelative) + '$'
+            $sourcePath = [IO.Path]::GetFullPath((Join-Path $candidateSourceRoot $sourceRelative))
+            $sourceItem = Get-Item -LiteralPath $sourcePath -Force -ErrorAction SilentlyContinue
+            if ($trackedStageExitCode -ne 0 -or $trackedStageOutput.Count -ne 1 -or
+                [string]$trackedStageOutput[0] -cnotmatch $trackedStagePattern -or
+                $null -eq $sourceItem -or $sourceItem.PSIsContainer -or
+                (($sourceItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) -or
+                -not $sourcePath.StartsWith($candidateSourceRoot.TrimEnd('/', '\') + [IO.Path]::DirectorySeparatorChar, [StringComparison]::Ordinal)) {
+              throw "Manifest source payload is not a regular tracked candidate file: $sourceRelative"
+            }
+            $packagedSourcePath = Join-Path $expanded $sourceRelative
+            if ($sourceItem.Length -ne (Get-Item -LiteralPath $packagedSourcePath).Length -or
+                (Get-FileHash -LiteralPath $sourcePath -Algorithm SHA256).Hash.ToLowerInvariant() -cne
+                  (Get-FileHash -LiteralPath $packagedSourcePath -Algorithm SHA256).Hash.ToLowerInvariant()) {
+              throw "Manifest source payload differs from the exact candidate commit: $sourceRelative"
+            }
+          }
+          $requiredPackageFiles = @(
+            'FilingBridge.cmd',
+            'compose.private.yml',
+            '.env.private.example',
+            'scripts/private-server.ps1',
+            'scripts/PrivateServer/PrivateServer.psm1',
+            'Docs/deployment/README.md',
+            'Docs/deployment/private-server.md',
+            'deploy/private/release-manifest.schema.json',
+            'README.md',
+            'LICENSE',
+            'NOTICE',
+            'THIRD_PARTY_NOTICES.md',
+            'CONTRIBUTORS.md'
+          )
+          foreach ($requiredPackageFile in $requiredPackageFiles) {
+            if (-not $manifestedExact.Contains($requiredPackageFile)) {
+              throw "Prepared release omits required package file: $requiredPackageFile"
+            }
+          }
+          function Assert-PackagedTrustedEvidence([string]$RelativePath, [string]$TrustedPath) {
+            if (-not $manifestedExact.Contains($RelativePath)) {
+              throw "Prepared release omits required trusted evidence: $RelativePath"
+            }
+            $packagedPath = Join-Path $expanded $RelativePath
+            $trustedItem = Get-Item -LiteralPath $TrustedPath
+            if ((Get-Item -LiteralPath $packagedPath).Length -ne $trustedItem.Length -or
+                (Get-FileHash -LiteralPath $packagedPath -Algorithm SHA256).Hash.ToLowerInvariant() -cne
+                  (Get-FileHash -LiteralPath $TrustedPath -Algorithm SHA256).Hash.ToLowerInvariant()) {
+              throw "Packaged trusted evidence differs from the independently downloaded candidate evidence: $RelativePath"
+            }
+          }
+          $expectedEvidencePaths = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+          [void]$expectedEvidencePaths.Add($evidencePrefix + 'container-supply-chain-report.json')
+          [void]$expectedEvidencePaths.Add($evidencePrefix + 'container-supply-chain-verification-report.json')
+          foreach ($retained in $retainedEvidence) {
+            [void]$expectedEvidencePaths.Add($evidencePrefix + [string]$retained.fileName)
+          }
+          $manifestEvidencePaths = @($manifestFiles | ForEach-Object { [string]$_.path } | Where-Object { $_.StartsWith($evidencePrefix, [StringComparison]::Ordinal) })
+          if ($manifestEvidencePaths.Count -ne $expectedEvidencePaths.Count -or
+              @($manifestEvidencePaths | Where-Object { -not $expectedEvidencePaths.Contains($_) }).Count -gt 0) {
+            throw "Prepared release evidence inventory is not exactly the independently trusted evidence set."
+          }
+          Assert-PackagedTrustedEvidence ($evidencePrefix + 'container-supply-chain-report.json') $reportPath
+          Assert-PackagedTrustedEvidence ($evidencePrefix + 'container-supply-chain-verification-report.json') $verificationPath
+          foreach ($retained in $retainedEvidence) {
+            $retainedRelativePath = $evidencePrefix + [string]$retained.fileName
+            Assert-PackagedTrustedEvidence $retainedRelativePath (Join-Path $evidenceRoot ([string]$retained.fileName))
+            $packagedRetained = Get-Item -LiteralPath (Join-Path $expanded $retainedRelativePath)
+            if ($packagedRetained.Length -ne [long]$retained.byteSize -or
+                (Get-FileHash -LiteralPath $packagedRetained.FullName -Algorithm SHA256).Hash.ToLowerInvariant() -cne [string]$retained.sha256) {
+              throw "Packaged retained evidence metadata differs from trusted verification: $retainedRelativePath"
+            }
+          }
+          $actual = @(Get-ChildItem -LiteralPath $expanded -File -Recurse | ForEach-Object {
+            $_.FullName.Substring($expanded.TrimEnd('/', '\').Length).TrimStart('/', '\').Replace('\', '/')
+          } | Where-Object { $_ -cne 'release.json' })
+          if ($actual.Count -ne $manifested.Count -or @($actual | Where-Object { -not $manifested.Contains($_) }).Count -gt 0) {
+            throw "Prepared release contains an unmanifested file or omits a manifested file."
+          }
+          "archive=$archive" >> $env:GITHUB_OUTPUT
+          "checksum=$checksum" >> $env:GITHUB_OUTPUT
+          "archive-file-name=$([IO.Path]::GetFileName($archive))" >> $env:GITHUB_OUTPUT
+          "archive-sha256=$archiveHash" >> $env:GITHUB_OUTPUT
+          "candidate-sha=$env:CANDIDATE_SHA" >> $env:GITHUB_OUTPUT
+
+      - name: Attest Private Server bundle
+        id: attest
+        uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
+        with:
+          subject-path: ${{ steps.bundle.outputs.archive }}
+
+      - name: Create non-overwriting draft GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+          CANDIDATE_SHA: ${{ steps.bundle.outputs.candidate-sha }}
+          CANDIDATE_RUN_URL: ${{ steps.protected-candidate.outputs.run-url }}
+          ATTESTED_SUBJECT_NAME: ${{ steps.bundle.outputs.archive-file-name }}
+          ATTESTED_SUBJECT_SHA256: ${{ steps.bundle.outputs.archive-sha256 }}
+          ARCHIVE: ${{ steps.bundle.outputs.archive }}
+          CHECKSUM: ${{ steps.bundle.outputs.checksum }}
+          ATTESTATION_URL: ${{ steps.attest.outputs.attestation-url }}
+        run: |
+          set -euo pipefail
+          tag="private-server-v$VERSION"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Refusing to overwrite existing release $tag" >&2
+            exit 1
+          fi
+          if gh api -H 'X-GitHub-Api-Version: 2026-03-10' "/repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" >/dev/null 2>&1; then
+            echo "Refusing to bind the release to pre-existing tag $tag" >&2
+            exit 1
+          fi
+          notes="$RUNNER_TEMP/private-server-release-notes.md"
+          cat > "$notes" <<EOF
+          # FilingBridge Private Server $VERSION
+
+          Operational preview for a compiled, private Windows x64 installation.
+
+          - Candidate: \`$CANDIDATE_SHA\`
+          - CI: $CANDIDATE_RUN_URL
+          - Attested subject: \`$ATTESTED_SUBJECT_NAME\` with SHA-256 \`$ATTESTED_SUBJECT_SHA256\`
+          - Provenance for that subject: $ATTESTATION_URL
+          - The attested subject's manifest candidate was independently byte-matched to \`$CANDIDATE_SHA\`.
+          - Runtime images are pinned by digest in \`release.json\`.
+          - Tailscale Serve is optional private ingress; Funnel is unsupported.
+          - Direct CRO/ROS submission remains unsupported.
+          - Statutory use remains blocked pending the live qualified-accountant and external-validation gates.
+
+          Review the attached checksum, attestation, manifest and Windows runbook before publishing
+          this draft as an immutable release.
+          EOF
+          gh release create "$tag" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$CANDIDATE_SHA" \
+            --title "FilingBridge Private Server $VERSION" \
+            --notes-file "$notes" \
+            --draft \
+            "$ARCHIVE#Windows x64 Private Server bundle" \
+            "$CHECKSUM#SHA-256 checksum"

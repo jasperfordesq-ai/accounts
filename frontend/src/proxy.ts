@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withStrictTransportSecurity } from "@/lib/securityHeaders";
+import { shouldUpgradeInsecureRequests, withStrictTransportSecurity } from "@/lib/securityHeaders";
 
 const isDevelopmentRuntime = process.env.NODE_ENV === "development";
 
-function contentSecurityPolicy(nonce: string) {
+function contentSecurityPolicy(nonce: string, request: NextRequest) {
   const scriptSrc = isDevelopmentRuntime
     ? `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' 'unsafe-inline' 'unsafe-eval'`
     : `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`;
@@ -24,13 +24,15 @@ function contentSecurityPolicy(nonce: string) {
     "manifest-src 'self'",
     "worker-src 'self' blob:",
     "connect-src 'self'",
-    ...(!isDevelopmentRuntime ? ["upgrade-insecure-requests"] : []),
+    ...(shouldUpgradeInsecureRequests(request.url, undefined, request.headers.get("host"))
+      ? ["upgrade-insecure-requests"]
+      : []),
   ].join("; ");
 }
 
 export function proxy(request: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
-  const csp = contentSecurityPolicy(nonce);
+  const csp = contentSecurityPolicy(nonce, request);
   const requestHeaders = new Headers(request.headers);
 
   requestHeaders.set("x-nonce", nonce);

@@ -8972,6 +8972,7 @@
           "userId",
           "tenantId",
           "tenantName",
+          "tenantSlug",
           "email",
           "displayName",
           "role",
@@ -8999,6 +9000,9 @@
             "format": "int32"
           },
           "tenantName": {
+            "type": "string"
+          },
+          "tenantSlug": {
             "type": "string"
           },
           "email": {
@@ -13796,11 +13800,18 @@
       },
       "LoginInput": {
         "required": [
+          "tenantSlug",
           "email",
           "password"
         ],
         "type": "object",
         "properties": {
+          "tenantSlug": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
           "email": {
             "type": [
               "null",

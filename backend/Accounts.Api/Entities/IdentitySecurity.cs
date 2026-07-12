@@ -17,7 +17,8 @@ public class UserActionToken
     public DateTime ExpiresAtUtc { get; set; }
     public DateTime? ConsumedAtUtc { get; set; }
     public DateTime? RevokedAtUtc { get; set; }
-    public int CreatedByUserId { get; set; }
+    public int? CreatedByUserId { get; set; }
+    public string CreatedByActorKind { get; set; } = IdentityActorKinds.User;
 
     [JsonIgnore]
     public UserAccount User { get; set; } = null!;
@@ -93,8 +94,15 @@ public class UserLifecycleEvent
     public long Id { get; set; }
     public int TenantId { get; set; }
     public int TargetUserId { get; set; }
-    public int ActorUserId { get; set; }
+    public int? ActorUserId { get; set; }
+    public string ActorKind { get; set; } = IdentityActorKinds.User;
     public required string EventType { get; set; }
     public required string DetailsJson { get; set; }
     public DateTime OccurredAtUtc { get; set; } = DateTime.UtcNow;
+}
+
+public static class IdentityActorKinds
+{
+    public const string User = "User";
+    public const string PrivateServerHostOperator = "PrivateServerHostOperator";
 }

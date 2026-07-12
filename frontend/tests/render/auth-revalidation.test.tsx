@@ -127,6 +127,7 @@ function user(): AuthUser {
     userId: 7,
     tenantId: 1,
     tenantName: "Auth Revalidation Firm",
+    tenantSlug: "auth-revalidation-firm",
     email: "owner@example.ie",
     displayName: "Owner User",
     role: "Owner",

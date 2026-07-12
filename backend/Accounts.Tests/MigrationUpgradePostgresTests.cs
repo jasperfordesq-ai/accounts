@@ -223,6 +223,154 @@ public sealed class MigrationUpgradePostgresTests
         }
     }
 
+    [PostgresFact]
+    public async Task SystemActorMigration_BackfillsExistingIdentityEvidenceBeforeAddingConstraints()
+    {
+        const string migrationBeforeActorKinds = "20260711212921_ScopeUserIdentityToTenant";
+        var baseConnectionString = Environment.GetEnvironmentVariable(ConnectionEnvVar)
+            ?? throw new InvalidOperationException($"{ConnectionEnvVar} is required.");
+        var schema = "migration_actor_backfill_" + Guid.NewGuid().ToString("N");
+        try
+        {
+            await CreateSchemaAsync(baseConnectionString, schema);
+            var connectionString = WithSearchPath(baseConnectionString, schema);
+            await using var db = new AccountsDbContext(CreateOptions(connectionString));
+            var migrator = db.GetService<IMigrator>();
+            await migrator.MigrateAsync(migrationBeforeActorKinds);
+
+            await using (var connection = new NpgsqlConnection(connectionString))
+            {
+                await connection.OpenAsync();
+                await using var seed = connection.CreateCommand();
+                seed.CommandText = """
+                    INSERT INTO tenants ("Id", "Name", "Slug", "IsMainDemoTenant", "CreatedAt", "UpdatedAt")
+                    VALUES (920001, 'Actor migration tenant', 'actor-migration-tenant', FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+                    INSERT INTO user_accounts
+                        ("Id", "TenantId", "Email", "DisplayName", "Role", "PasswordHash", "PasswordSalt", "PasswordAlgorithm",
+                         "PasswordStrengthScore", "IsActive", "MustChangePassword", "PasswordLastChangedAt", "CreatedAt", "UpdatedAt",
+                         "FailedLoginCount", "SessionVersion")
+                    VALUES
+                        (920001, 920001, 'actor-migration@example.ie', 'Actor Migration Owner', 'Owner', repeat('h', 64), repeat('s', 32),
+                         'PBKDF2-SHA256', 4, TRUE, FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0, 1);
+
+                    INSERT INTO user_action_tokens
+                        ("TenantId", "UserId", "Purpose", "TokenHash", "CreatedAtUtc", "ExpiresAtUtc", "CreatedByUserId")
+                    VALUES
+                        (920001, 920001, 'PasswordReset', repeat('a', 64), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP + INTERVAL '1 hour', 920001);
+
+                    INSERT INTO user_lifecycle_events
+                        ("TenantId", "TargetUserId", "ActorUserId", "EventType", "DetailsJson", "OccurredAtUtc")
+                    VALUES
+                        (920001, 920001, 920001, 'PasswordResetStarted', '{}'::jsonb, CURRENT_TIMESTAMP);
+                    """;
+                await seed.ExecuteNonQueryAsync();
+            }
+
+            await migrator.MigrateAsync();
+            await using var verify = new NpgsqlConnection(connectionString);
+            await verify.OpenAsync();
+            await using var command = verify.CreateCommand();
+            command.CommandText = """
+                SELECT
+                    (SELECT "CreatedByActorKind" || ':' || "CreatedByUserId"::text FROM user_action_tokens WHERE "TenantId" = 920001),
+                    (SELECT "ActorKind" || ':' || "ActorUserId"::text FROM user_lifecycle_events WHERE "TenantId" = 920001)
+                """;
+            await using var reader = await command.ExecuteReaderAsync();
+            Assert.True(await reader.ReadAsync());
+            Assert.Equal("User:920001", reader.GetString(0));
+            Assert.Equal("User:920001", reader.GetString(1));
+        }
+        finally
+        {
+            NpgsqlConnection.ClearAllPools();
+            await DropSchemaAsync(baseConnectionString, schema);
+        }
+    }
+
+    [PostgresFact]
+    public async Task HostOperatorConstraintCorrection_UpgradesAppliedPreviewSchemaToCanonicalResetEvent()
+    {
+        const string actorMigration = "20260711221827_RecordSystemIdentityActors";
+        const string correctionMigration = "20260712000457_CorrectPrivateHostLifecycleEventConstraint";
+        var baseConnectionString = Environment.GetEnvironmentVariable(ConnectionEnvVar)
+            ?? throw new InvalidOperationException($"{ConnectionEnvVar} is required.");
+        var schema = "migration_host_reset_constraint_" + Guid.NewGuid().ToString("N");
+        try
+        {
+            await CreateSchemaAsync(baseConnectionString, schema);
+            var connectionString = WithSearchPath(baseConnectionString, schema);
+            await using var db = new AccountsDbContext(CreateOptions(connectionString));
+            var migrator = db.GetService<IMigrator>();
+            await migrator.MigrateAsync(actorMigration);
+
+            await using (var connection = new NpgsqlConnection(connectionString))
+            {
+                await connection.OpenAsync();
+                await using (var seed = connection.CreateCommand())
+                {
+                    seed.CommandText = """
+                        INSERT INTO tenants ("Id", "Name", "Slug", "IsMainDemoTenant", "CreatedAt", "UpdatedAt")
+                        VALUES (930001, 'Host reset migration tenant', 'host-reset-migration', FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+                        INSERT INTO user_accounts
+                            ("Id", "TenantId", "Email", "DisplayName", "Role", "PasswordHash", "PasswordSalt", "PasswordAlgorithm",
+                             "PasswordStrengthScore", "IsActive", "MustChangePassword", "PasswordLastChangedAt", "CreatedAt", "UpdatedAt",
+                             "FailedLoginCount", "SessionVersion")
+                        VALUES
+                            (930001, 930001, 'host-reset-migration@example.ie', 'Host Reset Owner', 'Owner', repeat('h', 64), repeat('s', 32),
+                             'PBKDF2-SHA256', 4, TRUE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0, 1);
+                        """;
+                    await seed.ExecuteNonQueryAsync();
+                }
+
+                await using var rejected = connection.CreateCommand();
+                rejected.CommandText = """
+                    INSERT INTO user_lifecycle_events
+                        ("TenantId", "TargetUserId", "ActorUserId", "ActorKind", "EventType", "DetailsJson", "OccurredAtUtc")
+                    VALUES
+                        (930001, 930001, NULL, 'PrivateServerHostOperator', 'UserPasswordResetCompleted', '{}'::jsonb, CURRENT_TIMESTAMP);
+                    """;
+                var oldConstraintFailure = await Assert.ThrowsAsync<PostgresException>(() => rejected.ExecuteNonQueryAsync());
+                Assert.Equal(PostgresErrorCodes.CheckViolation, oldConstraintFailure.SqlState);
+                Assert.Equal("CK_user_lifecycle_events_actor", oldConstraintFailure.ConstraintName);
+            }
+
+            await migrator.MigrateAsync(correctionMigration);
+
+            await using var verify = new NpgsqlConnection(connectionString);
+            await verify.OpenAsync();
+            await using (var accepted = verify.CreateCommand())
+            {
+                accepted.CommandText = """
+                    INSERT INTO user_lifecycle_events
+                        ("TenantId", "TargetUserId", "ActorUserId", "ActorKind", "EventType", "DetailsJson", "OccurredAtUtc")
+                    VALUES
+                        (930001, 930001, NULL, 'PrivateServerHostOperator', 'UserPasswordResetCompleted', '{}'::jsonb, CURRENT_TIMESTAMP);
+                    """;
+                Assert.Equal(1, await accepted.ExecuteNonQueryAsync());
+            }
+
+            await using var constraint = verify.CreateCommand();
+            constraint.CommandText = """
+                SELECT pg_get_constraintdef(oid)
+                FROM pg_constraint
+                WHERE conname = 'CK_user_lifecycle_events_actor'
+                  AND conrelid = 'user_lifecycle_events'::regclass;
+                """;
+            var definition = (string?)await constraint.ExecuteScalarAsync()
+                ?? throw new InvalidOperationException("Corrected host-operator lifecycle constraint was not found.");
+            Assert.Contains("'UserPasswordResetCompleted'", definition, StringComparison.Ordinal);
+            Assert.DoesNotContain("'PasswordResetCompleted'", definition, StringComparison.Ordinal);
+            Assert.Equal(correctionMigration, (await db.Database.GetAppliedMigrationsAsync()).Last());
+        }
+        finally
+        {
+            NpgsqlConnection.ClearAllPools();
+            await DropSchemaAsync(baseConnectionString, schema);
+        }
+    }
+
     private static DbContextOptions<AccountsDbContext> CreateOptions(string connectionString) =>
         new DbContextOptionsBuilder<AccountsDbContext>()
             .UseNpgsql(connectionString)

@@ -299,6 +299,7 @@ test("auth contract rejects role drift, malformed identities, and duplicate scop
     userId: 1,
     tenantId: 2,
     tenantName: "Practice",
+    tenantSlug: "practice",
     email: "owner@example.ie",
     displayName: "Named Owner",
     role: "Owner",
@@ -308,6 +309,7 @@ test("auth contract rejects role drift, malformed identities, and duplicate scop
   assert.equal(parse(authUserSchema, user).role, "Owner");
   assert.throws(() => parse(authUserSchema, { ...user, role: "Administrator" }), /role/);
   assert.throws(() => parse(authUserSchema, { ...user, email: "not-an-email" }), /email/);
+  assert.throws(() => parse(authUserSchema, { ...user, tenantSlug: "Not a slug" }), /tenantSlug/);
   assert.throws(
     () => parse(authUserSchema, { ...user, role: "Reviewer", allowedCompanyIds: [7, 7] }),
     /allowedCompanyIds/,

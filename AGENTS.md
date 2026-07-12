@@ -21,23 +21,47 @@ The user has directed a new deployment-modes workstream so this repository can s
    selected users through Tailscale Serve; and
 3. the existing hardened Public Production path for an internet-reachable service.
 
-The canonical design, session findings, Docker-versus-native decision, security
-boundaries, proposed files, documentation outline, implementation packages, acceptance
-criteria, current status, and next-agent instructions are in
+The canonical design, implemented contract, security boundaries, verification state,
+remaining live acceptance, and next-agent instructions are in
 **[Docs/deployment/DEPLOYMENT_MODES_HANDOFF.md](Docs/deployment/DEPLOYMENT_MODES_HANDOFF.md)**.
 
-Private Server is **planned and not yet implemented**. Do not expose `compose.yml`; it is
-development-only. Do not solve private deployment by setting the API environment to
-Development or by requiring the full public-production secret/evidence system. Preserve
-production runtime behaviour and implement a narrow explicit deployment-mode contract.
-Tailscale Serve is the planned private ingress; Funnel, public API/database ports, Caddy,
-IIS, Apache, and Nginx are outside that private path. Caddy remains only one optional
-Public Production ingress example.
+Private Server is now a **Windows x64 operational preview**, not a live-certified deployment.
+The repository contains the explicit `PrivateServer` backend contract, compiled private Compose
+topology, release/manifest verification, Windows operator commands, same-installation backup and
+restore controls, and optional Tailscale Serve helper. A disposable current-host Windows drill
+passed source setup, stop/start, plaintext database-only backup/verify/restore, source update,
+Owner recovery/reset with privileged MFA enforced, diagnostics/support, purge and exact cleanup.
+Clean-machine setup, reboot, second-device Tailscale HTTPS, offline full workflow, encrypted
+complete recovery, genuine prior-version update/failure recovery, and replacement-host recovery
+have not been accepted live. Do not claim them.
+
+Private lifecycle commands are installation-mutex protected. Backups stream through host staging,
+are authenticated with an installation-held HMAC before any restore, and complete encrypted sets
+currently have a 1.9 GB payload ceiling. Updates are forward-only and require the separate age
+identity for their mandatory verified backup. These are same-installation controls; they do not
+establish replacement-host recovery.
+
+The three modes remain deliberately separate:
+
+- `compose.yml` and `Development` are contributor-only and must never be exposed through
+  Tailscale, a LAN, router forwarding, or public ingress;
+- `compose.private.yml` runs production builds with `Deployment__Mode=PrivateServer`, publishes
+  only the frontend on IPv4 loopback, and keeps Kestrel/PostgreSQL without host ports; and
+- `compose.production.yml` retains the full `PublicProduction` controls for an internet-reachable
+  service.
+
+Private access uses Tailscale **Serve**, never Funnel. Caddy, IIS, Apache, and Nginx are outside the
+private path; Caddy, Apache, and Nginx are optional Public Production ingress examples. Private
+Server login is tenant-qualified and requires workspace slug + email + password. Provider-free
+private allowances must remain narrow: local structured logs, disabled deadline delivery, and
+plaintext PostgreSQL transport only on the isolated same-host database bridge. Do not weaken RLS,
+signed tenant context, separate migration/application roles, secure cookies, CSRF, authentication,
+authorisation, or audit controls.
 
 This workstream complements rather than supersedes the production-readiness and statutory
 acceptance goal below. A successful private installation must not be represented as real
 CRO/Revenue filing acceptance or used to close qualified-accountant/external evidence
-gates.
+gates. The independent audit baseline remains **600/1,000**.
 
 ## Active Goal Handoff
 

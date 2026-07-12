@@ -16,6 +16,31 @@ public interface IErrorReporter
     string CaptureUnexpectedException(Exception exception, ErrorReportContext context);
 }
 
+public sealed class StructuredLogErrorReporter(ILogger<StructuredLogErrorReporter> logger) : IErrorReporter
+{
+    private static readonly EventId UnexpectedExceptionEvent = new(91001, "PrivateServerUnexpectedException");
+
+    public string CaptureUnexpectedException(Exception exception, ErrorReportContext context)
+    {
+        var safe = MonitoringEventSanitizer.Sanitize(exception, context);
+        var reference = "local-" + safe.StackFingerprint[..16] + "-"
+            + Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(safe.CorrelationId)))[..12];
+        // Do not pass the original exception to ILogger: its message, Data, inner exception, or
+        // stack frames may contain client/accounting material. The sanitizer emits a fixed schema.
+        logger.LogError(
+            UnexpectedExceptionEvent,
+            "Sanitized unexpected application event {EventReference} {EventCode} {ExceptionType} {HttpMethod} {RequestPath} {CorrelationId} {StackFingerprint}",
+            reference,
+            safe.EventCode,
+            safe.ExceptionType,
+            safe.Method,
+            safe.Path,
+            safe.CorrelationId,
+            safe.StackFingerprint);
+        return reference;
+    }
+}
+
 public sealed class SentryErrorReporter : IErrorReporter
 {
     public string CaptureUnexpectedException(Exception exception, ErrorReportContext context)

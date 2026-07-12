@@ -13,10 +13,14 @@ public static class AuthEndpoints
 
         auth.MapPost("/login", async (LoginInput input, IdentityAccessService identityAccess, AuthService authService, AuditService audit, PrivacyGovernanceService privacy, HttpContext context, CancellationToken cancellationToken) =>
         {
-            var outcome = await identityAccess.BeginLoginAsync(input.Email, input.Password, cancellationToken);
+            var outcome = await identityAccess.BeginLoginAsync(
+                input.TenantSlug,
+                input.Email,
+                input.Password,
+                cancellationToken);
             var result = outcome.FirstFactor;
             await privacy.RecordLoginAttemptAsync(
-                result.AuditEmail,
+                TenantQualifiedLoginIdentifier(input.TenantSlug, result.AuditEmail),
                 result.AuditTenantId,
                 result.AuditUserId,
                 result.Succeeded ? "accepted" : "rejected",
@@ -260,9 +264,12 @@ public static class AuthEndpoints
         if (result.AccountLocked)
             return "LockedOut";
 
-        return result.FailureReason?.Contains("required", StringComparison.OrdinalIgnoreCase) == true
-            ? "MissingCredentials"
-            : "InvalidCredentials";
+        return result.FailureKind switch
+        {
+            LoginFailureKinds.MissingCredentials => "MissingCredentials",
+            LoginFailureKinds.InactiveAccount => "InactiveAccount",
+            _ => "InvalidCredentials"
+        };
     }
 
     private static string PasswordChangeFailureReasonCode(string? failureReason)
@@ -295,9 +302,12 @@ public static class AuthEndpoints
             return "lockout-started";
         if (result.AccountLocked)
             return "locked-out";
-        return result.FailureReason?.Contains("required", StringComparison.OrdinalIgnoreCase) == true
-            ? "missing-credentials"
-            : "invalid-credentials";
+        return result.FailureKind switch
+        {
+            LoginFailureKinds.MissingCredentials => "missing-credentials",
+            LoginFailureKinds.InactiveAccount => "inactive-account",
+            _ => "invalid-credentials"
+        };
     }
 
     private static string? RequestId(HttpContext context)
@@ -312,9 +322,18 @@ public static class AuthEndpoints
 
         return context.TraceIdentifier;
     }
+
+    private static string? TenantQualifiedLoginIdentifier(string? tenantSlug, string? email)
+    {
+        var normalizedTenantSlug = tenantSlug?.Trim().ToLowerInvariant();
+        var normalizedEmail = email?.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(normalizedTenantSlug)) return normalizedEmail;
+        if (string.IsNullOrWhiteSpace(normalizedEmail)) return normalizedTenantSlug;
+        return $"{normalizedTenantSlug}\n{normalizedEmail}";
+    }
 }
 
-public record LoginInput(string? Email, string? Password);
+public record LoginInput(string? TenantSlug, string? Email, string? Password);
 public record PasswordChangeInput(string? CurrentPassword, string? NewPassword);
 public record MfaChallengeInput(string? ChallengeToken, string? TotpCode, string? RecoveryCode);
 public record ReauthenticationInput(string? Password, string? TotpCode);
@@ -325,6 +344,7 @@ public record AuthResponse(
     int UserId,
     int TenantId,
     string TenantName,
+    string TenantSlug,
     string Email,
     string DisplayName,
     string Role,
@@ -337,6 +357,7 @@ public record AuthResponse(
         user.UserId,
         user.TenantId,
         user.TenantName,
+        user.TenantSlug,
         user.Email,
         user.DisplayName,
         user.Role,

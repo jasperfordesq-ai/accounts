@@ -50,7 +50,7 @@ interface AuthContextValue {
   revalidating: boolean;
   authServiceError: string | null;
   logoutError: string | null;
-  login: (email: string, password: string) => Promise<AuthUser | MfaChallenge>;
+  login: (tenantSlug: string, email: string, password: string) => Promise<AuthUser | MfaChallenge>;
   completeMfaChallenge: (challengeToken: string, totpCode?: string, recoveryCode?: string) => Promise<MfaCompletion>;
   reauthenticate: (password: string, totpCode: string) => Promise<AuthUser>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<AuthUser>;
@@ -193,12 +193,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   }, [authServiceError, isLoginPage, isPasswordChangePage, isPublicPage, loading, router, user]);
 
-  const login = useCallback(async (email: string, password: string) => {
+  const login = useCallback(async (tenantSlug: string, email: string, password: string) => {
     const transitionId = ++authTransitionRef.current;
     setRevalidating(false);
 
     try {
-      const nextUser = await loginRequest(email, password);
+      const nextUser = await loginRequest(tenantSlug, email, password);
       if (authTransitionRef.current === transitionId && !isMfaChallenge(nextUser)) {
         setUser(nextUser);
         setAuthServiceError(null);

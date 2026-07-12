@@ -4,6 +4,9 @@ Multi-company web application that replaces the traditional year-end accountant 
 
 > Active production-readiness handoff for Claude/agent sessions:
 > **[AGENTS.md - Active Goal Handoff](AGENTS.md#active-goal-handoff)**.
+>
+> Deployment entry point: **[Docs/deployment/README.md](Docs/deployment/README.md)**. Development,
+> Private Server, and Public Production are separate contracts; never expose `compose.yml`.
 
 ## Repository
 
@@ -17,7 +20,8 @@ Multi-company web application that replaces the traditional year-end accountant 
 - **PDF Generation**: QuestPDF (server-side)
 - **iXBRL**: Custom XHTML generator with FRC Irish FRS taxonomy
 - **CSV Import**: CsvHelper (bank statement parsing)
-- **Container**: Docker Compose (api + db + frontend)
+- **Container**: Docker Compose (api + db + frontend), with separate Development,
+  Private Server, and Public Production profiles
 
 ## Project Structure
 
@@ -43,7 +47,7 @@ accounts/
 │   └── src/
 │       ├── app/                    # Next.js App Router pages
 │       │   ├── page.tsx            # Dashboard — company listing
-│       │   ├── login/page.tsx      # Firm staff login
+│       │   ├── login/page.tsx      # Tenant-qualified staff login
 │       │   ├── change-password/    # Self-service password change
 │       │   ├── health/, health/ready/   # Liveness + readiness routes
 │       │   ├── api/[...path]/route.ts    # Server-side proxy: injects API key, forwards cookies
@@ -61,6 +65,15 @@ accounts/
 ├── REQUIREMENTS.md                 # Full product requirements
 └── CLAUDE.md
 ```
+
+Deployment-specific files extend that core tree:
+
+- `compose.yml` — contributor Development only; known credentials, seed state, published ports;
+- `compose.private.yml` + `FilingBridge.cmd` + `scripts/PrivateServer/` — compiled Windows x64
+  Private Server operational preview;
+- `compose.production.yml` — hardened Public Production stack;
+- `Docs/deployment/` — authoritative mode chooser and per-mode guides; and
+- `deploy/{caddy,apache,nginx}/` — optional Public Production ingress examples only.
 
 ## Development Commands
 
@@ -80,7 +93,7 @@ cd backend/Accounts.Api && dotnet run
 # Run frontend dev server
 cd frontend && npm run dev
 
-# Docker (full local stack)
+# Docker (full Development stack; never expose it through Tailscale/LAN/public ingress)
 docker compose up -d
 
 # EF Core migrations
@@ -107,7 +120,12 @@ dotnet ef migrations add <Name> --output-dir Data/Migrations
 
 - PostgreSQL 16.4 on port 5433 (host) / 5432 (container)
 - Database: `accounts`, User: `accounts`, Password: `accounts_dev` (**dev only** — production rejects this password and demo seed)
-- Dev auto-migrates + seeds demo data; in production both are gated off by `ProductionSafetyService` and run via a controlled release step
+- Development auto-migrates and seeds labelled demo data. Private Server and Public Production
+  disable startup migration and demo seeding and use explicit one-shot migration/initialisation
+  workflows.
+- Private Server retains separate migration/application roles, forced RLS, and signed tenant
+  context while allowing `sslmode=disable` only on its isolated same-host Docker bridge. Public
+  Production requires certificate-verified PostgreSQL TLS.
 - All enums stored as text (not int) for readability
 - snake_case table names, decimal(18,2) for money
 
@@ -168,14 +186,14 @@ Auth, security & platform services:
 ## API endpoints
 
 The committed OpenAPI 3.1 contract is the canonical route and transport-schema inventory:
-`backend/Accounts.Api/OpenApi/accounts-api-v1.json`. It currently contains 177 paths and 182
+`backend/Accounts.Api/OpenApi/accounts-api-v1.json`. It currently contains 177 paths and 183
 schemas. `Docs/architecture/generated-api-contracts.md` documents regeneration and frontend drift
 checks; avoid maintaining a second exhaustive hand-written route count here.
 
 ### Authentication (representative routes)
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | /api/auth/login | Sign in; sets HTTP-only session + CSRF cookies |
+| POST | /api/auth/login | Sign in with workspace slug + email + password; sets HTTP-only session + CSRF cookies |
 | POST | /api/auth/logout | Clear session |
 | GET | /api/auth/me | Current signed-in user + tenant |
 | POST | /api/auth/change-password | Self-service password change (rotates session) |
@@ -243,7 +261,7 @@ and outbound submission clients are intentionally absent.
 
 | Route | Purpose |
 |-------|---------|
-| `/login` | Firm staff login (email + password) |
+| `/login` | Tenant-qualified staff login (workspace slug + email + password) |
 | `/change-password` | Self-service password change |
 | `/accept-invite`, `/reset-password` | Terminal invitation and password-reset flows |
 | `/settings/users` | Owner-only identity lifecycle and MFA/session administration |
@@ -270,7 +288,9 @@ and outbound submission clients are intentionally absent.
 - **Error handling**: Global ExceptionMiddleware (400 for business rules, 404 for not-found, 500 for server errors)
 - **Migrations**: Design-time factory (WDAC blocks QuestPDF.dll at design time)
 - **Serialization**: JSON camelCase (ASP.NET Core default), enums as text in DB
-- **CORS**: AllowAnyOrigin in dev; explicit `AllowedOrigins` (HTTPS-only) enforced in production
+- **CORS**: Development uses explicit localhost origins. Private Server permits its exact loopback
+  origin plus configured Tailscale HTTPS origin; Public Production requires reviewed exact HTTPS
+  origins.
 
 ## Authentication, Authorization & Security
 
@@ -281,13 +301,42 @@ The platform enforces firm-user identity and tenant isolation as the production 
 - **Passwords and MFA**: PBKDF2-SHA256 @ 210k iterations; constant-time verify; compromised-password rejection; account lockout; ≥20-char policy with mixed character classes; encrypted TOTP enrollment, recovery codes and recent-authentication gates for privileged actions.
 - **CSRF**: `CsrfProtectionMiddleware` double-submit — a session-bound token must match both the `X-CSRF-Token` header and the CSRF cookie on every mutating `/api` request.
 - **Tenancy**: every company is `TenantId`-scoped. `TenantAccessMiddleware` returns **404 (not 403)** for cross-tenant company IDs and honours per-user `UserCompanyAccess`; forced PostgreSQL RLS is the persistence boundary for the least-privileged application login. See `Docs/architecture/database-tenant-isolation.md`.
+- **Tenant-qualified identity**: user email is unique within a tenant, not globally. First-factor
+  login requires `workspace slug + email + password`; the database bootstrap resolver uses the
+  slug/email pair so the same email may belong to separate workspaces without leaking another
+  workspace's identity state.
 - **Roles** (`RoleAuthorizationService`): `Owner` (all), `Accountant` (working papers), `Reviewer` (approve/review/finalise/filing), `Client` (read-only). Backend is the source of truth; the UI only hides ineligible actions.
 - **Audit**: `AuditTrailMiddleware` + tamper-evident `AuditIntegrityCheckpointService` (signed checkpoints). Audit identity comes from the authenticated principal, never caller-supplied names.
-- **Fail-fast**: `ProductionSafetyService.ThrowIfUnsafe()` runs at startup and blocks boot on unsafe config (dev DB password, demo seed, non-HTTPS/localhost origins, wildcard hosts, weak/committed session key, insecure cookies, missing bootstrap-owner secrets, missing production monitoring).
+- **Fail-fast**: `ProductionSafetyService.ThrowIfUnsafe()` runs at startup and applies the exact
+  deployment-mode contract. Shared controls block development credentials/demo seed, weak or
+  committed keys, insecure cookies and unsafe host/origin configuration; Public Production adds
+  its external monitoring/provider/TLS requirements, while Private Server permits only its narrow
+  documented local-provider and isolated-database allowances.
 
-## Production Deployment
+## Deployment modes
 
-- **Stack**: `compose.production.yml` (api + db + frontend) behind a reverse proxy — see `deploy/caddy/Caddyfile.example` for HTTPS ingress.
+The exact supported markers are `Development`, `PrivateServer`, and `PublicProduction`. Use the
+[deployment mode chooser](Docs/deployment/README.md); no mode may be selected by weakening another
+mode's environment.
+
+- **Development**: `compose.yml` or the hybrid local-SDK workflow in `LOCAL_SETUP.md`. Local
+  contributors only; known credentials/demo allowances mean it must never be shared through
+  Tailscale, a LAN, or public ingress.
+- **Private Server**: Windows x64 operational preview using `compose.private.yml` and
+  `FilingBridge.cmd`. It runs compiled production builds, publishes only the frontend on IPv4
+  loopback, keeps API/PostgreSQL unexposed, and may add selected-user access through host-level
+  Tailscale Serve. Lifecycle commands are installation-locked; same-installation backups are
+  HMAC-authenticated before restore, use host staging, and have a current 1.9 GB complete-payload
+  ceiling. Updates are forward-only. External monitoring/deadline delivery are off by default. See
+  `Docs/deployment/private-server.md`. A disposable current-host lifecycle drill passed; clean-
+  machine, reboot, live Tailscale, offline full-workflow, encrypted complete recovery, genuine
+  prior-version update/failure recovery, and replacement-host recovery acceptance remain open.
+- **Public Production**: `compose.production.yml` behind an approved HTTPS ingress. Caddy, Apache,
+  and Nginx are optional examples, not runtime dependencies. See
+  `Docs/deployment/public-production.md` and `Docs/operations/production-runbook.md`.
+
+Public Production retains the following contract:
+
 - **Secrets via files/env** (never committed): separate `POSTGRES_PASSWORD_FILE`/`POSTGRES_APPLICATION_PASSWORD_FILE` credentials, `ACCOUNTS_MIGRATION_CONNECTION_STRING_FILE` (migration job only), `ACCOUNTS_APPLICATION_CONNECTION_STRING_FILE` (least-privileged API only), `DATABASE_TENANT_CONTEXT_KEY_FILE`, `AUTH_SESSION_SIGNING_KEY_FILE`, `AUDIT_INTEGRITY_SIGNING_KEY_FILE`, `IDENTITY_HMAC_KEY_FILE`, `MFA_ENCRYPTION_KEY_FILE`, `DEADLINE_PROVIDER_TOKEN_FILE`, `ACCOUNTS_API_KEY_FILE`/`ACCOUNTS_API_KEY_HASH`, and `BOOTSTRAP_OWNER_PASSWORD_FILE`; plus `ACCOUNTS_ALLOWED_HOSTS`, `ACCOUNTS_ALLOWED_ORIGIN`, `TRUST_PROXY_HEADERS`, `MONITORING_ERROR_TRACKING_DSN`, `MFA_ENCRYPTION_ACTIVE_KEY_ID`, `DEADLINE_DELIVERY_PROVIDER_ENDPOINT`, and `BOOTSTRAP_TENANT_*`/`BOOTSTRAP_OWNER_*`.
 - **Secret file permissions**: containers run as a non-root user and bind-mount the `*_FILE` secrets read-only. In non-swarm `docker compose` the in-container file keeps the host file's mode, so secret files must be readable by that user — keep the secrets directory `0700` and the secret files `0444`.
 - **First run**: `BootstrapOwnerService` creates the initial tenant + Owner from secret config; migrations run as a controlled step (not auto-migrate).
@@ -322,10 +371,10 @@ The platform enforces firm-user identity and tenant isolation as the production 
 
 ## Generated/current inventory
 
-- Transport inventory: committed OpenAPI 3.1 contract (177 paths, 182 schemas at this revision).
+- Transport inventory: committed OpenAPI 3.1 contract (177 paths, 183 schemas at this revision).
 - Database inventory: EF model plus append-only migrations; migration/model drift is tested rather
   than represented by a manually maintained count.
 - Test inventory: use test-run output and retained CI evidence for the exact candidate; historical
   counts in handoff logs are not a current release assertion.
-- Runtime topology: PostgreSQL, migrate-only job, least-privileged API, frontend and TLS ingress as
-  defined by `compose.production.yml`.
+- Runtime topology: select the exact Development, Private Server, or Public Production contract in
+  `Docs/deployment/README.md`; never infer topology from the fact that one Compose command renders.

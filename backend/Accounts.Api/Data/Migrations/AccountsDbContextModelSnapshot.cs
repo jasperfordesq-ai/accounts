@@ -4370,12 +4370,15 @@ namespace Accounts.Api.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Email")
+                    b.HasIndex("TenantId", "Email")
                         .IsUnique();
 
                     b.HasIndex("TenantId", "Role");
 
-                    b.ToTable("user_accounts", (string)null);
+                    b.ToTable("user_accounts", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_user_accounts_email_normalized", "\"Email\" = lower(btrim(\"Email\"))");
+                        });
                 });
 
             modelBuilder.Entity("Accounts.Api.Entities.UserActionToken", b =>
@@ -4392,7 +4395,14 @@ namespace Accounts.Api.Data.Migrations
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<int>("CreatedByUserId")
+                    b.Property<string>("CreatedByActorKind")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasDefaultValue("User");
+
+                    b.Property<int?>("CreatedByUserId")
                         .HasColumnType("integer");
 
                     b.Property<DateTime>("ExpiresAtUtc")
@@ -4430,6 +4440,8 @@ namespace Accounts.Api.Data.Migrations
 
                     b.ToTable("user_action_tokens", null, t =>
                         {
+                            t.HasCheckConstraint("CK_user_action_tokens_actor", "(\"CreatedByActorKind\" = 'User' AND \"CreatedByUserId\" IS NOT NULL) OR (\"CreatedByActorKind\" = 'PrivateServerHostOperator' AND \"CreatedByUserId\" IS NULL AND \"Purpose\" = 'PasswordReset')");
+
                             t.HasCheckConstraint("CK_user_action_tokens_purpose", "\"Purpose\" IN ('Invitation', 'PasswordReset')");
                         });
                 });
@@ -4469,7 +4481,14 @@ namespace Accounts.Api.Data.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
-                    b.Property<int>("ActorUserId")
+                    b.Property<string>("ActorKind")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasDefaultValue("User");
+
+                    b.Property<int?>("ActorUserId")
                         .HasColumnType("integer");
 
                     b.Property<string>("DetailsJson")
@@ -4500,7 +4519,10 @@ namespace Accounts.Api.Data.Migrations
 
                     b.HasIndex("TenantId", "TargetUserId", "OccurredAtUtc");
 
-                    b.ToTable("user_lifecycle_events", (string)null);
+                    b.ToTable("user_lifecycle_events", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_user_lifecycle_events_actor", "(\"ActorKind\" = 'User' AND \"ActorUserId\" IS NOT NULL) OR (\"ActorKind\" = 'PrivateServerHostOperator' AND \"ActorUserId\" IS NULL AND \"EventType\" IN ('PrivateOwnerRecoveryStarted', 'UserPasswordResetCompleted'))");
+                        });
                 });
 
             modelBuilder.Entity("Accounts.Api.Entities.UserMfaChallenge", b =>
@@ -5505,8 +5527,7 @@ namespace Accounts.Api.Data.Migrations
                     b.HasOne("Accounts.Api.Entities.UserAccount", null)
                         .WithMany()
                         .HasForeignKey("CreatedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Accounts.Api.Entities.UserAccount", "User")
                         .WithMany("ActionTokens")
@@ -5541,8 +5562,7 @@ namespace Accounts.Api.Data.Migrations
                     b.HasOne("Accounts.Api.Entities.UserAccount", null)
                         .WithMany()
                         .HasForeignKey("ActorUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Accounts.Api.Entities.UserAccount", null)
                         .WithMany()

@@ -49,8 +49,39 @@ describe("authentication monitoring privacy", () => {
       throw new TypeError("fetch failed for client@example.ie password=NeverSendThis");
     }));
 
-    await expect(login("client@example.ie", "NeverSendThis")).rejects.toThrow(/fetch failed/);
+    await expect(login("client-workspace", "client@example.ie", "NeverSendThis")).rejects.toThrow(/fetch failed/);
     expect(monitoring.report).toHaveBeenCalledWith("auth-service-unavailable");
     expect(JSON.stringify(monitoring.report.mock.calls)).not.toMatch(/client@example\.ie|NeverSendThis/);
+  });
+
+  it("sends the workspace slug in the typed login request", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      userId: 9,
+      tenantId: 3,
+      tenantName: "Client Workspace",
+      tenantSlug: "client-workspace",
+      email: "client@example.ie",
+      displayName: "Client User",
+      role: "Client",
+      allowedCompanyIds: [],
+      mustChangePassword: false,
+      mfaVerified: false,
+      mfaMethod: null,
+    }), { status: 200, headers: { "content-type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(login("client-workspace", "client@example.ie", "NeverSendThis")).resolves.toMatchObject({
+      tenantSlug: "client-workspace",
+      email: "client@example.ie",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/auth/login", expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({
+        tenantSlug: "client-workspace",
+        email: "client@example.ie",
+        password: "NeverSendThis",
+      }),
+    }));
   });
 });

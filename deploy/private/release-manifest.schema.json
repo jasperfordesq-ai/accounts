@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/jasperfordesq-ai/accounts/blob/main/deploy/private/release-manifest.schema.json",
+  "title": "FilingBridge Private Server release manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "version",
+    "generatedAtUtc",
+    "candidate",
+    "supportedHosts",
+    "images",
+    "files",
+    "statutoryAssurance"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "filingbridge.private-server.release/v1"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?$"
+    },
+    "generatedAtUtc": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commitSha", "githubActionsRunUrl"],
+      "properties": {
+        "commitSha": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "githubActionsRunUrl": {
+          "type": "string",
+          "pattern": "^https://github\\.com/jasperfordesq-ai/accounts/actions/runs/[1-9][0-9]*$"
+        }
+      }
+    },
+    "supportedHosts": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": ["windows-x64"]
+      }
+    },
+    "images": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["backend", "frontend", "postgres"],
+      "properties": {
+        "backend": { "$ref": "#/$defs/backendImage" },
+        "frontend": { "$ref": "#/$defs/frontendImage" },
+        "postgres": { "$ref": "#/$defs/postgresImage" }
+      }
+    },
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/file" }
+    },
+    "statutoryAssurance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "noDirectSubmission", "qualifiedAccountantRequired"],
+      "properties": {
+        "status": { "const": "release-blocked" },
+        "noDirectSubmission": { "const": true },
+        "qualifiedAccountantRequired": { "const": true }
+      }
+    }
+  },
+  "$defs": {
+    "backendImage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["exactDigestReference"],
+      "properties": {
+        "exactDigestReference": {
+          "type": "string",
+          "pattern": "^ghcr\\.io/jasperfordesq-ai/accounts-api@sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "frontendImage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["exactDigestReference"],
+      "properties": {
+        "exactDigestReference": {
+          "type": "string",
+          "pattern": "^ghcr\\.io/jasperfordesq-ai/accounts-frontend@sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "postgresImage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["exactDigestReference"],
+      "properties": {
+        "exactDigestReference": {
+          "type": "string",
+          "pattern": "^postgres@sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "byteSize", "sha256"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 260,
+          "not": { "pattern": "(^|[\\\\/])\\.\\.([\\\\/]|$)" }
+        },
+        "byteSize": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    }
+  }
+}
