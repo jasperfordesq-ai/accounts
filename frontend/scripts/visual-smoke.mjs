@@ -1808,6 +1808,7 @@ function relativePageUrl(page) {
 }
 
 export {
+  apiJson,
   assertRequiredMfaCompleted,
   checkAccessibility,
   checkResponsiveWorkflowAcceptance,
@@ -1815,6 +1816,7 @@ export {
   companyHrefFromPeriodHref,
   consumeEphemeralMfaHandoff,
   isExpectedAnonymousSessionProbeConsoleError,
+  login,
   nextFreshTotpCode,
   periodPathFromHref,
   resolveVisualSmokeStateHref,

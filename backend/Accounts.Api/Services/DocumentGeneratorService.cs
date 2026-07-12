@@ -46,9 +46,12 @@ public class DocumentGeneratorService(
             .FirstOrDefaultAsync(p => p.Id == periodId && p.CompanyId == companyId)
             ?? throw new ResourceNotFoundException("Period not found");
 
-        if (purpose == DocumentPackagePurpose.StatutoryApproval)
+        // A conspicuously marked review copy is intentionally available while a local test
+        // workflow is incomplete. Final/member-approval artifacts remain fail-closed behind the
+        // full statutory readiness gate.
+        if (purpose == DocumentPackagePurpose.StatutoryApproval && !reviewArtifact)
             await statementsService.AssertFinalOutputReadinessAsync(companyId, periodId, "accounts package");
-        else if (purpose == DocumentPackagePurpose.AgmApproval)
+        else if (purpose == DocumentPackagePurpose.AgmApproval && !reviewArtifact)
             await statementsService.AssertFinalOutputReadinessAsync(companyId, periodId, "AGM approval pack");
 
         var company = period.Company;

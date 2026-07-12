@@ -1354,6 +1354,31 @@ public partial class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task ReviewAccountsPackage_AllowsIncompleteSafeTestPeriodButRemainsMarkedDraft()
+    {
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        db.FilingRegimes.Add(new FilingRegime
+        {
+            PeriodId = period.Id,
+            ElectedRegime = ElectedRegime.Micro,
+            CanUseMicro = true,
+            CanFileAbridged = true,
+            AuditExempt = true
+        });
+        await db.SaveChangesAsync();
+        var documents = new DocumentGeneratorService(db, new FinancialStatementsService(db));
+
+        var reviewPdf = await documents.GenerateAccountsReviewPackageAsync(period.CompanyId, period.Id);
+        var reviewText = ExtractPdfText(reviewPdf);
+
+        Assert.Contains("DRAFT", reviewText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("NOT FOR FILING", reviewText, StringComparison.OrdinalIgnoreCase);
+        await Assert.ThrowsAsync<BusinessRuleException>(() =>
+            documents.GenerateAccountsPackageAsync(period.CompanyId, period.Id));
+    }
+
+    [Fact]
     public async Task FinalOutputs_BlockWhenReadinessWarningsRemainOpen()
     {
         await using var db = CreateDbContext();
