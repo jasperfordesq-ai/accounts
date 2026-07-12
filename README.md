@@ -48,7 +48,7 @@ do not adapt one mode's Compose file or security allowances into another mode.
 | Mode | Intended use | Status |
 |------|--------------|--------|
 | Development | Contributors changing code on localhost | Available |
-| Private Server | Compiled containers on a trusted Windows x64 computer; optional selected-user access through Tailscale Serve | Operational preview; current-host lifecycle passed, clean-host/Tailscale acceptance remains open |
+| Private Server | Compiled containers on a trusted Windows x64 computer; optional selected-user access through Tailscale Serve | Operational preview; exact preview.4 local score 980/1,000, with real reboot and clean replacement-host recovery open |
 | Public Production | Internet-reachable service behind an approved HTTPS ingress | Hardened stack exists; release-readiness gates remain open |
 
 Private Server uses the explicit `PrivateServer` deployment contract, generated secrets, compiled
@@ -56,6 +56,7 @@ images, a loopback-only frontend port, unexposed API/database services, forced P
 optional Tailscale **Serve**. It is not Development with different credentials and it is not a
 filing certification. See the [Private Server operator guide](Docs/deployment/private-server.md)
 and [deployment workstream handoff](Docs/deployment/DEPLOYMENT_MODES_HANDOFF.md).
+Tailscale is optional for this score and is not required for loopback-only owner use.
 
 ## Build & test
 

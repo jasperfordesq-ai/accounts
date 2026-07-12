@@ -322,8 +322,8 @@ fingerprints with the authenticated backup evidence. A failed attempt remains ex
 as `hostRecoveryFailed` for diagnosis or deliberate purge.
 
 Do not delete the source host until this exact workflow has passed on the intended replacement
-machine and retained business artifacts have been inspected. Implementation and mock/adversarial
-tests are not a substitute for that drill.
+machine and retained business artifacts have been inspected. Implementation, same-host checks, and
+mock/adversarial tests are not replacement-host acceptance.
 
 ## Updates and rollback limits
 
@@ -480,6 +480,23 @@ credentials to make a check green.
 
 ## Acceptance and known limits
 
+### Exact preview.4 local acceptance (12 July 2026)
+
+Candidate `0226c3a750ae4a9b174c51d098c8d5995a6f0c7e`, version `0.1.0-preview.4`,
+passed clean compiled-bundle setup and `local-check` on Windows, Owner password recovery/rotation
+with privileged MFA enforced, authenticated sample PDF/iXBRL downloads, encrypted complete backup
+and independent verification, same-installation restore, genuine release update, forced update
+failure, and explicit recovery. Canonical CI run `29199796404` and protected release workflow run
+`29200905370` passed. The draft ZIP SHA-256 is
+`1aebcad90084f85641598a98a37521dcd49a28a91221fbd8794833f7b83209e2`.
+
+The resulting local Windows score is **980/1,000**. A real Windows reboot still needs
+`reboot-check prepare` followed by post-reboot `reboot-check verify`. Replacement-host recovery
+must still run on a genuinely clean Windows host with separately stored backup, age identity, and
+recovery-authentication key. The current source host correctly refuses that operation while its
+source Docker project and volume exist. Tailscale was not enabled and is not required for
+loopback-only owner use.
+
 ### Current-host engineering drill
 
 On 11 July 2026 a disposable Windows 11 Pro x64 host exercise using Windows PowerShell 5.1 and
@@ -490,7 +507,8 @@ purge and exact cleanup. The reset completed with HTTP 204 and the recovered cre
 the expected HTTP 202 privileged-MFA gate. Diagnostics passed 25/25. Tailscale was not enabled and
 no API, database, LAN or public port was published.
 
-That drill is useful current-host engineering evidence, not clean-machine or filing acceptance. It
+That historical drill is useful current-host engineering evidence, not clean-machine or filing
+acceptance. The later preview.4 result above supersedes its local backup/update limitations. It
 used the explicitly incomplete plaintext database-only backup path, not an encrypted complete
 recovery set, and it did not exercise a reviewed published bundle, genuine prior-version update,
 reboot, offline accountant journey, second-device Serve access or replacement-host recovery. The
@@ -498,11 +516,10 @@ operator test suite now forces update failure and recovery and exercises the rep
 reboot evidence contracts through injected deterministic seams; those are coding evidence, not
 live-host acceptance.
 
-Private Server is not live-certified until a clean Windows x64 VM or equivalent proves setup,
-unique secrets, one tenant/Owner and no demo state, Owner password/MFA lifecycle, two additional
-users/roles, only the approved loopback port, restart and reboot persistence, offline routine use,
-private HTTPS from a second device, token-log absence, verified backup/restore, prior-version update,
-forced update failure, emergency Owner recovery and unchanged Public Production validation.
+Private Server remains an operational preview. The local owner-use score reaches full marks only
+after real reboot and clean replacement-host evidence. Broader organisational or remote-use claims
+also require the relevant non-Owner role, offline-use, and optional second-device Tailscale checks;
+Public Production and statutory use retain their separate acceptance contract.
 
 Even after that operational acceptance, FilingBridge remains early-development statutory
 preparation software. It does not directly submit to CRO or ROS. Real-world filing reliance remains

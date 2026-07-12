@@ -25,15 +25,18 @@ The canonical design, implemented contract, security boundaries, verification st
 remaining live acceptance, and next-agent instructions are in
 **[Docs/deployment/DEPLOYMENT_MODES_HANDOFF.md](Docs/deployment/DEPLOYMENT_MODES_HANDOFF.md)**.
 
-Private Server is now a **Windows x64 operational preview**, not a live-certified deployment.
+Private Server is now a **Windows x64 operational preview**, not a statutory or Public Production
+certification.
 The repository contains the explicit `PrivateServer` backend contract, compiled private Compose
 topology, release/manifest verification, Windows operator commands, same-installation backup and
-restore controls, and optional Tailscale Serve helper. A disposable current-host Windows drill
-passed source setup, stop/start, plaintext database-only backup/verify/restore, source update,
-Owner recovery/reset with privileged MFA enforced, diagnostics/support, purge and exact cleanup.
-Clean-machine setup, reboot, second-device Tailscale HTTPS, offline full workflow, encrypted
-complete recovery, genuine prior-version update/failure recovery, and replacement-host recovery
-have not been accepted live. Do not claim them.
+restore controls, and optional Tailscale Serve helper. The exact `0.1.0-preview.4` candidate passed
+clean compiled-bundle setup, local health/isolation, Owner recovery/password rotation with
+privileged MFA enforced, authenticated sample PDF/iXBRL downloads, encrypted complete backup and
+independent verification, same-installation restore, genuine release update, forced update failure
+and explicit recovery, plus candidate-bound CI and protected release publication. Real reboot
+verification and clean replacement-host recovery have not been accepted live. Second-device
+Tailscale HTTPS is optional for loopback-only use and was not tested. Do not claim the two remaining
+gates.
 
 Private lifecycle commands are installation-mutex protected. Backups stream through host staging,
 are authenticated with an installation-held HMAC before any restore, and complete encrypted sets
@@ -79,14 +82,14 @@ evaluation and coding without a structurally impossible self-approval gate.
 
 ## Local Windows 1,000/1,000 workstream — 12 July 2026
 
-The owner has adopted the 900/1,000 local-machine baseline and directed the coding side toward
-1,000/1,000. The score, deductions and evidence rule are canonical in
+The owner has progressed from the 900/1,000 baseline to an evidence-backed **980/1,000** for the
+exact preview.4 local-machine candidate. The score, deductions and evidence rule are canonical in
 `Docs/deployment/LOCAL_WINDOWS_READINESS.md`. Coding now includes machine-readable `local-check`
 and real-reboot `reboot-check` commands, separate recovery-trust export, authenticated
 replacement-host bootstrap, deterministic forced-update-failure recovery coverage, and the
 authenticated smoke script in compiled bundles. Do not award the remaining points merely because
-the code or mocks pass: the exact candidate still needs the live clean-install, reboot, encrypted
-restore, genuine update/failure, owner journey and replacement-host evidence listed in that file.
+the code or mocks pass: the exact candidate still needs a real reboot verify and a clean
+replacement-host recovery drill.
 This local score never changes the independent 600/1,000 statutory/Public Production audit.
 
 ## Active Goal Handoff

@@ -71,6 +71,16 @@ may not be inferred from the current-host drill or static/automated checks. Most
 success cannot satisfy `HUMAN-001` through `HUMAN-007`, external ROS/iXBRL validation, source-law
 review, qualified-accountant acceptance, or the no-direct-filing boundary.
 
+### Local Windows evidence update â€” 12 July 2026
+
+The later exact `0.1.0-preview.4` candidate passed clean compiled-bundle setup, Owner/MFA and
+sample-output checks, encrypted complete backup/verification/same-installation restore, genuine
+update, forced-failure recovery, and candidate-bound CI. Its separate local Windows readiness score
+is **980/1,000**; real reboot verification and clean replacement-host recovery remain open. This
+update supersedes the operational limitations in the dated 11 July note only. It does not alter
+this audit's independent **600/1,000** score or close any professional, statutory, external,
+governance, Public Production, or multi-user acceptance gate.
+
 ## Non-negotiable product boundary
 
 1. Direct CRO and ROS submission remains unsupported. The platform may only generate artifacts

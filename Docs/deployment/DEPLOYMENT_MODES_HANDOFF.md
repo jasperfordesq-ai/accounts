@@ -7,7 +7,7 @@
 > remaining work. Do not interpret implementation or an automated pass as statutory acceptance,
 > live Tailscale certification, clean-machine proof, or production filing readiness.
 
-Last updated: 11 July 2026.
+Last updated: 12 July 2026.
 
 ## Canonical deployment documents
 
@@ -237,6 +237,25 @@ Server release has been made generally available merely because this workflow ex
 
 ## Current verification state
 
+### Exact preview.4 local acceptance update (12 July 2026)
+
+Candidate `0226c3a750ae4a9b174c51d098c8d5995a6f0c7e`, Private Server
+`0.1.0-preview.4`, passed canonical CI run `29199796404` and protected release workflow run
+`29200905370`. Its verified draft bundle has SHA-256
+`1aebcad90084f85641598a98a37521dcd49a28a91221fbd8794833f7b83209e2`.
+
+On the local Windows host, that compiled bundle passed clean setup, `local-check`, stop/start,
+Owner recovery and password rotation with privileged MFA enforced, authenticated sample PDF and
+iXBRL downloads, encrypted complete backup, independent verification, same-installation restore,
+genuine release update, deterministic forced-update failure, and explicit authenticated recovery.
+The installation returned to `ready` on loopback with its data fingerprint retained. No API,
+PostgreSQL, LAN, Tailscale, or public listener was enabled.
+
+This is an evidence-backed **980/1,000** local Windows result under
+`LOCAL_WINDOWS_READINESS.md`. Only real reboot verification and clean replacement-host recovery
+remain in that local score. It does not change the independent 600/1,000 statutory/Public
+Production audit.
+
 Automated coverage now exists for:
 
 - backend Private Server mode safety, file-backed installation identity, private initialization,
@@ -258,8 +277,10 @@ across 71 files, lint, typecheck, a production build, and generated-contract ver
 paths and 183 schemas. The final post-correction backend candidate passed 1,072/1,072 tests with the
 PostgreSQL and golden-corpus gates enabled. Private Server operator, release bundle, Compose
 mutation/live-loopback, protected release-workflow, CI action-policy, whitespace, and adversarial
-publication checks also passed. Green candidate-bound CI evidence is still required before any
-release claim.
+publication checks also passed. The exact preview.4 CI and protected draft-release evidence is
+recorded above; a draft release is not general availability or statutory acceptance.
+
+### Historical source-build drill (11 July 2026)
 
 On 11 July 2026 a disposable current-host drill on Windows 11 Pro x64, Windows PowerShell 5.1, and
 Docker Desktop 29.2.1 passed source-build setup, loopback health, stop/start, plaintext database-only
@@ -270,19 +291,12 @@ for benign native stderr/Windows argv handling, restart of existing containers w
 removed one-shot dependencies, and the canonical `UserPasswordResetCompleted` host-audit database
 constraint. No Tailscale route or public listener was enabled.
 
-The following are **not** proven and must remain open:
+The following broader deployment or statutory claims remain open; items now accepted for the
+loopback-only local score are described in the preview.4 update above:
 
-- clean Windows x64 machine setup from a real published bundle;
-- complete Owner MFA enrolment/authenticated-session journey followed by two separate non-Owner
-  role journeys (the current-host drill proved recovery reset and that privileged MFA stayed
-  enforced, not the full journey);
 - live Tailscale Serve HTTPS from a second device and least-privilege tailnet policy;
 - Windows sign-in, Docker Desktop, application, and Serve recovery after reboot;
 - full routine workflow without ordinary internet connectivity;
-- encrypted complete-recovery-set backup/same-installation restore with artifact-level business
-  checks (only the explicitly incomplete plaintext database-only path was drilled);
-- update from a real prior version plus live forced migration/health failure recovery (the
-  deterministic operator suite now proves the coded failure/restore state machine);
 - clean-host execution of the implemented replacement-host recovery path; and
 - unchanged exact-candidate Public Production and statutory release evidence.
 
@@ -301,15 +315,15 @@ The following are **not** proven and must remain open:
       backup/verify/restore, source update, Owner recovery/reset, diagnostics/support, purge, and
       exact cleanup without public exposure.
 - [x] Exact local post-correction backend/frontend/repository gates passed with executed counts.
-- [ ] Green candidate-bound CI evidence retained after publication.
-- [ ] Clean Windows x64 release-bundle setup reaches tenant-qualified first login without YAML edits.
+- [x] Green candidate-bound CI evidence retained after publication.
+- [x] Clean Windows x64 release-bundle setup reaches tenant-qualified first login without YAML edits.
 - [ ] Rerunning setup refuses to replace an existing database or Owner credentials on a real host.
 - [ ] Two non-Owner users complete live role-appropriate journeys.
 - [ ] Live loopback and second-device Tailscale Serve HTTPS checks pass without public exposure.
-- [ ] Windows reboot and Docker/Tailscale restart preserve service/data (current-host stop/start and
-      source-build update passed; reboot and genuine release update remain open).
-- [ ] Real encrypted backup and same-installation restore drill passes with retained evidence.
-- [ ] Prior-version update and forced-failure recovery drill passes.
+- [ ] Windows reboot and Docker restart preserve service/data (genuine release update passed;
+      Tailscale is optional and was not enabled for the loopback-only path).
+- [x] Real encrypted backup and same-installation restore drill passes with retained evidence.
+- [x] Prior-version update and forced-failure recovery drill passes.
 - [ ] Offline routine workflow is exercised and documented honestly.
 - [x] Replacement-host recovery, separate trust-anchor export, post-recovery fingerprint checks,
       and adversarial coding tests are implemented.
