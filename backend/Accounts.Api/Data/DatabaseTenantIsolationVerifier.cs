@@ -177,21 +177,22 @@ public sealed class DatabaseTenantIsolationVerifier(
         string applicationLoginRole,
         CancellationToken cancellationToken)
     {
-        var expectedFunctions = new HashSet<string>(StringComparer.Ordinal)
+        var expectedFunctions = new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            "accounts_current_tenant_id",
-            "accounts_resolve_login_tenant",
-            "accounts_email_exists",
-            "accounts_resolve_action_token_tenant",
-            "accounts_resolve_mfa_challenge_tenant",
-            "accounts_list_tenant_ids_for_jobs",
-            "accounts_delete_expired_anonymous_login_events"
+            ["accounts_current_tenant_id"] = "",
+            ["accounts_resolve_login_tenant"] = "text, text",
+            ["accounts_resolve_action_token_tenant"] = "text, text",
+            ["accounts_resolve_mfa_challenge_tenant"] = "text",
+            ["accounts_list_tenant_ids_for_jobs"] = "",
+            ["accounts_delete_expired_anonymous_login_events"] = ""
         };
+        const string forbiddenGlobalEmailFunction = "accounts_email_exists";
         var found = new HashSet<string>(StringComparer.Ordinal);
         var failures = new List<string>();
         await using var command = connection.CreateCommand();
         command.CommandText = """
             SELECT procedure_entry.proname,
+                   pg_catalog.oidvectortypes(procedure_entry.proargtypes),
                    procedure_entry.prosecdef,
                    owner_role.rolname,
                    EXISTS (
@@ -211,21 +212,35 @@ public sealed class DatabaseTenantIsolationVerifier(
             """;
         var parameter = command.CreateParameter();
         parameter.ParameterName = "function_names";
-        parameter.Value = expectedFunctions.ToArray();
+        parameter.Value = expectedFunctions.Keys.Append(forbiddenGlobalEmailFunction).ToArray();
         command.Parameters.Add(parameter);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
             var name = reader.GetString(0);
+            var arguments = reader.GetString(1);
+            var signature = $"{name}({arguments})";
+            if (string.Equals(name, forbiddenGlobalEmailFunction, StringComparison.Ordinal))
+            {
+                failures.Add($"Forbidden global email-existence function '{signature}' is present.");
+                continue;
+            }
+            if (!expectedFunctions.TryGetValue(name, out var expectedArguments)
+                || !string.Equals(arguments, expectedArguments, StringComparison.Ordinal))
+            {
+                failures.Add($"Unexpected database tenant function overload '{signature}' is present.");
+                continue;
+            }
+
             found.Add(name);
-            if (!reader.GetBoolean(1)) failures.Add($"Database tenant function '{name}' is not SECURITY DEFINER.");
-            if (string.Equals(reader.GetString(2), applicationLoginRole, StringComparison.Ordinal))
-                failures.Add($"The API login owns database tenant function '{name}'.");
-            if (reader.GetBoolean(3)) failures.Add($"Database tenant function '{name}' is executable by PUBLIC.");
+            if (!reader.GetBoolean(2)) failures.Add($"Database tenant function '{signature}' is not SECURITY DEFINER.");
+            if (string.Equals(reader.GetString(3), applicationLoginRole, StringComparison.Ordinal))
+                failures.Add($"The API login owns database tenant function '{signature}'.");
+            if (reader.GetBoolean(4)) failures.Add($"Database tenant function '{signature}' is executable by PUBLIC.");
         }
 
-        foreach (var missing in expectedFunctions.Except(found, StringComparer.Ordinal).Order())
-            failures.Add($"Database tenant function '{missing}' is missing.");
+        foreach (var missing in expectedFunctions.Keys.Except(found, StringComparer.Ordinal).Order())
+            failures.Add($"Database tenant function '{missing}({expectedFunctions[missing]})' is missing.");
         return failures;
     }
 

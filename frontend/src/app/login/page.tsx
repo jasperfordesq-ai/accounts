@@ -10,10 +10,12 @@ import { isMfaChallenge, type MfaChallenge } from "@/lib/auth";
 import { changePasswordRouteForReturnTo, returnToFromLocation } from "@/lib/navigation";
 
 const defaultEmail = process.env.NEXT_PUBLIC_DEMO_LOGIN_EMAIL ?? "";
+const defaultTenantSlug = process.env.NEXT_PUBLIC_DEMO_TENANT_SLUG ?? "";
 
 export default function LoginPage() {
   const router = useRouter();
   const { login, completeMfaChallenge } = useAuth();
+  const [tenantSlug, setTenantSlug] = useState(defaultTenantSlug);
   const [email, setEmail] = useState(defaultEmail);
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +39,7 @@ export default function LoginPage() {
     setSubmitting(true);
 
     try {
-      const outcome = await login(email.trim(), password);
+      const outcome = await login(tenantSlug.trim().toLowerCase(), email.trim(), password);
       if (isMfaChallenge(outcome)) {
         setChallenge(outcome);
         setPassword("");
@@ -46,7 +48,7 @@ export default function LoginPage() {
       finishLogin(outcome);
     } catch (err) {
       if (err instanceof ApiError) {
-        setError(err.status === 401 ? "Invalid email or password." : err.message);
+        setError(err.status === 401 ? "Invalid workspace, email, or password." : err.message);
       } else {
         setError(err instanceof Error ? err.message : "Sign in failed. Please try again.");
       }
@@ -123,6 +125,26 @@ export default function LoginPage() {
             {!challenge ? (
               <>
                 <TextField fullWidth>
+                  <Label>Workspace slug</Label>
+                  <Input
+                    type="text"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    minLength={3}
+                    maxLength={120}
+                    pattern="[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?"
+                    value={tenantSlug}
+                    onChange={(event) => setTenantSlug(event.target.value)}
+                    disabled={submitting}
+                    required
+                    aria-describedby="workspace-slug-help"
+                  />
+                  <p id="workspace-slug-help" className="text-sm text-[var(--muted-foreground)]">
+                    Enter the workspace slug supplied by your administrator. Private Server setup prints this value.
+                  </p>
+                </TextField>
+                <TextField fullWidth>
                   <Label>Email</Label>
                   <Input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} disabled={submitting} required />
                 </TextField>
@@ -163,7 +185,7 @@ export default function LoginPage() {
               type="submit"
               variant="primary"
               className="w-full"
-              isDisabled={submitting || (!challenge ? !email.trim() || !password : !mfaCode.trim())}
+              isDisabled={submitting || (!challenge ? !tenantSlug.trim() || !email.trim() || !password : !mfaCode.trim())}
             >
               {submitting ? <Spinner size="sm" /> : <LogIn className="h-4 w-4" />}
               {challenge ? challenge.requiresEnrollment ? "Verify and enable MFA" : "Verify and sign in" : "Sign in"}

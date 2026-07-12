@@ -38,7 +38,9 @@ function isForbiddenApiKeyHeaderName(header: string) {
   return hopByHopHeaders.includes(normalized)
     || normalized === "forwarded"
     || normalized === "x-real-ip"
-    || normalized.startsWith("x-forwarded-");
+    || normalized.startsWith("x-forwarded-")
+    || normalized.startsWith("tailscale-")
+    || normalized.startsWith("x-tailscale-");
 }
 
 export function configuredApiKeyHeaderName(configuredHeader: string | undefined) {
@@ -74,12 +76,22 @@ function deleteForwardedHeaders(headers: Headers) {
   headers.delete("X-Real-IP");
 }
 
+export function deleteUntrustedTailscaleIdentityHeaders(headers: Headers) {
+  const identityHeaders = [...headers.keys()].filter((header) => {
+    const normalized = header.toLowerCase();
+    return normalized.startsWith("tailscale-") || normalized.startsWith("x-tailscale-");
+  });
+
+  for (const header of identityHeaders) headers.delete(header);
+}
+
 export function buildApiProxyRequestHeaders(
   sourceHeaders: Headers,
   options: BuildApiProxyRequestHeadersOptions,
 ) {
   const headers = new Headers(sourceHeaders);
   deleteHopByHopHeaders(headers);
+  deleteUntrustedTailscaleIdentityHeaders(headers);
 
   const apiKeyHeader = configuredApiKeyHeaderName(options.apiKeyHeader);
   headers.delete(defaultApiKeyHeader);

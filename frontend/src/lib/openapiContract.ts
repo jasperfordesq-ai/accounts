@@ -33,6 +33,15 @@ type JsonResponse<
     : never
   : never;
 
+type JsonRequest<
+  Path extends keyof paths,
+  Method extends keyof paths[Path],
+> = paths[Path][Method] extends {
+  requestBody: { content: { "application/json": infer Payload } };
+}
+  ? Payload
+  : never;
+
 type Equal<Left, Right> =
   (<Value>() => Value extends Left ? 1 : 2) extends
   (<Value>() => Value extends Right ? 1 : 2)
@@ -42,6 +51,7 @@ type Assert<Condition extends true> = Condition;
 type NotNever<Value> = [Value] extends [never] ? false : true;
 
 export type AuthWireResponse = JsonResponse<"/api/auth/me", "get", 200>;
+export type LoginWireRequest = JsonRequest<"/api/auth/login", "post">;
 export type MfaChallengeWireResponse = JsonResponse<"/api/auth/login", "post", 202>;
 export type ProfitAndLossWireResponse = JsonResponse<
   "/api/companies/{companyId}/periods/{periodId}/statements/profit-and-loss",
@@ -79,6 +89,11 @@ type _CriticalResponsesExist = [
   Assert<NotNever<FilingReadinessProfileWireResponse>>,
 ];
 
+type _CriticalRequestsExist = [
+  Assert<NotNever<LoginWireRequest>>,
+  Assert<Equal<keyof LoginWireRequest, "tenantSlug" | "email" | "password">>,
+];
+
 // Top-level key equality makes a backend field addition/removal fail tsc until the corresponding
 // runtime parser is deliberately updated. Nested schemas remain independently emitted as OpenAPI
 // components and are checked by the generated paths above plus existing adversarial parser tests.
@@ -109,6 +124,7 @@ type _CriticalRuntimeParserKeys = [
 ];
 
 export type CriticalApiContractAssertions = [
+  _CriticalRequestsExist,
   _CriticalResponsesExist,
   _CriticalRuntimeParserKeys,
 ];

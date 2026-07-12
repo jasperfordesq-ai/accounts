@@ -1722,6 +1722,7 @@ export const authUserSchema = z.object({
   userId: positiveIdSchema,
   tenantId: positiveIdSchema,
   tenantName: z.string().trim().min(1),
+  tenantSlug: z.string().trim().min(3).max(120).regex(/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])$/),
   email: z.string().email(),
   displayName: z.string().trim().min(1),
   role: z.enum(["Owner", "Accountant", "Reviewer", "Client"]),

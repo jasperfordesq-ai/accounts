@@ -829,6 +829,7 @@ public partial class AccountsWorkflowTests
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
+                ["Deployment:Mode"] = "Development",
                 ["AllowedHosts"] = "*",
                 ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=accounts_dev",
                 ["AllowedOrigins:0"] = "http://localhost:3000",
@@ -878,6 +879,7 @@ public partial class AccountsWorkflowTests
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
+                ["Deployment:Mode"] = "Development",
                 ["AllowedHosts"] = "*",
                 ["ConnectionStrings:DefaultConnection"] = "Host=localhost;Password=accounts_dev",
                 ["AllowedOrigins:0"] = "http://localhost:3000",
@@ -907,6 +909,7 @@ public partial class AccountsWorkflowTests
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
+                ["Deployment:Mode"] = "PublicProduction",
                 ["AllowedHosts"] = "accounts.example.ie",
                 ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password;SSL Mode=VerifyFull;Root Certificate=/run/secrets/postgres_ca_certificate;Trust Server Certificate=false",
                 ["AllowedOrigins:0"] = "https://accounts.example.ie",
@@ -1047,6 +1050,7 @@ public partial class AccountsWorkflowTests
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
+                ["Deployment:Mode"] = "PublicProduction",
                 ["AllowedHosts"] = "accounts.example.ie",
                 ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password;SSL Mode=VerifyFull;Root Certificate=/run/secrets/postgres_ca_certificate;Trust Server Certificate=false",
                 ["AllowedOrigins:0"] = "https://accounts.example.ie",

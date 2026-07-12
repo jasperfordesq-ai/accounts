@@ -34,8 +34,11 @@ public class BootstrapOwnerService(
         }
 
         var tenant = await db.Tenants.SingleOrDefaultAsync(t => t.Slug == tenantSlug, cancellationToken);
-        var existingOwnerEmailUser = await db.UserAccounts
-            .SingleOrDefaultAsync(u => u.Email.ToLower() == ownerEmail, cancellationToken);
+        var existingOwnerEmailUser = tenant is null
+            ? null
+            : await db.UserAccounts.SingleOrDefaultAsync(
+                u => u.TenantId == tenant.Id && u.Email.ToLower() == ownerEmail,
+                cancellationToken);
         if (existingOwnerEmailUser is not null && !IsUsableConfiguredOwner(existingOwnerEmailUser, tenant))
         {
             throw new InvalidOperationException(

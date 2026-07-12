@@ -44,6 +44,33 @@ Release run with zero failures/skips; the frontend score is supported by 277 uni
 tests plus contract/lint/type/build gates. Exact remote candidate CI and governance evidence must
 still be attached before this reassessment is release evidence.
 
+## Deployment modes implementation note — 11 July 2026
+
+The repository now contains an explicit three-mode deployment contract and a Windows x64 Private
+Server operational preview. This is a separate operational workstream and does **not** change the
+audited **600/1,000** independent baseline, the evidence-derived reassessment above, or any open
+weighted control in this audit.
+
+Implemented engineering includes a compiled private Compose topology, loopback-only frontend
+publication, unexposed API/database services, generated file-backed secrets, separate migration
+and runtime database roles, forced RLS and signed tenant context, tenant-qualified login using
+workspace slug + email + password, Windows lifecycle/recovery tooling, same-installation backup and
+restore controls, release-manifest/asset verification, optional Tailscale Serve integration, and
+separate Development/Private Server/Public Production documentation. `compose.yml` remains
+Development-only and must never be exposed through Tailscale, a LAN, router forwarding, or public
+ingress.
+
+Private Server is not live-certified. A disposable current-host Windows drill passed setup,
+stop/start, the explicitly incomplete plaintext database-only backup/verify/restore path,
+source-build update, Owner recovery/reset with privileged MFA still enforced, diagnostics/support,
+purge and exact cleanup. Clean-machine installation, complete Owner/MFA and multi-user journeys,
+second-device Tailscale HTTPS, reboot recovery, offline full workflow, encrypted complete-recovery
+sets, genuine prior-version/failure recovery, and replacement-host recovery remain unproven or
+unimplemented as recorded in `Docs/deployment/DEPLOYMENT_MODES_HANDOFF.md`. Those remaining controls
+may not be inferred from the current-host drill or static/automated checks. Most importantly, private installation
+success cannot satisfy `HUMAN-001` through `HUMAN-007`, external ROS/iXBRL validation, source-law
+review, qualified-accountant acceptance, or the no-direct-filing boundary.
+
 ## Non-negotiable product boundary
 
 1. Direct CRO and ROS submission remains unsupported. The platform may only generate artifacts
@@ -1887,7 +1914,7 @@ explicit revoke and final offboarding sequence, plus the live PostgreSQL securit
 with zero skips. Focused login, action-token, user-administration, permission and navigation render/
 contract coverage passed, as did TypeScript, lint and the generated API contract.
 
-### [x] P1-OPS-003 — Protect repository governance
+### [ ] P1-OPS-003 — Protect repository governance
 
 Configure protected `main`, required PR review and CI, admin enforcement, force-push/deletion
 blocking, required signed commits where supported, secret scanning, push protection, Dependabot
@@ -1911,6 +1938,17 @@ review, code-owner review, stale-review dismissal, signed commits, linear histor
 resolution and blocked force-push/deletion. Secret scanning, push protection, Dependabot security
 updates/automated fixes and extended weekly CodeQL are enabled. Administrator enforcement is enabled
 after the final reconciliation commit, and the verifier must pass against that exact protected head.
+
+Solo-owner posture update (2026-07-12): the user narrowed the immediate goal to local/private
+evaluation and continued coding on a personal Windows machine. The repository currently has one
+collaborator and one code owner, so requiring a second approving/code-owner review created an
+impossible self-approval gate. The live `main` policy therefore retains mandatory pull requests,
+strict CI, signed linear history, resolved conversations, administrator enforcement, and blocked
+force-push/deletion, but no longer requires an approving review or code-owner review. This control
+is reopened because that is not independent repository governance. It may be closed only after a
+genuine second reviewer with write access is added, CODEOWNERS is updated, the review requirements
+are restored, and exact-candidate governance evidence passes. Local Private Server evaluation does
+not require or imply that closure.
 
 ### [x] P1-OPS-004 — Make dependency and build inputs reproducible
 

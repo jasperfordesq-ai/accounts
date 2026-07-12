@@ -49,14 +49,18 @@ public static class FileBackedConfiguration
 {
     private const string FileSuffix = "_FILE";
 
-    public static void AddFileBackedEnvironmentVariables(ConfigurationManager configuration)
+    public static FileBackedConfigurationProvenance AddFileBackedEnvironmentVariables(
+        ConfigurationManager configuration)
     {
-        var values = LoadFromEnvironment();
+        var loadedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var values = LoadFromEnvironment(loadedKeys);
         if (values.Count > 0)
             configuration.AddInMemoryCollection(values);
+        return new FileBackedConfigurationProvenance(loadedKeys);
     }
 
-    public static IReadOnlyDictionary<string, string?> LoadFromEnvironment()
+    private static IReadOnlyDictionary<string, string?> LoadFromEnvironment(
+        ISet<string> loadedKeys)
     {
         var values = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
         foreach (DictionaryEntry entry in Environment.GetEnvironmentVariables())
@@ -77,8 +81,16 @@ public static class FileBackedConfiguration
 
             var configKey = environmentName[..^FileSuffix.Length].Replace("__", ":");
             values[configKey] = File.ReadAllText(filePath).TrimEnd('\r', '\n');
+            loadedKeys.Add(configKey);
         }
 
         return values;
     }
+}
+
+public sealed class FileBackedConfigurationProvenance(IEnumerable<string> loadedKeys)
+{
+    private readonly HashSet<string> keys = new(loadedKeys, StringComparer.OrdinalIgnoreCase);
+
+    public bool IsFileBacked(string configKey) => keys.Contains(configKey);
 }

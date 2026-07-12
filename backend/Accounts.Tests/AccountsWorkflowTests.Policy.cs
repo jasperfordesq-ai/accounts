@@ -441,7 +441,9 @@ public partial class AccountsWorkflowTests
         Assert.Contains("BootstrapOwner__OwnerInitialPassword: \"LocalAdmin!Accounts-2026-9Qx\"", compose);
         Assert.Contains("BootstrapOwner__OwnerMustChangePassword: \"false\"", compose);
         Assert.Contains("DatabaseStartup__SeedSampleCompanies: \"false\"", compose);
+        Assert.Contains("NEXT_PUBLIC_DEMO_TENANT_SLUG: \"main-demo\"", compose);
         Assert.Contains("NEXT_PUBLIC_DEMO_LOGIN_EMAIL: \"admin@accounts.local\"", compose);
+        Assert.Contains("ARG NEXT_PUBLIC_DEMO_TENANT_SLUG", frontendDockerfile);
         Assert.Contains("ARG NEXT_PUBLIC_DEMO_LOGIN_EMAIL", frontendDockerfile);
     }
 
@@ -1649,7 +1651,7 @@ public partial class AccountsWorkflowTests
         Assert.Contains("SystemReadinessProbeService readiness", endpoints);
         Assert.Contains("await readiness.GetAsync", endpoints);
         Assert.Contains("DatabaseTenantBootstrapResolver", probe);
-        Assert.Contains("ResolveLoginTenantAsync(email", probe);
+        Assert.Contains("ResolveLoginTenantAsync(tenantSlug, email", probe);
         Assert.Contains("user.Email.ToLower() == email", probe);
         Assert.Contains("user.Tenant.Slug.ToLower() == tenantSlug", probe);
 
@@ -1998,6 +2000,7 @@ public partial class AccountsWorkflowTests
         Assert.Contains("Run production smoke script", productionSmokeJob);
         Assert.Contains("./scripts/smoke-production.ps1", productionSmokeJob);
         Assert.Contains("-BaseUrl https://accounts-smoke.local", productionSmokeJob);
+        Assert.Contains("-TenantSlug $env:BOOTSTRAP_TENANT_SLUG", productionSmokeJob);
         Assert.Contains("-Email $env:BOOTSTRAP_OWNER_EMAIL", productionSmokeJob);
         Assert.Contains("-Password $bootstrapOwnerPassword", productionSmokeJob);
         Assert.Contains("-OutputDirectory (Join-Path $env:RUNNER_TEMP \"accounts-smoke\")", productionSmokeJob);
@@ -2006,6 +2009,7 @@ public partial class AccountsWorkflowTests
             "-EphemeralMfaHandoffPath (Join-Path $env:RUNNER_TEMP \"accounts-visual-auth/totp-handoff.json\")",
             productionSmokeJob);
         Assert.Contains("--mfa-handoff-file=\"$MFA_HANDOFF_FILE\"", productionSmokeJob);
+        Assert.Contains("--tenant-slug=\"$TENANT_SLUG\"", productionSmokeJob);
         Assert.Contains("trap 'rm -f \"$MFA_HANDOFF_FILE\"' EXIT", productionSmokeJob);
         Assert.Contains("rm -f \"$RUNNER_TEMP/accounts-visual-auth/totp-handoff.json\"", productionSmokeJob);
         Assert.Contains("-CheckMonitoringErrorRouting", productionSmokeJob);
@@ -3121,11 +3125,13 @@ public partial class AccountsWorkflowTests
 
         Assert.Contains("smoke-production.ps1", runbook);
         Assert.Contains("ACCOUNTS_FRONTEND_URL", runbook);
+        Assert.Contains("SMOKE_TENANT_SLUG", runbook);
         Assert.Contains("SMOKE_LOGIN_EMAIL", runbook);
         Assert.Contains("SMOKE_LOGIN_PASSWORD", runbook);
         Assert.Contains("SMOKE_TOTP_SECRET", runbook);
         Assert.Contains("/health/ready", smokeScript);
         Assert.Contains("/api/auth/login", smokeScript);
+        Assert.Contains("tenantSlug = $TenantSlug.Trim().ToLowerInvariant()", smokeScript);
         Assert.Contains("/api/auth/mfa/challenge", smokeScript);
         Assert.Contains("New-TotpCode", smokeScript);
         Assert.Contains("ConvertFrom-Base32", smokeScript);
@@ -4519,7 +4525,7 @@ public partial class AccountsWorkflowTests
         Assert.Contains("GetPendingMigrationsAsync", probe);
         Assert.Contains("HasActiveOwnerAsync", probe);
         Assert.Contains("DatabaseTenantBootstrapResolver", probe);
-        Assert.Contains("ResolveLoginTenantAsync(email", probe);
+        Assert.Contains("ResolveLoginTenantAsync(tenantSlug, email", probe);
         Assert.DoesNotContain("user.Role == \"Owner\"", probe);
         Assert.Contains("user.Role.Trim().ToLower() == \"owner\"", probe);
         Assert.Contains("user.Tenant.Slug.ToLower() == tenantSlug", probe);

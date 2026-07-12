@@ -41,12 +41,14 @@ test("visual smoke waits for a counter newer than the smoke enrollment counter",
 test("visual smoke login diagnostics redact enrollment seeds and credentials", () => {
   const email = "owner@example.ie";
   const password = "Correct Horse Battery Staple 1!";
+  const tenantSlug = "private-workspace";
   const diagnostic = safeLoginFailureDiagnostic(
-    new Error(`Enrollment failed for ${email} using ${password}; seed ${RFC_SECRET}`),
+    new Error(`Enrollment failed for ${tenantSlug}/${email} using ${password}; seed ${RFC_SECRET}`),
     "mfa-enrollment",
-    [email, password, RFC_SECRET],
+    [tenantSlug, email, password, RFC_SECRET],
   );
 
+  assert.equal(diagnostic.includes(tenantSlug), false);
   assert.equal(diagnostic.includes(email), false);
   assert.equal(diagnostic.includes(password), false);
   assert.equal(diagnostic.includes(RFC_SECRET), false);
@@ -69,6 +71,13 @@ test("visual smoke diagnostics never read whole form text", async () => {
   assert.doesNotMatch(source, /page\.getByRole\(["']alert["']\)/);
   assert.doesNotMatch(source, /document\.querySelector\(["']\[role=[^)]*alert/);
   assert.match(source, /form \[role=[^\]]*alert/);
+});
+
+test("visual smoke uses the tenant-qualified login contract", async () => {
+  const source = await readFile(new URL("../scripts/visual-smoke.mjs", import.meta.url), "utf8");
+  assert.match(source, /requiredArg\("tenant-slug"\)/);
+  assert.match(source, /getByRole\("textbox", \{ name: "Workspace slug" \}\)/);
+  assert.match(source, /tenantSlugInput\.fill\(tenantSlug\)/);
 });
 
 test("visual smoke consumes and deletes a mode-0600 runner MFA handoff", async () => {

@@ -247,7 +247,7 @@ async function setTheme(context, theme) {
   }, theme);
 }
 
-async function login(page, baseUrl, email, password, mfaState) {
+async function login(page, baseUrl, tenantSlug, email, password, mfaState) {
   let lastFailure = "";
 
   for (let attempt = 1; attempt <= 3; attempt += 1) {
@@ -262,10 +262,13 @@ async function login(page, baseUrl, email, password, mfaState) {
       return;
     }
 
+    const tenantSlugInput = page.getByRole("textbox", { name: "Workspace slug" });
     const emailInput = page.locator('input[type="email"]');
     const passwordInput = page.locator('input[type="password"]');
+    await tenantSlugInput.waitFor({ state: "visible", timeout: 30_000 });
     await emailInput.waitFor({ state: "visible", timeout: 30_000 });
     await passwordInput.waitFor({ state: "visible", timeout: 30_000 });
+    await tenantSlugInput.fill(tenantSlug);
     await emailInput.fill(email);
     await passwordInput.fill(password);
     const signInButton = page.getByRole("button", { name: "Sign in" });
@@ -322,7 +325,7 @@ async function login(page, baseUrl, email, password, mfaState) {
       return;
     } catch (error) {
       const uiState = await observedLoginUiState(page);
-      lastFailure = safeLoginFailureDiagnostic(error, uiState, [email, password, mfaState.secret]);
+      lastFailure = safeLoginFailureDiagnostic(error, uiState, [tenantSlug, email, password, mfaState.secret]);
       if (attempt < 3) {
         await page.waitForTimeout(attempt * 1_000);
         continue;
@@ -1616,6 +1619,7 @@ function safeVisualSmokeResponseRoute(rawUrl) {
 
 async function run() {
   const baseUrl = normalizeBaseUrl(requiredArg("base-url"));
+  const tenantSlug = requiredArg("tenant-slug");
   const email = requiredArg("email");
   const password = requiredArg("password");
   const outputDir = path.resolve(arg("output-dir", "artifacts/visual-smoke"));
@@ -1665,7 +1669,7 @@ async function run() {
           });
         }
 
-        await login(page, baseUrl, email, password, mfaState);
+        await login(page, baseUrl, tenantSlug, email, password, mfaState);
         const routeBases = await discoverRoutes(page, baseUrl);
 
         for (const state of selectedStates.filter((item) => item.authMode === "authenticated")) {

@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using System.Text.Json;
 using System.Threading.RateLimiting;
 using System.Collections;
 using System.Reflection;
@@ -14,13 +15,18 @@ using QuestPDF.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 var runMigrationsOnly = args.Any(arg => arg.Equals("--migrate-only", StringComparison.OrdinalIgnoreCase));
+var runPrivateInitialization = args.Any(arg => arg.Equals("--private-initialize", StringComparison.Ordinal));
+var runPrivateOwnerRecovery = args.Any(arg => arg.Equals("--private-owner-recovery", StringComparison.Ordinal));
+if (new[] { runMigrationsOnly, runPrivateInitialization, runPrivateOwnerRecovery }.Count(value => value) > 1)
+    throw new InvalidOperationException("Only one database operator command may be selected per process.");
 var generatingOpenApiDocument =
     Assembly.GetEntryAssembly()?.GetName().Name == "GetDocument.Insider"
     || AppDomain.CurrentDomain.GetAssemblies().Any(
         assembly => assembly.GetName().Name == "GetDocument.Insider")
     || Environment.CommandLine.Contains("dotnet-getdocument", StringComparison.OrdinalIgnoreCase)
     || Environment.CommandLine.Contains("GetDocument.Insider", StringComparison.OrdinalIgnoreCase);
-FileBackedConfiguration.AddFileBackedEnvironmentVariables(builder.Configuration);
+var fileBackedConfigurationProvenance =
+    FileBackedConfiguration.AddFileBackedEnvironmentVariables(builder.Configuration);
 
 // JSON: handle circular references + accept string enums in requests
 builder.Services.ConfigureHttpJsonOptions(options =>
@@ -97,6 +103,10 @@ builder.Services.Configure<ApiAccessConfig>(builder.Configuration.GetSection("Ap
 builder.Services.Configure<AuthSessionConfig>(builder.Configuration.GetSection("AuthSession"));
 builder.Services.Configure<IdentitySecurityConfig>(builder.Configuration.GetSection("IdentitySecurity"));
 builder.Services.Configure<BootstrapOwnerConfig>(builder.Configuration.GetSection("BootstrapOwner"));
+builder.Services.AddSingleton(fileBackedConfigurationProvenance);
+builder.Services.Configure<DeploymentConfig>(builder.Configuration.GetSection("Deployment"));
+builder.Services.Configure<PrivateInitializationConfig>(builder.Configuration.GetSection("PrivateInitialization"));
+builder.Services.Configure<PrivateOwnerRecoveryConfig>(builder.Configuration.GetSection("PrivateOwnerRecovery"));
 builder.Services.Configure<AuditIntegrityConfig>(builder.Configuration.GetSection("AuditIntegrity"));
 builder.Services.AddOptions<IdempotencyConfig>()
     .Bind(builder.Configuration.GetSection("Idempotency"))
@@ -211,9 +221,16 @@ builder.Services.AddScoped<MfaSecurityService>();
 builder.Services.AddScoped<IdentityAccessService>();
 builder.Services.AddScoped<UserLifecycleService>();
 builder.Services.AddScoped<BootstrapOwnerService>();
+builder.Services.AddScoped<PrivateInitializationService>();
+builder.Services.AddScoped<PrivateOwnerRecoveryService>();
 builder.Services.AddSingleton<ApiAccessService>();
 builder.Services.AddSingleton<ProductionSafetyService>();
-builder.Services.AddSingleton<IErrorReporter, SentryErrorReporter>();
+if (builder.Environment.IsDevelopment()
+    || DeploymentModeContract.IsPrivateServerRuntime(builder.Configuration, builder.Environment)
+    || string.IsNullOrWhiteSpace(monitoring.ErrorTrackingDsn))
+    builder.Services.AddSingleton<IErrorReporter, StructuredLogErrorReporter>();
+else
+    builder.Services.AddSingleton<IErrorReporter, SentryErrorReporter>();
 builder.Services.AddSingleton<PlatformMetrics>();
 builder.Services.AddSingleton<PlatformMetricAlertState>();
 builder.Services.AddSingleton<IPlatformMetricAlertSink, MonitoringPlatformMetricAlertSink>();
@@ -254,6 +271,24 @@ var app = builder.Build();
 
 if (!generatingOpenApiDocument)
     app.Services.GetRequiredService<ProductionSafetyService>().ThrowIfUnsafe();
+
+if (runPrivateInitialization)
+{
+    using var scope = app.Services.CreateScope();
+    var result = await scope.ServiceProvider.GetRequiredService<PrivateInitializationService>().InitializeAsync();
+    Console.WriteLine(JsonSerializer.Serialize(result, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+    return;
+}
+
+if (runPrivateOwnerRecovery)
+{
+    using var scope = app.Services.CreateScope();
+    var result = await scope.ServiceProvider.GetRequiredService<PrivateOwnerRecoveryService>().BeginAsync();
+    // The raw reset token is intentionally emitted exactly once by this one-shot process. Only its
+    // keyed hash is persisted; ordinary runtime logs and audit evidence never receive the token.
+    Console.WriteLine(JsonSerializer.Serialize(result, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+    return;
+}
 
 if (runMigrationsOnly)
 {

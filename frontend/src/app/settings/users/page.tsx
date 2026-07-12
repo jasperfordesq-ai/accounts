@@ -84,7 +84,7 @@ export default function UserAdministrationPage() {
         const result = await inviteUser({ ...invite, companyIds: [] });
         setUsers((current) => [...current, result.user].sort((a, b) => a.displayName.localeCompare(b.displayName)));
         const base = typeof window === "undefined" ? "" : window.location.origin;
-        setActionLink({ label: "One-time invitation link", value: `${base}/accept-invite?token=${encodeURIComponent(result.actionToken)}`, expires: result.expiresAtUtc });
+        setActionLink({ label: "One-time invitation link", value: `${base}/accept-invite#token=${encodeURIComponent(result.actionToken)}`, expires: result.expiresAtUtc });
       }
       setInvite({ email: "", displayName: "", role: "Client" }); setTemporaryPassword("");
     } catch (err) { setError(messageFor(err)); }
@@ -97,7 +97,7 @@ export default function UserAdministrationPage() {
       const result = await beginPasswordReset(user.userId);
       setUsers((current) => current.map((item) => item.userId === result.user.userId ? result.user : item));
       const base = typeof window === "undefined" ? "" : window.location.origin;
-      setActionLink({ label: `One-time reset link for ${user.displayName}`, value: `${base}/reset-password?token=${encodeURIComponent(result.actionToken)}`, expires: result.expiresAtUtc });
+      setActionLink({ label: `One-time reset link for ${user.displayName}`, value: `${base}/reset-password#token=${encodeURIComponent(result.actionToken)}`, expires: result.expiresAtUtc });
     } catch (err) { setError(messageFor(err)); }
     finally { setBusy(null); }
   }

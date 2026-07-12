@@ -126,6 +126,7 @@ public static class TenantIsolationMigrationSql
             .AppendLine("DROP FUNCTION IF EXISTS accounts_resolve_mfa_challenge_tenant(text);")
             .AppendLine("DROP FUNCTION IF EXISTS accounts_resolve_action_token_tenant(text, text);")
             .AppendLine("DROP FUNCTION IF EXISTS accounts_email_exists(text);")
+            .AppendLine("DROP FUNCTION IF EXISTS accounts_resolve_login_tenant(text, text);")
             .AppendLine("DROP FUNCTION IF EXISTS accounts_resolve_login_tenant(text);")
             .AppendLine("DROP FUNCTION IF EXISTS accounts_current_tenant_id();")
             .AppendLine("DROP TABLE IF EXISTS tenant_rls_context_keys;");
@@ -329,26 +330,19 @@ public static class TenantIsolationMigrationSql
         END
         $tenant_context$;
 
-        CREATE FUNCTION accounts_resolve_login_tenant(lookup_value text)
+        CREATE FUNCTION accounts_resolve_login_tenant(tenant_slug text, lookup_value text)
         RETURNS integer
         LANGUAGE sql
         STABLE
         SECURITY DEFINER
         SET search_path FROM CURRENT
         AS $resolver$
-            SELECT "TenantId" FROM user_accounts
-            WHERE lower("Email") = lower(lookup_value) AND "IsActive"
+            SELECT login_user."TenantId"
+            FROM user_accounts AS login_user
+            INNER JOIN tenants AS login_tenant ON login_tenant."Id" = login_user."TenantId"
+            WHERE login_tenant."Slug" = lower(btrim(tenant_slug))
+              AND login_user."Email" = lower(btrim(lookup_value))
             LIMIT 1
-        $resolver$;
-
-        CREATE FUNCTION accounts_email_exists(lookup_value text)
-        RETURNS boolean
-        LANGUAGE sql
-        STABLE
-        SECURITY DEFINER
-        SET search_path FROM CURRENT
-        AS $resolver$
-            SELECT EXISTS (SELECT 1 FROM user_accounts WHERE lower("Email") = lower(lookup_value))
         $resolver$;
 
         CREATE FUNCTION accounts_resolve_action_token_tenant(lookup_value text, lookup_purpose text)
@@ -409,15 +403,13 @@ public static class TenantIsolationMigrationSql
         $cleanup$;
 
         REVOKE ALL ON FUNCTION accounts_current_tenant_id() FROM PUBLIC;
-        REVOKE ALL ON FUNCTION accounts_resolve_login_tenant(text) FROM PUBLIC;
-        REVOKE ALL ON FUNCTION accounts_email_exists(text) FROM PUBLIC;
+        REVOKE ALL ON FUNCTION accounts_resolve_login_tenant(text, text) FROM PUBLIC;
         REVOKE ALL ON FUNCTION accounts_resolve_action_token_tenant(text, text) FROM PUBLIC;
         REVOKE ALL ON FUNCTION accounts_resolve_mfa_challenge_tenant(text) FROM PUBLIC;
         REVOKE ALL ON FUNCTION accounts_list_tenant_ids_for_jobs() FROM PUBLIC;
         REVOKE ALL ON FUNCTION accounts_delete_expired_anonymous_login_events() FROM PUBLIC;
         GRANT EXECUTE ON FUNCTION accounts_current_tenant_id() TO __APPLICATION_ROLE__, __ADMINISTRATOR_ROLE__;
-        GRANT EXECUTE ON FUNCTION accounts_resolve_login_tenant(text) TO __APPLICATION_ROLE__;
-        GRANT EXECUTE ON FUNCTION accounts_email_exists(text) TO __APPLICATION_ROLE__;
+        GRANT EXECUTE ON FUNCTION accounts_resolve_login_tenant(text, text) TO __APPLICATION_ROLE__;
         GRANT EXECUTE ON FUNCTION accounts_resolve_action_token_tenant(text, text) TO __APPLICATION_ROLE__;
         GRANT EXECUTE ON FUNCTION accounts_resolve_mfa_challenge_tenant(text) TO __APPLICATION_ROLE__;
         GRANT EXECUTE ON FUNCTION accounts_list_tenant_ids_for_jobs() TO __APPLICATION_ROLE__;

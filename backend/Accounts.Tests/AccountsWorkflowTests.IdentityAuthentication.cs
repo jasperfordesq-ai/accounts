@@ -620,6 +620,7 @@ public partial class AccountsWorkflowTests
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
+                ["Deployment:Mode"] = "PublicProduction",
                 ["AllowedHosts"] = "accounts.example.ie",
                 ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password;SSL Mode=VerifyFull;Root Certificate=/run/secrets/postgres_ca_certificate;Trust Server Certificate=false",
                 ["AllowedOrigins:0"] = "https://accounts.example.ie",
@@ -627,7 +628,7 @@ public partial class AccountsWorkflowTests
             })
             .Build();
         var service = new ProductionSafetyService(
-            new TestEnvironment("Staging"),
+            new TestEnvironment("Production"),
             config,
             Options.Create(new DatabaseStartupConfig
             {
@@ -649,7 +650,7 @@ public partial class AccountsWorkflowTests
                         }
                     ]
                 }),
-                new TestEnvironment("Staging")),
+                new TestEnvironment("Production")),
             Options.Create(AuditIntegrityCheckpointOptions()),
             Options.Create(new BootstrapOwnerConfig
             {
@@ -680,6 +681,7 @@ public partial class AccountsWorkflowTests
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
+                ["Deployment:Mode"] = "PublicProduction",
                 ["AllowedHosts"] = "accounts.example.ie",
                 ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password;SSL Mode=VerifyFull;Root Certificate=/run/secrets/postgres_ca_certificate;Trust Server Certificate=false",
                 ["AllowedOrigins:0"] = "https://accounts.example.ie",
@@ -687,7 +689,7 @@ public partial class AccountsWorkflowTests
             })
             .Build();
         var service = new ProductionSafetyService(
-            new TestEnvironment("Staging"),
+            new TestEnvironment("Production"),
             config,
             Options.Create(new DatabaseStartupConfig
             {
@@ -709,7 +711,7 @@ public partial class AccountsWorkflowTests
                         }
                     ]
                 }),
-                new TestEnvironment("Staging")),
+                new TestEnvironment("Production")),
             Options.Create(AuditIntegrityCheckpointOptions()),
             Options.Create(new BootstrapOwnerConfig
             {
@@ -861,6 +863,7 @@ public partial class AccountsWorkflowTests
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
+                ["Deployment:Mode"] = "PublicProduction",
                 ["AllowedHosts"] = "accounts.example.ie",
                 ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password;SSL Mode=VerifyFull;Root Certificate=/run/secrets/postgres_ca_certificate;Trust Server Certificate=false",
                 ["AllowedOrigins:0"] = "https://accounts.example.ie",
@@ -907,6 +910,7 @@ public partial class AccountsWorkflowTests
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
+                ["Deployment:Mode"] = "PublicProduction",
                 ["AllowedHosts"] = "accounts.example.ie",
                 ["ConnectionStrings:DefaultConnection"] = "Host=db;Password=not-the-dev-password;SSL Mode=VerifyFull;Root Certificate=/run/secrets/postgres_ca_certificate;Trust Server Certificate=false",
                 ["AllowedOrigins:0"] = "https://accounts.example.ie",
@@ -1101,7 +1105,7 @@ public partial class AccountsWorkflowTests
         var user = await SeedUserAsync(db, tenant, "owner@example.ie", "Correct Horse Battery Staple 1!");
         var service = CreateAuthService(db);
 
-        var result = await service.LoginAsync(" OWNER@EXAMPLE.IE ", "Correct Horse Battery Staple 1!");
+        var result = await service.LoginAsync(tenant.Slug, " OWNER@EXAMPLE.IE ", "Correct Horse Battery Staple 1!");
 
         Assert.True(result.Succeeded);
         Assert.Null(result.FailureReason);
@@ -1109,6 +1113,7 @@ public partial class AccountsWorkflowTests
         Assert.Equal(user.Id, result.User.UserId);
         Assert.Equal(tenant.Id, result.User.TenantId);
         Assert.Equal("Example Firm", result.User.TenantName);
+        Assert.Equal(tenant.Slug, result.User.TenantSlug);
         Assert.Equal("owner@example.ie", result.User.Email);
         Assert.Equal("Owner User", result.User.DisplayName);
         Assert.Equal("Owner", result.User.Role);
@@ -1126,7 +1131,7 @@ public partial class AccountsWorkflowTests
         await db.SaveChangesAsync();
         var service = CreateAuthService(db);
 
-        var login = await service.LoginAsync("owner@example.ie", "Correct Horse Battery Staple 1!");
+        var login = await service.LoginAsync(tenant.Slug, "owner@example.ie", "Correct Horse Battery Staple 1!");
         var principalFlag = typeof(AuthenticatedUser).GetProperty("MustChangePassword");
         Assert.True(principalFlag is not null, "Authenticated users should carry MustChangePassword so middleware can enforce first-login password changes.");
         Assert.True((bool)principalFlag.GetValue(login.User!)!);
@@ -1150,7 +1155,7 @@ public partial class AccountsWorkflowTests
         user.MustChangePassword = true;
         await db.SaveChangesAsync();
         var service = CreateAuthService(db);
-        var login = await service.LoginAsync("owner@example.ie", "Correct Horse Battery Staple 1!");
+        var login = await service.LoginAsync(tenant.Slug, "owner@example.ie", "Correct Horse Battery Staple 1!");
         var oldSession = service.CreateSessionCookieValue(login.User!, DateTimeOffset.UtcNow);
         var oldPasswordChangedAt = user.PasswordLastChangedAt;
         var result = await service.ChangePasswordAsync(
@@ -1169,8 +1174,8 @@ public partial class AccountsWorkflowTests
         Assert.Equal(resultPasswordChangedAt.Ticks, reloaded.PasswordLastChangedAt.Ticks);
         Assert.Null(await service.ReadSessionAsync(oldSession, DateTimeOffset.UtcNow.AddMinutes(1)));
 
-        var oldLogin = await service.LoginAsync("owner@example.ie", "Correct Horse Battery Staple 1!");
-        var newLogin = await service.LoginAsync("owner@example.ie", "New Correct Horse Battery 2!");
+        var oldLogin = await service.LoginAsync(tenant.Slug, "owner@example.ie", "Correct Horse Battery Staple 1!");
+        var newLogin = await service.LoginAsync(tenant.Slug, "owner@example.ie", "New Correct Horse Battery 2!");
         Assert.False(oldLogin.Succeeded);
         Assert.True(newLogin.Succeeded);
     }
@@ -1196,7 +1201,7 @@ public partial class AccountsWorkflowTests
         await db.SaveChangesAsync();
         var service = CreateAuthService(db);
 
-        var result = await service.LoginAsync("client@example.ie", "Correct Horse Battery Staple 1!");
+        var result = await service.LoginAsync(tenant.Slug, "client@example.ie", "Correct Horse Battery Staple 1!");
 
         Assert.True(result.Succeeded);
         Assert.NotNull(result.User);
@@ -1212,11 +1217,12 @@ public partial class AccountsWorkflowTests
         await SeedUserAsync(db, tenant, "owner@example.ie", "Correct Horse Battery Staple 1!");
         var service = CreateAuthService(db);
 
-        var result = await service.LoginAsync("owner@example.ie", "wrong password");
+        var result = await service.LoginAsync(tenant.Slug, "owner@example.ie", "wrong password");
 
         Assert.False(result.Succeeded);
         Assert.Null(result.User);
-        Assert.Contains("Invalid email or password", result.FailureReason);
+        Assert.Equal(AuthService.InvalidLoginMessage, result.FailureReason);
+        Assert.Equal(LoginFailureKinds.InvalidCredentials, result.FailureKind);
     }
 
     [Fact]
@@ -1227,11 +1233,12 @@ public partial class AccountsWorkflowTests
         await SeedUserAsync(db, tenant, "owner@example.ie", "Correct Horse Battery Staple 1!", isActive: false);
         var service = CreateAuthService(db);
 
-        var result = await service.LoginAsync("owner@example.ie", "Correct Horse Battery Staple 1!");
+        var result = await service.LoginAsync(tenant.Slug, "owner@example.ie", "Correct Horse Battery Staple 1!");
 
         Assert.False(result.Succeeded);
         Assert.Null(result.User);
-        Assert.Contains("inactive", result.FailureReason, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(AuthService.InvalidLoginMessage, result.FailureReason);
+        Assert.Equal(LoginFailureKinds.InactiveAccount, result.FailureKind);
     }
 
     [Fact]
@@ -1242,11 +1249,12 @@ public partial class AccountsWorkflowTests
         await SeedUserAsync(db, tenant, "owner@example.ie", "Correct Horse Battery Staple 1!", isActive: false);
         var service = CreateAuthService(db);
 
-        var result = await service.LoginAsync("owner@example.ie", "wrong password");
+        var result = await service.LoginAsync(tenant.Slug, "owner@example.ie", "wrong password");
 
         Assert.False(result.Succeeded);
         Assert.Null(result.User);
-        Assert.Equal("Invalid email or password.", result.FailureReason);
+        Assert.Equal(AuthService.InvalidLoginMessage, result.FailureReason);
+        Assert.Equal(LoginFailureKinds.InvalidCredentials, result.FailureKind);
     }
 
     [Fact]
@@ -1255,11 +1263,12 @@ public partial class AccountsWorkflowTests
         await using var db = CreateDbContext();
         var service = CreateAuthService(db);
 
-        var result = await service.LoginAsync(" ", null);
+        var result = await service.LoginAsync(null, " ", null);
 
         Assert.False(result.Succeeded);
         Assert.Null(result.User);
-        Assert.Equal("Email and password are required.", result.FailureReason);
+        Assert.Equal(AuthService.InvalidLoginMessage, result.FailureReason);
+        Assert.Equal(LoginFailureKinds.MissingCredentials, result.FailureKind);
     }
 
     [Fact]
@@ -1275,11 +1284,12 @@ public partial class AccountsWorkflowTests
             passwordAlgorithm: "PBKDF2-SHA1-1000");
         var service = CreateAuthService(db);
 
-        var result = await service.LoginAsync("owner@example.ie", "Correct Horse Battery Staple 1!");
+        var result = await service.LoginAsync(tenant.Slug, "owner@example.ie", "Correct Horse Battery Staple 1!");
 
         Assert.False(result.Succeeded);
         Assert.Null(result.User);
-        Assert.Equal("Invalid email or password.", result.FailureReason);
+        Assert.Equal(AuthService.InvalidLoginMessage, result.FailureReason);
+        Assert.Equal(LoginFailureKinds.InvalidCredentials, result.FailureKind);
     }
 
     [Theory]
@@ -1303,10 +1313,11 @@ public partial class AccountsWorkflowTests
         var verifier = new CountingPasswordVerifier();
         var service = CreateAuthService(db, passwordVerifier: verifier);
 
-        var result = await service.LoginAsync(email, "wrong password");
+        var result = await service.LoginAsync(tenant.Slug, email, "wrong password");
 
         Assert.False(result.Succeeded);
-        Assert.Equal("Invalid email or password.", result.FailureReason);
+        Assert.Equal(AuthService.InvalidLoginMessage, result.FailureReason);
+        Assert.Equal(LoginFailureKinds.InvalidCredentials, result.FailureKind);
         Assert.Equal(1, verifier.CallCount);
     }
 
@@ -1317,7 +1328,7 @@ public partial class AccountsWorkflowTests
         var tenant = await SeedTenantAsync(db);
         var user = await SeedUserAsync(db, tenant, "owner@example.ie", "Correct Horse Battery Staple 1!");
         var service = CreateAuthService(db);
-        var login = await service.LoginAsync("owner@example.ie", "Correct Horse Battery Staple 1!");
+        var login = await service.LoginAsync(tenant.Slug, "owner@example.ie", "Correct Horse Battery Staple 1!");
         var now = DateTimeOffset.UtcNow;
 
         var cookieValue = service.CreateSessionCookieValue(login.User!, now);
@@ -1339,7 +1350,7 @@ public partial class AccountsWorkflowTests
         var tenant = await SeedTenantAsync(db);
         await SeedUserAsync(db, tenant, "owner@example.ie", "Correct Horse Battery Staple 1!");
         var service = CreateAuthService(db);
-        var login = await service.LoginAsync("owner@example.ie", "Correct Horse Battery Staple 1!");
+        var login = await service.LoginAsync(tenant.Slug, "owner@example.ie", "Correct Horse Battery Staple 1!");
         var now = DateTimeOffset.UtcNow;
         var sessionCookie = service.CreateSessionCookieValue(login.User!, now);
 
@@ -1348,7 +1359,7 @@ public partial class AccountsWorkflowTests
         await service.RevokeSessionAsync(login.User!.UserId);
 
         Assert.Null(await service.ReadSessionAsync(sessionCookie, now.AddMinutes(2)));
-        var relogin = await service.LoginAsync("owner@example.ie", "Correct Horse Battery Staple 1!");
+        var relogin = await service.LoginAsync(tenant.Slug, "owner@example.ie", "Correct Horse Battery Staple 1!");
         var newSessionCookie = service.CreateSessionCookieValue(relogin.User!, now.AddMinutes(3));
         Assert.NotNull(await service.ReadSessionAsync(newSessionCookie, now.AddMinutes(4)));
     }
@@ -1366,7 +1377,7 @@ public partial class AccountsWorkflowTests
 
         for (var attempt = 0; attempt < 5; attempt++)
         {
-            var failed = await service.LoginAsync("owner@example.ie", $"wrong password {attempt}");
+            var failed = await service.LoginAsync(tenant.Slug, "owner@example.ie", $"wrong password {attempt}");
             Assert.False(failed.Succeeded);
         }
 
@@ -1376,14 +1387,14 @@ public partial class AccountsWorkflowTests
         Assert.NotNull(locked.LastFailedLoginAt);
         Assert.True(locked.LockedUntilUtc > firstAttemptTime.UtcDateTime);
 
-        var lockedOut = await service.LoginAsync("owner@example.ie", "Correct Horse Battery Staple 1!");
+        var lockedOut = await service.LoginAsync(tenant.Slug, "owner@example.ie", "Correct Horse Battery Staple 1!");
         Assert.False(lockedOut.Succeeded);
 
         db.ChangeTracker.Clear();
         var afterLockout = CreateAuthService(
             db,
             timeProvider: new FixedUtcTimeProvider(firstAttemptTime.AddMinutes(16)));
-        var successful = await afterLockout.LoginAsync("owner@example.ie", "Correct Horse Battery Staple 1!");
+        var successful = await afterLockout.LoginAsync(tenant.Slug, "owner@example.ie", "Correct Horse Battery Staple 1!");
 
         Assert.True(successful.Succeeded);
         db.ChangeTracker.Clear();
@@ -1408,7 +1419,7 @@ public partial class AccountsWorkflowTests
             db,
             timeProvider: new FixedUtcTimeProvider(now.AddMinutes(1)));
 
-        var failed = await service.LoginAsync("owner@example.ie", "wrong password");
+        var failed = await service.LoginAsync(tenant.Slug, "owner@example.ie", "wrong password");
 
         Assert.False(failed.Succeeded);
         Assert.True(failed.AccountLocked);
@@ -1423,7 +1434,7 @@ public partial class AccountsWorkflowTests
         var tenant = await SeedTenantAsync(db);
         var user = await SeedUserAsync(db, tenant, "owner@example.ie", "Correct Horse Battery Staple 1!");
         var service = CreateAuthService(db, StrongSessionSigningKeyBase64Url());
-        var login = await service.LoginAsync("owner@example.ie", "Correct Horse Battery Staple 1!");
+        var login = await service.LoginAsync(tenant.Slug, "owner@example.ie", "Correct Horse Battery Staple 1!");
         var now = new DateTimeOffset(2026, 1, 15, 10, 0, 0, TimeSpan.Zero);
 
         var cookieValue = service.CreateSessionCookieValue(login.User!, now);
@@ -1485,7 +1496,7 @@ public partial class AccountsWorkflowTests
         var tenant = await SeedTenantAsync(db);
         await SeedUserAsync(db, tenant, "owner@example.ie", "Correct Horse Battery Staple 1!");
         var service = CreateAuthService(db, expiryMinutes: 5);
-        var login = await service.LoginAsync("owner@example.ie", "Correct Horse Battery Staple 1!");
+        var login = await service.LoginAsync(tenant.Slug, "owner@example.ie", "Correct Horse Battery Staple 1!");
         var now = new DateTimeOffset(2026, 1, 15, 10, 0, 0, TimeSpan.Zero);
 
         var cookieValue = service.CreateSessionCookieValue(login.User!, now);
@@ -1503,7 +1514,7 @@ public partial class AccountsWorkflowTests
         var tenant = await SeedTenantAsync(db);
         await SeedUserAsync(db, tenant, "owner@example.ie", "Correct Horse Battery Staple 1!");
         var service = CreateAuthService(db);
-        var login = await service.LoginAsync("owner@example.ie", "Correct Horse Battery Staple 1!");
+        var login = await service.LoginAsync(tenant.Slug, "owner@example.ie", "Correct Horse Battery Staple 1!");
         var now = new DateTimeOffset(2026, 1, 15, 10, 0, 0, TimeSpan.Zero);
         var principal = login.User! with { CsrfToken = "csrf-token-1" };
 
@@ -1615,7 +1626,7 @@ public partial class AccountsWorkflowTests
         var tenant = await SeedTenantAsync(db);
         var user = await SeedUserAsync(db, tenant, "owner@example.ie", "Correct Horse Battery Staple 1!");
         var auth = CreateAuthService(db);
-        var login = await auth.LoginAsync("owner@example.ie", "Correct Horse Battery Staple 1!");
+        var login = await auth.LoginAsync(tenant.Slug, "owner@example.ie", "Correct Horse Battery Staple 1!");
         var now = DateTimeOffset.UtcNow;
         var sessionCookie = auth.CreateSessionCookieValue(login.User!, now);
         AuthenticatedUser? observedUser = null;
@@ -1932,7 +1943,7 @@ public partial class AccountsWorkflowTests
         var tenant = await SeedTenantAsync(db);
         var user = await SeedUserAsync(db, tenant, "owner@example.ie", "Correct Horse Battery Staple 1!");
         var auth = CreateAuthService(db);
-        var login = await auth.LoginAsync("owner@example.ie", "Correct Horse Battery Staple 1!");
+        var login = await auth.LoginAsync(tenant.Slug, "owner@example.ie", "Correct Horse Battery Staple 1!");
         var cookieValue = auth.CreateSessionCookieValue(login.User!, DateTimeOffset.UtcNow);
         var nextCalled = false;
         var context = new DefaultHttpContext
@@ -2184,12 +2195,12 @@ public partial class AccountsWorkflowTests
 
             var failedLogin = await client.PostAsJsonAsync(
                 "/api/auth/login",
-                new { email = " OWNER@EXAMPLE.IE ", password = "wrong password one!" });
+                new { tenantSlug = "tenant-a", email = " OWNER@EXAMPLE.IE ", password = "wrong password one!" });
             Assert.Equal(HttpStatusCode.Unauthorized, failedLogin.StatusCode);
 
             var login = await client.PostAsJsonAsync(
                 "/api/auth/login",
-                new { email = "owner@example.ie", password = "Correct Horse Battery Staple 1!" });
+                new { tenantSlug = "tenant-a", email = "owner@example.ie", password = "Correct Horse Battery Staple 1!" });
             Assert.Equal(HttpStatusCode.OK, login.StatusCode);
 
             var csrfToken = RequiredCookieValue(handler.CookieContainer, baseUri, "accounts_csrf");
@@ -2325,12 +2336,12 @@ public partial class AccountsWorkflowTests
             {
                 var response = await client.PostAsJsonAsync(
                     "/api/auth/login",
-                    new { email = "owner@example.ie", password = $"wrong password {attempt}!" });
+                    new { tenantSlug = "tenant-a", email = "owner@example.ie", password = $"wrong password {attempt}!" });
                 Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
             }
             var alreadyLocked = await client.PostAsJsonAsync(
                 "/api/auth/login",
-                new { email = "owner@example.ie", password = "Correct Horse Battery Staple 1!" });
+                new { tenantSlug = "tenant-a", email = "owner@example.ie", password = "Correct Horse Battery Staple 1!" });
             Assert.Equal(HttpStatusCode.Unauthorized, alreadyLocked.StatusCode);
 
             await using var verifyScope = app.Services.CreateAsyncScope();
@@ -2833,7 +2844,7 @@ public partial class AccountsWorkflowTests
     }
 
     [Fact]
-    public async Task BootstrapOwnerService_RejectsConflictingOwnerEmailBeforeClaimingOrphans()
+    public async Task BootstrapOwnerService_AllowsSameEmailInDifferentTenantAndClaimsOrphans()
     {
         await using var db = CreateDbContext();
         var otherTenant = new Tenant
@@ -2877,22 +2888,25 @@ public partial class AccountsWorkflowTests
                 OwnerInitialPassword = "Correct Horse Battery Staple 1!"
             }));
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => service.EnsureAsync());
+        await service.EnsureAsync();
 
-        Assert.Contains("BootstrapOwner:OwnerEmail", error.Message);
-        Assert.Contains("configured tenant", error.Message);
+        var configuredTenant = await db.Tenants.SingleAsync(tenant => tenant.Slug == "production-firm");
+        var configuredOwner = await db.UserAccounts.SingleAsync(user =>
+            user.TenantId == configuredTenant.Id && user.Email == "owner@example.ie");
+        Assert.Equal("Owner", configuredOwner.Role);
+        Assert.Equal(2, await db.UserAccounts.CountAsync(user => user.Email.ToLower() == "owner@example.ie"));
         var reloadedCompany = await db.Companies.SingleAsync(c => c.Id == orphanCompany.Id);
-        Assert.Null(reloadedCompany.TenantId);
+        Assert.Equal(configuredTenant.Id, reloadedCompany.TenantId);
     }
 
     [Fact]
-    public async Task BootstrapOwnerService_RejectsCaseVariantOwnerEmailBeforeClaimingOrphans()
+    public async Task BootstrapOwnerService_RejectsCaseVariantOwnerEmailWithinConfiguredTenantBeforeClaimingOrphans()
     {
         await using var db = CreateDbContext();
         var otherTenant = new Tenant
         {
-            Name = "Other Firm",
-            Slug = "other-firm"
+            Name = "Production Firm",
+            Slug = "production-firm"
         };
         db.Tenants.Add(otherTenant);
         await db.SaveChangesAsync();
@@ -2900,8 +2914,8 @@ public partial class AccountsWorkflowTests
         {
             TenantId = otherTenant.Id,
             Email = "Owner@Example.ie",
-            DisplayName = "Other Owner",
-            Role = "Owner",
+            DisplayName = "Existing Client",
+            Role = "Client",
             PasswordHash = "hash",
             PasswordSalt = "salt",
             IsActive = true

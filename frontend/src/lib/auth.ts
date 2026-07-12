@@ -6,6 +6,7 @@ import {
   parseMfaCompletion,
 } from "@/lib/apiContracts";
 import { reportClientMonitoringEvent } from "@/lib/clientMonitoring";
+import type { LoginWireRequest } from "@/lib/openapiContract";
 
 const ACCOUNTS_CSRF_COOKIE = "accounts_csrf";
 const CSRF_HEADER = "X-CSRF-Token";
@@ -26,6 +27,7 @@ export interface AuthUser {
   userId: number;
   tenantId: number;
   tenantName: string;
+  tenantSlug: string;
   email: string;
   displayName: string;
   role: "Owner" | "Accountant" | "Reviewer" | "Client";
@@ -51,6 +53,8 @@ export interface MfaCompletion {
 export function isMfaChallenge(value: AuthUser | MfaChallenge): value is MfaChallenge {
   return "challengeToken" in value;
 }
+
+export type LoginRequest = LoginWireRequest;
 
 async function readAuthResponse(res: Response): Promise<AuthUser> {
   if (!res.ok) {
@@ -78,15 +82,16 @@ async function withAuthMonitoring<T>(operation: () => Promise<T>): Promise<T> {
   }
 }
 
-export async function login(email: string, password: string): Promise<AuthUser | MfaChallenge> {
+export async function login(tenantSlug: string, email: string, password: string): Promise<AuthUser | MfaChallenge> {
   return withAuthMonitoring(async () => {
+    const request: LoginRequest = { tenantSlug, email, password };
     const res = await fetch("/api/auth/login", {
       method: "POST",
       credentials: "include",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify(request),
     });
 
     if (res.status === 202) {

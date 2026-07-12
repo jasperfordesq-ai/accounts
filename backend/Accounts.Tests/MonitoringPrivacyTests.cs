@@ -2,6 +2,9 @@ using System.Text;
 using System.Text.Json;
 using Accounts.Api.Services;
 using Accounts.Api.Rules;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.AspNetCore.Routing.Patterns;
 using Sentry;
 using Xunit;
 
@@ -53,6 +56,44 @@ public sealed class MonitoringPrivacyTests
         Assert.Equal("corr-smoke_2026.07", safe.CorrelationId);
         Assert.Equal("unexpected-exception", safe.EventCode);
         Assert.EndsWith("MonitoringSmokeException", safe.ExceptionType, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ClientCorrelationAliasAndRouteAllowlistRejectSafeLookingPersonalData()
+    {
+        var correlation = MonitoringEventSanitizer.SafeClientCorrelationId(
+            "JasperFord-ClientSecret\r\nforged-entry",
+            "server-correlation");
+        var route = MonitoringEventSanitizer.SafeClientPath(
+            "/companies/ConnachtTrading/periods/ClientReference2026");
+
+        Assert.Matches("^client-corr-[0-9a-f]{24}$", correlation);
+        Assert.DoesNotContain("Jasper", correlation, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain('\r', correlation);
+        Assert.DoesNotContain('\n', correlation);
+        Assert.Equal("/companies/{redacted}/periods/{redacted}", route);
+    }
+
+    [Fact]
+    public void ServerRouteUsesEndpointTemplateInsteadOfRequestValues()
+    {
+        var endpoint = new RouteEndpoint(
+            _ => Task.CompletedTask,
+            RoutePatternFactory.Parse("/api/companies/{companyId:int}/periods/{periodId:int}/adjustments/generate"),
+            order: 0,
+            EndpointMetadataCollection.Empty,
+            "test route");
+
+        Assert.Equal(
+            "/api/companies/{id}/periods/{id}/adjustments/generate",
+            MonitoringEventSanitizer.SafeServerRoute(endpoint));
+        Assert.Equal("/{unmatched}", MonitoringEventSanitizer.SafeServerRoute(null));
+    }
+
+    [Fact]
+    public void FinalLogFieldEncodingRemovesRecordSeparators()
+    {
+        Assert.Equal("safe__forged", MonitoringEventSanitizer.SafeLogField("safe\r\nforged"));
     }
 
     [Fact]

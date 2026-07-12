@@ -32,8 +32,18 @@ internal static class PersistenceOwnershipInvariantValidator
         foreach (var token in Changed<UserActionToken>(db))
         {
             await ValidateUserOwnedAsync(token.UserId, token.User, token.TenantId, nameof(UserActionToken), resolver, currentTenantId);
-            var creator = await resolver.UserAsync(token.CreatedByUserId);
-            Require(creator is not null && creator.TenantId == token.TenantId, nameof(UserActionToken));
+            if (token.CreatedByActorKind == IdentityActorKinds.User && token.CreatedByUserId is int creatorId)
+            {
+                var creator = await resolver.UserAsync(creatorId);
+                Require(creator is not null && creator.TenantId == token.TenantId, nameof(UserActionToken));
+            }
+            else
+            {
+                Require(token.CreatedByActorKind == IdentityActorKinds.PrivateServerHostOperator
+                    && token.CreatedByUserId is null
+                    && token.Purpose == UserActionPurposes.PasswordReset,
+                    nameof(UserActionToken));
+            }
         }
         foreach (var credential in Changed<UserMfaCredential>(db))
             await ValidateUserOwnedAsync(credential.UserId, credential.User, credential.TenantId, nameof(UserMfaCredential), resolver, currentTenantId);
@@ -44,11 +54,19 @@ internal static class PersistenceOwnershipInvariantValidator
         foreach (var evidence in Changed<UserLifecycleEvent>(db))
         {
             var target = await resolver.UserAsync(evidence.TargetUserId);
-            var actor = await resolver.UserAsync(evidence.ActorUserId);
-            Require(target is not null && actor is not null
-                && target.TenantId == evidence.TenantId
-                && actor.TenantId == evidence.TenantId,
-                nameof(UserLifecycleEvent));
+            Require(target is not null && target.TenantId == evidence.TenantId, nameof(UserLifecycleEvent));
+            if (evidence.ActorKind == IdentityActorKinds.User && evidence.ActorUserId is int actorId)
+            {
+                var actor = await resolver.UserAsync(actorId);
+                Require(actor is not null && actor.TenantId == evidence.TenantId, nameof(UserLifecycleEvent));
+            }
+            else
+            {
+                Require(evidence.ActorKind == IdentityActorKinds.PrivateServerHostOperator
+                    && evidence.ActorUserId is null
+                    && evidence.EventType is UserLifecycleEventTypes.PrivateOwnerRecoveryStarted or UserLifecycleEventTypes.PasswordResetCompleted,
+                    nameof(UserLifecycleEvent));
+            }
             RequireCurrentTenant(currentTenantId, evidence.TenantId, nameof(UserLifecycleEvent));
         }
 

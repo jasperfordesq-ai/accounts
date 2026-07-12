@@ -1,0 +1,32 @@
+# Optional Apache HTTPS ingress for FilingBridge Public Production.
+# Requires mod_ssl, mod_proxy, mod_proxy_http, mod_headers and a separately
+# managed certificate. All routes go to Next.js; never route /api to Kestrel.
+
+<VirtualHost *:443>
+    ServerName accounts.example.ie
+
+    SSLEngine on
+    SSLCertificateFile /etc/letsencrypt/live/accounts.example.ie/fullchain.pem
+    SSLCertificateKeyFile /etc/letsencrypt/live/accounts.example.ie/privkey.pem
+
+    ProxyRequests Off
+    ProxyPreserveHost On
+    ProxyAddHeaders Off
+
+    RequestHeader unset Forwarded
+    RequestHeader unset X-Real-IP
+    RequestHeader set X-Forwarded-For "expr=%{REMOTE_ADDR}"
+    RequestHeader set X-Forwarded-Host "expr=%{HTTP_HOST}"
+    RequestHeader set X-Forwarded-Proto "https"
+
+    ProxyPass        / http://127.0.0.1:3000/ connectiontimeout=5 timeout=120
+    ProxyPassReverse / http://127.0.0.1:3000/
+
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set Referrer-Policy "no-referrer"
+    # Add includeSubDomains/preload only after the whole domain is ready.
+    Header always set Strict-Transport-Security "max-age=31536000"
+
+    ErrorLog ${APACHE_LOG_DIR}/filingbridge-error.log
+    CustomLog ${APACHE_LOG_DIR}/filingbridge-access.log combined
+</VirtualHost>

@@ -129,6 +129,7 @@ services:
       - bootstrap_owner_password
     environment:
       ASPNETCORE_ENVIRONMENT: Production
+      Deployment__Mode: PublicProduction
       FilingRelease__Candidate: "${ACCOUNTS_API_IMAGE:?set ACCOUNTS_API_IMAGE}"
       ConnectionStrings__DefaultConnection_FILE: /run/secrets/accounts_migration_connection_string
       DatabaseTenantIsolation__Required: "true"
@@ -222,6 +223,7 @@ services:
       - deadline_provider_token
     environment:
       ASPNETCORE_ENVIRONMENT: Production
+      Deployment__Mode: PublicProduction
       ASPNETCORE_URLS: http://+:8080
       FilingRelease__Candidate: "${ACCOUNTS_API_IMAGE:?set ACCOUNTS_API_IMAGE}"
       ConnectionStrings__DefaultConnection_FILE: /run/secrets/accounts_application_connection_string

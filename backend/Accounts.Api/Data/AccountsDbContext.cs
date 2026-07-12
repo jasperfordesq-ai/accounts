@@ -180,7 +180,9 @@ public class AccountsDbContext : DbContext
         // UserAccount
         modelBuilder.Entity<UserAccount>(e =>
         {
-            e.ToTable("user_accounts");
+            e.ToTable("user_accounts", table => table.HasCheckConstraint(
+                "CK_user_accounts_email_normalized",
+                "\"Email\" = lower(btrim(\"Email\"))"));
             e.HasKey(u => u.Id);
             e.HasQueryFilter(u => CurrentTenantId == null || u.TenantId == CurrentTenantId);
             e.Property(u => u.Email).HasMaxLength(320).IsRequired();
@@ -192,7 +194,7 @@ public class AccountsDbContext : DbContext
             e.Property(u => u.SessionVersion).HasDefaultValue(1);
             e.Property(u => u.FailedLoginCount).HasDefaultValue(0);
             e.HasOne(u => u.Tenant).WithMany(t => t.Users).HasForeignKey(u => u.TenantId).OnDelete(DeleteBehavior.Cascade);
-            e.HasIndex(u => u.Email).IsUnique();
+            e.HasIndex(u => new { u.TenantId, u.Email }).IsUnique();
             e.HasIndex(u => new { u.TenantId, u.Role });
         });
 
@@ -210,13 +212,20 @@ public class AccountsDbContext : DbContext
 
         modelBuilder.Entity<UserActionToken>(e =>
         {
-            e.ToTable("user_action_tokens", table => table.HasCheckConstraint(
-                "CK_user_action_tokens_purpose",
-                "\"Purpose\" IN ('Invitation', 'PasswordReset')"));
+            e.ToTable("user_action_tokens", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_user_action_tokens_purpose",
+                    "\"Purpose\" IN ('Invitation', 'PasswordReset')");
+                table.HasCheckConstraint(
+                    "CK_user_action_tokens_actor",
+                    "(\"CreatedByActorKind\" = 'User' AND \"CreatedByUserId\" IS NOT NULL) OR (\"CreatedByActorKind\" = 'PrivateServerHostOperator' AND \"CreatedByUserId\" IS NULL AND \"Purpose\" = 'PasswordReset')");
+            });
             e.HasKey(token => token.Id);
             e.HasQueryFilter(token => CurrentTenantId == null || token.TenantId == CurrentTenantId);
             e.Property(token => token.Purpose).HasMaxLength(40).IsRequired();
             e.Property(token => token.TokenHash).HasMaxLength(64).IsRequired();
+            e.Property(token => token.CreatedByActorKind).HasMaxLength(40).HasDefaultValue(IdentityActorKinds.User).IsRequired();
             e.HasOne(token => token.User).WithMany(user => user.ActionTokens).HasForeignKey(token => token.UserId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne<UserAccount>().WithMany().HasForeignKey(token => token.CreatedByUserId).OnDelete(DeleteBehavior.Restrict);
             e.HasIndex(token => token.TokenHash).IsUnique();
@@ -266,10 +275,13 @@ public class AccountsDbContext : DbContext
 
         modelBuilder.Entity<UserLifecycleEvent>(e =>
         {
-            e.ToTable("user_lifecycle_events");
+            e.ToTable("user_lifecycle_events", table => table.HasCheckConstraint(
+                "CK_user_lifecycle_events_actor",
+                $"(\"ActorKind\" = 'User' AND \"ActorUserId\" IS NOT NULL) OR (\"ActorKind\" = 'PrivateServerHostOperator' AND \"ActorUserId\" IS NULL AND \"EventType\" IN ('{UserLifecycleEventTypes.PrivateOwnerRecoveryStarted}', '{UserLifecycleEventTypes.PasswordResetCompleted}'))"));
             e.HasKey(entry => entry.Id);
             e.HasQueryFilter(entry => CurrentTenantId == null || entry.TenantId == CurrentTenantId);
             e.Property(entry => entry.EventType).HasMaxLength(80).IsRequired();
+            e.Property(entry => entry.ActorKind).HasMaxLength(40).HasDefaultValue(IdentityActorKinds.User).IsRequired();
             e.Property(entry => entry.DetailsJson).HasColumnType("jsonb").IsRequired();
             e.HasOne<UserAccount>().WithMany().HasForeignKey(entry => entry.TargetUserId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<UserAccount>().WithMany().HasForeignKey(entry => entry.ActorUserId).OnDelete(DeleteBehavior.Restrict);
@@ -1862,7 +1874,9 @@ public class AccountsDbContext : DbContext
             if (entry.State == EntityState.Added
                 && (entry.Entity.TenantId <= 0
                     || entry.Entity.TargetUserId <= 0
-                    || entry.Entity.ActorUserId <= 0
+                    || (entry.Entity.ActorKind == IdentityActorKinds.User && entry.Entity.ActorUserId is null or <= 0)
+                    || (entry.Entity.ActorKind == IdentityActorKinds.PrivateServerHostOperator && entry.Entity.ActorUserId is not null)
+                    || entry.Entity.ActorKind is not (IdentityActorKinds.User or IdentityActorKinds.PrivateServerHostOperator)
                     || string.IsNullOrWhiteSpace(entry.Entity.EventType)
                     || !IsJsonObject(entry.Entity.DetailsJson)))
             {

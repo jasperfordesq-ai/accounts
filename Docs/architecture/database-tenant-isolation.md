@@ -50,14 +50,19 @@ the startup probe to pass before traffic resumes.
 Login and terminal token flows begin before an authenticated EF tenant exists. They may call only
 narrow, parameterised security-definer functions:
 
-- email to tenant ID for first-factor login;
+- workspace slug plus normalised email to tenant ID for first-factor login;
 - opaque invitation/password-reset hash and purpose to tenant ID;
-- opaque MFA challenge hash to tenant ID;
-- a global email-existence bit for Owner-only identity provisioning.
+- opaque MFA challenge hash to tenant ID.
 
 These functions never return passwords, salts, MFA material, tokens, names, roles, company data, or
 financial data. A signed, unexpired session envelope supplies its tenant before the authoritative
 user/session-version lookup. An invalid envelope never establishes a database context.
+
+User email is unique within a tenant through the `(TenantId, Email)` database constraint, not
+globally. Authenticated Owner provisioning checks availability only inside the actor's tenant. The
+legacy global email-existence function is absent, so the least-privileged API cannot use identity
+provisioning to learn whether an address belongs to another workspace. The same email may therefore
+belong to separate workspaces; users must supply `workspace slug + email + password` at login.
 
 Unknown-login telemetry is the sole nullable-tenant exception: an anonymous request may insert a
 minimised keyed-fingerprint rejection row, but cannot read, update, or delete it. Expired anonymous
@@ -100,7 +105,10 @@ The release gate uses a real PostgreSQL application login and proves:
 - a manually set tenant ID with a blank or forged signature returns no rows;
 - the API cannot read the context key, disable RLS, assume the migration role, or create schema
   objects;
-- anonymous bootstrap returns only the tenant ID and cannot read identity rows;
+- anonymous login bootstrap requires the workspace-slug/email pair, returns only the tenant ID,
+  and cannot read identity rows;
+- the least-privileged API has no global email-existence function, while authenticated Owner
+  provisioning enforces email uniqueness only in its current tenant;
 - nullable unknown-login telemetry is write-only to the anonymous context;
 - all mapped tables, policies, forced-RLS flags, roles, functions and ownership are complete; and
 - connection reuse does not inherit the previous request's context.

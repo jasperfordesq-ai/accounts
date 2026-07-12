@@ -16,6 +16,7 @@ vi.mock("@/lib/auth", () => ({
     userId: 7,
     tenantId: 1,
     tenantName: "Permission Matrix Firm",
+    tenantSlug: "permission-matrix-firm",
     email: `${routeState.role.toLowerCase()}@example.ie`,
     displayName: `${routeState.role} User`,
     role: routeState.role,

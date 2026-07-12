@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { buildApiProxyRequestHeaders, configuredApiKeyHeaderName } from "../src/lib/apiProxyRequest.ts";
 import { allowSetCookieForProxyResponse, proxyResponseForUpstream } from "../src/lib/apiProxyResponse.ts";
+import { shouldUpgradeInsecureRequests } from "../src/lib/securityHeaders.ts";
 
 const strictTransportSecurity = "max-age=31536000; includeSubDomains; preload";
 
@@ -14,6 +15,10 @@ const strictTransportSecurity = "max-age=31536000; includeSubDomains; preload";
   );
   assert.throws(
     () => configuredApiKeyHeaderName("Connection"),
+    /ACCOUNTS_API_KEY_HEADER must be an end-to-end HTTP header name/,
+  );
+  assert.throws(
+    () => configuredApiKeyHeaderName("Tailscale-User-Login"),
     /ACCOUNTS_API_KEY_HEADER must be an end-to-end HTTP header name/,
   );
 
@@ -32,6 +37,10 @@ const strictTransportSecurity = "max-age=31536000; includeSubDomains; preload";
     "X-Forwarded-Prefix": "/evil",
     "X-Forwarded-Proto": "http",
     "X-Real-IP": "198.51.100.40",
+    "Tailscale-User-Login": "attacker@example.invalid",
+    "Tailscale-User-Name": "Attacker Supplied Name",
+    "Tailscale-User-Profile-Pic": "https://example.invalid/attacker.png",
+    "X-Tailscale-User-Login": "second-attacker@example.invalid",
     "X-Dynamic-Hop": "dynamic-secret",
     "X-Second-Hop": "second-secret",
     Host: "accounts.example.ie",
@@ -57,10 +66,48 @@ const strictTransportSecurity = "max-age=31536000; includeSubDomains; preload";
   assert.equal(proxyHeaders.get("X-Forwarded-Prefix"), null);
   assert.equal(proxyHeaders.get("X-Forwarded-Proto"), null);
   assert.equal(proxyHeaders.get("X-Real-IP"), null);
+  assert.equal(proxyHeaders.get("Tailscale-User-Login"), null);
+  assert.equal(proxyHeaders.get("Tailscale-User-Name"), null);
+  assert.equal(proxyHeaders.get("Tailscale-User-Profile-Pic"), null);
+  assert.equal(proxyHeaders.get("X-Tailscale-User-Login"), null);
   assert.equal(proxyHeaders.get("X-Dynamic-Hop"), null);
   assert.equal(proxyHeaders.get("X-Second-Hop"), null);
   assert.equal(proxyHeaders.get("Host"), null);
   assert.equal(proxyHeaders.get("Content-Length"), null);
+}
+
+{
+  const publicProduction = {
+    NODE_ENV: "production",
+    DEPLOYMENT_MODE: "PublicProduction",
+    PRIVATE_LOCAL_ORIGIN: "http://localhost:3500",
+  };
+  assert.equal(shouldUpgradeInsecureRequests("http://localhost:3500/login", publicProduction), true);
+
+  const privateServer = { ...publicProduction, DEPLOYMENT_MODE: "PrivateServer" };
+  assert.equal(shouldUpgradeInsecureRequests("http://localhost:3500/login", privateServer), false);
+  assert.equal(shouldUpgradeInsecureRequests(
+    "http://localhost:3500/login",
+    privateServer,
+    "device.tailnet.ts.net",
+  ), true);
+  assert.equal(shouldUpgradeInsecureRequests(
+    "http://127.0.0.1:3000/login",
+    privateServer,
+    "localhost:3500",
+  ), false);
+  assert.equal(shouldUpgradeInsecureRequests("http://localhost:3501/login", privateServer), true);
+  assert.equal(shouldUpgradeInsecureRequests("http://127.0.0.1:3500/login", privateServer), true);
+  assert.equal(shouldUpgradeInsecureRequests("https://device.tailnet.ts.net/login", privateServer), true);
+  assert.equal(shouldUpgradeInsecureRequests("http://localhost.evil:3500/login", privateServer), true);
+  assert.equal(shouldUpgradeInsecureRequests("http://localhost:3500/login", {
+    ...privateServer,
+    PRIVATE_LOCAL_ORIGIN: "http://localhost.evil:3500",
+  }), true);
+
+  assert.equal(shouldUpgradeInsecureRequests("http://localhost:3000/login", {
+    NODE_ENV: "development",
+  }), false);
 }
 
 {

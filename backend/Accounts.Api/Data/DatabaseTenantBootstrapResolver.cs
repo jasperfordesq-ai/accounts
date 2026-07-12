@@ -5,8 +5,8 @@ using Microsoft.EntityFrameworkCore;
 namespace Accounts.Api.Data;
 
 /// <summary>
-/// Narrow pre-authentication resolvers. Their database functions expose only a tenant identifier
-/// (or an existence bit), never password, MFA or token material. After resolution, ordinary EF
+/// Narrow pre-authentication resolvers. Their database functions expose only a tenant identifier,
+/// never password, MFA or token material. After resolution, ordinary EF
 /// reads and writes remain subject to the same signed tenant RLS context as authenticated traffic.
 /// </summary>
 public sealed class DatabaseTenantBootstrapResolver(
@@ -16,11 +16,15 @@ public sealed class DatabaseTenantBootstrapResolver(
 {
     public void UseVerifiedSessionTenant(int tenantId) => tenantContext.SetResolvedTenant(tenantId);
 
-    public Task<int?> ResolveLoginTenantAsync(string normalizedEmail, CancellationToken cancellationToken = default) =>
+    public Task<int?> ResolveLoginTenantAsync(
+        string normalizedTenantSlug,
+        string normalizedEmail,
+        CancellationToken cancellationToken = default) =>
         ResolveAndSetAsync(
-            "SELECT accounts_resolve_login_tenant(@lookup_value)",
+            "SELECT accounts_resolve_login_tenant(@tenant_slug, @lookup_value)",
             normalizedEmail,
             null,
+            normalizedTenantSlug,
             cancellationToken);
 
     public Task<int?> ResolveActionTokenTenantAsync(
@@ -31,6 +35,7 @@ public sealed class DatabaseTenantBootstrapResolver(
             "SELECT accounts_resolve_action_token_tenant(@lookup_value, @lookup_purpose)",
             tokenHash,
             purpose,
+            null,
             cancellationToken);
 
     public Task<int?> ResolveMfaChallengeTenantAsync(
@@ -40,20 +45,8 @@ public sealed class DatabaseTenantBootstrapResolver(
             "SELECT accounts_resolve_mfa_challenge_tenant(@lookup_value)",
             tokenHash,
             null,
-            cancellationToken);
-
-    public async Task<bool> EmailExistsAsync(string normalizedEmail, CancellationToken cancellationToken = default)
-    {
-        if (!db.Database.IsRelational())
-            return await db.UserAccounts.IgnoreQueryFilters().AnyAsync(user => user.Email == normalizedEmail, cancellationToken);
-
-        var result = await ExecuteScalarAsync(
-            "SELECT accounts_email_exists(@lookup_value)",
-            normalizedEmail,
             null,
             cancellationToken);
-        return result is true;
-    }
 
     public async Task<IReadOnlyList<int>> ListTenantIdsForJobsAsync(
         CancellationToken cancellationToken = default)
@@ -106,11 +99,12 @@ public sealed class DatabaseTenantBootstrapResolver(
         string commandText,
         string lookupValue,
         string? purpose,
+        string? tenantSlug,
         CancellationToken cancellationToken)
     {
         if (!db.Database.IsRelational()) return null;
 
-        var result = await ExecuteScalarAsync(commandText, lookupValue, purpose, cancellationToken);
+        var result = await ExecuteScalarAsync(commandText, lookupValue, purpose, tenantSlug, cancellationToken);
         var tenantId = result switch
         {
             int value => value,
@@ -130,6 +124,7 @@ public sealed class DatabaseTenantBootstrapResolver(
         string commandText,
         string lookupValue,
         string? purpose,
+        string? tenantSlug,
         CancellationToken cancellationToken)
     {
         var connection = db.Database.GetDbConnection();
@@ -141,6 +136,7 @@ public sealed class DatabaseTenantBootstrapResolver(
             command.CommandText = commandText;
             AddParameter(command, "lookup_value", lookupValue);
             if (purpose is not null) AddParameter(command, "lookup_purpose", purpose);
+            if (tenantSlug is not null) AddParameter(command, "tenant_slug", tenantSlug);
             var result = await command.ExecuteScalarAsync(cancellationToken);
             return result is DBNull ? null : result;
         }

@@ -1,0 +1,406 @@
+name: accounts-private
+
+services:
+  db:
+    image: "${ACCOUNTS_POSTGRES_IMAGE:?set ACCOUNTS_POSTGRES_IMAGE to an immutable digest reference}"
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    pids_limit: "${PRIVATE_DB_PIDS_LIMIT:-256}"
+    mem_limit: "${PRIVATE_DB_MEMORY_LIMIT:-1g}"
+    cpus: "${PRIVATE_DB_CPU_LIMIT:-1.50}"
+    labels:
+      ie.filingbridge.deployment-mode: PrivateServer
+      ie.filingbridge.installation-id: "${PRIVATE_INSTALLATION_ID:?set PRIVATE_INSTALLATION_ID to the generated installation GUID}"
+      ie.filingbridge.component: database
+    stop_grace_period: 60s
+    environment:
+      POSTGRES_DB: "${POSTGRES_DB:-accounts}"
+      POSTGRES_USER: "${POSTGRES_USER:-accounts}"
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    volumes:
+      - accounts_private_data:/var/lib/postgresql/data
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m
+      - /var/run/postgresql:rw,noexec,nosuid,nodev,size=16m,uid=70,gid=70
+    networks:
+      - api_db
+    healthcheck:
+      test: ["CMD-SHELL", "PGPASSWORD=\"$$(cat /run/secrets/postgres_password)\" psql \"host=db port=5432 dbname=$$POSTGRES_DB user=$$POSTGRES_USER sslmode=disable connect_timeout=5\" -v ON_ERROR_STOP=1 -Atqc 'SELECT 1' | grep -qx 1"]
+      interval: 10s
+      timeout: 15s
+      retries: 12
+      start_period: 60s
+    logging: &private-logging
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  role-provision:
+    image: "${ACCOUNTS_POSTGRES_IMAGE:?set ACCOUNTS_POSTGRES_IMAGE to an immutable digest reference}"
+    user: postgres
+    restart: "no"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 64
+    mem_limit: 128m
+    cpus: "0.25"
+    labels:
+      ie.filingbridge.deployment-mode: PrivateServer
+      ie.filingbridge.installation-id: "${PRIVATE_INSTALLATION_ID:?set PRIVATE_INSTALLATION_ID to the generated installation GUID}"
+      ie.filingbridge.component: role-provision
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m
+    networks:
+      - api_db
+    secrets:
+      - postgres_password
+      - postgres_application_password
+    environment:
+      POSTGRES_DB: "${POSTGRES_DB:-accounts}"
+      POSTGRES_USER: "${POSTGRES_USER:-accounts}"
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        app_password="$$(cat /run/secrets/postgres_application_password)"
+        export PGPASSWORD="$$(cat /run/secrets/postgres_password)"
+        psql "host=db port=5432 dbname=$$POSTGRES_DB user=$$POSTGRES_USER sslmode=disable" \
+          --set=ON_ERROR_STOP=1 --set=app_password="$$app_password" <<'SQL'
+        SELECT CASE
+          WHEN EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'accounts_api')
+            THEN format('ALTER ROLE %I WITH LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION INHERIT PASSWORD %L', 'accounts_api', :'app_password')
+          ELSE format('CREATE ROLE %I WITH LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION INHERIT PASSWORD %L', 'accounts_api', :'app_password')
+        END \gexec
+        SQL
+    depends_on:
+      db:
+        condition: service_healthy
+    logging: *private-logging
+
+  migrate:
+    image: "${ACCOUNTS_API_IMAGE:?set ACCOUNTS_API_IMAGE to an immutable digest reference}"
+    command: ["--migrate-only"]
+    restart: "no"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: "${PRIVATE_MIGRATE_PIDS_LIMIT:-256}"
+    mem_limit: "${PRIVATE_MIGRATE_MEMORY_LIMIT:-1g}"
+    cpus: "${PRIVATE_MIGRATE_CPU_LIMIT:-1.00}"
+    labels:
+      ie.filingbridge.deployment-mode: PrivateServer
+      ie.filingbridge.installation-id: "${PRIVATE_INSTALLATION_ID:?set PRIVATE_INSTALLATION_ID to the generated installation GUID}"
+      ie.filingbridge.component: migrate
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=128m
+    networks:
+      - api_db
+    secrets:
+      - accounts_migration_connection_string
+      - auth_session_signing_key
+      - audit_integrity_signing_key
+      - database_tenant_context_key
+      - identity_hmac_key
+      - mfa_encryption_key
+      - accounts_api_key_hash
+    environment: &private-api-environment
+      ASPNETCORE_ENVIRONMENT: Production
+      Deployment__Mode: PrivateServer
+      Deployment__InstallationId: "${PRIVATE_INSTALLATION_ID:?set PRIVATE_INSTALLATION_ID to the generated installation GUID}"
+      FilingRelease__Candidate: "${ACCOUNTS_API_IMAGE:?set ACCOUNTS_API_IMAGE to an immutable digest reference}"
+      ConnectionStrings__DefaultConnection_FILE: /run/secrets/accounts_migration_connection_string
+      DatabaseTenantIsolation__Required: "true"
+      DatabaseTenantIsolation__ApplicationGroupRole: accounts_api_rls
+      DatabaseTenantIsolation__ApplicationLoginRole: accounts_api
+      DatabaseTenantIsolation__ContextSigningKey_FILE: /run/secrets/database_tenant_context_key
+      AuthSession__SigningKey_FILE: /run/secrets/auth_session_signing_key
+      AuthSession__SecureCookiesInProduction: "true"
+      AuthSession__IdleTimeoutMinutes: "30"
+      AuthSession__AbsoluteLifetimeMinutes: "480"
+      AuthSession__RecentMfaMinutes: "10"
+      AuthSession__MfaChallengeMinutes: "5"
+      AuthSession__RequirePrivilegedMfa: "true"
+      IdentitySecurity__RequireInProduction: "true"
+      IdentitySecurity__BreachedPasswordCheckEnabled: "false"
+      IdentitySecurity__BreachedPasswordFailClosed: "false"
+      IdentitySecurity__IdentityHmacKey_FILE: /run/secrets/identity_hmac_key
+      IdentitySecurity__ActiveMfaEncryptionKeyId: "${MFA_ENCRYPTION_ACTIVE_KEY_ID:?set MFA_ENCRYPTION_ACTIVE_KEY_ID}"
+      IdentitySecurity__MfaEncryptionKeys__0__KeyId: "${MFA_ENCRYPTION_ACTIVE_KEY_ID:?set MFA_ENCRYPTION_ACTIVE_KEY_ID}"
+      IdentitySecurity__MfaEncryptionKeys__0__EncryptionKey_FILE: /run/secrets/mfa_encryption_key
+      AuditIntegrity__ActiveKeyId: "${AUDIT_INTEGRITY_ACTIVE_KEY_ID:?set AUDIT_INTEGRITY_ACTIVE_KEY_ID}"
+      AuditIntegrity__SigningKeys__0__KeyId: "${AUDIT_INTEGRITY_ACTIVE_KEY_ID:?set AUDIT_INTEGRITY_ACTIVE_KEY_ID}"
+      AuditIntegrity__SigningKeys__0__SigningKey_FILE: /run/secrets/audit_integrity_signing_key
+      DatabaseStartup__AutoMigrateOnStartup: "false"
+      DatabaseStartup__SeedDemoData: "false"
+      DatabaseStartup__AllowInsecureDatabaseConnection: "true"
+      AllowedHosts: "${PRIVATE_ALLOWED_HOSTS:?set PRIVATE_ALLOWED_HOSTS};api"
+      AllowedOrigins__0: "${PRIVATE_SERVER_ORIGIN:?set PRIVATE_SERVER_ORIGIN to the exact Tailscale HTTPS origin}"
+      AllowedOrigins__1: "${PRIVATE_LOCAL_ORIGIN:?set PRIVATE_LOCAL_ORIGIN to the exact loopback HTTP origin}"
+      RateLimits__TrustForwardedFor: "false"
+      TRUST_PROXY_HEADERS: "false"
+      ApiAccess__Enabled: "true"
+      ApiAccess__RequireInProduction: "true"
+      ApiAccess__Keys__0__Name: Frontend proxy
+      ApiAccess__Keys__0__Role: Admin
+      ApiAccess__Keys__0__KeyHash_FILE: /run/secrets/accounts_api_key_hash
+      Monitoring__ErrorTrackingProvider: LocalStructuredLogs
+      Monitoring__ErrorTrackingDsn: ""
+      Monitoring__StructuredJsonConsole: "true"
+      Monitoring__IncludeCorrelationId: "true"
+      Monitoring__TracesSampleRate: "0"
+      Monitoring__ErrorSmokeEnabled: "false"
+      Monitoring__StructuredLogRetentionDays: "30"
+      Monitoring__ErrorEventRetentionDays: "30"
+      Monitoring__AlertAcknowledgementMinutes: "15"
+      Monitoring__EscalationMinutes: "30"
+      Monitoring__OnCallOwner: Private Server owner
+      Monitoring__AlertRoute: Local structured logs
+      Monitoring__IncidentRunbookPath: Docs/operations/monitoring-incident-response.md
+      DeadlineDelivery__RequireInProduction: "false"
+      DeadlineDelivery__Enabled: "false"
+      BootstrapOwner__Enabled: "false"
+    depends_on:
+      role-provision:
+        condition: service_completed_successfully
+    logging: *private-logging
+
+  private-initialize:
+    profiles: ["initialize"]
+    image: "${ACCOUNTS_API_IMAGE:?set ACCOUNTS_API_IMAGE to an immutable digest reference}"
+    command: ["--private-initialize"]
+    restart: "no"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: "${PRIVATE_INITIALIZE_PIDS_LIMIT:-256}"
+    mem_limit: "${PRIVATE_INITIALIZE_MEMORY_LIMIT:-1g}"
+    cpus: "${PRIVATE_INITIALIZE_CPU_LIMIT:-1.00}"
+    labels:
+      ie.filingbridge.deployment-mode: PrivateServer
+      ie.filingbridge.installation-id: "${PRIVATE_INSTALLATION_ID:?set PRIVATE_INSTALLATION_ID to the generated installation GUID}"
+      ie.filingbridge.component: private-initialize
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=128m
+    networks:
+      - api_db
+    secrets:
+      - accounts_migration_connection_string
+      - auth_session_signing_key
+      - audit_integrity_signing_key
+      - database_tenant_context_key
+      - identity_hmac_key
+      - mfa_encryption_key
+      - accounts_api_key_hash
+      - private_initial_owner_password
+    environment:
+      <<: *private-api-environment
+      PrivateInitialization__TenantName: "${PRIVATE_TENANT_NAME:?set PRIVATE_TENANT_NAME}"
+      PrivateInitialization__TenantSlug: "${PRIVATE_TENANT_SLUG:?set PRIVATE_TENANT_SLUG}"
+      PrivateInitialization__OwnerEmail: "${PRIVATE_OWNER_EMAIL:?set PRIVATE_OWNER_EMAIL}"
+      PrivateInitialization__OwnerDisplayName: "${PRIVATE_OWNER_DISPLAY_NAME:?set PRIVATE_OWNER_DISPLAY_NAME}"
+      PrivateInitialization__OwnerInitialPassword_FILE: /run/secrets/private_initial_owner_password
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    logging: *private-logging
+
+  private-owner-recovery:
+    profiles: ["owner-recovery"]
+    image: "${ACCOUNTS_API_IMAGE:?set ACCOUNTS_API_IMAGE to an immutable digest reference}"
+    command: ["--private-owner-recovery"]
+    restart: "no"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: "${PRIVATE_OWNER_RECOVERY_PIDS_LIMIT:-256}"
+    mem_limit: "${PRIVATE_OWNER_RECOVERY_MEMORY_LIMIT:-1g}"
+    cpus: "${PRIVATE_OWNER_RECOVERY_CPU_LIMIT:-1.00}"
+    labels:
+      ie.filingbridge.deployment-mode: PrivateServer
+      ie.filingbridge.installation-id: "${PRIVATE_INSTALLATION_ID:?set PRIVATE_INSTALLATION_ID to the generated installation GUID}"
+      ie.filingbridge.component: private-owner-recovery
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=128m
+    networks:
+      - api_db
+    secrets:
+      - accounts_migration_connection_string
+      - auth_session_signing_key
+      - audit_integrity_signing_key
+      - database_tenant_context_key
+      - identity_hmac_key
+      - mfa_encryption_key
+      - accounts_api_key_hash
+    environment:
+      <<: *private-api-environment
+      PrivateOwnerRecovery__ConfirmInstallationId: "${PRIVATE_OWNER_RECOVERY_INSTALLATION_ID:-}"
+      PrivateOwnerRecovery__TenantSlug: "${PRIVATE_OWNER_RECOVERY_TENANT_SLUG:-}"
+      PrivateOwnerRecovery__OwnerEmail: "${PRIVATE_OWNER_RECOVERY_OWNER_EMAIL:-}"
+      PrivateOwnerRecovery__ConfirmOwnerEmail: "${PRIVATE_OWNER_RECOVERY_CONFIRM_OWNER_EMAIL:-}"
+      PrivateOwnerRecovery__ConfirmationPhrase: "${PRIVATE_OWNER_RECOVERY_CONFIRMATION_PHRASE:-}"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    logging: *private-logging
+
+  api:
+    image: "${ACCOUNTS_API_IMAGE:?set ACCOUNTS_API_IMAGE to an immutable digest reference}"
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: "${PRIVATE_API_PIDS_LIMIT:-256}"
+    mem_limit: "${PRIVATE_API_MEMORY_LIMIT:-1g}"
+    cpus: "${PRIVATE_API_CPU_LIMIT:-1.50}"
+    labels:
+      ie.filingbridge.deployment-mode: PrivateServer
+      ie.filingbridge.installation-id: "${PRIVATE_INSTALLATION_ID:?set PRIVATE_INSTALLATION_ID to the generated installation GUID}"
+      ie.filingbridge.component: api
+    stop_grace_period: 30s
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=256m
+    networks:
+      - api_db
+      - frontend_api
+    secrets:
+      - accounts_application_connection_string
+      - auth_session_signing_key
+      - audit_integrity_signing_key
+      - database_tenant_context_key
+      - identity_hmac_key
+      - mfa_encryption_key
+      - accounts_api_key_hash
+    environment:
+      <<: *private-api-environment
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__DefaultConnection_FILE: /run/secrets/accounts_application_connection_string
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --header 'Host: api' http://localhost:8080/health/ready >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 15s
+      retries: 12
+      start_period: 60s
+    logging: *private-logging
+
+  frontend:
+    image: "${ACCOUNTS_FRONTEND_IMAGE:?set ACCOUNTS_FRONTEND_IMAGE to an immutable digest reference}"
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: "${PRIVATE_FRONTEND_PIDS_LIMIT:-256}"
+    mem_limit: "${PRIVATE_FRONTEND_MEMORY_LIMIT:-768m}"
+    cpus: "${PRIVATE_FRONTEND_CPU_LIMIT:-1.00}"
+    labels:
+      ie.filingbridge.deployment-mode: PrivateServer
+      ie.filingbridge.installation-id: "${PRIVATE_INSTALLATION_ID:?set PRIVATE_INSTALLATION_ID to the generated installation GUID}"
+      ie.filingbridge.component: frontend
+    stop_grace_period: 30s
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=128m
+      - /app/.next/cache:rw,noexec,nosuid,nodev,size=128m,uid=1001,gid=1001
+    networks:
+      - frontend_api
+      # Docker Desktop suppresses published ports for containers attached only to
+      # internal networks. This dedicated bridge exists solely for the loopback
+      # host publication; API and PostgreSQL never join it.
+      - frontend_ingress
+    secrets:
+      - accounts_api_key
+    ports:
+      - "127.0.0.1:${PRIVATE_FRONTEND_PORT:-3500}:3000"
+    environment:
+      API_URL: http://api:8080
+      ACCOUNTS_API_KEY_FILE: /run/secrets/accounts_api_key
+      API_PROXY_TIMEOUT_MS: "${API_PROXY_TIMEOUT_MS:-15000}"
+      API_PROXY_DOCUMENT_TIMEOUT_MS: "${API_PROXY_DOCUMENT_TIMEOUT_MS:-120000}"
+      API_PROXY_MAX_BODY_BYTES: "${API_PROXY_MAX_BODY_BYTES:-6291456}"
+      DEPLOYMENT_MODE: PrivateServer
+      PRIVATE_LOCAL_ORIGIN: "${PRIVATE_LOCAL_ORIGIN:?set PRIVATE_LOCAL_ORIGIN to the exact loopback HTTP origin}"
+      ENABLE_HSTS: "true"
+      TRUST_PROXY_HEADERS: "false"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/health/ready >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 15s
+      retries: 12
+      start_period: 60s
+    logging: *private-logging
+
+volumes:
+  accounts_private_data:
+    labels:
+      ie.filingbridge.deployment-mode: PrivateServer
+      ie.filingbridge.installation-id: "${PRIVATE_INSTALLATION_ID:?set PRIVATE_INSTALLATION_ID to the generated installation GUID}"
+      ie.filingbridge.component: database-volume
+
+networks:
+  frontend_api:
+    internal: true
+  api_db:
+    internal: true
+  frontend_ingress:
+    internal: false
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.enable_ip_masquerade: "false"
+
+# Docker Compose mounts these host files read-only at /run/secrets. The setup
+# helper creates them outside the checkout and restricts host access to the
+# installing user, administrators, and SYSTEM.
+secrets:
+  postgres_password:
+    file: "${POSTGRES_PASSWORD_FILE:?set POSTGRES_PASSWORD_FILE}"
+  postgres_application_password:
+    file: "${POSTGRES_APPLICATION_PASSWORD_FILE:?set POSTGRES_APPLICATION_PASSWORD_FILE}"
+  accounts_migration_connection_string:
+    file: "${ACCOUNTS_MIGRATION_CONNECTION_STRING_FILE:?set ACCOUNTS_MIGRATION_CONNECTION_STRING_FILE}"
+  accounts_application_connection_string:
+    file: "${ACCOUNTS_APPLICATION_CONNECTION_STRING_FILE:?set ACCOUNTS_APPLICATION_CONNECTION_STRING_FILE}"
+  auth_session_signing_key:
+    file: "${AUTH_SESSION_SIGNING_KEY_FILE:?set AUTH_SESSION_SIGNING_KEY_FILE}"
+  audit_integrity_signing_key:
+    file: "${AUDIT_INTEGRITY_SIGNING_KEY_FILE:?set AUDIT_INTEGRITY_SIGNING_KEY_FILE}"
+  database_tenant_context_key:
+    file: "${DATABASE_TENANT_CONTEXT_KEY_FILE:?set DATABASE_TENANT_CONTEXT_KEY_FILE}"
+  identity_hmac_key:
+    file: "${IDENTITY_HMAC_KEY_FILE:?set IDENTITY_HMAC_KEY_FILE}"
+  mfa_encryption_key:
+    file: "${MFA_ENCRYPTION_KEY_FILE:?set MFA_ENCRYPTION_KEY_FILE}"
+  accounts_api_key_hash:
+    file: "${ACCOUNTS_API_KEY_HASH_FILE:?set ACCOUNTS_API_KEY_HASH_FILE}"
+  accounts_api_key:
+    file: "${ACCOUNTS_API_KEY_FILE:?set ACCOUNTS_API_KEY_FILE}"
+  private_initial_owner_password:
+    file: "${PRIVATE_INITIAL_OWNER_PASSWORD_FILE:?set PRIVATE_INITIAL_OWNER_PASSWORD_FILE}"

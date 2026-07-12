@@ -22,10 +22,10 @@ real-world use until professional review is complete.
 
 - **Backend** — ASP.NET Core (.NET 10) Minimal API, EF Core 10, PostgreSQL 16.4, QuestPDF, CsvHelper
 - **Frontend** — Next.js 16 (App Router), HeroUI v3, Tailwind CSS 4
-- **Infra** — Docker Compose, GitHub Actions CI, private Tailscale deployment planning,
-  and optional public reverse-proxy examples
+- **Infra** — Docker Compose, GitHub Actions CI, a Windows x64 Private Server profile
+  with optional Tailscale Serve access, and optional public reverse-proxy examples
 
-## Quick start (local)
+## Quick start (Development only)
 
 ```bash
 docker compose up -d --build
@@ -35,22 +35,27 @@ docker compose up -d --build
 Full local instructions, the seeded local admin account, and SDK-only run steps are in
 **[LOCAL_SETUP.md](LOCAL_SETUP.md)**.
 
+`compose.yml` contains known development credentials, development allowances, published API and
+database ports, and seeded sample state. Never share that stack through Tailscale, a LAN ingress,
+router forwarding, or the public internet.
+
 ## Deployment modes
 
-FilingBridge is separating development, private small-organisation use, and public
-production into explicit modes. The Private Server mode is currently **in development**;
-the existing development stack must not be exposed through Tailscale or the public
-internet.
+FilingBridge separates contributor development, private small-organisation use, and public
+production into explicit modes. Start with the [deployment mode chooser](Docs/deployment/README.md);
+do not adapt one mode's Compose file or security allowances into another mode.
 
 | Mode | Intended use | Status |
 |------|--------------|--------|
 | Development | Contributors changing code on localhost | Available |
-| Private Server | Compiled containers shared only with selected users through Tailscale Serve | Planned / in development |
+| Private Server | Compiled containers on a trusted Windows x64 computer; optional selected-user access through Tailscale Serve | Operational preview; current-host lifecycle passed, clean-host/Tailscale acceptance remains open |
 | Public Production | Internet-reachable service behind an approved HTTPS ingress | Hardened stack exists; release-readiness gates remain open |
 
-The agreed architecture, security boundaries, documentation plan, implementation work
-packages, acceptance criteria, and continuation instructions are recorded in
-**[Deployment Modes Workstream Handoff](Docs/deployment/DEPLOYMENT_MODES_HANDOFF.md)**.
+Private Server uses the explicit `PrivateServer` deployment contract, generated secrets, compiled
+images, a loopback-only frontend port, unexposed API/database services, forced PostgreSQL RLS, and
+optional Tailscale **Serve**. It is not Development with different credentials and it is not a
+filing certification. See the [Private Server operator guide](Docs/deployment/private-server.md)
+and [deployment workstream handoff](Docs/deployment/DEPLOYMENT_MODES_HANDOFF.md).
 
 ## Build & test
 
@@ -69,21 +74,25 @@ backup/restore drill — see [`.github/workflows/ci.yml`](.github/workflows/ci.y
 
 ## Production deployment
 
-Use `compose.production.yml` behind a TLS-terminating reverse proxy. Caddy is an optional
-example, not a dependency (see [`deploy/caddy/Caddyfile.example`](deploy/caddy/Caddyfile.example)). All secrets are supplied
+Use `compose.production.yml` behind a reviewed TLS-terminating ingress. Caddy, Apache and Nginx are
+optional examples, not dependencies; start with the
+[Public Production entry guide](Docs/deployment/public-production.md). All secrets are supplied
 via env/secret files and never committed; `ProductionSafetyService` fails startup fast if the
 configuration is unsafe. Operational scripts (backup, restore, smoke, image verification) live in
 [`scripts/`](scripts/). The security model, required environment variables, and deployment details
 are documented in **[CLAUDE.md](CLAUDE.md)** under *Authentication, Authorization & Security* and
-*Production Deployment*.
+*Deployment modes*.
 
 ## Documentation
 
 | Document | Contents |
 |----------|----------|
 | [CLAUDE.md](CLAUDE.md) | Architecture, entities, services, endpoints, security model, deployment |
-| [LOCAL_SETUP.md](LOCAL_SETUP.md) | Running the stack locally + seeded admin |
-| [Deployment modes handoff](Docs/deployment/DEPLOYMENT_MODES_HANDOFF.md) | Work-in-progress private/public/development mode design and next-session instructions |
+| [LOCAL_SETUP.md](LOCAL_SETUP.md) | Contributor Development setup + seeded admin |
+| [Deployment mode chooser](Docs/deployment/README.md) | Select Development, Private Server, or Public Production |
+| [Private Server](Docs/deployment/private-server.md) | Windows x64 operational-preview installation and operation |
+| [Public Production](Docs/deployment/public-production.md) | Internet-reachable hardened deployment entry guide |
+| [Deployment modes handoff](Docs/deployment/DEPLOYMENT_MODES_HANDOFF.md) | Implemented contracts, verification state, remaining live acceptance |
 | [REQUIREMENTS.md](REQUIREMENTS.md) | Product requirements |
 | [LICENSE](LICENSE) | GNU Affero General Public License version 3 text |
 | [NOTICE](NOTICE) | Jasper Ford attribution, Section 7 additional terms, and source-code notice |

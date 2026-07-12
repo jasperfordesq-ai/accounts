@@ -9,7 +9,19 @@ procedures are defined in [deadline delivery and platform metrics](deadline-deli
 
 Production traffic must enter through an HTTPS reverse proxy that performs TLS termination before forwarding requests to the Docker Compose frontend. The production compose file publishes the frontend only on `127.0.0.1:${FRONTEND_PORT:-3000}:3000`; do not expose the frontend or API containers directly to the internet.
 
-Use `deploy/caddy/Caddyfile.example` as the checked-in ingress contract. It listens on the public hostname, obtains/serves certificates through Caddy, proxies to `ACCOUNTS_FRONTEND_UPSTREAM` (default `127.0.0.1:3000`), and overwrites X-Forwarded-For, overwrites X-Forwarded-Host, and overwrites X-Forwarded-Proto before the request reaches Next.js. Set `TRUST_PROXY_HEADERS=true` only when the ingress is deployed on the same trusted host or private network and untrusted clients cannot bypass it. The API also validates this flag at startup before it trusts forwarded client IPs for rate limiting. Leave `TRUST_PROXY_HEADERS=false` or unset for any topology where arbitrary clients can connect to the frontend port.
+The ingress product is an operator choice, not an application dependency. It must proxy every
+browser route to the Next.js frontend; never route `/api/*` directly to Kestrel because the
+Next.js boundary removes browser-supplied service credentials and injects the protected
+frontend-to-API key. Checked-in examples are available for
+[`Caddy`](../../deploy/caddy/Caddyfile.example),
+[`Apache`](../../deploy/apache/accounts.conf.example), and
+[`Nginx`](../../deploy/nginx/accounts.conf.example).
+
+The trusted ingress must preserve the external `Host`. It overwrites X-Forwarded-For rather than
+appending client input, overwrites X-Forwarded-Host, and overwrites X-Forwarded-Proto. Set
+`TRUST_PROXY_HEADERS=true` only when untrusted clients cannot bypass that ingress. The API also
+validates this acknowledgement before it trusts forwarded client addresses for rate limiting.
+Leave it false for any topology that does not provide that exact boundary.
 
 Minimum ingress environment:
 
@@ -19,15 +31,22 @@ $env:FRONTEND_PORT = "3000"
 $env:ACCOUNTS_FRONTEND_UPSTREAM = "127.0.0.1:$env:FRONTEND_PORT"
 ```
 
-Validate the Caddy configuration before a release:
+Validate the selected ingress configuration before a release. For the checked-in Caddy example:
 
 ```powershell
 caddy validate --config .\deploy\caddy\Caddyfile.example
 ```
 
-CI also runs the production smoke test through this Caddyfile instead of calling the frontend port directly. The workflow maps `accounts-smoke.local` to `127.0.0.1`, creates the Caddy container on Docker's standard bridge so only runner-loopback ports are published, then attaches it to the internal Compose frontend network before startup with `ACCOUNTS_FRONTEND_UPSTREAM=frontend:3000`. The probe explicitly bypasses proxies and resolves the smoke hostname to loopback; the workflow enables `ACCOUNTS_CADDY_GLOBAL_OPTIONS=local_certs`, trusts the generated local CA for curl, PowerShell and the Node capacity probe, and runs `smoke-production.ps1` against `https://accounts-smoke.local`. This avoids host networking while preserving the private upstream hop and the same ingress contract. Do not set `local_certs` in production unless you intentionally operate with an internally trusted private CA; the normal production path should use the public hostname and Caddy's public certificate automation.
+CI uses the Caddy example as one executable reference implementation of this generic contract. It
+maps `accounts-smoke.local` to loopback, attaches the disposable ingress to the frontend network,
+overwrites the forwarded headers, and runs `smoke-production.ps1` through HTTPS. That test proves
+the example, not that public operators must use Caddy. Do not set Caddy's `local_certs` option in a
+real public deployment unless an intentionally managed private CA is the approved trust model.
 
-The ingress emits HSTS for the public HTTPS hostname. Keep `ACCOUNTS_ALLOWED_ORIGIN` aligned to the public HTTPS origin used by the reverse proxy, for example `https://accounts.example.ie`. Leave the frontend `ENABLE_HSTS=false` when HSTS is owned by the ingress; set `ENABLE_HSTS=true` only when TLS terminates directly at the Next.js frontend and the domain is ready for the `includeSubDomains; preload` commitment.
+The ingress should emit HSTS for the public HTTPS hostname. Keep `ACCOUNTS_ALLOWED_ORIGIN` aligned
+to that exact origin, for example `https://accounts.example.ie`. `includeSubDomains` and `preload`
+are separate operator commitments and must not be enabled until every affected hostname is ready.
+Leave frontend `ENABLE_HSTS=false` when HSTS is owned by the ingress.
 
 The API container is not published to the host, but the frontend reaches it through Docker DNS as `http://api:8080`. `compose.production.yml` appends the internal `api` host to ASP.NET `AllowedHosts` and uses `Host: api` for the API healthcheck; keep the API unexposed and route public traffic through the HTTPS frontend ingress only.
 
@@ -488,6 +507,7 @@ docker image inspect $env:ACCOUNTS_FRONTEND_IMAGE
 
 ```powershell
 $env:ACCOUNTS_FRONTEND_URL = "https://accounts.example.ie"
+$env:SMOKE_TENANT_SLUG = "production-firm"
 $env:SMOKE_LOGIN_EMAIL = "owner@example.ie"
 $env:SMOKE_LOGIN_PASSWORD = "<read from the release secret store>"
 $env:SMOKE_TOTP_SECRET = "<read from the separate MFA secret store for an enrolled smoke account>"
