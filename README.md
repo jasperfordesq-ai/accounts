@@ -95,7 +95,7 @@ are documented in **[CLAUDE.md](CLAUDE.md)** under *Authentication, Authorizatio
 | [Deployment modes handoff](Docs/deployment/DEPLOYMENT_MODES_HANDOFF.md) | Implemented contracts, verification state, remaining live acceptance |
 | [REQUIREMENTS.md](REQUIREMENTS.md) | Product requirements |
 | [LICENSE](LICENSE) | GNU Affero General Public License version 3 text |
-| [NOTICE](NOTICE) | Jasper Ford attribution, Section 7 additional terms, and source-code notice |
+| [NOTICE](NOTICE) | Creator and contributor attribution, Section 7 additional terms, and source-code notice |
 | [CONTRIBUTORS.md](CONTRIBUTORS.md) | Creator and contributor attribution |
 | [CONTRIBUTOR_TERMS.md](CONTRIBUTOR_TERMS.md) | Contributor licence grant and project stewardship terms |
 | [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) | Major third-party component notices |
@@ -109,6 +109,7 @@ are documented in **[CLAUDE.md](CLAUDE.md)** under *Authentication, Authorizatio
 ### Contributors
 
 - **Jasper Ford** - Creator, main contributor, and primary author
+- **hOUR Timebank CLG (Ireland)** - Organisational contributor
 
 ### Third-party open-source components
 
@@ -139,7 +140,7 @@ display visible attribution and a link to the source code repository.
 ### Required Attribution
 
 **Footer (all pages):**
-> "Built on Irish Accounts by Jasper Ford"
+> "Built on Irish Accounts by Jasper Ford with hOUR Timebank CLG (Ireland)"
 
 This text must be a clickable hyperlink to:
 <https://github.com/jasperfordesq-ai/accounts>
@@ -147,6 +148,7 @@ This text must be a clickable hyperlink to:
 **About page:**
 > "Powered by Irish Accounts
 > Created by Jasper Ford
+> Contributors include hOUR Timebank CLG (Ireland)
 > Licensed under AGPL v3-or-later"
 
 With a link to: <https://github.com/jasperfordesq-ai/accounts>

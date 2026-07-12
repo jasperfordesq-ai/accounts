@@ -3,6 +3,7 @@ import {
   ABOUT_ATTRIBUTION_LINES,
   CREATOR_NAME,
   LICENSE_NAME,
+  ORGANISATIONAL_CONTRIBUTORS,
   PRODUCT_NAME,
   REPOSITORY_URL,
 } from "@/lib/attribution";
@@ -29,6 +30,11 @@ export default function AboutPage() {
               {CREATOR_NAME} is the creator, main contributor, and copyright holder for {PRODUCT_NAME}.
               This software is licensed under {LICENSE_NAME}, with additional attribution terms
               recorded in the NOTICE file.
+            </p>
+            <p>
+              Recognised organisational contributor: {ORGANISATIONAL_CONTRIBUTORS.join(", ")}.
+              Contributor acknowledgement records participation in the project and does not alter
+              the creator or copyright-holder designation.
             </p>
             <p>
               Interactive interfaces based on {PRODUCT_NAME} must keep a visible attribution

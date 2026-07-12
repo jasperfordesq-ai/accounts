@@ -1,7 +1,7 @@
 <Project>
   <PropertyGroup>
     <ArtifactsPath>$(MSBuildThisFileDirectory)../.dotnet-artifacts</ArtifactsPath>
-    <Authors>Jasper Ford</Authors>
+    <Authors>Jasper Ford; hOUR Timebank CLG (Ireland)</Authors>
     <Copyright>Copyright (c) 2026 Jasper Ford</Copyright>
     <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/jasperfordesq-ai/accounts</RepositoryUrl>

@@ -175,6 +175,11 @@ terms do not guarantee that every Contribution will receive individual
 attribution in every product, interface, distribution, or commercial
 arrangement.
 
+The canonical contributor records currently acknowledge Jasper Ford and
+hOUR Timebank CLG (Ireland). Inclusion in those records identifies project
+participation and does not, by itself, change copyright ownership or appoint a
+contributor as a Project Steward.
+
 ## 8. No Obligation, Payment, Or Warranty
 
 The Project Steward has no obligation to accept, review, merge, publish,
