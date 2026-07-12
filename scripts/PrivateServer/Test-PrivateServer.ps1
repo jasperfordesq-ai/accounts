@@ -151,6 +151,7 @@ $global:FbFakeTailscaleStatus = '{"version":"etag-empty"}'
 $global:FbMutateReleaseComposeOnValidate = ""
 $global:FbFailDescriptionPattern = ""
 $global:FbExpectedFrontendPort = 3500
+$global:FbFakePublishedService = ""
 $fakeInvoker = {
     param($FilePath, $Arguments, $Description, $Mutating)
     $argumentStrings = @($Arguments | ForEach-Object { [string]$_ })
@@ -214,8 +215,13 @@ $fakeInvoker = {
     if ($Description -eq 'Inspect frontend published port') {
         return [pscustomobject]@{ ExitCode = 0; Output = @("127.0.0.1:$global:FbExpectedFrontendPort") }
     }
-    if ($Description -match '^Inspect (api|db) unpublished port$') {
-        return [pscustomobject]@{ ExitCode = 1; Output = @() }
+    if ($Description -match '^Inspect (api|db) host port bindings$') {
+        $service = $Matches[1]
+        $containerPort = if ($service -eq "api") { "8080/tcp" } else { "5432/tcp" }
+        $value = if ($global:FbFakePublishedService -ceq $service) {
+            '{"' + $containerPort + '":[{"HostIp":"0.0.0.0","HostPort":"' + $(if ($service -eq "api") { "18080" } else { "15432" }) + '"}]}'
+        } else { '{"' + $containerPort + '":null}' }
+        return [pscustomobject]@{ ExitCode = 0; Output = @($value) }
     }
     if ($Description -eq "Create a PostgreSQL custom-format dump directly in private host staging") {
         $volumeIndex = [Array]::IndexOf($argumentStrings, "--volume")
@@ -334,7 +340,7 @@ try {
     $unicodeTenantName = "Carthanas $([char]0x00D3) C$([char]0x00F3)na$([char]0x00ED)"
     $unicodeOwnerName = "M$([char]0x00E1)ire O'Connor"
     $mainSetupCallStart = $global:FbOperatorCalls.Count
-    Invoke-FilingBridgePrivateServer -Command setup -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory -TenantName $unicodeTenantName -OwnerEmail "owner@example.ie" -OwnerName $unicodeOwnerName -BuildLocal -NonInteractive -SkipPrerequisiteChecks 6>$null
+    Invoke-FilingBridgePrivateServer -Command setup -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory -TenantName $unicodeTenantName -OwnerEmail "owner@example.ie" -OwnerName $unicodeOwnerName -BuildLocal -NonInteractive -SkipPrerequisiteChecks -Port 35490 6>$null
     $statePath = Join-Path $stateDirectory "server.json"
     Assert-True (Test-Path -LiteralPath $statePath -PathType Leaf) "setup must create state outside the checkout"
     $state = ([IO.File]::ReadAllText($statePath, $testUtf8)) | ConvertFrom-Json
@@ -504,6 +510,11 @@ try {
     Assert-True ($hostRecoveryCalls -match 'Read important-table fingerprints from the recovered database') "replacement-host recovery must compare live post-start business-data fingerprints"
 
     $global:FbExpectedFrontendPort = 35496
+    $global:FbFakePublishedService = "api"
+    Assert-Throws {
+        Invoke-FilingBridgePrivateServer -Command local-check -RepositoryRoot $repositoryRoot -StateDirectory $recoveredStateDirectory 6>$null
+    } 'api has a host-published port' "local acceptance must reject a real HostConfig API port binding"
+    $global:FbFakePublishedService = ""
     Invoke-FilingBridgePrivateServer -Command local-check -RepositoryRoot $repositoryRoot -StateDirectory $recoveredStateDirectory 6>$null
     $localReports = @(Get-ChildItem -LiteralPath (Join-Path $recoveredStateDirectory "acceptance") -Filter "local-check-*.json" -File)
     Assert-True ($localReports.Count -eq 1) "local acceptance must retain one machine-readable report"
