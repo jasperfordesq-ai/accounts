@@ -331,9 +331,11 @@ mode's environment.
   Tailscale Serve. Lifecycle commands are installation-locked; same-installation backups are
   HMAC-authenticated before restore, use host staging, and have a current 1.9 GB complete-payload
   ceiling. Updates are forward-only. External monitoring/deadline delivery are off by default. See
-  `Docs/deployment/private-server.md`. A disposable current-host lifecycle drill passed; clean-
-  machine, reboot, live Tailscale, offline full-workflow, encrypted complete recovery, genuine
-  prior-version update/failure recovery, and replacement-host recovery acceptance remain open.
+  `Docs/deployment/private-server.md`. Exact preview.4 clean compiled setup, Owner/MFA and sample
+  output journey, encrypted complete backup/verification/same-installation restore, genuine update,
+  forced-failure recovery, and candidate-bound CI have passed. The evidence-backed local Windows
+  score is 980/1,000; real reboot verification and clean replacement-host recovery remain open.
+  Tailscale is optional and was not enabled for the loopback-only acceptance path.
 - **Public Production**: `compose.production.yml` behind an approved HTTPS ingress. Caddy, Apache,
   and Nginx are optional examples, not runtime dependencies. See
   `Docs/deployment/public-production.md` and `Docs/operations/production-runbook.md`.

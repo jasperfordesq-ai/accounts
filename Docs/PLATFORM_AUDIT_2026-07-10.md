@@ -60,16 +60,28 @@ separate Development/Private Server/Public Production documentation. `compose.ym
 Development-only and must never be exposed through Tailscale, a LAN, router forwarding, or public
 ingress.
 
-Private Server is not live-certified. A disposable current-host Windows drill passed setup,
+In the 11 July snapshot, Private Server was not live-certified. A disposable current-host Windows
+drill had passed setup,
 stop/start, the explicitly incomplete plaintext database-only backup/verify/restore path,
 source-build update, Owner recovery/reset with privileged MFA still enforced, diagnostics/support,
-purge and exact cleanup. Clean-machine installation, complete Owner/MFA and multi-user journeys,
+purge and exact cleanup. At that time, clean-machine installation, complete Owner/MFA and multi-user journeys,
 second-device Tailscale HTTPS, reboot recovery, offline full workflow, encrypted complete-recovery
-sets, genuine prior-version/failure recovery, and replacement-host recovery remain unproven or
-unimplemented as recorded in `Docs/deployment/DEPLOYMENT_MODES_HANDOFF.md`. Those remaining controls
-may not be inferred from the current-host drill or static/automated checks. Most importantly, private installation
+sets, genuine prior-version/failure recovery, and replacement-host recovery were unproven or
+unimplemented. The 12 July update below supersedes the encrypted-recovery and update/failure
+clauses; the other stated boundaries remain governed by
+`Docs/deployment/DEPLOYMENT_MODES_HANDOFF.md`. Most importantly, private installation
 success cannot satisfy `HUMAN-001` through `HUMAN-007`, external ROS/iXBRL validation, source-law
 review, qualified-accountant acceptance, or the no-direct-filing boundary.
+
+### Local Windows evidence update — 12 July 2026
+
+The later exact `0.1.0-preview.4` candidate passed clean compiled-bundle setup, Owner/MFA and
+sample-output checks, encrypted complete backup/verification/same-installation restore, genuine
+update, forced-failure recovery, and candidate-bound CI. Its separate local Windows readiness score
+is **980/1,000**; real reboot verification and clean replacement-host recovery remain open. This
+update supersedes the operational limitations in the dated 11 July note only. It does not alter
+this audit's independent **600/1,000** score or close any professional, statutory, external,
+governance, Public Production, or multi-user acceptance gate.
 
 ## Non-negotiable product boundary
 
