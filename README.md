@@ -22,7 +22,7 @@ real-world use until professional review is complete.
 
 - **Backend** — ASP.NET Core (.NET 10) Minimal API, EF Core 10, PostgreSQL 16.4, QuestPDF, CsvHelper
 - **Frontend** — Next.js 16 (App Router), HeroUI v3, Tailwind CSS 4
-- **Infra** — Docker Compose, GitHub Actions CI, a Windows x64 Private Server profile
+- **Infra** — Docker Compose, GitHub Actions CI, Windows x64 and Ubuntu 24.04 x64 Private Server profiles
   with optional Tailscale Serve access, and optional public reverse-proxy examples
 
 ## Quick start (Development only)
@@ -48,7 +48,7 @@ do not adapt one mode's Compose file or security allowances into another mode.
 | Mode | Intended use | Status |
 |------|--------------|--------|
 | Development | Contributors changing code on localhost | Available |
-| Private Server | Compiled containers on a trusted Windows x64 computer; optional selected-user access through Tailscale Serve | Operational preview; exact preview.4 local score 980/1,000, with real reboot and clean replacement-host recovery open |
+| Private Server | Compiled containers on trusted Windows x64 or Ubuntu 24.04 x64; optional selected-user access through Tailscale Serve | Windows preview.4 local score 980/1,000; Ubuntu/Google Cloud coding preview pending live acceptance |
 | Public Production | Internet-reachable service behind an approved HTTPS ingress | Hardened stack exists; release-readiness gates remain open |
 
 Private Server uses the explicit `PrivateServer` deployment contract, generated secrets, compiled
@@ -92,6 +92,8 @@ are documented in **[CLAUDE.md](CLAUDE.md)** under *Authentication, Authorizatio
 | [LOCAL_SETUP.md](LOCAL_SETUP.md) | Contributor Development setup + seeded admin |
 | [Deployment mode chooser](Docs/deployment/README.md) | Select Development, Private Server, or Public Production |
 | [Private Server](Docs/deployment/private-server.md) | Windows x64 operational-preview installation and operation |
+| [Ubuntu Private Server](Docs/deployment/private-server-linux.md) | Ubuntu 24.04 x64 operator contract |
+| [Google Cloud Private Server](Docs/deployment/GOOGLE_CLOUD_PRIVATE_SERVER.md) | Exact VM, network, installation and cost plan |
 | [Public Production](Docs/deployment/public-production.md) | Internet-reachable hardened deployment entry guide |
 | [Deployment modes handoff](Docs/deployment/DEPLOYMENT_MODES_HANDOFF.md) | Implemented contracts, verification state, remaining live acceptance |
 | [REQUIREMENTS.md](REQUIREMENTS.md) | Product requirements |

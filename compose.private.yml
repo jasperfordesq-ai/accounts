@@ -329,7 +329,7 @@ services:
       - /app/.next/cache:rw,noexec,nosuid,nodev,size=128m,uid=1001,gid=1001
     networks:
       - frontend_api
-      # Docker Desktop suppresses published ports for containers attached only to
+      # Docker hosts can suppress published ports for containers attached only to
       # internal networks. This dedicated bridge exists solely for the loopback
       # host publication; API and PostgreSQL never join it.
       - frontend_ingress
@@ -378,7 +378,7 @@ networks:
 
 # Docker Compose mounts these host files read-only at /run/secrets. The setup
 # helper creates them outside the checkout and restricts host access to the
-# installing user, administrators, and SYSTEM.
+# installing identity (plus Windows administrators/SYSTEM on Windows).
 secrets:
   postgres_password:
     file: "${POSTGRES_PASSWORD_FILE:?set POSTGRES_PASSWORD_FILE}"

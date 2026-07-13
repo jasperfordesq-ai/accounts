@@ -120,7 +120,9 @@ requireText("./scripts/test-container-supply-chain-report.ps1", "CI must exercis
 requireText("./scripts/test-postgres-backup-evidence.ps1", "CI must exercise candidate-bound encrypted backup evidence and tamper cases.");
 requireText("./scripts/test-smoke-mfa-handoff.ps1", "CI must exercise atomic, contained disposable MFA handoff creation.");
 requireText("./scripts/test-private-compose.ps1", "CI must exercise the Private Server compose verifier and unsafe-topology mutations.");
-requireText("./scripts/PrivateServer/Test-PrivateServer.ps1", "CI must exercise the Private Server Windows operator contract.");
+requireText("./scripts/PrivateServer/Test-PrivateServer.ps1", "CI must exercise the Private Server cross-platform operator contract.");
+requireText("./filingbridge help", "CI must exercise the Ubuntu Private Server launcher.");
+requireText("scripts/verify-linux-private-host.sh", "CI must syntax-check the Ubuntu Private Server host verifier.");
 requireText("./scripts/test-private-server-release.ps1", "CI must exercise the Private Server release builder and archive verifier.");
 requireText("./scripts/verify-private-compose.ps1", "CI must enforce the Private Server compose contract.");
 requireText("docker compose -f compose.yml config --quiet", "CI must retain the contributor development compose configuration check.");

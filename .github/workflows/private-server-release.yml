@@ -348,8 +348,9 @@ jobs:
               $generatedAtProperties.Count -ne 1 -or -not $generatedAtMatch.Success -or
               -not [DateTimeOffset]::TryParseExact($generatedAtMatch.Groups['value'].Value, 'o', [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::None, [ref]$generatedAt) -or
               $generatedAt.Offset -ne [TimeSpan]::Zero -or
-              @($manifest.supportedHosts).Count -ne 1 -or
-              [string]$manifest.supportedHosts[0] -cne 'windows-x64' -or
+              @($manifest.supportedHosts).Count -ne 2 -or
+              @($manifest.supportedHosts) -notcontains 'windows-x64' -or
+              @($manifest.supportedHosts) -notcontains 'ubuntu-x64' -or
               [string]$manifest.candidate.commitSha -cne $env:CANDIDATE_SHA -or
               [string]$manifest.candidate.githubActionsRunUrl -cne $env:CANDIDATE_RUN_URL) {
             throw "Prepared release candidate identity is invalid."
@@ -434,14 +435,19 @@ jobs:
           }
           $requiredPackageFiles = @(
             'FilingBridge.cmd',
+            'filingbridge',
             'compose.private.yml',
             '.env.private.example',
             'scripts/private-server.ps1',
             'scripts/PrivateServer/PrivateServer.psm1',
             'scripts/smoke-production.ps1',
+            'scripts/verify-linux-private-host.sh',
             'Docs/deployment/README.md',
             'Docs/deployment/private-server.md',
+            'Docs/deployment/private-server-linux.md',
+            'Docs/deployment/GOOGLE_CLOUD_PRIVATE_SERVER.md',
             'Docs/deployment/LOCAL_WINDOWS_READINESS.md',
+            'Docs/deployment/LINUX_CLOUD_READINESS.md',
             'deploy/private/release-manifest.schema.json',
             'README.md',
             'LICENSE',
@@ -533,7 +539,7 @@ jobs:
           cat > "$notes" <<EOF
           # FilingBridge Private Server $VERSION
 
-          Operational preview for a compiled, private Windows x64 installation.
+          Operational preview for compiled private Windows x64 and Ubuntu 24.04 x64 installations.
 
           - Candidate: \`$CANDIDATE_SHA\`
           - CI: $CANDIDATE_RUN_URL
@@ -545,7 +551,7 @@ jobs:
           - Direct CRO/ROS submission remains unsupported.
           - Statutory use remains blocked pending the live qualified-accountant and external-validation gates.
 
-          Review the attached checksum, attestation, manifest and Windows runbook before publishing
+          Review the attached checksum, attestation, manifest and platform runbooks before publishing
           this draft as an immutable release.
           EOF
           gh release create "$tag" \
@@ -554,5 +560,5 @@ jobs:
             --title "FilingBridge Private Server $VERSION" \
             --notes-file "$notes" \
             --draft \
-            "$ARCHIVE#Windows x64 Private Server bundle" \
+            "$ARCHIVE#Windows and Ubuntu x64 Private Server bundle" \
             "$CHECKSUM#SHA-256 checksum"

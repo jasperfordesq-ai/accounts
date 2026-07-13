@@ -19,6 +19,23 @@ $script:RecoveryCriticalSecrets = @(
 )
 $script:MaximumCompleteBackupArchiveBytes = 1900MB
 
+function Test-FbWindowsHost {
+    return [Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([Runtime.InteropServices.OSPlatform]::Windows)
+}
+
+function Test-FbLinuxHost {
+    return [Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([Runtime.InteropServices.OSPlatform]::Linux)
+}
+
+function Get-FbHostProfile {
+    if ([Runtime.InteropServices.RuntimeInformation]::OSArchitecture -ne [Runtime.InteropServices.Architecture]::X64) {
+        throw "FilingBridge Private Server requires an x86-64 host. ARM64 is not certified."
+    }
+    if (Test-FbWindowsHost) { return "windows-x64" }
+    if (Test-FbLinuxHost) { return "ubuntu-x64" }
+    throw "FilingBridge Private Server supports only Windows x64 and Ubuntu Linux x64."
+}
+
 function Set-PrivateServerCommandInvoker {
     [CmdletBinding()]
     param([Parameter(Mandatory = $true)][scriptblock]$Invoker)
@@ -66,6 +83,7 @@ function Protect-FbSupportText {
     $protected = Protect-PrivateServerText $Text
     $protected = [regex]::Replace($protected, '(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b', '[EMAIL-REDACTED]')
     $protected = [regex]::Replace($protected, '(?i)C:\\Users\\[^\\/\r\n]+', 'C:\Users\[USER-REDACTED]')
+    $protected = [regex]::Replace($protected, '(?i)(?<![A-Za-z0-9._-])/home/[^/\r\n]+', '/home/[USER-REDACTED]')
     $protected = [regex]::Replace($protected, '(?<![\d.])(?!127\.0\.0\.1\b)(?:\d{1,3}\.){3}\d{1,3}(?![\d.])', '[IP-REDACTED]')
     return $protected
 }
@@ -99,13 +117,24 @@ function Test-FbPathWithin {
     param([string]$Candidate, [string]$Parent)
     $candidateFull = [IO.Path]::GetFullPath($Candidate).TrimEnd('\', '/')
     $parentFull = [IO.Path]::GetFullPath($Parent).TrimEnd('\', '/')
-    if ($candidateFull.Equals($parentFull, [StringComparison]::OrdinalIgnoreCase)) { return $true }
+    $comparison = if (Test-FbWindowsHost) { [StringComparison]::OrdinalIgnoreCase } else { [StringComparison]::Ordinal }
+    if ($candidateFull.Equals($parentFull, $comparison)) { return $true }
     return $candidateFull.StartsWith(
         $parentFull + [IO.Path]::DirectorySeparatorChar,
-        [StringComparison]::OrdinalIgnoreCase)
+        $comparison)
 }
 
 function Get-FbDefaultStateDirectory {
+    if (Test-FbLinuxHost) {
+        $stateHome = if (-not [string]::IsNullOrWhiteSpace($env:XDG_STATE_HOME)) {
+            $env:XDG_STATE_HOME
+        } elseif (-not [string]::IsNullOrWhiteSpace($HOME)) {
+            Join-Path $HOME ".local/state"
+        } else {
+            throw "HOME and XDG_STATE_HOME are unavailable. Supply -StateDirectory explicitly."
+        }
+        return [IO.Path]::GetFullPath((Join-Path $stateHome "filingbridge/server"))
+    }
     if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
         throw "LOCALAPPDATA is unavailable. Supply -StateDirectory explicitly."
     }
@@ -122,7 +151,8 @@ function Resolve-FbStateDirectory {
 
 function Assert-FbSafeOperatorPath {
     param([Parameter(Mandatory = $true)][string]$Path, [string]$Description = "Path")
-    if ($Path.Length -gt 165) { throw "$Description is too long for reliable Docker Desktop and legacy Windows path handling: $Path" }
+    $maximum = if (Test-FbWindowsHost) { 165 } else { 512 }
+    if ($Path.Length -gt $maximum) { throw "$Description is too long for reliable host and Docker path handling: $Path" }
     if ($Path -match "[\r\n\x00]") { throw "$Description contains a control character." }
     if ($Path.Contains('"')) { throw "$Description may not contain a double quote." }
 }
@@ -182,9 +212,14 @@ function Write-FbJsonAtomic {
 
 function Set-FbRestrictedAcl {
     param([Parameter(Mandatory = $true)][string]$Path)
-    if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
+    if (-not (Test-FbWindowsHost)) {
         $mode = if ((Get-Item -LiteralPath $Path -Force).PSIsContainer) { "700" } else { "600" }
         $null = Invoke-FbNative -FilePath "chmod" -Arguments @($mode, "--", $Path) -Description "Restrict private state permissions" -Mutating
+        $stat = Invoke-FbNative -FilePath "stat" -Arguments @("-c", "%a|%u", "--", $Path) -Description "Verify private state permissions"
+        $identity = Invoke-FbNative -FilePath "id" -Arguments @("-u") -Description "Verify private state owner"
+        $actual = (($stat.Output | Select-Object -Last 1) -join "").Trim()
+        $uid = (($identity.Output | Select-Object -Last 1) -join "").Trim()
+        if ($actual -cne "$mode|$uid") { throw "Private Server POSIX permissions or ownership are unsafe for: $Path" }
         return
     }
 
@@ -640,7 +675,8 @@ function Read-FbReleaseManifest {
     }
     $Path = [IO.Path]::GetFullPath($Path)
     $canonicalManifest = [IO.Path]::GetFullPath((Join-Path $RepositoryRoot "release.json"))
-    if (-not $Path.Equals($canonicalManifest, [StringComparison]::OrdinalIgnoreCase)) {
+    $pathComparison = if (Test-FbWindowsHost) { [StringComparison]::OrdinalIgnoreCase } else { [StringComparison]::Ordinal }
+    if (-not $Path.Equals($canonicalManifest, $pathComparison)) {
         throw "A compiled release must use the canonical release.json at the extracted release root. Nested or partial manifests are refused; use -BuildLocal explicitly for a source tree."
     }
     $manifestText = Read-FbUtf8Text $Path
@@ -659,7 +695,13 @@ function Read-FbReleaseManifest {
         throw "release.json generatedAtUtc must be a UTC timestamp."
     }
     $supportedHosts = @(Get-FbProperty $manifest "supportedHosts" @())
-    if ($supportedHosts.Count -ne 1 -or [string]$supportedHosts[0] -cne "windows-x64") { throw "This release must declare exactly the supported windows-x64 host." }
+    $hostProfile = Get-FbHostProfile
+    if ($supportedHosts.Count -lt 1 -or $supportedHosts.Count -gt 2 -or
+        @($supportedHosts | Select-Object -Unique).Count -ne $supportedHosts.Count -or
+        @($supportedHosts | Where-Object { [string]$_ -notin @("windows-x64", "ubuntu-x64") }).Count -gt 0 -or
+        $supportedHosts -notcontains $hostProfile) {
+        throw "This release does not declare support for the current $hostProfile host."
+    }
     $images = Get-FbProperty $manifest "images"
     $api = [string](Get-FbProperty (Get-FbProperty $images "backend") "exactDigestReference" "")
     $frontend = [string](Get-FbProperty (Get-FbProperty $images "frontend") "exactDigestReference" "")
@@ -698,9 +740,11 @@ function Read-FbReleaseManifest {
         $manifestFiles[$relativeKey] = [pscustomobject]@{ byteSize = $expectedSize; sha256 = $expectedHash }
     }
     foreach ($required in @(
-        "FilingBridge.cmd", "compose.private.yml", ".env.private.example",
+        "FilingBridge.cmd", "filingbridge", "compose.private.yml", ".env.private.example",
         "scripts/private-server.ps1", "scripts/PrivateServer/PrivateServer.psm1", "scripts/smoke-production.ps1",
-        "Docs/deployment/README.md", "Docs/deployment/private-server.md", "Docs/deployment/LOCAL_WINDOWS_READINESS.md",
+        "Docs/deployment/README.md", "Docs/deployment/private-server.md", "Docs/deployment/private-server-linux.md",
+        "Docs/deployment/GOOGLE_CLOUD_PRIVATE_SERVER.md", "Docs/deployment/LOCAL_WINDOWS_READINESS.md",
+        "Docs/deployment/LINUX_CLOUD_READINESS.md",
         "deploy/private/release-manifest.schema.json", "README.md", "LICENSE", "NOTICE",
         "THIRD_PARTY_NOTICES.md", "CONTRIBUTORS.md")) {
         if (-not $manifestFiles.ContainsKey($required.ToLowerInvariant())) { throw "release.json omits required release file: $required" }
@@ -768,12 +812,47 @@ function Assert-FbPrerequisites {
         if (-not (Test-FbTcpPortAvailable $Port)) { throw "Loopback port $Port is already in use." }
         return
     }
-    if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
-        throw "FilingBridge Private Server is currently supported only on Windows x64."
+    $hostProfile = Get-FbHostProfile
+    Assert-FbSafeOperatorPath $StateDirectory "State directory"
+    Assert-FbSafeOperatorPath $RepositoryRoot "Release directory"
+    if (-not (Test-FbTcpPortAvailable $Port)) { throw "Loopback port $Port is already in use. Choose another -Port." }
+
+    if ($hostProfile -eq "ubuntu-x64") {
+        if (-not (Test-Path -LiteralPath "/etc/os-release" -PathType Leaf)) { throw "Ubuntu identity could not be verified from /etc/os-release." }
+        $osRelease = @{}
+        foreach ($line in @(Get-Content -LiteralPath "/etc/os-release")) {
+            if ($line -match '^(?<key>[A-Z_]+)=(?<value>.*)$') { $osRelease[$Matches.key] = $Matches.value.Trim('"') }
+        }
+        if ([string]$osRelease.ID -cne "ubuntu" -or [string]$osRelease.VERSION_ID -cnotmatch '^24\.04(?:\.\d+)?$') {
+            throw "Ubuntu 24.04 LTS x86-64 is required for the Linux Private Server preview."
+        }
+        if ([Environment]::ProcessorCount -lt 2) { throw "At least two vCPUs are required on Ubuntu." }
+        $memoryLine = Get-Content -LiteralPath "/proc/meminfo" | Where-Object { $_ -match '^MemTotal:' } | Select-Object -First 1
+        $memoryMatch = [regex]::Match([string]$memoryLine, '^MemTotal:\s+(?<kb>\d+)\s+kB$')
+        if (-not $memoryMatch.Success -or [long]$memoryMatch.Groups['kb'].Value -lt 7340032) { throw "At least 8 GB of memory is required on Ubuntu." }
+        $disk = Invoke-FbNative -FilePath "df" -Arguments @("--output=avail", "-k", "/") -Description "Verify Ubuntu disk space"
+        $availableKb = [long](($disk.Output | Select-Object -Last 1) -join "").Trim()
+        if ($availableKb -lt 41943040) { throw "At least 40 GB of free disk space is required on Ubuntu before setup." }
+        foreach ($command in @("docker", "systemctl")) {
+            if ($null -eq (Get-Command $command -ErrorAction SilentlyContinue)) { throw "$command is required on Ubuntu." }
+        }
+        $docker = Invoke-FbNative -FilePath "docker" -Arguments @("version", "--format", "{{.Server.Os}}") -Description "Verify Docker Engine"
+        if ((($docker.Output -join "").Trim()).ToLowerInvariant() -ne "linux") { throw "Docker Engine must be running Linux containers." }
+        $dockerArchitecture = Invoke-FbNative -FilePath "docker" -Arguments @("info", "--format", "{{.Architecture}}") -Description "Verify Docker engine architecture"
+        if ((($dockerArchitecture.Output -join "").Trim()).ToLowerInvariant() -notin @("x86_64", "amd64")) { throw "Docker Engine must expose x86-64 Linux containers." }
+        $composeVersionResult = Invoke-FbNative -FilePath "docker" -Arguments @("compose", "version", "--short") -Description "Verify Docker Compose"
+        $composeVersionMatch = [regex]::Match((($composeVersionResult.Output -join "").Trim()), '(?<version>\d+\.\d+\.\d+)')
+        if (-not $composeVersionMatch.Success -or [Version]::Parse($composeVersionMatch.Groups['version'].Value) -lt [Version]::Parse("2.20.0")) { throw "Docker Compose 2.20.0 or newer is required." }
+        $dockerEnabled = Invoke-FbNative -FilePath "systemctl" -Arguments @("is-enabled", "docker.service") -Description "Verify Docker boot persistence" -IgnoreExitCode
+        if ($dockerEnabled.ExitCode -ne 0 -or (($dockerEnabled.Output -join "").Trim()) -notin @("enabled", "enabled-runtime")) { throw "docker.service must be enabled for automatic restart after reboot." }
+        $existingContainers = Invoke-FbNative -FilePath "docker" -Arguments @("ps", "--all", "--filter", "label=ie.filingbridge.deployment-mode=PrivateServer", "--format", "{{.ID}}") -Description "Detect an existing FilingBridge Private Server project"
+        $existingVolumes = Invoke-FbNative -FilePath "docker" -Arguments @("volume", "ls", "--filter", "label=ie.filingbridge.deployment-mode=PrivateServer", "--format", "{{.Name}}") -Description "Detect an existing FilingBridge Private Server data volume"
+        if (@($existingContainers.Output + $existingVolumes.Output | ForEach-Object { $_.Trim() } | Where-Object { $_ } | Select-Object -Unique).Count -gt 0) {
+            throw "An existing FilingBridge Private Server Docker project or data volume was detected. Use its saved state directory."
+        }
+        return
     }
-    if ([Runtime.InteropServices.RuntimeInformation]::OSArchitecture -ne [Runtime.InteropServices.Architecture]::X64) {
-        throw "FilingBridge Private Server currently requires Windows x64. ARM64 is not a certified host."
-    }
+
     $operatingSystem = Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue
     if ($null -eq $operatingSystem) { throw "Windows support posture could not be verified." }
     if ([int]$operatingSystem.ProductType -ne 1) { throw "Docker Desktop and FilingBridge Private Server are not supported on Windows Server." }
@@ -781,9 +860,6 @@ function Assert-FbPrerequisites {
     if ($windowsBuild -lt 22631) {
         throw "A currently supported Windows 11 x64 host at version 23H2 (build 22631) or newer is required. Windows 10 is not certified for this Private Server preview."
     }
-    Assert-FbSafeOperatorPath $StateDirectory "State directory"
-    Assert-FbSafeOperatorPath $RepositoryRoot "Release directory"
-    if (-not (Test-FbTcpPortAvailable $Port)) { throw "Loopback port $Port is already in use. Choose another -Port." }
 
     try {
         $computer = Get-CimInstance Win32_ComputerSystem -ErrorAction Stop
@@ -1030,6 +1106,7 @@ function Invoke-FbSetup {
         $now = (Get-Date).ToUniversalTime().ToString("o")
         $state = [pscustomobject][ordered]@{
             formatVersion        = $script:SupportedStateFormat
+            hostProfile          = Get-FbHostProfile
             status               = "initializing"
             instanceId           = $instanceId
             composeProject       = "filingbridge-" + $instanceId.Replace("-", "").Substring(0, 12)
@@ -1399,7 +1476,7 @@ function Invoke-FbTailscale {
         foreach ($line in $result.Output) { Write-Host (Protect-PrivateServerText $line) }
         return
     }
-    if (-not $DryRun -and $null -eq $script:PrivateServerCommandInvoker -and -not (Test-FbWindowsAdministrator)) {
+    if (-not $DryRun -and $null -eq $script:PrivateServerCommandInvoker -and (Test-FbWindowsHost) -and -not (Test-FbWindowsAdministrator)) {
         throw "Changing Tailscale Serve on Windows requires an Administrator terminal. Reopen the terminal as Administrator and retry only this command."
     }
     if ($normalized -eq "enable") {
@@ -2872,7 +2949,18 @@ function Get-FbBootEvidence {
             startedAtUtc = $testBoot.ToUniversalTime().ToString("o")
         }
     }
-    if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) { throw "The reboot acceptance check is supported only on Windows." }
+    if (Test-FbLinuxHost) {
+        $bootIdPath = "/proc/sys/kernel/random/boot_id"
+        if (-not (Test-Path -LiteralPath $bootIdPath -PathType Leaf)) { throw "Linux boot identity is unavailable." }
+        $bootId = (Get-Content -LiteralPath $bootIdPath -Raw).Trim().ToLowerInvariant()
+        if ($bootId -cnotmatch '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') { throw "Linux boot identity is malformed." }
+        $btimeLine = Get-Content -LiteralPath "/proc/stat" | Where-Object { $_ -match '^btime\s+(?<seconds>[1-9][0-9]*)$' } | Select-Object -First 1
+        if ($null -eq $btimeLine) { throw "Linux boot start time is unavailable." }
+        $btimeMatch = [regex]::Match([string]$btimeLine, '^btime\s+(?<seconds>[1-9][0-9]*)$')
+        $started = [DateTimeOffset]::FromUnixTimeSeconds([long]$btimeMatch.Groups['seconds'].Value)
+        return [pscustomobject][ordered]@{ identity = "linux-boot-$bootId"; startedAtUtc = $started.ToUniversalTime().ToString("o") }
+    }
+    if (-not (Test-FbWindowsHost)) { throw "The reboot acceptance check requires Windows or Ubuntu Linux." }
     $operatingSystem = Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction Stop
     $lastBoot = [DateTimeOffset]$operatingSystem.LastBootUpTime
     return [pscustomobject][ordered]@{
@@ -2924,7 +3012,7 @@ function Invoke-FbRebootCheck {
         return
     }
     if ($DryRun) {
-        Write-Host "DRY RUN: $normalizedAction the Windows reboot persistence acceptance check"
+        Write-Host "DRY RUN: $normalizedAction the host reboot persistence acceptance check"
         return
     }
     if ($normalizedAction -eq "prepare") {
@@ -2932,11 +3020,11 @@ function Invoke-FbRebootCheck {
         $running = @(Get-FbRunningServices $State $ComposeFile)
         foreach ($required in @("db", "api", "frontend")) { if ($running -notcontains $required) { throw "Cannot prepare reboot evidence because '$required' is not running." } }
         Wait-FbHttpHealth -Port ([int]$State.port)
-        $tables = @(Get-FbImportantTableEvidence $State $ComposeFile "accounts" "Read important-table fingerprints from the database before Windows reboot")
+        $tables = @(Get-FbImportantTableEvidence $State $ComposeFile "accounts" "Read important-table fingerprints from the database before host reboot")
         $bootBefore = Get-FbBootEvidence
         $record = [ordered]@{
             schemaVersion = "filingbridge.private-server.reboot-check/v2"; status = "pending"
-            instanceId = [string]$State.instanceId; releaseVersion = [string]$State.releaseVersion
+            hostProfile = Get-FbHostProfile; instanceId = [string]$State.instanceId; releaseVersion = [string]$State.releaseVersion
             releaseCommitSha = [string]$State.releaseCommitSha; preparedAtUtc = (Get-Date).ToUniversalTime().ToString("o")
             composeProject = [string]$State.composeProject; composeFileSha256 = [string]$State.composeFileSha256
             acceptanceContract = "release-bound-auto-restart/v1"
@@ -2948,7 +3036,8 @@ function Invoke-FbRebootCheck {
         }
         Write-FbJsonAtomic -Path $pendingPath -Value $record
         Set-FbRestrictedAcl $pendingPath
-        Write-Host "Reboot check prepared. Reboot Windows normally, wait for Docker Desktop, then run: FilingBridge.cmd reboot-check verify"
+        $launcher = if (Test-FbLinuxHost) { "./filingbridge" } else { "FilingBridge.cmd" }
+        Write-Host "Reboot check prepared. Reboot the host normally, wait for Docker, then run: $launcher reboot-check verify"
         return
     }
     if (-not (Test-Path -LiteralPath $pendingPath -PathType Leaf)) { throw "No prepared reboot acceptance record was found." }
@@ -2972,7 +3061,7 @@ function Invoke-FbRebootCheck {
         }
     }
     $bootAfter = Get-FbBootEvidence
-    if ([string]$bootAfter.identity -ceq [string]$pending.bootIdentityBefore) { throw "Windows has not rebooted since this check was prepared." }
+    if ([string]$bootAfter.identity -ceq [string]$pending.bootIdentityBefore) { throw "The host has not rebooted since this check was prepared." }
     $running = @(Get-FbRunningServices $State $ComposeFile)
     foreach ($required in @("db", "api", "frontend")) { if ($running -notcontains $required) { throw "Reboot persistence failed because '$required' did not return automatically." } }
     $runtimeAfter = @(Get-FbRebootRuntimeEvidence $State $ComposeFile)
@@ -2983,15 +3072,15 @@ function Invoke-FbRebootCheck {
         if ($before.Count -ne 1 -or [string]$before[0].containerId -cne [string]$current.containerId -or
             [string]$before[0].startedAtUtc -ceq [string]$current.startedAtUtc -or
             $started -lt $bootStartedAfter -or $started -gt $bootStartedAfter.AddMinutes(30)) {
-            throw "Reboot persistence failed because '$($current.service)' was not the prepared container automatically restarted within 30 minutes of Windows boot."
+            throw "Reboot persistence failed because '$($current.service)' was not the prepared container automatically restarted within 30 minutes of host boot."
         }
     }
     Wait-FbHttpHealth -Port ([int]$State.port)
-    $tablesAfter = @(Get-FbImportantTableEvidence $State $ComposeFile "accounts" "Read important-table fingerprints from the database after Windows reboot")
-    Assert-FbImportantTableEvidenceMatches -Expected @($pending.importantTablesBefore) -Actual $tablesAfter -Description "Windows reboot persistence"
+    $tablesAfter = @(Get-FbImportantTableEvidence $State $ComposeFile "accounts" "Read important-table fingerprints from the database after host reboot")
+    Assert-FbImportantTableEvidenceMatches -Expected @($pending.importantTablesBefore) -Actual $tablesAfter -Description "Host reboot persistence"
     $completed = [ordered]@{
         schemaVersion = "filingbridge.private-server.reboot-check/v2"; status = "passed"
-        instanceId = [string]$State.instanceId; releaseVersion = [string]$State.releaseVersion
+        hostProfile = Get-FbHostProfile; instanceId = [string]$State.instanceId; releaseVersion = [string]$State.releaseVersion
         releaseCommitSha = [string]$State.releaseCommitSha; preparedAtUtc = [string]$pending.preparedAtUtc
         composeProject = [string]$State.composeProject; composeFileSha256 = [string]$State.composeFileSha256
         acceptanceContract = "release-bound-auto-restart/v1"
@@ -3011,7 +3100,7 @@ function Invoke-FbRebootCheck {
         Initialize-FbManagedOutputDirectory $resolvedOutput $State "Acceptance"
         Copy-Item -LiteralPath $completedPath -Destination (Join-Path $resolvedOutput ([IO.Path]::GetFileName($completedPath)))
     }
-    Write-Host "Windows reboot persistence passed with unchanged business-data fingerprints: $completedPath"
+    Write-Host "Host reboot persistence passed with unchanged business-data fingerprints: $completedPath"
 }
 
 function Invoke-FbLocalCheck {
@@ -3038,7 +3127,7 @@ function Invoke-FbLocalCheck {
     $tables = @(Get-FbImportantTableEvidence $State $ComposeFile "accounts" "Read important-table fingerprints from the local acceptance database")
     $report = [ordered]@{
         schemaVersion = "filingbridge.private-server.local-check/v1"; status = "passed"
-        instanceId = [string]$State.instanceId; releaseVersion = [string]$State.releaseVersion
+        hostProfile = Get-FbHostProfile; instanceId = [string]$State.instanceId; releaseVersion = [string]$State.releaseVersion
         releaseCommitSha = [string]$State.releaseCommitSha; checkedAtUtc = (Get-Date).ToUniversalTime().ToString("o")
         deploymentMode = "PrivateServer"; runningServices = @("db", "api", "frontend")
         frontendBinding = "127.0.0.1:$($State.port)"; apiHostPortPublished = $false; databaseHostPortPublished = $false
@@ -3196,7 +3285,7 @@ function Invoke-FbRecoverHost {
         $now = (Get-Date).ToUniversalTime().ToString("o")
         $localOrigin = "http://localhost:$Port"
         $state = [pscustomobject][ordered]@{
-            formatVersion = $script:SupportedStateFormat; status = "recovering"; instanceId = $newInstanceId
+            formatVersion = $script:SupportedStateFormat; hostProfile = Get-FbHostProfile; status = "recovering"; instanceId = $newInstanceId
             composeProject = "filingbridge-" + $newInstanceId.Replace("-", "").Substring(0, 12)
             stateDirectory = $resolvedStateDirectory; releaseDirectory = $RepositoryRoot; secretDirectory = $secretDirectory
             environmentFile = Join-Path $resolvedStateDirectory $script:EnvironmentFileName; installedComposeFile = $installedComposeFile
@@ -3292,12 +3381,16 @@ function Invoke-FbDiagnose {
     param($State, [string]$ComposeFile, [string]$RepositoryRoot)
     $checks = New-Object System.Collections.Generic.List[object]
     $checks.Add([pscustomobject]@{ name = "state-format"; passed = ([int]$State.formatVersion -eq $script:SupportedStateFormat); detail = "format $($State.formatVersion)" })
+    $currentHostProfile = Get-FbHostProfile
+    $recordedHostProfile = [string](Get-FbProperty $State "hostProfile" $currentHostProfile)
+    $checks.Add([pscustomobject]@{ name = "host-profile"; passed = ($recordedHostProfile -ceq $currentHostProfile); detail = "$recordedHostProfile on $currentHostProfile" })
     $checks.Add([pscustomobject]@{ name = "state-directory"; passed = (Test-Path -LiteralPath ([string]$State.stateDirectory) -PathType Container); detail = [string]$State.stateDirectory })
     $checks.Add([pscustomobject]@{ name = "compose-file"; passed = (Test-Path -LiteralPath $ComposeFile -PathType Leaf); detail = $ComposeFile })
     try {
         $stateDrive = [IO.DriveInfo]::new([IO.Path]::GetPathRoot([string]$State.stateDirectory))
         $freeGiB = [Math]::Round($stateDrive.AvailableFreeSpace / 1GB, 1)
-        $checks.Add([pscustomobject]@{ name = "state-disk-free"; passed = ($stateDrive.AvailableFreeSpace -ge 5GB); detail = "$freeGiB GiB free (5 GiB operational floor; Docker VHDX capacity must also be monitored)" })
+        $diskDetail = if (Test-FbWindowsHost) { "$freeGiB GiB free (5 GiB operational floor; Docker VHDX capacity must also be monitored)" } else { "$freeGiB GiB free (5 GiB operational floor; Docker data-root capacity must also be monitored)" }
+        $checks.Add([pscustomobject]@{ name = "state-disk-free"; passed = ($stateDrive.AvailableFreeSpace -ge 5GB); detail = $diskDetail })
     } catch {
         $checks.Add([pscustomobject]@{ name = "state-disk-free"; passed = $false; detail = "could not read free space" })
     }
@@ -3466,24 +3559,28 @@ function Get-PrivateServerHelp {
     [CmdletBinding()]
     param()
     return @'
-FilingBridge Private Server (Windows x64)
+FilingBridge Private Server (Windows x64 / Ubuntu 24.04 x64)
 
 Usage:
-  FilingBridge.cmd setup -TenantName <name> -OwnerEmail <email> -OwnerName <name> [-ReleaseManifest <release.json>]
-  FilingBridge.cmd start | status | stop | logs
-  FilingBridge.cmd backup [-OutputDirectory <dir>] [-BackupRecipient <age-recipient>]
-  FilingBridge.cmd backup -PlaintextDatabaseOnly [-OutputDirectory <dir>]
-  FilingBridge.cmd verify-backup -BackupPath <path> [-AgeIdentityFile <identity>]
-  FilingBridge.cmd restore -BackupPath <path> [-AgeIdentityFile <identity>]
-  FilingBridge.cmd export-recovery-key -OutputDirectory <separate-offline-directory>
-  FilingBridge.cmd recover-host -BackupPath <path> -AgeIdentityFile <identity> -RecoveryAuthenticationKeyFile <key>
-  FilingBridge.cmd reboot-check prepare | verify | status
-  FilingBridge.cmd local-check [-OutputDirectory <evidence-directory>]
-  FilingBridge.cmd update -ReleaseManifest <release.json> [-BackupRecipient <recipient>] [-AgeIdentityFile <identity>]
-  FilingBridge.cmd owner-recovery [-OwnerEmail <email>]
-  FilingBridge.cmd tailscale enable | disable | status
-  FilingBridge.cmd diagnose | support-bundle | uninstall | purge-data
-  FilingBridge.cmd <command> -DryRun
+  <launcher> setup -TenantName <name> -OwnerEmail <email> -OwnerName <name> [-ReleaseManifest <release.json>]
+  <launcher> start | status | stop | logs
+  <launcher> backup [-OutputDirectory <dir>] [-BackupRecipient <age-recipient>]
+  <launcher> backup -PlaintextDatabaseOnly [-OutputDirectory <dir>]
+  <launcher> verify-backup -BackupPath <path> [-AgeIdentityFile <identity>]
+  <launcher> restore -BackupPath <path> [-AgeIdentityFile <identity>]
+  <launcher> export-recovery-key -OutputDirectory <separate-offline-directory>
+  <launcher> recover-host -BackupPath <path> -AgeIdentityFile <identity> -RecoveryAuthenticationKeyFile <key>
+  <launcher> reboot-check prepare | verify | status
+  <launcher> local-check [-OutputDirectory <evidence-directory>]
+  <launcher> update -ReleaseManifest <release.json> [-BackupRecipient <recipient>] [-AgeIdentityFile <identity>]
+  <launcher> owner-recovery [-OwnerEmail <email>]
+  <launcher> tailscale enable | disable | status
+  <launcher> diagnose | support-bundle | uninstall | purge-data
+  <launcher> <command> -DryRun
+
+Launchers:
+  Windows: FilingBridge.cmd
+  Ubuntu:  ./filingbridge
 
 Safety:
   setup never overwrites existing state; start never builds, migrates, or seeds; stop

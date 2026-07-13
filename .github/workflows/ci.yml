@@ -56,9 +56,17 @@ jobs:
         shell: pwsh
         run: ./scripts/test-private-compose.ps1
 
-      - name: Test Private Server Windows operator contract
+      - name: Test Private Server cross-platform operator contract
         shell: pwsh
         run: ./scripts/PrivateServer/Test-PrivateServer.ps1
+
+      - name: Test Ubuntu Private Server launcher contract
+        shell: bash
+        run: |
+          bash -n filingbridge scripts/verify-linux-private-host.sh
+          test -x filingbridge
+          test -x scripts/verify-linux-private-host.sh
+          ./filingbridge help | grep -F "Ubuntu 24.04 x64"
 
       - name: Test Private Server release bundle contract
         shell: pwsh

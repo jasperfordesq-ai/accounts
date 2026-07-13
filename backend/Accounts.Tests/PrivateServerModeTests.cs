@@ -92,12 +92,39 @@ public sealed class PrivateServerModeTests
         Assert.Contains("RecoveryAuthenticationKeyFile", dispatcher, StringComparison.Ordinal);
         Assert.Contains("Assert-FbBackupAuthenticationWithKey", module, StringComparison.Ordinal);
         Assert.Contains("Read important-table fingerprints from the recovered database", module, StringComparison.Ordinal);
-        Assert.Contains("Windows has not rebooted since this check was prepared", module, StringComparison.Ordinal);
+        Assert.Contains("The host has not rebooted since this check was prepared", module, StringComparison.Ordinal);
         Assert.Contains("scripts/smoke-production.ps1", builder, StringComparison.Ordinal);
         Assert.Contains("scripts/smoke-production.ps1", verifier, StringComparison.Ordinal);
         Assert.Contains("The coding path is implemented, but it has not yet passed", guide, StringComparison.Ordinal);
         Assert.Contains("Rule for awarding 1,000/1,000", readiness, StringComparison.Ordinal);
         Assert.Contains("qualified-accountant", readiness, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void UbuntuPrivateServerProfile_IsExplicitlyPackagedAndAcceptanceSeparated()
+    {
+        var root = RepositoryRoot();
+        var module = File.ReadAllText(Path.Combine(root, "scripts", "PrivateServer", "PrivateServer.psm1"));
+        var launcher = File.ReadAllText(Path.Combine(root, "filingbridge"));
+        var hostVerifier = File.ReadAllText(Path.Combine(root, "scripts", "verify-linux-private-host.sh"));
+        var builder = File.ReadAllText(Path.Combine(root, "scripts", "build-private-server-release.ps1"));
+        var guide = File.ReadAllText(Path.Combine(root, "Docs", "deployment", "private-server-linux.md"));
+        var cloud = File.ReadAllText(Path.Combine(root, "Docs", "deployment", "GOOGLE_CLOUD_PRIVATE_SERVER.md"));
+        var readiness = File.ReadAllText(Path.Combine(root, "Docs", "deployment", "LINUX_CLOUD_READINESS.md"));
+
+        Assert.Contains("ubuntu-x64", module, StringComparison.Ordinal);
+        Assert.Contains("Ubuntu 24.04 LTS x86-64", module, StringComparison.Ordinal);
+        Assert.Contains("/proc/sys/kernel/random/boot_id", module, StringComparison.Ordinal);
+        Assert.Contains("systemctl", module, StringComparison.Ordinal);
+        Assert.Contains("exec pwsh", launcher, StringComparison.Ordinal);
+        Assert.Contains("docker-boot-enabled", hostVerifier, StringComparison.Ordinal);
+        Assert.Contains("filingbridge", builder, StringComparison.Ordinal);
+        Assert.Contains("private-server-linux.md", builder, StringComparison.Ordinal);
+        Assert.Contains("never Funnel", guide, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("e2-standard-2", cloud, StringComparison.Ordinal);
+        Assert.Contains("no application ports are exposed publicly", cloud, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Implementation alone receives no live-acceptance marks", readiness, StringComparison.Ordinal);
+        Assert.Contains("independent 600/1,000", readiness, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -70,8 +70,9 @@ requireText("container-supply-chain-protected", "Protected publication must use 
 requireText("Trusted candidate supply-chain evidence is invalid or mismatched", "Protected publication must re-verify trusted candidate identity and report binding.");
 requireText("Private Server release version must be valid semantic version syntax", "The protected job must validate release semantic-version syntax before using it as an asset name.");
 requireText("manifest.generatedAtUtc", "The protected job must require a UTC release-manifest generation timestamp.");
-requireText("@($manifest.supportedHosts).Count -ne 1", "The protected job must require exactly one supported host.");
-requireText("[string]$manifest.supportedHosts[0] -cne 'windows-x64'", "The protected job must require exactly windows-x64.");
+requireText("@($manifest.supportedHosts).Count -ne 2", "The protected job must require exactly two supported hosts.");
+requireText("@($manifest.supportedHosts) -notcontains 'windows-x64'", "The protected job must require windows-x64.");
+requireText("@($manifest.supportedHosts) -notcontains 'ubuntu-x64'", "The protected job must require ubuntu-x64.");
 requireText("Prepared release manifest files inventory must be nonempty", "The protected job must reject an empty manifest file inventory.");
 requireText("Assert-PackagedTrustedEvidence", "The protected job must compare packaged evidence with independently downloaded trusted evidence.");
 requireText("container-supply-chain-verification-report.json", "The protected job must retain the trusted supply-chain verification report.");
@@ -159,14 +160,19 @@ if (prepareStart < 0 || publishStart < 0 || publishStart <= prepareStart) {
   }
   for (const requiredPackageFile of [
     "FilingBridge.cmd",
+    "filingbridge",
     "compose.private.yml",
     ".env.private.example",
     "scripts/private-server.ps1",
     "scripts/PrivateServer/PrivateServer.psm1",
     "scripts/smoke-production.ps1",
+    "scripts/verify-linux-private-host.sh",
     "Docs/deployment/README.md",
     "Docs/deployment/private-server.md",
+    "Docs/deployment/private-server-linux.md",
+    "Docs/deployment/GOOGLE_CLOUD_PRIVATE_SERVER.md",
     "Docs/deployment/LOCAL_WINDOWS_READINESS.md",
+    "Docs/deployment/LINUX_CLOUD_READINESS.md",
     "deploy/private/release-manifest.schema.json",
     "README.md",
     "LICENSE",

@@ -278,10 +278,11 @@ try {
     $releaseRoot = Join-Path $testRoot "synthetic-release"
     New-Item -ItemType Directory -Path $releaseRoot | Out-Null
     $requiredReleaseFiles = @(
-        "FilingBridge.cmd", "compose.private.yml", ".env.private.example",
+        "FilingBridge.cmd", "filingbridge", "compose.private.yml", ".env.private.example",
         "scripts/private-server.ps1", "scripts/PrivateServer/PrivateServer.psm1",
-        "scripts/smoke-production.ps1",
-        "Docs/deployment/README.md", "Docs/deployment/private-server.md", "Docs/deployment/LOCAL_WINDOWS_READINESS.md",
+        "scripts/smoke-production.ps1", "scripts/verify-linux-private-host.sh",
+        "Docs/deployment/README.md", "Docs/deployment/private-server.md", "Docs/deployment/private-server-linux.md",
+        "Docs/deployment/GOOGLE_CLOUD_PRIVATE_SERVER.md", "Docs/deployment/LOCAL_WINDOWS_READINESS.md", "Docs/deployment/LINUX_CLOUD_READINESS.md",
         "deploy/private/release-manifest.schema.json", "README.md", "LICENSE", "NOTICE",
         "THIRD_PARTY_NOTICES.md", "CONTRIBUTORS.md")
     foreach ($relative in $requiredReleaseFiles) {
@@ -296,7 +297,7 @@ try {
         version = "1.2.3"
         generatedAtUtc = [DateTime]::UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
         candidate = [ordered]@{ commitSha = ("a" * 40); githubActionsRunUrl = "https://github.com/jasperfordesq-ai/accounts/actions/runs/1" }
-        supportedHosts = @("windows-x64")
+        supportedHosts = @("windows-x64", "ubuntu-x64")
         images = [ordered]@{
             backend = [ordered]@{ exactDigestReference = "ghcr.io/jasperfordesq-ai/accounts-api@sha256:$('1' * 64)" }
             frontend = [ordered]@{ exactDigestReference = "ghcr.io/jasperfordesq-ai/accounts-frontend@sha256:$('2' * 64)" }

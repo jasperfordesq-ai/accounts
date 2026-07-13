@@ -92,6 +92,22 @@ the code or mocks pass: the exact candidate still needs a real reboot verify and
 replacement-host recovery drill.
 This local score never changes the independent 600/1,000 statutory/Public Production audit.
 
+## Ubuntu / Google Cloud Private Server workstream — 13 July 2026
+
+The owner has no spare Windows/Hyper-V host and has directed preparation of an Ubuntu 24.04 x64
+Private Server for a Google Cloud VM with Tailscale Serve. The Linux launcher reuses the hardened
+cross-platform operator and the exact `PrivateServer` Compose/runtime contract; Linux-specific
+boundaries cover POSIX permissions, Ubuntu/Docker prerequisites, systemd boot persistence, Linux
+boot identity, release host declarations, and Google Cloud network guidance. Canonical instructions
+are `Docs/deployment/private-server-linux.md`, `Docs/deployment/GOOGLE_CLOUD_PRIVATE_SERVER.md`, and
+`Docs/deployment/LINUX_CLOUD_READINESS.md`.
+
+Ubuntu/Google Cloud is a separate operational-preview acceptance track. Do not award live Linux
+points from code, mocks, Windows evidence, or CI. It does not close the two remaining Windows gates
+and never changes the independent 600/1,000 statutory/Public Production audit. Never expose
+application ports in a VPC firewall, use Tailscale Funnel, run `compose.yml`, or weaken the shared
+tenant/auth/RLS/audit/recovery controls.
+
 ## Active Goal Handoff
 
 Goal: finish the Irish statutory accounts platform so it is production-ready code-wise,

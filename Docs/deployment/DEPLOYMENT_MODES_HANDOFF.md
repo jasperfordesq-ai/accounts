@@ -1,7 +1,7 @@
 # Deployment Modes Workstream Handoff
 
-> **Status: Private Server implemented as a Windows x64 operational preview; live acceptance is
-> incomplete.**
+> **Status: Windows x64 is an evidence-backed operational preview; Ubuntu 24.04 x64 is an
+> implemented coding preview awaiting live Google Cloud acceptance.**
 >
 > This document records the implemented three-mode contract, current verification boundary, and
 > remaining work. Do not interpret implementation or an automated pass as statutory acceptance,
@@ -23,7 +23,8 @@ FilingBridge supports three deliberately separate operator models:
 
 1. **Development** for contributors changing code on localhost.
 2. **Private Server** for a person or small organisation running a compiled installation on a
-   trusted Windows x64 computer, with optional access for selected users through Tailscale Serve.
+   trusted Windows x64 or Ubuntu 24.04 x64 computer, with optional access for selected users through
+   Tailscale Serve.
 3. **Public Production** for an internet-reachable service behind a reviewed HTTPS ingress and the
    full public operations/evidence contract.
 
@@ -137,6 +138,7 @@ slug/email pair. Generic login errors and keyed rejection telemetry remain in pl
 | `compose.private.yml` | Compiled private topology, one-shot role/migration/initialisation jobs, health checks, exact image inputs, named data volume |
 | `.env.private.example` | Names/placeholders only; generated secrets live outside the checkout |
 | `FilingBridge.cmd` | Discoverable Windows launcher |
+| `filingbridge` | Discoverable Ubuntu launcher into the shared hardened operator |
 | `scripts/private-server.ps1` | Command dispatcher |
 | `scripts/PrivateServer/PrivateServer.psm1` | Setup, lifecycle, Tailscale, recovery, backup/update, diagnostics, uninstall/purge implementation |
 | `scripts/verify-private-compose.ps1` | Static private topology/mode invariant verifier |
@@ -146,10 +148,23 @@ slug/email pair. Generic login errors and keyed rejection telemetry remain in pl
 | `.github/workflows/private-server-release.yml` | Manual two-stage candidate preparation and protected draft-release publication |
 | `deploy/private/release-manifest.schema.json` | Release manifest contract |
 | `Docs/deployment/private-server.md` | Authoritative Windows operator guide |
+| `Docs/deployment/private-server-linux.md` | Ubuntu 24.04 x64 operator guide |
+| `Docs/deployment/GOOGLE_CLOUD_PRIVATE_SERVER.md` | Google Cloud VM/network/install plan |
+| `Docs/deployment/LINUX_CLOUD_READINESS.md` | Separate live Linux/cloud acceptance matrix |
 | `Docs/deployment/public-production.md` | Proxy-neutral public entry guide |
 | `deploy/{caddy,apache,nginx}/` | Optional Public Production ingress examples |
 
 The Public Production examples are not Private Server dependencies.
+
+### Ubuntu / Google Cloud coding profile (13 July 2026)
+
+The release contract now supports `ubuntu-x64` alongside `windows-x64`. Ubuntu uses the same
+compiled images, Compose topology, generated secrets, authentication, tenant/RLS, backup,
+restore/update, Owner recovery, Tailscale ownership, and destructive-action controls. The shared
+PowerShell operator adds Ubuntu 24.04/x86-64 resource checks, POSIX `0700`/`0600` permissions,
+Linux state paths, Docker systemd persistence checks, Linux kernel boot identity, and an executable
+shell launcher. This is coding preparation, not a live-accepted deployment. Its score begins only
+when the exact Google Cloud matrix is exercised and retained.
 
 ## Operator contract
 
