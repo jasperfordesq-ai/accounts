@@ -154,14 +154,19 @@ New-Item -ItemType Directory -Force -Path $stageRoot | Out-Null
 try {
     $requiredItems = @(
         "FilingBridge.cmd",
+        "filingbridge",
         "compose.private.yml",
         ".env.private.example",
         "scripts/private-server.ps1",
         "scripts/PrivateServer/PrivateServer.psm1",
         "scripts/smoke-production.ps1",
+        "scripts/verify-linux-private-host.sh",
         "Docs/deployment/README.md",
         "Docs/deployment/private-server.md",
+        "Docs/deployment/private-server-linux.md",
+        "Docs/deployment/GOOGLE_CLOUD_PRIVATE_SERVER.md",
         "Docs/deployment/LOCAL_WINDOWS_READINESS.md",
+        "Docs/deployment/LINUX_CLOUD_READINESS.md",
         "deploy/private/release-manifest.schema.json",
         "README.md",
         "LICENSE",
@@ -198,7 +203,7 @@ try {
             commitSha = $CandidateCommitSha
             githubActionsRunUrl = $GitHubActionsRunUrl
         }
-        supportedHosts = @("windows-x64")
+        supportedHosts = @("windows-x64", "ubuntu-x64")
         images = [ordered]@{
             backend = [ordered]@{ exactDigestReference = $backendReference }
             frontend = [ordered]@{ exactDigestReference = $frontendReference }

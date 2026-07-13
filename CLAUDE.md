@@ -72,8 +72,8 @@ accounts/
 Deployment-specific files extend that core tree:
 
 - `compose.yml` — contributor Development only; known credentials, seed state, published ports;
-- `compose.private.yml` + `FilingBridge.cmd` + `scripts/PrivateServer/` — compiled Windows x64
-  Private Server operational preview;
+- `compose.private.yml` + `FilingBridge.cmd`/`filingbridge` + `scripts/PrivateServer/` — compiled
+  Windows x64 and Ubuntu 24.04 x64 Private Server operational previews;
 - `compose.production.yml` — hardened Public Production stack;
 - `Docs/deployment/` — authoritative mode chooser and per-mode guides; and
 - `deploy/{caddy,apache,nginx}/` — optional Public Production ingress examples only.
@@ -325,8 +325,8 @@ mode's environment.
 - **Development**: `compose.yml` or the hybrid local-SDK workflow in `LOCAL_SETUP.md`. Local
   contributors only; known credentials/demo allowances mean it must never be shared through
   Tailscale, a LAN, or public ingress.
-- **Private Server**: Windows x64 operational preview using `compose.private.yml` and
-  `FilingBridge.cmd`. It runs compiled production builds, publishes only the frontend on IPv4
+- **Private Server**: Windows x64 and Ubuntu 24.04 x64 operational previews using
+  `compose.private.yml` and the platform launcher. They run compiled production builds, publish only the frontend on IPv4
   loopback, keeps API/PostgreSQL unexposed, and may add selected-user access through host-level
   Tailscale Serve. Lifecycle commands are installation-locked; same-installation backups are
   HMAC-authenticated before restore, use host staging, and have a current 1.9 GB complete-payload
@@ -336,6 +336,8 @@ mode's environment.
   forced-failure recovery, and candidate-bound CI have passed. The evidence-backed local Windows
   score is 980/1,000; real reboot verification and clean replacement-host recovery remain open.
   Tailscale is optional and was not enabled for the loopback-only acceptance path.
+  Ubuntu/Google Cloud has a separate zero-until-live acceptance matrix; implementation must not be
+  counted as Windows, statutory, or Public Production evidence.
 - **Public Production**: `compose.production.yml` behind an approved HTTPS ingress. Caddy, Apache,
   and Nginx are optional examples, not runtime dependencies. See
   `Docs/deployment/public-production.md` and `Docs/operations/production-runbook.md`.

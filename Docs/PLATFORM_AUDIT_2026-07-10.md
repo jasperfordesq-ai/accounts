@@ -83,6 +83,15 @@ update supersedes the operational limitations in the dated 11 July note only. It
 this audit's independent **600/1,000** score or close any professional, statutory, external,
 governance, Public Production, or multi-user acceptance gate.
 
+### Ubuntu / Google Cloud preparation note — 13 July 2026
+
+The repository now contains a separate Ubuntu 24.04 x64 Private Server coding profile and Google
+Cloud acceptance matrix. It reuses the bounded `PrivateServer` runtime and does not expose
+Development or relax Public Production. No live Linux/cloud marks are awarded until an exact
+release completes the clean VM, network, Owner/MFA, reboot, encrypted recovery/update,
+replacement-host, and Tailscale evidence in `Docs/deployment/LINUX_CLOUD_READINESS.md`. This work
+does not alter the independent **600/1,000** score or any professional/external gate.
+
 ## Non-negotiable product boundary
 
 1. Direct CRO and ROS submission remains unsupported. The platform may only generate artifacts

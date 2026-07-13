@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+operator="$root/scripts/private-server.ps1"
+
+if [[ ! -f "$operator" ]]; then
+  printf 'FilingBridge operator script is missing: %s\n' "$operator" >&2
+  exit 1
+fi
+if ! command -v pwsh >/dev/null 2>&1; then
+  printf 'PowerShell 7 (pwsh) is required. Follow Docs/deployment/private-server-linux.md.\n' >&2
+  exit 1
+fi
+
+exec pwsh -NoLogo -NoProfile -File "$operator" "$@"

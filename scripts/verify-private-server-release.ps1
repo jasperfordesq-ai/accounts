@@ -118,8 +118,10 @@ try {
             ($ExpectedGitHubActionsRunUrl -and [string]$manifest.candidate.githubActionsRunUrl -cne $ExpectedGitHubActionsRunUrl)) {
             Add-Failure $failures "release.json Actions run URL is invalid or mismatched."
         }
-        if (@($manifest.supportedHosts).Count -ne 1 -or [string]$manifest.supportedHosts[0] -ne "windows-x64") {
-            Add-Failure $failures "release.json must honestly support exactly windows-x64."
+        if (@($manifest.supportedHosts).Count -ne 2 -or
+            @($manifest.supportedHosts) -notcontains "windows-x64" -or
+            @($manifest.supportedHosts) -notcontains "ubuntu-x64") {
+            Add-Failure $failures "release.json must honestly support exactly windows-x64 and ubuntu-x64."
         }
         foreach ($component in @("backend", "frontend", "postgres")) {
             $reference = [string]$manifest.images.$component.exactDigestReference
@@ -173,13 +175,18 @@ try {
         }
         foreach ($required in @(
             "FilingBridge.cmd",
+            "filingbridge",
             "compose.private.yml",
             ".env.private.example",
             "scripts/private-server.ps1",
             "scripts/PrivateServer/PrivateServer.psm1",
             "scripts/smoke-production.ps1",
+            "scripts/verify-linux-private-host.sh",
             "Docs/deployment/private-server.md",
+            "Docs/deployment/private-server-linux.md",
+            "Docs/deployment/GOOGLE_CLOUD_PRIVATE_SERVER.md",
             "Docs/deployment/LOCAL_WINDOWS_READINESS.md",
+            "Docs/deployment/LINUX_CLOUD_READINESS.md",
             "LICENSE",
             "NOTICE")) {
             if (-not $seen.Contains($required)) {

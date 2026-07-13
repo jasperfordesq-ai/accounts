@@ -56,9 +56,23 @@ jobs:
         shell: pwsh
         run: ./scripts/test-private-compose.ps1
 
-      - name: Test Private Server Windows operator contract
+      - name: Test Private Server cross-platform operator contract
         shell: pwsh
         run: ./scripts/PrivateServer/Test-PrivateServer.ps1
+
+      - name: Test Ubuntu Private Server launcher contract
+        shell: bash
+        run: |
+          bash -n filingbridge scripts/verify-linux-private-host.sh
+          test -x filingbridge
+          test -x scripts/verify-linux-private-host.sh
+          export FILINGBRIDGE_VERIFY_LIB_ONLY=1
+          source scripts/verify-linux-private-host.sh
+          unset FILINGBRIDGE_VERIFY_LIB_ONLY
+          ! compose_at_least_2_20 2.19.9
+          compose_at_least_2_20 2.20.0
+          compose_at_least_2_20 v3.0.0
+          ./filingbridge help | grep -F "Ubuntu 24.04 x64"
 
       - name: Test Private Server release bundle contract
         shell: pwsh

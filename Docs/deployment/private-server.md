@@ -1,5 +1,9 @@
 # FilingBridge Private Server
 
+This page is the Windows operator guide. For Ubuntu 24.04 x64, use
+[Private Server on Ubuntu](private-server-linux.md) and the
+[Google Cloud plan](GOOGLE_CLOUD_PRIVATE_SERVER.md).
+
 > **Operational preview:** the Private Server code and operator contract are independently
 > versioned from FilingBridge's statutory acceptance. Do not use generated outputs for real CRO or
 > Revenue work until the live audit's named qualified-accountant and external-validation gates are

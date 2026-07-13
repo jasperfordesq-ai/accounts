@@ -10,7 +10,7 @@ exposure and operator model, not from which command happens to start successfull
 | Question | Use |
 | --- | --- |
 | Are you changing source code, running tests, or exploring seeded sample data? | [Development](../../LOCAL_SETUP.md) |
-| Is one person or small organisation running a compiled copy on a trusted computer, with optional access only through Tailscale Serve? | [Private Server](private-server.md) |
+| Is one person or small organisation running a compiled copy on a trusted computer, with optional access only through Tailscale Serve? | [Private Server for Windows](private-server.md) or [Ubuntu](private-server-linux.md) |
 | Is the service internet-reachable or operated for unrelated organisations? | [Public Production](public-production.md) |
 
 ## Supported-mode contract
@@ -30,6 +30,11 @@ exposure and operator model, not from which command happens to start successfull
 Private Server and Public Production both run production builds. Private Server is not
 Development with a different password, and it is not Public Production with arbitrary checks
 disabled. Only the exact `PrivateServer` deployment marker selects its bounded policy.
+
+Ubuntu/Google Cloud remains a separate operational-preview and acceptance track. Use the
+[Google Cloud VM plan](GOOGLE_CLOUD_PRIVATE_SERVER.md) and
+[Linux readiness matrix](LINUX_CLOUD_READINESS.md); do not transfer Linux evidence into the local
+Windows score.
 
 ## Availability and threat boundaries
 
