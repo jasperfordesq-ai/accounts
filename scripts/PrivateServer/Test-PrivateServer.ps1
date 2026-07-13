@@ -351,6 +351,14 @@ try {
     $state = ([IO.File]::ReadAllText($statePath, $testUtf8)) | ConvertFrom-Json
     $global:FbFakeState = $state
     Assert-True ($state.status -eq "ready") "successful setup must record ready state"
+    if ([Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([Runtime.InteropServices.OSPlatform]::Linux)) {
+        $mountedSecretMode = (& stat -c '%a' -- (Join-Path $state.secretDirectory "accounts_api_key")).Trim()
+        $hostOnlySecretMode = (& stat -c '%a' -- (Join-Path $state.secretDirectory "backup_authentication_key")).Trim()
+        $secretDirectoryMode = (& stat -c '%a' -- $state.secretDirectory).Trim()
+        Assert-True ($mountedSecretMode -ceq "644") "container-mounted Linux secrets must be readable by non-root container users"
+        Assert-True ($hostOnlySecretMode -ceq "600") "host-only Linux secrets must remain owner-only"
+        Assert-True ($secretDirectoryMode -ceq "700") "the Linux secret directory must prevent traversal by other host users"
+    }
     Assert-True ($state.composeProject -match '^filingbridge-[a-f0-9]{12}$') "setup must generate a unique Compose project"
     $parsedInstanceId = [Guid]::Empty
     Assert-True ([Guid]::TryParse([string]$state.instanceId, [ref]$parsedInstanceId)) "setup must generate an installation GUID"

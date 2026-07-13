@@ -17,6 +17,20 @@ $script:RecoveryCriticalSecrets = @(
     "mfa_encryption_key",
     "backup_authentication_key"
 )
+$script:ContainerMountedSecrets = @(
+    "postgres_password",
+    "postgres_application_password",
+    "accounts_migration_connection_string",
+    "accounts_application_connection_string",
+    "auth_session_signing_key",
+    "audit_integrity_signing_key",
+    "database_tenant_context_key",
+    "identity_hmac_key",
+    "mfa_encryption_key",
+    "accounts_api_key_hash",
+    "accounts_api_key",
+    "private_initial_owner_password"
+)
 $script:MaximumCompleteBackupArchiveBytes = 1900MB
 
 function Test-FbWindowsHost {
@@ -211,9 +225,13 @@ function Write-FbJsonAtomic {
 }
 
 function Set-FbRestrictedAcl {
-    param([Parameter(Mandatory = $true)][string]$Path)
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [switch]$ContainerReadable
+    )
     if (-not (Test-FbWindowsHost)) {
-        $mode = if ((Get-Item -LiteralPath $Path -Force).PSIsContainer) { "700" } else { "600" }
+        $item = Get-Item -LiteralPath $Path -Force
+        $mode = if ($item.PSIsContainer) { "700" } elseif ($ContainerReadable) { "644" } else { "600" }
         $null = Invoke-FbNative -FilePath "chmod" -Arguments @($mode, "--", $Path) -Description "Restrict private state permissions" -Mutating
         $stat = Invoke-FbNative -FilePath "stat" -Arguments @("-c", "%a|%u", "--", $Path) -Description "Verify private state permissions"
         $identity = Invoke-FbNative -FilePath "id" -Arguments @("-u") -Description "Verify private state owner"
@@ -259,6 +277,12 @@ function Set-FbRestrictedAcl {
     foreach ($rule in @($verifiedAcl.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier]))) {
         if ($allowedSids -notcontains $rule.IdentityReference.Value) { throw "Private Server path retains an unexpected NTFS identity: $Path" }
     }
+}
+
+function Set-FbSecretAcl {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    $containerReadable = (Split-Path -Leaf $Path) -in $script:ContainerMountedSecrets
+    Set-FbRestrictedAcl -Path $Path -ContainerReadable:$containerReadable
 }
 
 function New-PrivateServerRandomSecret {
@@ -968,7 +992,7 @@ function New-FbInitialSecrets {
     foreach ($entry in $secrets.GetEnumerator()) {
         $path = Join-Path $SecretDirectory $entry.Key
         Write-FbTextExclusive -Path $path -Value ([string]$entry.Value)
-        Set-FbRestrictedAcl -Path $path
+        Set-FbSecretAcl -Path $path
     }
 }
 
@@ -982,7 +1006,7 @@ function Remove-FbEphemeralOwnerPassword {
     # inactive. Retain a deliberately invalid, non-secret sentinel at the same path so
     # routine lifecycle commands continue to render after the real password is erased.
     Write-FbTextExclusive -Path $path -Value "INITIALIZATION-COMPLETE-NO-PASSWORD"
-    Set-FbRestrictedAcl -Path $path
+    Set-FbSecretAcl -Path $path
 }
 
 function Wait-FbUriHealth {
@@ -1190,7 +1214,7 @@ function Invoke-FbSetup {
             try {
                 if (Test-Path -LiteralPath $ephemeral) { Remove-Item -LiteralPath $ephemeral -Force -ErrorAction SilentlyContinue }
                 Write-FbTextExclusive -Path $ephemeral -Value "INITIALIZATION-COMPLETE-NO-PASSWORD"
-                Set-FbRestrictedAcl -Path $ephemeral
+                Set-FbSecretAcl -Path $ephemeral
             } catch { }
         }
         $ownerPassword = $null
@@ -2548,7 +2572,7 @@ function New-FbMergedSecretDirectory {
     # including sessions captured at the backup point. Other recovery-critical keys
     # retain audit/MFA/identity continuity; only the session-signing key is rotated.
     [IO.File]::WriteAllText((Join-Path $temporary "auth_session_signing_key"), (New-PrivateServerRandomSecret), $script:Utf8NoBom)
-    foreach ($file in @(Get-ChildItem -LiteralPath $temporary -File -Force)) { Set-FbRestrictedAcl $file.FullName }
+    foreach ($file in @(Get-ChildItem -LiteralPath $temporary -File -Force)) { Set-FbSecretAcl $file.FullName }
     return $temporary
 }
 
@@ -3270,12 +3294,12 @@ function Invoke-FbRecoverHost {
         foreach ($required in @(Get-FbRequiredRecoveryPaths | Where-Object { $_ -like "state/secrets/*" })) {
             $name = Split-Path $required -Leaf
             Copy-Item -LiteralPath (Join-Path $recoveredSecrets $name) -Destination (Join-Path $secretDirectory $name)
-            Set-FbRestrictedAcl (Join-Path $secretDirectory $name)
+            Set-FbSecretAcl (Join-Path $secretDirectory $name)
         }
         Write-FbTextExclusive -Path (Join-Path $secretDirectory "private_initial_owner_password") -Value "RECOVERED-HOST-NO-INITIAL-PASSWORD"
-        Set-FbRestrictedAcl (Join-Path $secretDirectory "private_initial_owner_password")
+        Set-FbSecretAcl (Join-Path $secretDirectory "private_initial_owner_password")
         [IO.File]::WriteAllText((Join-Path $secretDirectory "auth_session_signing_key"), (New-PrivateServerRandomSecret), $script:Utf8NoBom)
-        Set-FbRestrictedAcl (Join-Path $secretDirectory "auth_session_signing_key")
+        Set-FbSecretAcl (Join-Path $secretDirectory "auth_session_signing_key")
         $installedComposeFile = Join-Path $resolvedStateDirectory "compose.private.installed.yml"
         Write-FbTextAtomic -Path $installedComposeFile -Value (Read-FbUtf8Text $composeFile)
         Set-FbRestrictedAcl $installedComposeFile

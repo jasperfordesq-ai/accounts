@@ -123,6 +123,8 @@ requireText("./scripts/test-private-compose.ps1", "CI must exercise the Private 
 requireText("./scripts/PrivateServer/Test-PrivateServer.ps1", "CI must exercise the Private Server cross-platform operator contract.");
 requireText("./filingbridge help", "CI must exercise the Ubuntu Private Server launcher.");
 requireText("scripts/verify-linux-private-host.sh", "CI must syntax-check the Ubuntu Private Server host verifier.");
+requireText("! compose_at_least_2_20 2.19.9", "CI must reject Docker Compose releases below 2.20.");
+requireText("compose_at_least_2_20 2.20.0", "CI must accept the minimum supported Docker Compose release.");
 requireText("./scripts/test-private-server-release.ps1", "CI must exercise the Private Server release builder and archive verifier.");
 requireText("./scripts/verify-private-compose.ps1", "CI must enforce the Private Server compose contract.");
 requireText("docker compose -f compose.yml config --quiet", "CI must retain the contributor development compose configuration check.");
