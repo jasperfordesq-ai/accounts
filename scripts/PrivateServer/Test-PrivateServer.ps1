@@ -159,6 +159,10 @@ $fakeInvoker = {
     if (-not [string]::IsNullOrWhiteSpace($global:FbFailDescriptionPattern) -and $Description -match $global:FbFailDescriptionPattern) {
         return [pscustomobject]@{ ExitCode = 17; Output = @("synthetic controlled failure") }
     }
+    if ($FilePath -in @("chmod", "stat", "id")) {
+        $nativeOutput = @(& $FilePath @argumentStrings 2>&1)
+        return [pscustomobject]@{ ExitCode = $LASTEXITCODE; Output = $nativeOutput }
+    }
     if ($Description -in @("Validate the isolated Private Server topology", "Pull exact update image digests") -and -not [string]::IsNullOrWhiteSpace($global:FbMutateReleaseComposeOnValidate)) {
         [IO.File]::AppendAllText($global:FbMutateReleaseComposeOnValidate, "`n# synthetic post-verification source mutation", [Text.UTF8Encoding]::new($false))
         $global:FbMutateReleaseComposeOnValidate = ""
