@@ -21,7 +21,7 @@ check forty-gib-free bash -c '(( $(df --output=avail -k / | tail -1) >= 41943040
 check powershell-seven bash -c 'command -v pwsh >/dev/null && pwsh -NoProfile -Command "exit \$([int](\$PSVersionTable.PSVersion.Major -lt 7))"'
 check docker-engine bash -c 'docker version --format "{{.Server.Os}}" | grep -qx linux'
 check docker-compose bash -c 'docker compose version --short | grep -Eq "^[2-9][0-9]*\\.|^2\\.(2[0-9]|[3-9][0-9])\\."'
-check docker-boot-enabled bash -c 'systemctl is-enabled docker.service | grep -Eq "^enabled(-runtime)?$"'
+check docker-boot-enabled bash -c 'systemctl is-enabled docker.service | grep -qx enabled'
 check loopback-port-3500 bash -c '! ss -H -ltn "sport = :3500" | grep -q .'
 
 if command -v tailscale >/dev/null 2>&1; then

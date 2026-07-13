@@ -116,8 +116,12 @@ public sealed class PrivateServerModeTests
         Assert.Contains("Ubuntu 24.04 LTS x86-64", module, StringComparison.Ordinal);
         Assert.Contains("/proc/sys/kernel/random/boot_id", module, StringComparison.Ordinal);
         Assert.Contains("systemctl", module, StringComparison.Ordinal);
+        Assert.Contains("persistently enabled", module, StringComparison.Ordinal);
+        Assert.DoesNotContain("enabled-runtime", module, StringComparison.Ordinal);
         Assert.Contains("exec pwsh", launcher, StringComparison.Ordinal);
         Assert.Contains("docker-boot-enabled", hostVerifier, StringComparison.Ordinal);
+        Assert.Contains("grep -qx enabled", hostVerifier, StringComparison.Ordinal);
+        Assert.DoesNotContain("enabled-runtime", hostVerifier, StringComparison.Ordinal);
         Assert.Contains("filingbridge", builder, StringComparison.Ordinal);
         Assert.Contains("private-server-linux.md", builder, StringComparison.Ordinal);
         Assert.Contains("never Funnel", guide, StringComparison.OrdinalIgnoreCase);

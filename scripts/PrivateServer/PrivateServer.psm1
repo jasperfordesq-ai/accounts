@@ -844,7 +844,7 @@ function Assert-FbPrerequisites {
         $composeVersionMatch = [regex]::Match((($composeVersionResult.Output -join "").Trim()), '(?<version>\d+\.\d+\.\d+)')
         if (-not $composeVersionMatch.Success -or [Version]::Parse($composeVersionMatch.Groups['version'].Value) -lt [Version]::Parse("2.20.0")) { throw "Docker Compose 2.20.0 or newer is required." }
         $dockerEnabled = Invoke-FbNative -FilePath "systemctl" -Arguments @("is-enabled", "docker.service") -Description "Verify Docker boot persistence" -IgnoreExitCode
-        if ($dockerEnabled.ExitCode -ne 0 -or (($dockerEnabled.Output -join "").Trim()) -notin @("enabled", "enabled-runtime")) { throw "docker.service must be enabled for automatic restart after reboot." }
+        if ($dockerEnabled.ExitCode -ne 0 -or (($dockerEnabled.Output -join "").Trim()) -cne "enabled") { throw "docker.service must be persistently enabled for automatic restart after reboot." }
         $existingContainers = Invoke-FbNative -FilePath "docker" -Arguments @("ps", "--all", "--filter", "label=ie.filingbridge.deployment-mode=PrivateServer", "--format", "{{.ID}}") -Description "Detect an existing FilingBridge Private Server project"
         $existingVolumes = Invoke-FbNative -FilePath "docker" -Arguments @("volume", "ls", "--filter", "label=ie.filingbridge.deployment-mode=PrivateServer", "--format", "{{.Name}}") -Description "Detect an existing FilingBridge Private Server data volume"
         if (@($existingContainers.Output + $existingVolumes.Output | ForEach-Object { $_.Trim() } | Where-Object { $_ } | Select-Object -Unique).Count -gt 0) {
