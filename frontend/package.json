@@ -34,10 +34,10 @@
     "test": "npm run test:unit && npm run test:render && npm run test:readiness && npm run test:proxy && npm run test:auth && npm run test:api-client && npm run test:api-contract"
   },
   "dependencies": {
-    "@heroui/react": "3.2.1",
-    "@heroui/styles": "3.2.1",
+    "@heroui/react": "3.2.2",
+    "@heroui/styles": "3.2.2",
     "framer-motion": "12.42.2",
-    "lucide-react": "1.23.0",
+    "lucide-react": "1.25.0",
     "next": "16.2.10",
     "react": "19.2.7",
     "react-dom": "19.2.7",
