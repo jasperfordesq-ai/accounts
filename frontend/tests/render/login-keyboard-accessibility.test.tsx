@@ -150,6 +150,7 @@ describe("login keyboard accessibility", () => {
     await user.type(screen.getByRole("textbox", { name: "Email" }), "reviewer@example.test");
     await user.type(screen.getByLabelText("Password"), "correct horse battery staple");
     await user.click(screen.getByRole("button", { name: "Sign in" }));
+    expect(await screen.findByRole("img", { name: "Scan this QR code with your authenticator app" })).toBeVisible();
     await user.type(await screen.findByLabelText("6-digit authenticator code"), "123456");
     await user.click(screen.getByRole("button", { name: "Verify and enable MFA" }));
 
