@@ -1,9 +1,10 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, Input, Label, Spinner, TextField } from "@heroui/react";
 import { AlertCircle, LogIn } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/components/AuthProvider";
 import { isMfaChallenge, type MfaChallenge } from "@/lib/auth";
@@ -25,6 +26,7 @@ export default function LoginPage() {
   const [useRecoveryCode, setUseRecoveryCode] = useState(false);
   const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
   const [recoveryContinuation, setRecoveryContinuation] = useState<{ mustChangePassword: boolean } | null>(null);
+  const submissionInFlight = useRef(false);
 
   function finishLogin(user: { mustChangePassword: boolean }) {
     const returnTo = returnToFromLocation(
@@ -35,6 +37,8 @@ export default function LoginPage() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (submissionInFlight.current) return;
+    submissionInFlight.current = true;
     setError(null);
     setSubmitting(true);
 
@@ -53,13 +57,15 @@ export default function LoginPage() {
         setError(err instanceof Error ? err.message : "Sign in failed. Please try again.");
       }
     } finally {
+      submissionInFlight.current = false;
       setSubmitting(false);
     }
   }
 
   async function handleMfaSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!challenge) return;
+    if (!challenge || submissionInFlight.current) return;
+    submissionInFlight.current = true;
     setError(null);
     setSubmitting(true);
     try {
@@ -79,6 +85,7 @@ export default function LoginPage() {
         ? "The authenticator or recovery code was not accepted."
         : err instanceof Error ? err.message : "Authenticator verification failed.");
     } finally {
+      submissionInFlight.current = false;
       setSubmitting(false);
     }
   }
@@ -158,7 +165,20 @@ export default function LoginPage() {
                 {challenge.requiresEnrollment && challenge.enrollmentSecret && (
                   <div className="space-y-2 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-950 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-100">
                     <p className="font-semibold">Set up your authenticator</p>
-                    <p>Add this one-time setup key to a TOTP authenticator. It is encrypted at rest and will not be shown after enrollment.</p>
+                    <p>Scan this QR code with your authenticator app, then enter the 6-digit code it shows.</p>
+                    {challenge.otpAuthUri && (
+                      <div className="mx-auto w-fit rounded-lg bg-white p-2">
+                        <QRCodeSVG
+                          value={challenge.otpAuthUri}
+                          size={192}
+                          level="M"
+                          marginSize={2}
+                          role="img"
+                          aria-label="Scan this QR code with your authenticator app"
+                        />
+                      </div>
+                    )}
+                    <p>If scanning is unavailable, enter this one-time setup key manually. It is encrypted at rest and will not be shown after enrollment.</p>
                     <code aria-label="Authenticator setup key" className="block break-all rounded bg-white px-2 py-1 font-mono dark:bg-neutral-950">{challenge.enrollmentSecret}</code>
                   </div>
                 )}

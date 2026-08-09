@@ -220,8 +220,8 @@ The supported upgrade floor is `20260621123340_AddCroSignatories`: it is the new
 committed to the integration branch before the active production-readiness hardening migration
 series. Supporting an older database requires a separately planned, tested data-conversion release;
 do not infer support merely because EF can enumerate an older migration. The toolchain is deliberately
-split and locked: `global.json` selects .NET SDK `10.0.103`, while `.config/dotnet-tools.json` and the
-API design/runtime packages pin EF `10.0.9`; the Npgsql EF provider is `10.0.2`. Restore repository
+split and locked: `global.json` selects .NET SDK `10.0.302`, while `.config/dotnet-tools.json` and the
+API design/runtime packages pin EF `10.0.10`; the Npgsql EF provider is `10.0.2`. Restore repository
 tools before running the exact drift check:
 
 ```powershell

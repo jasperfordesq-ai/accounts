@@ -1675,14 +1675,31 @@ function Get-FbHostBackupMount {
     }
 }
 
+function Get-FbOperatorContainerUserArguments {
+    param([bool]$IsLinux = (Test-FbLinuxHost))
+    if (-not $IsLinux) { return @() }
+
+    $uidResult = Invoke-FbNative -FilePath "id" -Arguments @("-u") -Description "Resolve the Linux operator user ID"
+    $gidResult = Invoke-FbNative -FilePath "id" -Arguments @("-g") -Description "Resolve the Linux operator group ID"
+    $uid = (($uidResult.Output | Select-Object -Last 1) -join "").Trim()
+    $gid = (($gidResult.Output | Select-Object -Last 1) -join "").Trim()
+    if ($uid -cnotmatch '^[0-9]+$' -or $gid -cnotmatch '^[0-9]+$' -or $uid -ceq "0") {
+        throw "The dedicated Linux operator numeric user/group identity could not be resolved safely."
+    }
+    return @("--user", "${uid}:$gid")
+}
+
 function New-FbDatabaseDump {
     param($State, [string]$ComposeFile, [string]$HostDumpPath, [switch]$DryRun)
     $mount = Get-FbHostBackupMount $HostDumpPath
     $dumpScript = 'export PGPASSWORD="$(cat /run/secrets/postgres_password)"; umask 077; rm -f "$1"; exec pg_dump --host db --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" --format=custom --no-owner --no-acl --file "$1"'
-    $null = Invoke-FbCompose $State $ComposeFile @(
-        "run", "--rm", "--no-deps", "--entrypoint", "/bin/sh", "--volume", $mount.volume,
+    $containerUserArguments = @(Get-FbOperatorContainerUserArguments)
+    $null = Invoke-FbCompose $State $ComposeFile (@(
+        "run", "--rm", "--no-deps"
+    ) + $containerUserArguments + @(
+        "--entrypoint", "/bin/sh", "--volume", $mount.volume,
         "role-provision", "-ec", $dumpScript, "filingbridge-backup", $mount.containerPath
-    ) "Create a PostgreSQL custom-format dump directly in private host staging" -Mutating -DryRun:$DryRun
+    )) "Create a PostgreSQL custom-format dump directly in private host staging" -Mutating -DryRun:$DryRun
     if (-not $DryRun -and (-not (Test-Path -LiteralPath $HostDumpPath -PathType Leaf) -or (Get-Item -LiteralPath $HostDumpPath -Force).Length -le 0)) {
         throw "PostgreSQL backup output is missing or empty."
     }
@@ -1783,10 +1800,13 @@ function Test-FbDatabaseDumpRestore {
     }
     try {
         $scriptText = 'export PGPASSWORD="$(cat /run/secrets/postgres_password)"; dropdb --host db --username "$POSTGRES_USER" --if-exists "$1"; createdb --host db --username "$POSTGRES_USER" "$1"; pg_restore --host db --username "$POSTGRES_USER" --dbname "$1" --single-transaction --exit-on-error --no-owner --no-acl "$2"; psql --host db --username "$POSTGRES_USER" --dbname "$1" --no-align --tuples-only --command "SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname=''public''"'
-        $result = Invoke-FbCompose $State $ComposeFile @(
-            "run", "--rm", "--no-deps", "--entrypoint", "/bin/sh", "--volume", $mount.volume,
+        $containerUserArguments = @(Get-FbOperatorContainerUserArguments)
+        $result = Invoke-FbCompose $State $ComposeFile (@(
+            "run", "--rm", "--no-deps"
+        ) + $containerUserArguments + @(
+            "--entrypoint", "/bin/sh", "--volume", $mount.volume,
             "role-provision", "-ec", $scriptText, "filingbridge-verify", $verifyDatabase, $mount.containerPath
-        ) "Restore the host-mounted dump into a disposable verification database" -Mutating -DryRun:$DryRun
+        )) "Restore the host-mounted dump into a disposable verification database" -Mutating -DryRun:$DryRun
         if (-not $DryRun) {
             $numbers = @($result.Output | ForEach-Object { $_.Trim() } | Where-Object { $_ -match '^\d+$' })
             if ($numbers.Count -eq 0 -or [int]$numbers[-1] -le 0) { throw "Disposable restore contained no public tables." }
@@ -2514,10 +2534,13 @@ function Restore-FbCandidateDatabase {
     param($State, [string]$ComposeFile, [string]$DumpPath, [string]$CandidateDatabase)
     $mount = Get-FbHostBackupMount $DumpPath
     $restoreScript = 'export PGPASSWORD="$(cat /run/secrets/postgres_password)"; dropdb --host db --username "$POSTGRES_USER" --if-exists --force "$1"; createdb --host db --username "$POSTGRES_USER" "$1"; exec pg_restore --host db --username "$POSTGRES_USER" --dbname "$1" --single-transaction --exit-on-error --no-owner --no-acl "$2"'
-    $null = Invoke-FbCompose $State $ComposeFile @(
-        "run", "--rm", "--no-deps", "--entrypoint", "/bin/sh", "--volume", $mount.volume,
+    $containerUserArguments = @(Get-FbOperatorContainerUserArguments)
+    $null = Invoke-FbCompose $State $ComposeFile (@(
+        "run", "--rm", "--no-deps"
+    ) + $containerUserArguments + @(
+        "--entrypoint", "/bin/sh", "--volume", $mount.volume,
         "role-provision", "-ec", $restoreScript, "filingbridge-restore", $CandidateDatabase, $mount.containerPath
-    ) "Restore the authenticated host-mounted backup into an isolated candidate database" -Mutating
+    )) "Restore the authenticated host-mounted backup into an isolated candidate database" -Mutating
 }
 
 function Switch-FbDatabase {

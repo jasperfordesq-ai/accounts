@@ -2091,8 +2091,8 @@ Acceptance:
 
 Implemented evidence (2026-07-10):
 
-- `.config/dotnet-tools.json` pins `dotnet-ef` 10.0.9 to the EF 10.0.9 design/runtime packages;
-  `global.json` independently pins SDK 10.0.103 and `config/migration-gate.json` records the exact
+- `.config/dotnet-tools.json` pins `dotnet-ef` 10.0.10 to the EF 10.0.10 design/runtime packages;
+  `global.json` independently pins SDK 10.0.302 and `config/migration-gate.json` records the exact
   toolchain, PostgreSQL 16.4 target, transactional policy and supported upgrade floor.
 - The supported floor is `20260621123340_AddCroSignatories`, the newest migration committed to the
   integration branch before the current production-readiness hardening series. Older schemas require

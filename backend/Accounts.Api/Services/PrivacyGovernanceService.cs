@@ -52,16 +52,37 @@ public sealed partial class PrivacyGovernanceService
     {
         var normalized = NormalizeIdentifier(attemptedIdentifier);
         var now = UtcNow();
+        var identifierFingerprint = Fingerprint(normalized ?? "missing");
+        var safeOutcomeCode = RequiredCode(outcomeCode, nameof(outcomeCode));
+        var safeReasonCode = RequiredCode(reasonCode, nameof(reasonCode));
+        var safeCorrelationId = SafeCorrelationId(correlationId);
+        var expiresAtUtc = now.AddDays(config.LoginSecurityEventRetentionDays);
+
+        // Anonymous rejected-login telemetry is intentionally insert-only under RLS. EF's normal
+        // identity insert adds `RETURNING "Id"`, which PostgreSQL then checks against the SELECT
+        // policy and rejects because anonymous rows must never be readable by the application role.
+        // A parameterised non-returning insert preserves the write-only security boundary.
+        if (db.Database.IsRelational() && tenantId is null && userId is null)
+        {
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO login_security_events
+                    ("TenantId", "UserId", "IdentifierFingerprint", "OutcomeCode", "ReasonCode", "CorrelationId", "OccurredAtUtc", "ExpiresAtUtc")
+                VALUES
+                    (NULL, NULL, {identifierFingerprint}, {safeOutcomeCode}, {safeReasonCode}, {safeCorrelationId}, {now}, {expiresAtUtc})
+                """, cancellationToken);
+            return;
+        }
+
         db.Set<LoginSecurityEvent>().Add(new LoginSecurityEvent
         {
             TenantId = tenantId,
             UserId = userId,
-            IdentifierFingerprint = Fingerprint(normalized ?? "missing"),
-            OutcomeCode = RequiredCode(outcomeCode, nameof(outcomeCode)),
-            ReasonCode = RequiredCode(reasonCode, nameof(reasonCode)),
-            CorrelationId = SafeCorrelationId(correlationId),
+            IdentifierFingerprint = identifierFingerprint,
+            OutcomeCode = safeOutcomeCode,
+            ReasonCode = safeReasonCode,
+            CorrelationId = safeCorrelationId,
             OccurredAtUtc = now,
-            ExpiresAtUtc = now.AddDays(config.LoginSecurityEventRetentionDays)
+            ExpiresAtUtc = expiresAtUtc
         });
         await db.SaveChangesAsync(cancellationToken);
     }

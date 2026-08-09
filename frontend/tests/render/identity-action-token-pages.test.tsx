@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ActionTokenPasswordForm } from "@/components/identity/ActionTokenPasswordForm";
@@ -49,6 +49,38 @@ describe("one-time identity action forms", () => {
     await user.click(screen.getByRole("button", { name: "Set new password" }));
 
     await waitFor(() => expect(identity.completePasswordReset).toHaveBeenCalledWith(token, password));
+    expect(await screen.findByText(/password has been reset/i)).toBeInTheDocument();
+  });
+
+  it("states and enforces the complete password composition policy before reset", async () => {
+    const user = userEvent.setup();
+    render(<ActionTokenPasswordForm mode="password-reset" token="reset-token" />);
+
+    expect(screen.getByText(/at least 20 characters.*uppercase.*lowercase.*number.*symbol/i)).toBeInTheDocument();
+    await user.type(screen.getByLabelText("New password"), "all lowercase words are longer than twenty");
+    await user.type(screen.getByLabelText("Confirm new password"), "all lowercase words are longer than twenty");
+
+    expect(screen.getByRole("button", { name: "Set new password" })).toBeDisabled();
+    expect(identity.completePasswordReset).not.toHaveBeenCalled();
+  });
+
+  it("submits a one-time password reset token only once while completion is pending", async () => {
+    const user = userEvent.setup();
+    let finishReset!: () => void;
+    identity.completePasswordReset.mockImplementation(() => new Promise<void>((resolve) => { finishReset = resolve; }));
+    render(<ActionTokenPasswordForm mode="password-reset" token="reset-token" />);
+
+    const password = "A distinct sufficiently long password 2026!";
+    await user.type(screen.getByLabelText("New password"), password);
+    await user.type(screen.getByLabelText("Confirm new password"), password);
+    const form = screen.getByRole("button", { name: "Set new password" }).closest("form");
+    expect(form).not.toBeNull();
+
+    fireEvent.submit(form!);
+    fireEvent.submit(form!);
+
+    expect(identity.completePasswordReset).toHaveBeenCalledTimes(1);
+    finishReset();
     expect(await screen.findByText(/password has been reset/i)).toBeInTheDocument();
   });
 
