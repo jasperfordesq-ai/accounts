@@ -2198,6 +2198,11 @@ public partial class AccountsWorkflowTests
                 new { tenantSlug = "tenant-a", email = " OWNER@EXAMPLE.IE ", password = "wrong password one!" });
             Assert.Equal(HttpStatusCode.Unauthorized, failedLogin.StatusCode);
 
+            var unknownLogin = await client.PostAsJsonAsync(
+                "/api/auth/login",
+                new { tenantSlug = "tenant-a", email = "unknown@example.invalid", password = "wrong password two!" });
+            Assert.Equal(HttpStatusCode.Unauthorized, unknownLogin.StatusCode);
+
             var login = await client.PostAsJsonAsync(
                 "/api/auth/login",
                 new { tenantSlug = "tenant-a", email = "owner@example.ie", password = "Correct Horse Battery Staple 1!" });
@@ -2241,6 +2246,9 @@ public partial class AccountsWorkflowTests
                 .Where(a => a.TenantId == tenantId)
                 .OrderBy(a => a.Id)
                 .ToListAsync();
+            Assert.DoesNotContain(
+                await db.AuditLogs.IgnoreQueryFilters().ToListAsync(),
+                entry => entry.TenantId is null);
 
             var failedLoginAudit = Assert.Single(audits, a => a.Action == "AuthLoginFailed");
             var successfulLoginAudit = Assert.Single(audits, a => a.Action == "AuthLoginSucceeded");

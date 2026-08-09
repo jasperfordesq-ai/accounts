@@ -146,8 +146,15 @@ public static class AuthEndpoints
             .Produces<AuthResponse>();
     }
 
-    private static Task LogLoginAuditAsync(AuditService audit, HttpContext context, LoginResult result, bool awaitingMfa) =>
-        audit.LogAsync(
+    private static Task LogLoginAuditAsync(AuditService audit, HttpContext context, LoginResult result, bool awaitingMfa)
+    {
+        // Unknown tenant-qualified identities are recorded only in the deliberately anonymous,
+        // insert-only login-security ledger. The durable audit ledger is tenant-owned and must
+        // never receive an unscoped row.
+        if (result.AuditTenantId is null)
+            return Task.CompletedTask;
+
+        return audit.LogAsync(
             companyId: null,
             periodId: null,
             entityType: result.AuditUserId is null ? "AuthAttempt" : "AuthSession",
@@ -169,6 +176,7 @@ public static class AuthEndpoints
             requestId: RequestId(context),
             actorDisplayName: null,
             durableAudit: true);
+    }
 
     private static void SetSessionCookies(HttpContext context, AuthService authService, AuthenticatedUser user, DateTimeOffset now, bool preserveIssuedAt)
     {
