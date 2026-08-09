@@ -48,6 +48,7 @@ Assert-True ($moduleSource -match '"filingbridge-switch", \$PreservedDatabase\) 
 Assert-True ($moduleSource -match 'restoreRecoveryRequired') "an incomplete restore rollback must leave a durable blocked state"
 Assert-True ($moduleSource -notmatch 'Return to the preserved pre-restore database" -Mutating -IgnoreExitCode') "restore must not ignore a failed database rollback"
 Assert-True ($moduleSource -notmatch 'db:\$containerPath|/tmp/filingbridge-(?:backup|verify|restore)') "backup verification and restore must not stage dumps in the database tmpfs"
+Assert-True ([regex]::Matches($moduleSource, 'Get-FbOperatorContainerUserArguments').Count -eq 3) "both host-mounted dump and restore helpers must apply the Linux operator UID/GID override"
 Assert-True ($moduleSource -match 'backup_authentication_key') "backup restore must require a dedicated installation authentication key"
 Assert-True ($moduleSource -match 'Enter-FbInstallationLock') "every lifecycle command must take the installation mutex"
 
@@ -159,7 +160,16 @@ $fakeInvoker = {
     if (-not [string]::IsNullOrWhiteSpace($global:FbFailDescriptionPattern) -and $Description -match $global:FbFailDescriptionPattern) {
         return [pscustomobject]@{ ExitCode = 17; Output = @("synthetic controlled failure") }
     }
-    if ($FilePath -in @("chmod", "stat", "id")) {
+    if ($FilePath -eq "id") {
+        if ($argumentStrings.Count -eq 1 -and $argumentStrings[0] -eq "-u") {
+            return [pscustomobject]@{ ExitCode = 0; Output = @("1000") }
+        }
+        if ($argumentStrings.Count -eq 1 -and $argumentStrings[0] -eq "-g") {
+            return [pscustomobject]@{ ExitCode = 0; Output = @("1000") }
+        }
+        return [pscustomobject]@{ ExitCode = 2; Output = @("unsupported synthetic id invocation") }
+    }
+    if ($FilePath -in @("chmod", "stat")) {
         $nativeOutput = @(& $FilePath @argumentStrings 2>&1)
         return [pscustomobject]@{ ExitCode = $LASTEXITCODE; Output = $nativeOutput }
     }
@@ -278,6 +288,16 @@ $fakeInvoker = {
 try {
     New-Item -ItemType Directory -Path $testRoot | Out-Null
     Set-PrivateServerCommandInvoker $fakeInvoker
+
+    $linuxContainerUserArguments = @(& $privateServerModule {
+        Get-FbOperatorContainerUserArguments -IsLinux $true
+    })
+    Assert-True (($linuxContainerUserArguments -join "|") -ceq "--user|1000:1000") "Linux host-mounted database helpers must run with the operator numeric UID/GID"
+    $windowsContainerUserArguments = @(& $privateServerModule {
+        Get-FbOperatorContainerUserArguments -IsLinux $false
+    })
+    Assert-True ($windowsContainerUserArguments.Count -eq 0) "Windows database helpers must preserve the Compose service user"
+    $global:FbOperatorCalls.Clear()
 
     $releaseRoot = Join-Path $testRoot "synthetic-release"
     New-Item -ItemType Directory -Path $releaseRoot | Out-Null
@@ -413,7 +433,7 @@ try {
         & $privateServerModule { param($lock) Exit-FbInstallationLock $lock } $heldLock
     }
     Assert-True ($secondCommandExit -ne 0) "a second process must not enter a lifecycle command while the installation lock is held"
-    Assert-True (($secondCommandOutput -join "`n") -match '(?s)exclusive lifecycle lock.*no Docker') "lock contention must fail before any Docker or state mutation"
+    Assert-True (($secondCommandOutput -join "`n") -match '(?s)exclusive\s+lifecycle lock.*no Docker') "lock contention must fail before any Docker or state mutation"
 
     $global:FbOperatorCalls.Clear()
     Invoke-FilingBridgePrivateServer -Command start -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory 6>$null
