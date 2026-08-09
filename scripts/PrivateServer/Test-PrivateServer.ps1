@@ -161,13 +161,14 @@ $fakeInvoker = {
         return [pscustomobject]@{ ExitCode = 17; Output = @("synthetic controlled failure") }
     }
     if ($FilePath -eq "id") {
-        if ($argumentStrings.Count -eq 1 -and $argumentStrings[0] -eq "-u") {
+        if ($Description -eq "Resolve the Linux operator user ID" -and $argumentStrings.Count -eq 1 -and $argumentStrings[0] -eq "-u") {
             return [pscustomobject]@{ ExitCode = 0; Output = @("1000") }
         }
-        if ($argumentStrings.Count -eq 1 -and $argumentStrings[0] -eq "-g") {
+        if ($Description -eq "Resolve the Linux operator group ID" -and $argumentStrings.Count -eq 1 -and $argumentStrings[0] -eq "-g") {
             return [pscustomobject]@{ ExitCode = 0; Output = @("1000") }
         }
-        return [pscustomobject]@{ ExitCode = 2; Output = @("unsupported synthetic id invocation") }
+        $nativeOutput = @(& $FilePath @argumentStrings 2>&1)
+        return [pscustomobject]@{ ExitCode = $LASTEXITCODE; Output = $nativeOutput }
     }
     if ($FilePath -in @("chmod", "stat")) {
         $nativeOutput = @(& $FilePath @argumentStrings 2>&1)
