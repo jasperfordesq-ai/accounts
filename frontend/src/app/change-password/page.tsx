@@ -1,12 +1,13 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, Input, Label, Spinner, TextField } from "@heroui/react";
 import { AlertCircle, KeyRound } from "lucide-react";
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/components/AuthProvider";
 import { returnToFromLocation } from "@/lib/navigation";
+import { meetsPasswordCompositionPolicy, PASSWORD_POLICY_DESCRIPTION } from "@/lib/password-policy";
 
 export default function ChangePasswordPage() {
   const router = useRouter();
@@ -16,6 +17,7 @@ export default function ChangePasswordPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const submissionInFlight = useRef(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -25,6 +27,12 @@ export default function ChangePasswordPage() {
       setError("New passwords do not match.");
       return;
     }
+    if (!meetsPasswordCompositionPolicy(newPassword)) {
+      setError(PASSWORD_POLICY_DESCRIPTION);
+      return;
+    }
+    if (submissionInFlight.current) return;
+    submissionInFlight.current = true;
 
     setSubmitting(true);
     try {
@@ -39,6 +47,7 @@ export default function ChangePasswordPage() {
         setError(err instanceof Error ? err.message : "Password change failed. Please try again.");
       }
     } finally {
+      submissionInFlight.current = false;
       setSubmitting(false);
     }
   }
@@ -89,6 +98,7 @@ export default function ChangePasswordPage() {
                 minLength={20}
                 required
               />
+              <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">{PASSWORD_POLICY_DESCRIPTION}</p>
             </TextField>
 
             <TextField fullWidth>
@@ -108,7 +118,7 @@ export default function ChangePasswordPage() {
               type="submit"
               variant="primary"
               className="w-full"
-              isDisabled={submitting || !currentPassword || !newPassword || !confirmPassword}
+              isDisabled={submitting || !currentPassword || !meetsPasswordCompositionPolicy(newPassword) || !confirmPassword}
             >
               {submitting ? <Spinner size="sm" /> : <KeyRound className="h-4 w-4" />}
               Update password

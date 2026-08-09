@@ -1,10 +1,11 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 import Link from "next/link";
 import { Button, Card, Input, Label, Spinner, TextField } from "@heroui/react";
 import { AlertCircle, CheckCircle2, KeyRound } from "lucide-react";
 import { acceptInvitation, completePasswordReset } from "@/lib/identity";
+import { meetsPasswordCompositionPolicy, PASSWORD_POLICY_DESCRIPTION } from "@/lib/password-policy";
 import { ActionLink } from "@/components/workbench";
 
 type ActionMode = "invitation" | "password-reset";
@@ -31,14 +32,16 @@ export function ActionTokenPasswordForm({ mode, token }: { mode: ActionMode; tok
   const [submitting, setSubmitting] = useState(false);
   const [completed, setCompleted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const submissionInFlight = useRef(false);
 
   const tokenMissing = token.trim().length === 0;
   const mismatch = confirmation.length > 0 && password !== confirmation;
-  const passwordTooShort = password.length > 0 && password.length < 20;
+  const passwordInvalid = password.length > 0 && !meetsPasswordCompositionPolicy(password);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (tokenMissing || password.length < 20 || password !== confirmation) return;
+    if (tokenMissing || !meetsPasswordCompositionPolicy(password) || password !== confirmation || submissionInFlight.current) return;
+    submissionInFlight.current = true;
     setSubmitting(true);
     setError(null);
     try {
@@ -50,6 +53,7 @@ export function ActionTokenPasswordForm({ mode, token }: { mode: ActionMode; tok
     } catch {
       setError("This one-time link is invalid, expired, or already used, or the password does not meet the security policy. Request a new link from your firm Owner.");
     } finally {
+      submissionInFlight.current = false;
       setSubmitting(false);
     }
   }
@@ -81,17 +85,17 @@ export function ActionTokenPasswordForm({ mode, token }: { mode: ActionMode; tok
                 </div>
               )}
               {error && <div role="alert" aria-live="assertive" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200">{error}</div>}
-              <TextField fullWidth isInvalid={passwordTooShort}>
+              <TextField fullWidth isInvalid={passwordInvalid}>
                 <Label>New password</Label>
                 <Input type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} minLength={20} required disabled={submitting || tokenMissing} />
-                <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">Use at least 20 characters. Known-compromised passwords are rejected.</p>
+                <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">{PASSWORD_POLICY_DESCRIPTION}</p>
               </TextField>
               <TextField fullWidth isInvalid={mismatch}>
                 <Label>Confirm new password</Label>
                 <Input type="password" autoComplete="new-password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} minLength={20} required disabled={submitting || tokenMissing} />
                 {mismatch && <p role="alert" className="mt-1 text-xs text-red-700 dark:text-red-300">The passwords do not match.</p>}
               </TextField>
-              <Button type="submit" variant="primary" className="w-full" isDisabled={submitting || tokenMissing || password.length < 20 || password !== confirmation}>
+              <Button type="submit" variant="primary" className="w-full" isDisabled={submitting || tokenMissing || !meetsPasswordCompositionPolicy(password) || password !== confirmation}>
                 {submitting ? <Spinner size="sm" /> : <KeyRound className="h-4 w-4" />}
                 {labels.button}
               </Button>

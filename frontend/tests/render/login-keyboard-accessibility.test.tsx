@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import LoginPage from "@/app/login/page";
@@ -77,6 +77,40 @@ describe("login keyboard accessibility", () => {
       "reviewer@example.test",
       "correct horse battery staple",
     ));
+  });
+
+  it("submits only one first-factor request while the first request is pending", async () => {
+    const user = userEvent.setup();
+    let completeLogin!: (value: {
+      userId: number; tenantId: number; tenantName: string; tenantSlug: string;
+      email: string; displayName: string; role: string; allowedCompanyIds: never[];
+      mustChangePassword: boolean;
+    }) => void;
+    mocks.login.mockImplementation(() => new Promise((resolve) => { completeLogin = resolve; }));
+    render(<LoginPage />);
+
+    await user.type(screen.getByRole("textbox", { name: "Workspace slug" }), "keyboard-accountants");
+    await user.type(screen.getByRole("textbox", { name: "Email" }), "reviewer@example.test");
+    await user.type(screen.getByLabelText("Password"), "correct horse battery staple");
+    const form = screen.getByRole("button", { name: "Sign in" }).closest("form");
+    expect(form).not.toBeNull();
+
+    fireEvent.submit(form!);
+    fireEvent.submit(form!);
+
+    expect(mocks.login).toHaveBeenCalledTimes(1);
+    completeLogin({
+      userId: 1,
+      tenantId: 2,
+      tenantName: "Keyboard Accountants",
+      tenantSlug: "keyboard-accountants",
+      email: "reviewer@example.test",
+      displayName: "Keyboard Reviewer",
+      role: "Reviewer",
+      allowedCompanyIds: [],
+      mustChangePassword: false,
+    });
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/"));
   });
 
   it("does not reveal which tenant-qualified credential was rejected", async () => {

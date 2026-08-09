@@ -1,5 +1,7 @@
 using Accounts.Api.Data;
 using Accounts.Api.Entities;
+using Accounts.Api.Rules;
+using Accounts.Api.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -80,6 +82,45 @@ public sealed class DatabaseTenantIsolationPostgresTests : IAsyncLifetime
             DROP ROLE IF EXISTS "{applicationRole}";
             """;
         await command.ExecuteNonQueryAsync();
+    }
+
+    [PostgresFact]
+    public async Task AnonymousRejectedLoginTelemetry_DoesNotRequireReadAccessToInsertedRow()
+    {
+        var adminConnection = administratorConnectionString
+            ?? throw new InvalidOperationException($"{ConnectionEnvVar} is required.");
+        var appConnection = applicationConnectionString
+            ?? throw new InvalidOperationException($"{ConnectionEnvVar} is required.");
+        var httpContextAccessor = new HttpContextAccessor();
+        var tenantContext = new DatabaseTenantContext(httpContextAccessor);
+        var interceptor = new TenantRlsConnectionInterceptor(tenantContext, Options.Create(Configuration()));
+        var options = new DbContextOptionsBuilder<AccountsDbContext>()
+            .UseNpgsql(appConnection)
+            .AddInterceptors(interceptor)
+            .Options;
+
+        await using (var db = new AccountsDbContext(options, httpContextAccessor, tenantContext))
+        {
+            var service = new PrivacyGovernanceService(
+                db,
+                Options.Create(new PrivacyGovernanceConfig()),
+                Options.Create(new AuthSessionConfig { SigningKey = signingKey }),
+                TimeProvider.System);
+
+            await service.RecordLoginAttemptAsync(
+                "tenant-a\nunknown@example.invalid",
+                tenantId: null,
+                userId: null,
+                outcomeCode: "rejected",
+                reasonCode: "invalid-credentials",
+                correlationId: "anonymous-login-regression");
+        }
+
+        await using var verify = new NpgsqlConnection(adminConnection);
+        await verify.OpenAsync();
+        Assert.Equal(1, await ScalarIntAsync(
+            verify,
+            "SELECT count(*)::integer FROM login_security_events WHERE \"CorrelationId\" = 'anonymous-login-regression'"));
     }
 
     [PostgresFact]

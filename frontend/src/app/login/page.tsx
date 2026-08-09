@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, Input, Label, Spinner, TextField } from "@heroui/react";
 import { AlertCircle, LogIn } from "lucide-react";
@@ -25,6 +25,7 @@ export default function LoginPage() {
   const [useRecoveryCode, setUseRecoveryCode] = useState(false);
   const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
   const [recoveryContinuation, setRecoveryContinuation] = useState<{ mustChangePassword: boolean } | null>(null);
+  const submissionInFlight = useRef(false);
 
   function finishLogin(user: { mustChangePassword: boolean }) {
     const returnTo = returnToFromLocation(
@@ -35,6 +36,8 @@ export default function LoginPage() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (submissionInFlight.current) return;
+    submissionInFlight.current = true;
     setError(null);
     setSubmitting(true);
 
@@ -53,13 +56,15 @@ export default function LoginPage() {
         setError(err instanceof Error ? err.message : "Sign in failed. Please try again.");
       }
     } finally {
+      submissionInFlight.current = false;
       setSubmitting(false);
     }
   }
 
   async function handleMfaSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!challenge) return;
+    if (!challenge || submissionInFlight.current) return;
+    submissionInFlight.current = true;
     setError(null);
     setSubmitting(true);
     try {
@@ -79,6 +84,7 @@ export default function LoginPage() {
         ? "The authenticator or recovery code was not accepted."
         : err instanceof Error ? err.message : "Authenticator verification failed.");
     } finally {
+      submissionInFlight.current = false;
       setSubmitting(false);
     }
   }
