@@ -3,9 +3,9 @@
   "previousReleaseMigration": "20260621123340_AddCroSignatories",
   "supportedUpgradeFloorBasis": "Newest migration committed to the integration branch before the active production-readiness hardening migration series.",
   "databaseEngine": "PostgreSQL 16.4",
-  "dotnetSdkVersion": "10.0.103",
-  "entityFrameworkToolVersion": "10.0.9",
-  "entityFrameworkPackageVersion": "10.0.9",
+  "dotnetSdkVersion": "10.0.302",
+  "entityFrameworkToolVersion": "10.0.10",
+  "entityFrameworkPackageVersion": "10.0.10",
   "npgsqlProviderVersion": "10.0.2",
   "rollbackPolicy": "transactional-per-migration",
   "requiredPreservationChecks": [
