@@ -2534,10 +2534,13 @@ function Restore-FbCandidateDatabase {
     param($State, [string]$ComposeFile, [string]$DumpPath, [string]$CandidateDatabase)
     $mount = Get-FbHostBackupMount $DumpPath
     $restoreScript = 'export PGPASSWORD="$(cat /run/secrets/postgres_password)"; dropdb --host db --username "$POSTGRES_USER" --if-exists --force "$1"; createdb --host db --username "$POSTGRES_USER" "$1"; exec pg_restore --host db --username "$POSTGRES_USER" --dbname "$1" --single-transaction --exit-on-error --no-owner --no-acl "$2"'
-    $null = Invoke-FbCompose $State $ComposeFile @(
-        "run", "--rm", "--no-deps", "--entrypoint", "/bin/sh", "--volume", $mount.volume,
+    $containerUserArguments = @(Get-FbOperatorContainerUserArguments)
+    $null = Invoke-FbCompose $State $ComposeFile (@(
+        "run", "--rm", "--no-deps"
+    ) + $containerUserArguments + @(
+        "--entrypoint", "/bin/sh", "--volume", $mount.volume,
         "role-provision", "-ec", $restoreScript, "filingbridge-restore", $CandidateDatabase, $mount.containerPath
-    ) "Restore the authenticated host-mounted backup into an isolated candidate database" -Mutating
+    )) "Restore the authenticated host-mounted backup into an isolated candidate database" -Mutating
 }
 
 function Switch-FbDatabase {

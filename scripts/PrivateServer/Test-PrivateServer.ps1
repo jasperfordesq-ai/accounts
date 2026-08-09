@@ -48,7 +48,7 @@ Assert-True ($moduleSource -match '"filingbridge-switch", \$PreservedDatabase\) 
 Assert-True ($moduleSource -match 'restoreRecoveryRequired') "an incomplete restore rollback must leave a durable blocked state"
 Assert-True ($moduleSource -notmatch 'Return to the preserved pre-restore database" -Mutating -IgnoreExitCode') "restore must not ignore a failed database rollback"
 Assert-True ($moduleSource -notmatch 'db:\$containerPath|/tmp/filingbridge-(?:backup|verify|restore)') "backup verification and restore must not stage dumps in the database tmpfs"
-Assert-True ([regex]::Matches($moduleSource, 'Get-FbOperatorContainerUserArguments').Count -eq 3) "both host-mounted dump and restore helpers must apply the Linux operator UID/GID override"
+Assert-True ($moduleSource -match '(?s)function Restore-FbCandidateDatabase\s*\{.*?\$containerUserArguments\s*=\s*@\(Get-FbOperatorContainerUserArguments\).*?Invoke-FbCompose.*?\+\s*\$containerUserArguments\s*\+') "candidate restore must run with the Linux operator UID/GID that owns the host-mounted dump"
 Assert-True ($moduleSource -match 'backup_authentication_key') "backup restore must require a dedicated installation authentication key"
 Assert-True ($moduleSource -match 'Enter-FbInstallationLock') "every lifecycle command must take the installation mutex"
 
