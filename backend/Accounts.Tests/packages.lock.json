@@ -27,19 +27,19 @@
       },
       "Microsoft.NET.Test.Sdk": {
         "type": "Direct",
-        "requested": "[18.7.0, )",
-        "resolved": "18.7.0",
-        "contentHash": "49xH9j4UzCh2hMohJp53g3wUTvyycECw7CtVht4gfCz5ykudB1uBcF6D0TtgJPjCtP76UPW53bQElKdCeX+dUg==",
+        "requested": "[18.8.1, )",
+        "resolved": "18.8.1",
+        "contentHash": "dknJL3/9Y3t4XuCBqnc0PevPxgLsUMmVhjwup/b1HNovA8zWcj3XsfIf7c6p05363DWcqL7X/YhDL9B+Zymv1w==",
         "dependencies": {
-          "Microsoft.CodeCoverage": "18.7.0",
-          "Microsoft.TestPlatform.TestHost": "18.7.0"
+          "Microsoft.CodeCoverage": "18.8.1",
+          "Microsoft.TestPlatform.TestHost": "18.8.1"
         }
       },
       "Npgsql.EntityFrameworkCore.PostgreSQL": {
         "type": "Direct",
-        "requested": "[10.0.2, )",
-        "resolved": "10.0.2",
-        "contentHash": "PsNYgPOSW41Xx19gin7y4EdZAPteWr9Cb01XkdObxOsPzi+mgBupBEN7J7+erXFsROPOILM7MlIoO9QzL8+LGQ==",
+        "requested": "[10.0.3, )",
+        "resolved": "10.0.3",
+        "contentHash": "IPGrrZnRkuW7OlHDhUESZz4G5DLkW7Nej/O3Cx+0iTsgyU5XJxBgpsvTHLloo3WWuAKKbDHXBvWPVkX1deRh1Q==",
         "dependencies": {
           "Microsoft.EntityFrameworkCore": "[10.0.4, 11.0.0)",
           "Microsoft.EntityFrameworkCore.Relational": "[10.0.4, 11.0.0)",
@@ -48,9 +48,9 @@
       },
       "PdfPig": {
         "type": "Direct",
-        "requested": "[0.1.9, )",
-        "resolved": "0.1.9",
-        "contentHash": "VU27oq5O0rpD+zWiD639xXkSHtsNXqbPpYV0pzYg9VPhDibH1cq1i67f9DuW2WnzDVEti0HipLcZxDhdayIzGg=="
+        "requested": "[0.1.15, )",
+        "resolved": "0.1.15",
+        "contentHash": "Bf0NO4o2ZSVnemMyj21KDU1sfSgmamFC0pD4aAv19CDNXQsoO1Z6O99gNqpiK/XWWZ5d5i7JkQoT7PUBxEPz5g=="
       },
       "xunit": {
         "type": "Direct",
@@ -71,8 +71,8 @@
       },
       "CsvHelper": {
         "type": "Transitive",
-        "resolved": "33.0.1",
-        "contentHash": "fev4lynklAU2A9GVMLtwarkwaanjSYB4wUqO2nOJX5hnzObORzUqVLe+bDYCUyIIRQM4o5Bsq3CcyJR89iMmEQ=="
+        "resolved": "33.1.0",
+        "contentHash": "kqfTOZGrn7NarNeXgjh86JcpTHUoeQDMB8t9NVa/ZtlSYiV1rxfRnQ49WaJsob4AiGrbK0XDzpyKkBwai4F8eg=="
       },
       "Microsoft.AspNetCore.OpenApi": {
         "type": "Transitive",
@@ -84,8 +84,8 @@
       },
       "Microsoft.CodeCoverage": {
         "type": "Transitive",
-        "resolved": "18.7.0",
-        "contentHash": "+wFfx9s7D9wegM0RziXMj2kvYDT4qcqXXtyjiQwSZOGQ2wwcOAJQcD6eQXk02jt0MvRNawtp8TJxTrV+wD8X1g=="
+        "resolved": "18.8.1",
+        "contentHash": "Eclse/ZZjr4lmWzZFNN9h/OluhKL+SK/QbUyKUewgX139aGeyMEO/DkMPwuFs2MixvanTnz6891rF8UHDg+W4Q=="
       },
       "Microsoft.EntityFrameworkCore": {
         "type": "Transitive",
@@ -265,22 +265,16 @@
       },
       "Microsoft.TestPlatform.ObjectModel": {
         "type": "Transitive",
-        "resolved": "18.7.0",
-        "contentHash": "6rmgU4q3/WOpOPcncI0YW0Q/QpcQtwR2TTEXDR5+4TfSimPBAk6Z/BgKLeGgp1SOun0ROVUCCafXhRLwsHaPpA=="
+        "resolved": "18.8.1",
+        "contentHash": "qLbktNB1+b1XZLNJBTzaWVVJAd6PEzD7cgD406geMb6PcFZhp3EDNa1tctWx1+mtMU6MP/6ozVvFPC9vs2a9rw=="
       },
       "Microsoft.TestPlatform.TestHost": {
         "type": "Transitive",
-        "resolved": "18.7.0",
-        "contentHash": "kYwfmebCs8992zaxEDkvG7S+YEouTeKfYVKUFEkwh1W2dIoOaevBt80XSKVXCUFEhusjOIm1sFfHBnoJgygrRA==",
+        "resolved": "18.8.1",
+        "contentHash": "FaQHPDTUOcE+SFTjssNPfrub2lT9Zyon4J2W/KLHt/efLJACb1TCeWXyOgh0D/4Q1e4n+S3E6mOKud+9nLZlEA==",
         "dependencies": {
-          "Microsoft.TestPlatform.ObjectModel": "18.7.0",
-          "Newtonsoft.Json": "13.0.3"
+          "Microsoft.TestPlatform.ObjectModel": "18.8.1"
         }
-      },
-      "Newtonsoft.Json": {
-        "type": "Transitive",
-        "resolved": "13.0.3",
-        "contentHash": "HrC5BXdl00IP9zeV+0Z848QWPAoCr9P3bDEZguI+gkLcBKAOxix/tLEAAHC+UvDNPv4a2d18lOReHMOagPa+zQ=="
       },
       "Npgsql": {
         "type": "Transitive",
@@ -292,31 +286,31 @@
       },
       "QuestPDF": {
         "type": "Transitive",
-        "resolved": "2026.6.1",
-        "contentHash": "EuGtkJcYNF/IV5Sd4WzshYJcqG5FNutBrRFPqzzlFxIEV9FOrN1pbPIYf38LVKEz9WCpHZN5SZjcISUefoHQvQ=="
+        "resolved": "2026.7.2",
+        "contentHash": "GSPOoErqB4Yh7mnbV4m/ykHOF6erHdm5qyMRHDr4sjk+fvrtkEL+RoG5YpOqiWrS833jEiktC1Uthyy5/QMNQA=="
       },
       "Sentry": {
         "type": "Transitive",
-        "resolved": "6.6.0",
-        "contentHash": "1D3xo3P9Y94VQN3RoV/86XqgtylHp1pdeEml3/UB649BrzJeZ/pqO/o8YgJ5g+GqpMQiGI09yjAI7s5ff2A1IA=="
+        "resolved": "6.8.0",
+        "contentHash": "amUjwslDtdx1p8r6z4APCxM8vHCKG4CBamPpSTwxmTMoBQ2CLwx2m3CaIttJXRT/hw9S5rNfXgjol2OqADytLQ=="
       },
       "Sentry.AspNetCore": {
         "type": "Transitive",
-        "resolved": "6.6.0",
-        "contentHash": "MzS1695uLEYN8sfjmqaBYMg87WAB+YaQjlI/IQp9FVC1D3Kimv+SqptvM5Xzg6tjZZ0NR6AhPTdWs1oP145N5w==",
+        "resolved": "6.8.0",
+        "contentHash": "yo9TeFZPgmhyu0Vj+Zq3VxRR8kDbhlNbRAQDANN+gTwETe5uDa/H1I91PntBD7jwhWa7P218bYU+LGYOipylYA==",
         "dependencies": {
-          "Sentry.Extensions.Logging": "6.6.0"
+          "Sentry.Extensions.Logging": "6.8.0"
         }
       },
       "Sentry.Extensions.Logging": {
         "type": "Transitive",
-        "resolved": "6.6.0",
-        "contentHash": "6d5/MLfqfIy2uIlKIFJVtSpT3Z0lY3VlpFPqBP34E1COX1qI+AnrsRKa9v7+wedZDKmBmyTGGzwUZWmmfJfGaw==",
+        "resolved": "6.8.0",
+        "contentHash": "K7/Z7B8ec5c61ByzZOgxHxhcT+5yo7X6n7GchcaFI/X44Zn/ZsGqUFMqvypaILnc4JISAeppDTSiWdgWmflzbg==",
         "dependencies": {
           "Microsoft.Extensions.Configuration.Binder": "10.0.0",
           "Microsoft.Extensions.Http": "10.0.0",
           "Microsoft.Extensions.Logging.Configuration": "10.0.0",
-          "Sentry": "6.6.0"
+          "Sentry": "6.8.0"
         }
       },
       "Swashbuckle.AspNetCore": {
@@ -394,12 +388,12 @@
       "accounts.api": {
         "type": "Project",
         "dependencies": {
-          "CsvHelper": "[33.0.1, )",
+          "CsvHelper": "[33.1.0, )",
           "Microsoft.AspNetCore.OpenApi": "[10.0.10, )",
           "Microsoft.EntityFrameworkCore": "[10.0.10, )",
-          "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.2, )",
-          "QuestPDF": "[2026.6.1, )",
-          "Sentry.AspNetCore": "[6.6.0, )",
+          "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.3, )",
+          "QuestPDF": "[2026.7.2, )",
+          "Sentry.AspNetCore": "[6.8.0, )",
           "Swashbuckle.AspNetCore": "[10.2.3, )"
         }
       }
