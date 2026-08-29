@@ -1089,7 +1089,12 @@ public partial class AccountsWorkflowTests
     }
 
     [Theory]
-    [InlineData("Posted Account, Posted Transactions Date, Description, Debit Amount, Credit Amount, Balance", "AIB")]
+    // AIB Internet Banking 12-column export (split debit/credit) — detected by full signature.
+    [InlineData("Posted Account, Posted Transactions Date, Description1, Description2, Description3, Debit Amount, Credit Amount, Balance, Posted Currency, Transaction Type, Local Currency Amount, Local Currency", "AIBInternetBanking")]
+    // Variant header that still contains both "Debit Amount" and "Credit Amount" → still AIBInternetBanking.
+    [InlineData("Posted Account, Posted Transactions Date, Description, Debit Amount, Credit Amount, Balance", "AIBInternetBanking")]
+    // Old-style AIB format with a single signed amount column, detected by "Posted Account" substring.
+    [InlineData("Posted Account, Posted Transactions Date, Description, Amount, Balance", "AIB")]
     [InlineData("Date, Transaction Details, Amount, Balance - Bank of Ireland", "BOI")]
     [InlineData("Type, Started Date, Completed Date, Description, Amount, Balance", "Revolut")]
     [InlineData("id, created, amount, currency, description, balance_transaction", "Stripe")]

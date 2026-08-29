@@ -52,6 +52,12 @@ public class Company
     public bool IncludedInHigherConsolidatedFinancialStatements { get; set; }
     public bool IsCharitableOrganisation { get; set; }
 
+    // Revenue Charitable Tax Exemption — suppresses CT1/Revenue filing deadlines while held.
+    // Record the CHY reference and the date Revenue confirmed the exemption.
+    public bool HoldsCharitableTaxExemption { get; set; }
+    public string? CharitableTaxExemptionReference { get; set; }
+    public DateOnly? CharitableTaxExemptionConfirmedDate { get; set; }
+
     // Recoverable quarantine. Detailed immutable evidence is retained separately.
     public bool IsQuarantined { get; set; }
     public DateTime? QuarantinedAtUtc { get; set; }

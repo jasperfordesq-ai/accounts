@@ -26,13 +26,32 @@ public class ImportService(AccountsDbContext db, IOptions<ImportLimitConfig>? im
         string SourceFileSha256,
         long SourceFileBytes);
 
-    public record ColumnMapping(int DateColumn, int DescriptionColumn, int AmountColumn, int? BalanceColumn, int? ReferenceColumn, string DateFormat = "dd/MM/yyyy");
+    /// <summary>
+    /// Maps CSV columns to transaction fields. For AIB Internet Banking exports use
+    /// <see cref="DebitColumn"/>/<see cref="CreditColumn"/> instead of <see cref="AmountColumn"/>
+    /// (set AmountColumn to -1), and <see cref="DescriptionColumns"/> instead of
+    /// <see cref="DescriptionColumn"/> (set DescriptionColumn to -1).
+    /// </summary>
+    public record ColumnMapping(
+        int DateColumn,
+        int DescriptionColumn,
+        int AmountColumn,
+        int? BalanceColumn,
+        int? ReferenceColumn,
+        string DateFormat = "dd/MM/yyyy",
+        int? DebitColumn = null,
+        int? CreditColumn = null,
+        int[]? DescriptionColumns = null);
 
     // Auto-detect bank format from CSV headers
     public record BankFormat(string Name, ColumnMapping Mapping);
 
     private static readonly List<BankFormat> KnownFormats =
     [
+        // AIB Internet Banking 12-column export (Posted Account / Posted Transactions Date /
+        // Description1-3 / Debit Amount / Credit Amount / Balance / …).
+        // Detected before the generic AIB check; both formats must coexist.
+        new("AIBInternetBanking", new(-1, -1, -1, 7, 0, "dd/MM/yyyy", 5, 6, [2, 3, 4])),
         new("AIB", new(0, 1, 3, 4, 2, "dd/MM/yyyy")),
         new("BOI", new(0, 1, 2, 3, -1, "dd/MM/yyyy")),
         new("Revolut", new(0, 1, 2, 3, -1, "yyyy-MM-dd")),
@@ -158,16 +177,25 @@ public class ImportService(AccountsDbContext db, IOptions<ImportLimitConfig>? im
         {
             cancellationToken.ThrowIfCancellationRequested();
             var fields = row.Fields;
-            var requiredMaxIndex = Math.Max(mapping.DateColumn, Math.Max(mapping.DescriptionColumn, mapping.AmountColumn));
-            if (fields.Length <= requiredMaxIndex)
+            var usingSplitAmounts = mapping.DebitColumn.HasValue && mapping.CreditColumn.HasValue;
+            var usingDescriptionColumns = mapping.DescriptionColumns is { Length: > 0 };
+            var requiredIndices = new List<int> { mapping.DateColumn };
+            if (!usingDescriptionColumns) requiredIndices.Add(mapping.DescriptionColumn);
+            else requiredIndices.AddRange(mapping.DescriptionColumns!);
+            if (!usingSplitAmounts) requiredIndices.Add(mapping.AmountColumn);
+            else { requiredIndices.Add(mapping.DebitColumn!.Value); requiredIndices.Add(mapping.CreditColumn!.Value); }
+            if (fields.Length <= requiredIndices.Max())
             {
                 warnings.Add($"Row {row.RowNumber}: insufficient columns");
                 continue;
             }
 
             var dateStr = CleanCsvField(fields[mapping.DateColumn]);
-            var description = NeutraliseCsvText(fields[mapping.DescriptionColumn]);
-            var amountStr = CleanCsvField(fields[mapping.AmountColumn]);
+            var description = usingDescriptionColumns
+                ? string.Join(" ", mapping.DescriptionColumns!
+                    .Where(c => c < fields.Length && !string.IsNullOrWhiteSpace(fields[c]))
+                    .Select(c => NeutraliseCsvText(fields[c])))
+                : NeutraliseCsvText(fields[mapping.DescriptionColumn]);
 
             if (string.IsNullOrWhiteSpace(description))
             {
@@ -192,10 +220,32 @@ public class ImportService(AccountsDbContext db, IOptions<ImportLimitConfig>? im
                 continue;
             }
 
-            if (!TryParseBankDecimal(amountStr, out var amount))
+            decimal amount;
+            if (usingSplitAmounts)
             {
-                warnings.Add($"Row {row.RowNumber}: could not parse amount");
-                continue;
+                TryParseBankDecimal(CleanCsvField(fields[mapping.DebitColumn!.Value]), out var debitVal);
+                TryParseBankDecimal(CleanCsvField(fields[mapping.CreditColumn!.Value]), out var creditVal);
+                var hasDebit = debitVal > 0;
+                var hasCredit = creditVal > 0;
+                if (hasDebit && hasCredit)
+                {
+                    warnings.Add($"Row {row.RowNumber}: both debit and credit columns have non-zero values");
+                    continue;
+                }
+                if (!hasDebit && !hasCredit)
+                {
+                    warnings.Add($"Row {row.RowNumber}: neither debit nor credit column has a parseable non-zero value");
+                    continue;
+                }
+                amount = hasDebit ? -debitVal : creditVal;
+            }
+            else
+            {
+                if (!TryParseBankDecimal(CleanCsvField(fields[mapping.AmountColumn]), out amount))
+                {
+                    warnings.Add($"Row {row.RowNumber}: could not parse amount");
+                    continue;
+                }
             }
             var normalizedAmount = decimal.Round(amount, 2, MidpointRounding.ToEven);
             if (amount != normalizedAmount)
@@ -308,22 +358,37 @@ public class ImportService(AccountsDbContext db, IOptions<ImportLimitConfig>? im
     public BankFormat DetectFormat(string headerLine)
     {
         var lower = headerLine.ToLower();
-        if (lower.Contains("posted account") || lower.Contains("aib")) return KnownFormats[0]; // AIB
-        if (lower.Contains("bank of ireland") || lower.Contains("boi")) return KnownFormats[1]; // BOI
-        if (lower.Contains("started date") || lower.Contains("revolut")) return KnownFormats[2]; // Revolut
-        if (lower.Contains("balance_transaction") || lower.Contains("stripe")) return KnownFormats[3]; // Stripe
-        return KnownFormats[4]; // Generic
+        // AIB Internet Banking: 12-column format with separate debit/credit columns.
+        // Match on the full distinguishing signature before the simpler AIB substring.
+        if (lower.Contains("posted transactions date") && lower.Contains("debit amount") && lower.Contains("credit amount"))
+            return KnownFormats[0]; // AIBInternetBanking
+        if (lower.Contains("posted account") || lower.Contains("aib")) return KnownFormats[1]; // AIB
+        if (lower.Contains("bank of ireland") || lower.Contains("boi")) return KnownFormats[2]; // BOI
+        if (lower.Contains("started date") || lower.Contains("revolut")) return KnownFormats[3]; // Revolut
+        if (lower.Contains("balance_transaction") || lower.Contains("stripe")) return KnownFormats[4]; // Stripe
+        return KnownFormats[5]; // Generic
     }
 
     private static void ValidateMapping(ColumnMapping mapping, int headerLength)
     {
-        var required = new[] { mapping.DateColumn, mapping.DescriptionColumn, mapping.AmountColumn };
-        if (required.Any(index => index < 0 || index >= headerLength)
-            || mapping.BalanceColumn is >= 0 && mapping.BalanceColumn >= headerLength
-            || mapping.ReferenceColumn is >= 0 && mapping.ReferenceColumn >= headerLength)
-        {
+        var usingSplitAmounts = mapping.DebitColumn.HasValue && mapping.CreditColumn.HasValue;
+        var usingDescriptionColumns = mapping.DescriptionColumns is { Length: > 0 };
+
+        bool OutOfRange(int i) => i < 0 || i >= headerLength;
+
+        if (OutOfRange(mapping.DateColumn))
             throw new BusinessRuleException("CSV column mapping does not match the uploaded header.");
-        }
+        if (!usingDescriptionColumns && OutOfRange(mapping.DescriptionColumn))
+            throw new BusinessRuleException("CSV column mapping does not match the uploaded header.");
+        if (!usingSplitAmounts && OutOfRange(mapping.AmountColumn))
+            throw new BusinessRuleException("CSV column mapping does not match the uploaded header.");
+        if (usingSplitAmounts && (OutOfRange(mapping.DebitColumn!.Value) || OutOfRange(mapping.CreditColumn!.Value)))
+            throw new BusinessRuleException("CSV column mapping does not match the uploaded header.");
+        if (usingDescriptionColumns && mapping.DescriptionColumns!.Any(OutOfRange))
+            throw new BusinessRuleException("CSV column mapping does not match the uploaded header.");
+        if (mapping.BalanceColumn is >= 0 && mapping.BalanceColumn >= headerLength
+            || mapping.ReferenceColumn is >= 0 && mapping.ReferenceColumn >= headerLength)
+            throw new BusinessRuleException("CSV column mapping does not match the uploaded header.");
         if (string.IsNullOrWhiteSpace(mapping.DateFormat))
             throw new BusinessRuleException("CSV date format is required.");
     }
@@ -373,7 +438,8 @@ public class ImportService(AccountsDbContext db, IOptions<ImportLimitConfig>? im
     {
         return KnownFormats
             .Select(format => format.Mapping)
-            .Where(mapping => header.Length > Math.Max(mapping.DateColumn, mapping.AmountColumn))
+            .Where(mapping => mapping.AmountColumn >= 0
+                && header.Length > Math.Max(mapping.DateColumn, mapping.AmountColumn))
             .Any(mapping =>
                 TryParseMappedDate(CleanCsvField(header[mapping.DateColumn]), mapping.DateFormat, out _)
                 && TryParseBankDecimal(CleanCsvField(header[mapping.AmountColumn]), out _));

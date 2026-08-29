@@ -896,6 +896,16 @@ namespace Accounts.Api.Data.Migrations
                     b.Property<bool>("IsCharitableOrganisation")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("HoldsCharitableTaxExemption")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("CharitableTaxExemptionReference")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateOnly?>("CharitableTaxExemptionConfirmedDate")
+                        .HasColumnType("date");
+
                     b.Property<bool>("IsCreditInstitution")
                         .HasColumnType("boolean");
 

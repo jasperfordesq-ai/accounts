@@ -44,6 +44,9 @@ public class CompanyInput
     public bool PreparesGroupFinancialStatements { get; set; }
     public bool IncludedInHigherConsolidatedFinancialStatements { get; set; }
     public bool IsCharitableOrganisation { get; set; }
+    public bool HoldsCharitableTaxExemption { get; set; }
+    public string? CharitableTaxExemptionReference { get; set; }
+    public DateOnly? CharitableTaxExemptionConfirmedDate { get; set; }
 }
 
 public class CompanyOfficerInput
@@ -204,6 +207,9 @@ public static class EndpointInputs
         company.PreparesGroupFinancialStatements = input.PreparesGroupFinancialStatements;
         company.IncludedInHigherConsolidatedFinancialStatements = input.IncludedInHigherConsolidatedFinancialStatements;
         company.IsCharitableOrganisation = input.IsCharitableOrganisation;
+        company.HoldsCharitableTaxExemption = input.HoldsCharitableTaxExemption;
+        company.CharitableTaxExemptionReference = TrimToNull(input.CharitableTaxExemptionReference);
+        company.CharitableTaxExemptionConfirmedDate = input.CharitableTaxExemptionConfirmedDate;
         company.UpdatedAt = DateTime.UtcNow;
     }
 

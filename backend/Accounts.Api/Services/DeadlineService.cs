@@ -71,12 +71,17 @@ public class DeadlineService(
 
         // ROS CT1/balance deadline: the earlier of nine months after period end and day 23
         // of that month. A period ending early in a month therefore keeps its exact day.
-        var revDueDate = CorporationTaxFilingSupportCalculator.ReturnAndBalanceDueDate(fye);
-        deadlines.Add(await UpsertDeadline(
-            companyId,
-            periodId,
-            DeadlineType.Revenue,
-            DeadlineCalculation.Simple(companyId, periodId, DeadlineType.Revenue, revDueDate)));
+        // Suppressed when the company holds Revenue Charitable Tax Exemption — such bodies are
+        // exempt from CT1 and financial-statement filing to Revenue while the exemption is held.
+        if (!company.HoldsCharitableTaxExemption)
+        {
+            var revDueDate = CorporationTaxFilingSupportCalculator.ReturnAndBalanceDueDate(fye);
+            deadlines.Add(await UpsertDeadline(
+                companyId,
+                periodId,
+                DeadlineType.Revenue,
+                DeadlineCalculation.Simple(companyId, periodId, DeadlineType.Revenue, revDueDate)));
+        }
 
         // Charity deadline: FYE + 10 months (only if charitable organisation)
         if (company.IsCharitableOrganisation)
