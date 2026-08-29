@@ -4,8 +4,8 @@
   "npmMajor": 11,
   "dotnetSdkVersion": "10.0.302",
   "baseImages": {
-    "node:24-alpine": "sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd",
-    "mcr.microsoft.com/dotnet/sdk:10.0": "sha256:72dd743782f2ae7e5476fd64f6a460045e3998dc862218b80e6944cba79a01b0",
-    "mcr.microsoft.com/dotnet/aspnet:10.0": "sha256:f1126d438ccc359f51cc6d4701a8deae513856cf10f5fe645d29ea6403dcac6b"
+    "node:24-alpine": "sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf",
+    "mcr.microsoft.com/dotnet/sdk:10.0": "sha256:e1ffd2a92ae84c1291bc1b6887501f8af98e6331e7af6d4c8d37168c5e87a64c",
+    "mcr.microsoft.com/dotnet/aspnet:10.0": "sha256:a4556ed033fa96f984bb7a8d348851cb2d36b1281dd2420070045f664fbb5f94"
   }
 }
