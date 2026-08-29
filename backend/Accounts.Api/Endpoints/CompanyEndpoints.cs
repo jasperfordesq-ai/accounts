@@ -120,6 +120,9 @@ public static class CompanyEndpoints
             var oldValue = DomainAuditCoverage.CompanySnapshot(company);
             var filingObligationsChanged = company.IsCharitableOrganisation != input.IsCharitableOrganisation
                 || company.HoldsCharitableTaxExemption != input.HoldsCharitableTaxExemption;
+            await using var transaction = db.Database.IsRelational() && db.Database.CurrentTransaction is null
+                ? await db.Database.BeginTransactionAsync(context.RequestAborted)
+                : null;
             EndpointInputs.ApplyCompany(company, input);
             await InvalidateCompanyCharityArtifactsAsync(db, id);
 
@@ -143,6 +146,8 @@ public static class CompanyEndpoints
                 oldValue,
                 DomainAuditCoverage.CompanySnapshot(company),
                 context.RequestAborted);
+            if (transaction is not null)
+                await transaction.CommitAsync(context.RequestAborted);
             return Results.Ok(company);
         });
 

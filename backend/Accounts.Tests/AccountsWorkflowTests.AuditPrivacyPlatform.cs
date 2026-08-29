@@ -2066,6 +2066,54 @@ public partial class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task DeadlineCalculation_RetainsReminderHistoryAndCancelsPendingReminderWhenObligationEnds()
+    {
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var service = new DeadlineService(db);
+        var initial = await service.CalculateDeadlinesAsync(period.CompanyId, period.Id);
+        var revenueDeadline = initial.Single(deadline => deadline.DeadlineType == DeadlineType.Revenue);
+        var company = await db.Companies.SingleAsync(candidate => candidate.Id == period.CompanyId);
+        var now = DateTime.UtcNow;
+        var reminder = new DeadlineReminderOutbox
+        {
+            Id = Guid.NewGuid(),
+            TenantId = company.TenantId ?? throw new InvalidOperationException("Seed company tenant is required."),
+            CompanyId = company.Id,
+            PeriodId = period.Id,
+            FilingDeadlineId = revenueDeadline.Id,
+            DeadlineType = DeadlineType.Revenue,
+            ReminderKind = DeadlineReminderKind.DueSoon,
+            State = DeadlineReminderState.Pending,
+            ObservedDueDate = revenueDeadline.DueDate,
+            ObservedCalculationFingerprintSha256 = revenueDeadline.CalculationFingerprintSha256,
+            DeduplicationKeySha256 = new string('d', 64),
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now,
+            NextAttemptAtUtc = now
+        };
+        db.DeadlineReminderOutbox.Add(reminder);
+        company.IsCharitableOrganisation = true;
+        company.HoldsCharitableTaxExemption = true;
+        company.CharitableTaxExemptionReference = "CHY-12345";
+        company.CharitableTaxExemptionConfirmedDate = new DateOnly(2022, 12, 16);
+        await db.SaveChangesAsync();
+
+        var recalculated = await service.RecalculateCompanyDeadlinesAsync(period.CompanyId);
+
+        Assert.DoesNotContain(recalculated, deadline => deadline.DeadlineType == DeadlineType.Revenue);
+        Assert.DoesNotContain(
+            await service.GetDeadlinesAsync(company.Id),
+            deadline => deadline.DeadlineType == DeadlineType.Revenue);
+        Assert.Equal(DeadlineReminderState.Cancelled, reminder.State);
+        Assert.NotNull(reminder.CancelledAtUtc);
+        Assert.Equal(2, reminder.Revision);
+        Assert.Equal(
+            revenueDeadline.Id,
+            (await db.FilingDeadlines.SingleAsync(deadline => deadline.Id == revenueDeadline.Id)).Id);
+    }
+
+    [Fact]
     public async Task FilingWorkflow_LogsCroAndIxbrlDomainAudits()
     {
         await using var db = CreateDbContext();
