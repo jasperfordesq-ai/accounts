@@ -59,6 +59,9 @@ public static class DomainAuditCoverage
         company.IsTrading,
         company.IsDormant,
         company.IsCharitableOrganisation,
+        company.HoldsCharitableTaxExemption,
+        company.CharitableTaxExemptionReference,
+        company.CharitableTaxExemptionConfirmedDate,
         company.IsQuarantined
     };
 

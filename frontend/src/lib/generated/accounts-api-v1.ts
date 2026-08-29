@@ -7934,6 +7934,10 @@ export interface components {
             preparesGroupFinancialStatements?: boolean;
             includedInHigherConsolidatedFinancialStatements?: boolean;
             isCharitableOrganisation?: boolean;
+            holdsCharitableTaxExemption?: boolean;
+            charitableTaxExemptionReference?: null | string;
+            /** Format: date */
+            charitableTaxExemptionConfirmedDate?: null | string;
         };
         CompanyOfficerInput: {
             name?: null | string;

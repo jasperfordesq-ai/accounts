@@ -434,6 +434,7 @@ public sealed class DomainOperationAuditCoverageTests
             builder.Services.AddSingleton<ApiAccessService>();
             builder.Services.AddScoped<AuditService>();
             builder.Services.AddScoped<AnnualReturnDateService>();
+            builder.Services.AddScoped<DeadlineService>();
             builder.Services.AddScoped<IdempotencyService>();
             builder.Services.AddScoped<AccountingWriteGuard>();
             builder.Services.AddScoped<PeriodChronologyService>();

@@ -19,6 +19,27 @@ public class DeadlineService(
     private static readonly TimeZoneInfo IrelandTimeZone = ResolveIrelandTimeZone();
     private FilingReleaseGate ReleaseGate => releaseGate ??= new FilingReleaseGate(db);
 
+    public async Task<List<FilingDeadline>> RecalculateCompanyDeadlinesAsync(
+        int companyId,
+        string? userId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var periodIds = await db.AccountingPeriods
+            .Where(period => period.CompanyId == companyId)
+            .OrderBy(period => period.PeriodStart)
+            .ThenBy(period => period.Id)
+            .Select(period => period.Id)
+            .ToListAsync(cancellationToken);
+        var deadlines = new List<FilingDeadline>();
+        foreach (var periodId in periodIds)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            deadlines.AddRange(await CalculateDeadlinesAsync(companyId, periodId, userId));
+        }
+
+        return deadlines;
+    }
+
     /// <summary>
     /// Calculates and retains the separate CRO ARD, B1 made-up-to date, 56-day delivery date and
     /// section 347(4) financial-statement age limit. Also calculates charity and Revenue deadlines.
@@ -71,12 +92,24 @@ public class DeadlineService(
 
         // ROS CT1/balance deadline: the earlier of nine months after period end and day 23
         // of that month. A period ending early in a month therefore keeps its exact day.
-        var revDueDate = CorporationTaxFilingSupportCalculator.ReturnAndBalanceDueDate(fye);
-        deadlines.Add(await UpsertDeadline(
-            companyId,
-            periodId,
-            DeadlineType.Revenue,
-            DeadlineCalculation.Simple(companyId, periodId, DeadlineType.Revenue, revDueDate)));
+        // Suppressed when the company holds Revenue Charitable Tax Exemption — such bodies are
+        // exempt from CT1 and financial-statement filing to Revenue while the exemption is held.
+        if (!company.HoldsCharitableTaxExemption)
+        {
+            var revDueDate = CorporationTaxFilingSupportCalculator.ReturnAndBalanceDueDate(fye);
+            deadlines.Add(await UpsertDeadline(
+                companyId,
+                periodId,
+                DeadlineType.Revenue,
+                DeadlineCalculation.Simple(companyId, periodId, DeadlineType.Revenue, revDueDate)));
+        }
+        else
+        {
+            var staleRevenueDeadline = period.FilingDeadlines
+                .FirstOrDefault(deadline => deadline.DeadlineType == DeadlineType.Revenue
+                    && deadline.FiledDate is null);
+            await RemoveUnfiledDeadlineOrRetainReminderHistoryAsync(staleRevenueDeadline);
+        }
 
         // Charity deadline: FYE + 10 months (only if charitable organisation)
         if (company.IsCharitableOrganisation)
@@ -87,6 +120,13 @@ public class DeadlineService(
                 periodId,
                 DeadlineType.Charity,
                 DeadlineCalculation.Simple(companyId, periodId, DeadlineType.Charity, charityDueDate)));
+        }
+        else
+        {
+            var staleCharityDeadline = period.FilingDeadlines
+                .FirstOrDefault(deadline => deadline.DeadlineType == DeadlineType.Charity
+                    && deadline.FiledDate is null);
+            await RemoveUnfiledDeadlineOrRetainReminderHistoryAsync(staleCharityDeadline);
         }
 
         await db.SaveChangesAsync();
@@ -113,7 +153,10 @@ public class DeadlineService(
     {
         var today = CurrentIrelandDate();
         return await db.FilingDeadlines
-            .Where(d => d.CompanyId == companyId && d.FiledDate == null)
+            .Where(d => d.CompanyId == companyId
+                && d.FiledDate == null
+                && !(d.DeadlineType == DeadlineType.Revenue && d.Company.HoldsCharitableTaxExemption)
+                && !(d.DeadlineType == DeadlineType.Charity && !d.Company.IsCharitableOrganisation))
             .OrderBy(d => d.DueDate)
             .FirstOrDefaultAsync();
     }
@@ -124,7 +167,9 @@ public class DeadlineService(
     public async Task<List<FilingDeadline>> GetDeadlinesAsync(int companyId)
     {
         return await db.FilingDeadlines
-            .Where(d => d.CompanyId == companyId)
+            .Where(d => d.CompanyId == companyId
+                && !(d.DeadlineType == DeadlineType.Revenue && d.Company.HoldsCharitableTaxExemption)
+                && !(d.DeadlineType == DeadlineType.Charity && !d.Company.IsCharitableOrganisation))
             .OrderByDescending(d => d.DueDate)
             .ToListAsync();
     }
@@ -164,7 +209,9 @@ public class DeadlineService(
         var deadline = await db.FilingDeadlines.FirstOrDefaultAsync(candidate =>
                 candidate.CompanyId == companyId
                 && candidate.PeriodId == periodId
-                && candidate.DeadlineType == type,
+                && candidate.DeadlineType == type
+                && !(candidate.DeadlineType == DeadlineType.Revenue && candidate.Company.HoldsCharitableTaxExemption)
+                && !(candidate.DeadlineType == DeadlineType.Charity && !candidate.Company.IsCharitableOrganisation),
             cancellationToken)
             ?? throw new BusinessRuleException("Deadline not found. Calculate deadlines first.");
         if (deadline.FiledDate is not null)
@@ -249,7 +296,11 @@ public class DeadlineService(
         };
 
         var deadline = await db.FilingDeadlines
-            .FirstOrDefaultAsync(d => d.CompanyId == companyId && d.PeriodId == periodId && d.DeadlineType == type)
+            .FirstOrDefaultAsync(d => d.CompanyId == companyId
+                && d.PeriodId == periodId
+                && d.DeadlineType == type
+                && !(d.DeadlineType == DeadlineType.Revenue && d.Company.HoldsCharitableTaxExemption)
+                && !(d.DeadlineType == DeadlineType.Charity && !d.Company.IsCharitableOrganisation))
             ?? throw new BusinessRuleException("Deadline not found. Calculate deadlines first.");
         var oldValue = DeadlineAuditSnapshot(deadline);
 
@@ -487,6 +538,33 @@ public class DeadlineService(
         ApplyCalculation(created, calculation);
         db.FilingDeadlines.Add(created);
         return created;
+    }
+
+    private async Task RemoveUnfiledDeadlineOrRetainReminderHistoryAsync(FilingDeadline? deadline)
+    {
+        if (deadline is null)
+            return;
+
+        var reminders = await db.DeadlineReminderOutbox
+            .Where(item => item.FilingDeadlineId == deadline.Id)
+            .ToListAsync();
+        if (reminders.Count == 0)
+        {
+            db.FilingDeadlines.Remove(deadline);
+            return;
+        }
+
+        var cancelledAt = UtcNowMicrosecond();
+        foreach (var reminder in reminders.Where(item => item.State is
+                     DeadlineReminderState.Pending or
+                     DeadlineReminderState.Delivering or
+                     DeadlineReminderState.RetryScheduled))
+        {
+            reminder.State = DeadlineReminderState.Cancelled;
+            reminder.CancelledAtUtc = cancelledAt;
+            reminder.UpdatedAtUtc = cancelledAt;
+            reminder.Revision++;
+        }
     }
 
     private async Task<FilingDeadline> InsertDeadlineAtomicallyAsync(

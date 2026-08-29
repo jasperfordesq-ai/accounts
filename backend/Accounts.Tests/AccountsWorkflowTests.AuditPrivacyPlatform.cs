@@ -2020,6 +2020,100 @@ public partial class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task DeadlineCalculation_RemovesRevenueDeadlineWhenCharitableTaxExemptionIsHeld()
+    {
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var service = new DeadlineService(db);
+
+        var initial = await service.CalculateDeadlinesAsync(period.CompanyId, period.Id);
+        Assert.Contains(initial, deadline => deadline.DeadlineType == DeadlineType.Revenue);
+
+        var company = await db.Companies.SingleAsync(candidate => candidate.Id == period.CompanyId);
+        company.IsCharitableOrganisation = true;
+        company.HoldsCharitableTaxExemption = true;
+        company.CharitableTaxExemptionReference = "CHY-12345";
+        company.CharitableTaxExemptionConfirmedDate = new DateOnly(2022, 12, 16);
+        await db.SaveChangesAsync();
+
+        var recalculated = await service.RecalculateCompanyDeadlinesAsync(period.CompanyId);
+
+        Assert.Equal(
+            [DeadlineType.CRO, DeadlineType.Charity],
+            recalculated.Select(deadline => deadline.DeadlineType).OrderBy(type => type).ToArray());
+        Assert.DoesNotContain(
+            await db.FilingDeadlines.Where(deadline => deadline.PeriodId == period.Id).ToListAsync(),
+            deadline => deadline.DeadlineType == DeadlineType.Revenue);
+
+        company.HoldsCharitableTaxExemption = false;
+        company.CharitableTaxExemptionReference = null;
+        company.CharitableTaxExemptionConfirmedDate = null;
+        await db.SaveChangesAsync();
+
+        var afterRevocation = await service.RecalculateCompanyDeadlinesAsync(period.CompanyId);
+        Assert.Contains(afterRevocation, deadline => deadline.DeadlineType == DeadlineType.Revenue);
+
+        company.IsCharitableOrganisation = false;
+        await db.SaveChangesAsync();
+
+        var afterLeavingCharityScope = await service.RecalculateCompanyDeadlinesAsync(period.CompanyId);
+        Assert.Equal(
+            [DeadlineType.CRO, DeadlineType.Revenue],
+            afterLeavingCharityScope.Select(deadline => deadline.DeadlineType).OrderBy(type => type).ToArray());
+        Assert.DoesNotContain(
+            await db.FilingDeadlines.Where(deadline => deadline.PeriodId == period.Id).ToListAsync(),
+            deadline => deadline.DeadlineType == DeadlineType.Charity && deadline.FiledDate is null);
+    }
+
+    [Fact]
+    public async Task DeadlineCalculation_RetainsReminderHistoryAndCancelsPendingReminderWhenObligationEnds()
+    {
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var service = new DeadlineService(db);
+        var initial = await service.CalculateDeadlinesAsync(period.CompanyId, period.Id);
+        var revenueDeadline = initial.Single(deadline => deadline.DeadlineType == DeadlineType.Revenue);
+        var company = await db.Companies.SingleAsync(candidate => candidate.Id == period.CompanyId);
+        var now = DateTime.UtcNow;
+        var reminder = new DeadlineReminderOutbox
+        {
+            Id = Guid.NewGuid(),
+            TenantId = company.TenantId ?? throw new InvalidOperationException("Seed company tenant is required."),
+            CompanyId = company.Id,
+            PeriodId = period.Id,
+            FilingDeadlineId = revenueDeadline.Id,
+            DeadlineType = DeadlineType.Revenue,
+            ReminderKind = DeadlineReminderKind.DueSoon,
+            State = DeadlineReminderState.Pending,
+            ObservedDueDate = revenueDeadline.DueDate,
+            ObservedCalculationFingerprintSha256 = revenueDeadline.CalculationFingerprintSha256,
+            DeduplicationKeySha256 = new string('d', 64),
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now,
+            NextAttemptAtUtc = now
+        };
+        db.DeadlineReminderOutbox.Add(reminder);
+        company.IsCharitableOrganisation = true;
+        company.HoldsCharitableTaxExemption = true;
+        company.CharitableTaxExemptionReference = "CHY-12345";
+        company.CharitableTaxExemptionConfirmedDate = new DateOnly(2022, 12, 16);
+        await db.SaveChangesAsync();
+
+        var recalculated = await service.RecalculateCompanyDeadlinesAsync(period.CompanyId);
+
+        Assert.DoesNotContain(recalculated, deadline => deadline.DeadlineType == DeadlineType.Revenue);
+        Assert.DoesNotContain(
+            await service.GetDeadlinesAsync(company.Id),
+            deadline => deadline.DeadlineType == DeadlineType.Revenue);
+        Assert.Equal(DeadlineReminderState.Cancelled, reminder.State);
+        Assert.NotNull(reminder.CancelledAtUtc);
+        Assert.Equal(2, reminder.Revision);
+        Assert.Equal(
+            revenueDeadline.Id,
+            (await db.FilingDeadlines.SingleAsync(deadline => deadline.Id == revenueDeadline.Id)).Id);
+    }
+
+    [Fact]
     public async Task FilingWorkflow_LogsCroAndIxbrlDomainAudits()
     {
         await using var db = CreateDbContext();
@@ -4050,6 +4144,49 @@ public partial class AccountsWorkflowTests
             Assert.Null(auditLog.PeriodId);
             Assert.Equal("user:1", auditLog.UserId);
         });
+    }
+
+    [Fact]
+    public async Task CharityInfoUpdate_PersistsOrdinaryFieldsAndRetainsUnchangedGovernanceEvidence()
+    {
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var service = new CharityReportingService(db);
+        var evidence = Encoding.UTF8.GetBytes("retained governance evidence");
+        var created = await service.SaveCharityInfoAsync(period.CompanyId, new CharityInfo
+        {
+            CharityNumber = "CHY-12345",
+            CharityType = "Other",
+            GrossIncome = 100_000m,
+            CharitableObjectives = "Community development",
+            PrincipalActivities = "Time banking",
+            GovernanceCodeCompliant = true,
+            GovernanceCodeNote = "Board review complete",
+            GovernanceEvidenceReference = "GOV-001",
+            GovernanceEvidenceArtifact = evidence
+        }, "reviewer@example.ie");
+        var originalHash = created.GovernanceEvidenceArtifactSha256;
+
+        await service.SaveCharityInfoAsync(period.CompanyId, new CharityInfo
+        {
+            CharityNumber = created.CharityNumber,
+            CharityType = "CLG",
+            GrossIncome = 125_000m,
+            CharitableObjectives = created.CharitableObjectives,
+            PrincipalActivities = "Time banking and community support",
+            GovernanceCodeCompliant = created.GovernanceCodeCompliant,
+            GovernanceCodeNote = created.GovernanceCodeNote,
+            GovernanceEvidenceReference = created.GovernanceEvidenceReference
+        });
+
+        var updated = await db.CharityInfos.SingleAsync(info => info.CompanyId == period.CompanyId);
+        Assert.Equal("CLG", updated.CharityType);
+        Assert.Equal(125_000m, updated.GrossIncome);
+        Assert.Equal("Time banking and community support", updated.PrincipalActivities);
+        Assert.Equal(evidence, updated.GovernanceEvidenceArtifact);
+        Assert.Equal(originalHash, updated.GovernanceEvidenceArtifactSha256);
+        Assert.Equal("reviewer@example.ie", updated.GovernanceReviewedBy);
+        Assert.NotNull(updated.GovernanceReviewedAtUtc);
     }
 
     [Fact]
