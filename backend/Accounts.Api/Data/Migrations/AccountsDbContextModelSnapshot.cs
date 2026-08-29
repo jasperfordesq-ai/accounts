@@ -17,7 +17,7 @@ namespace Accounts.Api.Data.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.9")
+                .HasAnnotation("ProductVersion", "10.0.10")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -864,6 +864,13 @@ namespace Accounts.Api.Data.Migrations
                     b.Property<DateOnly?>("AnnualReturnDate")
                         .HasColumnType("date");
 
+                    b.Property<DateOnly?>("CharitableTaxExemptionConfirmedDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("CharitableTaxExemptionReference")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<string>("CompanyType")
                         .IsRequired()
                         .HasColumnType("text");
@@ -885,6 +892,9 @@ namespace Accounts.Api.Data.Migrations
                         .HasColumnType("boolean");
 
                     b.Property<bool>("HasStock")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("HoldsCharitableTaxExemption")
                         .HasColumnType("boolean");
 
                     b.Property<bool>("IncludedInHigherConsolidatedFinancialStatements")

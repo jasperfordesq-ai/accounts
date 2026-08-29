@@ -428,6 +428,9 @@ export interface Company {
   isInsuranceUndertaking: boolean;
   isPensionFund: boolean;
   isCharitableOrganisation: boolean;
+  holdsCharitableTaxExemption?: boolean;
+  charitableTaxExemptionReference?: string;
+  charitableTaxExemptionConfirmedDate?: string;
   assignedReviewerName?: string;
   assignedReviewerEmail?: string;
   latestPeriod?: AccountingPeriod;

@@ -44,6 +44,14 @@ const parse = (schema, payload, name = "test") => parseApiContract(schema, paylo
 test("company and period contracts reject missing fields, unknown enums, and impossible dates", () => {
   const company = companyFixture();
   assert.equal(parse(companySchema, company).legalName, "Contract Ltd");
+  const exemptCompany = parse(companySchema, {
+    ...company,
+    holdsCharitableTaxExemption: true,
+    charitableTaxExemptionReference: "CHY-12345",
+    charitableTaxExemptionConfirmedDate: "2022-12-16",
+  });
+  assert.equal(exemptCompany.holdsCharitableTaxExemption, true);
+  assert.equal(exemptCompany.charitableTaxExemptionReference, "CHY-12345");
 
   const missing = structuredClone(company);
   delete missing.legalName;

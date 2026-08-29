@@ -77,6 +77,32 @@ public sealed class DashboardDeadlineBatchTests
         Assert.DoesNotContain(result.Items, item => item.CompanyId == companies[1].Id || item.CompanyId == companies[3].Id);
     }
 
+    [Fact]
+    public async Task Batch_TreatsRevenueAsNotApplicableForExemptCharityAndRetainsFiledHistory()
+    {
+        await using var db = CreateDb();
+        var company = Assert.Single(await SeedCompaniesAsync(db, 1));
+        company.IsCharitableOrganisation = true;
+        company.HoldsCharitableTaxExemption = true;
+        company.CharitableTaxExemptionReference = "CHY-12345";
+        company.CharitableTaxExemptionConfirmedDate = new DateOnly(2022, 12, 16);
+        var period = AddPeriod(db, company);
+        await db.SaveChangesAsync();
+        var today = new DateOnly(2026, 7, 10);
+        db.FilingDeadlines.AddRange(
+            Deadline(period, today.AddDays(20)),
+            Deadline(period, today.AddDays(40), type: DeadlineType.Charity),
+            Deadline(period, today.AddDays(-20), today.AddDays(-10), DeadlineType.Revenue));
+        await db.SaveChangesAsync();
+
+        var result = await CreateService(db, today).GetAsync(User("Owner"));
+
+        var item = Item(result, company);
+        Assert.Equal(DashboardDeadlineStates.DueSoon, item.State);
+        Assert.Equal(DeadlineType.CRO, item.Deadline?.DeadlineType);
+        Assert.DoesNotContain("not been calculated", item.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static DashboardDeadlineItem Item(DashboardDeadlineBatch batch, Company company) =>
         Assert.Single(batch.Items, item => item.CompanyId == company.Id);
 

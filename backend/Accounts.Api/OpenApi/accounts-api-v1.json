@@ -10349,6 +10349,22 @@
           },
           "isCharitableOrganisation": {
             "type": "boolean"
+          },
+          "holdsCharitableTaxExemption": {
+            "type": "boolean"
+          },
+          "charitableTaxExemptionReference": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "charitableTaxExemptionConfirmedDate": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date"
           }
         }
       },

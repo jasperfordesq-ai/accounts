@@ -277,8 +277,9 @@ public sealed class CharityReportingService(AccountsDbContext db)
             existing = input;
             db.CharityInfos.Add(existing);
         }
-        else if (!retainExistingGovernanceEvidence)
+        else
         {
+            // Always update ordinary fields; the retain flag only governs the governance artifact below.
             existing.CharityNumber = input.CharityNumber;
             existing.CharityType = input.CharityType;
             existing.GrossIncome = input.GrossIncome;
@@ -302,13 +303,15 @@ public sealed class CharityReportingService(AccountsDbContext db)
             existing.GovernanceReviewedBy = governanceReviewer?.Trim();
             existing.GovernanceReviewedAtUtc = DateTime.UtcNow;
         }
-        else
+        else if (!retainExistingGovernanceEvidence)
         {
+            // Governance settings changed but no new artifact supplied — clear stale evidence.
             existing.GovernanceEvidenceArtifact = null;
             existing.GovernanceEvidenceArtifactSha256 = null;
             existing.GovernanceReviewedBy = null;
             existing.GovernanceReviewedAtUtc = null;
         }
+        // else: governance unchanged, no new artifact — keep existing artifact.
 
         var packages = await db.CharityFilingPackages
             .Where(p => p.Period.CompanyId == companyId)

@@ -27,6 +27,9 @@ export function CompanyStatutoryProfile({ company }: { company: Company }) {
             rows={[
               `CRO ${company.croNumber || "-"}`,
               `Tax ${company.taxReference || "-"}`,
+              ...(company.holdsCharitableTaxExemption
+                ? [`Revenue charitable exemption ${company.charitableTaxExemptionReference || "reference not recorded"}${company.charitableTaxExemptionConfirmedDate ? ` (confirmed ${formatDateIE(company.charitableTaxExemptionConfirmedDate)})` : ""}`]
+                : []),
               formatCompanyType(company.companyType),
               `Incorporated ${formatDateIE(company.incorporationDate)}`,
             ]}
@@ -110,6 +113,7 @@ function profileFlags(company: Company): { label: string; tone: "default" | "goo
   flags.push(company.isTrading ? { label: "Trading", tone: "good" } : { label: "Non-trading", tone: "warn" });
   if (company.isDormant) flags.push({ label: "Dormant", tone: "warn" });
   if (company.isCharitableOrganisation) flags.push({ label: "Charity workflow", tone: "info" });
+  if (company.holdsCharitableTaxExemption) flags.push({ label: "Revenue charitable exemption", tone: "good" });
   if (company.isVatRegistered) flags.push({ label: "VAT registered", tone: "info" });
   if (company.isEmployer) flags.push({ label: "Employer", tone: "info" });
   if (company.isGroupMember || company.isHolding || company.isSubsidiary) flags.push({ label: "Group context", tone: "warn" });

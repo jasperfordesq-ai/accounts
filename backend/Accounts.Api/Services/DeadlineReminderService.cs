@@ -260,7 +260,11 @@ public sealed class DeadlineReminderService(
 
             var subjects = await db.FilingDeadlines
                 .AsNoTracking()
-                .Where(deadline => deadline.Company.TenantId == tenantId)
+                .Where(deadline => deadline.Company.TenantId == tenantId
+                    && !(deadline.DeadlineType == DeadlineType.Revenue
+                        && deadline.Company.HoldsCharitableTaxExemption)
+                    && !(deadline.DeadlineType == DeadlineType.Charity
+                        && !deadline.Company.IsCharitableOrganisation))
                 .OrderBy(deadline => deadline.Id)
                 .Select(deadline => new DeadlineReminderSubject(
                     tenantId,

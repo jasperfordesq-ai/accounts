@@ -61,7 +61,8 @@ public sealed class DashboardDeadlineService(AccountsDbContext db, DeadlineServi
                 company.LegalName,
                 company.IncorporationDate,
                 company.Periods.Count,
-                company.IsCharitableOrganisation))
+                company.IsCharitableOrganisation,
+                company.HoldsCharitableTaxExemption))
             .ToListAsync(cancellationToken);
 
         var companyIds = companies.Select(company => company.Id).ToArray();
@@ -136,11 +137,21 @@ public sealed class DashboardDeadlineService(AccountsDbContext db, DeadlineServi
                 "Deadline evidence is inconsistent and cannot be relied on. Review the company deadline configuration.");
         }
 
-        var expectedDeadlineCount = company.PeriodCount * (company.IsCharitableOrganisation ? 3 : 2);
-        var fullyConfigured = deadlines.Count == expectedDeadlineCount
-            && deadlines.Count(deadline => deadline.DeadlineType == DeadlineType.CRO) == company.PeriodCount
-            && deadlines.Count(deadline => deadline.DeadlineType == DeadlineType.Revenue) == company.PeriodCount
-            && deadlines.Count(deadline => deadline.DeadlineType == DeadlineType.Charity)
+        // A filed Revenue row may remain as historical evidence after an exemption is recorded.
+        // It is retained in storage but is no longer an applicable dashboard obligation.
+        var applicableDeadlines = deadlines
+            .Where(deadline => !(company.HoldsCharitableTaxExemption
+                    && deadline.DeadlineType == DeadlineType.Revenue)
+                && !(!company.IsCharitableOrganisation
+                    && deadline.DeadlineType == DeadlineType.Charity))
+            .ToList();
+        var expectedRevenueCount = company.HoldsCharitableTaxExemption ? 0 : company.PeriodCount;
+        var expectedCharityCount = company.IsCharitableOrganisation ? company.PeriodCount : 0;
+        var expectedDeadlineCount = company.PeriodCount + expectedRevenueCount + expectedCharityCount;
+        var fullyConfigured = applicableDeadlines.Count == expectedDeadlineCount
+            && applicableDeadlines.Count(deadline => deadline.DeadlineType == DeadlineType.CRO) == company.PeriodCount
+            && applicableDeadlines.Count(deadline => deadline.DeadlineType == DeadlineType.Revenue) == expectedRevenueCount
+            && applicableDeadlines.Count(deadline => deadline.DeadlineType == DeadlineType.Charity)
                 == (company.IsCharitableOrganisation ? company.PeriodCount : 0);
         if (!fullyConfigured)
         {
@@ -152,14 +163,14 @@ public sealed class DashboardDeadlineService(AccountsDbContext db, DeadlineServi
                 "One or more applicable filing deadlines have not been calculated for the company's accounting periods.");
         }
 
-        var next = deadlines
+        var next = applicableDeadlines
             .Where(deadline => deadline.FiledDate is null)
             .OrderBy(deadline => deadline.DueDate)
             .ThenBy(deadline => deadline.Id)
             .FirstOrDefault();
         if (next is null)
         {
-            var latestFiled = deadlines
+            var latestFiled = applicableDeadlines
                 .OrderByDescending(deadline => deadline.FiledDate)
                 .ThenByDescending(deadline => deadline.DueDate)
                 .ThenByDescending(deadline => deadline.Id)
@@ -191,5 +202,6 @@ public sealed class DashboardDeadlineService(AccountsDbContext db, DeadlineServi
         string LegalName,
         DateOnly IncorporationDate,
         int PeriodCount,
-        bool IsCharitableOrganisation);
+        bool IsCharitableOrganisation,
+        bool HoldsCharitableTaxExemption);
 }

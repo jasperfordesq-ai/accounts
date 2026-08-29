@@ -307,6 +307,7 @@ public class AccountsDbContext : DbContext
             e.Property(c => c.TradingName).HasMaxLength(500);
             e.Property(c => c.CroNumber).HasMaxLength(20);
             e.Property(c => c.TaxReference).HasMaxLength(20);
+            e.Property(c => c.CharitableTaxExemptionReference).HasMaxLength(200);
             e.HasOne(c => c.Tenant).WithMany(t => t.Companies).HasForeignKey(c => c.TenantId).OnDelete(DeleteBehavior.SetNull);
             e.HasIndex(c => c.CroNumber).IsUnique().HasFilter("\"CroNumber\" IS NOT NULL");
             e.HasIndex(c => c.TenantId);

@@ -1549,4 +1549,25 @@ public partial class AccountsWorkflowTests
         Assert.NotNull(EndpointInputs.ValidatePeriod(badPeriod));
     }
 
+    [Fact]
+    public void EndpointInputs_RequiresAuditableEvidenceForCharitableTaxExemption()
+    {
+        var input = new CompanyInput
+        {
+            LegalName = "Example Charity CLG",
+            IncorporationDate = new DateOnly(2020, 1, 1),
+            FinancialYearStartMonth = 1,
+            AnnualReturnDate = new DateOnly(2026, 9, 15),
+            IsCharitableOrganisation = true,
+            HoldsCharitableTaxExemption = true
+        };
+
+        Assert.NotNull(EndpointInputs.ValidateCompany(input));
+
+        input.CharitableTaxExemptionReference = "CHY-12345";
+        input.CharitableTaxExemptionConfirmedDate = new DateOnly(2022, 12, 16);
+
+        Assert.Null(EndpointInputs.ValidateCompany(input));
+    }
+
 }

@@ -199,6 +199,15 @@ public sealed class IdempotencyPostgresTests
         await using (var previous = CreateDb(schema.ConnectionString))
         {
             await previous.Database.MigrateAsync("20260711000000_AddCorporationTaxFilingSupport");
+            // This test deliberately writes with the current DbContext while the database is held at
+            // the migration immediately before the idempotency ledger. Temporarily add later Company
+            // columns for the seed write, then remove them before exercising the real upgrade chain.
+            await previous.Database.ExecuteSqlRawAsync("""
+                ALTER TABLE companies
+                    ADD COLUMN "CharitableTaxExemptionConfirmedDate" date NULL,
+                    ADD COLUMN "CharitableTaxExemptionReference" character varying(200) NULL,
+                    ADD COLUMN "HoldsCharitableTaxExemption" boolean NOT NULL DEFAULT FALSE
+                """);
             tenantId = await SeedTenantAsync(previous);
             var company = Company(tenantId, "Legacy Upgrade Limited");
             previous.Companies.Add(company);
@@ -248,6 +257,12 @@ public sealed class IdempotencyPostgresTests
             legacy.ResponseJson = responseJson;
             legacy.ResponseSha256 = Hash(responseJson);
             await previous.SaveChangesAsync();
+            await previous.Database.ExecuteSqlRawAsync("""
+                ALTER TABLE companies
+                    DROP COLUMN "CharitableTaxExemptionConfirmedDate",
+                    DROP COLUMN "CharitableTaxExemptionReference",
+                    DROP COLUMN "HoldsCharitableTaxExemption"
+                """);
             await previous.Database.MigrateAsync();
         }
 

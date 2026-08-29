@@ -157,7 +157,12 @@ public class FilingWorkflowService(
 
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var overdueDeadlines = await db.FilingDeadlines
-            .Where(d => d.CompanyId == companyId && d.PeriodId == periodId && d.FiledDate == null && d.DueDate < today)
+            .Where(d => d.CompanyId == companyId
+                && d.PeriodId == periodId
+                && d.FiledDate == null
+                && d.DueDate < today
+                && !(d.DeadlineType == DeadlineType.Revenue && period.Company.HoldsCharitableTaxExemption)
+                && !(d.DeadlineType == DeadlineType.Charity && !period.Company.IsCharitableOrganisation))
             .OrderBy(d => d.DueDate)
             .ToListAsync();
 
