@@ -1091,10 +1091,8 @@ public partial class AccountsWorkflowTests
     [Theory]
     // AIB Internet Banking 12-column export (split debit/credit) — detected by full signature.
     [InlineData("Posted Account, Posted Transactions Date, Description1, Description2, Description3, Debit Amount, Credit Amount, Balance, Posted Currency, Transaction Type, Local Currency Amount, Local Currency", "AIBInternetBanking")]
-    // Variant header that still contains both "Debit Amount" and "Credit Amount" → still AIBInternetBanking.
-    [InlineData("Posted Account, Posted Transactions Date, Description, Debit Amount, Credit Amount, Balance", "AIBInternetBanking")]
-    // Old-style AIB format with a single signed amount column, detected by "Posted Account" substring.
-    [InlineData("Posted Account, Posted Transactions Date, Description, Amount, Balance", "AIB")]
+    // Old-style AIB format with a single signed amount column remains supported.
+    [InlineData("Date,Description,Reference,Amount,Balance - AIB", "AIB")]
     [InlineData("Date, Transaction Details, Amount, Balance - Bank of Ireland", "BOI")]
     [InlineData("Type, Started Date, Completed Date, Description, Amount, Balance", "Revolut")]
     [InlineData("id, created, amount, currency, description, balance_transaction", "Stripe")]
@@ -1138,6 +1136,38 @@ public partial class AccountsWorkflowTests
             new MemoryStream(Encoding.UTF8.GetBytes(csv)), "revolut.csv");
         Assert.Equal(2, second.DuplicateCandidates);
         Assert.Equal(2, second.ImportedRows);
+    }
+
+    [Fact]
+    public async Task ImportService_AutoDetectsAibInternetBankingAndParsesSplitAmountsAndDescriptions()
+    {
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        var bank = new BankAccount { CompanyId = period.CompanyId, Name = "AIB", OpeningBalance = 0m };
+        db.BankAccounts.Add(bank);
+        await db.SaveChangesAsync();
+
+        var csv = "Posted Account,Posted Transactions Date,Description1,Description2,Description3,Debit Amount,Credit Amount,Balance,Posted Currency,Transaction Type,Local Currency Amount,Local Currency\n"
+            + "936375 - 16074058,01/03/2025,CARD,COFFEE SHOP,DUBLIN,10.25,,989.75,EUR,Debit,10.25,EUR\n"
+            + "936375 - 16074058,02/03/2025,TRANSFER,CLIENT PAYMENT,,,25.50,1015.25,EUR,Credit,25.50,EUR\n";
+        var service = new ImportService(db, Options.Create(new ImportLimitConfig()));
+
+        var result = await service.ImportCsvAsync(
+            period.CompanyId, bank.Id, period.Id,
+            new MemoryStream(Encoding.UTF8.GetBytes(csv)), "aib.csv");
+
+        Assert.Equal(2, result.ImportedRows);
+        Assert.Empty(result.Warnings);
+        var transactions = await db.ImportedTransactions
+            .Where(transaction => transaction.BankAccountId == bank.Id)
+            .OrderBy(transaction => transaction.Date)
+            .ToListAsync();
+        Assert.Equal(new DateOnly(2025, 3, 1), transactions[0].Date);
+        Assert.Equal("CARD COFFEE SHOP DUBLIN", transactions[0].Description);
+        Assert.Equal(-10.25m, transactions[0].Amount);
+        Assert.Equal("936375 - 16074058", transactions[0].Reference);
+        Assert.Equal("TRANSFER CLIENT PAYMENT", transactions[1].Description);
+        Assert.Equal(25.50m, transactions[1].Amount);
     }
 
     [Theory]

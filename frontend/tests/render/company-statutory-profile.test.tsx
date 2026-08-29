@@ -19,6 +19,8 @@ describe("CompanyStatutoryProfile", () => {
     expect(screen.getByText("Dublin")).toBeInTheDocument();
     expect(screen.getByText("D02 X285")).toBeInTheDocument();
     expect(screen.getByText("Charity workflow")).toBeInTheDocument();
+    expect(screen.getByText("Revenue charitable exemption")).toBeInTheDocument();
+    expect(screen.getByText("Revenue charitable exemption CHY-12345 (confirmed 16 Dec 2022)")).toBeInTheDocument();
     expect(screen.getByText("Regulated/excluded entity")).toBeInTheDocument();
   });
 });
@@ -54,5 +56,8 @@ function sampleCompany(): Company {
     isInsuranceUndertaking: false,
     isPensionFund: false,
     isCharitableOrganisation: true,
+    holdsCharitableTaxExemption: true,
+    charitableTaxExemptionReference: "CHY-12345",
+    charitableTaxExemptionConfirmedDate: "2022-12-16",
   };
 }

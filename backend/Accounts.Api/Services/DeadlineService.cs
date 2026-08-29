@@ -82,6 +82,14 @@ public class DeadlineService(
                 DeadlineType.Revenue,
                 DeadlineCalculation.Simple(companyId, periodId, DeadlineType.Revenue, revDueDate)));
         }
+        else
+        {
+            var staleRevenueDeadline = period.FilingDeadlines
+                .FirstOrDefault(deadline => deadline.DeadlineType == DeadlineType.Revenue
+                    && deadline.FiledDate is null);
+            if (staleRevenueDeadline is not null)
+                db.FilingDeadlines.Remove(staleRevenueDeadline);
+        }
 
         // Charity deadline: FYE + 10 months (only if charitable organisation)
         if (company.IsCharitableOrganisation)

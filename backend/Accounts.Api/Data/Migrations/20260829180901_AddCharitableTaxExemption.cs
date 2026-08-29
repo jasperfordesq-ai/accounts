@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -11,12 +11,11 @@ namespace Accounts.Api.Data.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<bool>(
-                name: "HoldsCharitableTaxExemption",
+            migrationBuilder.AddColumn<DateOnly>(
+                name: "CharitableTaxExemptionConfirmedDate",
                 table: "companies",
-                type: "boolean",
-                nullable: false,
-                defaultValue: false);
+                type: "date",
+                nullable: true);
 
             migrationBuilder.AddColumn<string>(
                 name: "CharitableTaxExemptionReference",
@@ -25,11 +24,12 @@ namespace Accounts.Api.Data.Migrations
                 maxLength: 200,
                 nullable: true);
 
-            migrationBuilder.AddColumn<DateOnly>(
-                name: "CharitableTaxExemptionConfirmedDate",
+            migrationBuilder.AddColumn<bool>(
+                name: "HoldsCharitableTaxExemption",
                 table: "companies",
-                type: "date",
-                nullable: true);
+                type: "boolean",
+                nullable: false,
+                defaultValue: false);
         }
 
         /// <inheritdoc />

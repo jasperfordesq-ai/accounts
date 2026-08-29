@@ -51,7 +51,7 @@ public class ImportService(AccountsDbContext db, IOptions<ImportLimitConfig>? im
         // AIB Internet Banking 12-column export (Posted Account / Posted Transactions Date /
         // Description1-3 / Debit Amount / Credit Amount / Balance / …).
         // Detected before the generic AIB check; both formats must coexist.
-        new("AIBInternetBanking", new(-1, -1, -1, 7, 0, "dd/MM/yyyy", 5, 6, [2, 3, 4])),
+        new("AIBInternetBanking", new(1, -1, -1, 7, 0, "dd/MM/yyyy", 5, 6, [2, 3, 4])),
         new("AIB", new(0, 1, 3, 4, 2, "dd/MM/yyyy")),
         new("BOI", new(0, 1, 2, 3, -1, "dd/MM/yyyy")),
         new("Revolut", new(0, 1, 2, 3, -1, "yyyy-MM-dd")),
@@ -360,7 +360,14 @@ public class ImportService(AccountsDbContext db, IOptions<ImportLimitConfig>? im
         var lower = headerLine.ToLower();
         // AIB Internet Banking: 12-column format with separate debit/credit columns.
         // Match on the full distinguishing signature before the simpler AIB substring.
-        if (lower.Contains("posted transactions date") && lower.Contains("debit amount") && lower.Contains("credit amount"))
+        if (lower.Contains("posted account")
+            && lower.Contains("posted transactions date")
+            && lower.Contains("description1")
+            && lower.Contains("description2")
+            && lower.Contains("description3")
+            && lower.Contains("debit amount")
+            && lower.Contains("credit amount")
+            && lower.Contains("balance"))
             return KnownFormats[0]; // AIBInternetBanking
         if (lower.Contains("posted account") || lower.Contains("aib")) return KnownFormats[1]; // AIB
         if (lower.Contains("bank of ireland") || lower.Contains("boi")) return KnownFormats[2]; // BOI

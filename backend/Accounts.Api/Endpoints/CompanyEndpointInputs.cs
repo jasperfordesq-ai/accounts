@@ -88,6 +88,21 @@ public static class EndpointInputs
             errors["annualReturnDate"] = ["Annual Return Date cannot be before incorporation."];
         if (!string.IsNullOrWhiteSpace(input.CroNumber) && input.CroNumber.Length > 20)
             errors["croNumber"] = ["CRO number must be 20 characters or fewer."];
+        if (!string.IsNullOrWhiteSpace(input.CharitableTaxExemptionReference)
+            && input.CharitableTaxExemptionReference.Length > 200)
+            errors["charitableTaxExemptionReference"] = ["Charitable tax exemption reference must be 200 characters or fewer."];
+        if (input.HoldsCharitableTaxExemption && !input.IsCharitableOrganisation)
+            errors["holdsCharitableTaxExemption"] = ["Charitable tax exemption can only be recorded for a charitable organisation."];
+        if (input.HoldsCharitableTaxExemption && string.IsNullOrWhiteSpace(input.CharitableTaxExemptionReference))
+            errors["charitableTaxExemptionReference"] = ["Revenue exemption evidence reference is required while charitable tax exemption is held."];
+        if (input.HoldsCharitableTaxExemption
+            && (input.CharitableTaxExemptionConfirmedDate is null
+                || input.CharitableTaxExemptionConfirmedDate == default))
+            errors["charitableTaxExemptionConfirmedDate"] = ["Revenue exemption confirmation date is required while charitable tax exemption is held."];
+        if (!input.HoldsCharitableTaxExemption
+            && (!string.IsNullOrWhiteSpace(input.CharitableTaxExemptionReference)
+                || input.CharitableTaxExemptionConfirmedDate is not null))
+            errors["holdsCharitableTaxExemption"] = ["Set charitable tax exemption to held before recording its evidence."];
 
         return errors.Count > 0 ? Results.ValidationProblem(errors) : null;
     }
