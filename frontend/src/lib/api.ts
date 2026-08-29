@@ -2245,7 +2245,7 @@ const dashboardDeadlineBatchSchema = z.object({
     companyId: z.number().int().positive(),
     companyName: z.string().min(1),
     state: dashboardDeadlineStateSchema,
-    deadline: filingDeadlineSchema.nullable(),
+    deadline: filingDeadlineSchema.nullish().transform((deadline) => deadline ?? null),
     message: z.string().min(1),
   })),
 });

@@ -33,6 +33,20 @@ test("dashboard deadline batch rejects malformed counts, duplicate scope and dea
   assert.throws(() => parseDashboardDeadlineBatch(missingEvidence), /deadline does not match state scheduled/);
 });
 
+test("dashboard deadline batch normalizes an omitted deadline for a new uncalculated period", () => {
+  const batch = dashboardBatch(1);
+  batch.items[0].state = "not-configured";
+  batch.items[0].message = "Filing deadlines have not been calculated for this company.";
+  delete batch.items[0].deadline;
+  batch.counts["not-applicable"] = 0;
+  batch.counts["not-configured"] = 1;
+
+  const parsed = parseDashboardDeadlineBatch(batch);
+
+  assert.equal(parsed.items[0].state, "not-configured");
+  assert.equal(parsed.items[0].deadline, null);
+});
+
 test("getDashboardDeadlines makes one batch request rather than one request per company", async () => {
   const originalFetch = globalThis.fetch;
   const calls = [];
