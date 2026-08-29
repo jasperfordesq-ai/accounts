@@ -136,11 +136,14 @@ public static class PeriodStatusEndpoint
         var company = await db.Companies
             .AsNoTracking()
             .Where(c => c.Id == companyId)
-            .Select(c => new { c.IsCharitableOrganisation })
+            .Select(c => new { c.IsCharitableOrganisation, c.HoldsCharitableTaxExemption })
             .SingleAsync();
-        var requiredTypes = company.IsCharitableOrganisation
-            ? new[] { DeadlineType.CRO, DeadlineType.Revenue, DeadlineType.Charity }
-            : new[] { DeadlineType.CRO, DeadlineType.Revenue };
+        var requiredTypes = (company.IsCharitableOrganisation, company.HoldsCharitableTaxExemption) switch
+        {
+            (true, false) => new[] { DeadlineType.CRO, DeadlineType.Revenue, DeadlineType.Charity },
+            (true, true)  => new[] { DeadlineType.CRO, DeadlineType.Charity },
+            _             => new[] { DeadlineType.CRO, DeadlineType.Revenue },
+        };
         var deadlines = await db.FilingDeadlines
             .AsNoTracking()
             .Where(d => d.CompanyId == companyId && d.PeriodId == periodId)
