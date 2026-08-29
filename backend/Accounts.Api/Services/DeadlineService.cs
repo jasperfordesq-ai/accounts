@@ -19,6 +19,27 @@ public class DeadlineService(
     private static readonly TimeZoneInfo IrelandTimeZone = ResolveIrelandTimeZone();
     private FilingReleaseGate ReleaseGate => releaseGate ??= new FilingReleaseGate(db);
 
+    public async Task<List<FilingDeadline>> RecalculateCompanyDeadlinesAsync(
+        int companyId,
+        string? userId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var periodIds = await db.AccountingPeriods
+            .Where(period => period.CompanyId == companyId)
+            .OrderBy(period => period.PeriodStart)
+            .ThenBy(period => period.Id)
+            .Select(period => period.Id)
+            .ToListAsync(cancellationToken);
+        var deadlines = new List<FilingDeadline>();
+        foreach (var periodId in periodIds)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            deadlines.AddRange(await CalculateDeadlinesAsync(companyId, periodId, userId));
+        }
+
+        return deadlines;
+    }
+
     /// <summary>
     /// Calculates and retains the separate CRO ARD, B1 made-up-to date, 56-day delivery date and
     /// section 347(4) financial-statement age limit. Also calculates charity and Revenue deadlines.
@@ -100,6 +121,14 @@ public class DeadlineService(
                 periodId,
                 DeadlineType.Charity,
                 DeadlineCalculation.Simple(companyId, periodId, DeadlineType.Charity, charityDueDate)));
+        }
+        else
+        {
+            var staleCharityDeadline = period.FilingDeadlines
+                .FirstOrDefault(deadline => deadline.DeadlineType == DeadlineType.Charity
+                    && deadline.FiledDate is null);
+            if (staleCharityDeadline is not null)
+                db.FilingDeadlines.Remove(staleCharityDeadline);
         }
 
         await db.SaveChangesAsync();

@@ -2036,7 +2036,7 @@ public partial class AccountsWorkflowTests
         company.CharitableTaxExemptionConfirmedDate = new DateOnly(2022, 12, 16);
         await db.SaveChangesAsync();
 
-        var recalculated = await service.CalculateDeadlinesAsync(period.CompanyId, period.Id);
+        var recalculated = await service.RecalculateCompanyDeadlinesAsync(period.CompanyId);
 
         Assert.Equal(
             [DeadlineType.CRO, DeadlineType.Charity],
@@ -2044,6 +2044,25 @@ public partial class AccountsWorkflowTests
         Assert.DoesNotContain(
             await db.FilingDeadlines.Where(deadline => deadline.PeriodId == period.Id).ToListAsync(),
             deadline => deadline.DeadlineType == DeadlineType.Revenue);
+
+        company.HoldsCharitableTaxExemption = false;
+        company.CharitableTaxExemptionReference = null;
+        company.CharitableTaxExemptionConfirmedDate = null;
+        await db.SaveChangesAsync();
+
+        var afterRevocation = await service.RecalculateCompanyDeadlinesAsync(period.CompanyId);
+        Assert.Contains(afterRevocation, deadline => deadline.DeadlineType == DeadlineType.Revenue);
+
+        company.IsCharitableOrganisation = false;
+        await db.SaveChangesAsync();
+
+        var afterLeavingCharityScope = await service.RecalculateCompanyDeadlinesAsync(period.CompanyId);
+        Assert.Equal(
+            [DeadlineType.CRO, DeadlineType.Revenue],
+            afterLeavingCharityScope.Select(deadline => deadline.DeadlineType).OrderBy(type => type).ToArray());
+        Assert.DoesNotContain(
+            await db.FilingDeadlines.Where(deadline => deadline.PeriodId == period.Id).ToListAsync(),
+            deadline => deadline.DeadlineType == DeadlineType.Charity && deadline.FiledDate is null);
     }
 
     [Fact]

@@ -2736,6 +2736,9 @@ public partial class AccountsWorkflowTests
         AssertOccursBefore(periodStatusEndpoint, "CompanyEndpointAccess.CanAccessCompanyAsync(context, db, companyId)", "EndpointRequestAuthorization.AuthorizeCurrentRequest(context, apiAccess)");
 
         AssertOccursBefore(EndpointSnippet(source, "companies.MapPut(\"/{id:int}\", async"), "CompanyEndpointAccess.CanAccessCompanyAsync(context, db, id)", "EndpointInputs.ValidateCompany(input)");
+        var companyUpdate = EndpointSnippet(source, "companies.MapPut(\"/{id:int}\", async");
+        Assert.Contains("filingObligationsChanged", companyUpdate);
+        Assert.Contains("deadlineService.RecalculateCompanyDeadlinesAsync(", companyUpdate);
 
         static string EndpointSnippet(string source, string marker)
         {

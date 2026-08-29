@@ -92,7 +92,7 @@ public static class CompanyEndpoints
             }
         });
 
-        companies.MapPut("/{id:int}", async (int id, CompanyInput input, HttpContext context, ApiAccessService apiAccess, AccountsDbContext db, AccountingWriteGuard writeGuard, AuditService audit) =>
+        companies.MapPut("/{id:int}", async (int id, CompanyInput input, HttpContext context, ApiAccessService apiAccess, AccountsDbContext db, AccountingWriteGuard writeGuard, AuditService audit, DeadlineService deadlineService) =>
         {
             if (!await CompanyEndpointAccess.CanAccessCompanyAsync(context, db, id))
                 return Results.NotFound();
@@ -118,10 +118,20 @@ public static class CompanyEndpoints
                 return blocked;
 
             var oldValue = DomainAuditCoverage.CompanySnapshot(company);
+            var filingObligationsChanged = company.IsCharitableOrganisation != input.IsCharitableOrganisation
+                || company.HoldsCharitableTaxExemption != input.HoldsCharitableTaxExemption;
             EndpointInputs.ApplyCompany(company, input);
             await InvalidateCompanyCharityArtifactsAsync(db, id);
 
             await db.SaveChangesAsync();
+            if (filingObligationsChanged)
+            {
+                var actor = AuthContext.RequireUser(context);
+                await deadlineService.RecalculateCompanyDeadlinesAsync(
+                    id,
+                    AuthenticatedIdentity.AuditUserId(actor),
+                    context.RequestAborted);
+            }
             await DomainAuditCoverage.LogAsync(
                 audit,
                 context,
