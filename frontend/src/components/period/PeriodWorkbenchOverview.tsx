@@ -104,8 +104,8 @@ export function PeriodWorkbenchOverview({
     {
       id: "classify",
       label: "Classify",
-      detail: period?.sizeClassification ? period.sizeClassification.calculatedClass : "Size/regime not complete",
-      state: period?.sizeClassification ? "done" : transactionTotal > 0 ? "active" : "todo",
+      detail: period?.sizeClassification?.calculatedClass ?? "Size/regime not complete",
+      state: period?.sizeClassification?.calculatedClass ? "done" : transactionTotal > 0 ? "active" : "todo",
       href: `/companies/${companyId}/periods/${periodId}/classify`,
     },
     {

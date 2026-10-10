@@ -84,7 +84,11 @@ public sealed class PeriodConcurrencyTokenService(AccountsDbContext db)
 
         var connection = db.Database.GetDbConnection();
         var closeAfter = connection.State != ConnectionState.Open;
-        if (closeAfter) await connection.OpenAsync(cancellationToken);
+        // Open through EF so TenantRlsConnectionInterceptor applies the tenant context. A raw
+        // DbConnection.OpenAsync bypasses it, and under forced RLS the token query then sees no
+        // period: reads carry no ETag and a write's response falls back to its pre-write token,
+        // so the next write is rejected as a false concurrency conflict.
+        if (closeAfter) await db.Database.OpenConnectionAsync(cancellationToken);
         try
         {
             await using var command = connection.CreateCommand();
@@ -121,7 +125,7 @@ public sealed class PeriodConcurrencyTokenService(AccountsDbContext db)
         }
         finally
         {
-            if (closeAfter) await connection.CloseAsync();
+            if (closeAfter) await db.Database.CloseConnectionAsync();
         }
     }
 

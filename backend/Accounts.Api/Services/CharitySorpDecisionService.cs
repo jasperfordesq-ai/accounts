@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Accounts.Api.Entities;
 
 namespace Accounts.Api.Services;
@@ -9,14 +10,14 @@ public sealed record CharitySorpSource(
     string SourceId,
     string Title,
     string Url,
-    string? DocumentSha256,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? DocumentSha256,
     string Basis);
 
 public sealed record CharitySorpDecision(
     string FrameworkCode,
     string FrameworkTitle,
     DateOnly EffectiveFrom,
-    int? Tier,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] int? Tier,
     string SofaBasis,
     bool AutomatedArtifactsSupported,
     bool ManualProfessionalHandoffRequired,

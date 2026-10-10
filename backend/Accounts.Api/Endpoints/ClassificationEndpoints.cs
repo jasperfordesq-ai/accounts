@@ -14,18 +14,9 @@ public static class ClassificationEndpoints
         // Save size classification data
         group.MapPut("/size-classification", SaveSizeClassificationEndpointAsync);
 
-        // Run classification engine
-        group.MapPost("/classify", async (int companyId, int periodId, SizeClassificationService service, AccountsDbContext db, HttpContext context, ApiAccessService apiAccess) =>
-        {
-            if (!await CompanyEndpointAccess.CanAccessCompanyPeriodAsync(context, db, companyId, periodId))
-                return Results.NotFound();
-
-            if (EndpointRequestAuthorization.AuthorizeCurrentRequest(context, apiAccess) is { } denied)
-                return denied;
-
-            var result = await service.ClassifyAsync(companyId, periodId, AuditUserId(context));
-            return Results.Ok(result);
-        });
+        // Run classification engine, optionally saving the inputs in the same write
+        group.MapPost("/classify", ClassifySizeEndpointAsync)
+            .Produces<SizeClassificationService.ClassificationResult>();
 
         // Apply or re-review a conservative, evidence-bound statutory classification override.
         group.MapPut("/size-classification/override", ApplySizeClassificationOverrideEndpointAsync);
@@ -114,6 +105,68 @@ public static class ClassificationEndpoints
             .FirstOrDefaultAsync(p => p.Id == periodId && p.CompanyId == companyId);
         if (period == null) return Results.NotFound();
 
+        var (sc, oldValue) = ApplySizeClassificationInputs(db, period, input);
+
+        await db.SaveChangesAsync();
+        await audit.LogAsync(
+            companyId,
+            periodId,
+            "SizeClassification",
+            sc.Id,
+            AuditEventCodes.SizeClassificationDataSaved,
+            oldValue,
+            SizeClassificationInputSnapshot(sc),
+            AuditUserId(context));
+        return Results.Ok(sc);
+    }
+
+    public static async Task<IResult> ClassifySizeEndpointAsync(
+        int companyId,
+        int periodId,
+        SizeClassificationInput? input,
+        SizeClassificationService service,
+        AccountsDbContext db,
+        AuditService audit,
+        HttpContext context,
+        ApiAccessService apiAccess)
+    {
+        if (!await CompanyEndpointAccess.CanAccessCompanyPeriodAsync(context, db, companyId, periodId))
+            return Results.NotFound();
+
+        if (EndpointRequestAuthorization.AuthorizeCurrentRequest(context, apiAccess) is { } denied)
+            return denied;
+
+        if (input is null)
+            return Results.Ok(await service.ClassifyAsync(companyId, periodId, AuditUserId(context)));
+
+        // Inputs and decision are written by one SaveChanges inside ClassifyLoadedAsync. A
+        // classification the engine rejects therefore leaves no inputs-only row behind.
+        var period = await service.LoadPeriodForClassificationAsync(companyId, periodId);
+        var decisionOldValue = period.SizeClassification is { } existing
+            ? SizeClassificationService.DecisionAuditSnapshot(existing)
+            : null;
+        var (sc, inputOldValue) = ApplySizeClassificationInputs(db, period, input);
+        var result = await service.ClassifyLoadedAsync(period, decisionOldValue, AuditUserId(context));
+        await audit.LogAsync(
+            companyId,
+            periodId,
+            "SizeClassification",
+            sc.Id,
+            AuditEventCodes.SizeClassificationDataSaved,
+            inputOldValue,
+            SizeClassificationInputSnapshot(sc),
+            AuditUserId(context));
+        return Results.Ok(result);
+    }
+
+    /// <summary>
+    /// Validates and applies caller inputs to the tracked period's classification without saving.
+    /// </summary>
+    private static (SizeClassification Classification, object? OldValue) ApplySizeClassificationInputs(
+        AccountsDbContext db,
+        AccountingPeriod period,
+        SizeClassificationInput input)
+    {
         SizeClassificationService.ValidateInputs(
             input.Turnover,
             input.BalanceSheetTotal,
@@ -126,8 +179,9 @@ public static class ClassificationEndpoints
         object? oldValue = sc is null ? null : SizeClassificationInputSnapshot(sc);
         if (sc == null)
         {
-            sc = new SizeClassification { PeriodId = periodId };
+            sc = new SizeClassification { PeriodId = period.Id };
             db.SizeClassifications.Add(sc);
+            period.SizeClassification = sc;
         }
 
         var changed = sc.Turnover != input.Turnover
@@ -149,17 +203,7 @@ public static class ClassificationEndpoints
                 db.FilingRegimes.Remove(period.FilingRegime);
         }
 
-        await db.SaveChangesAsync();
-        await audit.LogAsync(
-            companyId,
-            periodId,
-            "SizeClassification",
-            sc.Id,
-            AuditEventCodes.SizeClassificationDataSaved,
-            oldValue,
-            SizeClassificationInputSnapshot(sc),
-            AuditUserId(context));
-        return Results.Ok(sc);
+        return (sc, oldValue);
     }
 
     public static async Task<IResult> ApplySizeClassificationOverrideEndpointAsync(

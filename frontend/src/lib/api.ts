@@ -485,7 +485,8 @@ export interface SizeClassification {
   thresholdScheduleEffectiveFrom?: string;
   thresholdScheduleCode?: string;
   decisionInputFingerprintSha256?: string;
-  calculatedClass: string;
+  /** Absent until the engine has recorded a decision for the current inputs. */
+  calculatedClass?: string;
   overrideRequiresRereview?: boolean;
   qualificationNotes?: string;
 }
@@ -586,7 +587,7 @@ export interface YearEndSummary {
   inventory: { count: number; totalValue: number };
   loans: { count: number; totalBalance: number };
   directorLoans: { count: number };
-  payroll: { grossWages: number; staffCount: number } | null;
+  payroll: { hasPayroll: true; grossWages: number; staffCount: number } | { hasPayroll: false };
   taxes: { count: number; totalLiability: number; totalBalance: number };
   dividends: { count: number; total: number };
   reviewConfirmations: YearEndReviewConfirmation[];
@@ -2012,8 +2013,19 @@ export interface ClassificationResult {
   thresholdScheduleEffectiveFrom?: string;
 }
 
-export const runClassification = (companyId: number, periodId: number) =>
-  apiFetch<ClassificationResult>(`/api/companies/${companyId}/periods/${periodId}/classify`, { method: "POST" });
+export type SizeClassificationInputs = Parameters<typeof saveSizeClassification>[2];
+
+/**
+ * Saves the inputs and runs the engine as one server write, so a rejected classification leaves
+ * no inputs-only record behind. The decision is validated against its own response contract.
+ */
+export const runClassification = (companyId: number, periodId: number, inputs?: SizeClassificationInputs) =>
+  apiFetch<ClassificationResult>(`/api/companies/${companyId}/periods/${periodId}/classify`, {
+    method: "POST",
+    ...(inputs ? { body: JSON.stringify(inputs) } : {}),
+    responseSchema: apiContracts.classificationResultSchema,
+    responseContract: "size classification result",
+  });
 
 export const setFilingRegime = (companyId: number, periodId: number, electedRegime?: string) =>
   apiFetch<unknown>(`/api/companies/${companyId}/periods/${periodId}/filing-regime`, {
@@ -2220,6 +2232,14 @@ export interface DashboardDeadlineItem {
   state: DashboardDeadlineState;
   deadline: FilingDeadline | null;
   message: string;
+  /** Unfiled deadlines of earlier periods: visible, but not ranked as live risk. */
+  historicUnverifiedCount: number;
+  oldestHistoricUnverified: FilingDeadline | null;
+}
+
+export interface HistoricDeadlineSummary {
+  count: number;
+  oldest: FilingDeadline;
 }
 
 export interface DashboardDeadlineBatch {
@@ -2250,6 +2270,12 @@ const dashboardDeadlineBatchSchema = z.object({
     state: dashboardDeadlineStateSchema,
     deadline: filingDeadlineSchema.nullish().transform((deadline) => deadline ?? null),
     message: z.string().min(1),
+    historicUnverifiedCount: z.number().int().nonnegative(),
+    oldestHistoricUnverified: filingDeadlineSchema.nullable(),
+  }).superRefine((item, context) => {
+    if ((item.historicUnverifiedCount > 0) !== (item.oldestHistoricUnverified !== null)) {
+      context.addIssue({ code: "custom", path: ["oldestHistoricUnverified"], message: "Must be present exactly when historic unverified deadlines are counted" });
+    }
   })),
 });
 

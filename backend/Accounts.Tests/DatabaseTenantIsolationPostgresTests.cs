@@ -326,6 +326,58 @@ public sealed class DatabaseTenantIsolationPostgresTests : IAsyncLifetime
         }
     }
 
+    [PostgresFact]
+    public async Task PeriodConcurrencyToken_IsReadUnderTenantContextWhetherOrNotTheConnectionIsOpen()
+    {
+        var adminConnection = administratorConnectionString
+            ?? throw new InvalidOperationException($"{ConnectionEnvVar} is required.");
+        var appConnection = applicationConnectionString
+            ?? throw new InvalidOperationException($"{ConnectionEnvVar} is required.");
+        int tenantId;
+        int companyId;
+        int periodId;
+        await using (var setup = CreateDb(adminConnection))
+        {
+            var tenant = new Tenant { Name = "ETag Tenant", Slug = "etag-" + Guid.NewGuid().ToString("N") };
+            setup.Tenants.Add(tenant);
+            await setup.SaveChangesAsync();
+            tenantId = tenant.Id;
+            var company = Company(tenantId, "ETag Limited");
+            setup.Companies.Add(company);
+            await setup.SaveChangesAsync();
+            companyId = company.Id;
+            var period = Period(companyId, 2025);
+            setup.AccountingPeriods.Add(period);
+            await setup.SaveChangesAsync();
+            periodId = period.Id;
+        }
+
+        var tenantContext = new DatabaseTenantContext(new HttpContextAccessor());
+        tenantContext.SetResolvedTenant(tenantId);
+        var interceptor = new TenantRlsConnectionInterceptor(tenantContext, Options.Create(Configuration()));
+        var options = new DbContextOptionsBuilder<AccountsDbContext>()
+            .UseNpgsql(appConnection)
+            .AddInterceptors(interceptor)
+            .Options;
+        await using var appDb = new AccountsDbContext(options);
+        var tokens = new PeriodConcurrencyTokenService(appDb);
+
+        // A GET, or a write response's ETag computed after the request transaction has closed
+        // the connection, reads the token from a closed connection.
+        var fromClosedConnection = await tokens.GetAsync(companyId, periodId);
+
+        // A write request's If-Match comparison reads it inside the request transaction.
+        string? insideTransaction;
+        await using (var transaction = await appDb.Database.BeginTransactionAsync())
+        {
+            insideTransaction = await tokens.GetAsync(companyId, periodId);
+            await transaction.RollbackAsync();
+        }
+
+        Assert.NotNull(insideTransaction);
+        Assert.Equal(insideTransaction, fromClosedConnection);
+    }
+
     private DatabaseTenantIsolationConfig Configuration() => new()
     {
         Required = true,

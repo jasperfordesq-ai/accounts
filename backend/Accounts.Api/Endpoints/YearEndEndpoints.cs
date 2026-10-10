@@ -271,7 +271,7 @@ public static partial class YearEndEndpoints
                 inventory = new { count = inventoryList.Count, totalValue = inventoryList.Sum(i => i.Value) },
                 loans = new { count = loansList.Count, totalBalance = snapshotClosingBalance + fallbackLoanBalance },
                 directorLoans = new { count = dirLoansList.Count },
-                payroll = payrollItem != null ? new { payrollItem.GrossWages, payrollItem.StaffCount } : null,
+                payroll = YearEndPayrollSummary.From(payrollItem),
                 taxes = new { count = taxList.Count, totalLiability = taxList.Sum(t => t.Liability), totalBalance = taxList.Sum(t => t.Balance) },
                 dividends = new { count = dividendsList.Count, total = dividendsList.Sum(d => d.Amount) },
                 reviewConfirmations = confirmations,
@@ -421,4 +421,17 @@ public static partial class YearEndEndpoints
             }
         });
     }
+}
+
+/// <summary>
+/// Year-end summary payroll section. A company with no employees (for example a charity run by
+/// volunteers) legitimately has no payroll record; that is stated explicitly as HasPayroll=false
+/// rather than as a null that the API's WhenWritingNull policy would drop from the response.
+/// </summary>
+public sealed record YearEndPayrollSummary(bool HasPayroll, decimal? GrossWages, int? StaffCount)
+{
+    public static YearEndPayrollSummary From(PayrollSummary? payroll) =>
+        payroll is null
+            ? new(false, null, null)
+            : new(true, payroll.GrossWages, payroll.StaffCount);
 }

@@ -53,10 +53,10 @@ public class AccountantWorkingPaperService(
         int EntityId,
         int PeriodId,
         string Label,
-        decimal? Amount,
-        string? EvidenceReference,
-        string? ReviewedBy,
-        DateTime? ReviewedAtUtc,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] decimal? Amount,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? EvidenceReference,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? ReviewedBy,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] DateTime? ReviewedAtUtc,
         string DrillDownRoute);
 
     public sealed record Reconciliation(
@@ -94,19 +94,19 @@ public class AccountantWorkingPaperService(
         decimal Amount,
         int BankAccountId,
         string BankAccountName,
-        int? ImportBatchId,
-        string? ImportFilename,
-        string? SourceFileSha256,
-        int? CategoryId,
-        string? CategoryCode,
-        string? CategoryName,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] int? ImportBatchId,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? ImportFilename,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? SourceFileSha256,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] int? CategoryId,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? CategoryCode,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? CategoryName,
         string CategorizationStatus,
-        decimal? ConfidenceScore,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] decimal? ConfidenceScore,
         bool ManualOverride,
         bool IncludedInLedger,
         string DuplicateReviewStatus,
-        string? DuplicateDecisionBy,
-        DateTime? DuplicateDecisionAtUtc,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? DuplicateDecisionBy,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] DateTime? DuplicateDecisionAtUtc,
         IReadOnlyList<SourceReference> Sources);
 
     public sealed record CategorizedTransactionsArtifact(

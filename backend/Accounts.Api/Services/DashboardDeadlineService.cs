@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Accounts.Api.Data;
 using Accounts.Api.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -26,12 +27,20 @@ public static class DashboardDeadlineStates
     ];
 }
 
+/// <summary>
+/// State and Deadline describe the live (latest) accounting period. Unfiled deadlines of earlier
+/// periods are reported separately as historic and unverified: they stay visible, because a missed
+/// historic filing still matters, but a back-filled history without recorded filing dates must not
+/// rank as the firm's most urgent live risk.
+/// </summary>
 public sealed record DashboardDeadlineItem(
     int CompanyId,
     string CompanyName,
     string State,
     FilingDeadline? Deadline,
-    string Message);
+    string Message,
+    int HistoricUnverifiedCount = 0,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] FilingDeadline? OldestHistoricUnverified = null);
 
 public sealed record DashboardDeadlineBatch(
     int TotalCompanies,
@@ -61,6 +70,11 @@ public sealed class DashboardDeadlineService(AccountsDbContext db, DeadlineServi
                 company.LegalName,
                 company.IncorporationDate,
                 company.Periods.Count,
+                company.Periods
+                    .OrderByDescending(period => period.PeriodEnd)
+                    .ThenByDescending(period => period.Id)
+                    .Select(period => (int?)period.Id)
+                    .FirstOrDefault(),
                 company.IsCharitableOrganisation,
                 company.HoldsCharitableTaxExemption))
             .ToListAsync(cancellationToken);
@@ -163,14 +177,28 @@ public sealed class DashboardDeadlineService(AccountsDbContext db, DeadlineServi
                 "One or more applicable filing deadlines have not been calculated for the company's accounting periods.");
         }
 
-        var next = applicableDeadlines
+        var liveDeadlines = applicableDeadlines
+            .Where(deadline => deadline.PeriodId == company.LatestPeriodId)
+            .ToList();
+        var historicUnverified = applicableDeadlines
+            .Where(deadline => deadline.PeriodId != company.LatestPeriodId && deadline.FiledDate is null)
+            .OrderBy(deadline => deadline.DueDate)
+            .ThenBy(deadline => deadline.Id)
+            .ToList();
+        var historicCount = historicUnverified.Count;
+        var oldestHistoric = historicUnverified.FirstOrDefault();
+        var historicNote = historicCount == 0
+            ? ""
+            : $" {historicCount} earlier-period deadline{(historicCount == 1 ? " has" : "s have")} no recorded filing.";
+
+        var next = liveDeadlines
             .Where(deadline => deadline.FiledDate is null)
             .OrderBy(deadline => deadline.DueDate)
             .ThenBy(deadline => deadline.Id)
             .FirstOrDefault();
         if (next is null)
         {
-            var latestFiled = applicableDeadlines
+            var latestFiled = liveDeadlines
                 .OrderByDescending(deadline => deadline.FiledDate)
                 .ThenByDescending(deadline => deadline.DueDate)
                 .ThenByDescending(deadline => deadline.Id)
@@ -180,7 +208,9 @@ public sealed class DashboardDeadlineService(AccountsDbContext db, DeadlineServi
                 company.LegalName,
                 DashboardDeadlineStates.Filed,
                 latestFiled,
-                "All configured filing deadlines are recorded as filed.");
+                "All live-period filing deadlines are recorded as filed." + historicNote,
+                historicCount,
+                oldestHistoric);
         }
 
         var state = next.DueDate < today
@@ -190,11 +220,18 @@ public sealed class DashboardDeadlineService(AccountsDbContext db, DeadlineServi
                 : DashboardDeadlineStates.Scheduled;
         var message = state switch
         {
-            DashboardDeadlineStates.Overdue => "The next unfiled deadline is overdue.",
-            DashboardDeadlineStates.DueSoon => $"The next unfiled deadline falls within {DueSoonDays} days.",
-            _ => "The next filing deadline is scheduled."
+            DashboardDeadlineStates.Overdue => "The next unfiled live-period deadline is overdue.",
+            DashboardDeadlineStates.DueSoon => $"The next unfiled live-period deadline falls within {DueSoonDays} days.",
+            _ => "The next live-period filing deadline is scheduled."
         };
-        return new DashboardDeadlineItem(company.Id, company.LegalName, state, next, message);
+        return new DashboardDeadlineItem(
+            company.Id,
+            company.LegalName,
+            state,
+            next,
+            message + historicNote,
+            historicCount,
+            oldestHistoric);
     }
 
     internal sealed record CompanyDeadlineScope(
@@ -202,6 +239,7 @@ public sealed class DashboardDeadlineService(AccountsDbContext db, DeadlineServi
         string LegalName,
         DateOnly IncorporationDate,
         int PeriodCount,
+        int? LatestPeriodId,
         bool IsCharitableOrganisation,
         bool HoldsCharitableTaxExemption);
 }

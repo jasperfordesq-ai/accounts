@@ -47,6 +47,24 @@ test("dashboard deadline batch normalizes an omitted deadline for a new uncalcul
   assert.equal(parsed.items[0].deadline, null);
 });
 
+test("dashboard deadline batch carries unverified historic deadlines separately from the live state", () => {
+  const batch = dashboardBatch(7);
+  const scheduled = batch.items.find((item) => item.state === "scheduled");
+  assert.ok(scheduled);
+  scheduled.historicUnverifiedCount = 16;
+  scheduled.oldestHistoricUnverified = { ...scheduled.deadline, id: 99, periodId: 1, deadlineType: "Revenue", dueDate: "2019-09-23", calculatedDueDate: "2019-09-23" };
+  const parsed = parseDashboardDeadlineBatch(batch);
+  assert.equal(parsed.items.find((item) => item.state === "scheduled").historicUnverifiedCount, 16);
+
+  const inconsistent = structuredClone(batch);
+  inconsistent.items.find((item) => item.state === "scheduled").oldestHistoricUnverified = null;
+  assert.throws(() => parseDashboardDeadlineBatch(inconsistent), /oldestHistoricUnverified/);
+
+  const omitted = structuredClone(batch);
+  delete omitted.items[0].historicUnverifiedCount;
+  assert.throws(() => parseDashboardDeadlineBatch(omitted), /historicUnverifiedCount/);
+});
+
 test("getDashboardDeadlines makes one batch request rather than one request per company", async () => {
   const originalFetch = globalThis.fetch;
   const calls = [];
@@ -103,6 +121,8 @@ function dashboardBatch(totalCompanies) {
         notes: null,
       } : null,
       message: `Explicit ${state} state`,
+      historicUnverifiedCount: 0,
+      oldestHistoricUnverified: null,
     };
   });
   return {

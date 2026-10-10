@@ -9,6 +9,7 @@ import {
   type Company,
   type FilingDeadline,
   type DashboardDeadlineState,
+  type HistoricDeadlineSummary,
   type ProductionReadinessReport,
   type QuarantinedCompanySummary,
   ApiError,
@@ -38,6 +39,7 @@ export default function Dashboard() {
   const [deadlineState, setDeadlineState] = useState<ResourceState>(INITIAL_RESOURCE_STATE);
   const [deadlineUnavailableCompanyIds, setDeadlineUnavailableCompanyIds] = useState<number[]>([]);
   const [deadlineStates, setDeadlineStates] = useState<Record<number, DashboardDeadlineState>>({});
+  const [historicDeadlines, setHistoricDeadlines] = useState<Record<number, HistoricDeadlineSummary>>({});
   const [readinessReport, setReadinessReport] = useState<ProductionReadinessReport | null>(null);
   const [readinessState, setReadinessState] = useState<ResourceState>(INITIAL_RESOURCE_STATE);
   const [quarantinedCompanies, setQuarantinedCompanies] = useState<QuarantinedCompanySummary[]>([]);
@@ -99,6 +101,9 @@ export default function Dashboard() {
       }
       setDeadlines(Object.fromEntries(batch.items.map((item) => [item.companyId, item.deadline])));
       setDeadlineStates(Object.fromEntries(batch.items.map((item) => [item.companyId, item.state])));
+      setHistoricDeadlines(Object.fromEntries(batch.items.flatMap((item) => item.oldestHistoricUnverified
+        ? [[item.companyId, { count: item.historicUnverifiedCount, oldest: item.oldestHistoricUnverified }]]
+        : [])));
       setDeadlineUnavailableCompanyIds(batch.items
         .filter((item) => item.state === "unavailable")
         .map((item) => item.companyId));
@@ -191,6 +196,7 @@ export default function Dashboard() {
       deadlineState={deadlineState}
       deadlineUnavailableCompanyIds={deadlineUnavailableCompanyIds}
       deadlineStates={deadlineStates}
+      historicDeadlines={historicDeadlines}
       canManageDeadlineRisk={canReadInternalWorkingPapers}
       canRunDeadlineDelivery={isOwner}
       deadlineRiskItems={deadlineRiskItems}
