@@ -141,9 +141,15 @@ installation-held HMAC before any privileged restore. Keep these three items in
 separate protected locations: the encrypted recovery set, its age identity, and
 the recovery-authentication key produced by `export-recovery-key`. Possession of
 all three is sufficient to recover the installation, so do not store them
-together. If the age identity or the MFA/identity/audit key material is lost,
-the affected sets cannot be restored or verified; do not delete the remaining
-host state, volume or recovery sets, and do not improvise a plaintext backup,
+together. A complete recovery set carries the MFA, identity-HMAC, audit-signing,
+tenant-context and session key material in its encrypted configuration
+companion, so losing the host's copies of those keys does not by itself prevent
+recovery: an intact complete set, its age identity and the separately saved
+recovery-authentication key still allow `recover-host` to restore them. Recovery
+is lost only when no usable combination of those three remains, for example if
+the age identity is lost or the only complete sets are missing or damaged. In
+that case do not delete the remaining host state, volume or recovery sets, and
+do not improvise a plaintext backup,
 `docker volume` operation or manual database edit as a workaround. Preserve the
 host and seek supervised recovery. If an age identity, the recovery key or the
 operator account is compromised, treat every recovery set it protects as
