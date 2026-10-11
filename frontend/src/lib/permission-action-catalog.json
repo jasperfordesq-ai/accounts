@@ -28,6 +28,7 @@
   { "id": "share-capital-update", "routeId": "company-detail", "requiredPermission": "canWriteWorkingPapers", "method": "PUT", "path": "/api/companies/1/share-capital/2" },
   { "id": "share-capital-delete", "routeId": "company-detail", "requiredPermission": "canWriteWorkingPapers", "method": "DELETE", "path": "/api/companies/1/share-capital/2" },
 
+  { "id": "period-finalise", "routeId": "period-workspace", "requiredPermission": "canApprove", "method": "PUT", "path": "/api/companies/1/periods/3/status" },
   { "id": "deadline-calculate", "routeId": "period-workspace", "requiredPermission": "canWriteWorkingPapers", "method": "POST", "path": "/api/companies/1/periods/3/deadlines/calculate" },
   { "id": "bank-account-create", "routeId": "period-workspace", "requiredPermission": "canWriteWorkingPapers", "method": "POST", "path": "/api/companies/1/bank-accounts" },
   { "id": "bank-import", "routeId": "period-workspace", "requiredPermission": "canWriteWorkingPapers", "method": "POST", "path": "/api/companies/1/bank-accounts/2/import" },

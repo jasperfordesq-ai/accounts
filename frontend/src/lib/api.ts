@@ -457,6 +457,7 @@ export interface AccountingPeriod {
   periodEnd: string;
   status: string;
   lockedAt?: string;
+  approvalDate?: string; // board approval date (s.324), recorded on finalisation
   isFirstYear: boolean;
   memberAuditNoticeReceived: boolean;
   memberAuditNoticeDate?: string;
@@ -1223,6 +1224,16 @@ export const createPeriod = (companyId: number, data: Partial<AccountingPeriod>,
     body: JSON.stringify(data),
     responseSchema: apiContracts.accountingPeriodSchema,
     responseContract: "created accounting period",
+  });
+// Finalising records the board approval date (s.324); reopening a locked period needs an Owner and a 10+ character reason.
+export type PeriodStatusUpdate = { status: "Draft" | "Review" | "Finalised" | "Filed"; approvalDate?: string; reopenReason?: string };
+export const updatePeriodStatus = (companyId: number, periodId: number, update: PeriodStatusUpdate, idempotencyKey?: string) =>
+  apiFetch<AccountingPeriod>(`/api/companies/${companyId}/periods/${periodId}/status`, {
+    method: "PUT",
+    ...idempotentMutation("period-status", idempotencyKey),
+    body: JSON.stringify(update),
+    responseSchema: apiContracts.accountingPeriodSchema,
+    responseContract: "updated accounting period status",
   });
 
 // Bank Accounts

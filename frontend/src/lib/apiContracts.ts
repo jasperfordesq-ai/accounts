@@ -158,6 +158,7 @@ export const accountingPeriodSchema = z.object({
   periodEnd: isoDateSchema,
   status: periodStatusSchema,
   lockedAt: z.string().datetime({ offset: true }).nullable().optional().transform((value) => value ?? undefined),
+  approvalDate: optionalDate,
   isFirstYear: z.boolean(),
   memberAuditNoticeReceived: z.boolean(),
   memberAuditNoticeDate: optionalDate,

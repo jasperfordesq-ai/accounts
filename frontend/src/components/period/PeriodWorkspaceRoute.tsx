@@ -85,6 +85,7 @@ import { PeriodWorkspaceSkeleton } from "@/components/Skeleton";
 import { ActionLink, WorkbenchHeader } from "@/components/workbench";
 import { PeriodAdjustmentsWorkspace } from "@/components/period/PeriodAdjustmentsWorkspace";
 import { PeriodWorkbenchOverview } from "@/components/period/PeriodWorkbenchOverview";
+import { PeriodFinalisePanel } from "@/components/period/PeriodFinalisePanel";
 import { PeriodCategoriseWorkspace } from "@/components/period/PeriodCategoriseWorkspace";
 import { PeriodFilingWorkspace } from "@/components/period/PeriodFilingWorkspace";
 import { PeriodImportWorkspace } from "@/components/period/PeriodImportWorkspace";
@@ -131,7 +132,7 @@ export function PeriodWorkspaceRoute({
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const router = useRouter();
-  const { canApprove, canRead, canReadInternalWorkingPapers, canReview, canWriteWorkingPapers } = useAuth();
+  const { canApprove, canRead, canReadInternalWorkingPapers, canReview, canWriteWorkingPapers, isOwner } = useAuth();
   const { announcement, announce } = useInteractionAnnouncements();
   const toast = useMemo(() => ({
     success(message: string) {
@@ -1067,6 +1068,14 @@ export function PeriodWorkspaceRoute({
             </ActionLink>
           </>
         }
+      />
+
+      <PeriodFinalisePanel
+        companyId={cId}
+        period={period}
+        canFinalise={canApprove}
+        canReopen={isOwner}
+        onChanged={() => Promise.all([loadPeriodResources(), refreshFilingState()]).then(() => undefined)}
       />
 
       <PeriodWorkbenchOverview

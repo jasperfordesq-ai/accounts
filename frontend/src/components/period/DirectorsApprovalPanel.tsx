@@ -161,7 +161,7 @@ export function DirectorsApprovalPanel({
         <div className="space-y-4">
           {approvalDate === null ? (
             <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
-              The board approval date has to be recorded on the period before the approval page can be generated. Record it, then regenerate the accounts so the signed page matches them.
+              Finalise the period to record the board approval date (s.324), then generate the final accounts.
             </p>
           ) : (
             <>

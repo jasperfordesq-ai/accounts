@@ -104,8 +104,8 @@ describe("DirectorsApprovalPanel", () => {
       periodApprovalDate: null,
     });
     render(<DirectorsApprovalPanel companyId={1} periodId={9} canRecord />);
-    expect(await screen.findByText(/board approval date has to be recorded on the period/i)).toBeInTheDocument();
-    expect(screen.getByText(/regenerate the accounts/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Finalise the period to record the board approval date \(s\.324\)/)).toBeInTheDocument();
+    expect(screen.getByText(/then generate the final accounts/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Generate approval page" })).not.toBeInTheDocument();
     expect(screen.queryByLabelText("First director")).not.toBeInTheDocument();
   });
