@@ -213,6 +213,7 @@ public partial class AccountsWorkflowTests
         }
         await db.SaveChangesAsync();
         await PrepareFinalisedReleaseTestPeriodAsync(db, period);
+        await FilingGateFixture.PrepareBoardAsync(db, period);
         var statements = new FinancialStatementsService(db);
         var workflow = new FilingWorkflowService(db, statements, new IxbrlService(db, statements));
         await workflow.RecordCroDocumentGeneratedAsync(period.CompanyId, period.Id, "accounts", retainedFinalArtifact: [1, 2, 3]);
@@ -747,41 +748,11 @@ public partial class AccountsWorkflowTests
         DisplayName: "Example User",
         Role: role);
 
-    private static QualifiedAccountantApprovalEvidence TrustedAccountantEvidence(
-        int tenantId,
-        FilingReleaseWorkflow workflow)
-    {
-        var artifact = Encoding.UTF8.GetBytes("professional-register-response:trusted-member:current");
-        return new QualifiedAccountantApprovalEvidence(
-            "Trusted Qualified Accountant",
-            tenantId,
-            workflow switch
-            {
-                FilingReleaseWorkflow.Cro => "cro-final-filing",
-                FilingReleaseWorkflow.Revenue => "revenue-final-filing",
-                FilingReleaseWorkflow.Charity => "charity-final-filing",
-                _ => throw new ArgumentOutOfRangeException(nameof(workflow))
-            },
-            "qualified-accountant",
-            "approved",
-            "Chartered Accountants Ireland",
-            "trusted-member",
-            "https://register.example.test/trusted-member/check",
-            artifact,
-            FilingReleaseGate.ComputeSha256(artifact),
-            DateTime.UtcNow.AddMinutes(-5),
-            DateTime.UtcNow.AddDays(30));
-    }
-
     private static async Task<CroFilingPackage> BindTrustedCroApprovalAsync(
         AccountsDbContext db,
         AccountingPeriod period)
     {
         var package = await db.CroFilingPackages.SingleAsync(p => p.PeriodId == period.Id);
-        var tenantId = await db.Companies
-            .Where(c => c.Id == period.CompanyId)
-            .Select(c => c.TenantId)
-            .SingleAsync() ?? throw new InvalidOperationException("Test company tenant is missing.");
         var gate = new FilingReleaseGate(db, package.ArtifactReleaseCandidate ?? "local-development");
         var signedArtifact = Encoding.UTF8.GetBytes("retained-executed-cro-signing-pack");
         await gate.RecordVerifiedCroSignatureAsync(
@@ -793,11 +764,11 @@ public partial class AccountsWorkflowTests
                 DateTime.UtcNow.AddMinutes(-2),
                 signedArtifact,
                 FilingReleaseGate.ComputeSha256(signedArtifact)));
-        await gate.BindVerifiedApprovalAsync(
+        await FilingGateFixture.RecordDirectorsApprovalAsync(db, period.CompanyId, period.Id);
+        await gate.BindApprovalAsync(
             period.CompanyId,
             period.Id,
-            FilingReleaseWorkflow.Cro,
-            TrustedAccountantEvidence(tenantId, FilingReleaseWorkflow.Cro));
+            FilingReleaseWorkflow.Cro);
         package = await db.CroFilingPackages.SingleAsync(p => p.PeriodId == period.Id);
         package.FilingStatus = FilingStatus.Approved;
         await db.SaveChangesAsync();
@@ -809,16 +780,19 @@ public partial class AccountsWorkflowTests
         AccountingPeriod period)
     {
         var package = await db.CharityFilingPackages.SingleAsync(p => p.PeriodId == period.Id);
-        var tenantId = await db.Companies
-            .Where(c => c.Id == period.CompanyId)
-            .Select(c => c.TenantId)
-            .SingleAsync() ?? throw new InvalidOperationException("Test company tenant is missing.");
         var gate = new FilingReleaseGate(db, package.ArtifactReleaseCandidate ?? "local-development");
-        await gate.BindVerifiedApprovalAsync(
+        // The directors' s.324 approval is recorded against the CRO accounts, so a charity needs them too.
+        if (!await db.CroFilingPackages.AnyAsync(p => p.PeriodId == period.Id && p.AccountsPdfGenerated))
+        {
+            var statements = new FinancialStatementsService(db);
+            await new FilingWorkflowService(db, statements, new IxbrlService(db, statements))
+                .RecordCroDocumentGeneratedAsync(period.CompanyId, period.Id, "accounts", retainedFinalArtifact: [1, 2, 3]);
+        }
+        await FilingGateFixture.RecordDirectorsApprovalAsync(db, period.CompanyId, period.Id);
+        await gate.BindApprovalAsync(
             period.CompanyId,
             period.Id,
-            FilingReleaseWorkflow.Charity,
-            TrustedAccountantEvidence(tenantId, FilingReleaseWorkflow.Charity));
+            FilingReleaseWorkflow.Charity);
         package = await db.CharityFilingPackages.SingleAsync(p => p.PeriodId == period.Id);
         package.FilingStatus = FilingStatus.Approved;
         await db.SaveChangesAsync();

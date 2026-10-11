@@ -161,6 +161,10 @@ public sealed class CharitySorpArtifactTests
         Assert.Contains("REVIEW COPY - NOT APPROVED FOR FINAL USE", ExtractPdfText(reviewSofa));
         Assert.Contains("TRUSTEES' ANNUAL REPORT", ExtractPdfText(cleanTar));
         Assert.Contains("Serving Trustee", ExtractPdfText(cleanTar));
+        // Retained final artifacts are bound by SHA-256: an identical source renders identical bytes.
+        await Task.Delay(1100);
+        Assert.Equal(cleanSofa, pdf.GenerateSofa(evidence, reviewCopy: false));
+        Assert.Equal(cleanTar, pdf.GenerateTrusteesAnnualReport(evidence, reviewCopy: false));
 
         var qaOutput = Environment.GetEnvironmentVariable("CHARITY_PDF_QA_OUTPUT");
         if (!string.IsNullOrWhiteSpace(qaOutput))

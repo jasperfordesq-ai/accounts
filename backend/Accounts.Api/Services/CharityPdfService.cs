@@ -94,7 +94,7 @@ public sealed class CharityPdfService(PlatformMetrics? platformMetrics = null)
                 });
             });
         });
-        return document.GeneratePdf();
+        return document.WithMetadata(DeterministicPdf.Metadata(DeterministicPdf.StableDate(evidence.Period))).GeneratePdf();
     }
 
     public byte[] GenerateTrusteesAnnualReport(CharityArtifactEvidence evidence, bool reviewCopy) =>
@@ -181,7 +181,7 @@ public sealed class CharityPdfService(PlatformMetrics? platformMetrics = null)
                 });
             });
         });
-        return document.GeneratePdf();
+        return document.WithMetadata(DeterministicPdf.Metadata(DeterministicPdf.StableDate(evidence.Period))).GeneratePdf();
     }
 
     private static void ConfigurePage(

@@ -12,6 +12,12 @@ import type {
 import { FilingDeadlinesPanel } from "@/components/period/FilingDeadlinesPanel";
 import { FilingOutputsPanel, type FilingOutputChecklist } from "@/components/period/FilingOutputsPanel";
 import { FilingReviewCentre } from "@/components/period/FilingReviewCentre";
+import { DirectorsApprovalPanel } from "@/components/period/DirectorsApprovalPanel";
+import {
+  AuditorReportPanel,
+  CroSigningPackPanel,
+  OptionalAccountantReviewPanel,
+} from "@/components/period/FilingEvidencePanels";
 import { ExternalFilingHandoffRuntime } from "@/components/period/ExternalFilingHandoffRuntime";
 import { PeriodAuditTrailPanel } from "@/components/period/PeriodAuditTrailPanel";
 import { StatutoryWarningsPanel } from "@/components/period/StatutoryWarningsPanel";
@@ -70,6 +76,7 @@ interface PeriodFilingWorkspaceProps {
   onRetryAuditLog: FilingReviewAction;
   onRetryFiling?: FilingReviewAction;
   onExternalHandoffChanged?: FilingReviewAction;
+  onFilingEvidenceChanged?: FilingReviewAction;
 }
 
 export function PeriodFilingWorkspace({
@@ -121,6 +128,7 @@ export function PeriodFilingWorkspace({
   onRetryAuditLog,
   onRetryFiling,
   onExternalHandoffChanged,
+  onFilingEvidenceChanged,
 }: PeriodFilingWorkspaceProps) {
   const filingEvidenceAvailable = !filingResourceState
     || filingResourceState.status === "loaded"
@@ -130,6 +138,38 @@ export function PeriodFilingWorkspace({
       {filingResourceState && (
         <ResourceStateNotice state={filingResourceState} label="filing workflow evidence" onRetry={onRetryFiling} />
       )}
+      <DirectorsApprovalPanel
+        companyId={companyId}
+        periodId={periodId}
+        canRecord={canApprove}
+        canGenerate={canApprove || canWriteWorkingPapers}
+        onChanged={onFilingEvidenceChanged}
+      />
+
+      <CroSigningPackPanel
+        companyId={companyId}
+        periodId={periodId}
+        filingReadinessProfile={filingReadinessProfile}
+        canRecord={canApprove}
+        onChanged={onFilingEvidenceChanged}
+      />
+
+      <AuditorReportPanel
+        companyId={companyId}
+        periodId={periodId}
+        filingReadinessProfile={filingReadinessProfile}
+        canRecord={canApprove}
+        onChanged={onFilingEvidenceChanged}
+      />
+
+      <OptionalAccountantReviewPanel
+        companyId={companyId}
+        periodId={periodId}
+        filingReadinessProfile={filingReadinessProfile}
+        canRecord={canApprove || canWriteWorkingPapers}
+        onChanged={onFilingEvidenceChanged}
+      />
+
       <FilingReviewCentre
         filingStatus={filingStatus}
         filingReadinessProfile={filingReadinessProfile}

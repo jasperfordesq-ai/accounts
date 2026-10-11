@@ -27,6 +27,8 @@ public class CroFilingPackage
     [JsonIgnore]
     public byte[]? AccountsPdfArtifact { get; set; }
     public string? AccountsPdfSha256 { get; set; }
+    /// <summary>Set only when the accounts PDF bytes change (GeneratedAt also moves for the signature page).</summary>
+    public DateTime? AccountsPdfGeneratedAtUtc { get; set; }
     [JsonIgnore]
     public byte[]? SignaturePageArtifact { get; set; }
     public string? SignaturePageSha256 { get; set; }
@@ -50,6 +52,12 @@ public class CroFilingPackage
     public string? ApproverVerificationArtifactSha256 { get; set; }
     public DateTime? ApproverVerifiedAt { get; set; }
     public DateTime? ApproverCredentialValidUntil { get; set; }
+
+    // Optional "reviewed by an accountant" attestation (never a gate). The reviewer's body, membership
+    // number, review date and optional letter live in the ApproverProfessionalBody/MembershipNumber/
+    // VerifiedAt/VerificationArtifact fields above; this holds the reviewer's name. Cleared when the
+    // accounts PDF is regenerated, so it always refers to the accounts actually filed.
+    public string? OptionalReviewerName { get; set; }
 
     // signing-approval-chain: the director/secretary who approved/signed the statements, captured at
     // approval. Submission is blocked until both are present, so there is always a recorded signing

@@ -608,8 +608,7 @@ namespace Accounts.Api.Data.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("ApprovedBy")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+                        .HasColumnType("text");
 
                     b.Property<string>("ApprovedReleaseCandidate")
                         .HasMaxLength(200)
@@ -1603,6 +1602,9 @@ namespace Accounts.Api.Data.Migrations
                     b.Property<bool>("AccountsPdfGenerated")
                         .HasColumnType("boolean");
 
+                    b.Property<DateTime?>("AccountsPdfGeneratedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("AccountsPdfSha256")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
@@ -1685,6 +1687,10 @@ namespace Accounts.Api.Data.Migrations
 
                     b.Property<DateTime>("GeneratedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("OptionalReviewerName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
                     b.Property<bool>("PaymentCompleted")
                         .HasColumnType("boolean");
@@ -2124,6 +2130,183 @@ namespace Accounts.Api.Data.Migrations
                     b.HasIndex("DirectorLoanId", "MovementDate", "Id");
 
                     b.ToTable("director_loan_movements", (string)null);
+                });
+
+            modelBuilder.Entity("Accounts.Api.Entities.DirectorsApprovalEvent", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ApprovalPageId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ApprovalPageSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("text");
+
+                    b.Property<int>("PeriodId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("PreviousRecordSha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("RecordSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("RecordedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RecordedByDisplayName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("RecordedByUserId")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
+                    b.Property<byte[]>("ResolutionArtifact")
+                        .HasColumnType("bytea");
+
+                    b.Property<string>("ResolutionSha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("RevocationReason")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<byte[]>("SignedPageArtifact")
+                        .HasColumnType("bytea");
+
+                    b.Property<string>("SignedPageSha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApprovalPageId");
+
+                    b.HasIndex("PeriodId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_directors_approval_events_PeriodId_Genesis")
+                        .HasFilter("\"PreviousRecordSha256\" IS NULL");
+
+                    b.HasIndex("PreviousRecordSha256")
+                        .IsUnique()
+                        .HasFilter("\"PreviousRecordSha256\" IS NOT NULL");
+
+                    b.HasIndex("PeriodId", "RecordedAtUtc");
+
+                    b.ToTable("directors_approval_events", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_directors_approval_events_kind", "(\"Kind\" = 'Approved' AND \"SignedPageSha256\" IS NOT NULL AND \"ResolutionSha256\" IS NOT NULL AND \"RevocationReason\" IS NULL) OR (\"Kind\" = 'Revoked' AND \"SignedPageSha256\" IS NULL AND \"ResolutionSha256\" IS NULL AND \"RevocationReason\" IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_directors_approval_events_sha256", "length(\"RecordSha256\") = 64 AND length(\"ApprovalPageSha256\") = 64 AND (\"SignedPageSha256\" IS NULL OR length(\"SignedPageSha256\") = 64) AND (\"ResolutionSha256\" IS NULL OR length(\"ResolutionSha256\") = 64)");
+                        });
+                });
+
+            modelBuilder.Entity("Accounts.Api.Entities.DirectorsApprovalPage", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AccountsPdfSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateOnly>("ApprovalDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("ArtifactSourceFingerprintSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("DirectorsInOfficeCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("FirstDirectorName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("FirstDirectorOfficerId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("GeneratedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("GeneratedByDisplayName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("GeneratedByUserId")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
+                    b.Property<byte[]>("PageArtifact")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<string>("PageSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("PeriodId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("RecordSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ResolutionReference")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("SecondDirectorName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int?>("SecondDirectorOfficerId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FirstDirectorOfficerId");
+
+                    b.HasIndex("SecondDirectorOfficerId");
+
+                    b.HasIndex("PeriodId", "GeneratedAtUtc");
+
+                    b.ToTable("directors_approval_pages", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_directors_approval_pages_directors", "(\"SecondDirectorOfficerId\" IS NULL AND \"DirectorsInOfficeCount\" = 1) OR (\"SecondDirectorOfficerId\" IS NOT NULL AND \"SecondDirectorOfficerId\" <> \"FirstDirectorOfficerId\" AND \"DirectorsInOfficeCount\" >= 2)");
+
+                            t.HasCheckConstraint("CK_directors_approval_pages_sha256", "length(\"RecordSha256\") = 64 AND length(\"PageSha256\") = 64 AND length(\"AccountsPdfSha256\") = 64 AND length(\"ArtifactSourceFingerprintSha256\") = 64");
+                        });
                 });
 
             modelBuilder.Entity("Accounts.Api.Entities.Dividend", b =>
@@ -5034,6 +5217,47 @@ namespace Accounts.Api.Data.Migrations
                     b.Navigation("DirectorLoan");
                 });
 
+            modelBuilder.Entity("Accounts.Api.Entities.DirectorsApprovalEvent", b =>
+                {
+                    b.HasOne("Accounts.Api.Entities.DirectorsApprovalPage", "ApprovalPage")
+                        .WithMany()
+                        .HasForeignKey("ApprovalPageId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Accounts.Api.Entities.AccountingPeriod", "Period")
+                        .WithMany("DirectorsApprovalEvents")
+                        .HasForeignKey("PeriodId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ApprovalPage");
+
+                    b.Navigation("Period");
+                });
+
+            modelBuilder.Entity("Accounts.Api.Entities.DirectorsApprovalPage", b =>
+                {
+                    b.HasOne("Accounts.Api.Entities.CompanyOfficer", null)
+                        .WithMany()
+                        .HasForeignKey("FirstDirectorOfficerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Accounts.Api.Entities.AccountingPeriod", "Period")
+                        .WithMany("DirectorsApprovalPages")
+                        .HasForeignKey("PeriodId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Accounts.Api.Entities.CompanyOfficer", null)
+                        .WithMany()
+                        .HasForeignKey("SecondDirectorOfficerId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Period");
+                });
+
             modelBuilder.Entity("Accounts.Api.Entities.Dividend", b =>
                 {
                     b.HasOne("Accounts.Api.Entities.AccountingPeriod", "Period")
@@ -5663,6 +5887,10 @@ namespace Accounts.Api.Data.Migrations
                     b.Navigation("DepreciationEntries");
 
                     b.Navigation("DirectorLoans");
+
+                    b.Navigation("DirectorsApprovalEvents");
+
+                    b.Navigation("DirectorsApprovalPages");
 
                     b.Navigation("Dividends");
 

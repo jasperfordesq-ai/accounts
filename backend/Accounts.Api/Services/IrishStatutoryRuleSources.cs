@@ -44,6 +44,21 @@ public static class IrishStatutoryRuleSources
         new DateOnly(2026, 7, 3),
         "https://cro.ie/annual-return/financial-statements-requirements/");
 
+    public static readonly LegalSourceReference CompaniesActSection324 = new(
+        "companies-act-2014-s324",
+        "Companies Act 2014, section 324 — approval and signing of statutory financial statements by the board",
+        new DateOnly(2026, 10, 11),
+        "https://www.irishstatutebook.ie/eli/2014/act/38/section/324/enacted/en/html");
+
+    // Watch item: s.50(13)(a) excludes company charities from the Charities Act audit/independent
+    // examination requirement. The Charities (Amendment) Act 2024 deletes it but was not commenced
+    // when reviewed; commencement must trigger the source-law change review.
+    public static readonly LegalSourceReference CharitiesActSection50CompanyExclusion = new(
+        "charities-act-2009-s50-company-exclusion",
+        "Charities Act 2009, section 50(13)(a) — company charities excluded (2024 amendment not commenced)",
+        new DateOnly(2026, 10, 11),
+        "https://revisedacts.lawreform.ie/eli/2009/act/6/section/50/revised/en/html");
+
     public static readonly LegalSourceReference CroGuaranteeCompany = new(
         "cro-guarantee-company",
         "CRO guarantee company financial statements requirements",
@@ -114,8 +129,8 @@ public static class IrishStatutoryRuleSources
     {
         var sources = All;
         return new SourceLawSnapshot(
-            new DateOnly(2026, 7, 3),
-            "irish-statutory-accounts-sources-2026-07-03",
+            new DateOnly(2026, 10, 11),
+            "irish-statutory-accounts-sources-2026-10-11",
             ComputeContentHash(sources),
             sources.Count,
             sources);
@@ -154,7 +169,9 @@ public static class IrishStatutoryRuleSources
         RevenueAcceptedTaxonomies,
         FrcFrs102,
         FrcFrs105,
-        CharitiesRegulatorAnnualReport
+        CharitiesRegulatorAnnualReport,
+        CompaniesActSection324,
+        CharitiesActSection50CompanyExclusion
     ];
 }
 

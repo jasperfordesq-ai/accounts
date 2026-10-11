@@ -66,7 +66,7 @@ public partial class AccountsWorkflowTests
         {
             ("public static async Task<IResult> ClassifySizeEndpointAsync", "service.ClassifyAsync"),
             ("group.MapPost(\"/filing-regime\"", "service.DetermineAsync"),
-            ("group.MapPut(\"/member-audit-notice\"", "var period = await db.AccountingPeriods"),
+            ("public static async Task<IResult> SaveMemberAuditNoticeEndpointAsync", "var period = await db.AccountingPeriods"),
             ("public static async Task<IResult> SaveSizeClassificationEndpointAsync", "var period = await db.AccountingPeriods")
         })
         {
@@ -4654,5 +4654,44 @@ public partial class AccountsWorkflowTests
         AssertOccursBefore(endpoint, "AssertFinalOutputReadinessAsync(companyId, id, outputName)", "DomainAuditCoverage.LogAsync(");
         AssertOccursBefore(endpoint, "AssertFilingObligationsRecordedAsync(", "DomainAuditCoverage.LogAsync(");
     }
+
+    [Theory]
+    [InlineData("Reviewer", "POST", "directors-approval", true)]
+    [InlineData("Reviewer", "POST", "directors-approval-page", true)]
+    [InlineData("Reviewer", "POST", "cro-signing-pack", true)]
+    [InlineData("Reviewer", "POST", "auditor-report", true)]
+    [InlineData("Reviewer", "POST", "accountant-review", true)]
+    [InlineData("Accountant", "POST", "directors-approval", false)]
+    [InlineData("Accountant", "POST", "cro-signing-pack", false)]
+    [InlineData("Accountant", "POST", "auditor-report", false)]
+    [InlineData("Accountant", "POST", "directors-approval-page", true)]
+    [InlineData("Accountant", "POST", "accountant-review", true)]
+    [InlineData("Client", "POST", "directors-approval-page", false)]
+    [InlineData("Client", "POST", "directors-approval", false)]
+    [InlineData("Owner", "POST", "directors-approval", true)]
+    public void DirectorsApprovalRoutes_HaveTheIntendedRolePermissions(string role, string method, string action, bool allowed)
+    {
+        var decision = RoleAuthorizationService.Authorize(
+            AuthenticatedRole(role),
+            new PathString($"/api/companies/1/periods/9/filing/{action}"),
+            method);
+        Assert.Equal(allowed, decision.IsAllowed);
+    }
+
+    [Theory]
+    [InlineData("/api/companies/1/periods/9/filing/directors-approval")]
+    [InlineData("/api/companies/1/periods/9/filing/cro-signing-pack")]
+    [InlineData("/api/companies/1/periods/9/filing/auditor-report")]
+    [InlineData("/api/companies/1/periods/9/filing/directors-approval/")]
+    [InlineData("/api/companies/1/periods/9/filing/cro-signing-pack/")]
+    [InlineData("/api/companies/1/periods/9/filing/auditor-report/")]
+    [InlineData("/api/companies/1/periods/9/mark-filed/")]
+    public void EvidenceRecordingRoutes_RequireRecentAuthentication(string path) =>
+        Assert.True(RecentAuthenticationMiddleware.RequiresRecentMfa(new PathString(path), "POST"));
+
+    [Fact]
+    public void GeneratingTheApprovalPage_RecordsNoDecisionAndNeedsNoRecentAuthentication() =>
+        Assert.False(RecentAuthenticationMiddleware.RequiresRecentMfa(
+            new PathString("/api/companies/1/periods/9/filing/directors-approval-page"), "POST"));
 
 }

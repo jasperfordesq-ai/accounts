@@ -15,8 +15,11 @@ public class ProductionReadinessReportTests
     {
         var snapshot = IrishStatutoryRuleSources.BuildSnapshot();
 
-        Assert.Equal(new DateOnly(2026, 7, 3), snapshot.SnapshotDate);
+        Assert.Equal(new DateOnly(2026, 10, 11), snapshot.SnapshotDate);
+        Assert.Equal("irish-statutory-accounts-sources-2026-10-11", snapshot.SnapshotVersion);
         Assert.Contains(snapshot.Sources, s => s.SourceId == "cro-financial-statements-requirements");
+        Assert.Contains(snapshot.Sources, s => s.SourceId == IrishStatutoryRuleSources.CompaniesActSection324.SourceId);
+        Assert.Contains(snapshot.Sources, s => s.SourceId == IrishStatutoryRuleSources.CharitiesActSection50CompanyExclusion.SourceId);
         Assert.Contains(snapshot.Sources, s => s.SourceId == "cro-medium-company" && s.EffectiveDate == new DateOnly(2026, 7, 4));
         Assert.Contains(snapshot.Sources, s => s.SourceId == "cro-auditors-report" && s.EffectiveDate == new DateOnly(2026, 7, 4));
         Assert.Contains(snapshot.Sources, s => s.SourceId == "revenue-accepted-taxonomies" && s.EffectiveDate == new DateOnly(2025, 11, 6));
@@ -73,7 +76,7 @@ public class ProductionReadinessReportTests
         Assert.Contains(report.GoldenFilingCorpus, s => s.Code == "clg-charity" && s.CoverageStatus == "machine-covered-review-pending");
         Assert.Contains(report.GoldenFilingCorpus, s => s.Code == "medium-audit-required" && s.ExpectedOutcome == "manual-handoff");
         Assert.Contains(report.ManualHandoffPaths, p => p.Contains("PLC", StringComparison.OrdinalIgnoreCase));
-        Assert.Contains(report.OperationalGates, g => g.Code == "qualified-accountant-review" && g.Required);
+        Assert.Contains(report.OperationalGates, g => g.Code == "qualified-accountant-review" && !g.Required && g.Status == "optional");
         Assert.Contains(report.OperationalGates, g => g.Code == "no-direct-cro-ros-submission" && g.Required);
         Assert.Contains(report.Areas, a => a.Code == "backend-accounting-engine" && a.Status == "in-progress");
         Assert.Contains(report.SourceLawSnapshot.Sources, s => s.SourceId == IrishStatutoryRuleSources.RevenueAcceptedTaxonomies.SourceId);
@@ -96,15 +99,19 @@ public class ProductionReadinessReportTests
         Assert.Equal(report.StatutoryRulesCoverage.Count, report.AssurancePacket.StatutoryRuleCoverageFamilies);
         Assert.Equal(report.VisualQaCoverage.ExpectedScreenshotCount, report.AssurancePacket.VisualQaExpectedScreenshots);
         Assert.Equal(report.OperationalGates.Count(gate => gate.Required), report.AssurancePacket.RequiredOperationalGates);
-        Assert.Equal(report.AssuranceActions.Count(action => action.Priority == "critical" && action.Status != "complete"), report.AssurancePacket.OpenCriticalActions);
+        Assert.Equal(report.AssuranceActions.Count(action => action.Priority == "critical" && action.Status is not ("complete" or "optional")), report.AssurancePacket.OpenCriticalActions);
         Assert.Contains("source-law-snapshot-fingerprint", report.AssurancePacket.EvidenceItems);
         Assert.Contains("golden-filing-corpus", report.AssurancePacket.EvidenceItems);
         Assert.Contains("visual-smoke-screenshots", report.AssurancePacket.EvidenceItems);
         Assert.Contains("accountant-workbench-evidence-report", report.AssurancePacket.EvidenceItems);
         Assert.Contains("production-readiness-report", report.AssurancePacket.EvidenceItems);
         Assert.Contains("production-readiness-verification-report", report.AssurancePacket.EvidenceItems);
-        Assert.Contains(report.AssurancePacket.ReleaseBlockers, blocker =>
-            blocker.Contains("qualified accountant", StringComparison.OrdinalIgnoreCase));
+        // Irish law does not require an accountant: the optional sign-off is not a release blocker.
+        Assert.DoesNotContain(report.AssurancePacket.ReleaseBlockers, blocker =>
+            blocker.Contains("accountant sign-off", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(report.AssurancePacket.ReleaseBlockers, blocker =>
+            blocker.Contains("Accountant acceptance walkthrough", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains("Source-law change review required", report.AssurancePacket.ReleaseBlockers);
         Assert.Equal(
             report.AssurancePacket.PacketId,
             ProductionReadinessReportService.ComputeAssurancePacketId(report.AssurancePacket));
@@ -375,7 +382,8 @@ public class ProductionReadinessReportTests
             && StringListProperty(entry, "AuditEventCodes").Contains(AuditEventCodes.CroDocumentGenerated));
         Assert.Contains(timeline, entry =>
             StringProperty(entry, "Code") == "accountant-approval-capture"
-            && StringProperty(entry, "RequiredActor").Contains("qualified accountant", StringComparison.OrdinalIgnoreCase)
+            && StringProperty(entry, "RequiredActor").Contains("s.324", StringComparison.OrdinalIgnoreCase)
+            && StringProperty(entry, "RequiredActor").Contains("optional", StringComparison.OrdinalIgnoreCase)
             && StringListProperty(entry, "BlockingGateCodes").Contains("qualified-accountant-review"));
         Assert.Contains(timeline, entry =>
             StringProperty(entry, "Code") == "external-validation-capture"
@@ -417,7 +425,8 @@ public class ProductionReadinessReportTests
             && StringListProperty(item, "BlockingGateCodes").Contains("working-paper-review"));
         Assert.Contains(pack, item =>
             StringProperty(item, "Code") == "who-approved-what"
-            && StringProperty(item, "RequiredActor").Contains("qualified accountant", StringComparison.OrdinalIgnoreCase)
+            && StringProperty(item, "RequiredActor").Contains("s.324", StringComparison.OrdinalIgnoreCase)
+            && StringProperty(item, "RequiredActor").Contains("optional", StringComparison.OrdinalIgnoreCase)
             && StringProperty(item, "RequiredArtifact") == "named-accountant-approval-record"
             && StringListProperty(item, "BlockingGateCodes").Contains("qualified-accountant-review"));
         Assert.Contains(pack, item =>
@@ -544,7 +553,8 @@ public class ProductionReadinessReportTests
         Assert.Contains(report.ReleaseReviewChecklist, item =>
             item.Code == "golden-corpus-accountant-acceptance"
             && item.EvidenceArtifact == "signed-golden-corpus-acceptance-note"
-            && item.BlocksRelease);
+            && item.Status == "optional"
+            && !item.BlocksRelease);
     }
 
     [Fact]
@@ -1094,10 +1104,17 @@ public class ProductionReadinessReportTests
                 "monitoringProviderConfirmation"
             },
             report.HumanReleaseEvidence.Select(item => item.Code));
-        Assert.All(report.HumanReleaseEvidence, item =>
+        // The qualified-accountant acceptance is optional (Irish law requires no accountant); the rest block.
+        var optionalHumanEvidence = report.HumanReleaseEvidence.Single(item => item.Code == "qualifiedAccountantAcceptance");
+        Assert.Equal("optional", optionalHumanEvidence.Status);
+        Assert.False(optionalHumanEvidence.BlocksRelease);
+        Assert.All(report.HumanReleaseEvidence.Where(item => item.Code != "qualifiedAccountantAcceptance"), item =>
         {
             Assert.Equal("pending-human-evidence", item.Status);
             Assert.True(item.BlocksRelease);
+        });
+        Assert.All(report.HumanReleaseEvidence, item =>
+        {
             Assert.EndsWith("-template.md", item.TemplateFile, StringComparison.Ordinal);
             Assert.False(string.IsNullOrWhiteSpace(item.RequiredReviewerRole));
             Assert.False(string.IsNullOrWhiteSpace(item.SignOffGate));
@@ -2225,6 +2242,7 @@ public class ProductionReadinessReportTests
 
         Assert.NotEmpty(report.AssuranceActions);
         Assert.Equal("qualified-accountant-signoff", report.AssuranceActions[0].Code);
+        Assert.Equal("optional", report.AssuranceActions[0].Status);
         Assert.Equal("critical", report.AssuranceActions[0].Priority);
         Assert.Equal(0, report.AssuranceActions[0].RiskRank);
         Assert.Equal("accountant-review-gate", report.AssuranceActions[0].EvidenceStage);
@@ -2533,7 +2551,9 @@ public class ProductionReadinessReportTests
             && StringProperty(item, "AssuranceActionCode") == "qualified-accountant-signoff"
             && StringProperty(item, "OperationalGateCode") == "qualified-accountant-review"
             && StringProperty(item, "EvidenceArtifact") == "named-accountant-approval-record"
-            && BooleanProperty(item, "BlocksRelease")
+            && StringProperty(item, "Status") == "optional"
+            && !BooleanProperty(item, "Required")
+            && !BooleanProperty(item, "BlocksRelease")
             && StringListProperty(item, "AuditEventCodes").Contains(AuditEventCodes.CroFilingStatusChanged));
         Assert.Contains(checklist, item =>
             StringProperty(item, "Code") == "production-smoke-and-backup"
@@ -2598,13 +2618,11 @@ public class ProductionReadinessReportTests
         var assuranceActionCodes = report.AssuranceActions.Select(action => action.Code).ToHashSet(StringComparer.Ordinal);
         var checklistCodes = report.ReleaseReviewChecklist.Select(item => item.Code).ToHashSet(StringComparer.Ordinal);
 
-        Assert.Contains(blockerRegister, blocker =>
-            StringProperty(blocker, "TrackCode") == "backend-code"
-            && StringProperty(blocker, "SourceActionCode") == "qualified-accountant-signoff"
-            && StringProperty(blocker, "ReleaseChecklistCode") == "accountant-final-signoff"
-            && StringProperty(blocker, "EvidenceArtifact") == "named-accountant-approval-record"
-            && StringProperty(blocker, "BlockingIssue") == "Qualified accountant sign-off required"
-            && BooleanProperty(blocker, "BlocksRelease"));
+        // The named accountant sign-off is optional assurance, never a release blocker.
+        Assert.DoesNotContain(blockerRegister, blocker =>
+            StringProperty(blocker, "SourceActionCode") == "qualified-accountant-signoff"
+            || StringProperty(blocker, "ReleaseChecklistCode") == "accountant-final-signoff"
+            || StringProperty(blocker, "EvidenceArtifact") == "named-accountant-approval-record");
         Assert.Contains(blockerRegister, blocker =>
             StringProperty(blocker, "TrackCode") == "frontend-ui-ux"
             && StringProperty(blocker, "SourceActionCode") == "light-dark-visual-regression"

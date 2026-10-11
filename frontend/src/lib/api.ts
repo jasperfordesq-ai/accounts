@@ -1,5 +1,6 @@
 import { z } from "zod";
 import * as apiContracts from "./apiContracts.ts";
+import { DEFAULT_API_PROXY_MAX_BODY_BYTES } from "./apiProxyLimits.ts";
 import {
   reportClientMonitoringEvent,
   type ClientMonitoringEventCode,
@@ -2848,7 +2849,7 @@ export interface FilingReadinessSignOffStep {
 export interface FilingReadinessSignOffPacket {
   state: string;
   stateLabel: string;
-  readyForAccountantApproval: boolean;
+  readyForDirectorsApproval: boolean;
   readyForExternalFiling: boolean;
   approvedBy?: string;
   approvedAt?: string;
@@ -2867,8 +2868,9 @@ export interface FilingReadinessProfile {
   auditExempt?: boolean;
   supportedPath: boolean;
   manualProfessionalReviewRequired: boolean;
-  accountantReviewRequired: boolean;
+  accountantReviewRequired: false;
   accountantReviewState: string;
+  approvalAuthority: "board-of-directors-s324";
   directCroSubmissionSupported: boolean;
   directRosSubmissionSupported: boolean;
   revenueIxbrlGenerationSupported: boolean;
@@ -3037,6 +3039,230 @@ export const getFilingReadinessProfile = (companyId: number, periodId: number) =
     responseSchema: apiContracts.filingReadinessProfileSchema,
     responseContract: "filing readiness profile",
   });
+
+// --- Directors' s.324 approval, CRO signing pack, auditor's report and optional accountant review ---
+
+export type DirectorOption = z.infer<typeof apiContracts.directorOptionSchema>;
+export type DirectorsApprovalPageSummary = z.infer<typeof apiContracts.directorsApprovalPageSummarySchema>;
+export type DirectorsApprovalSummary = z.infer<typeof apiContracts.directorsApprovalSummarySchema>;
+export type DirectorsApprovalState = z.infer<typeof apiContracts.directorsApprovalStateSchema>;
+export type CroSigningPackSummary = z.infer<typeof apiContracts.croSigningPackSummarySchema>;
+export type AuditorReportSummary = z.infer<typeof apiContracts.auditorReportSummarySchema>;
+export type AccountantReviewSummary = z.infer<typeof apiContracts.accountantReviewSummarySchema>;
+
+export interface DirectorsApprovalPageInput {
+  approvalDate: string;
+  firstDirectorOfficerId: number;
+  secondDirectorOfficerId: number | null;
+  resolutionReference: string;
+}
+
+export interface DirectorsApprovalRecordInput {
+  approvalPageId: number;
+  signedPage: Blob;
+  resolution: Blob;
+}
+
+export interface CroSigningPackInput {
+  directorOfficerId: number;
+  secretaryOfficerId: number;
+  signedAtUtc: string;
+  signedPack: Blob;
+}
+
+export interface AuditorReportInput {
+  firmName: string;
+  signerName: string;
+  professionalBody: string;
+  membershipNumber: string;
+  reportReference: string;
+  signedAtUtc: string;
+  acceptedByDirectors: boolean;
+  report: Blob;
+}
+
+export interface AccountantReviewInput {
+  reviewerName: string;
+  professionalBody: string;
+  membershipNumber: string;
+  reviewDate: string;
+  reviewLetter?: Blob | null;
+}
+
+export interface EvidenceFilePayload {
+  base64: string;
+  sha256: string;
+}
+
+/** Reads an uploaded evidence file into the base64 body and lowercase hex SHA-256 the filing endpoints verify. */
+export async function readEvidenceFile(file: Blob): Promise<EvidenceFilePayload> {
+  const buffer = await file.arrayBuffer();
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", buffer));
+  const sha256 = Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+  }
+  return { base64: btoa(binary), sha256 };
+}
+
+/** Room left in the proxy body limit for the JSON field names, the other fields and quoting. */
+const EVIDENCE_UPLOAD_JSON_MARGIN_BYTES = 16 * 1024;
+
+/** Raised in the browser, before anything is sent, when evidence files would exceed the proxy body limit. */
+export class EvidenceUploadTooLargeError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "EvidenceUploadTooLargeError";
+  }
+}
+
+/**
+ * Evidence files travel base64-encoded in one JSON body (about 4/3 of their size), which must fit
+ * the frontend API proxy's body limit. Checks the encoded size before reading or sending anything.
+ */
+export function assertEvidenceUploadFits(files: ReadonlyArray<Blob | null | undefined>) {
+  const present = files.filter((file): file is Blob => file != null);
+  const encodedBytes = present.reduce((total, file) => total + Math.ceil(file.size / 3) * 4, 0);
+  const allowedEncodedBytes = DEFAULT_API_PROXY_MAX_BODY_BYTES - EVIDENCE_UPLOAD_JSON_MARGIN_BYTES;
+  if (encodedBytes <= allowedEncodedBytes) return;
+  const maxMegabytes = Math.floor(((allowedEncodedBytes * 3) / 4 / (1024 * 1024)) * 10) / 10;
+  throw new EvidenceUploadTooLargeError(
+    present.length > 1
+      ? `These files are too large to upload together (max about ${maxMegabytes} MB). Please compress or rescan at a lower resolution.`
+      : `This file is too large to upload (max about ${maxMegabytes} MB). Please compress or rescan at a lower resolution.`,
+  );
+}
+
+const directorsApprovalBase = (companyId: number, periodId: number) =>
+  `/api/companies/${companyId}/periods/${periodId}/filing`;
+
+export const getDirectorsApproval = (companyId: number, periodId: number, onDate?: string) =>
+  apiFetch<DirectorsApprovalState>(
+    `${directorsApprovalBase(companyId, periodId)}/directors-approval${onDate ? `?onDate=${encodeURIComponent(onDate)}` : ""}`,
+    {
+      responseSchema: apiContracts.directorsApprovalStateSchema,
+      responseContract: "directors' approval state",
+    },
+  );
+
+export const generateDirectorsApprovalPage = (
+  companyId: number,
+  periodId: number,
+  input: DirectorsApprovalPageInput,
+  idempotencyKey?: string,
+) =>
+  apiFetch<DirectorsApprovalPageSummary>(`${directorsApprovalBase(companyId, periodId)}/directors-approval-page`, {
+    method: "POST",
+    ...idempotentMutation("directors-approval-page", idempotencyKey),
+    body: JSON.stringify(input),
+    responseSchema: apiContracts.directorsApprovalPageSummarySchema,
+    responseContract: "directors' approval page",
+  });
+
+export const directorsApprovalPageUrl = (companyId: number, periodId: number, pageId: number) =>
+  `${API_BASE}${directorsApprovalBase(companyId, periodId)}/directors-approval-page/${pageId}`;
+
+export const recordDirectorsApproval = async (
+  companyId: number,
+  periodId: number,
+  input: DirectorsApprovalRecordInput,
+  idempotencyKey?: string,
+) => {
+  assertEvidenceUploadFits([input.signedPage, input.resolution]);
+  const [signedPage, resolution] = await Promise.all([
+    readEvidenceFile(input.signedPage),
+    readEvidenceFile(input.resolution),
+  ]);
+  return apiFetch<DirectorsApprovalSummary>(`${directorsApprovalBase(companyId, periodId)}/directors-approval`, {
+    method: "POST",
+    ...idempotentMutation("directors-approval", idempotencyKey),
+    body: JSON.stringify({
+      approvalPageId: input.approvalPageId,
+      signedPageArtifact: signedPage.base64,
+      signedPageSha256: signedPage.sha256,
+      resolutionArtifact: resolution.base64,
+      resolutionSha256: resolution.sha256,
+    }),
+    responseSchema: apiContracts.directorsApprovalSummarySchema,
+    responseContract: "directors' approval record",
+  });
+};
+
+export const recordCroSigningPack = async (
+  companyId: number,
+  periodId: number,
+  input: CroSigningPackInput,
+  idempotencyKey?: string,
+) => {
+  assertEvidenceUploadFits([input.signedPack]);
+  const signedPack = await readEvidenceFile(input.signedPack);
+  return apiFetch<CroSigningPackSummary>(`${directorsApprovalBase(companyId, periodId)}/cro-signing-pack`, {
+    method: "POST",
+    ...idempotentMutation("cro-signing-pack", idempotencyKey),
+    body: JSON.stringify({
+      directorOfficerId: input.directorOfficerId,
+      secretaryOfficerId: input.secretaryOfficerId,
+      signedAtUtc: input.signedAtUtc,
+      signedArtifact: signedPack.base64,
+      signedArtifactSha256: signedPack.sha256,
+    }),
+    responseSchema: apiContracts.croSigningPackSummarySchema,
+    responseContract: "executed CRO signing pack",
+  });
+};
+
+export const recordAuditorReport = async (
+  companyId: number,
+  periodId: number,
+  input: AuditorReportInput,
+  idempotencyKey?: string,
+) => {
+  assertEvidenceUploadFits([input.report]);
+  const report = await readEvidenceFile(input.report);
+  return apiFetch<AuditorReportSummary>(`${directorsApprovalBase(companyId, periodId)}/auditor-report`, {
+    method: "POST",
+    ...idempotentMutation("auditor-report", idempotencyKey),
+    body: JSON.stringify({
+      firmName: input.firmName,
+      signerName: input.signerName,
+      professionalBody: input.professionalBody,
+      membershipNumber: input.membershipNumber,
+      reportReference: input.reportReference,
+      signedAtUtc: input.signedAtUtc,
+      acceptedByDirectors: input.acceptedByDirectors,
+      reportArtifact: report.base64,
+      reportArtifactSha256: report.sha256,
+    }),
+    responseSchema: apiContracts.auditorReportSummarySchema,
+    responseContract: "signed auditor's report",
+  });
+};
+
+export const recordAccountantReview = async (
+  companyId: number,
+  periodId: number,
+  input: AccountantReviewInput,
+  idempotencyKey?: string,
+) => {
+  assertEvidenceUploadFits([input.reviewLetter]);
+  const letter = input.reviewLetter ? await readEvidenceFile(input.reviewLetter) : null;
+  return apiFetch<AccountantReviewSummary>(`${directorsApprovalBase(companyId, periodId)}/accountant-review`, {
+    method: "POST",
+    ...idempotentMutation("accountant-review", idempotencyKey),
+    body: JSON.stringify({
+      reviewerName: input.reviewerName,
+      professionalBody: input.professionalBody,
+      membershipNumber: input.membershipNumber,
+      reviewDate: input.reviewDate,
+      reviewLetter: letter?.base64 ?? null,
+      reviewLetterSha256: letter?.sha256 ?? null,
+    }),
+    responseSchema: apiContracts.accountantReviewSummarySchema,
+    responseContract: "optional accountant review",
+  });
+};
 
 export const getProductionReadinessReport = async () =>
   parseProductionReadinessReport(await apiFetch<unknown>("/api/system/production-readiness"));

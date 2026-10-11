@@ -1322,6 +1322,9 @@ export function PeriodWorkspaceRoute({
             onExternalHandoffChanged={async () => {
               await Promise.all([refreshFilingState(), loadAuditLog()]);
             }}
+            onFilingEvidenceChanged={async () => {
+              await Promise.all([refreshFilingState(), loadAuditLog()]);
+            }}
             notesHref={`/companies/${companyId}/periods/${periodId}/notes`}
             onCroSubmissionReferenceChange={setCroSubmissionReference}
             onRunIxbrlChecks={async () => {

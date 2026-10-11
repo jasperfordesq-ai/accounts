@@ -17,6 +17,7 @@ public static class EndpointRegistration
         app.MapDeadlineEndpoints();
         app.MapCharityEndpoints();
         app.MapFilingWorkflowEndpoints();
+        app.MapDirectorsApprovalEndpoints();
         app.MapExternalFilingHandoffEndpoints();
         app.MapPrivacyEndpoints();
         app.MapOperationsEndpoints();

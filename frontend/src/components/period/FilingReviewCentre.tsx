@@ -18,6 +18,7 @@ import {
   StatusBadge,
   WorkflowDecisionSummary,
 } from "@/components/workbench";
+import { directorsApprovalGateLabel, directorsApprovalRecorded } from "@/lib/filingEvidence";
 
 type FilingReviewAction = () => void | Promise<void>;
 
@@ -67,7 +68,7 @@ export function FilingReviewCentre({
   return (
     <ReviewPanel
       title="Filing readiness profile"
-      description="Source-backed CRO, Revenue and accountant-review gates for this period."
+      description="Source-backed CRO, Revenue and directors' approval gates for this period."
       actions={
         <div className="flex flex-wrap items-center gap-2">
           <StatusBadge tone={evidenceAvailable && filingReadinessProfile?.supportedPath ? "good" : "bad"}>
@@ -81,10 +82,15 @@ export function FilingReviewCentre({
     >
       {filingStatus ? (
         <div className="space-y-4">
-          <div className="grid gap-3 lg:grid-cols-4">
+          <div className="grid gap-3 lg:grid-cols-5">
             <StatusTile label="CRO workflow" value={filingStatus.cro.status} tone={filingStatusTone(filingStatus.cro.status)} />
             <StatusTile label="Revenue workflow" value={filingStatus.revenue.status} tone={filingStatusTone(filingStatus.revenue.status)} />
-            <StatusTile label="Accountant review" value={filingReadinessProfile?.accountantReviewState ?? "Required"} />
+            <StatusTile
+              label="Directors' approval"
+              value={directorsApprovalGateLabel(filingReadinessProfile)}
+              tone={directorsApprovalRecorded(filingReadinessProfile) ? "good" : "warn"}
+            />
+            <StatusTile label="Accountant review" value="Optional" />
             <StatusTile
               label="Taxonomy"
               value={taxonomyTileValue(filingReadinessProfile)}
@@ -341,6 +347,7 @@ function ProductionDecisionLedger({
   filingReadinessProfile: FilingReadinessProfile;
   croSubmissionReference: string;
 }) {
+  const approvalRecorded = directorsApprovalRecorded(filingReadinessProfile);
   const rows = [
     {
       label: "Supported company path",
@@ -351,12 +358,12 @@ function ProductionDecisionLedger({
       tone: filingReadinessProfile.supportedPath ? "good" : "bad",
     },
     {
-      label: "Accountant approval",
-      value: filingReadinessProfile.signOffPacket.stateLabel,
-      detail: filingReadinessProfile.signOffPacket.readyForAccountantApproval
-        ? "Named accountant review can be recorded once the reviewer accepts the evidence."
-        : "Approval remains blocked by open evidence or manual handoff.",
-      tone: signOffStateTone(filingReadinessProfile.signOffPacket.state),
+      label: "Directors' approval (s.324)",
+      value: directorsApprovalGateLabel(filingReadinessProfile),
+      detail: approvalRecorded
+        ? "The board's s.324 approval is on file for the current accounts."
+        : "Record the board's s.324 approval above: generate the approval page, have the directors sign it, then upload it with the minute or resolution.",
+      tone: approvalRecorded ? "good" : "warn",
     },
     {
       label: "External ROS/iXBRL validation",
@@ -394,7 +401,7 @@ function ProductionDecisionLedger({
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Production decision ledger</p>
           <p className="mt-1 max-w-3xl text-sm leading-6 text-[var(--muted-foreground)]">
-            Final-use gates for supported path, accountant approval, external validation, direct submission controls and CRO evidence.
+            Final-use gates for supported path, directors&apos; approval, external validation, direct submission controls and CRO evidence.
           </p>
         </div>
         <StatusBadge tone={rows.some((row) => row.tone === "bad") ? "bad" : rows.some((row) => row.tone === "warn") ? "warn" : "good"}>
@@ -553,7 +560,7 @@ function FilingDecisionCentre({
     : [filingReadinessProfile.manualProfessionalReviewRequired
       ? "Move this file to manual professional handoff."
       : filingStatus.readyToFile
-        ? "Record the named accountant approval and external filing evidence."
+        ? "Record the external filing evidence."
         : "Resolve the filing blockers before approval."];
   const warningItems = filingIssues.blockers.length > 0 ? filingIssues.warnings : [];
 
@@ -566,7 +573,7 @@ function FilingDecisionCentre({
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Filing decision centre</p>
           <p className="mt-1 max-w-3xl text-sm leading-6 text-[var(--muted-foreground)]">
-            Accountant-facing summary of blockers, evidenced outputs and the next allowed workflow step.
+            Summary of blockers, evidenced outputs and the next allowed workflow step.
           </p>
         </div>
         <StatusBadge tone={filingIssues.blockers.length > 0 ? "bad" : filingIssues.warnings.length > 0 ? "warn" : "good"}>
@@ -640,18 +647,18 @@ function SignOffPacketPanel({ packet }: { packet: FilingReadinessSignOffPacket }
     : "No workflow action allowed";
 
   return (
-    <section className="rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-4" aria-label="Accountant sign-off packet">
+    <section className="rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-4" aria-label="Filing sign-off packet">
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div className="min-w-0">
           <div className="flex min-w-0 items-center gap-2">
             <ClipboardCheck className="h-4 w-4 shrink-0 text-[var(--muted-foreground)]" />
-            <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Accountant sign-off packet</p>
+            <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Filing sign-off packet</p>
           </div>
           <p className="mt-1 text-sm font-semibold text-[var(--foreground)]">{packet.stateLabel}</p>
           <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">
             {packet.approvedBy
               ? `Approved by ${packet.approvedBy}${packet.approvedAt ? ` on ${formatIrishDateTime(packet.approvedAt)}` : ""}.`
-              : "Named qualified-accountant approval is recorded only after every required gate is evidenced."}
+              : "The board's s.324 approval, the executed signing pack and any required auditor's report are recorded on the Filing tab."}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -661,13 +668,15 @@ function SignOffPacketPanel({ packet }: { packet: FilingReadinessSignOffPacket }
       </div>
 
       <section
-        aria-label="Accountant approval docket"
+        aria-label="Directors' approval docket"
         className="mt-4 grid gap-3 rounded-md border border-[var(--border)] bg-[var(--surface)] p-3 md:grid-cols-3"
       >
         <ApprovalDocketItem
-          label="Reviewer state"
+          label="Sign-off state"
           value={packet.stateLabel}
-          detail={packet.readyForAccountantApproval ? "Ready for named accountant review." : "Approval remains blocked by open evidence."}
+          detail={packet.readyForDirectorsApproval
+            ? "The directors' s.324 approval is recorded; the CRO pack can be approved."
+            : "The directors' s.324 approval or other evidence is still open."}
         />
         <ApprovalDocketItem
           label="Open evidence"
@@ -807,7 +816,7 @@ function isSpecialistSignOffStep(step: FilingReadinessSignOffStep) {
 
 function signOffStateTone(state: string): "default" | "good" | "warn" | "bad" | "info" {
   if (state === "ready-for-external-filing") return "good";
-  if (state === "ready-for-accountant-review" || state === "approved-external-evidence-open") return "info";
+  if (state === "ready-for-directors-approval" || state === "approved-external-evidence-open") return "info";
   if (state === "manual-handoff" || state === "blocked") return "bad";
   return "default";
 }
@@ -827,7 +836,7 @@ function formatStateLabel(state: string) {
     complete: "Complete",
     "manual-handoff": "Manual gate",
     pending: "Pending",
-    "ready-for-accountant-review": "Ready",
+    "ready-for-directors-approval": "Ready",
     "ready-for-external-filing": "External-ready",
     warning: "Warning",
   };
@@ -842,6 +851,8 @@ function formatActionLabel(action: string) {
     "generate-cro-accounts-pdf": "Generate CRO accounts PDF",
     "generate-cro-signature-page": "Generate CRO signature page",
     "mark-cro-accepted": "Mark CRO accepted",
+    "record-cro-signing-pack": "Record executed CRO signing pack",
+    "record-directors-approval": "Record directors' approval",
     "mark-cro-submitted": "Record external CRO submission",
     "run-internal-ixbrl-checks": "Check draft iXBRL structure",
   };

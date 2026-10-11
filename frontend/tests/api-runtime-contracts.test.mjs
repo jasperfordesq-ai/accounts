@@ -1,10 +1,16 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import test from "node:test";
 import {
   ApiContractError,
   accountingPeriodSchema,
   adjustmentSchema,
+  accountantReviewSummarySchema,
   adjustmentSummarySchema,
+  auditorReportSummarySchema,
+  croSigningPackSummarySchema,
+  directorsApprovalPageSummarySchema,
+  directorsApprovalStateSchema,
   authUserSchema,
   balanceSheetSchema,
   charityInfoSchema,
@@ -24,9 +30,14 @@ import {
   yearEndSummarySchema,
 } from "../src/lib/apiContracts.ts";
 import {
+  EvidenceUploadTooLargeError,
+  assertEvidenceUploadFits,
+  directorsApprovalPageUrl,
+  generateDirectorsApprovalPage,
   getAdjustmentSummary,
   getCompanies,
   getCompany,
+  getDirectorsApproval,
   getDirectorsReportData,
   getFilingReadinessProfile,
   getFilingWorkflowStatus,
@@ -38,6 +49,11 @@ import {
   getSofa,
   getTransactions,
   getYearEndSummary,
+  readEvidenceFile,
+  recordAccountantReview,
+  recordAuditorReport,
+  recordCroSigningPack,
+  recordDirectorsApproval,
 } from "../src/lib/api.ts";
 
 const parse = (schema, payload, name = "test") => parseApiContract(schema, payload, name);
@@ -365,10 +381,231 @@ test("filing workflow and readiness contracts enforce support boundaries and exa
     () => parse(filingReadinessProfileSchema, { ...readiness, directCroSubmissionSupported: true }),
     /directCroSubmissionSupported/,
   );
+});
+
+test("filing readiness profile: accountant review is never mandatory and the board approves", () => {
+  const profile = filingReadinessFixture();
+  assert.equal(parse(filingReadinessProfileSchema, profile).approvalAuthority, "board-of-directors-s324");
+  assert.throws(() => parse(filingReadinessProfileSchema, { ...profile, accountantReviewRequired: true }), /accountantReviewRequired/);
+  assert.throws(() => parse(filingReadinessProfileSchema, { ...profile, approvalAuthority: "qualified-accountant" }), /approvalAuthority/);
+  const missing = structuredClone(profile);
+  delete missing.approvalAuthority;
+  assert.throws(() => parse(filingReadinessProfileSchema, missing), /approvalAuthority/);
+  const renamedState = structuredClone(profile);
+  renamedState.signOffPacket.state = "ready-for-accountant-review";
+  assert.throws(() => parse(filingReadinessProfileSchema, renamedState), /signOffPacket/);
+});
+
+const HASH_A = "a".repeat(64);
+const HASH_B = "b".repeat(64);
+
+function directorsPageFixture(overrides = {}) {
+  return {
+    id: 4,
+    approvalDate: "2026-03-01",
+    firstDirectorName: "Director One",
+    secondDirectorName: "Director Two",
+    directorsInOfficeCount: 2,
+    resolutionReference: "Board minute 2026/03",
+    pageSha256: HASH_A,
+    accountsPdfSha256: HASH_B,
+    recordSha256: HASH_A,
+    generatedAtUtc: "2026-03-01T10:00:00.1234567Z",
+    ...overrides,
+  };
+}
+
+test("directors approval state mirrors the backend: nullable members are explicit nulls", () => {
+  const empty = { eligibleDirectors: [], latestPage: null, current: null, periodApprovalDate: null };
+  assert.equal(parse(directorsApprovalStateSchema, empty).current, null);
+  for (const key of Object.keys(empty)) {
+    const missing = structuredClone(empty);
+    delete missing[key];
+    assert.throws(() => parse(directorsApprovalStateSchema, missing), new RegExp(key));
+  }
+
+  const full = {
+    eligibleDirectors: [{ officerId: 1, name: "Director One" }, { officerId: 2, name: "Director Two" }],
+    latestPage: directorsPageFixture(),
+    current: {
+      eventId: 9,
+      page: directorsPageFixture(),
+      signedPageSha256: HASH_A,
+      resolutionSha256: HASH_B,
+      recordedByDisplayName: "Reviewer One",
+      recordedAtUtc: "2026-03-02T09:00:00Z",
+      recordSha256: HASH_B,
+    },
+    periodApprovalDate: "2026-03-01",
+  };
+  assert.equal(parse(directorsApprovalStateSchema, full).current.eventId, 9);
   assert.throws(
-    () => parse(filingReadinessProfileSchema, { ...readiness, accountantReviewRequired: false }),
-    /accountantReviewRequired/,
+    () => parse(directorsApprovalStateSchema, { ...full, latestPage: directorsPageFixture({ pageSha256: "short" }) }),
+    /pageSha256/,
   );
+});
+
+test("directors approval page enforces one signatory for a sole director and two otherwise", () => {
+  assert.equal(parse(directorsApprovalPageSummarySchema, directorsPageFixture()).directorsInOfficeCount, 2);
+  assert.equal(
+    parse(directorsApprovalPageSummarySchema, directorsPageFixture({ secondDirectorName: null, directorsInOfficeCount: 1 })).secondDirectorName,
+    null,
+  );
+  assert.throws(
+    () => parse(directorsApprovalPageSummarySchema, directorsPageFixture({ secondDirectorName: null })),
+    /secondDirectorName/,
+  );
+  assert.throws(
+    () => parse(directorsApprovalPageSummarySchema, directorsPageFixture({ directorsInOfficeCount: 1 })),
+    /secondDirectorName/,
+  );
+});
+
+test("signing pack, auditor report and accountant review summaries validate their hashes and nullability", () => {
+  assert.equal(parse(croSigningPackSummarySchema, {
+    signedByDirector: "Director One",
+    signedBySecretary: "Secretary One",
+    signedAtUtc: "2026-03-03T11:00:00Z",
+    signedPdfSha256: HASH_A,
+  }).signedByDirector, "Director One");
+  assert.throws(() => parse(croSigningPackSummarySchema, {
+    signedByDirector: "Director One",
+    signedBySecretary: "Secretary One",
+    signedAtUtc: "2026-03-03T11:00:00Z",
+    signedPdfSha256: "zz",
+  }), /signedPdfSha256/);
+  assert.equal(parse(auditorReportSummarySchema, {
+    reportReference: "AR-1",
+    firmName: "Firm One",
+    signerName: "Signer One",
+    signedAtUtc: "2026-03-03T11:00:00Z",
+    reportSha256: HASH_B,
+  }).reportReference, "AR-1");
+  const review = {
+    reviewerName: "Reviewer One",
+    professionalBody: "ACCA",
+    membershipNumber: "12345",
+    reviewDate: "2026-03-04",
+    reviewLetterSha256: null,
+    state: "Optional review recorded: Reviewer One (ACCA, 12345)",
+  };
+  assert.equal(parse(accountantReviewSummarySchema, review).reviewLetterSha256, null);
+  const missing = structuredClone(review);
+  delete missing.reviewLetterSha256;
+  assert.throws(() => parse(accountantReviewSummarySchema, missing), /reviewLetterSha256/);
+});
+
+test("evidence uploads that would exceed the proxy body limit are refused in the browser with a clear message", async () => {
+  const originalFetch = globalThis.fetch;
+  let fetched = 0;
+  globalThis.fetch = async () => {
+    fetched += 1;
+    return new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+  try {
+    const megabytes = (count) => new Blob([new Uint8Array(Math.round(count * 1024 * 1024))], { type: "application/pdf" });
+    // Each alone fits; together their base64 encoding exceeds the 5 MB proxy limit.
+    assert.doesNotThrow(() => assertEvidenceUploadFits([megabytes(2)]));
+    assert.doesNotThrow(() => assertEvidenceUploadFits([megabytes(3.6), null]));
+    await assert.rejects(
+      () => recordDirectorsApproval(1, 2, { approvalPageId: 4, signedPage: megabytes(2), resolution: megabytes(2) }),
+      (error) => error instanceof EvidenceUploadTooLargeError
+        && error.message === "These files are too large to upload together (max about 3.7 MB). Please compress or rescan at a lower resolution.",
+    );
+    const single = {
+      name: "EvidenceUploadTooLargeError",
+      message: "This file is too large to upload (max about 3.7 MB). Please compress or rescan at a lower resolution.",
+    };
+    await assert.rejects(
+      () => recordCroSigningPack(1, 2, { directorOfficerId: 1, secretaryOfficerId: 3, signedAtUtc: "2026-03-03T11:00:00Z", signedPack: megabytes(4) }),
+      single,
+    );
+    await assert.rejects(
+      () => recordAuditorReport(1, 2, {
+        firmName: "Firm One", signerName: "Signer One", professionalBody: "ACCA", membershipNumber: "12345",
+        reportReference: "AR-1", signedAtUtc: "2026-03-03T11:00:00Z", acceptedByDirectors: true, report: megabytes(4),
+      }),
+      single,
+    );
+    await assert.rejects(
+      () => recordAccountantReview(1, 2, {
+        reviewerName: "Reviewer One", professionalBody: "ACCA", membershipNumber: "12345", reviewDate: "2026-03-04", reviewLetter: megabytes(4),
+      }),
+      single,
+    );
+    assert.equal(fetched, 0, "nothing is sent when the upload would not fit");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("directors approval client calls use the filing routes, send base64 evidence with SHA-256 and validate responses", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  const responses = [];
+  globalThis.fetch = async (url, init) => {
+    requests.push({ url: String(url), method: (init?.method ?? "GET").toUpperCase(), body: init?.body ? JSON.parse(String(init.body)) : undefined });
+    return new Response(JSON.stringify(responses.shift()), { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+  try {
+    const bytes = new Uint8Array([1, 2, 3, 250, 251, 252]);
+    const file = new File([bytes], "evidence.pdf", { type: "application/pdf" });
+    const payload = await readEvidenceFile(file);
+    assert.equal(payload.base64, Buffer.from(bytes).toString("base64"));
+    assert.equal(payload.sha256, createHash("sha256").update(bytes).digest("hex"));
+
+    const base = "/api/companies/1/periods/2/filing";
+    responses.push({ eligibleDirectors: [], latestPage: null, current: null, periodApprovalDate: null });
+    await getDirectorsApproval(1, 2, "2026-03-01");
+    assert.equal(requests.at(-1).url, base + "/directors-approval?onDate=2026-03-01");
+
+    responses.push(directorsPageFixture());
+    await generateDirectorsApprovalPage(1, 2, {
+      approvalDate: "2026-03-01",
+      firstDirectorOfficerId: 1,
+      secondDirectorOfficerId: null,
+      resolutionReference: "Board minute 2026/03",
+    });
+    assert.equal(requests.at(-1).url, base + "/directors-approval-page");
+    assert.equal(requests.at(-1).body.secondDirectorOfficerId, null);
+    assert.equal(directorsApprovalPageUrl(1, 2, 4), base + "/directors-approval-page/4");
+
+    responses.push({
+      eventId: 9, page: directorsPageFixture(), signedPageSha256: HASH_A, resolutionSha256: HASH_B,
+      recordedByDisplayName: "Reviewer One", recordedAtUtc: "2026-03-02T09:00:00Z", recordSha256: HASH_B,
+    });
+    await recordDirectorsApproval(1, 2, { approvalPageId: 4, signedPage: file, resolution: file });
+    assert.equal(requests.at(-1).url, base + "/directors-approval");
+    assert.deepEqual(Object.keys(requests.at(-1).body).sort(), [
+      "approvalPageId", "resolutionArtifact", "resolutionSha256", "signedPageArtifact", "signedPageSha256",
+    ]);
+    assert.equal(requests.at(-1).body.signedPageSha256, payload.sha256);
+
+    responses.push({ signedByDirector: "Director One", signedBySecretary: "Secretary One", signedAtUtc: "2026-03-03T11:00:00Z", signedPdfSha256: HASH_A });
+    await recordCroSigningPack(1, 2, { directorOfficerId: 1, secretaryOfficerId: 3, signedAtUtc: "2026-03-03T11:00:00Z", signedPack: file });
+    assert.equal(requests.at(-1).url, base + "/cro-signing-pack");
+    assert.equal(requests.at(-1).body.signedArtifact, payload.base64);
+
+    responses.push({ reportReference: "AR-1", firmName: "Firm One", signerName: "Signer One", signedAtUtc: "2026-03-03T11:00:00Z", reportSha256: HASH_B });
+    await recordAuditorReport(1, 2, {
+      firmName: "Firm One", signerName: "Signer One", professionalBody: "ACCA", membershipNumber: "12345",
+      reportReference: "AR-1", signedAtUtc: "2026-03-03T11:00:00Z", acceptedByDirectors: true, report: file,
+    });
+    assert.equal(requests.at(-1).url, base + "/auditor-report");
+    assert.equal(requests.at(-1).body.acceptedByDirectors, true);
+    assert.equal("reviewedBy" in requests.at(-1).body, false);
+
+    responses.push({ reviewerName: "Reviewer One", professionalBody: "ACCA", membershipNumber: "12345", reviewDate: "2026-03-04", reviewLetterSha256: null, state: "Optional review recorded: Reviewer One (ACCA, 12345)" });
+    await recordAccountantReview(1, 2, { reviewerName: "Reviewer One", professionalBody: "ACCA", membershipNumber: "12345", reviewDate: "2026-03-04" });
+    assert.equal(requests.at(-1).url, base + "/accountant-review");
+    assert.equal(requests.at(-1).body.reviewLetter, null);
+    assert.equal(requests.at(-1).body.reviewLetterSha256, null);
+
+    responses.push({ eligibleDirectors: [], latestPage: null, current: null });
+    await assert.rejects(() => getDirectorsApproval(1, 2), ApiContractError);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("auth contract rejects role drift, malformed identities, and duplicate scope", () => {
@@ -803,8 +1040,9 @@ function filingReadinessFixture() {
     auditExempt: true,
     supportedPath: true,
     manualProfessionalReviewRequired: false,
-    accountantReviewRequired: true,
-    accountantReviewState: "Required",
+    accountantReviewRequired: false,
+    accountantReviewState: "Not required by law — not recorded",
+    approvalAuthority: "board-of-directors-s324",
     directCroSubmissionSupported: false,
     directRosSubmissionSupported: false,
     revenueIxbrlGenerationSupported: false,
@@ -821,18 +1059,18 @@ function filingReadinessFixture() {
     },
     signOffPacket: {
       state: "blocked",
-      stateLabel: "Blocked before accountant review",
-      readyForAccountantApproval: false,
+      stateLabel: "Blocked before directors' approval",
+      readyForDirectorsApproval: false,
       readyForExternalFiling: false,
       approvedBy: null,
       approvedAt: null,
-      steps: [{ code: "accountant-approval", label: "Approval", state: "blocked", detail: "Required", sources: [source] }],
-      openBlockers: ["Qualified review required"],
+      steps: [{ code: "directors-approval", label: "Approval", state: "blocked", detail: "Required", sources: [source] }],
+      openBlockers: ["Directors' approval required"],
       openWarnings: [],
       allowedNextActions: ["Resolve blockers"],
     },
-    requiredEvidence: [{ code: "accountant-review", label: "Accountant review", required: true, satisfied: false, detail: "Required", sources: [source] }],
-    blockingIssues: [{ code: "accountant-review-required", severity: "blocking", message: "Qualified review required", sources: [source] }],
+    requiredEvidence: [{ code: "directors-approval", label: "Board approval of the financial statements, s.324", required: true, satisfied: false, detail: "Required", sources: [source] }],
+    blockingIssues: [{ code: "directors-approval-required", severity: "blocking", message: "Directors' approval required", sources: [source] }],
     warningIssues: [],
     sourceReferences: [source],
     allowedNextActions: ["Resolve blockers"],

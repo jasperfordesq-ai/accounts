@@ -11,7 +11,7 @@ namespace Accounts.Tests;
 public class FilingReadinessProfileTests
 {
     [Fact]
-    public async Task ReadinessProfile_ForCorePrivateCompany_IsSourceBackedAndRequiresAccountantReview()
+    public async Task ReadinessProfile_ForCorePrivateCompany_IsSourceBackedAndRequiresDirectorsApprovalNotAnAccountant()
     {
         await using var db = CreateDbContext();
         var period = await SeedCompanyPeriodAsync(db, CompanyType.Private, CompanySizeClass.Small);
@@ -23,17 +23,22 @@ public class FilingReadinessProfileTests
         var profile = await service.GetProfileAsync(period.CompanyId, period.Id);
 
         Assert.True(profile.SupportedPath);
-        Assert.True(profile.AccountantReviewRequired);
-        Assert.Equal("Required", profile.AccountantReviewState);
-        Assert.Contains(profile.RequiredEvidence, e => e.Code == "accountant-review" && e.Required && !e.Satisfied);
-        Assert.Contains(profile.BlockingIssues, i => i.Code == "accountant-review-required");
+        Assert.False(profile.AccountantReviewRequired);
+        Assert.Equal("board-of-directors-s324", profile.ApprovalAuthority);
+        Assert.Equal("Not required by law — not recorded", profile.AccountantReviewState);
+        Assert.Contains(profile.RequiredEvidence, e => e.Code == "directors-approval" && e.Required && !e.Satisfied);
+        Assert.Contains(profile.RequiredEvidence, e => e.Code == "accountant-review-optional" && !e.Required && !e.Satisfied);
+        Assert.DoesNotContain(profile.RequiredEvidence, e => e.Code == "accountant-review");
+        Assert.Contains(profile.BlockingIssues, i => i.Code == "directors-approval-required");
+        Assert.DoesNotContain(profile.BlockingIssues, i => i.Code == "accountant-review-required");
+        Assert.Contains(profile.SourceReferences, s => s.SourceId == IrishStatutoryRuleSources.CompaniesActSection324.SourceId);
         Assert.Contains(profile.SourceReferences, s => s.SourceId == IrishStatutoryRuleSources.CroFinancialStatementsRequirements.SourceId);
         Assert.Contains(profile.SourceReferences, s => s.SourceId == IrishStatutoryRuleSources.RevenueAcceptedTaxonomies.SourceId);
         Assert.Contains(profile.SourceReferences, s => s.SourceId == IrishStatutoryRuleSources.FrcFrs102.SourceId);
     }
 
     [Fact]
-    public async Task ReadinessProfile_BuildsAccountantSignOffPacketFromEvidenceAndWorkflowState()
+    public async Task ReadinessProfile_BuildsDirectorsSignOffPacketFromEvidenceAndWorkflowState()
     {
         await using var db = CreateDbContext();
         var period = await SeedCompanyPeriodAsync(db, CompanyType.Private, CompanySizeClass.Small);
@@ -49,19 +54,21 @@ public class FilingReadinessProfileTests
             profile.BlockingIssues.All(issue => issue.Code != "corporation-tax-scope-required"),
             string.Join(" | ", profile.BlockingIssues.Select(issue => $"{issue.Code}: {issue.Message}")));
         Assert.Equal("blocked", profile.SignOffPacket.State);
-        Assert.Equal("Blocked before accountant review", profile.SignOffPacket.StateLabel);
-        Assert.False(profile.SignOffPacket.ReadyForAccountantApproval);
+        Assert.Equal("Blocked before directors' approval", profile.SignOffPacket.StateLabel);
+        Assert.False(profile.SignOffPacket.ReadyForDirectorsApproval);
         Assert.False(profile.SignOffPacket.ReadyForExternalFiling);
         Assert.Null(profile.SignOffPacket.ApprovedBy);
-        Assert.Contains("approve-cro-pack", profile.SignOffPacket.AllowedNextActions);
-        Assert.Contains(profile.SignOffPacket.OpenBlockers, message => message.Contains("named qualified accountant", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains("record-directors-approval", profile.SignOffPacket.AllowedNextActions);
+        Assert.DoesNotContain("approve-cro-pack", profile.SignOffPacket.AllowedNextActions);
+        Assert.Contains(profile.SignOffPacket.OpenBlockers, message => message.Contains("s.324", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(profile.SignOffPacket.OpenBlockers, message => message.Contains("named qualified accountant", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(profile.SignOffPacket.OpenBlockers, message => message.Contains("filing-ready iXBRL generation is disabled", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(profile.SignOffPacket.OpenWarnings, message => message.Contains("External ROS/iXBRL validation", StringComparison.OrdinalIgnoreCase));
-        Assert.Contains(profile.SignOffPacket.Steps, step => step.Code == "accountant-approval" && step.State == "pending");
+        Assert.Contains(profile.SignOffPacket.Steps, step => step.Code == "directors-approval" && step.State == "pending");
         Assert.Contains(profile.SignOffPacket.Steps, step => step.Code == "external-validation" && step.State == "warning");
         Assert.Contains(
-            profile.SignOffPacket.Steps.Single(step => step.Code == "accountant-approval").Sources,
-            source => source.SourceId == IrishStatutoryRuleSources.CroFinancialStatementsRequirements.SourceId);
+            profile.SignOffPacket.Steps.Single(step => step.Code == "directors-approval").Sources,
+            source => source.SourceId == IrishStatutoryRuleSources.CompaniesActSection324.SourceId);
     }
 
     [Fact]
@@ -126,7 +133,7 @@ public class FilingReadinessProfileTests
         Assert.Empty(profile.AllowedNextActions);
         Assert.Contains(profile.BlockingIssues, i => i.Code == "unsupported-company-type");
         Assert.Equal("manual-handoff", profile.SignOffPacket.State);
-        Assert.False(profile.SignOffPacket.ReadyForAccountantApproval);
+        Assert.False(profile.SignOffPacket.ReadyForDirectorsApproval);
         Assert.False(profile.SignOffPacket.ReadyForExternalFiling);
         Assert.Contains(profile.SignOffPacket.Steps, step => step.Code == "supported-path" && step.State == "blocked");
     }
@@ -143,7 +150,7 @@ public class FilingReadinessProfileTests
 
         var ex = await Assert.ThrowsAsync<BusinessRuleException>(() =>
             service.AssertCanApproveCroPackAsync(period.CompanyId, period.Id));
-        Assert.Contains("Manual professional handoff is required", ex.Message);
+        Assert.Contains("This company is outside the supported filing path", ex.Message);
         Assert.Contains("PublicLimitedCompany", ex.Message);
     }
 

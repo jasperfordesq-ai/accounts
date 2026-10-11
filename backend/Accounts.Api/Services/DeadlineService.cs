@@ -706,7 +706,8 @@ public class DeadlineService(
         return occurrence;
     }
 
-    private static TimeZoneInfo ResolveIrelandTimeZone()
+    /// <summary>Europe/Dublin, falling back to the Windows "GMT Standard Time" id.</summary>
+    internal static TimeZoneInfo ResolveIrelandTimeZone()
     {
         try
         {

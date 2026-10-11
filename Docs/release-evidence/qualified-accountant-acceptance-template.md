@@ -1,8 +1,10 @@
 # Qualified-Accountant Acceptance Template
 
 Use this template for the named qualified-accountant walkthrough across the seeded
-golden filing corpus and live accountant workbench journey. This is mandatory before
-real CRO or Revenue filing use.
+golden filing corpus and live accountant workbench journey. This review is optional:
+Irish law does not require an accountant to prepare or approve the accounts (the directors
+approve them under Companies Act 2014 s.324). Complete it only if a named accountant
+reviewed this release; if it is left blank the release verifier does not require it.
 
 ## Release Candidate
 

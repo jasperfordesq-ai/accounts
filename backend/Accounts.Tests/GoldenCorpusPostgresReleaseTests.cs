@@ -79,7 +79,7 @@ public sealed partial class GoldenCorpusPostgresReleaseTests : IAsyncLifetime
 
             var profile = await new FilingReadinessProfileService(db)
                 .GetProfileAsync(period.CompanyId, period.Id);
-            Assert.Contains(profile.RequiredEvidence, item => item.Code == "accountant-review" && !item.Satisfied);
+            Assert.Contains(profile.RequiredEvidence, item => item.Code == "directors-approval" && item.Required && !item.Satisfied);
             Assert.Contains(profile.RequiredEvidence, item => item.Code == "external-ros-validation" && !item.Satisfied);
 
             if (audited)

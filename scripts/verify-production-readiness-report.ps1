@@ -482,11 +482,22 @@ if ($null -ne $report) {
         Assert-NonEmptyString (Get-JsonProperty $humanEvidence "releaseChecklistCode") "humanReleaseEvidence '$humanEvidenceCode' releaseChecklistCode" $failures
         Assert-NonEmptyString (Get-JsonProperty $humanEvidence "releaseManifestCode") "humanReleaseEvidence '$humanEvidenceCode' releaseManifestCode" $failures
         Assert-NonEmptyString (Get-JsonProperty $humanEvidence "evidenceArtifact") "humanReleaseEvidence '$humanEvidenceCode' evidenceArtifact" $failures
-        if ([string](Get-JsonProperty $humanEvidence "status") -ne "pending-human-evidence") {
-            Add-Failure $failures "humanReleaseEvidence '$humanEvidenceCode' status must be pending-human-evidence before named sign-off."
-        }
-        if ((Get-JsonProperty $humanEvidence "blocksRelease") -ne $true) {
-            Add-Failure $failures "humanReleaseEvidence '$humanEvidenceCode' must block release before named sign-off."
+        # The qualified-accountant acceptance is optional (Irish law requires no accountant): it may be
+        # optional and non-blocking. Every other human evidence gate must stay pending and blocking.
+        $humanEvidenceStatus = [string](Get-JsonProperty $humanEvidence "status")
+        $humanEvidenceBlocks = Get-JsonProperty $humanEvidence "blocksRelease"
+        $humanEvidenceIsOptional = $humanEvidenceCode -eq "qualifiedAccountantAcceptance" -and $humanEvidenceStatus -eq "optional"
+        if ($humanEvidenceIsOptional) {
+            if ($humanEvidenceBlocks -ne $false) {
+                Add-Failure $failures "humanReleaseEvidence '$humanEvidenceCode' is optional and must not block release."
+            }
+        } else {
+            if ($humanEvidenceStatus -ne "pending-human-evidence") {
+                Add-Failure $failures "humanReleaseEvidence '$humanEvidenceCode' status must be pending-human-evidence before named sign-off."
+            }
+            if ($humanEvidenceBlocks -ne $true) {
+                Add-Failure $failures "humanReleaseEvidence '$humanEvidenceCode' must block release before named sign-off."
+            }
         }
         if (@((Get-JsonProperty $humanEvidence "requiredEvidence")).Count -lt 2) {
             Add-Failure $failures "humanReleaseEvidence '$humanEvidenceCode' must include retained requiredEvidence references."

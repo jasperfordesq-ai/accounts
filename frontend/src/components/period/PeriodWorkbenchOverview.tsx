@@ -10,6 +10,7 @@ import type {
 } from "@/lib/api";
 import { IssueDigest, MetricStrip, ReviewPanel, StatusBadge, WorkflowDecisionSummary, type WorkflowItem } from "@/components/workbench";
 import { AccountantWorkflowRail, type AccountantWorkflowStage } from "@/components/workbench/AccountantWorkflowRail";
+import { directorsApprovalGateLabel } from "@/lib/filingEvidence";
 
 interface PeriodWorkbenchOverviewProps {
   companyId: number | string;
@@ -54,7 +55,7 @@ export function PeriodWorkbenchOverview({
   const reviewIssueCount = filingReadinessProfile
     ? filingReadinessProfile.blockingIssues.length + filingReadinessProfile.warningIssues.length
     : filingStatus?.blockingIssues.length ?? 0;
-  const accountantReviewState = filingReadinessProfile?.accountantReviewState ?? "Not started";
+  const directorsApprovalLabel = directorsApprovalGateLabel(filingReadinessProfile);
   const blockingIssues = uniqueIssues([
     ...(filingStatus?.blockingIssues ?? []),
     ...(filingReadinessProfile?.blockingIssues.map((issue) => issue.message) ?? []),
@@ -139,14 +140,14 @@ export function PeriodWorkbenchOverview({
     {
       id: "review",
       label: "Review",
-      detail: readyToFile ? "Qualified-accountant gate cleared" : `${reviewIssueCount} review issues`,
+      detail: readyToFile ? "Directors' approval recorded" : `${reviewIssueCount} review issues`,
       state: readyToFile ? "done" : reviewIssueCount > 0 ? "blocked" : "active",
       href: `${periodWorkspaceHref}?tab=filing`,
     },
     {
       id: "filing",
       label: "Filing",
-      detail: readyToFile ? "CRO pack ready" : `${filingStatus?.blockingIssues.length ?? 0} blockers - ${accountantReviewState}`,
+      detail: readyToFile ? "CRO pack ready" : `${filingStatus?.blockingIssues.length ?? 0} blockers - directors' approval ${directorsApprovalLabel.toLowerCase()}`,
       state: readyToFile ? "done" : "blocked",
       href: `${periodWorkspaceHref}?tab=filing`,
     },
@@ -224,12 +225,13 @@ export function PeriodWorkbenchOverview({
 
       <ReviewPanel
         title="Filing gate snapshot"
-        description="Compact review state for accountant sign-off, external filing evidence and the next allowed filing workflow action."
+        description="Compact review state for the directors' approval, external filing evidence and the next allowed filing workflow action."
         actions={<StatusBadge tone={filingGateTone}>{filingGatePathLabel}</StatusBadge>}
       >
-        <div className="grid gap-3 rounded-md border border-[var(--border)] bg-[var(--surface)] p-3 md:grid-cols-[minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,1fr)_auto] md:items-center">
+        <div className="grid gap-3 rounded-md border border-[var(--border)] bg-[var(--surface)] p-3 md:grid-cols-[minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,1fr)_auto] md:items-center">
           <GateSnapshotItem label="Path" value={filingGatePathLabel} />
-          <GateSnapshotItem label="Accountant review" value={accountantReviewState} />
+          <GateSnapshotItem label="Directors' approval" value={directorsApprovalLabel} />
+          <GateSnapshotItem label="Accountant review" value="Optional" />
           <GateSnapshotItem label="External filing" value={externalFilingState} />
           <GateSnapshotItem label="Allowed next action" value={allowedNextActions} />
           <Link

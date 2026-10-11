@@ -1004,6 +1004,30 @@ public partial class ProductionReadinessReportService
                 IrishStatutoryRuleSources.CroGroupCompany,
                 IrishStatutoryRuleSources.CroUnlimitedCompany,
                 IrishStatutoryRuleSources.RevenueIxbrlOverview
+            ]),
+        new(
+            "directors-s324-approval",
+            "Directors' approval",
+            "The board approves the statutory financial statements and two directors, or the sole director, sign on its behalf (Companies Act 2014, s.324) before a CRO pack can be approved; an accountant's review is optional. Company charities stay outside the Charities Act 2009 s.50 audit/independent examination requirement while its 2024 deletion is not commenced.",
+            "covered",
+            [
+                "DirectorsApprovalTests.CroApproval_WithoutADirectorsApproval_IsBlocked",
+                "DirectorsApprovalTests.ThreeDirectorsInOffice_RequireTwoDistinctDirectors",
+                "DirectorsApprovalTests.SoleDirector_SignsAlone",
+                "DirectorsApprovalTests.RealOrder_FinaliseThenGenerateLater_ApprovalIsRecordedAndSurvivesAnIdenticalReDownload",
+                "DirectorsApprovalTests.AuditedCompany_StillRequiresTheAuditorsReport",
+                "DirectorsApprovalTests.StatutorySources_CiteSection324AndTheCharitiesActCompanyExclusion"
+            ],
+            [
+                "two directors sign where more than one director is in office",
+                "a sole director signs alone (s.324(2))",
+                "regenerated accounts revoke the approval; an identical re-download keeps it",
+                "audit-required companies still need the signed auditor's report",
+                "company charities excluded from the Charities Act s.50 audit requirement (2024 amendment not commenced)"
+            ],
+            [
+                IrishStatutoryRuleSources.CompaniesActSection324,
+                IrishStatutoryRuleSources.CharitiesActSection50CompanyExclusion
             ])
     ];
 

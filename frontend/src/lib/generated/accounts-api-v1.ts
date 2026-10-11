@@ -7257,6 +7257,291 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/companies/{companyId}/periods/{periodId}/filing/directors-approval": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    onDate?: string;
+                };
+                header?: never;
+                path: {
+                    companyId: number;
+                    periodId: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DirectorsApprovalStateResponse"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    companyId: number;
+                    periodId: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["DirectorsApprovalRecordInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DirectorsApprovalSummary"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies/{companyId}/periods/{periodId}/filing/directors-approval-page": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    companyId: number;
+                    periodId: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["DirectorsApprovalPageInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DirectorsApprovalPageSummary"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies/{companyId}/periods/{periodId}/filing/directors-approval-page/{pageId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    companyId: number;
+                    periodId: number;
+                    pageId: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies/{companyId}/periods/{periodId}/filing/cro-signing-pack": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    companyId: number;
+                    periodId: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CroSigningPackInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CroSigningPackSummary"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies/{companyId}/periods/{periodId}/filing/auditor-report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    companyId: number;
+                    periodId: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["AuditorReportInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AuditorReportSummary"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies/{companyId}/periods/{periodId}/filing/accountant-review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    companyId: number;
+                    periodId: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["AccountantReviewAttestationInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AccountantReviewSummary"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/companies/{companyId}/periods/{periodId}/external-filing-handoff/workspace": {
         parameters: {
             query?: never;
@@ -7514,6 +7799,25 @@ export interface components {
             token: null | string;
             newPassword: null | string;
         };
+        AccountantReviewAttestationInput: {
+            reviewerName: string;
+            professionalBody: string;
+            membershipNumber: string;
+            /** Format: date */
+            reviewDate: string;
+            /** Format: byte */
+            reviewLetter: null | string;
+            reviewLetterSha256: null | string;
+        };
+        AccountantReviewSummary: {
+            reviewerName: string;
+            professionalBody: string;
+            membershipNumber: string;
+            /** Format: date */
+            reviewDate: string;
+            reviewLetterSha256: null | string;
+            state: string;
+        };
         AccountCategoryInput: {
             code?: null | string;
             name?: null | string;
@@ -7595,6 +7899,27 @@ export interface components {
             depreciation: number | string;
             /** Format: double */
             nbv: number | string;
+        };
+        AuditorReportInput: {
+            firmName: string;
+            signerName: string;
+            professionalBody: string;
+            membershipNumber: string;
+            reportReference: string;
+            /** Format: date-time */
+            signedAtUtc: string;
+            acceptedByDirectors: boolean;
+            /** Format: byte */
+            reportArtifact: string;
+            reportArtifactSha256: string;
+        };
+        AuditorReportSummary: {
+            reportReference: string;
+            firmName: string;
+            signerName: string;
+            /** Format: date-time */
+            signedAtUtc: string;
+            reportSha256: string;
         };
         AuthorityRequest: {
             workflow: components["schemas"]["ExternalFilingWorkflow"];
@@ -8087,6 +8412,24 @@ export interface components {
         CroPaymentInput: {
             by: null | string;
         };
+        CroSigningPackInput: {
+            /** Format: int32 */
+            directorOfficerId: number | string;
+            /** Format: int32 */
+            secretaryOfficerId: number | string;
+            /** Format: date-time */
+            signedAtUtc: string;
+            /** Format: byte */
+            signedArtifact: string;
+            signedArtifactSha256: string;
+        };
+        CroSigningPackSummary: {
+            signedByDirector: string;
+            signedBySecretary: string;
+            /** Format: date-time */
+            signedAtUtc: string;
+            signedPdfSha256: string;
+        };
         CroSnapshotInput: {
             /** Format: date */
             madeUpToDate: string;
@@ -8352,6 +8695,64 @@ export interface components {
          * @enum {unknown}
          */
         DirectorLoanTermsStatus: "Unassessed" | "NotWritten" | "WrittenComplete" | "WrittenAmbiguousRepayment" | "WrittenAmbiguousInterest" | "WrittenAmbiguousRepaymentAndInterest";
+        DirectorOption: {
+            /** Format: int32 */
+            officerId: number | string;
+            name: string;
+        };
+        DirectorsApprovalPageInput: {
+            /** Format: date */
+            approvalDate: string;
+            /** Format: int32 */
+            firstDirectorOfficerId: number | string;
+            /** Format: int32 */
+            secondDirectorOfficerId: null | number | string;
+            resolutionReference: string;
+        };
+        DirectorsApprovalPageSummary: {
+            /** Format: int32 */
+            id: number | string;
+            /** Format: date */
+            approvalDate: string;
+            firstDirectorName: string;
+            secondDirectorName: null | string;
+            /** Format: int32 */
+            directorsInOfficeCount: number | string;
+            resolutionReference: string;
+            pageSha256: string;
+            accountsPdfSha256: string;
+            recordSha256: string;
+            /** Format: date-time */
+            generatedAtUtc: string;
+        };
+        DirectorsApprovalRecordInput: {
+            /** Format: int32 */
+            approvalPageId: number | string;
+            /** Format: byte */
+            signedPageArtifact: string;
+            signedPageSha256: string;
+            /** Format: byte */
+            resolutionArtifact: string;
+            resolutionSha256: string;
+        };
+        DirectorsApprovalStateResponse: {
+            eligibleDirectors: components["schemas"]["DirectorOption"][];
+            latestPage: null | components["schemas"]["DirectorsApprovalPageSummary"];
+            current: null | components["schemas"]["DirectorsApprovalSummary"];
+            /** Format: date */
+            periodApprovalDate: null | string;
+        };
+        DirectorsApprovalSummary: {
+            /** Format: int32 */
+            eventId: number | string;
+            page: components["schemas"]["DirectorsApprovalPageSummary"];
+            signedPageSha256: string;
+            resolutionSha256: string;
+            recordedByDisplayName: string;
+            /** Format: date-time */
+            recordedAtUtc: string;
+            recordSha256: string;
+        };
         DividendInput: {
             /** Format: double */
             amount?: number | string;
@@ -8588,6 +8989,7 @@ export interface components {
             manualProfessionalReviewRequired: boolean;
             accountantReviewRequired: boolean;
             accountantReviewState: string;
+            approvalAuthority: string;
             directCroSubmissionSupported: boolean;
             directRosSubmissionSupported: boolean;
             revenueIxbrlGenerationSupported: boolean;
@@ -8604,7 +9006,7 @@ export interface components {
         FilingReadinessSignOffPacket: {
             state: string;
             stateLabel: string;
-            readyForAccountantApproval: boolean;
+            readyForDirectorsApproval: boolean;
             readyForExternalFiling: boolean;
             approvedBy: null | string;
             /** Format: date-time */

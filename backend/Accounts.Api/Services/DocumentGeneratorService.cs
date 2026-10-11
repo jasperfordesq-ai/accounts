@@ -11,7 +11,7 @@ namespace Accounts.Api.Services;
 public class DocumentGeneratorService(
     AccountsDbContext db,
     FinancialStatementsService statementsService,
-    PlatformMetrics? platformMetrics = null)
+    PlatformMetrics? platformMetrics = null) : IDirectorsApprovalPageRenderer
 {
     public async Task<byte[]> GenerateAccountsPackageAsync(int companyId, int periodId)
         => await TrackDocumentAsync(
@@ -176,7 +176,42 @@ public class DocumentGeneratorService(
                     t.TotalPages();
                 });
             });
-        }).GeneratePdf();
+        }).WithMetadata(DeterministicPdf.Metadata(DeterministicPdf.StableDate(period))).GeneratePdf();
+    }
+
+    /// <summary>One-page Companies Act 2014 s.324 approval page for the directors to sign.</summary>
+    public async Task<byte[]> RenderAsync(int companyId, int periodId, DirectorsApprovalPageContent content)
+    {
+        var period = await db.AccountingPeriods.Include(p => p.Company)
+            .FirstOrDefaultAsync(p => p.Id == periodId && p.CompanyId == companyId)
+            ?? throw new ResourceNotFoundException($"Period {periodId} not found");
+        var company = period.Company;
+        var signatories = content.SecondDirectorName is null
+            ? new[] { content.FirstDirectorName }
+            : new[] { content.FirstDirectorName, content.SecondDirectorName };
+        return Document.Create(doc => doc.Page(page =>
+        {
+            page.Size(PageSizes.A4);
+            page.Margin(2, Unit.Centimetre);
+            page.DefaultTextStyle(x => x.FontSize(11).FontFamily("Helvetica"));
+            page.Header().Element(c => ComposeHeader(c, company));
+            page.Content().Column(col =>
+            {
+                col.Spacing(10);
+                col.Item().Text("Approval of the financial statements — Companies Act 2014, section 324").Bold().FontSize(14);
+                col.Item().Text($"{company.LegalName} (CRO {company.CroNumber}) — financial year {period.PeriodStart:dd MMMM yyyy} to {period.PeriodEnd:dd MMMM yyyy}");
+                col.Item().Text($"The financial statements for the financial year were approved by the board of directors on {content.ApprovalDate:dd MMMM yyyy} ({content.ResolutionReference}) and are signed on its behalf by:");
+                if (content.SecondDirectorName is null)
+                    col.Item().Text("The company has a sole director, who approves and signs the financial statements (s.324(2)).").Italic();
+                foreach (var name in signatories)
+                {
+                    col.Item().PaddingTop(30).LineHorizontal(0.5f);
+                    col.Item().Text($"{name}, Director").SemiBold();
+                    col.Item().Text($"Date: {content.ApprovalDate:dd MMMM yyyy}");
+                }
+                col.Item().PaddingTop(20).Text($"Approved accounts PDF SHA-256: {content.AccountsPdfSha256}").FontSize(8);
+            });
+        })).WithMetadata(DeterministicPdf.Metadata(content.ApprovalDate)).GeneratePdf();
     }
 
     private static void ComposeHeader(IContainer container, Company company)
@@ -949,7 +984,7 @@ public class DocumentGeneratorService(
                     t.TotalPages();
                 });
             });
-        }).GeneratePdf();
+        }).WithMetadata(DeterministicPdf.Metadata(DeterministicPdf.StableDate(period))).GeneratePdf();
     }
 
     private static void ComposeCompanyIdentification(ColumnDescriptor col, Company company)
@@ -1118,7 +1153,7 @@ public class DocumentGeneratorService(
                     col.Item().PaddingTop(30).Text($"Date of approval: {approvalDate}").FontSize(10);
                 });
             });
-        });
+        }).WithMetadata(DeterministicPdf.Metadata(DeterministicPdf.StableDate(period)));
 
         using var stream = new MemoryStream();
         document.GeneratePdf(stream);

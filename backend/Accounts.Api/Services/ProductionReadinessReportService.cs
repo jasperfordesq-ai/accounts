@@ -186,12 +186,10 @@ public partial class ProductionReadinessReportService(AccountsDbContext db)
             "production-scorecard"
         };
         var releaseBlockers = assuranceActions
-            .Where(action => action.Status != "complete")
+            .Where(action => action.Status is not ("complete" or "optional"))
             .OrderBy(action => action.Priority == "critical" ? 0 : action.Priority == "high" ? 1 : 2)
             .ThenBy(action => action.Code, StringComparer.Ordinal)
-            .Select(action => action.Code == "qualified-accountant-signoff"
-                ? "Qualified accountant sign-off required"
-                : $"{action.Label} required")
+            .Select(action => $"{action.Label} required")
             .Distinct(StringComparer.Ordinal)
             .ToArray();
         var packetWithoutId = new ProductionAssurancePacket(
@@ -205,7 +203,7 @@ public partial class ProductionReadinessReportService(AccountsDbContext db)
             statutoryRulesCoverage.Count,
             visualQaCoverage.ExpectedScreenshotCount,
             operationalGates.Count(gate => gate.Required),
-            assuranceActions.Count(action => action.Priority == "critical" && action.Status != "complete"),
+            assuranceActions.Count(action => action.Priority == "critical" && action.Status is not ("complete" or "optional")),
             evidenceItems,
             releaseBlockers);
 
@@ -300,7 +298,7 @@ public partial class ProductionReadinessReportService(AccountsDbContext db)
                 [
                     "CLAUDE.md is the canonical architecture/development guide.",
                     "AGENTS.md carries the active production-readiness handoff.",
-                    "Production runbook links release evidence templates for source-law review, visual QA, monitoring provider confirmation and qualified-accountant acceptance.",
+                    "Production runbook links release evidence templates for source-law review, visual QA, monitoring provider confirmation and (optional) qualified-accountant acceptance.",
                     "scripts/verify-release-evidence.ps1 validates completed release evidence templates before real filing use, including source-law source coverage.",
                     "scripts/verify-release-artifact-pack.ps1 validates the collected release artifact reports and the retained human release-evidence templates as one exact evidence pack with release candidate identity and SHA-256 inventory.",
                     "Production readiness report exposes the six human release-evidence gates with template files, reviewer roles, sign-off gates, required retained evidence and full per-gate reviewerPickupFiles.",
@@ -394,15 +392,13 @@ public partial class ProductionReadinessReportService(AccountsDbContext db)
                 ],
                 [
                     "Complete and retain verified source-law review evidence for every monitored source before relying on generated packs.",
-                    "Run and retain verified qualified-accountant acceptance across every canonical golden corpus scenario.",
+                    "Optional: record a qualified-accountant acceptance of the canonical golden corpus scenarios if an accountant reviewed them.",
                     "Complete and retain verified external ROS/iXBRL validation evidence for generated packs.",
                     "Complete and retain verified manual handoff acceptance for audit-required and unsupported paths before relying on outputs."
                 ],
                 ["backend-code"],
                 [
-                    "backend-code:qualified-accountant-signoff",
-                    "backend-code:external-ros-validation",
-                    "backend-code:accountant-acceptance-walkthrough"
+                    "backend-code:external-ros-validation"
                 ],
                 [
                     Control(
@@ -460,7 +456,7 @@ public partial class ProductionReadinessReportService(AccountsDbContext db)
                         30,
                         "code",
                         false,
-                        ["The implemented statutory-output controls are covered by retained machine evidence; the remaining director-loan, tax-calculation and filing-acceptance findings require genuine qualified-accountant and external evidence."],
+                        ["The implemented statutory-output controls are covered by retained machine evidence; the remaining director-loan, tax-calculation and filing-acceptance findings require genuine external evidence (an accountant review is optional)."],
                         ["P1-STAT-007", "P1-TAX-001", "P1-TAX-002"]),
                     Control(
                         "external-ixbrl-acceptance",
@@ -476,7 +472,7 @@ public partial class ProductionReadinessReportService(AccountsDbContext db)
                         20,
                         "human-external",
                         false,
-                        ["Qualified-accountant and manual-handoff templates require genuine professional identities and signed evidence."],
+                        ["The manual-handoff template requires genuine professional identities and signed evidence; the qualified-accountant template is optional and is only checked when a review was recorded."],
                         ["HUMAN-004", "HUMAN-005"]),
                     Control(
                         "independent-golden-corpus",
@@ -523,12 +519,11 @@ public partial class ProductionReadinessReportService(AccountsDbContext db)
                 [
                     "Complete named visual QA review against the 192-capture light/dark mobile/tablet/desktop canonical state manifest and visual-smoke-evidence-report.json.",
                     "Complete manual keyboard, screen-reader, focus-indicator, contrast and responsive usability review without waiving axe-incomplete rules.",
-                    "Record qualified-accountant route acceptance for outputs, gates, wording and evidence."
+                    "Optional: record an accountant route acceptance for outputs, gates, wording and evidence if one was done."
                 ],
                 ["frontend-ui-ux", "frontend-code"],
                 [
                     "frontend-ui-ux:light-dark-visual-regression",
-                    "frontend-ui-ux:accountant-acceptance-walkthrough",
                     "frontend-code:light-dark-visual-regression"
                 ],
                 [
@@ -587,7 +582,7 @@ public partial class ProductionReadinessReportService(AccountsDbContext db)
                         25,
                         "machine",
                         false,
-                        ["All 192 canonical captures pass automated axe-core WCAG 2.2 A/AA and responsive workflow checks; genuine manual keyboard, screen-reader, focus/contrast and qualified-accountant acceptance remain open."],
+                        ["All 192 canonical captures pass automated axe-core WCAG 2.2 A/AA and responsive workflow checks; genuine manual keyboard, screen-reader and focus/contrast review remain open; a qualified-accountant acceptance is optional."],
                         ["P1-UX-001", "P1-UX-003", "P1-A11Y-001", "P1-VIS-002", "P1-FE-011"]),
                     Control(
                         "complete-visual-acceptance",
@@ -857,6 +852,16 @@ public partial class ProductionReadinessReportService(AccountsDbContext db)
                 "charity-annual-return-review",
                 "qualified-accountant-review"
             ],
+            [IrishStatutoryRuleSources.CharitiesActSection50CompanyExclusion.SourceId] =
+            [
+                "charity-annual-return-review",
+                "source-law-change-review"
+            ],
+            [IrishStatutoryRuleSources.CompaniesActSection324.SourceId] =
+            [
+                "directors-approval",
+                "cro-filing-readiness"
+            ],
             [IrishStatutoryRuleSources.CroAuditorsReport.SourceId] =
             [
                 "auditor-handoff",
@@ -1027,7 +1032,7 @@ public partial class ProductionReadinessReportService(AccountsDbContext db)
             "Confirm source page is reachable at the pinned URL.",
             "Compare pinned effective date against the current source page.",
             "Review guidance wording for statutory filing, exemption, note or taxonomy changes.",
-            "Record qualified accountant acceptance before generated packs are used for real filings."
+            "Optionally record qualified accountant acceptance of the review note before generated packs are used for real filings."
         };
 
         if (sourceId.StartsWith("revenue-", StringComparison.Ordinal))
@@ -1038,6 +1043,10 @@ public partial class ProductionReadinessReportService(AccountsDbContext db)
             checks.Add("Confirm unlimited-company variants remain manual professional handoff unless explicitly modelled.");
         if (sourceId == IrishStatutoryRuleSources.CharitiesRegulatorAnnualReport.SourceId)
             checks.Add("Confirm charity annual-report deadlines and SoFA/TAR evidence expectations remain current.");
+        if (sourceId == IrishStatutoryRuleSources.CompaniesActSection324.SourceId)
+            checks.Add("Confirm s.324 still requires board approval with signature by two directors, or by the sole director.");
+        if (sourceId == IrishStatutoryRuleSources.CharitiesActSection50CompanyExclusion.SourceId)
+            checks.Add("Confirm the Charities (Amendment) Act 2024 deletion of s.50(13)(a) is still not commenced; commencement brings company charities into the Charities Act audit/independent examination regime.");
 
         return checks;
     }

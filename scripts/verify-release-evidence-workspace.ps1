@@ -858,7 +858,7 @@ This summary is generated from ``release-evidence-report.json``. It is not relea
 | --- | --- | --- | --- | --- | ---: | --- |
 $($rows -join "`n")
 
-Run ``scripts/verify-release-evidence.ps1`` again after named reviewers complete the Markdown templates. The release remains blocked until all six rows are accepted.
+Run ``scripts/verify-release-evidence.ps1`` again after named reviewers complete the Markdown templates. The release remains blocked until the five required rows are accepted; the qualifiedAccountantAcceptance row is optional.
 "@
 
     Set-Content -LiteralPath $Path -Value $content -NoNewline

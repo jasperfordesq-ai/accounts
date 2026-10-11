@@ -44,6 +44,7 @@ public class AccountsDbContext : DbContext
         ValidateIdempotencyRecordChanges();
         ValidateExternalFilingHandoffChanges();
         ValidateAnnualReturnDateEvidenceChanges();
+        ValidateDirectorsApprovalChanges();
         ValidateDuplicateReviewChanges();
         ValidateIdentityLifecycleEvidenceChanges();
         PersistenceOwnershipInvariantValidator.ValidateAsync(this, CurrentTenantId, CancellationToken.None)
@@ -62,6 +63,7 @@ public class AccountsDbContext : DbContext
         ValidateIdempotencyRecordChanges();
         ValidateExternalFilingHandoffChanges();
         ValidateAnnualReturnDateEvidenceChanges();
+        ValidateDirectorsApprovalChanges();
         ValidateDuplicateReviewChanges();
         ValidateIdentityLifecycleEvidenceChanges();
         await PersistenceOwnershipInvariantValidator.ValidateAsync(this, CurrentTenantId, cancellationToken);
@@ -153,6 +155,8 @@ public class AccountsDbContext : DbContext
     public DbSet<CompanyOnboardingRequest> CompanyOnboardingRequests => Set<CompanyOnboardingRequest>();
     public DbSet<IdempotencyRecord> IdempotencyRecords => Set<IdempotencyRecord>();
     public DbSet<AnnualReturnDateRecord> AnnualReturnDateRecords => Set<AnnualReturnDateRecord>();
+    public DbSet<DirectorsApprovalPage> DirectorsApprovalPages => Set<DirectorsApprovalPage>();
+    public DbSet<DirectorsApprovalEvent> DirectorsApprovalEvents => Set<DirectorsApprovalEvent>();
 
     // Privacy governance
     public DbSet<LoginSecurityEvent> LoginSecurityEvents => Set<LoginSecurityEvent>();
@@ -346,6 +350,68 @@ public class AccountsDbContext : DbContext
             e.HasIndex(record => new { record.CompanyId, record.AnnualReturnDate });
         });
 
+        modelBuilder.Entity<DirectorsApprovalPage>(e =>
+        {
+            e.ToTable("directors_approval_pages", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_directors_approval_pages_sha256",
+                    "length(\"RecordSha256\") = 64 AND length(\"PageSha256\") = 64 AND length(\"AccountsPdfSha256\") = 64 AND length(\"ArtifactSourceFingerprintSha256\") = 64");
+                table.HasCheckConstraint(
+                    "CK_directors_approval_pages_directors",
+                    "(\"SecondDirectorOfficerId\" IS NULL AND \"DirectorsInOfficeCount\" = 1) OR (\"SecondDirectorOfficerId\" IS NOT NULL AND \"SecondDirectorOfficerId\" <> \"FirstDirectorOfficerId\" AND \"DirectorsInOfficeCount\" >= 2)");
+            });
+            e.HasKey(page => page.Id);
+            e.HasQueryFilter(page => CurrentTenantId == null || page.Period.Company.TenantId == CurrentTenantId);
+            e.Property(page => page.FirstDirectorName).HasMaxLength(200).IsRequired();
+            e.Property(page => page.SecondDirectorName).HasMaxLength(200);
+            e.Property(page => page.ResolutionReference).HasMaxLength(200).IsRequired();
+            e.Property(page => page.AccountsPdfSha256).HasMaxLength(64).IsRequired();
+            e.Property(page => page.ArtifactSourceFingerprintSha256).HasMaxLength(64).IsRequired();
+            e.Property(page => page.PageSha256).HasMaxLength(64).IsRequired();
+            e.Property(page => page.GeneratedByUserId).HasMaxLength(320).IsRequired();
+            e.Property(page => page.GeneratedByDisplayName).HasMaxLength(200).IsRequired();
+            e.Property(page => page.RecordSha256).HasMaxLength(64).IsRequired();
+            e.HasOne(page => page.Period).WithMany(period => period.DirectorsApprovalPages)
+                .HasForeignKey(page => page.PeriodId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<CompanyOfficer>().WithMany().HasForeignKey(page => page.FirstDirectorOfficerId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<CompanyOfficer>().WithMany().HasForeignKey(page => page.SecondDirectorOfficerId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(page => new { page.PeriodId, page.GeneratedAtUtc });
+        });
+
+        modelBuilder.Entity<DirectorsApprovalEvent>(e =>
+        {
+            e.ToTable("directors_approval_events", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_directors_approval_events_kind",
+                    "(\"Kind\" = 'Approved' AND \"SignedPageSha256\" IS NOT NULL AND \"ResolutionSha256\" IS NOT NULL AND \"RevocationReason\" IS NULL) OR (\"Kind\" = 'Revoked' AND \"SignedPageSha256\" IS NULL AND \"ResolutionSha256\" IS NULL AND \"RevocationReason\" IS NOT NULL)");
+                table.HasCheckConstraint(
+                    "CK_directors_approval_events_sha256",
+                    "length(\"RecordSha256\") = 64 AND length(\"ApprovalPageSha256\") = 64 AND (\"SignedPageSha256\" IS NULL OR length(\"SignedPageSha256\") = 64) AND (\"ResolutionSha256\" IS NULL OR length(\"ResolutionSha256\") = 64)");
+            });
+            e.HasKey(item => item.Id);
+            e.HasQueryFilter(item => CurrentTenantId == null || item.Period.Company.TenantId == CurrentTenantId);
+            e.Property(item => item.Kind).HasConversion<string>().HasMaxLength(20);
+            e.Property(item => item.ApprovalPageSha256).HasMaxLength(64).IsRequired();
+            e.Property(item => item.SignedPageSha256).HasMaxLength(64);
+            e.Property(item => item.ResolutionSha256).HasMaxLength(64);
+            e.Property(item => item.RevocationReason).HasMaxLength(100);
+            e.Property(item => item.RecordedByUserId).HasMaxLength(320).IsRequired();
+            e.Property(item => item.RecordedByDisplayName).HasMaxLength(200).IsRequired();
+            e.Property(item => item.PreviousRecordSha256).HasMaxLength(64);
+            e.Property(item => item.RecordSha256).HasMaxLength(64).IsRequired();
+            e.HasOne(item => item.Period).WithMany(period => period.DirectorsApprovalEvents)
+                .HasForeignKey(item => item.PeriodId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(item => item.ApprovalPage).WithMany()
+                .HasForeignKey(item => item.ApprovalPageId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(item => new { item.PeriodId, item.RecordedAtUtc });
+            // Chain-fork guards: at most one event may follow any given event, and at most one
+            // genesis (null previous) event may exist per period. Both are needed for a single chain head.
+            e.HasIndex(item => item.PreviousRecordSha256).IsUnique().HasFilter("\"PreviousRecordSha256\" IS NOT NULL");
+            e.HasIndex(item => item.PeriodId).IsUnique().HasFilter("\"PreviousRecordSha256\" IS NULL").HasDatabaseName("IX_directors_approval_events_PeriodId_Genesis");
+        });
+
         // CompanyOfficer
         modelBuilder.Entity<CompanyOfficer>(e =>
         {
@@ -426,6 +492,7 @@ public class AccountsDbContext : DbContext
             e.Property(c => c.ApprovalDecision).HasMaxLength(50);
             e.Property(c => c.ApproverVerificationReference).HasMaxLength(200);
             e.Property(c => c.ApproverVerificationArtifactSha256).HasMaxLength(64);
+            e.Property(c => c.OptionalReviewerName).HasMaxLength(200);
             e.Property(c => c.SignedPdfSha256).HasMaxLength(64);
             e.HasOne(c => c.Period).WithOne(p => p.CroFilingPackage).HasForeignKey<CroFilingPackage>(c => c.PeriodId).OnDelete(DeleteBehavior.Cascade);
         });
@@ -465,7 +532,7 @@ public class AccountsDbContext : DbContext
             e.ToTable(t => t.HasTrigger("TR_charity_filing_packages_period_immutable"));
             e.HasKey(c => c.Id);
             e.HasQueryFilter(c => CurrentTenantId == null || c.Period.Company.TenantId == CurrentTenantId);
-            e.Property(c => c.ApprovedBy).HasMaxLength(200);
+            // Unbounded like the CRO and Revenue packages: it holds the signing directors' names.
             e.Property(c => c.SubmittedBy).HasMaxLength(200);
             e.Property(c => c.AcceptedBy).HasMaxLength(200);
             e.Property(c => c.AnnualReturnReference).HasMaxLength(200);
@@ -1644,6 +1711,25 @@ public class AccountsDbContext : DbContext
             {
                 throw new BusinessRuleException("External filing outcome failed its append-only evidence integrity checks.");
             }
+        }
+    }
+
+    private void ValidateDirectorsApprovalChanges()
+    {
+        ChangeTracker.DetectChanges();
+        foreach (var entry in ChangeTracker.Entries<DirectorsApprovalPage>())
+        {
+            if (entry.State is EntityState.Modified or EntityState.Deleted)
+                throw new BusinessRuleException("Directors' approval pages are append-only and cannot be changed or deleted.");
+            if (entry.State == EntityState.Added && !DirectorsApprovalIntegrity.IsValid(entry.Entity))
+                throw new BusinessRuleException("A directors' approval page failed its SHA-256 integrity check.");
+        }
+        foreach (var entry in ChangeTracker.Entries<DirectorsApprovalEvent>())
+        {
+            if (entry.State is EntityState.Modified or EntityState.Deleted)
+                throw new BusinessRuleException("Directors' approval events are append-only and cannot be changed or deleted.");
+            if (entry.State == EntityState.Added && !DirectorsApprovalIntegrity.IsValid(entry.Entity))
+                throw new BusinessRuleException("A directors' approval event failed its SHA-256 integrity check.");
         }
     }
 

@@ -5,6 +5,7 @@ import {
   configuredApiKeyHeaderName,
   deleteHopByHopHeaders,
 } from "@/lib/apiProxyRequest";
+import { DEFAULT_API_PROXY_MAX_BODY_BYTES } from "@/lib/apiProxyLimits";
 import { allowSetCookieForProxyResponse, proxyResponseForUpstream } from "@/lib/apiProxyResponse";
 import { withStrictTransportSecurity } from "@/lib/securityHeaders";
 import { readServerSecret } from "@/lib/serverSecrets";
@@ -15,7 +16,7 @@ export const dynamic = "force-dynamic";
 const apiUrl = process.env.API_URL;
 const UPSTREAM_TIMEOUT_MS = Number.parseInt(process.env.API_PROXY_TIMEOUT_MS ?? "15000", 10);
 const DOCUMENT_TIMEOUT_MS = Number.parseInt(process.env.API_PROXY_DOCUMENT_TIMEOUT_MS ?? "120000", 10);
-const MAX_PROXY_BODY_BYTES = Number.parseInt(process.env.API_PROXY_MAX_BODY_BYTES ?? "5242880", 10);
+const MAX_PROXY_BODY_BYTES = Number.parseInt(process.env.API_PROXY_MAX_BODY_BYTES ?? String(DEFAULT_API_PROXY_MAX_BODY_BYTES), 10);
 const TRUST_PROXY_HEADERS = process.env.TRUST_PROXY_HEADERS === "true";
 const DEFAULT_DEVELOPMENT_API_URL = "http://localhost:5090";
 const isDevelopmentRuntime = process.env.NODE_ENV === "development";
@@ -95,7 +96,7 @@ function proxyTimeoutMs(path: string[]) {
 }
 
 function maxProxyBodyBytes() {
-  return Number.isFinite(MAX_PROXY_BODY_BYTES) && MAX_PROXY_BODY_BYTES > 0 ? MAX_PROXY_BODY_BYTES : 5 * 1024 * 1024;
+  return Number.isFinite(MAX_PROXY_BODY_BYTES) && MAX_PROXY_BODY_BYTES > 0 ? MAX_PROXY_BODY_BYTES : DEFAULT_API_PROXY_MAX_BODY_BYTES;
 }
 
 function contentLengthExceedsLimit(request: NextRequest) {

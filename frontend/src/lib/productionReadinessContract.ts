@@ -3714,9 +3714,21 @@ function assertHumanReleaseEvidence(report: ProductionReadinessReport) {
       );
     }
 
-    if (item.status !== "pending-human-evidence" && item.status !== "accepted") {
+    if (item.status !== "pending-human-evidence" && item.status !== "accepted" && item.status !== "optional") {
       throw new Error(
-        `Invalid production readiness report contract: humanReleaseEvidence.${itemIndex}.status - must be pending-human-evidence or accepted`,
+        `Invalid production readiness report contract: humanReleaseEvidence.${itemIndex}.status - must be pending-human-evidence, accepted or optional`,
+      );
+    }
+
+    if (item.status === "optional" && item.code !== "qualifiedAccountantAcceptance") {
+      throw new Error(
+        `Invalid production readiness report contract: humanReleaseEvidence.${itemIndex}.status - only qualifiedAccountantAcceptance may be optional`,
+      );
+    }
+
+    if (item.status === "optional" && item.blocksRelease) {
+      throw new Error(
+        `Invalid production readiness report contract: humanReleaseEvidence.${itemIndex}.blocksRelease - optional human evidence cannot block release`,
       );
     }
 
@@ -3726,9 +3738,9 @@ function assertHumanReleaseEvidence(report: ProductionReadinessReport) {
       );
     }
 
-    if (!item.blocksRelease && item.status !== "accepted") {
+    if (!item.blocksRelease && item.status !== "accepted" && item.status !== "optional") {
       throw new Error(
-        `Invalid production readiness report contract: humanReleaseEvidence.${itemIndex}.status - non-blocking human evidence must be accepted`,
+        `Invalid production readiness report contract: humanReleaseEvidence.${itemIndex}.status - non-blocking human evidence must be accepted or optional`,
       );
     }
 

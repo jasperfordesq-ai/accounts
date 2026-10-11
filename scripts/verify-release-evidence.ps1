@@ -1174,7 +1174,8 @@ function New-HumanEvidenceCompletionItem {
         [string]$RequiredReviewerRole,
         [string]$SignOffGate,
         [string]$Content,
-        [System.Collections.Generic.List[string]]$EvidenceFailures
+        [System.Collections.Generic.List[string]]$EvidenceFailures,
+        [bool]$Optional = $false
     )
 
     $present = Test-Path -LiteralPath $TemplateFile -PathType Leaf
@@ -1198,6 +1199,7 @@ function New-HumanEvidenceCompletionItem {
         present = $present
         hasReleaseIdentity = $null -ne $identity
         status = $status
+        optional = $Optional
         blockingFailureCount = $EvidenceFailures.Count
         blockingFailures = $EvidenceFailures.ToArray()
     }
@@ -1209,16 +1211,23 @@ function New-ProductionScorecardCompletion {
         [System.Collections.Generic.List[string]]$Failures
     )
 
-    $completionItems = @($HumanEvidenceCompletion)
+    # The accountant review is optional (Irish law does not require an accountant): it never has to be
+    # accepted, and it is only held to the template rules when a reviewer actually recorded one.
+    $mandatoryHumanEvidence = @($requiredPendingHumanEvidenceBlockers | Where-Object { -not ($_.PSObject.Properties.Name -contains "Optional" -and $_.Optional) })
+    $completionItems = @($HumanEvidenceCompletion | Where-Object { -not $_["optional"] })
+    $optionalCompletionItems = @($HumanEvidenceCompletion | Where-Object { $_["optional"] })
     $acceptedItems = @($completionItems | Where-Object {
         [string]::Equals([string]$_["status"], "accepted", [StringComparison]::Ordinal)
     })
     $acceptedEvidenceNames = @($acceptedItems | ForEach-Object { [string]$_["evidenceName"] })
+    $optionalAcceptedEvidenceNames = @($optionalCompletionItems | Where-Object {
+        [string]::Equals([string]$_["status"], "accepted", [StringComparison]::Ordinal)
+    } | ForEach-Object { [string]$_["evidenceName"] })
     $remainingEvidenceNames = @($completionItems | Where-Object {
         -not [string]::Equals([string]$_["status"], "accepted", [StringComparison]::Ordinal)
     } | ForEach-Object { [string]$_["evidenceName"] })
 
-    $allHumanEvidenceAccepted = $acceptedItems.Count -eq $requiredPendingHumanEvidenceBlockers.Count
+    $allHumanEvidenceAccepted = $acceptedItems.Count -eq $mandatoryHumanEvidence.Count
     $readinessPath = Join-Path $EvidenceDirectory "production-readiness-report.json"
     $readiness = Read-JsonEvidenceFile $readinessPath "Production readiness report" $Failures
     $scorecard = Get-JsonPropertyValue $readiness "productionScorecard"
@@ -1302,7 +1311,7 @@ function New-ProductionScorecardCompletion {
                 currentScore = $derivedCurrentScore
                 targetScore = $derivedTargetScore
                 completionGate = "all-weighted-controls-passed"
-                requiredHumanEvidence = @($requiredPendingHumanEvidenceBlockers | ForEach-Object { [string]$_.EvidenceName })
+                requiredHumanEvidence = @($mandatoryHumanEvidence | ForEach-Object { [string]$_.EvidenceName })
                 remainingHumanEvidence = $remainingEvidenceNames
                 controls = $retainedControls
             }
@@ -1332,7 +1341,8 @@ function New-ProductionScorecardCompletion {
         auditedCommit = $auditedCommit
         evidencePolicy = $evidencePolicy
         acceptedHumanEvidenceCount = $acceptedItems.Count
-        requiredHumanEvidenceCount = $requiredPendingHumanEvidenceBlockers.Count
+        requiredHumanEvidenceCount = $mandatoryHumanEvidence.Count
+        optionalHumanEvidenceAccepted = $optionalAcceptedEvidenceNames
         acceptedHumanEvidence = $acceptedEvidenceNames
         remainingHumanEvidence = $remainingEvidenceNames
         openEngineeringOrAssuranceControlCount = $openControls.Count
@@ -1430,7 +1440,7 @@ $requiredPendingHumanEvidenceBlockers = @(
     [pscustomobject]@{ EvidenceName = "visualQa"; TemplateFile = "visual-qa-signoff-template.md"; RequiredReviewerRole = "Named visual QA reviewer"; SignOffGate = "visual-qa-screenshot-review"; RequiredPickupFiles = @("visual-qa-signoff-template.md", "visual-smoke-manifest.json", "visual-smoke-evidence-report.json", "accountant-workbench-evidence-report.json", "release-evidence-reviewer-blockers.md") },
     [pscustomobject]@{ EvidenceName = "sourceLawReview"; TemplateFile = "source-law-review-template.md"; RequiredReviewerRole = "Named source-law reviewer plus qualified accountant"; SignOffGate = "source-law-change-review"; RequiredPickupFiles = @("source-law-review-template.md", "production-readiness-report.json", "production-readiness-verification-report.json", "release-evidence-reviewer-blockers.md") },
     [pscustomobject]@{ EvidenceName = "externalRosIxbrlValidation"; TemplateFile = "external-ros-ixbrl-validation-template.md"; RequiredReviewerRole = "External ROS/iXBRL validation reviewer"; SignOffGate = "external-ros-validation-evidence"; RequiredPickupFiles = @("external-ros-ixbrl-validation-template.md", "production-readiness-report.json", "release-evidence-reviewer-blockers.md") },
-    [pscustomobject]@{ EvidenceName = "qualifiedAccountantAcceptance"; TemplateFile = "qualified-accountant-acceptance-template.md"; RequiredReviewerRole = "Named qualified accountant"; SignOffGate = "qualified-accountant-final-signoff"; RequiredPickupFiles = @("qualified-accountant-acceptance-template.md", "production-readiness-report.json", "accountant-workbench-evidence-report.json", "release-evidence-reviewer-blockers.md") },
+    [pscustomobject]@{ EvidenceName = "qualifiedAccountantAcceptance"; TemplateFile = "qualified-accountant-acceptance-template.md"; RequiredReviewerRole = "Named qualified accountant"; SignOffGate = "qualified-accountant-final-signoff"; Optional = $true; RequiredPickupFiles = @("qualified-accountant-acceptance-template.md", "production-readiness-report.json", "accountant-workbench-evidence-report.json", "release-evidence-reviewer-blockers.md") },
     [pscustomobject]@{ EvidenceName = "manualHandoffAcceptance"; TemplateFile = "manual-handoff-acceptance-template.md"; RequiredReviewerRole = "Named manual handoff reviewer"; SignOffGate = "manual-accountant-acceptance"; RequiredPickupFiles = @("manual-handoff-acceptance-template.md", "production-readiness-report.json", "release-evidence-reviewer-blockers.md") },
     [pscustomobject]@{ EvidenceName = "monitoringProviderConfirmation"; TemplateFile = "monitoring-provider-confirmation-template.md"; RequiredReviewerRole = "Named release operator"; SignOffGate = "production-monitoring"; RequiredPickupFiles = @("monitoring-provider-confirmation-template.md", "monitoring-error-routing-report.json", "structured-log-report.json", "release-evidence-reviewer-blockers.md") }
 )
@@ -1927,7 +1937,9 @@ $workspaceVerificationReportPath = Join-Path $resolvedDirectory "release-evidenc
 $visual = [string](Read-EvidenceFile $visualPath $failures)
 $sourceLaw = [string](Read-EvidenceFile $sourceLawPath $failures)
 $externalRosIxbrl = [string](Read-EvidenceFile $externalRosIxbrlPath $failures)
-$accountant = [string](Read-EvidenceFile $accountantPath $failures)
+# Optional accountant review: an absent file is not a failure, and the template rules only bind a recorded review.
+$accountant = if (Test-Path -LiteralPath $accountantPath) { [string](Read-EvidenceFile $accountantPath $failures) } else { "" }
+$accountantRecorded = -not [string]::IsNullOrWhiteSpace((Get-FieldValue $accountant "Accountant name"))
 $manualHandoff = [string](Read-EvidenceFile $manualHandoffPath $failures)
 $monitoring = [string](Read-EvidenceFile $monitoringPath $failures)
 $workspaceManifest = Read-JsonEvidenceFile $workspaceManifestPath "release-evidence-workspace-manifest.json" $failures
@@ -1984,7 +1996,7 @@ $humanEvidenceCompletion = @(
     New-HumanEvidenceCompletionItem "visualQa" $visualPath "Named visual QA reviewer" "visual-qa-screenshot-review" $visual $visualFailures
     New-HumanEvidenceCompletionItem "sourceLawReview" $sourceLawPath "Named source-law reviewer plus qualified accountant" "source-law-change-review" $sourceLaw $sourceLawFailures
     New-HumanEvidenceCompletionItem "externalRosIxbrlValidation" $externalRosIxbrlPath "External ROS/iXBRL validation reviewer" "external-ros-validation-evidence" $externalRosIxbrl $externalRosIxbrlFailures
-    New-HumanEvidenceCompletionItem "qualifiedAccountantAcceptance" $accountantPath "Named qualified accountant" "qualified-accountant-final-signoff" $accountant $accountantFailures
+    New-HumanEvidenceCompletionItem "qualifiedAccountantAcceptance" $accountantPath "Named qualified accountant" "qualified-accountant-final-signoff" $accountant $accountantFailures $true
     New-HumanEvidenceCompletionItem "manualHandoffAcceptance" $manualHandoffPath "Named manual handoff reviewer" "manual-accountant-acceptance" $manualHandoff $manualHandoffFailures
     New-HumanEvidenceCompletionItem "monitoringProviderConfirmation" $monitoringPath "Named release operator" "production-monitoring" $monitoring $monitoringFailures
 )
@@ -1997,6 +2009,9 @@ foreach ($evidenceFailureList in @(
     $manualHandoffFailures,
     $monitoringFailures
 )) {
+    if ([object]::ReferenceEquals($evidenceFailureList, $accountantFailures) -and -not $accountantRecorded) {
+        continue
+    }
     foreach ($failure in $evidenceFailureList) {
         Add-Failure $failures $failure
     }

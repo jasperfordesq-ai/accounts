@@ -99,7 +99,7 @@ public partial class ProductionReadinessReportService
             "What was generated and when?",
             "Immediately after server-side PDF, notes, charity or iXBRL generation completes.",
             "System generation service",
-            "Generated output audit event must exist before accountant approval can rely on the pack.",
+            "Generated output audit event must exist before the directors approve, or an optional accountant reviews, the pack.",
             [
                 AuditEventCodes.CroDocumentGenerated,
                 AuditEventCodes.IxbrlInternalCheckCompleted,
@@ -112,10 +112,10 @@ public partial class ProductionReadinessReportService
             ]),
         new(
             "accountant-approval-capture",
-            "Professional review",
+            "Approval and optional review",
             "Who approved the pack and what evidence was open at approval?",
-            "At named qualified-accountant approval, after generated outputs and required evidence are present.",
-            "Named qualified accountant",
+            "At the directors' s.324 approval (and any optional accountant review), after generated outputs and required evidence are present.",
+            "Directors approving under s.324; optional named qualified accountant",
             "Filing workflow transitions must record reviewer identity, approval timestamp, open blockers, warnings and allowed next actions.",
             [
                 AuditEventCodes.AdjustmentApproved,
@@ -170,13 +170,13 @@ public partial class ProductionReadinessReportService
         new(
             "who-approved-what",
             "Who approved what",
-            "Which named reviewer or qualified accountant approved the pack, and which period/output state was approved?",
+            "Which directors approved the accounts under s.324, which optional named accountant review was recorded, and which period/output state was approved?",
             "named-accountant-approval-record",
             "filing_workflow_status_history",
-            "Named qualified accountant",
+            "Directors approving under s.324; optional named qualified accountant",
             "After required evidence is present and before any filing status can be marked approved or submitted.",
             "Approval transition must carry reviewer identity, timestamp, period id, open blocker summary and the allowed next action set.",
-            "Block release when approval can be recorded without a named qualified-accountant identity and linked readiness evidence.",
+            "Block release when approval can be recorded without the directors' s.324 approval identity and linked readiness evidence; an accountant review is optional and never required.",
             [
                 AuditEventCodes.AdjustmentApproved,
                 AuditEventCodes.CroFilingStatusChanged,
@@ -190,13 +190,13 @@ public partial class ProductionReadinessReportService
         new(
             "evidence-present-at-approval",
             "Evidence present at approval",
-            "What evidence was present, blocked, warned or manually handed off when the accountant approval decision was made?",
+            "What evidence was present, blocked, warned or manually handed off when the approval decision was made?",
             "readiness-profile-decision-snapshot",
             "filing-readiness-profile-snapshot",
-            "Named qualified accountant",
-            "At professional review, immediately before final approval or manual handoff recording.",
+            "Directors approving under s.324; optional named qualified accountant",
+            "At approval or optional professional review, immediately before final approval or manual handoff recording.",
             "Snapshot must include required evidence, blocking issues, warning issues, legal source references, generated output flags and allowed next actions.",
-            "Block release when accountant approval can proceed without a retained readiness-profile snapshot for the approved period.",
+            "Block release when the approval can proceed without a retained readiness-profile snapshot for the approved period.",
             [
                 AuditEventCodes.YearEndReviewConfirmationUpdated,
                 AuditEventCodes.OpeningBalanceUpserted,

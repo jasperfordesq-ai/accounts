@@ -1542,6 +1542,11 @@ function Assert-ReleaseEvidenceHumanCompletionManifest {
             continue
         }
 
+        # The accountant review is optional: it must be listed, but only has to be accepted when recorded.
+        if (($required.PSObject.Properties.Name -contains "optional" -and $required.optional) -and [string](Get-JsonProperty $entry @("status")) -ne "accepted") {
+            continue
+        }
+
         if ([string](Get-JsonProperty $entry @("requiredReviewerRole")) -ne [string]$required.requiredReviewerRole) {
             Add-Failure $Failures "release-evidence-report.json humanEvidenceCompletion.$($required.evidenceName).requiredReviewerRole must be $($required.requiredReviewerRole)."
         }
@@ -1615,10 +1620,11 @@ function Assert-ReleaseEvidenceProductionScorecardCompletion {
     if (@((Get-JsonProperty $scorecard @("openEngineeringOrAssuranceControls"))).Count -ne 0) {
         Add-Failure $Failures "release-evidence-report.json productionScorecardCompletion.openEngineeringOrAssuranceControls must be empty."
     }
-    if ([int](Get-JsonProperty $scorecard @("acceptedHumanEvidenceCount")) -ne $RequiredTemplates.Count) {
+    $mandatoryTemplateCount = @($RequiredTemplates | Where-Object { -not ($_.PSObject.Properties.Name -contains "optional" -and $_.optional) }).Count
+    if ([int](Get-JsonProperty $scorecard @("acceptedHumanEvidenceCount")) -ne $mandatoryTemplateCount) {
         Add-Failure $Failures "release-evidence-report.json productionScorecardCompletion.acceptedHumanEvidenceCount must equal the required human evidence count."
     }
-    if ([int](Get-JsonProperty $scorecard @("requiredHumanEvidenceCount")) -ne $RequiredTemplates.Count) {
+    if ([int](Get-JsonProperty $scorecard @("requiredHumanEvidenceCount")) -ne $mandatoryTemplateCount) {
         Add-Failure $Failures "release-evidence-report.json productionScorecardCompletion.requiredHumanEvidenceCount must equal the required human evidence count."
     }
     if (@((Get-JsonProperty $scorecard @("remainingHumanEvidence"))).Count -ne 0) {
@@ -1628,7 +1634,7 @@ function Assert-ReleaseEvidenceProductionScorecardCompletion {
         Add-Failure $Failures "release-evidence-report.json productionScorecardCompletion.completionPolicy must mention zero blocking failures."
     }
 
-    foreach ($required in $RequiredTemplates) {
+    foreach ($required in @($RequiredTemplates | Where-Object { -not ($_.PSObject.Properties.Name -contains "optional" -and $_.optional) })) {
         Assert-ArrayContains @((Get-JsonProperty $scorecard @("acceptedHumanEvidence"))) ([string]$required.evidenceName) "release-evidence-report.json productionScorecardCompletion.acceptedHumanEvidence" $Failures
     }
 
@@ -2247,7 +2253,7 @@ $requiredReleaseEvidenceTemplates = @(
     [pscustomobject]@{ evidenceName = "visualQa"; fileName = "visual-qa-signoff-template.md"; requiredReviewerRole = "Named visual QA reviewer"; signOffGate = "visual-qa-screenshot-review"; requiredPickupFiles = @("visual-qa-signoff-template.md", "visual-smoke-manifest.json", "visual-smoke-evidence-report.json", "accountant-workbench-evidence-report.json", "release-evidence-reviewer-blockers.md") },
     [pscustomobject]@{ evidenceName = "sourceLawReview"; fileName = "source-law-review-template.md"; requiredReviewerRole = "Named source-law reviewer plus qualified accountant"; signOffGate = "source-law-change-review"; requiredPickupFiles = @("source-law-review-template.md", "production-readiness-report.json", "production-readiness-verification-report.json", "release-evidence-reviewer-blockers.md") },
     [pscustomobject]@{ evidenceName = "externalRosIxbrlValidation"; fileName = "external-ros-ixbrl-validation-template.md"; requiredReviewerRole = "External ROS/iXBRL validation reviewer"; signOffGate = "external-ros-validation-evidence"; requiredPickupFiles = @("external-ros-ixbrl-validation-template.md", "production-readiness-report.json", "release-evidence-reviewer-blockers.md") },
-    [pscustomobject]@{ evidenceName = "qualifiedAccountantAcceptance"; fileName = "qualified-accountant-acceptance-template.md"; requiredReviewerRole = "Named qualified accountant"; signOffGate = "qualified-accountant-final-signoff"; requiredPickupFiles = @("qualified-accountant-acceptance-template.md", "production-readiness-report.json", "accountant-workbench-evidence-report.json", "release-evidence-reviewer-blockers.md") },
+    [pscustomobject]@{ evidenceName = "qualifiedAccountantAcceptance"; fileName = "qualified-accountant-acceptance-template.md"; requiredReviewerRole = "Named qualified accountant"; signOffGate = "qualified-accountant-final-signoff"; optional = $true; requiredPickupFiles = @("qualified-accountant-acceptance-template.md", "production-readiness-report.json", "accountant-workbench-evidence-report.json", "release-evidence-reviewer-blockers.md") },
     [pscustomobject]@{ evidenceName = "manualHandoffAcceptance"; fileName = "manual-handoff-acceptance-template.md"; requiredReviewerRole = "Named manual handoff reviewer"; signOffGate = "manual-accountant-acceptance"; requiredPickupFiles = @("manual-handoff-acceptance-template.md", "production-readiness-report.json", "release-evidence-reviewer-blockers.md") },
     [pscustomobject]@{ evidenceName = "monitoringProviderConfirmation"; fileName = "monitoring-provider-confirmation-template.md"; requiredReviewerRole = "Named release operator"; signOffGate = "production-monitoring"; requiredPickupFiles = @("monitoring-provider-confirmation-template.md", "monitoring-error-routing-report.json", "structured-log-report.json", "release-evidence-reviewer-blockers.md") }
 )
@@ -2941,7 +2947,7 @@ $releaseEvidenceScorecardSummary = [ordered]@{
     currentScore = $null
     targetScore = $null
     acceptedHumanEvidenceCount = 0
-    requiredHumanEvidenceCount = $requiredReleaseEvidenceTemplates.Count
+    requiredHumanEvidenceCount = @($requiredReleaseEvidenceTemplates | Where-Object { -not ($_.PSObject.Properties.Name -contains "optional" -and $_.optional) }).Count
     remainingHumanEvidenceCount = 0
     categoryScores = @()
 }

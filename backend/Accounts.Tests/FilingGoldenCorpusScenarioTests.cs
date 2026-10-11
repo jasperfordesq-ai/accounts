@@ -90,7 +90,10 @@ public class FilingGoldenCorpusScenarioTests
         Assert.Contains(profile.RequiredEvidence, e => e.Code == "cro-accounts-pdf" && !e.Satisfied);
         Assert.Contains(profile.RequiredEvidence, e => e.Code == "cro-signature-page" && !e.Satisfied);
         Assert.Contains(profile.RequiredEvidence, e => e.Code == "cro-signatories" && e.Satisfied);
-        Assert.Contains(profile.RequiredEvidence, e => e.Code == "accountant-review" && !e.Satisfied);
+        Assert.Contains(profile.RequiredEvidence, e => e.Code == "directors-approval" && e.Required && !e.Satisfied);
+        Assert.False(profile.AccountantReviewRequired);
+        Assert.Equal("board-of-directors-s324", profile.ApprovalAuthority);
+        Assert.Contains(profile.BlockingIssues, issue => issue.Code == "directors-approval-required");
         Assert.Contains(profile.RequiredEvidence, e => e.Code == "external-ros-validation" && !e.Satisfied);
         Assert.Contains(profile.BlockingIssues, issue => issue.Code == "ixbrl-generation-manual-handoff");
         Assert.DoesNotContain("mark-cro-submitted", profile.AllowedNextActions);
@@ -102,12 +105,13 @@ public class FilingGoldenCorpusScenarioTests
         Assert.Contains(approvedProfile.RequiredEvidence, e => e.Code == "cro-accounts-pdf" && e.Satisfied);
         Assert.Contains(approvedProfile.RequiredEvidence, e => e.Code == "cro-signature-page" && e.Satisfied);
         Assert.Contains(approvedProfile.RequiredEvidence, e => e.Code == "cro-signatories" && e.Satisfied);
-        Assert.Contains(approvedProfile.RequiredEvidence, e => e.Code == "accountant-review" && !e.Satisfied);
+        Assert.Contains(approvedProfile.RequiredEvidence, e => e.Code == "directors-approval" && e.Required && !e.Satisfied);
         Assert.Contains(approvedProfile.RequiredEvidence, e => e.Code == "external-ros-validation" && !e.Satisfied);
         Assert.Equal("blocked", approvedProfile.SignOffPacket.State);
         Assert.False(approvedProfile.SignOffPacket.ReadyForExternalFiling);
         Assert.Contains(approvedProfile.BlockingIssues, issue => issue.Code == "ixbrl-generation-manual-handoff");
-        Assert.Contains("approve-cro-pack", approvedProfile.AllowedNextActions);
+        Assert.Contains("record-directors-approval", approvedProfile.AllowedNextActions);
+        Assert.DoesNotContain("approve-cro-pack", approvedProfile.AllowedNextActions);
         Assert.DoesNotContain("mark-cro-submitted", approvedProfile.AllowedNextActions);
     }
 
@@ -146,7 +150,7 @@ public class FilingGoldenCorpusScenarioTests
         Assert.True(profile.AuditExempt);
         Assert.False(profile.ManualProfessionalReviewRequired);
         Assert.DoesNotContain(profile.BlockingIssues, issue => issue.Code.Contains("unsupported", StringComparison.OrdinalIgnoreCase));
-        Assert.Contains(profile.RequiredEvidence, e => e.Code == "accountant-review" && !e.Satisfied);
+        Assert.Contains(profile.RequiredEvidence, e => e.Code == "directors-approval" && e.Required && !e.Satisfied);
         Assert.Contains(profile.RequiredEvidence, e => e.Code == "cro-signatories" && e.Satisfied);
         Assert.Contains(profile.RequiredEvidence, e => e.Code == "external-ros-validation" && !e.Satisfied);
         Assert.Contains(profile.BlockingIssues, issue => issue.Code == "ixbrl-generation-manual-handoff");
@@ -155,7 +159,8 @@ public class FilingGoldenCorpusScenarioTests
         Assert.Contains(profile.SourceReferences, s => s.SourceId == IrishStatutoryRuleSources.RevenueAcceptedTaxonomies.SourceId);
         Assert.Equal("blocked", profile.SignOffPacket.State);
         Assert.False(profile.SignOffPacket.ReadyForExternalFiling);
-        Assert.Contains("approve-cro-pack", profile.AllowedNextActions);
+        Assert.Contains("record-directors-approval", profile.AllowedNextActions);
+        Assert.DoesNotContain("approve-cro-pack", profile.AllowedNextActions);
         Assert.DoesNotContain("mark-cro-submitted", profile.AllowedNextActions);
     }
 
@@ -197,7 +202,7 @@ public class FilingGoldenCorpusScenarioTests
         Assert.Equal("blocked", profile.SignOffPacket.State);
         Assert.False(profile.SignOffPacket.ReadyForExternalFiling);
         Assert.Null(profile.SignOffPacket.ApprovedBy);
-        Assert.Contains(profile.RequiredEvidence, e => e.Code == "accountant-review" && !e.Satisfied);
+        Assert.Contains(profile.RequiredEvidence, e => e.Code == "directors-approval" && e.Required && !e.Satisfied);
         var charityStep = Assert.Single(profile.SignOffPacket.Steps, step => step.Code == "charity-reporting");
         Assert.Equal("blocked", charityStep.State);
         Assert.Contains(charityStep.Sources, s => s.SourceId == IrishStatutoryRuleSources.CharitiesRegulatorAnnualReport.SourceId);
@@ -268,7 +273,8 @@ public class FilingGoldenCorpusScenarioTests
         Assert.Contains(profile.BlockingIssues, issue => issue.Code == "ixbrl-generation-manual-handoff");
         Assert.Equal("blocked", profile.SignOffPacket.State);
         Assert.Contains(profile.SignOffPacket.Steps, step => step.Code == "statutory-basis" && step.Detail.Contains("abridgement", StringComparison.OrdinalIgnoreCase));
-        Assert.Contains("approve-cro-pack", profile.AllowedNextActions);
+        Assert.Contains("record-directors-approval", profile.AllowedNextActions);
+        Assert.DoesNotContain("approve-cro-pack", profile.AllowedNextActions);
         Assert.DoesNotContain("mark-cro-submitted", profile.AllowedNextActions);
 
         Assert.Equal(scenario.WorkflowFacts.ExpectedCorporationTax, tax.TotalCorporationTax);

@@ -186,7 +186,6 @@ public class FilingWorkflowService(
 
         if (status == FilingStatus.Approved)
         {
-            RequireNamedReviewer(by, "approving the CRO filing pack");
             var statusSnapshot = await GetStatusAsync(companyId, periodId);
             if (statusSnapshot.BlockingIssues.Count > 0)
                 throw new BusinessRuleException($"Cannot approve CRO filing while blockers remain: {string.Join("; ", statusSnapshot.BlockingIssues.Distinct())}");
@@ -197,7 +196,6 @@ public class FilingWorkflowService(
                 companyId,
                 periodId,
                 FilingReleaseWorkflow.Cro,
-                by!,
                 auditUserId ?? by);
         }
 
@@ -247,7 +245,6 @@ public class FilingWorkflowService(
         }
 
         pkg.FilingStatus = status;
-        if (status == FilingStatus.Approved) { pkg.ApprovedBy = by; pkg.ApprovedAt = DateTime.UtcNow; }
         if (status == FilingStatus.Submitted)
         {
             pkg.SubmittedBy = by;
@@ -490,12 +487,10 @@ public class FilingWorkflowService(
 
         if (status == FilingStatus.Approved)
         {
-            RequireNamedReviewer(by, "approving the Revenue filing artifact");
             await ReleaseGate.BindApprovalAsync(
                 companyId,
                 periodId,
                 FilingReleaseWorkflow.Revenue,
-                by!,
                 auditUserId ?? by);
         }
         else if (status == FilingStatus.Submitted)
@@ -638,13 +633,11 @@ public class FilingWorkflowService(
 
         if (status == FilingStatus.Approved)
         {
-            RequireNamedReviewer(by, "approving the Charity annual return pack");
             await AssertCharityAnnualReturnEvidenceAsync(period, pkg);
             await ReleaseGate.BindApprovalAsync(
                 companyId,
                 periodId,
                 FilingReleaseWorkflow.Charity,
-                by!,
                 auditUserId ?? by);
         }
 
@@ -792,12 +785,6 @@ public class FilingWorkflowService(
         if (trimmed.Length > 200)
             throw new BusinessRuleException($"{label} must be 200 characters or fewer.");
         return trimmed;
-    }
-
-    private static void RequireNamedReviewer(string? by, string action)
-    {
-        if (string.IsNullOrWhiteSpace(by))
-            throw new BusinessRuleException($"A named qualified reviewer is required before {action}.");
     }
 
     private static bool InternalIxbrlChecksPassed(RevenueFilingPackage? pkg) =>

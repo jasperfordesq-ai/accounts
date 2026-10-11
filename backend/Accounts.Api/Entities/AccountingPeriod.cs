@@ -82,4 +82,8 @@ public class AccountingPeriod
     public List<RelatedPartyTransaction> RelatedPartyTransactions { get; set; } = [];
     public List<ContingentLiability> ContingentLiabilities { get; set; } = [];
     public List<FundBalance> FundBalances { get; set; } = [];
+    [JsonIgnore]
+    public List<DirectorsApprovalPage> DirectorsApprovalPages { get; set; } = [];
+    [JsonIgnore]
+    public List<DirectorsApprovalEvent> DirectorsApprovalEvents { get; set; } = [];
 }

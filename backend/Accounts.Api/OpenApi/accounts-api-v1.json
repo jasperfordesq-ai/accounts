@@ -7784,6 +7784,358 @@
         }
       }
     },
+    "/api/companies/{companyId}/periods/{periodId}/filing/directors-approval": {
+      "get": {
+        "tags": [
+          "Directors Approval"
+        ],
+        "parameters": [
+          {
+            "name": "companyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "periodId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "onDate",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectorsApprovalStateResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Directors Approval"
+        ],
+        "parameters": [
+          {
+            "name": "companyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "periodId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DirectorsApprovalRecordInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectorsApprovalSummary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/companies/{companyId}/periods/{periodId}/filing/directors-approval-page": {
+      "post": {
+        "tags": [
+          "Directors Approval"
+        ],
+        "parameters": [
+          {
+            "name": "companyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "periodId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DirectorsApprovalPageInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectorsApprovalPageSummary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/companies/{companyId}/periods/{periodId}/filing/directors-approval-page/{pageId}": {
+      "get": {
+        "tags": [
+          "Directors Approval"
+        ],
+        "parameters": [
+          {
+            "name": "companyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "periodId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "pageId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/companies/{companyId}/periods/{periodId}/filing/cro-signing-pack": {
+      "post": {
+        "tags": [
+          "Directors Approval"
+        ],
+        "parameters": [
+          {
+            "name": "companyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "periodId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CroSigningPackInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CroSigningPackSummary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/companies/{companyId}/periods/{periodId}/filing/auditor-report": {
+      "post": {
+        "tags": [
+          "Directors Approval"
+        ],
+        "parameters": [
+          {
+            "name": "companyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "periodId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuditorReportInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditorReportSummary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/companies/{companyId}/periods/{periodId}/filing/accountant-review": {
+      "post": {
+        "tags": [
+          "Directors Approval"
+        ],
+        "parameters": [
+          {
+            "name": "companyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "periodId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountantReviewAttestationInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountantReviewSummary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/companies/{companyId}/periods/{periodId}/external-filing-handoff/workspace": {
       "get": {
         "tags": [
@@ -8560,6 +8912,80 @@
           }
         }
       },
+      "AccountantReviewAttestationInput": {
+        "required": [
+          "reviewerName",
+          "professionalBody",
+          "membershipNumber",
+          "reviewDate",
+          "reviewLetter",
+          "reviewLetterSha256"
+        ],
+        "type": "object",
+        "properties": {
+          "reviewerName": {
+            "type": "string"
+          },
+          "professionalBody": {
+            "type": "string"
+          },
+          "membershipNumber": {
+            "type": "string"
+          },
+          "reviewDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "reviewLetter": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "byte"
+          },
+          "reviewLetterSha256": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "AccountantReviewSummary": {
+        "required": [
+          "reviewerName",
+          "professionalBody",
+          "membershipNumber",
+          "reviewDate",
+          "reviewLetterSha256",
+          "state"
+        ],
+        "type": "object",
+        "properties": {
+          "reviewerName": {
+            "type": "string"
+          },
+          "professionalBody": {
+            "type": "string"
+          },
+          "membershipNumber": {
+            "type": "string"
+          },
+          "reviewDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "reviewLetterSha256": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "state": {
+            "type": "string"
+          }
+        }
+      },
       "AccountCategoryInput": {
         "type": "object",
         "properties": {
@@ -8901,6 +9327,79 @@
               "string"
             ],
             "format": "double"
+          }
+        }
+      },
+      "AuditorReportInput": {
+        "required": [
+          "firmName",
+          "signerName",
+          "professionalBody",
+          "membershipNumber",
+          "reportReference",
+          "signedAtUtc",
+          "acceptedByDirectors",
+          "reportArtifact",
+          "reportArtifactSha256"
+        ],
+        "type": "object",
+        "properties": {
+          "firmName": {
+            "type": "string"
+          },
+          "signerName": {
+            "type": "string"
+          },
+          "professionalBody": {
+            "type": "string"
+          },
+          "membershipNumber": {
+            "type": "string"
+          },
+          "reportReference": {
+            "type": "string"
+          },
+          "signedAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "acceptedByDirectors": {
+            "type": "boolean"
+          },
+          "reportArtifact": {
+            "type": "string",
+            "format": "byte"
+          },
+          "reportArtifactSha256": {
+            "type": "string"
+          }
+        }
+      },
+      "AuditorReportSummary": {
+        "required": [
+          "reportReference",
+          "firmName",
+          "signerName",
+          "signedAtUtc",
+          "reportSha256"
+        ],
+        "type": "object",
+        "properties": {
+          "reportReference": {
+            "type": "string"
+          },
+          "firmName": {
+            "type": "string"
+          },
+          "signerName": {
+            "type": "string"
+          },
+          "signedAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reportSha256": {
+            "type": "string"
           }
         }
       },
@@ -11005,6 +11504,69 @@
           }
         }
       },
+      "CroSigningPackInput": {
+        "required": [
+          "directorOfficerId",
+          "secretaryOfficerId",
+          "signedAtUtc",
+          "signedArtifact",
+          "signedArtifactSha256"
+        ],
+        "type": "object",
+        "properties": {
+          "directorOfficerId": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "secretaryOfficerId": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "signedAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "signedArtifact": {
+            "type": "string",
+            "format": "byte"
+          },
+          "signedArtifactSha256": {
+            "type": "string"
+          }
+        }
+      },
+      "CroSigningPackSummary": {
+        "required": [
+          "signedByDirector",
+          "signedBySecretary",
+          "signedAtUtc",
+          "signedPdfSha256"
+        ],
+        "type": "object",
+        "properties": {
+          "signedByDirector": {
+            "type": "string"
+          },
+          "signedBySecretary": {
+            "type": "string"
+          },
+          "signedAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "signedPdfSha256": {
+            "type": "string"
+          }
+        }
+      },
       "CroSnapshotInput": {
         "required": [
           "madeUpToDate",
@@ -12035,6 +12597,242 @@
         ],
         "default": "Unassessed"
       },
+      "DirectorOption": {
+        "required": [
+          "officerId",
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "officerId": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "DirectorsApprovalPageInput": {
+        "required": [
+          "approvalDate",
+          "firstDirectorOfficerId",
+          "secondDirectorOfficerId",
+          "resolutionReference"
+        ],
+        "type": "object",
+        "properties": {
+          "approvalDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "firstDirectorOfficerId": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "secondDirectorOfficerId": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "resolutionReference": {
+            "type": "string"
+          }
+        }
+      },
+      "DirectorsApprovalPageSummary": {
+        "required": [
+          "id",
+          "approvalDate",
+          "firstDirectorName",
+          "secondDirectorName",
+          "directorsInOfficeCount",
+          "resolutionReference",
+          "pageSha256",
+          "accountsPdfSha256",
+          "recordSha256",
+          "generatedAtUtc"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "approvalDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "firstDirectorName": {
+            "type": "string"
+          },
+          "secondDirectorName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "directorsInOfficeCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "resolutionReference": {
+            "type": "string"
+          },
+          "pageSha256": {
+            "type": "string"
+          },
+          "accountsPdfSha256": {
+            "type": "string"
+          },
+          "recordSha256": {
+            "type": "string"
+          },
+          "generatedAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "DirectorsApprovalRecordInput": {
+        "required": [
+          "approvalPageId",
+          "signedPageArtifact",
+          "signedPageSha256",
+          "resolutionArtifact",
+          "resolutionSha256"
+        ],
+        "type": "object",
+        "properties": {
+          "approvalPageId": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "signedPageArtifact": {
+            "type": "string",
+            "format": "byte"
+          },
+          "signedPageSha256": {
+            "type": "string"
+          },
+          "resolutionArtifact": {
+            "type": "string",
+            "format": "byte"
+          },
+          "resolutionSha256": {
+            "type": "string"
+          }
+        }
+      },
+      "DirectorsApprovalStateResponse": {
+        "required": [
+          "eligibleDirectors",
+          "latestPage",
+          "current",
+          "periodApprovalDate"
+        ],
+        "type": "object",
+        "properties": {
+          "eligibleDirectors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DirectorOption"
+            }
+          },
+          "latestPage": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DirectorsApprovalPageSummary"
+              }
+            ]
+          },
+          "current": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DirectorsApprovalSummary"
+              }
+            ]
+          },
+          "periodApprovalDate": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date"
+          }
+        }
+      },
+      "DirectorsApprovalSummary": {
+        "required": [
+          "eventId",
+          "page",
+          "signedPageSha256",
+          "resolutionSha256",
+          "recordedByDisplayName",
+          "recordedAtUtc",
+          "recordSha256"
+        ],
+        "type": "object",
+        "properties": {
+          "eventId": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "page": {
+            "$ref": "#/components/schemas/DirectorsApprovalPageSummary"
+          },
+          "signedPageSha256": {
+            "type": "string"
+          },
+          "resolutionSha256": {
+            "type": "string"
+          },
+          "recordedByDisplayName": {
+            "type": "string"
+          },
+          "recordedAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "recordSha256": {
+            "type": "string"
+          }
+        }
+      },
       "DividendInput": {
         "type": "object",
         "properties": {
@@ -13005,6 +13803,7 @@
           "manualProfessionalReviewRequired",
           "accountantReviewRequired",
           "accountantReviewState",
+          "approvalAuthority",
           "directCroSubmissionSupported",
           "directRosSubmissionSupported",
           "revenueIxbrlGenerationSupported",
@@ -13077,6 +13876,9 @@
           "accountantReviewState": {
             "type": "string"
           },
+          "approvalAuthority": {
+            "type": "string"
+          },
           "directCroSubmissionSupported": {
             "type": "boolean"
           },
@@ -13134,7 +13936,7 @@
         "required": [
           "state",
           "stateLabel",
-          "readyForAccountantApproval",
+          "readyForDirectorsApproval",
           "readyForExternalFiling",
           "approvedBy",
           "approvedAt",
@@ -13151,7 +13953,7 @@
           "stateLabel": {
             "type": "string"
           },
-          "readyForAccountantApproval": {
+          "readyForDirectorsApproval": {
             "type": "boolean"
           },
           "readyForExternalFiling": {
@@ -17121,6 +17923,9 @@
     },
     {
       "name": "Filing Workflow"
+    },
+    {
+      "name": "Directors Approval"
     },
     {
       "name": "External Filing Handoff"

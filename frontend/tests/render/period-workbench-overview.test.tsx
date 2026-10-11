@@ -46,9 +46,12 @@ describe("PeriodWorkbenchOverview", () => {
     const filingGate = screen.getByRole("region", { name: "Filing gate snapshot" });
     expect(within(filingGate).getByText("Filing gate snapshot")).toBeInTheDocument();
     expect(within(filingGate).getAllByText("Manual professional review")).toHaveLength(2);
-    expect(within(filingGate).getByText("Not approved")).toBeInTheDocument();
+    expect(within(filingGate).getByText("Directors' approval")).toBeInTheDocument();
+    expect(within(filingGate).getByText("Required")).toBeInTheDocument();
+    expect(within(filingGate).getByText("Accountant review")).toBeInTheDocument();
+    expect(within(filingGate).getByText("Optional")).toBeInTheDocument();
     expect(within(filingGate).getByText("External filing blocked")).toBeInTheDocument();
-    expect(within(filingGate).getByText("record-accountant-review")).toBeInTheDocument();
+    expect(within(filingGate).getByText("record-directors-approval")).toBeInTheDocument();
     expect(within(filingGate).getByRole("link", { name: "Open filing review" })).toHaveAttribute(
       "href",
       "/companies/7/periods/3?tab=filing",
@@ -107,7 +110,7 @@ describe("PeriodWorkbenchOverview", () => {
     expect(screen.getByText("1 warning")).toBeInTheDocument();
     expect(screen.getByText("2 more blockers")).toBeInTheDocument();
     expect(screen.getAllByText("Balance sheet does not balance")).toHaveLength(2);
-    expect(screen.getByText("Named qualified-accountant approval required")).toBeInTheDocument();
+    expect(screen.getByText("The board must approve the financial statements (Companies Act 2014, s.324)")).toBeInTheDocument();
     expect(screen.getByText("Revenue deadline has passed and late filing exposure must be reviewed")).toBeInTheDocument();
   }, 20_000);
 
@@ -273,8 +276,9 @@ function sampleFilingReadinessProfile(): FilingReadinessProfile {
     auditExempt: true,
     supportedPath: true,
     manualProfessionalReviewRequired: true,
-    accountantReviewRequired: true,
-    accountantReviewState: "Not approved",
+    accountantReviewRequired: false,
+    accountantReviewState: "Not required by law — not recorded",
+    approvalAuthority: "board-of-directors-s324",
     directCroSubmissionSupported: false,
     directRosSubmissionSupported: false,
     revenueIxbrlGenerationSupported: false,
@@ -300,9 +304,9 @@ function sampleFilingReadinessProfile(): FilingReadinessProfile {
     ],
     blockingIssues: [
       {
-        code: "accountant-review",
+        code: "directors-approval-required",
         severity: "blocking",
-        message: "Named qualified-accountant approval required",
+        message: "The board must approve the financial statements (Companies Act 2014, s.324)",
         sources: [],
       },
       {
@@ -314,11 +318,11 @@ function sampleFilingReadinessProfile(): FilingReadinessProfile {
     ],
     warningIssues: [],
     sourceReferences: [],
-    allowedNextActions: ["record-accountant-review"],
+    allowedNextActions: ["record-directors-approval"],
     signOffPacket: {
       state: "blocked",
-      stateLabel: "Blocked before accountant review",
-      readyForAccountantApproval: false,
+      stateLabel: "Blocked before directors' approval",
+      readyForDirectorsApproval: false,
       readyForExternalFiling: false,
       approvedBy: undefined,
       approvedAt: undefined,
@@ -332,11 +336,11 @@ function sampleFilingReadinessProfile(): FilingReadinessProfile {
         },
       ],
       openBlockers: [
-        "Named qualified-accountant approval required",
+        "The board must approve the financial statements (Companies Act 2014, s.324)",
         "External ROS/iXBRL validation evidence required",
       ],
       openWarnings: [],
-      allowedNextActions: ["record-accountant-review"],
+      allowedNextActions: ["record-directors-approval"],
     },
   };
 }

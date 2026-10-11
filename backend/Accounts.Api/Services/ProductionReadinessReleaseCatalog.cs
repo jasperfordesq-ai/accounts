@@ -6,10 +6,10 @@ public partial class ProductionReadinessReportService
     [
         new(
             "qualified-accountant-review",
-            "Named qualified-accountant review",
-            true,
-            "required",
-            "Generated statutory packs cannot be treated as filing-ready until a named qualified accountant has reviewed and approved them."),
+            "Accountant review (optional)",
+            false,
+            "optional",
+            "Accountant review (optional): Irish law does not require an accountant to prepare or approve the accounts; record a review only if one was done. The directors' Companies Act 2014 s.324 approval is the filing gate."),
         new(
             "external-ros-validation",
             "External ROS/iXBRL validation",
@@ -40,14 +40,14 @@ public partial class ProductionReadinessReportService
     [
         new(
             "qualified-accountant-signoff",
-            "Qualified accountant sign-off",
+            "Qualified accountant sign-off (optional)",
             "Qualified accountant",
             "critical",
             0,
             "accountant-review-gate",
-            "required",
-            "No generated filing pack can be treated as final until a named qualified accountant has reviewed the evidence, outputs and wording.",
-            "Named qualified-accountant approval recorded against the period and linked to the generated pack."),
+            "optional",
+            "Irish law does not require an accountant: the directors' Companies Act 2014 s.324 approval is the filing gate. A named accountant review is optional assurance that can be recorded against the period.",
+            "Optional named accountant review recorded against the period when the company chooses to obtain one."),
         new(
             "source-law-change-review",
             "Source-law change review",
@@ -80,14 +80,14 @@ public partial class ProductionReadinessReportService
             "Release reviewer confirms final filing operations remain recorded workflow states only and no direct submission client is wired."),
         new(
             "accountant-acceptance-walkthrough",
-            "Accountant acceptance walkthrough",
+            "Accountant acceptance walkthrough (optional)",
             "Qualified accountant",
             "high",
             10,
             "golden-corpus-acceptance",
-            "required",
-            "A qualified accountant must take the golden scenarios through the live workflow and confirm outputs, gates and wording are professionally acceptable.",
-            "Signed acceptance note covering micro LTD, small abridged LTD, CLG charity and medium/audit-required manual handoff."),
+            "optional",
+            "Optional: an accountant may take the golden scenarios through the live workflow and confirm outputs, gates and wording. Irish law does not require an accountant, so this never blocks release.",
+            "Optional signed acceptance note covering micro LTD, small abridged LTD, CLG charity and medium/audit-required manual handoff."),
         new(
             "production-monitoring",
             "Production monitoring",
@@ -129,7 +129,7 @@ public partial class ProductionReadinessReportService
                 "No direct CRO/ROS submission automation is enforced as recorded workflow states only."
             ],
             [
-                "Run qualified-accountant acceptance on the golden corpus.",
+                "Optionally run an accountant acceptance walkthrough on the golden corpus.",
                 "Record source-law change review evidence against the pinned snapshot.",
                 "Attach external ROS/iXBRL validation evidence for generated iXBRL packs.",
                 "Verify Sentry/error routing, structured logs and backup restore evidence.",
@@ -218,7 +218,7 @@ public partial class ProductionReadinessReportService
                 if (!actionsByCode.TryGetValue(actionCode, out var action))
                     throw new InvalidOperationException($"Completion track {track.Code} references unknown assurance action {actionCode}.");
 
-                if (action.Status == "complete")
+                if (action.Status is "complete" or "optional")
                     continue;
 
                 if (!checklistByAction.TryGetValue(action.Code, out var checklist))
@@ -250,9 +250,7 @@ public partial class ProductionReadinessReportService
     }
 
     private static string FormatReleaseBlockingIssue(ProductionReadinessAssuranceAction action) =>
-        action.Code == "qualified-accountant-signoff"
-            ? "Qualified accountant sign-off required"
-            : $"{action.Label} required";
+        $"{action.Label} required";
 
     private static string SelectNextAction(
         ProductionReadinessCompletionTrack track,
@@ -266,10 +264,6 @@ public partial class ProductionReadinessReportService
                 || nextAction.Contains("backup", StringComparison.OrdinalIgnoreCase),
             "light-dark-visual-regression" => nextAction.Contains("screenshot", StringComparison.OrdinalIgnoreCase)
                 || nextAction.Contains("visual", StringComparison.OrdinalIgnoreCase),
-            "accountant-acceptance-walkthrough" => nextAction.Contains("acceptance", StringComparison.OrdinalIgnoreCase)
-                || nextAction.Contains("visual acceptance", StringComparison.OrdinalIgnoreCase),
-            "qualified-accountant-signoff" => nextAction.Contains("qualified-accountant", StringComparison.OrdinalIgnoreCase)
-                || nextAction.Contains("acceptance", StringComparison.OrdinalIgnoreCase),
             _ => nextAction.Contains(action.Label, StringComparison.OrdinalIgnoreCase)
         });
 
@@ -303,9 +297,9 @@ public partial class ProductionReadinessReportService
                 code,
                 label,
                 ownerRole,
-                Required: true,
+                Required: status != "optional",
                 status,
-                BlocksRelease: status != "complete",
+                BlocksRelease: status is not ("complete" or "optional"),
                 evidenceArtifact,
                 assuranceActionCode,
                 operationalGateCode,
@@ -317,7 +311,7 @@ public partial class ProductionReadinessReportService
         [
             Item(
                 "accountant-final-signoff",
-                "Named accountant final sign-off",
+                "Named accountant final sign-off (optional)",
                 "Qualified accountant",
                 "named-accountant-approval-record",
                 "qualified-accountant-signoff",
@@ -327,7 +321,7 @@ public partial class ProductionReadinessReportService
                     AuditEventCodes.CharityFilingStatusChanged,
                     AuditEventCodes.YearEndReviewConfirmationUpdated
                 ],
-                "Named professional approval must be recorded against the period before any real filing pack is treated as final."),
+                "An optional named professional review may be recorded against the period; Irish law does not require one, so it never blocks release."),
             Item(
                 "source-law-change-review",
                 "Source-law change review",
@@ -361,7 +355,7 @@ public partial class ProductionReadinessReportService
                 "Release reviewer confirms final filing operations remain generated, reviewed, approved, marked submitted, payment confirmed, accepted, rejected or corrected recorded workflow states only."),
             Item(
                 "golden-corpus-accountant-acceptance",
-                "Golden corpus accountant acceptance",
+                "Golden corpus accountant acceptance (optional)",
                 "Qualified accountant",
                 "signed-golden-corpus-acceptance-note",
                 "accountant-acceptance-walkthrough",
@@ -371,7 +365,7 @@ public partial class ProductionReadinessReportService
                     AuditEventCodes.IxbrlInternalCheckCompleted,
                     AuditEventCodes.NotesGenerated
                 ],
-                "A qualified accountant must walk the golden scenarios through the live workflow and accept outputs, gates and wording."),
+                "An accountant may optionally walk the golden scenarios through the live workflow and accept outputs, gates and wording; it never blocks release."),
             Item(
                 "production-smoke-and-backup",
                 "Production smoke and backup evidence",
@@ -452,15 +446,15 @@ public partial class ProductionReadinessReportService
             "Before real filing release, retain a dated review note confirming each pinned source URL, effective date, wording impact and qualified-accountant acceptance."),
         new(
             "qualified-accountant-final-signoff",
-            "Named accountant final sign-off evidence",
+            "Named accountant final sign-off evidence (optional)",
             "Qualified accountant",
-            "manual review: record named qualified-accountant approval against the final generated filing pack",
+            "optional review: record named qualified-accountant approval against the final generated filing pack",
             "manual-release",
             RunsInDefaultCi: false,
-            BlocksRelease: true,
+            BlocksRelease: false,
             "named-accountant-approval-record",
             "named-accountant-approval-record",
-            "A named qualified accountant must approve the exact generated PDF, iXBRL, tax computation, notes, source-law evidence and filing gate state before real filing use."),
+            "Optional: a named qualified accountant may review the exact generated PDF, iXBRL, tax computation, notes, source-law evidence and filing gate state. Irish law does not require it; the directors' s.324 approval is the filing gate."),
         new(
             "external-ros-validation-evidence",
             "External ROS/iXBRL validation evidence",
@@ -558,7 +552,7 @@ public partial class ProductionReadinessReportService
             RunsInDefaultCi: false,
             BlocksRelease: true,
             "release-artifact-pack-report",
-            "named-accountant-approval-record",
+            "ci-production-stack-smoke-and-backup-restore",
             "Run against the collected dependency, production safety, monitoring, log, migration upgrade, restore, no-direct, production-readiness, visual, workbench, human release-evidence, workspace verification and reviewer handoff reports for the exact release candidate."),
         new(
             "postgres-gated-audit-tests",
@@ -573,15 +567,15 @@ public partial class ProductionReadinessReportService
             "Set ACCOUNTS_POSTGRES_TEST_CONNECTION to a disposable PostgreSQL database and run the command from backend/ before relying on audit durability evidence."),
         new(
             "manual-accountant-acceptance",
-            "Named accountant acceptance walkthrough",
+            "Named accountant acceptance walkthrough (optional)",
             "Qualified accountant",
-            "manual walkthrough: micro LTD, small abridged LTD, CLG charity and medium/audit-required handoff",
+            "optional walkthrough: micro LTD, small abridged LTD, CLG charity and medium/audit-required handoff",
             "manual-release",
             RunsInDefaultCi: false,
-            BlocksRelease: true,
+            BlocksRelease: false,
             "signed-golden-corpus-acceptance-note",
             "signed-golden-corpus-acceptance-note",
-            "A named qualified accountant must review the generated outputs, gates, wording and source-law evidence before any real filing pack is treated as final.")
+            "Optional: a named qualified accountant may review the generated outputs, gates, wording and source-law evidence. Irish law does not require it; the directors' s.324 approval is the filing gate.")
     ];
 
     private static IReadOnlyList<HumanReleaseEvidenceGate> BuildHumanReleaseEvidence(
@@ -601,7 +595,8 @@ public partial class ProductionReadinessReportService
             string releaseManifestCode,
             IReadOnlyList<string> reviewerPickupFiles,
             IReadOnlyList<string> requiredEvidence,
-            string nextAction)
+            string nextAction,
+            bool optional = false)
         {
             if (!checklistByCode.TryGetValue(releaseChecklistCode, out var checklistItem))
                 throw new InvalidOperationException($"Human release evidence gate {code} references unknown release checklist item {releaseChecklistCode}.");
@@ -614,12 +609,12 @@ public partial class ProductionReadinessReportService
                 label,
                 templateFile,
                 requiredReviewerRole,
-                "pending-human-evidence",
+                optional ? "optional" : "pending-human-evidence",
                 signOffGate,
                 releaseChecklistCode,
                 releaseManifestCode,
                 checklistItem.EvidenceArtifact,
-                BlocksRelease: true,
+                BlocksRelease: !optional,
                 reviewerPickupFiles,
                 requiredEvidence,
                 nextAction);
@@ -692,7 +687,7 @@ public partial class ProductionReadinessReportService
                 "Retain external ROS/iXBRL validation references for the exact generated artifacts."),
             Item(
                 "qualifiedAccountantAcceptance",
-                "Qualified-accountant acceptance",
+                "Qualified-accountant acceptance (optional)",
                 "qualified-accountant-acceptance-template.md",
                 "Named qualified accountant",
                 "qualified-accountant-final-signoff",
@@ -710,7 +705,8 @@ public partial class ProductionReadinessReportService
                     "Scenario walkthrough evidence",
                     "Route acceptance evidence"
                 ],
-                "Walk the golden corpus through the live workflow and retain named professional acceptance."),
+                "Optional: if an accountant walked the golden corpus through the live workflow, retain their named acceptance. Irish law does not require one, so this never blocks release.",
+                optional: true),
             Item(
                 "manualHandoffAcceptance",
                 "Manual handoff acceptance",

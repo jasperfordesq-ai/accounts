@@ -81,6 +81,35 @@ public static class TenantIsolationMigrationSql
         new("account_categories", TenantOwnershipPath.NullableCompanyWithGlobalReadOnlyRows)
     ];
 
+    // Tables added after Version1PolicyInventory. Each increment is installed by the migration that
+    // creates its tables (via BuildInstallTablesSql) and is immutable once released; the catalog
+    // must equal Version1PolicyInventory plus every increment (asserted by the catalog test).
+    // Installed by migration AddDirectorsApproval.
+    public static IReadOnlyList<TenantIsolationPolicyDefinition> DirectorsApprovalPolicyInventory { get; } =
+    [
+        new("directors_approval_pages", TenantOwnershipPath.Period),
+        new("directors_approval_events", TenantOwnershipPath.Period)
+    ];
+
+    /// <summary>
+    /// Installs forced row-level security for tables added after the Version 1 install. Unlike
+    /// <see cref="BuildInstallSql"/> it does not recreate roles, the context-key table or functions.
+    /// </summary>
+    public static string BuildInstallTablesSql(IReadOnlyList<TenantIsolationPolicyDefinition> policies)
+    {
+        ArgumentNullException.ThrowIfNull(policies);
+        if (policies.Count == 0) throw new ArgumentException("At least one tenant table is required.", nameof(policies));
+
+        var sql = new StringBuilder(4_000);
+        foreach (var policy in policies)
+            AppendTablePolicy(sql, policy);
+
+        sql.Append(SequenceGrantSql
+            .Replace("__APPLICATION_ROLE__", TenantIsolationPolicyCatalog.ApplicationGroupRole, StringComparison.Ordinal)
+            .Replace("__ADMINISTRATOR_ROLE__", TenantIsolationPolicyCatalog.AdministratorGroupRole, StringComparison.Ordinal));
+        return sql.ToString();
+    }
+
     public static string BuildInstallSql(IReadOnlyList<TenantIsolationPolicyDefinition> policies)
     {
         ArgumentNullException.ThrowIfNull(policies);

@@ -13,7 +13,7 @@ export default function AboutPage() {
     <PageShell
       title={`About ${PRODUCT_NAME}`}
       subtitle="Source, attribution and production-use boundaries for the Irish statutory accounts platform."
-      meta={<StatusBadge tone="warn">Qualified-accountant review required</StatusBadge>}
+      meta={<StatusBadge tone="warn">Directors&apos; approval (s.324) required</StatusBadge>}
     >
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.45fr)]">
         <ReviewPanel
@@ -54,10 +54,11 @@ export default function AboutPage() {
 
         <ReviewPanel
           title="Production-use boundary"
-          description="The platform prepares evidence and packs; real-world filing remains professionally gated."
+          description="The platform prepares evidence and packs; real-world filing is gated on the board's approval."
         >
           <ul className="space-y-3 text-sm leading-6 text-[var(--muted-foreground)]">
-            <li>Final CRO or Revenue use requires named qualified-accountant review.</li>
+            <li>Final CRO or Revenue use requires the board of directors&apos; approval of the accounts, signed by two directors or the sole director (Companies Act 2014, s.324).</li>
+            <li>An accountant&apos;s review is optional; a statutory audit is still required where the company is not audit-exempt.</li>
             <li>Direct CRO or ROS submission remains unsupported by this application.</li>
             <li>Workflow states record preparation, review and handoff evidence only.</li>
           </ul>

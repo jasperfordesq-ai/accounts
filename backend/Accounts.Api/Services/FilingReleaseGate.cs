@@ -32,20 +32,6 @@ public sealed record ReleasedFilingArtifact(
     string Sha256,
     string ReleaseCandidate);
 
-public sealed record QualifiedAccountantApprovalEvidence(
-    string ReviewerName,
-    int TenantId,
-    string Scope,
-    string Capacity,
-    string Decision,
-    string ProfessionalBody,
-    string MembershipNumber,
-    string VerificationReference,
-    byte[] VerificationArtifact,
-    string VerificationArtifactSha256,
-    DateTime VerifiedAtUtc,
-    DateTime CredentialValidUntilUtc);
-
 public sealed record CroSignatureEvidence(
     string DirectorName,
     string SecretaryName,
@@ -88,14 +74,16 @@ public sealed class FilingReleaseGate
     private readonly FilingReadinessProfileService _readiness;
     private readonly Func<string> _releaseCandidate;
     private readonly AuditService? _audit;
+    private readonly DirectorsApprovalService _directorsApproval;
 
     public FilingReleaseGate(
         AccountsDbContext db,
         FinancialStatementsService statements,
         FilingReadinessProfileService readiness,
         FilingReleaseIdentityProvider identity,
-        AuditService audit)
-        : this(db, statements, readiness, identity.GetRequiredCandidate, audit)
+        AuditService audit,
+        DirectorsApprovalService directorsApproval)
+        : this(db, statements, readiness, identity.GetRequiredCandidate, audit, directorsApproval)
     {
     }
 
@@ -105,7 +93,8 @@ public sealed class FilingReleaseGate
             new FinancialStatementsService(db),
             new FilingReadinessProfileService(db),
             () => NormalizeCandidate(releaseCandidate),
-            audit)
+            audit,
+            CreateDirectorsApproval(db, audit))
     {
     }
 
@@ -118,7 +107,8 @@ public sealed class FilingReleaseGate
                 Environment.GetEnvironmentVariable("ACCOUNTS_RELEASE_CANDIDATE")
                 ?? Environment.GetEnvironmentVariable("GITHUB_SHA")
                 ?? "local-development"),
-            null)
+            null,
+            CreateDirectorsApproval(db, null))
     {
     }
 
@@ -127,14 +117,31 @@ public sealed class FilingReleaseGate
         FinancialStatementsService statements,
         FilingReadinessProfileService readiness,
         Func<string> releaseCandidate,
-        AuditService? audit)
+        AuditService? audit,
+        DirectorsApprovalService directorsApproval)
     {
         _db = db;
         _statements = statements;
         _readiness = readiness;
         _releaseCandidate = releaseCandidate;
         _audit = audit;
+        _directorsApproval = directorsApproval;
     }
+
+    /// <summary>
+    /// Convenience constructors have no page renderer; revoking an approval never renders a page, so
+    /// the revocation path stays fully functional and rendering fails closed if it is ever reached.
+    /// </summary>
+    private static DirectorsApprovalService CreateDirectorsApproval(AccountsDbContext db, AuditService? audit) =>
+        new(db, new RenderingUnavailable(), audit ?? new AuditService(db));
+
+    private sealed class RenderingUnavailable : IDirectorsApprovalPageRenderer
+    {
+        public Task<byte[]> RenderAsync(int companyId, int periodId, DirectorsApprovalPageContent content) =>
+            throw new InvalidOperationException("The filing release gate cannot render a directors' approval page.");
+    }
+
+    public const string BoardApprovalCapacity = "board-of-directors-s324";
 
     public string CurrentReleaseCandidate => _releaseCandidate();
 
@@ -194,12 +201,23 @@ public sealed class FilingReleaseGate
             package.SignaturePageGenerated = false;
         }
 
-        if (artifactType == FilingReleaseArtifact.CroAccountsPdf)
+        // The directors sign the exact accounts PDF bytes (s.324). A release-candidate-only change
+        // that re-records identical bytes against an unchanged source does not change what they
+        // approved, so it neither revokes their approval nor refreshes the generation time.
+        var isAccountsPdf = artifactType == FilingReleaseArtifact.CroAccountsPdf;
+        var approvedBytesRetained = isAccountsPdf
+            && !sourceChanged
+            && _directorsApproval.IsApprovedAccountsPdf(periodId, hash);
+        var directorsApprovalSuperseded = sourceChanged || (isAccountsPdf && !approvedBytesRetained);
+
+        if (isAccountsPdf)
         {
             package.AccountsPdfArtifact = retainedContent;
             package.AccountsPdfSha256 = hash;
             package.AttachedAuditorReportSha256 = attachedAuditorReportSha256;
             package.AccountsPdfGenerated = true;
+            if (!approvedBytesRetained && (sourceChanged || contentChanged))
+                package.AccountsPdfGeneratedAtUtc = DateTime.UtcNow;
         }
         else
         {
@@ -216,11 +234,22 @@ public sealed class FilingReleaseGate
             RevokeCroApproval(package);
             ClearCroSignatureEvidence(package);
         }
+        // An accountant's optional review is of specific accounts: regenerated accounts clear it.
+        if (sourceChanged || (isAccountsPdf && contentChanged))
+            ClearOptionalAccountantReview(package);
+        // Same unit of work as the artifact: the directors' approval cannot outlive its accounts.
+        var directorsRevocation = directorsApprovalSuperseded
+            ? _directorsApproval.AppendRevocationIfCurrent(
+                period,
+                package,
+                sourceChanged ? "accounts-source-changed" : "accounts-regenerated")
+            : null;
         package.FilingStatus = package.AccountsPdfGenerated && package.SignaturePageGenerated
             ? FilingStatus.PackageGenerated
             : FilingStatus.InProgress;
 
         await _db.SaveChangesAsync();
+        await LogDirectorsApprovalRevokedAsync(period, directorsRevocation, auditUserId);
         await LogGeneratedAsync(period, artifactType, hash, candidate, auditUserId);
         return package;
     }
@@ -402,9 +431,13 @@ public sealed class FilingReleaseGate
         period.AuditorsReportReviewDecision = evidence.ReviewDecision.Trim().ToLowerInvariant();
         period.AuditorsReportArtifact = evidence.ReportArtifact.ToArray();
         period.AuditorsReportSha256 = evidence.ReportArtifactSha256.ToLowerInvariant();
+        DirectorsApprovalEvent? directorsRevocation = null;
         if (period.CroFilingPackage is not null)
         {
             RevokeCroApproval(period.CroFilingPackage);
+            ClearOptionalAccountantReview(period.CroFilingPackage);
+            directorsRevocation = _directorsApproval.AppendRevocationIfCurrent(
+                period, period.CroFilingPackage, "accounts-source-changed");
             period.CroFilingPackage.AccountsPdfArtifact = null;
             period.CroFilingPackage.AccountsPdfSha256 = null;
             period.CroFilingPackage.SignaturePageArtifact = null;
@@ -417,40 +450,30 @@ public sealed class FilingReleaseGate
             period.CroFilingPackage.FilingStatus = FilingStatus.InProgress;
         }
         await _db.SaveChangesAsync();
+        await LogDirectorsApprovalRevokedAsync(period, directorsRevocation, auditUserId);
         await LogEvidenceAsync(period, "signed auditor report", period.AuditorsReportSha256, auditUserId);
         return period;
     }
 
+    /// <summary>
+    /// Binds the filing approval to the board's current Companies Act 2014 s.324 approval of the
+    /// exact accounts: the approvers are the directors who signed, never a caller-supplied name.
+    /// </summary>
     public Task BindApprovalAsync(
         int companyId,
         int periodId,
         FilingReleaseWorkflow workflow,
-        string approvedBy,
-        string? auditUserId = null) =>
-        GuardAsync(companyId, periodId, workflow, "Approved", auditUserId, _ =>
-        {
-            Block("Free-form reviewer names cannot approve a final filing release. Retained, current qualified-accountant credential verification is required.");
-            return Task.CompletedTask;
-        });
-
-    /// <summary>
-    /// Trusted evidence-ingestion boundary. This method is intentionally not exposed by the public
-    /// filing-status endpoints: callers must first obtain and retain independently verifiable
-    /// professional-body evidence.
-    /// </summary>
-    public Task BindVerifiedApprovalAsync(
-        int companyId,
-        int periodId,
-        FilingReleaseWorkflow workflow,
-        QualifiedAccountantApprovalEvidence evidence,
         string? auditUserId = null) =>
         GuardAsync(companyId, periodId, workflow, "Approved", auditUserId, async period =>
         {
-            EnsureQualifiedAccountantEvidence(evidence, RequireTenantId(period.Company), workflow);
-
             if (workflow == FilingReleaseWorkflow.Revenue)
                 RevenueIxbrlGenerationPolicy.AssertFilingReadyGenerationEnabled();
             await EnsureBaseReadinessAsync(period);
+            var approval = await RequireDirectorsApprovalAsync(period);
+            var approvers = approval.Page.SecondDirectorName is null
+                ? approval.Page.FirstDirectorName
+                : $"{approval.Page.FirstDirectorName} and {approval.Page.SecondDirectorName}";
+            var tenantId = RequireTenantId(period.Company);
             var candidate = CurrentReleaseCandidate;
             switch (workflow)
             {
@@ -461,8 +484,8 @@ public sealed class FilingReleaseGate
                     EnsureCroArtifacts(period, package, candidate);
                     EnsureCroSignatures(package);
                     EnsureAuditorEvidence(period);
-                    ApplyApprovalEvidence(package, evidence);
-                    package.ApprovedArtifactManifestSha256 = CroManifest(period, package, candidate);
+                    ApplyBoardApproval(package, approvers, tenantId, RequiredApprovalScope(workflow));
+                    package.ApprovedArtifactManifestSha256 = CroManifest(period, package, candidate, approval);
                     package.ApprovedReleaseCandidate = candidate;
                     package.ApprovedAt = DateTime.UtcNow;
                     break;
@@ -472,8 +495,8 @@ public sealed class FilingReleaseGate
                     var package = period.RevenueFilingPackage ?? Block<RevenueFilingPackage>("Generate the Revenue iXBRL artifact before approval.");
                     EnsureRevenueArtifact(package, candidate);
                     EnsureExternalRevenueValidation(package);
-                    ApplyApprovalEvidence(package, evidence);
-                    package.ApprovedArtifactManifestSha256 = RevenueManifest(package, candidate);
+                    ApplyBoardApproval(package, approvers, tenantId, RequiredApprovalScope(workflow));
+                    package.ApprovedArtifactManifestSha256 = RevenueManifest(package, candidate, approval);
                     package.ApprovedReleaseCandidate = candidate;
                     package.ApprovedAt = DateTime.UtcNow;
                     break;
@@ -484,8 +507,8 @@ public sealed class FilingReleaseGate
                     await EnsureCharityArtifactSourceCurrentAsync(period, package);
                     EnsureCharityArtifacts(package, candidate);
                     EnsureCharityEvidence(period, package);
-                    ApplyApprovalEvidence(package, evidence);
-                    package.ApprovedArtifactManifestSha256 = CharityManifest(package, candidate);
+                    ApplyBoardApproval(package, approvers, tenantId, RequiredApprovalScope(workflow));
+                    package.ApprovedArtifactManifestSha256 = CharityManifest(package, candidate, approval);
                     package.ApprovedReleaseCandidate = candidate;
                     package.ApprovedAt = DateTime.UtcNow;
                     break;
@@ -496,6 +519,10 @@ public sealed class FilingReleaseGate
 
             await _db.SaveChangesAsync();
         });
+
+    private async Task<CurrentDirectorsApproval> RequireDirectorsApprovalAsync(AccountingPeriod period) =>
+        await _directorsApproval.GetCurrentApprovalAsync(period.Id)
+        ?? Block<CurrentDirectorsApproval>("Record the board's directors' approval (s.324), signed by two directors or the sole director, before approving the filing.");
 
     public Task AssertTransitionAsync(
         int companyId,
@@ -541,7 +568,7 @@ public sealed class FilingReleaseGate
                 case FilingReleaseWorkflow.Revenue:
                 {
                     var package = period.RevenueFilingPackage ?? Block<RevenueFilingPackage>("The Revenue filing package has not been generated.");
-                    EnsureCurrentRevenueApproval(period, package, candidate);
+                    await EnsureCurrentRevenueApprovalAsync(period, package, candidate);
                     EnsureExternalRevenueValidation(package);
                     if (targetStatus == FilingStatus.Submitted && package.FilingStatus != FilingStatus.Approved)
                         Block("Only the currently approved Revenue artifact can be recorded as submitted.");
@@ -554,7 +581,7 @@ public sealed class FilingReleaseGate
                 {
                     var package = period.CharityFilingPackage ?? Block<CharityFilingPackage>("The charity filing package has not been generated.");
                     await EnsureCharityArtifactSourceCurrentAsync(period, package);
-                    EnsureCurrentCharityApproval(period, package, candidate);
+                    await EnsureCurrentCharityApprovalAsync(period, package, candidate);
                     EnsureCharityEvidence(period, package);
                     if (targetStatus == FilingStatus.Submitted && package.FilingStatus != FilingStatus.Approved)
                         Block("Only the currently approved charity artifact manifest can be recorded as submitted.");
@@ -595,7 +622,7 @@ public sealed class FilingReleaseGate
                 case FilingReleaseWorkflow.Revenue:
                 {
                     var package = period.RevenueFilingPackage ?? Block<RevenueFilingPackage>("The Revenue filing package is missing.");
-                    EnsureCurrentRevenueApproval(period, package, candidate);
+                    await EnsureCurrentRevenueApprovalAsync(period, package, candidate);
                     EnsureExternalRevenueValidation(package);
                     if (package.FilingStatus != FilingStatus.Accepted)
                         Block("Record Revenue acceptance for the exact approved iXBRL artifact before marking Revenue filed.");
@@ -606,7 +633,7 @@ public sealed class FilingReleaseGate
                 {
                     var package = period.CharityFilingPackage ?? Block<CharityFilingPackage>("The charity filing package is missing.");
                     await EnsureCharityArtifactSourceCurrentAsync(period, package);
-                    EnsureCurrentCharityApproval(period, package, candidate);
+                    await EnsureCurrentCharityApprovalAsync(period, package, candidate);
                     if (package.FilingStatus != FilingStatus.Accepted)
                         Block("Record Charities Regulator acceptance for the exact approved manifest before marking Charity filed.");
                     EnsureMatchingReference(filingReference, package.AnnualReturnReference, "Charity annual return reference");
@@ -647,9 +674,9 @@ public sealed class FilingReleaseGate
             {
                 FilingReleaseArtifact.CroAccountsPdf => await ReleaseCroArtifactAsync(period, candidate, true),
                 FilingReleaseArtifact.CroSignaturePage => await ReleaseCroArtifactAsync(period, candidate, false),
-                FilingReleaseArtifact.RevenueIxbrl => ReleaseRevenueArtifact(period, candidate),
-                FilingReleaseArtifact.CharitySofa => ReleaseCharityArtifact(period, candidate, true),
-                FilingReleaseArtifact.CharityTrusteesReport => ReleaseCharityArtifact(period, candidate, false),
+                FilingReleaseArtifact.RevenueIxbrl => await ReleaseRevenueArtifactAsync(period, candidate),
+                FilingReleaseArtifact.CharitySofa => await ReleaseCharityArtifactAsync(period, candidate, true),
+                FilingReleaseArtifact.CharityTrusteesReport => await ReleaseCharityArtifactAsync(period, candidate, false),
                 _ => throw new ArgumentOutOfRangeException(nameof(artifactType))
             };
         });
@@ -918,7 +945,7 @@ public sealed class FilingReleaseGate
         if (period.FilingRegime?.AuditExempt != false)
             return;
         if (!HasCompleteAuditorReportEvidence(period))
-            Block("Audit-required release needs retained signed-opinion PDF bytes, auditor firm/signer identity and an accepted qualified-accountant review.");
+            Block("Audit-required release needs retained signed-opinion PDF bytes, auditor firm/signer identity and the report accepted by the directors.");
     }
 
     public static bool HasCompleteAuditorReportEvidence(AccountingPeriod period)
@@ -1011,150 +1038,51 @@ public sealed class FilingReleaseGate
     {
         await EnsureCroArtifactSourceCurrentAsync(period, package);
         EnsureCroArtifacts(period, package, candidate);
-        EnsureStoredQualifiedAccountantEvidence(
-            RequireTenantId(period.Company),
-            FilingReleaseWorkflow.Cro,
-            package.ApprovedBy,
-            package.ApproverTenantId,
-            package.ApprovalScope,
-            package.ApprovalCapacity,
-            package.ApprovalDecision,
-            package.ApproverProfessionalBody,
-            package.ApproverMembershipNumber,
-            package.ApproverVerificationReference,
-            package.ApproverVerificationArtifact,
-            package.ApproverVerificationArtifactSha256,
-            package.ApproverVerifiedAt,
-            package.ApproverCredentialValidUntil);
+        var approval = await RequireCurrentBoardApprovalAsync(period, package.ApprovalCapacity);
         EnsureApproval(
             package.ApprovedBy,
             package.ApprovedAt,
             package.ApprovedReleaseCandidate,
             package.ApprovedArtifactManifestSha256,
             candidate,
-            CroManifest(period, package, candidate),
+            CroManifest(period, package, candidate, approval),
             "CRO");
     }
 
-    private static void EnsureCurrentRevenueApproval(AccountingPeriod period, RevenueFilingPackage package, string candidate)
+    private async Task EnsureCurrentRevenueApprovalAsync(AccountingPeriod period, RevenueFilingPackage package, string candidate)
     {
         EnsureRevenueArtifact(package, candidate);
-        EnsureStoredQualifiedAccountantEvidence(
-            RequireTenantId(period.Company),
-            FilingReleaseWorkflow.Revenue,
-            package.ApprovedBy,
-            package.ApproverTenantId,
-            package.ApprovalScope,
-            package.ApprovalCapacity,
-            package.ApprovalDecision,
-            package.ApproverProfessionalBody,
-            package.ApproverMembershipNumber,
-            package.ApproverVerificationReference,
-            package.ApproverVerificationArtifact,
-            package.ApproverVerificationArtifactSha256,
-            package.ApproverVerifiedAt,
-            package.ApproverCredentialValidUntil);
+        var approval = await RequireCurrentBoardApprovalAsync(period, package.ApprovalCapacity);
         EnsureApproval(
             package.ApprovedBy,
             package.ApprovedAt,
             package.ApprovedReleaseCandidate,
             package.ApprovedArtifactManifestSha256,
             candidate,
-            RevenueManifest(package, candidate),
+            RevenueManifest(package, candidate, approval),
             "Revenue");
     }
 
-    private static void EnsureCurrentCharityApproval(AccountingPeriod period, CharityFilingPackage package, string candidate)
+    private async Task EnsureCurrentCharityApprovalAsync(AccountingPeriod period, CharityFilingPackage package, string candidate)
     {
         EnsureCharityArtifacts(package, candidate);
-        EnsureStoredQualifiedAccountantEvidence(
-            RequireTenantId(period.Company),
-            FilingReleaseWorkflow.Charity,
-            package.ApprovedBy,
-            package.ApproverTenantId,
-            package.ApprovalScope,
-            package.ApprovalCapacity,
-            package.ApprovalDecision,
-            package.ApproverProfessionalBody,
-            package.ApproverMembershipNumber,
-            package.ApproverVerificationReference,
-            package.ApproverVerificationArtifact,
-            package.ApproverVerificationArtifactSha256,
-            package.ApproverVerifiedAt,
-            package.ApproverCredentialValidUntil);
+        var approval = await RequireCurrentBoardApprovalAsync(period, package.ApprovalCapacity);
         EnsureApproval(
             package.ApprovedBy,
             package.ApprovedAt,
             package.ApprovedReleaseCandidate,
             package.ApprovedArtifactManifestSha256,
             candidate,
-            CharityManifest(package, candidate),
+            CharityManifest(package, candidate, approval),
             "Charity");
     }
 
-    private static void EnsureQualifiedAccountantEvidence(
-        QualifiedAccountantApprovalEvidence evidence,
-        int expectedTenantId,
-        FilingReleaseWorkflow workflow) =>
-        EnsureStoredQualifiedAccountantEvidence(
-            expectedTenantId,
-            workflow,
-            evidence.ReviewerName,
-            evidence.TenantId,
-            evidence.Scope,
-            evidence.Capacity,
-            evidence.Decision,
-            evidence.ProfessionalBody,
-            evidence.MembershipNumber,
-            evidence.VerificationReference,
-            evidence.VerificationArtifact,
-            evidence.VerificationArtifactSha256,
-            evidence.VerifiedAtUtc,
-            evidence.CredentialValidUntilUtc);
-
-    private static void EnsureStoredQualifiedAccountantEvidence(
-        int expectedTenantId,
-        FilingReleaseWorkflow workflow,
-        string? reviewerName,
-        int? evidenceTenantId,
-        string? scope,
-        string? capacity,
-        string? decision,
-        string? professionalBody,
-        string? membershipNumber,
-        string? verificationReference,
-        byte[]? verificationArtifact,
-        string? verificationArtifactSha256,
-        DateTime? verifiedAtUtc,
-        DateTime? credentialValidUntilUtc)
+    private async Task<CurrentDirectorsApproval> RequireCurrentBoardApprovalAsync(AccountingPeriod period, string? approvalCapacity)
     {
-        if (evidenceTenantId != expectedTenantId)
-            Block("Qualified-accountant approval evidence belongs to a different tenant.");
-        if (!string.Equals(scope?.Trim(), RequiredApprovalScope(workflow), StringComparison.Ordinal))
-            Block($"Qualified-accountant approval scope must be '{RequiredApprovalScope(workflow)}'.");
-        if (!string.Equals(capacity?.Trim(), "qualified-accountant", StringComparison.OrdinalIgnoreCase))
-            Block("Final filing approval requires the verified capacity 'qualified-accountant'.");
-        if (!string.Equals(decision?.Trim(), "approved", StringComparison.OrdinalIgnoreCase))
-            Block("Final filing approval requires an explicit approved decision.");
-        if (string.IsNullOrWhiteSpace(reviewerName)
-            || !IsRecognisedProfessionalBody(professionalBody)
-            || string.IsNullOrWhiteSpace(membershipNumber)
-            || !IsHttpsReference(verificationReference)
-            || verifiedAtUtc is null
-            || verifiedAtUtc.Value.Kind != DateTimeKind.Utc
-            || verifiedAtUtc > DateTime.UtcNow.AddMinutes(5)
-            || credentialValidUntilUtc is null
-            || credentialValidUntilUtc.Value.Kind != DateTimeKind.Utc
-            || credentialValidUntilUtc <= DateTime.UtcNow
-            || credentialValidUntilUtc <= verifiedAtUtc)
-        {
-            Block("A current qualified-accountant identity and professional-body credential verification is required.");
-        }
-
-        EnsureRetainedArtifact(
-            verificationArtifact,
-            verificationArtifactSha256,
-            "qualified-accountant credential verification");
+        var approval = await RequireDirectorsApprovalAsync(period);
+        if (!string.Equals(approvalCapacity, BoardApprovalCapacity, StringComparison.Ordinal))
+            Block("The filing approval was not bound to the directors' approval (s.324); approve it again.");
+        return approval;
     }
 
     private static string RequiredApprovalScope(FilingReleaseWorkflow workflow) => workflow switch
@@ -1167,20 +1095,6 @@ public sealed class FilingReleaseGate
 
     private static int RequireTenantId(Company company) =>
         company.TenantId ?? Block<int>("Final filing release requires an owning tenant.");
-
-    private static bool IsRecognisedProfessionalBody(string? value) => value?.Trim() switch
-    {
-        "Chartered Accountants Ireland" => true,
-        "Association of Chartered Certified Accountants" => true,
-        "Chartered Institute of Management Accountants" => true,
-        "Institute of Chartered Accountants in England and Wales" => true,
-        "Institute of Chartered Accountants of Scotland" => true,
-        _ => false
-    };
-
-    private static bool IsHttpsReference(string? value) =>
-        Uri.TryCreate(value?.Trim(), UriKind.Absolute, out var uri)
-        && string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase);
 
     private static void EnsureCroSignatureEvidence(CroSignatureEvidence evidence)
     {
@@ -1209,7 +1123,7 @@ public sealed class FilingReleaseGate
             || evidence.ReviewedAtUtc > DateTime.UtcNow.AddMinutes(5)
             || !string.Equals(evidence.ReviewDecision?.Trim(), "accepted", StringComparison.OrdinalIgnoreCase))
         {
-            Block("The signed auditor report requires firm/signer professional identity, UTC signing evidence and an accepted qualified-accountant review.");
+            Block("The signed auditor report requires firm/signer professional identity, UTC signing evidence and the report accepted by the directors.");
         }
         EnsureRetainedArtifact(evidence.ReportArtifact, evidence.ReportArtifactSha256, "signed auditor report");
         if (!IsPdfArtifact(evidence.ReportArtifact))
@@ -1273,11 +1187,11 @@ public sealed class FilingReleaseGate
             candidate);
     }
 
-    private static ReleasedFilingArtifact ReleaseRevenueArtifact(AccountingPeriod period, string candidate)
+    private async Task<ReleasedFilingArtifact> ReleaseRevenueArtifactAsync(AccountingPeriod period, string candidate)
     {
         RevenueIxbrlGenerationPolicy.AssertFilingReadyGenerationEnabled();
         var package = period.RevenueFilingPackage ?? Block<RevenueFilingPackage>("The Revenue filing package is missing.");
-        EnsureCurrentRevenueApproval(period, package, candidate);
+        await EnsureCurrentRevenueApprovalAsync(period, package, candidate);
         EnsureExternalRevenueValidation(package);
         return new ReleasedFilingArtifact(
             package.IxbrlArtifact!.ToArray(),
@@ -1287,10 +1201,10 @@ public sealed class FilingReleaseGate
             candidate);
     }
 
-    private static ReleasedFilingArtifact ReleaseCharityArtifact(AccountingPeriod period, string candidate, bool sofa)
+    private async Task<ReleasedFilingArtifact> ReleaseCharityArtifactAsync(AccountingPeriod period, string candidate, bool sofa)
     {
         var package = period.CharityFilingPackage ?? Block<CharityFilingPackage>("The charity filing package is missing.");
-        EnsureCurrentCharityApproval(period, package, candidate);
+        await EnsureCurrentCharityApprovalAsync(period, package, candidate);
         EnsureCharityEvidence(period, package);
         var content = sofa ? package.SofaArtifact! : package.TrusteesReportArtifact!;
         var hash = sofa ? package.SofaSha256! : package.TrusteesReportSha256!;
@@ -1302,73 +1216,69 @@ public sealed class FilingReleaseGate
             candidate);
     }
 
-    private static void ApplyApprovalEvidence(CroFilingPackage package, QualifiedAccountantApprovalEvidence evidence)
+    private static void ApplyBoardApproval(CroFilingPackage package, string approvers, int tenantId, string scope)
     {
-        package.ApprovedBy = evidence.ReviewerName.Trim();
-        package.ApproverTenantId = evidence.TenantId;
-        package.ApprovalScope = evidence.Scope.Trim();
-        package.ApprovalCapacity = evidence.Capacity.Trim().ToLowerInvariant();
-        package.ApprovalDecision = evidence.Decision.Trim().ToLowerInvariant();
-        package.ApproverProfessionalBody = evidence.ProfessionalBody.Trim();
-        package.ApproverMembershipNumber = evidence.MembershipNumber.Trim();
-        package.ApproverVerificationReference = evidence.VerificationReference.Trim();
-        package.ApproverVerificationArtifact = evidence.VerificationArtifact.ToArray();
-        package.ApproverVerificationArtifactSha256 = evidence.VerificationArtifactSha256.ToLowerInvariant();
-        package.ApproverVerifiedAt = evidence.VerifiedAtUtc;
-        package.ApproverCredentialValidUntil = evidence.CredentialValidUntilUtc;
+        package.ApprovedBy = approvers;
+        package.ApproverTenantId = tenantId;
+        package.ApprovalScope = scope;
+        package.ApprovalCapacity = BoardApprovalCapacity;
+        package.ApprovalDecision = "approved";
+        // The professional-body, membership, review-date and review-letter fields hold the optional
+        // accountant review attestation (never a gate); binding the board approval must not erase it.
+        package.ApproverVerificationReference = null;
+        package.ApproverCredentialValidUntil = null;
     }
 
-    private static void ApplyApprovalEvidence(RevenueFilingPackage package, QualifiedAccountantApprovalEvidence evidence)
+    private static void ApplyBoardApproval(RevenueFilingPackage package, string approvers, int tenantId, string scope)
     {
-        package.ApprovedBy = evidence.ReviewerName.Trim();
-        package.ApproverTenantId = evidence.TenantId;
-        package.ApprovalScope = evidence.Scope.Trim();
-        package.ApprovalCapacity = evidence.Capacity.Trim().ToLowerInvariant();
-        package.ApprovalDecision = evidence.Decision.Trim().ToLowerInvariant();
-        package.ApproverProfessionalBody = evidence.ProfessionalBody.Trim();
-        package.ApproverMembershipNumber = evidence.MembershipNumber.Trim();
-        package.ApproverVerificationReference = evidence.VerificationReference.Trim();
-        package.ApproverVerificationArtifact = evidence.VerificationArtifact.ToArray();
-        package.ApproverVerificationArtifactSha256 = evidence.VerificationArtifactSha256.ToLowerInvariant();
-        package.ApproverVerifiedAt = evidence.VerifiedAtUtc;
-        package.ApproverCredentialValidUntil = evidence.CredentialValidUntilUtc;
+        package.ApprovedBy = approvers;
+        package.ApproverTenantId = tenantId;
+        package.ApprovalScope = scope;
+        package.ApprovalCapacity = BoardApprovalCapacity;
+        package.ApprovalDecision = "approved";
+        package.ApproverProfessionalBody = null;
+        package.ApproverMembershipNumber = null;
+        package.ApproverVerificationReference = null;
+        package.ApproverVerificationArtifact = null;
+        package.ApproverVerificationArtifactSha256 = null;
+        package.ApproverVerifiedAt = null;
+        package.ApproverCredentialValidUntil = null;
     }
 
-    private static void ApplyApprovalEvidence(CharityFilingPackage package, QualifiedAccountantApprovalEvidence evidence)
+    private static void ApplyBoardApproval(CharityFilingPackage package, string approvers, int tenantId, string scope)
     {
-        package.ApprovedBy = evidence.ReviewerName.Trim();
-        package.ApproverTenantId = evidence.TenantId;
-        package.ApprovalScope = evidence.Scope.Trim();
-        package.ApprovalCapacity = evidence.Capacity.Trim().ToLowerInvariant();
-        package.ApprovalDecision = evidence.Decision.Trim().ToLowerInvariant();
-        package.ApproverProfessionalBody = evidence.ProfessionalBody.Trim();
-        package.ApproverMembershipNumber = evidence.MembershipNumber.Trim();
-        package.ApproverVerificationReference = evidence.VerificationReference.Trim();
-        package.ApproverVerificationArtifact = evidence.VerificationArtifact.ToArray();
-        package.ApproverVerificationArtifactSha256 = evidence.VerificationArtifactSha256.ToLowerInvariant();
-        package.ApproverVerifiedAt = evidence.VerifiedAtUtc;
-        package.ApproverCredentialValidUntil = evidence.CredentialValidUntilUtc;
+        package.ApprovedBy = approvers;
+        package.ApproverTenantId = tenantId;
+        package.ApprovalScope = scope;
+        package.ApprovalCapacity = BoardApprovalCapacity;
+        package.ApprovalDecision = "approved";
+        package.ApproverProfessionalBody = null;
+        package.ApproverMembershipNumber = null;
+        package.ApproverVerificationReference = null;
+        package.ApproverVerificationArtifact = null;
+        package.ApproverVerificationArtifactSha256 = null;
+        package.ApproverVerifiedAt = null;
+        package.ApproverCredentialValidUntil = null;
     }
 
-    private static string CroManifest(AccountingPeriod period, CroFilingPackage package, string candidate)
+    private static (string Name, string Hash)[] DirectorsApprovalEntries(CurrentDirectorsApproval approval) =>
+    [
+        ("directors-approval-page", approval.Page.PageSha256),
+        ("directors-signed-page", approval.Approval.SignedPageSha256!),
+        ("board-resolution", approval.Approval.ResolutionSha256!),
+        ("directors-approval-record", approval.Approval.RecordSha256),
+    ];
+
+    private static string CroManifest(AccountingPeriod period, CroFilingPackage package, string candidate, CurrentDirectorsApproval approval)
     {
         var artifacts = new List<(string Name, string Hash)>
         {
             ("accounts-pdf", package.AccountsPdfSha256!),
             ("signature-page-template", package.SignaturePageSha256!),
             ("executed-signing-pack", package.SignedPdfSha256!),
-            ("legal-tax-accounting-source-fingerprint", package.ArtifactSourceFingerprintSha256!),
-            ("accountant-verification", package.ApproverVerificationArtifactSha256!),
-            ("accountant-decision-binding", ApprovalBindingHash(
-                package.ApproverTenantId,
-                package.ApprovalScope,
-                package.ApprovalCapacity,
-                package.ApprovalDecision,
-                package.ApproverProfessionalBody,
-                package.ApproverMembershipNumber,
-                package.ApproverVerificationReference,
-                package.ApproverVerificationArtifactSha256))
+            ("legal-tax-accounting-source-fingerprint", package.ArtifactSourceFingerprintSha256!)
         };
+        artifacts.AddRange(DirectorsApprovalEntries(approval));
         if (period.FilingRegime?.AuditExempt == false)
         {
             artifacts.Add(("signed-auditor-report", period.AuditorsReportSha256!));
@@ -1377,24 +1287,18 @@ public sealed class FilingReleaseGate
         return Manifest("CRO", candidate, [.. artifacts]);
     }
 
-    private static string RevenueManifest(RevenueFilingPackage package, string candidate) =>
+    private static string RevenueManifest(RevenueFilingPackage package, string candidate, CurrentDirectorsApproval approval) =>
         Manifest("Revenue", candidate,
+        [
             ("ixbrl", package.IxbrlSha256!),
             ("external-validator-response", package.ExternalValidationResponseSha256!),
             ("external-taxonomy-package", package.ExternalTaxonomyPackageSha256!),
-            ("accountant-verification", package.ApproverVerificationArtifactSha256!),
-            ("accountant-decision-binding", ApprovalBindingHash(
-                package.ApproverTenantId,
-                package.ApprovalScope,
-                package.ApprovalCapacity,
-                package.ApprovalDecision,
-                package.ApproverProfessionalBody,
-                package.ApproverMembershipNumber,
-                package.ApproverVerificationReference,
-                package.ApproverVerificationArtifactSha256)));
+            .. DirectorsApprovalEntries(approval)
+        ]);
 
-    private static string CharityManifest(CharityFilingPackage package, string candidate) =>
+    private static string CharityManifest(CharityFilingPackage package, string candidate, CurrentDirectorsApproval approval) =>
         Manifest("Charity", candidate,
+        [
             ("sofa", package.SofaSha256!),
             ("trustees-report", package.TrusteesReportSha256!),
             ("source-fingerprint", package.ArtifactSourceFingerprintSha256!),
@@ -1407,41 +1311,11 @@ public sealed class FilingReleaseGate
                 package.BalanceSheetNetAssets?.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture),
                 package.ReconciliationDifference?.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture),
                 package.ReconciledAtUtc?.ToUniversalTime().ToString("O"))),
-            ("accountant-verification", package.ApproverVerificationArtifactSha256!),
-            ("accountant-decision-binding", ApprovalBindingHash(
-                package.ApproverTenantId,
-                package.ApprovalScope,
-                package.ApprovalCapacity,
-                package.ApprovalDecision,
-                package.ApproverProfessionalBody,
-                package.ApproverMembershipNumber,
-                package.ApproverVerificationReference,
-                package.ApproverVerificationArtifactSha256)));
+            .. DirectorsApprovalEntries(approval)
+        ]);
 
     private static string HashBinding(params string?[] values) =>
         ComputeSha256(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(values)));
-
-    private static string ApprovalBindingHash(
-        int? tenantId,
-        string? scope,
-        string? capacity,
-        string? decision,
-        string? professionalBody,
-        string? membershipNumber,
-        string? verificationReference,
-        string? verificationArtifactSha256)
-    {
-        var canonical = string.Join("\n",
-            $"tenantId={tenantId}",
-            $"scope={scope?.Trim()}",
-            $"capacity={capacity?.Trim().ToLowerInvariant()}",
-            $"decision={decision?.Trim().ToLowerInvariant()}",
-            $"professionalBody={professionalBody?.Trim()}",
-            $"membershipNumber={membershipNumber?.Trim()}",
-            $"verificationReference={verificationReference?.Trim()}",
-            $"verificationArtifactSha256={verificationArtifactSha256?.Trim().ToLowerInvariant()}");
-        return ComputeSha256(Encoding.UTF8.GetBytes(canonical));
-    }
 
     private static string Manifest(string workflow, string candidate, params (string Name, string Hash)[] artifacts)
     {
@@ -1452,27 +1326,49 @@ public sealed class FilingReleaseGate
         return ComputeSha256(Encoding.UTF8.GetBytes(canonical));
     }
 
+    /// <summary>
+    /// A members' audit notice (s.334) removed the audit exemption a CRO approval relied on: revoke
+    /// that approval in the caller's unit of work (the caller saves). A package already recorded as
+    /// externally submitted or accepted is left to its correction workflow. True when revoked.
+    /// </summary>
+    public static bool RevokeCroApprovalForLostAuditExemption(CroFilingPackage? package)
+    {
+        if (package?.ApprovedBy is null || package.FilingStatus is FilingStatus.Submitted or FilingStatus.Accepted)
+            return false;
+        RevokeCroApproval(package);
+        return true;
+    }
+
     private static void RevokeCroApproval(CroFilingPackage package)
     {
         package.ApprovedBy = null;
         package.ApprovedAt = null;
         package.ApprovedArtifactManifestSha256 = null;
         package.ApprovedReleaseCandidate = null;
-        package.ApproverProfessionalBody = null;
-        package.ApproverMembershipNumber = null;
         package.ApproverTenantId = null;
         package.ApprovalScope = null;
         package.ApprovalCapacity = null;
         package.ApprovalDecision = null;
         package.ApproverVerificationReference = null;
-        package.ApproverVerificationArtifact = null;
-        package.ApproverVerificationArtifactSha256 = null;
-        package.ApproverVerifiedAt = null;
         package.ApproverCredentialValidUntil = null;
         package.SubmittedBy = null;
         package.SubmittedAt = null;
         package.CroSubmissionReference = null;
         package.PaymentCompleted = false;
+    }
+
+    /// <summary>
+    /// The optional accountant review refers to the accounts actually filed, so any change to the
+    /// accounts clears it. It is stored on the package's professional-body verification fields.
+    /// </summary>
+    private static void ClearOptionalAccountantReview(CroFilingPackage package)
+    {
+        package.OptionalReviewerName = null;
+        package.ApproverProfessionalBody = null;
+        package.ApproverMembershipNumber = null;
+        package.ApproverVerificationArtifact = null;
+        package.ApproverVerificationArtifactSha256 = null;
+        package.ApproverVerifiedAt = null;
     }
 
     private static void RevokeRevenueApproval(RevenueFilingPackage package)
@@ -1564,7 +1460,7 @@ public sealed class FilingReleaseGate
         {
             CharityReportingService.InvalidateArtifacts(package);
             await _db.SaveChangesAsync();
-            Block($"Charity artifacts and qualified-accountant approval were revoked because current source evidence is incomplete or changed: {ex.Message}");
+            Block($"Charity artifacts and their filing approval were revoked because current source evidence is incomplete or changed: {ex.Message}");
             return;
         }
 
@@ -1575,7 +1471,7 @@ public sealed class FilingReleaseGate
         {
             CharityReportingService.InvalidateArtifacts(package);
             await _db.SaveChangesAsync();
-            Block("Charity artifacts and qualified-accountant approval were revoked because the charity number, governance evidence, trustee population, SORP decision, funds or reconciled net assets changed. Regenerate and reapprove the pack.");
+            Block("Charity artifacts and their filing approval were revoked because the charity number, governance evidence, trustee population, SORP decision, funds or reconciled net assets changed. Regenerate the pack, record a new directors' approval (s.324) and approve again.");
         }
     }
 
@@ -1589,7 +1485,7 @@ public sealed class FilingReleaseGate
         var current = await ComputeCroSourceFingerprintAsync(period);
         if (!string.Equals(current, package.ArtifactSourceFingerprintSha256, StringComparison.OrdinalIgnoreCase))
         {
-            Block("CRO artifacts and qualified-accountant approval are stale because legal, tax or accounting source evidence changed. Regenerate and reapprove the pack.");
+            Block("CRO artifacts and the directors' approval (s.324) are stale because legal, tax or accounting source evidence changed. Regenerate the pack, record a new directors' approval and approve again.");
         }
     }
 
@@ -1731,7 +1627,9 @@ public sealed class FilingReleaseGate
             var attached = File.ReadAllBytes(outputPath);
             if (!IsPdfArtifact(attached) || attached.Length <= accountsPdf.Length)
                 Block("The signed auditor report could not be retained inside the final accounts PDF.");
-            return attached;
+            // qpdf derives the trailer /ID from the clock; pin it to the content so re-recording the
+            // same accounts and report yields the same bytes (and keeps the directors' approval).
+            return DeterministicPdf.WithContentDerivedTrailerId(attached);
         }
         catch (FilingReleaseBlockedException)
         {
@@ -1765,6 +1663,24 @@ public sealed class FilingReleaseGate
             AuditEventCodes.FilingArtifactGenerated,
             null,
             new { Artifact = artifact.ToString(), Sha256 = hash, ReleaseCandidate = candidate },
+            auditUserId);
+    }
+
+    private async Task LogDirectorsApprovalRevokedAsync(
+        AccountingPeriod period,
+        DirectorsApprovalEvent? revocation,
+        string? auditUserId)
+    {
+        if (_audit is null || revocation is null)
+            return;
+        await _audit.LogAsync(
+            period.CompanyId,
+            period.Id,
+            nameof(DirectorsApprovalEvent),
+            revocation.Id,
+            AuditEventCodes.DirectorsApprovalRevoked,
+            null,
+            new { revocation.ApprovalPageId, revocation.ApprovalPageSha256, revocation.RevocationReason, revocation.RecordSha256 },
             auditUserId);
     }
 
@@ -1836,4 +1752,42 @@ public sealed class FilingReleaseGate
 
     [DoesNotReturn]
     private static T Block<T>(string message) => throw new FilingReleaseBlockedException(message);
+}
+
+/// <summary>
+/// Professional-body credential checks retained from the former mandatory qualified-accountant gate
+/// for the optional accountant review attestation. No filing workflow requires them.
+/// </summary>
+public static class AccountantCredentialChecks
+{
+    /// <summary>
+    /// The professional bodies accepted for the optional accountant review, by exact name. The
+    /// frontend offers exactly this list (frontend/src/lib/filingEvidence.ts).
+    /// </summary>
+    public static readonly IReadOnlyList<string> RecognisedProfessionalBodies =
+    [
+        "Chartered Accountants Ireland",
+        "Institute of Certified Public Accountants in Ireland",
+        "Association of Chartered Certified Accountants",
+        "Chartered Institute of Management Accountants",
+        "Institute of Chartered Accountants in England and Wales",
+        "Institute of Chartered Accountants of Scotland"
+    ];
+
+    public static bool IsRecognisedProfessionalBody(string? value) =>
+        value is not null && RecognisedProfessionalBodies.Contains(value.Trim(), StringComparer.Ordinal);
+
+    public static bool IsHttpsReference(string? value) =>
+        Uri.TryCreate(value?.Trim(), UriKind.Absolute, out var uri)
+        && string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>A UTC verification not in the future and a UTC credential expiry after both it and now.</summary>
+    public static bool IsCurrentCredential(DateTime? verifiedAtUtc, DateTime? credentialValidUntilUtc) =>
+        verifiedAtUtc is not null
+        && verifiedAtUtc.Value.Kind == DateTimeKind.Utc
+        && verifiedAtUtc <= DateTime.UtcNow.AddMinutes(5)
+        && credentialValidUntilUtc is not null
+        && credentialValidUntilUtc.Value.Kind == DateTimeKind.Utc
+        && credentialValidUntilUtc > DateTime.UtcNow
+        && credentialValidUntilUtc > verifiedAtUtc;
 }

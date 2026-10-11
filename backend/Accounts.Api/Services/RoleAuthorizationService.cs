@@ -89,6 +89,12 @@ public static class RoleAuthorizationService
 
         if (role.Equals("Accountant", StringComparison.OrdinalIgnoreCase))
         {
+            // Generating the approval page and recording the optional accountant review decide nothing.
+            if (HttpMethods.IsPost(method)
+                && (IsPeriodFilingAction(SplitPath(path), "directors-approval-page")
+                    || IsPeriodFilingAction(SplitPath(path), "accountant-review")))
+                return RoleAuthorizationDecision.Allowed();
+
             if (IsReviewerWrite(path, method) || IsCompanyCreate(path, method) || IsCompanyDelete(path, method))
                 return RoleAuthorizationDecision.Denied("Accountant users cannot perform reviewer or owner-only actions.");
 
@@ -120,6 +126,11 @@ public static class RoleAuthorizationService
         if (HttpMethods.IsPost(method)
             && (IsPeriodFilingAction(segments, "cro-payment")
                 || IsPeriodFilingAction(segments, "revenue-external-validation")
+                || IsPeriodFilingAction(segments, "directors-approval")
+                || IsPeriodFilingAction(segments, "directors-approval-page")
+                || IsPeriodFilingAction(segments, "cro-signing-pack")
+                || IsPeriodFilingAction(segments, "auditor-report")
+                || IsPeriodFilingAction(segments, "accountant-review")
                 || IsPeriodAction(segments, "mark-filed")))
         {
             return true;

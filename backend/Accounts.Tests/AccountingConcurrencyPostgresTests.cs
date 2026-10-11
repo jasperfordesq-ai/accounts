@@ -649,6 +649,8 @@ public sealed class AccountingConcurrencyCoverageTests
             // compare-and-swap lease, idempotency, or identity lifecycle boundary. They must not
             // be coupled to an accounting-period advisory lock.
             typeof(AnnualReturnDateRecord),
+            typeof(DirectorsApprovalPage),
+            typeof(DirectorsApprovalEvent),
             typeof(CompanyOnboardingRequest),
             typeof(DeadlineReminderOutbox),
             typeof(ExternalFilingHandoffSnapshot),

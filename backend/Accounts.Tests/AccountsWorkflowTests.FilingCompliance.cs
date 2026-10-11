@@ -2000,6 +2000,7 @@ public partial class AccountsWorkflowTests
         await MakePeriodReadyForCroDocumentsAsync(db, period);
 
         await FinaliseReleaseTestPeriodAsync(db, period);
+        await FilingGateFixture.PrepareBoardAsync(db, period);
 
         var statements = new FinancialStatementsService(db);
         var ixbrl = new IxbrlService(db, statements);
@@ -2026,7 +2027,7 @@ public partial class AccountsWorkflowTests
     }
 
     [Fact]
-    public async Task CroApproval_FreeFormReviewerFailsClosedWithoutCapturingSignatories()
+    public async Task CroApproval_WithoutDirectorsApprovalFailsClosedWithoutCapturingSignatories()
     {
         await using var db = CreateDbContext();
         var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
@@ -2035,6 +2036,7 @@ public partial class AccountsWorkflowTests
         await db.SaveChangesAsync();
         await MakePeriodReadyForCroDocumentsAsync(db, period);
         await FinaliseReleaseTestPeriodAsync(db, period);
+        await FilingGateFixture.PrepareBoardAsync(db, period);
 
         var statements = new FinancialStatementsService(db);
         var workflow = new FilingWorkflowService(db, statements, new IxbrlService(db, statements));
@@ -2043,7 +2045,7 @@ public partial class AccountsWorkflowTests
 
         var error = await Assert.ThrowsAsync<FilingReleaseBlockedException>(() =>
             workflow.UpdateCroStatusAsync(period.CompanyId, period.Id, FilingStatus.Approved, "Reviewer"));
-        Assert.Contains("Free-form reviewer names", error.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("directors' approval (s.324)", error.Message, StringComparison.OrdinalIgnoreCase);
 
         db.ChangeTracker.Clear();
         var package = await db.CroFilingPackages.SingleAsync(p => p.PeriodId == period.Id);
@@ -2079,6 +2081,7 @@ public partial class AccountsWorkflowTests
         await db.SaveChangesAsync();
         await MakePeriodReadyForCroDocumentsAsync(db, period);
         await FinaliseReleaseTestPeriodAsync(db, period);
+        await FilingGateFixture.PrepareBoardAsync(db, period);
 
         var statements = new FinancialStatementsService(db);
         var ixbrl = new IxbrlService(db, statements);
@@ -2194,6 +2197,7 @@ public partial class AccountsWorkflowTests
         await db.SaveChangesAsync();
         await MakePeriodReadyForCroDocumentsAsync(db, period);
         await FinaliseReleaseTestPeriodAsync(db, period);
+        await FilingGateFixture.PrepareBoardAsync(db, period);
         await new NotesDisclosureService(db).GenerateNotesAsync(period.CompanyId, period.Id);
 
         var audit = new AuditService(db);
@@ -2294,6 +2298,7 @@ public partial class AccountsWorkflowTests
         await db.SaveChangesAsync();
         await MakePeriodReadyForCroDocumentsAsync(db, period);
         await FinaliseReleaseTestPeriodAsync(db, period);
+        await FilingGateFixture.PrepareBoardAsync(db, period);
 
         var statements = new FinancialStatementsService(db);
         var ixbrl = new IxbrlService(db, statements);
@@ -2358,6 +2363,7 @@ public partial class AccountsWorkflowTests
         await db.SaveChangesAsync();
         await MakePeriodReadyForCroDocumentsAsync(db, period);
         await FinaliseReleaseTestPeriodAsync(db, period);
+        await FilingGateFixture.PrepareBoardAsync(db, period);
 
         var statements = new FinancialStatementsService(db);
         var ixbrl = new IxbrlService(db, statements);
@@ -2381,7 +2387,7 @@ public partial class AccountsWorkflowTests
                 submissionReference: "CORE-BLOCKER-TEST"));
 
         var package = await db.CroFilingPackages.SingleAsync(p => p.PeriodId == period.Id);
-        Assert.Contains("artifacts and qualified-accountant approval are stale", error.Message);
+        Assert.Contains("artifacts and the directors' approval (s.324) are stale", error.Message);
         Assert.Equal(FilingStatus.Approved, package.FilingStatus);
         Assert.Null(package.SubmittedBy);
         Assert.Null(package.SubmittedAt);

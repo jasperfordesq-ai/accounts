@@ -185,6 +185,8 @@ builder.Services.AddScoped<AuditIntegrityCheckpointService>();
 builder.Services.AddScoped<FinancialStatementsService>();
 builder.Services.AddScoped<AccountantWorkingPaperService>();
 builder.Services.AddScoped<DocumentGeneratorService>();
+builder.Services.AddScoped<IDirectorsApprovalPageRenderer>(sp => sp.GetRequiredService<DocumentGeneratorService>());
+builder.Services.AddScoped<DirectorsApprovalService>();
 builder.Services.AddScoped<TaxComputationService>();
 builder.Services.AddScoped<CorporationTaxFilingSupportService>();
 builder.Services.AddScoped<ExternalFilingHandoffRepository>();

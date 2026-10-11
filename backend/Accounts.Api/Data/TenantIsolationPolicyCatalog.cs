@@ -63,6 +63,8 @@ public static class TenantIsolationPolicyCatalog
         new("size_classifications", TenantOwnershipPath.Period),
         new("filing_regimes", TenantOwnershipPath.Period),
         new("cro_filing_packages", TenantOwnershipPath.Period),
+        new("directors_approval_pages", TenantOwnershipPath.Period),
+        new("directors_approval_events", TenantOwnershipPath.Period),
         new("revenue_filing_packages", TenantOwnershipPath.Period),
         new("charity_filing_packages", TenantOwnershipPath.Period),
         // Imported rows can legitimately be unassigned to a period during review. Their bank

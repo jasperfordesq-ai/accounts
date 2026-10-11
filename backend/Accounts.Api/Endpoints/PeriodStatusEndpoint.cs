@@ -59,7 +59,9 @@ public static class PeriodStatusEndpoint
                         // Fix the board-approval date before readiness validation, then refresh the coded approval
                         // note in the same advisory-locked transaction. If readiness fails, the transaction is not
                         // committed and neither value leaks into the draft period.
-                        period.ApprovalDate ??= update.ApprovalDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
+                        // The default is today's date in Ireland (Europe/Dublin), not the UTC date.
+                        period.ApprovalDate ??= update.ApprovalDate ?? DateOnly.FromDateTime(
+                            TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, DeadlineService.ResolveIrelandTimeZone()));
                         await NotesDisclosureService.RefreshApprovalNoteAsync(db, period);
 
                         var outputName = update.Status is PeriodStatus.Filed

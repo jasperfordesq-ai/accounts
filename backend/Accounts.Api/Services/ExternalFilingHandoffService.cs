@@ -352,7 +352,7 @@ public sealed class ExternalFilingHandoffService(
             ?? throw new BusinessRuleException("Generate and approve the CRO accounts/signature artifacts before creating a B1 handoff snapshot.");
         RequireSha(package.AccountsPdfSha256, "CRO accounts PDF SHA-256");
         RequireSha(package.SignaturePageSha256, "CRO signature page SHA-256");
-        RequireSha(package.ApprovedArtifactManifestSha256, "Qualified-review artifact manifest SHA-256");
+        RequireSha(package.ApprovedArtifactManifestSha256, "Directors' approval artifact manifest SHA-256");
         if (package.AccountsPdfArtifact is not { Length: > 0 } || package.SignaturePageArtifact is not { Length: > 0 })
             throw new BusinessRuleException("The exact retained CRO accounts and signature artifacts are required.");
         if (!string.Equals(package.ApprovedReleaseCandidate, candidate, StringComparison.Ordinal))
@@ -473,7 +473,7 @@ public sealed class ExternalFilingHandoffService(
         var authority = await RequireCurrentAuthorityAsync(companyId, ExternalFilingWorkflow.RevenueCt1Support, candidate, DateTime.UtcNow, cancellationToken);
         var package = period.RevenueFilingPackage
             ?? throw new BusinessRuleException("Retain the reviewed Revenue package before creating a CT1 support handoff snapshot.");
-        RequireSha(package.ApprovedArtifactManifestSha256, "Qualified-review Revenue manifest SHA-256");
+        RequireSha(package.ApprovedArtifactManifestSha256, "Directors' approval Revenue manifest SHA-256");
         if (!string.Equals(package.ApprovedReleaseCandidate, candidate, StringComparison.Ordinal))
             throw new BusinessRuleException("The approved Revenue manifest belongs to a different release candidate.");
         var support = await taxSupportService.GetAsync(companyId, periodId, input.AsOfDate, cancellationToken);

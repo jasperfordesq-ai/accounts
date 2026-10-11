@@ -111,6 +111,10 @@ internal static class PersistenceOwnershipInvariantValidator
 
         foreach (var package in Changed<CroFilingPackage>(db))
             await ValidatePeriodOwnedAsync(package.PeriodId, package.Period, nameof(CroFilingPackage), resolver, currentTenantId);
+        foreach (var page in Changed<DirectorsApprovalPage>(db))
+            await ValidatePeriodOwnedAsync(page.PeriodId, page.Period, nameof(DirectorsApprovalPage), resolver, currentTenantId);
+        foreach (var approvalEvent in Changed<DirectorsApprovalEvent>(db))
+            await ValidatePeriodOwnedAsync(approvalEvent.PeriodId, approvalEvent.Period, nameof(DirectorsApprovalEvent), resolver, currentTenantId);
         foreach (var package in Changed<RevenueFilingPackage>(db))
             await ValidatePeriodOwnedAsync(package.PeriodId, package.Period, nameof(RevenueFilingPackage), resolver, currentTenantId);
         foreach (var package in Changed<CharityFilingPackage>(db))

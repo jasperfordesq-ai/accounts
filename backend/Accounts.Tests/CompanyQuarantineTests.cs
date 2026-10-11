@@ -383,6 +383,39 @@ public sealed class CompanyQuarantineTests
             case "company_officers":
                 db.CompanyOfficers.Add(new CompanyOfficer { CompanyId = f.CompanyId, Name = "Director One", Role = OfficerRole.Director });
                 break;
+            case "directors_approval_pages":
+            case "directors_approval_events":
+            {
+                var first = new CompanyOfficer { CompanyId = f.CompanyId, Name = "Director One", Role = OfficerRole.Director };
+                var second = new CompanyOfficer { CompanyId = f.CompanyId, Name = "Director Two", Role = OfficerRole.Director };
+                db.CompanyOfficers.AddRange(first, second);
+                await db.SaveChangesAsync();
+                var page = DirectorsApprovalTests.SamplePage(f.PeriodId, first.Id, second.Id);
+                db.DirectorsApprovalPages.Add(page);
+                await db.SaveChangesAsync();
+                if (table == "directors_approval_events")
+                {
+                    var approval = new DirectorsApprovalEvent
+                    {
+                        PeriodId = f.PeriodId,
+                        Kind = DirectorsApprovalEventKind.Approved,
+                        ApprovalPageId = page.Id,
+                        ApprovalPageSha256 = page.PageSha256,
+                        SignedPageArtifact = [0x25, 0x50, 0x44, 0x46],
+                        SignedPageSha256 = new string('d', 64),
+                        ResolutionArtifact = [0x25, 0x50, 0x44, 0x46],
+                        ResolutionSha256 = new string('e', 64),
+                        RecordedByUserId = "user:1",
+                        RecordedByDisplayName = "Owner",
+                        RecordedAtUtc = new DateTime(2026, 11, 21, 10, 0, 0, DateTimeKind.Utc),
+                        RecordSha256 = ""
+                    };
+                    approval.RecordSha256 = DirectorsApprovalIntegrity.ComputeEventHash(approval);
+                    db.DirectorsApprovalEvents.Add(approval);
+                    await db.SaveChangesAsync();
+                }
+                return;
+            }
             case "size_classifications":
                 db.SizeClassifications.Add(new SizeClassification { PeriodId = f.PeriodId, Turnover = 1m, BalanceSheetTotal = 1m, AvgEmployees = 1 });
                 break;

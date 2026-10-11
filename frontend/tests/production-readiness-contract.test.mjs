@@ -1150,6 +1150,35 @@ test("parseProductionReadinessReport rejects missing human release evidence gate
   );
 });
 
+test("parseProductionReadinessReport accepts the optional accountant human release evidence and rejects it blocking", () => {
+  const payload = sampleReport();
+  const accountant = payload.humanReleaseEvidence.find((item) => item.code === "qualifiedAccountantAcceptance");
+  accountant.status = "optional";
+  accountant.blocksRelease = false;
+  const parsed = parseProductionReadinessReport(payload);
+  assert.equal(parsed.humanReleaseEvidence.find((item) => item.code === "qualifiedAccountantAcceptance")?.status, "optional");
+
+  const blocking = sampleReport();
+  const blockingAccountant = blocking.humanReleaseEvidence.find((item) => item.code === "qualifiedAccountantAcceptance");
+  blockingAccountant.status = "optional";
+  assert.throws(
+    () => parseProductionReadinessReport(blocking),
+    /humanReleaseEvidence.3.blocksRelease - optional human evidence cannot block release/,
+  );
+});
+
+test("parseProductionReadinessReport rejects optional status on any gate other than the accountant acceptance", () => {
+  const payload = sampleReport();
+  const visual = payload.humanReleaseEvidence.find((item) => item.code === "visualQa");
+  visual.status = "optional";
+  visual.blocksRelease = false;
+
+  assert.throws(
+    () => parseProductionReadinessReport(payload),
+    /humanReleaseEvidence.0.status - only qualifiedAccountantAcceptance may be optional/,
+  );
+});
+
 test("parseProductionReadinessReport rejects human release evidence manifest drift", () => {
   const payload = sampleReport();
   payload.humanReleaseEvidence[0].releaseManifestCode = "missing-manifest-gate";

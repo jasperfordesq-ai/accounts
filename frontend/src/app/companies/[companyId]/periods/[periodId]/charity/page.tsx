@@ -27,6 +27,7 @@ import {
 import { toast as sonnerToast } from "sonner";
 import {
   getCompany,
+  getDirectorsApproval,
   getPeriod,
   getSofa,
   getTrusteesReport,
@@ -141,6 +142,9 @@ export default function CharityReportingPage({
   const [funds, setFunds] = useState<FundBalance[]>([]);
   const [filingStatus, setFilingStatus] = useState<CharityFilingStatus | null>(null);
   const [artifactStatus, setArtifactStatus] = useState<CharityArtifactStatus | null>(null);
+  // Whether the board's current directors' approval (Companies Act 2014, s.324) is recorded. It only
+  // decides whether the approve action is offered; the backend gate remains the source of truth.
+  const [directorsApprovalCurrent, setDirectorsApprovalCurrent] = useState(false);
   const [shellState, setShellState] = useState<ResourceState>(INITIAL_RESOURCE_STATE);
   const [evidenceState, setEvidenceState] = useState<ResourceState>(INITIAL_RESOURCE_STATE);
   const [updatingWorkflow, setUpdatingWorkflow] = useState<string | null>(null);
@@ -246,8 +250,12 @@ export default function CharityReportingPage({
     };
     const keys = (onlyKeys ?? Object.keys(loaders)) as Array<keyof typeof loaders>;
     setEvidenceState((current) => beginResourceLoad(current, current.hasRetainedData));
-    const result = await loadResourceGroup(loaders, keys);
+    const [result, approvalCurrent] = await Promise.all([
+      loadResourceGroup(loaders, keys),
+      getDirectorsApproval(cId, pId).then((state) => state.current !== null, () => false),
+    ]);
     if (!request.isLatest()) return;
+    setDirectorsApprovalCurrent(approvalCurrent);
     if (result.values.sofa !== undefined) setSofa(result.values.sofa);
     if (result.values["trustees-report"] !== undefined) setTar(result.values["trustees-report"]);
     if (result.values.funds !== undefined) setFunds(result.values.funds);
@@ -460,7 +468,7 @@ export default function CharityReportingPage({
               </p>
               <p className="mt-1 text-sm">{artifactStatus.decision.decisionReason}</p>
               <p className="mt-2 text-xs">
-                Decision evidence {artifactStatus.decision.decisionSha256.slice(0, 16)}...; final PDF export remains blocked until exact-artifact qualified-accountant approval.
+                Decision evidence {artifactStatus.decision.decisionSha256.slice(0, 16)}...; final PDF export remains blocked until the charity pack is approved against the board&apos;s current directors&apos; approval (Companies Act 2014, s.324).
               </p>
             </div>
           </div>
@@ -582,7 +590,19 @@ export default function CharityReportingPage({
               </div>
               <div className="flex flex-wrap gap-2">
                 {canApprove && filingStatus?.status !== "Approved" && filingStatus?.status !== "Submitted" && filingStatus?.status !== "Accepted" && (
-                  <Chip size="sm" variant="soft" color="warning">Qualified-accountant evidence approval required</Chip>
+                  directorsApprovalCurrent ? (
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      aria-label="Approve charity pack"
+                      isDisabled={workflowEvidenceUnavailable || updatingWorkflow !== null}
+                      onPress={() => updateWorkflow("approve", () => updateCharityFilingStatus(cId, pId, { status: "Approved" }), "Charity pack approved against the directors' approval")}
+                    >
+                      {updatingWorkflow === "approve" ? <Spinner size="sm" /> : "Approve charity pack"}
+                    </Button>
+                  ) : (
+                    <Chip size="sm" variant="soft" color="warning">Directors&apos; approval (s.324) required</Chip>
+                  )
                 )}
                 {canReview && filingStatus?.status === "Approved" ? (
                   <Button

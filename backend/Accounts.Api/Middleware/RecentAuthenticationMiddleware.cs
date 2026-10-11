@@ -53,7 +53,8 @@ public sealed class RecentAuthenticationMiddleware(RequestDelegate next)
         if (path.StartsWithSegments("/api/operations/deadline-reminders", StringComparison.OrdinalIgnoreCase)) return true;
         if (path.Equals("/api/auth/mfa/recovery-codes", StringComparison.OrdinalIgnoreCase)) return true;
 
-        var value = path.Value ?? "";
+        // Routing ignores a trailing slash, so the suffix rules must too.
+        var value = (path.Value ?? "").TrimEnd('/');
         return value.Contains("/quarantine", StringComparison.OrdinalIgnoreCase)
             || value.EndsWith("/recover", StringComparison.OrdinalIgnoreCase)
             || value.EndsWith("/status", StringComparison.OrdinalIgnoreCase)
@@ -61,6 +62,9 @@ public sealed class RecentAuthenticationMiddleware(RequestDelegate next)
             || value.Contains("/year-end-reviews/", StringComparison.OrdinalIgnoreCase)
             || value.EndsWith("/mark-filed", StringComparison.OrdinalIgnoreCase)
             || value.EndsWith("/revenue-external-validation", StringComparison.OrdinalIgnoreCase)
+            || value.EndsWith("/filing/directors-approval", StringComparison.OrdinalIgnoreCase)
+            || value.EndsWith("/filing/cro-signing-pack", StringComparison.OrdinalIgnoreCase)
+            || value.EndsWith("/filing/auditor-report", StringComparison.OrdinalIgnoreCase)
             || value.Contains("/external-filing-handoff/", StringComparison.OrdinalIgnoreCase)
             || value.Contains("/release-evidence", StringComparison.OrdinalIgnoreCase)
             || value.Contains("/accept", StringComparison.OrdinalIgnoreCase);

@@ -28,6 +28,12 @@ public static class AuditEventCodes
     public const string TransactionRuleCreated = "TransactionRuleCreated";
     public const string TransactionRuleDeleted = "TransactionRuleDeleted";
     public const string AnnualReturnDateRecorded = "AnnualReturnDateRecorded";
+    public const string DirectorsApprovalPageGenerated = "DirectorsApprovalPageGenerated";
+    public const string DirectorsApprovalRecorded = "DirectorsApprovalRecorded";
+    public const string DirectorsApprovalRevoked = "DirectorsApprovalRevoked";
+    public const string CroSigningPackRecorded = "CroSigningPackRecorded";
+    public const string AuditorReportRecorded = "AuditorReportRecorded";
+    public const string AccountantReviewAttestationRecorded = "AccountantReviewAttestationRecorded";
     public const string SizeClassificationDataSaved = "SizeClassificationDataSaved";
     public const string SizeClassificationRun = "SizeClassificationRun";
     public const string SizeClassificationOverrideApplied = "SizeClassificationOverrideApplied";

@@ -81,9 +81,9 @@ describe("FilingReviewCentre", () => {
     expect(within(decisionCentre).getByText("Approve CRO pack")).toBeInTheDocument();
     expect(within(decisionCentre).getByText("External ROS/iXBRL validation remains a manual evidence gate.")).toBeInTheDocument();
 
-    const approvalDocket = screen.getByRole("region", { name: "Accountant approval docket" });
-    expect(within(approvalDocket).getByText("Reviewer state")).toBeInTheDocument();
-    expect(within(approvalDocket).getByText("Ready for accountant review")).toBeInTheDocument();
+    const approvalDocket = screen.getByRole("region", { name: "Directors' approval docket" });
+    expect(within(approvalDocket).getByText("Sign-off state")).toBeInTheDocument();
+    expect(within(approvalDocket).getByText("Directors' approval recorded, ready to approve the CRO pack")).toBeInTheDocument();
     expect(within(approvalDocket).getByText("Open evidence")).toBeInTheDocument();
     expect(within(approvalDocket).getByText("1 blocker / 1 warning")).toBeInTheDocument();
     expect(within(approvalDocket).getByText("Next workflow action")).toBeInTheDocument();
@@ -130,7 +130,7 @@ describe("FilingReviewCentre", () => {
 
     expect(screen.getByText("Filing readiness profile")).toBeInTheDocument();
     expect(screen.getByText("Manual handoff")).toBeInTheDocument();
-    expect(screen.getByText("Accountant sign-off packet")).toBeInTheDocument();
+    expect(screen.getByText("Filing sign-off packet")).toBeInTheDocument();
     expect(screen.getAllByText("Manual professional handoff").length).toBeGreaterThan(0);
     expect(screen.getByText("Audit report")).toBeInTheDocument();
     expect(screen.getAllByText("Signed auditor report must be reviewed manually before final filing.").length).toBeGreaterThan(0);
@@ -215,11 +215,11 @@ describe("FilingReviewCentre", () => {
               sources: [sourceReference()],
             },
             {
-              code: "accountant-review",
-              label: "Named accountant approval",
+              code: "directors-approval",
+              label: "Board approval of the financial statements, s.324",
               required: true,
               satisfied: false,
-              detail: "Approval must be recorded before filing.",
+              detail: "Generate the s.324 approval page, have the directors sign it, then upload it with the minute or written resolution.",
               sources: [sourceReference()],
             },
           ],
@@ -236,7 +236,7 @@ describe("FilingReviewCentre", () => {
       />,
     );
 
-    const blockingEvidence = evidenceChecklistLabel("Named accountant approval");
+    const blockingEvidence = evidenceChecklistLabel("Board approval of the financial statements, s.324");
     const advisoryEvidence = evidenceChecklistLabel("External ROS validation evidence");
     const completedEvidence = evidenceChecklistLabel("CRO accounts PDF generated");
 
@@ -353,7 +353,7 @@ describe("FilingReviewCentre", () => {
           manualProfessionalReviewRequired: false,
           blockingIssues: [
             readinessIssue("cro-pdf", "Generate the CRO accounts PDF before approval or submission."),
-            readinessIssue("accountant-review", "A named qualified accountant must approve the filing pack before real CRO/Revenue use."),
+            readinessIssue("directors-approval-required", "The board must approve the financial statements and two directors (or the sole director) must sign on its behalf (Companies Act 2014, s.324)."),
             readinessIssue("director-signatory", "Director certification must be recorded before CRO filing."),
           ],
           warningIssues: [
@@ -377,7 +377,7 @@ describe("FilingReviewCentre", () => {
 
     expect(gates.getByText("Resolve before approval")).toBeInTheDocument();
     expect(gates.getByText("Generate the CRO accounts PDF before approval or submission.")).toBeInTheDocument();
-    expect(gates.getByText("A named qualified accountant must approve the filing pack before real CRO/Revenue use.")).toBeInTheDocument();
+    expect(gates.getByText("The board must approve the financial statements and two directors (or the sole director) must sign on its behalf (Companies Act 2014, s.324).")).toBeInTheDocument();
     expect(gates.getByText("1 more approval blocker")).toBeInTheDocument();
     expect(gates.getByText("External ROS/iXBRL validation remains a manual evidence gate.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Approve for Filing/i })).toBeDisabled();
@@ -395,7 +395,7 @@ describe("FilingReviewCentre", () => {
             readinessIssue("filing-regime", "Filing regime must be determined before statutory outputs are approved."),
             readinessIssue("secretary", "Record an active company secretary before approving or submitting CRO accounts."),
             readinessIssue("cro-pdf", "Generate the CRO accounts PDF before approval or submission."),
-            readinessIssue("accountant-review", "A named qualified accountant must approve the filing pack before real CRO/Revenue use."),
+            readinessIssue("directors-approval-required", "The board must approve the financial statements and two directors (or the sole director) must sign on its behalf (Companies Act 2014, s.324)."),
           ],
           warningIssues: [
             readinessIssue("external-ros-validation", "External ROS/iXBRL validation remains a manual evidence gate.", "warning"),
@@ -414,7 +414,7 @@ describe("FilingReviewCentre", () => {
     );
 
     expect(screen.getByText("Filing issue digest")).toBeInTheDocument();
-    expect(screen.getAllByText("Ready for accountant review").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Directors' approval recorded, ready to approve the CRO pack").length).toBeGreaterThan(0);
     expect(screen.getByText("External ROS validation evidence pending")).toBeInTheDocument();
     expect(screen.getAllByText("Approve CRO pack").length).toBeGreaterThan(0);
     expect(screen.getAllByText("5 blockers").length).toBeGreaterThan(0);
@@ -490,6 +490,46 @@ describe("FilingReviewCentre", () => {
     expect(screen.getAllByText("Effective 03 Jul 2026").length).toBeGreaterThan(0);
   });
 
+  it("labels the directors' approval gate Recorded, keeps accountant review optional and never reads as still to be recorded", () => {
+    render(
+      <FilingReviewCentre
+        filingStatus={sampleWorkflowStatus({ readyToFile: false, warningIssues: [] })}
+        filingReadinessProfile={sampleReadinessProfile({
+          supportedPath: true,
+          manualProfessionalReviewRequired: false,
+          extraEvidence: [
+            {
+              code: "directors-approval",
+              label: "Board approval of the financial statements, s.324",
+              required: true,
+              satisfied: true,
+              detail: "Approved by the board.",
+              sources: [sourceReference()],
+            },
+          ],
+        })}
+        croSubmissionReference=""
+        validatingIxbrl={false}
+        onCroSubmissionReferenceChange={vi.fn()}
+        onRunIxbrlChecks={vi.fn()}
+        onApproveForFiling={vi.fn()}
+        onMarkCroSubmitted={vi.fn()}
+        onConfirmCroPayment={vi.fn()}
+        onMarkCroAccepted={vi.fn()}
+        onRecordCroSendBack={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Directors' approval")).toBeInTheDocument();
+    expect(screen.getAllByText("Recorded").length).toBeGreaterThan(0);
+    expect(screen.getByText("Accountant review")).toBeInTheDocument();
+    expect(screen.getByText("Optional")).toBeInTheDocument();
+    const docket = screen.getByRole("region", { name: "Directors' approval docket" });
+    expect(within(docket).getByText("The directors' s.324 approval is recorded; the CRO pack can be approved.")).toBeInTheDocument();
+    expect(screen.queryByText(/accountant approval/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/qualified-accountant/i)).not.toBeInTheDocument();
+  });
+
   it("shows a production decision ledger for final-use filing gates", () => {
     render(
       <FilingReviewCentre
@@ -523,8 +563,8 @@ describe("FilingReviewCentre", () => {
     expect(ledgerScope.getByText("Production decision ledger")).toBeInTheDocument();
     expect(ledgerScope.getByText("Supported company path")).toBeInTheDocument();
     expect(ledgerScope.getByText("Supported")).toBeInTheDocument();
-    expect(ledgerScope.getByText("Accountant approval")).toBeInTheDocument();
-    expect(ledgerScope.getByText("Ready for accountant review")).toBeInTheDocument();
+    expect(ledgerScope.getByText("Directors' approval (s.324)")).toBeInTheDocument();
+    expect(ledgerScope.getByText("Required")).toBeInTheDocument();
     expect(ledgerScope.getByText("External ROS/iXBRL validation")).toBeInTheDocument();
     expect(ledgerScope.getByText("Evidence open")).toBeInTheDocument();
     expect(ledgerScope.getByText("Direct submission automation")).toBeInTheDocument();
@@ -599,8 +639,9 @@ function sampleReadinessProfile({
     auditExempt: false,
     supportedPath,
     manualProfessionalReviewRequired,
-    accountantReviewRequired: true,
-    accountantReviewState: "Qualified accountant review required",
+    accountantReviewRequired: false,
+    accountantReviewState: "Not required by law — not recorded",
+    approvalAuthority: "board-of-directors-s324",
     directCroSubmissionSupported: false,
     directRosSubmissionSupported: false,
     revenueIxbrlGenerationSupported: false,
@@ -631,9 +672,9 @@ function sampleReadinessProfile({
     sourceReferences: [sourceReference()],
     allowedNextActions: [],
     signOffPacket: {
-      state: manualProfessionalReviewRequired ? "manual-handoff" : "ready-for-accountant-review",
-      stateLabel: manualProfessionalReviewRequired ? "Manual professional handoff" : "Ready for accountant review",
-      readyForAccountantApproval: !manualProfessionalReviewRequired,
+      state: manualProfessionalReviewRequired ? "manual-handoff" : "ready-for-directors-approval",
+      stateLabel: manualProfessionalReviewRequired ? "Manual professional handoff" : "Directors' approval recorded, ready to approve the CRO pack",
+      readyForDirectorsApproval: !manualProfessionalReviewRequired,
       readyForExternalFiling: false,
       approvedBy: undefined,
       approvedAt: undefined,

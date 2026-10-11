@@ -1614,11 +1614,11 @@ const signOffPacketSchema = z.object({
     "manual-handoff",
     "ready-for-external-filing",
     "approved-external-evidence-open",
-    "ready-for-accountant-review",
+    "ready-for-directors-approval",
     "blocked",
   ]),
   stateLabel: z.string().trim().min(1),
-  readyForAccountantApproval: z.boolean(),
+  readyForDirectorsApproval: z.boolean(),
   readyForExternalFiling: z.boolean(),
   approvedBy: optionalText,
   approvedAt: optionalDateTime,
@@ -1644,8 +1644,9 @@ export const filingReadinessProfileSchema = z.object({
   auditExempt: z.boolean().nullable().optional().transform((value) => value ?? undefined),
   supportedPath: z.boolean(),
   manualProfessionalReviewRequired: z.boolean(),
-  accountantReviewRequired: z.boolean(),
+  accountantReviewRequired: z.literal(false),
   accountantReviewState: z.string().trim().min(1),
+  approvalAuthority: z.literal("board-of-directors-s324"),
   directCroSubmissionSupported: z.literal(false),
   directRosSubmissionSupported: z.literal(false),
   revenueIxbrlGenerationSupported: z.boolean(),
@@ -1659,9 +1660,6 @@ export const filingReadinessProfileSchema = z.object({
   sourceReferences: z.array(legalSourceSchema).min(1),
   allowedNextActions: z.array(z.string().trim().min(1)),
 }).superRefine((profile, context) => {
-  if (!profile.accountantReviewRequired) {
-    addIssue(context, ["accountantReviewRequired"], "Qualified-accountant review must remain mandatory");
-  }
   if (profile.revenueIxbrlGenerationSupported === profile.revenueManualHandoffRequired) {
     addIssue(context, ["revenueManualHandoffRequired"], "Revenue generation support and manual handoff flags are inconsistent");
   }
@@ -1692,6 +1690,63 @@ export const filingReadinessProfileSchema = z.object({
       || profile.allowedNextActions.some((action, index) => action !== profile.signOffPacket.allowedNextActions[index])) {
     addIssue(context, ["allowedNextActions"], "Top-level actions do not match the sign-off packet");
   }
+});
+
+export const directorOptionSchema = z.object({
+  officerId: positiveIdSchema,
+  name: z.string().trim().min(1),
+});
+export const directorsApprovalPageSummarySchema = z.object({
+  id: positiveIdSchema,
+  approvalDate: isoDateSchema,
+  firstDirectorName: z.string().trim().min(1),
+  secondDirectorName: z.string().trim().min(1).nullable(),
+  directorsInOfficeCount: z.number().int().positive(),
+  resolutionReference: z.string().trim().min(1),
+  pageSha256: sha256Schema,
+  accountsPdfSha256: sha256Schema,
+  recordSha256: sha256Schema,
+  generatedAtUtc: isoDateTimeSchema,
+}).superRefine((page, context) => {
+  if ((page.secondDirectorName === null) !== (page.directorsInOfficeCount === 1)) {
+    addIssue(context, ["secondDirectorName"], "A sole-director page has one signatory; otherwise two");
+  }
+});
+export const directorsApprovalSummarySchema = z.object({
+  eventId: positiveIdSchema,
+  page: directorsApprovalPageSummarySchema,
+  signedPageSha256: sha256Schema,
+  resolutionSha256: sha256Schema,
+  recordedByDisplayName: z.string().trim().min(1),
+  recordedAtUtc: isoDateTimeSchema,
+  recordSha256: sha256Schema,
+});
+export const directorsApprovalStateSchema = z.object({
+  eligibleDirectors: z.array(directorOptionSchema),
+  latestPage: directorsApprovalPageSummarySchema.nullable(),
+  current: directorsApprovalSummarySchema.nullable(),
+  periodApprovalDate: isoDateSchema.nullable(),
+});
+export const croSigningPackSummarySchema = z.object({
+  signedByDirector: z.string().trim().min(1),
+  signedBySecretary: z.string().trim().min(1),
+  signedAtUtc: isoDateTimeSchema,
+  signedPdfSha256: sha256Schema,
+});
+export const auditorReportSummarySchema = z.object({
+  reportReference: z.string().trim().min(1),
+  firmName: z.string().trim().min(1),
+  signerName: z.string().trim().min(1),
+  signedAtUtc: isoDateTimeSchema,
+  reportSha256: sha256Schema,
+});
+export const accountantReviewSummarySchema = z.object({
+  reviewerName: z.string().trim().min(1),
+  professionalBody: z.string().trim().min(1),
+  membershipNumber: z.string().trim().min(1),
+  reviewDate: isoDateSchema,
+  reviewLetterSha256: sha256Schema.nullable(),
+  state: z.string().trim().min(1),
 });
 
 const croFilingStatusSchema = z.object({

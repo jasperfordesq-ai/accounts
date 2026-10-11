@@ -1,6 +1,7 @@
 using Accounts.Api.Data;
 using Accounts.Api.Entities;
 using Accounts.Api.Services;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace Accounts.Api.Endpoints;
@@ -47,41 +48,88 @@ public static class ClassificationEndpoints
         });
 
         // Save member audit notice (s.334 Companies Act 2014)
-        group.MapPut("/member-audit-notice", async (int companyId, int periodId, MemberAuditNoticeInput input, AccountsDbContext db, AuditService audit, HttpContext context, ApiAccessService apiAccess) =>
+        group.MapPut("/member-audit-notice", SaveMemberAuditNoticeEndpointAsync);
+    }
+
+    /// <summary>
+    /// Records a members' audit notice (s.334) and re-determines the period's filing regime, which
+    /// folds the notice into audit exemption. When the regime loses its exemption, a CRO approval
+    /// given on the audit-exempt basis is revoked in the same unit of work, so readiness and the
+    /// release gate agree that the signed auditor's report is now required.
+    /// </summary>
+    public static async Task<IResult> SaveMemberAuditNoticeEndpointAsync(
+        int companyId,
+        int periodId,
+        MemberAuditNoticeInput input,
+        AccountsDbContext db,
+        AuditService audit,
+        HttpContext context,
+        ApiAccessService apiAccess,
+        FilingRegimeService regimes,
+        [FromServices] AccountingConcurrencyCoordinator? concurrency = null)
+    {
+        if (!await CompanyEndpointAccess.CanAccessCompanyPeriodAsync(context, db, companyId, periodId))
+            return Results.NotFound();
+
+        if (EndpointRequestAuthorization.AuthorizeCurrentRequest(context, apiAccess) is { } denied)
+            return denied;
+
+        concurrency ??= new AccountingConcurrencyCoordinator(db);
+        await using var lease = await concurrency.AcquirePeriodAsync(companyId, periodId, context.RequestAborted);
+        var period = await db.AccountingPeriods
+            .Include(p => p.FilingRegime)
+            .Include(p => p.CroFilingPackage)
+            .FirstOrDefaultAsync(p => p.Id == periodId && p.CompanyId == companyId);
+        if (period == null) return Results.NotFound();
+
+        var oldValue = new
         {
-            if (!await CompanyEndpointAccess.CanAccessCompanyPeriodAsync(context, db, companyId, periodId))
-                return Results.NotFound();
+            period.MemberAuditNoticeReceived,
+            period.MemberAuditNoticeDate,
+            period.FilingRegime?.AuditExempt
+        };
+        period.MemberAuditNoticeReceived = input.Received;
+        period.MemberAuditNoticeDate = input.NoticeDate;
 
-            if (EndpointRequestAuthorization.AuthorizeCurrentRequest(context, apiAccess) is { } denied)
-                return denied;
+        var wasAuditExempt = period.FilingRegime?.AuditExempt == true;
+        if (period.FilingRegime is { } regime)
+        {
+            try
+            {
+                // Saves the notice together with the re-determined regime (same tracked period).
+                await regimes.DetermineAsync(companyId, periodId, regime.ElectedRegime, AuditUserId(context));
+            }
+            catch (BusinessRuleException)
+            {
+                // The regime cannot be re-determined until the size classification is re-run. A
+                // members' notice removes the exemption regardless (s.334), so never leave it claimed;
+                // a withdrawn notice leaves the regime as it is until it is re-determined.
+                if (input.Received)
+                    regime.AuditExempt = false;
+            }
+        }
 
-            var period = await db.AccountingPeriods
-                .FirstOrDefaultAsync(p => p.Id == periodId && p.CompanyId == companyId);
-            if (period == null) return Results.NotFound();
-
-            var oldValue = new
+        var croApprovalRevoked = wasAuditExempt
+            && period.FilingRegime?.AuditExempt == false
+            && FilingReleaseGate.RevokeCroApprovalForLostAuditExemption(period.CroFilingPackage);
+        await db.SaveChangesAsync();
+        await audit.LogAsync(
+            companyId,
+            periodId,
+            "AccountingPeriod",
+            periodId,
+            AuditEventCodes.MemberAuditNoticeUpdated,
+            oldValue,
+            new
             {
                 period.MemberAuditNoticeReceived,
-                period.MemberAuditNoticeDate
-            };
-            period.MemberAuditNoticeReceived = input.Received;
-            period.MemberAuditNoticeDate = input.NoticeDate;
-            await db.SaveChangesAsync();
-            await audit.LogAsync(
-                companyId,
-                periodId,
-                "AccountingPeriod",
-                periodId,
-                AuditEventCodes.MemberAuditNoticeUpdated,
-                oldValue,
-                new
-                {
-                    period.MemberAuditNoticeReceived,
-                    period.MemberAuditNoticeDate
-                },
-                AuditUserId(context));
-            return Results.Ok(new { period.MemberAuditNoticeReceived, period.MemberAuditNoticeDate });
-        });
+                period.MemberAuditNoticeDate,
+                period.FilingRegime?.AuditExempt,
+                CroApprovalRevoked = croApprovalRevoked
+            },
+            AuditUserId(context));
+        await lease.CommitIfOwnedAsync(context.RequestAborted);
+        return Results.Ok(new { period.MemberAuditNoticeReceived, period.MemberAuditNoticeDate });
     }
 
     public static async Task<IResult> SaveSizeClassificationEndpointAsync(

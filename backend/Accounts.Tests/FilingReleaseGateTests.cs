@@ -49,46 +49,29 @@ public sealed class FilingReleaseGateTests
 
         var error = await Assert.ThrowsAsync<FilingReleaseBlockedException>(() =>
             gate.GetFinalArtifactAsync(period.CompanyId, period.Id, FilingReleaseArtifact.CroAccountsPdf));
-        Assert.Contains("qualified-accountant", error.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("directors' approval (s.324)", error.Message, StringComparison.Ordinal);
     }
 
     [Fact]
     public async Task CroApproval_BindsExactManifest_AndChangedBytesRevokeFinalEligibility()
     {
-        await using var db = CreateDbContext();
-        var period = await SeedReleaseReadyPeriodAsync(db);
-        var audit = new AuditService(db);
-        var gate = new FilingReleaseGate(db, "candidate-a", audit);
+        var harness = await FilingGateFixture.ReadyForApprovalAsync();
+        var db = harness.Db;
+        var period = harness.Period;
+        var gate = harness.Gate;
+        var package = await db.CroFilingPackages.SingleAsync(p => p.PeriodId == period.Id);
+        await harness.RecordDirectorsApprovalAsync();
 
-        await gate.RecordCroArtifactAsync(
-            period.CompanyId,
-            period.Id,
-            FilingReleaseArtifact.CroAccountsPdf,
-            Encoding.UTF8.GetBytes("clean-cro-accounts-v1"),
-            "reviewer@example.ie");
-        var package = await gate.RecordCroArtifactAsync(
-            period.CompanyId,
-            period.Id,
-            FilingReleaseArtifact.CroSignaturePage,
-            Encoding.UTF8.GetBytes("clean-cro-signature-v1"),
-            "reviewer@example.ie");
-        await gate.RecordVerifiedCroSignatureAsync(
-            period.CompanyId,
-            period.Id,
-            SignatureEvidence(),
-            "reviewer@example.ie");
-
-        await gate.BindVerifiedApprovalAsync(
+        await gate.BindApprovalAsync(
             period.CompanyId,
             period.Id,
             FilingReleaseWorkflow.Cro,
-            ApprovalEvidence(period, FilingReleaseWorkflow.Cro),
             "reviewer@example.ie");
         var released = await gate.GetFinalArtifactAsync(
             period.CompanyId,
             period.Id,
             FilingReleaseArtifact.CroAccountsPdf);
-        Assert.Equal("clean-cro-accounts-v1", Encoding.UTF8.GetString(released.Content));
+        Assert.Equal(harness.AccountsPdf, released.Content);
         Assert.Equal(FilingReleaseGate.ComputeSha256(released.Content), released.Sha256);
 
         var company = await db.Companies.SingleAsync(item => item.Id == period.CompanyId);
@@ -125,7 +108,7 @@ public sealed class FilingReleaseGateTests
             && entry.PeriodId == period.Id);
 
         package = await db.CroFilingPackages.SingleAsync(p => p.PeriodId == period.Id);
-        package.AccountsPdfArtifact = Encoding.UTF8.GetBytes("clean-cro-accounts-v1");
+        package.AccountsPdfArtifact = harness.AccountsPdf.ToArray();
         package.AccountsPdfSha256 = FilingReleaseGate.ComputeSha256(package.AccountsPdfArtifact);
         await db.SaveChangesAsync();
         await gate.RecordCroArtifactAsync(
@@ -154,11 +137,10 @@ public sealed class FilingReleaseGateTests
         await db.SaveChangesAsync();
 
         var disabledBeforeExternalEvidence = await Assert.ThrowsAsync<FilingReleaseBlockedException>(() =>
-            gate.BindVerifiedApprovalAsync(
+            gate.BindApprovalAsync(
                 period.CompanyId,
                 period.Id,
-                FilingReleaseWorkflow.Revenue,
-                ApprovalEvidence(period, FilingReleaseWorkflow.Revenue)));
+                FilingReleaseWorkflow.Revenue));
         Assert.Equal(RevenueIxbrlGenerationPolicy.ManualHandoffReason, disabledBeforeExternalEvidence.Message);
 
         var freeForm = await Assert.ThrowsAsync<FilingReleaseBlockedException>(() =>
@@ -182,11 +164,10 @@ public sealed class FilingReleaseGateTests
             period.Id,
             ExternalValidationEvidence(package.IxbrlSha256!));
         var disabledAfterExactEvidence = await Assert.ThrowsAsync<FilingReleaseBlockedException>(() =>
-            gate.BindVerifiedApprovalAsync(
+            gate.BindApprovalAsync(
                 period.CompanyId,
                 period.Id,
-                FilingReleaseWorkflow.Revenue,
-                ApprovalEvidence(period, FilingReleaseWorkflow.Revenue)));
+                FilingReleaseWorkflow.Revenue));
         Assert.Equal(RevenueIxbrlGenerationPolicy.ManualHandoffReason, disabledAfterExactEvidence.Message);
 
         var finalExportBlocked = await Assert.ThrowsAsync<FilingReleaseBlockedException>(() => gate.GetFinalArtifactAsync(
@@ -234,42 +215,106 @@ public sealed class FilingReleaseGateTests
     }
 
     [Fact]
-    public async Task AccountantApproval_RejectsExpiredUnqualifiedSelfDeclaredWrongScopeDecisionAndCrossTenantEvidence()
+    public async Task CroApproval_BoundUnderTheOldQualifiedAccountantCapacity_IsRefusedUntilApprovedAgain()
+    {
+        var harness = await FilingGateFixture.ReadyForApprovalAsync();
+        await harness.RecordDirectorsApprovalAsync();
+        await harness.Gate.BindApprovalAsync(harness.CompanyId, harness.PeriodId, FilingReleaseWorkflow.Cro, "user:1");
+        await harness.Gate.GetFinalArtifactAsync(harness.CompanyId, harness.PeriodId, FilingReleaseArtifact.CroAccountsPdf);
+
+        var package = await harness.Db.CroFilingPackages.SingleAsync(p => p.PeriodId == harness.PeriodId);
+        package.ApprovalCapacity = "qualified-accountant";
+        await harness.Db.SaveChangesAsync();
+
+        var export = await Assert.ThrowsAsync<FilingReleaseBlockedException>(() =>
+            harness.Gate.GetFinalArtifactAsync(harness.CompanyId, harness.PeriodId, FilingReleaseArtifact.CroAccountsPdf));
+        Assert.Contains("not bound to the directors' approval (s.324)", export.Message, StringComparison.Ordinal);
+        var transition = await Assert.ThrowsAsync<FilingReleaseBlockedException>(() =>
+            harness.Gate.AssertTransitionAsync(harness.CompanyId, harness.PeriodId, FilingReleaseWorkflow.Cro, FilingStatus.Submitted, "CORE-OLD-CAPACITY"));
+        Assert.Contains("not bound to the directors' approval (s.324)", transition.Message, StringComparison.Ordinal);
+
+        await harness.Gate.BindApprovalAsync(harness.CompanyId, harness.PeriodId, FilingReleaseWorkflow.Cro, "user:1");
+        package = await harness.Db.CroFilingPackages.SingleAsync(p => p.PeriodId == harness.PeriodId);
+        Assert.Equal(FilingReleaseGate.BoardApprovalCapacity, package.ApprovalCapacity);
+        await harness.Gate.GetFinalArtifactAsync(harness.CompanyId, harness.PeriodId, FilingReleaseArtifact.CroAccountsPdf);
+    }
+
+    [Fact]
+    public async Task CroApproval_BoundUnderARevokedDirectorsApproval_IsRefusedEvenAfterANewApprovalUntilApprovedAgain()
+    {
+        var harness = await FilingGateFixture.ReadyForApprovalAsync();
+        var db = harness.Db;
+        await harness.RecordDirectorsApprovalAsync();
+        await harness.Gate.BindApprovalAsync(harness.CompanyId, harness.PeriodId, FilingReleaseWorkflow.Cro, "user:1");
+        await harness.Gate.GetFinalArtifactAsync(harness.CompanyId, harness.PeriodId, FilingReleaseArtifact.CroAccountsPdf);
+
+        var period = await db.AccountingPeriods.Include(p => p.CroFilingPackage).SingleAsync(p => p.Id == harness.PeriodId);
+        var directors = new DirectorsApprovalService(db, new DirectorsApprovalTests.FakePageRenderer(), new AuditService(db));
+        Assert.NotNull(directors.AppendRevocationIfCurrent(period, period.CroFilingPackage!, "board withdrew its approval"));
+        await db.SaveChangesAsync();
+
+        var revoked = await Assert.ThrowsAsync<FilingReleaseBlockedException>(() =>
+            harness.Gate.GetFinalArtifactAsync(harness.CompanyId, harness.PeriodId, FilingReleaseArtifact.CroAccountsPdf));
+        Assert.Contains("directors' approval (s.324)", revoked.Message, StringComparison.Ordinal);
+
+        await harness.RecordDirectorsApprovalAsync();
+
+        // The package is still bound to the revoked approval's record, so it must be approved again.
+        var stale = await Assert.ThrowsAsync<FilingReleaseBlockedException>(() =>
+            harness.Gate.GetFinalArtifactAsync(harness.CompanyId, harness.PeriodId, FilingReleaseArtifact.CroAccountsPdf));
+        Assert.Contains("approval does not match the current", stale.Message, StringComparison.Ordinal);
+        await Assert.ThrowsAsync<FilingReleaseBlockedException>(() =>
+            harness.Gate.AssertTransitionAsync(harness.CompanyId, harness.PeriodId, FilingReleaseWorkflow.Cro, FilingStatus.Submitted, "CORE-REVOKED"));
+
+        await harness.Gate.BindApprovalAsync(harness.CompanyId, harness.PeriodId, FilingReleaseWorkflow.Cro, "user:1");
+        await harness.Gate.GetFinalArtifactAsync(harness.CompanyId, harness.PeriodId, FilingReleaseArtifact.CroAccountsPdf);
+    }
+
+    [Fact]
+    public async Task CharityApproval_WithoutACurrentDirectorsApproval_IsBlockedWithTheS324Message()
     {
         await using var db = CreateDbContext();
-        var period = await SeedReleaseReadyPeriodAsync(db);
-        var otherTenant = new Tenant { Name = "Other Practice", Slug = Guid.NewGuid().ToString("N") };
-        db.Tenants.Add(otherTenant);
+        var period = await SeedReleaseReadyPeriodAsync(db, charity: true);
+        await FilingGateFixture.PrepareBoardAsync(db, period);
+        db.CharityFilingPackages.Add(new CharityFilingPackage
+        {
+            PeriodId = period.Id,
+            SofaGenerated = true,
+            TrusteesReportGenerated = true,
+            FilingStatus = FilingStatus.PackageGenerated
+        });
         await db.SaveChangesAsync();
         var gate = new FilingReleaseGate(db, "candidate-a");
-        await gate.RecordCroArtifactAsync(period.CompanyId, period.Id, FilingReleaseArtifact.CroAccountsPdf, [1, 2, 3]);
-        await gate.RecordCroArtifactAsync(period.CompanyId, period.Id, FilingReleaseArtifact.CroSignaturePage, [4, 5, 6]);
-        await gate.RecordVerifiedCroSignatureAsync(period.CompanyId, period.Id, SignatureEvidence());
 
-        var current = ApprovalEvidence(period, FilingReleaseWorkflow.Cro);
-        var invalidEvidence = new[]
-        {
-            current with { CredentialValidUntilUtc = DateTime.UtcNow.AddMinutes(-1) },
-            current with { Capacity = "bookkeeper" },
-            current with { ProfessionalBody = "Self-declared practice" },
-            current with { Scope = "revenue-final-filing" },
-            current with { Decision = "recommended" },
-            current with { TenantId = otherTenant.Id }
-        };
+        var error = await Assert.ThrowsAsync<FilingReleaseBlockedException>(() =>
+            gate.BindApprovalAsync(period.CompanyId, period.Id, FilingReleaseWorkflow.Charity));
 
-        foreach (var evidence in invalidEvidence)
-        {
-            await Assert.ThrowsAsync<FilingReleaseBlockedException>(() =>
-                gate.BindVerifiedApprovalAsync(
-                    period.CompanyId,
-                    period.Id,
-                    FilingReleaseWorkflow.Cro,
-                    evidence));
-        }
-
-        var package = await db.CroFilingPackages.SingleAsync(p => p.PeriodId == period.Id);
+        Assert.Contains("directors' approval (s.324)", error.Message, StringComparison.Ordinal);
+        db.ChangeTracker.Clear();
+        var package = await db.CharityFilingPackages.SingleAsync(p => p.PeriodId == period.Id);
         Assert.Null(package.ApprovedBy);
         Assert.Null(package.ApprovedArtifactManifestSha256);
+        Assert.NotEqual(FilingStatus.Approved, package.FilingStatus);
+    }
+
+    [Fact]
+    public async Task RevenueApproval_WithoutADirectorsApproval_IsBlockedAndNeverApproved()
+    {
+        // Revenue filing-ready generation is disabled, which blocks before the directors' approval is
+        // even consulted; either way no approval is recorded without the board's s.324 approval.
+        await using var db = CreateDbContext();
+        var period = await SeedReleaseReadyPeriodAsync(db);
+        var gate = new FilingReleaseGate(db, "candidate-a");
+        await gate.RecordRevenueIxbrlArtifactAsync(period.CompanyId, period.Id, Encoding.UTF8.GetBytes("<html>retained ixbrl</html>"));
+
+        await Assert.ThrowsAsync<FilingReleaseBlockedException>(() =>
+            gate.BindApprovalAsync(period.CompanyId, period.Id, FilingReleaseWorkflow.Revenue));
+
+        db.ChangeTracker.Clear();
+        var package = await db.RevenueFilingPackages.SingleAsync(p => p.PeriodId == period.Id);
+        Assert.Null(package.ApprovedBy);
+        Assert.Null(package.ApprovedArtifactManifestSha256);
+        Assert.Null(package.ApprovalCapacity);
     }
 
     [Fact]
@@ -277,6 +322,7 @@ public sealed class FilingReleaseGateTests
     {
         await using var db = CreateDbContext();
         var period = await SeedReleaseReadyPeriodAsync(db, auditRequired: true);
+        await FilingGateFixture.PrepareBoardAsync(db, period);
         var gate = new FilingReleaseGate(db, "candidate-a");
 
         var missingReport = await Assert.ThrowsAsync<FilingReleaseBlockedException>(() =>
@@ -319,11 +365,11 @@ public sealed class FilingReleaseGateTests
             FilingReleaseArtifact.CroSignaturePage,
             signaturePage);
         await gate.RecordVerifiedCroSignatureAsync(period.CompanyId, period.Id, SignatureEvidence());
-        await gate.BindVerifiedApprovalAsync(
+        await FilingGateFixture.RecordDirectorsApprovalAsync(db, period.CompanyId, period.Id);
+        await gate.BindApprovalAsync(
             period.CompanyId,
             period.Id,
-            FilingReleaseWorkflow.Cro,
-            ApprovalEvidence(period, FilingReleaseWorkflow.Cro));
+            FilingReleaseWorkflow.Cro);
 
         var released = await gate.GetFinalArtifactAsync(
             period.CompanyId,
@@ -346,11 +392,13 @@ public sealed class FilingReleaseGateTests
     {
         await using var db = CreateDbContext();
         var period = await SeedReleaseReadyPeriodAsync(db);
+        await FilingGateFixture.PrepareBoardAsync(db, period);
         var firstGate = new FilingReleaseGate(db, "candidate-a");
         await firstGate.RecordCroArtifactAsync(period.CompanyId, period.Id, FilingReleaseArtifact.CroAccountsPdf, [1, 2, 3]);
         var package = await firstGate.RecordCroArtifactAsync(period.CompanyId, period.Id, FilingReleaseArtifact.CroSignaturePage, [4, 5, 6]);
         await firstGate.RecordVerifiedCroSignatureAsync(period.CompanyId, period.Id, SignatureEvidence());
-        await firstGate.BindVerifiedApprovalAsync(period.CompanyId, period.Id, FilingReleaseWorkflow.Cro, ApprovalEvidence(period, FilingReleaseWorkflow.Cro));
+        await FilingGateFixture.RecordDirectorsApprovalAsync(db, period.CompanyId, period.Id);
+        await firstGate.BindApprovalAsync(period.CompanyId, period.Id, FilingReleaseWorkflow.Cro);
 
         var nextGate = new FilingReleaseGate(db, "candidate-b");
         var error = await Assert.ThrowsAsync<FilingReleaseBlockedException>(() =>
@@ -363,15 +411,16 @@ public sealed class FilingReleaseGateTests
     {
         await using var db = CreateDbContext();
         var period = await SeedReleaseReadyPeriodAsync(db);
+        await FilingGateFixture.PrepareBoardAsync(db, period);
         var gate = new FilingReleaseGate(db, "candidate-a");
         await gate.RecordCroArtifactAsync(period.CompanyId, period.Id, FilingReleaseArtifact.CroAccountsPdf, [1, 2, 3]);
         await gate.RecordCroArtifactAsync(period.CompanyId, period.Id, FilingReleaseArtifact.CroSignaturePage, [4, 5, 6]);
         await gate.RecordVerifiedCroSignatureAsync(period.CompanyId, period.Id, SignatureEvidence());
-        await gate.BindVerifiedApprovalAsync(
+        await FilingGateFixture.RecordDirectorsApprovalAsync(db, period.CompanyId, period.Id);
+        await gate.BindApprovalAsync(
             period.CompanyId,
             period.Id,
-            FilingReleaseWorkflow.Cro,
-            ApprovalEvidence(period, FilingReleaseWorkflow.Cro));
+            FilingReleaseWorkflow.Cro);
 
         var package = await db.CroFilingPackages.SingleAsync(p => p.PeriodId == period.Id);
         package.FilingStatus = FilingStatus.Approved;
@@ -415,6 +464,11 @@ public sealed class FilingReleaseGateTests
     {
         await using var db = CreateDbContext();
         var period = await SeedReleaseReadyPeriodAsync(db, charity: true);
+        await FilingGateFixture.PrepareBoardAsync(db, period);
+        // The board's s.324 approval of the company's accounts binds the charity filing too.
+        await new FilingReleaseGate(db, "candidate-a").RecordCroArtifactAsync(
+            period.CompanyId, period.Id, FilingReleaseArtifact.CroAccountsPdf, FilingGateFixture.Pdf("charity company accounts"));
+        await FilingGateFixture.RecordDirectorsApprovalAsync(db, period.CompanyId, period.Id);
         db.CharityFilingPackages.Add(new CharityFilingPackage
         {
             PeriodId = period.Id,
@@ -426,7 +480,7 @@ public sealed class FilingReleaseGateTests
         var gate = new FilingReleaseGate(db, "candidate-a");
 
         var booleanOnly = await Assert.ThrowsAsync<FilingReleaseBlockedException>(() =>
-            gate.BindVerifiedApprovalAsync(period.CompanyId, period.Id, FilingReleaseWorkflow.Charity, ApprovalEvidence(period, FilingReleaseWorkflow.Charity)));
+            gate.BindApprovalAsync(period.CompanyId, period.Id, FilingReleaseWorkflow.Charity));
         Assert.Contains("artifacts", booleanOnly.Message, StringComparison.OrdinalIgnoreCase);
 
         var reporting = new CharityReportingService(db);
@@ -456,7 +510,7 @@ public sealed class FilingReleaseGateTests
             FilingReleaseArtifact.CharityTrusteesReport,
             pdf.GenerateTrusteesAnnualReport(evidence, reviewCopy: false),
             evidence: evidence);
-        await gate.BindVerifiedApprovalAsync(period.CompanyId, period.Id, FilingReleaseWorkflow.Charity, ApprovalEvidence(period, FilingReleaseWorkflow.Charity));
+        await gate.BindApprovalAsync(period.CompanyId, period.Id, FilingReleaseWorkflow.Charity);
 
         var released = await gate.GetFinalArtifactAsync(
             period.CompanyId,
@@ -469,7 +523,7 @@ public sealed class FilingReleaseGateTests
     }
 
     [Fact]
-    public async Task PublicFreeFormApproval_FailsClosedWithoutPersistingApprovedStatus()
+    public async Task Approval_WithoutDirectorsApproval_FailsClosedWithoutPersistingApprovedStatus()
     {
         await using var db = CreateDbContext();
         var period = await SeedReleaseReadyPeriodAsync(db);
@@ -491,7 +545,7 @@ public sealed class FilingReleaseGateTests
                 period.Id,
                 FilingStatus.Approved,
                 "Reviewer supplied in request"));
-        Assert.Contains("Free-form reviewer names", error.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("directors' approval (s.324)", error.Message, StringComparison.Ordinal);
 
         db.ChangeTracker.Clear();
         var package = await db.CroFilingPackages.SingleAsync(p => p.PeriodId == period.Id);
@@ -525,32 +579,6 @@ public sealed class FilingReleaseGateTests
         return new AccountsDbContext(options);
     }
 
-    private static QualifiedAccountantApprovalEvidence ApprovalEvidence(
-        AccountingPeriod period,
-        FilingReleaseWorkflow workflow)
-    {
-        var artifact = Encoding.UTF8.GetBytes("professional-body-register-response:member-123:current");
-        return new QualifiedAccountantApprovalEvidence(
-            "Named Qualified Accountant",
-            period.Company.TenantId!.Value,
-            workflow switch
-            {
-                FilingReleaseWorkflow.Cro => "cro-final-filing",
-                FilingReleaseWorkflow.Revenue => "revenue-final-filing",
-                FilingReleaseWorkflow.Charity => "charity-final-filing",
-                _ => throw new ArgumentOutOfRangeException(nameof(workflow))
-            },
-            "qualified-accountant",
-            "approved",
-            "Chartered Accountants Ireland",
-            "member-123",
-            "https://register.example.test/member-123/check-2026-07-10",
-            artifact,
-            FilingReleaseGate.ComputeSha256(artifact),
-            DateTime.UtcNow.AddMinutes(-5),
-            DateTime.UtcNow.AddDays(30));
-    }
-
     private static CroSignatureEvidence SignatureEvidence()
     {
         var artifact = Encoding.UTF8.GetBytes("executed-cro-signing-pack");
@@ -577,7 +605,7 @@ public sealed class FilingReleaseGateTests
             DateTime.UtcNow.AddMinutes(-1));
     }
 
-    private static async Task<AccountingPeriod> SeedReleaseReadyPeriodAsync(
+    internal static async Task<AccountingPeriod> SeedReleaseReadyPeriodAsync(
         AccountsDbContext db,
         bool charity = false,
         bool auditRequired = false)

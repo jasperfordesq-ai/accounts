@@ -785,7 +785,7 @@ $machineEvidenceSummary = [ordered]@{
         syntheticSensitiveMarkersAbsent = [bool](Get-JsonPropertyValue $structuredLogReport "syntheticSensitiveMarkersAbsent")
     }
     reviewerQueue = @($reviewerQueue)
-    completionPolicy = "This summary is machine evidence only; all six human evidence templates must still be completed by named reviewers."
+    completionPolicy = "This summary is machine evidence only; the five required human evidence templates must still be completed by named reviewers (the qualified-accountant acceptance template is optional)."
 }
 
 $machineEvidenceSummaryPath = Join-Path $resolvedOutputDirectory $machineEvidenceSummaryFile
@@ -805,7 +805,7 @@ $completionLedger = [ordered]@{
         commitSha = $CommitSha
         githubActionsRunUrl = $GitHubActionsRunUrl
     }
-    completionPolicy = "All six entries must be completed by named human reviewers before release evidence can pass."
+    completionPolicy = "The five required entries must be completed by named human reviewers before release evidence can pass; the qualified-accountant acceptance entry is optional (Irish law requires no accountant)."
     entries = @($reviewerQueue | ForEach-Object {
         [ordered]@{
             evidenceGate = $_.EvidenceGate

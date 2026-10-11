@@ -22,7 +22,9 @@ public sealed class DatabaseTenantIsolationSqlTests
         Assert.Equal(TenantIsolationPolicyCatalog.Policies.Count, TenantIsolationPolicyCatalog.TableNames.Count);
         Assert.Equal(
             TenantIsolationPolicyCatalog.Policies.OrderBy(item => item.TableName),
-            TenantIsolationMigrationSql.Version1PolicyInventory.OrderBy(item => item.TableName));
+            TenantIsolationMigrationSql.Version1PolicyInventory
+                .Concat(TenantIsolationMigrationSql.DirectorsApprovalPolicyInventory)
+                .OrderBy(item => item.TableName));
         Assert.Empty(mappedTables.Except(TenantIsolationPolicyCatalog.TableNames, StringComparer.Ordinal));
         Assert.Empty(TenantIsolationPolicyCatalog.TableNames.Except(mappedTables, StringComparer.Ordinal));
     }
