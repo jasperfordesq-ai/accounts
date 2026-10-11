@@ -1,6 +1,7 @@
 using Accounts.Api.Data;
 using Accounts.Api.Entities;
 using Accounts.Api.Services;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace Accounts.Api.Endpoints;
@@ -19,7 +20,7 @@ public static class PeriodStatusEndpoint
         FilingReleaseGate? releaseGate = null,
         AccountingConcurrencyCoordinator? concurrency = null,
         IdempotencyService? idempotency = null,
-        TimeProvider? clock = null)
+        [FromServices] TimeProvider? clock = null)
     {
         if (!await CompanyEndpointAccess.CanAccessCompanyAsync(context, db, companyId))
             return Results.NotFound();
