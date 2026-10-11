@@ -1336,6 +1336,10 @@ public sealed class FilingReleaseGate
         if (package?.ApprovedBy is null || package.FilingStatus is FilingStatus.Submitted or FilingStatus.Accepted)
             return false;
         RevokeCroApproval(package);
+        // Back to the pre-approval state RecordCroArtifactAsync derives, so the pack no longer reads as Approved.
+        package.FilingStatus = package.AccountsPdfGenerated && package.SignaturePageGenerated
+            ? FilingStatus.PackageGenerated
+            : FilingStatus.InProgress;
         return true;
     }
 

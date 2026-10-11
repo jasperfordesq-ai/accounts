@@ -18,7 +18,11 @@ public sealed partial class DirectorsApprovalTests
         var db = harness.Db;
         await harness.RecordDirectorsApprovalAsync();
         await harness.Gate.BindApprovalAsync(harness.CompanyId, harness.PeriodId, FilingReleaseWorkflow.Cro, "user:1");
-        Assert.NotNull((await db.CroFilingPackages.SingleAsync(c => c.PeriodId == harness.PeriodId)).ApprovedBy);
+        var approvedPackage = await db.CroFilingPackages.SingleAsync(c => c.PeriodId == harness.PeriodId);
+        Assert.NotNull(approvedPackage.ApprovedBy);
+        // FilingWorkflowService moves the package to Approved after binding the approval.
+        approvedPackage.FilingStatus = FilingStatus.Approved;
+        await db.SaveChangesAsync();
         var tenantId = (await db.Companies.SingleAsync(c => c.Id == harness.CompanyId)).TenantId!.Value;
         var audit = new AuditService(db);
 
@@ -35,6 +39,8 @@ public sealed partial class DirectorsApprovalTests
         Assert.False(period.FilingRegime!.AuditExempt);
         Assert.Null(period.CroFilingPackage!.ApprovedBy);
         Assert.Null(period.CroFilingPackage.ApprovedArtifactManifestSha256);
+        // The revoked package returns to its pre-approval state rather than reading as Approved.
+        Assert.Equal(FilingStatus.PackageGenerated, period.CroFilingPackage.FilingStatus);
         if (classified)
             Assert.Contains(db.AuditLogs, a => a.Action == AuditEventCodes.FilingRegimeDetermined);
 
