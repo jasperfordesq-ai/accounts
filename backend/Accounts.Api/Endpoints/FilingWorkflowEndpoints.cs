@@ -59,6 +59,43 @@ public static class FilingWorkflowEndpoints
                 result => result.Id);
         });
 
+        group.MapPut("/cro-signing-pack", async (int companyId, int periodId, CroSigningPackInput input, FilingWorkflowService service, AccountsDbContext db, HttpContext context, ApiAccessService apiAccess, [FromServices] IdempotencyService? idempotency = null) =>
+        {
+            if (!await CompanyEndpointAccess.CanAccessCompanyPeriodAsync(context, db, companyId, periodId))
+                return Results.NotFound();
+
+            if (EndpointRequestAuthorization.AuthorizeCurrentRequest(context, apiAccess) is { } denied)
+                return denied;
+
+            if (input.SignedArtifact is { Length: > FilingWorkflowService.MaxCroSigningPackBytes })
+                return Results.BadRequest(new { error = "The signed signature page must not exceed 3 MB." });
+
+            var user = AuthContext.RequireUser(context);
+            var artifactSha256 = input.SignedArtifact is { Length: > 0 }
+                ? FilingReleaseGate.ComputeSha256(input.SignedArtifact)
+                : null;
+            return await ExecuteCommandAsync(
+                context,
+                db,
+                idempotency,
+                user,
+                IdempotencyOperations.CroSigningPack,
+                new { companyId, periodId, input.DirectorName, input.SecretaryName, input.SignedOn, artifactSha256 },
+                _ => service.RecordCroSigningPackAsync(
+                    companyId,
+                    periodId,
+                    input.DirectorName,
+                    input.SecretaryName,
+                    input.SignedOn,
+                    input.SignedArtifact,
+                    AuthenticatedIdentity.AuditUserId(user)),
+                "CroFilingPackage",
+                result => result.Id);
+        })
+            .Produces<CroFilingPackage>()
+            .Produces(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status404NotFound);
+
         group.MapPost("/cro-payment", async (int companyId, int periodId, CroPaymentInput input, FilingWorkflowService service, AccountsDbContext db, HttpContext context, ApiAccessService apiAccess, [FromServices] IdempotencyService? idempotency = null) =>
         {
             if (!await CompanyEndpointAccess.CanAccessCompanyPeriodAsync(context, db, companyId, periodId))
@@ -294,3 +331,4 @@ public record RevenueExternalValidationInput(string ArtifactSha256, string Exter
 public record RevenueFilingStatusInput(FilingStatus Status, string? Reason, string? FilingReference);
 public record MarkGeneratedInput(string DocumentType);
 public record CroPaymentInput(string? By);
+public record CroSigningPackInput(string? DirectorName, string? SecretaryName, DateOnly SignedOn, byte[]? SignedArtifact);

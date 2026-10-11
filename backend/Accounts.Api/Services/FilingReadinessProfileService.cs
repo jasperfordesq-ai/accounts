@@ -29,7 +29,7 @@ public sealed record FilingReadinessSignOffStep(
 public sealed record FilingReadinessSignOffPacket(
     string State,
     string StateLabel,
-    bool ReadyForAccountantApproval,
+    bool ReadyForApproval,
     bool ReadyForExternalFiling,
     string? ApprovedBy,
     DateTime? ApprovedAt,
@@ -149,7 +149,7 @@ public class FilingReadinessProfileService(AccountsDbContext db)
                 : IrishStatutoryRuleSources.CroFinancialStatementsRequirements;
             Block(
                 "unsupported-company-type",
-                $"{company.CompanyType} workflows require manual professional handoff before statutory filing.",
+                $"{company.CompanyType} companies are outside the platform's supported filing path; prepare these accounts outside the platform.",
                 source);
         }
 
@@ -179,7 +179,7 @@ public class FilingReadinessProfileService(AccountsDbContext db)
             manualHandoff = true;
             Block(
                 "group-context-manual-handoff",
-                "Group, holding, subsidiary and consolidation contexts require manual professional review and are outside the supported filing path.",
+                "Group, holding, subsidiary and consolidation contexts are outside the platform's supported filing path.",
                 IrishStatutoryRuleSources.CroGroupCompany,
                 IrishStatutoryRuleSources.FrcFrs102);
         }
@@ -274,7 +274,7 @@ public class FilingReadinessProfileService(AccountsDbContext db)
             auditRequired
                 ? completeAuditorReport
                     ? $"{period.AuditorsReportReference}; retained PDF SHA-256 {period.AuditorsReportSha256}."
-                    : "Retained signed auditor-report PDF, firm/signer identity and accepted qualified-accountant review are required."
+                    : "The signed auditor's report PDF and the auditor firm/signer identity are required."
                 : "Audit exemption currently indicated by filing regime.",
             IrishStatutoryRuleSources.CroFinancialStatementsRequirements,
             IrishStatutoryRuleSources.CroMediumCompany,
@@ -291,19 +291,35 @@ public class FilingReadinessProfileService(AccountsDbContext db)
                 IrishStatutoryRuleSources.CroAuditorsReport);
         }
 
-        var qualifiedApprovalRetained = HasCurrentQualifiedAccountantApprovalEvidence(cro, company.TenantId);
-        var reviewState = qualifiedApprovalRetained
-            ? $"Verified approval by {cro!.ApprovedBy} ({cro.ApproverProfessionalBody}, {cro.ApproverMembershipNumber}); manifest {cro.ApprovedArtifactManifestSha256}"
-            : "Required";
+        var signingPackRecorded = HasExecutedSigningPack(cro);
         RequireEvidence(
-            "accountant-review",
-            "Named qualified-accountant review and approval recorded",
-            reviewState != "Required",
-            reviewState,
-            IrishStatutoryRuleSources.CroFinancialStatementsRequirements,
-            IrishStatutoryRuleSources.RevenueIxbrlOverview);
-        if (reviewState == "Required")
-            Block("accountant-review-required", "A named qualified accountant must approve the filing pack before any real CRO/Revenue use.", IrishStatutoryRuleSources.CroFinancialStatementsRequirements);
+            "cro-executed-signing-pack",
+            "Signature page signed by a director and the company secretary",
+            signingPackRecorded,
+            signingPackRecorded
+                ? $"Signed by {cro!.SignedByDirector} (director) and {cro.SignedBySecretary} (secretary) on {cro.SignedAt:yyyy-MM-dd}; PDF SHA-256 {cro.SignedPdfSha256}."
+                : "Print or e-sign the generated signature page, then upload the signed copy.",
+            IrishStatutoryRuleSources.CroFinancialStatementsRequirements);
+        if (!signingPackRecorded)
+            Block("cro-signing-pack-required", "Upload the signature page signed by a director and the company secretary before approving the CRO filing pack.", IrishStatutoryRuleSources.CroFinancialStatementsRequirements);
+
+        // Accountant review is optional. The directors approve their own accounts.
+        var directorApprovalRecorded = HasCurrentApprovalEvidence(cro, company.TenantId);
+        var verifiedAccountantReview = directorApprovalRecorded
+            && string.Equals(cro!.ApprovalCapacity, FilingReleaseGate.QualifiedAccountantApprovalCapacity, StringComparison.OrdinalIgnoreCase);
+        var reviewState = verifiedAccountantReview
+            ? $"Optional review recorded: approved by {cro!.ApprovedBy} ({cro.ApproverProfessionalBody}, {cro.ApproverMembershipNumber})"
+            : "Optional — not required for filing";
+        RequireEvidence(
+            "director-approval",
+            "Directors' approval of the filing pack recorded",
+            directorApprovalRecorded,
+            directorApprovalRecorded
+                ? $"Approved by {cro!.ApprovedBy} on {cro.ApprovedAt:yyyy-MM-dd HH:mm} UTC; manifest {cro.ApprovedArtifactManifestSha256}."
+                : "The directors approve the exact generated filing pack. No accountant sign-off is required.",
+            IrishStatutoryRuleSources.CroFinancialStatementsRequirements);
+        if (!directorApprovalRecorded)
+            Block("director-approval-required", "The directors must approve the filing pack before it is filed with the CRO.", IrishStatutoryRuleSources.CroFinancialStatementsRequirements);
 
         TaxComputationService.TaxComputation? taxSupport = null;
         string? taxSupportFailure = null;
@@ -436,7 +452,7 @@ public class FilingReadinessProfileService(AccountsDbContext db)
             period.FilingRegime?.AuditExempt,
             supportedPath,
             manualHandoff,
-            AccountantReviewRequired: true,
+            AccountantReviewRequired: false,
             reviewState,
             DirectCroSubmissionSupported: false,
             DirectRosSubmissionSupported: false,
@@ -462,7 +478,7 @@ public class FilingReadinessProfileService(AccountsDbContext db)
             .ToList();
 
         if (profile.ManualProfessionalReviewRequired)
-            blockers.Insert(0, "Manual professional handoff is required for this filing path.");
+            blockers.Insert(0, "This company is outside the platform's supported filing path.");
 
         if (blockers.Count > 0)
             throw new BusinessRuleException($"Cannot mark CRO filing as submitted while readiness blockers remain: {string.Join("; ", blockers)}");
@@ -472,13 +488,13 @@ public class FilingReadinessProfileService(AccountsDbContext db)
     {
         var profile = await GetProfileAsync(companyId, periodId);
         var blockers = profile.BlockingIssues
-            .Where(i => i.Code != "accountant-review-required" && !IsRevenueOnlyBlocker(i.Code))
+            .Where(i => i.Code != "director-approval-required" && !IsRevenueOnlyBlocker(i.Code))
             .Select(i => i.Message)
             .Distinct()
             .ToList();
 
         if (profile.ManualProfessionalReviewRequired)
-            blockers.Insert(0, "Manual professional handoff is required for this filing path.");
+            blockers.Insert(0, "This company is outside the platform's supported filing path.");
 
         if (blockers.Count > 0)
             throw new BusinessRuleException($"Cannot approve CRO filing while readiness blockers remain: {string.Join("; ", blockers)}");
@@ -502,14 +518,19 @@ public class FilingReadinessProfileService(AccountsDbContext db)
             actions.Add("generate-cro-signature-page");
         if (revenue?.IxbrlGenerated != true)
             actions.Add("run-internal-ixbrl-checks");
+        if (cro?.AccountsPdfGenerated == true
+            && cro.SignaturePageGenerated
+            && !HasExecutedSigningPack(cro)
+            && cro.FilingStatus is not (FilingStatus.Submitted or FilingStatus.Accepted))
+            actions.Add("record-cro-signing-pack");
 
-        var onlyReviewAndExternalRosRemain = blockers.All(i =>
-            i.Code == "accountant-review-required" || IsRevenueOnlyBlocker(i.Code))
+        var onlyApprovalAndRevenueRemain = blockers.All(i =>
+            i.Code == "director-approval-required" || IsRevenueOnlyBlocker(i.Code))
             || blockers.Count == 0;
         var docsReady = evidence.All(e =>
-            e.Code is not ("cro-accounts-pdf" or "cro-signature-page" or "cro-signatories")
+            e.Code is not ("cro-accounts-pdf" or "cro-signature-page" or "cro-signatories" or "cro-executed-signing-pack")
             || e.Satisfied);
-        if (docsReady && onlyReviewAndExternalRosRemain)
+        if (docsReady && onlyApprovalAndRevenueRemain && cro?.FilingStatus != FilingStatus.Approved)
             actions.Add("approve-cro-pack");
 
         if (cro?.FilingStatus == FilingStatus.Approved && blockers.All(i => IsRevenueOnlyBlocker(i.Code)))
@@ -559,7 +580,18 @@ public class FilingReadinessProfileService(AccountsDbContext db)
         return string.Equals(actual, expectedSha256, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool HasCurrentQualifiedAccountantApprovalEvidence(CroFilingPackage? package, int? tenantId)
+    private static bool HasExecutedSigningPack(CroFilingPackage? package) =>
+        package is not null
+        && !string.IsNullOrWhiteSpace(package.SignedByDirector)
+        && !string.IsNullOrWhiteSpace(package.SignedBySecretary)
+        && package.SignedAt is not null
+        && RetainedShaMatches(package.SignedPdfArtifact, package.SignedPdfSha256);
+
+    /// <summary>
+    /// A current approval of the CRO pack by the directors, or optionally by a verified accountant.
+    /// Credential evidence is checked only when the optional accountant capacity was used.
+    /// </summary>
+    private static bool HasCurrentApprovalEvidence(CroFilingPackage? package, int? tenantId)
     {
         if (package is null
             || tenantId is null
@@ -569,19 +601,7 @@ public class FilingReadinessProfileService(AccountsDbContext db)
             || package.ApprovedAt.Value.Kind != DateTimeKind.Utc
             || package.ApprovedAt > DateTime.UtcNow.AddMinutes(5)
             || !string.Equals(package.ApprovalScope, "cro-final-filing", StringComparison.OrdinalIgnoreCase)
-            || !string.Equals(package.ApprovalCapacity, "qualified-accountant", StringComparison.OrdinalIgnoreCase)
             || !string.Equals(package.ApprovalDecision, "approved", StringComparison.OrdinalIgnoreCase)
-            || !IsRecognisedProfessionalBody(package.ApproverProfessionalBody)
-            || string.IsNullOrWhiteSpace(package.ApproverMembershipNumber)
-            || !IsHttpsReference(package.ApproverVerificationReference)
-            || package.ApproverVerifiedAt is null
-            || package.ApproverVerifiedAt.Value.Kind != DateTimeKind.Utc
-            || package.ApproverVerifiedAt > DateTime.UtcNow.AddMinutes(5)
-            || package.ApproverCredentialValidUntil is null
-            || package.ApproverCredentialValidUntil.Value.Kind != DateTimeKind.Utc
-            || package.ApproverCredentialValidUntil <= DateTime.UtcNow
-            || package.ApproverCredentialValidUntil <= package.ApproverVerifiedAt
-            || !RetainedShaMatches(package.ApproverVerificationArtifact, package.ApproverVerificationArtifactSha256)
             || package.ApprovedArtifactManifestSha256?.Length != 64
             || string.IsNullOrWhiteSpace(package.ApprovedReleaseCandidate)
             || !string.Equals(package.ApprovedReleaseCandidate, package.ArtifactReleaseCandidate, StringComparison.Ordinal))
@@ -589,7 +609,17 @@ public class FilingReadinessProfileService(AccountsDbContext db)
             return false;
         }
 
-        return true;
+        if (string.Equals(package.ApprovalCapacity, FilingReleaseGate.DirectorApprovalCapacity, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return string.Equals(package.ApprovalCapacity, FilingReleaseGate.QualifiedAccountantApprovalCapacity, StringComparison.OrdinalIgnoreCase)
+            && IsRecognisedProfessionalBody(package.ApproverProfessionalBody)
+            && !string.IsNullOrWhiteSpace(package.ApproverMembershipNumber)
+            && IsHttpsReference(package.ApproverVerificationReference)
+            && package.ApproverVerifiedAt is { Kind: DateTimeKind.Utc }
+            && package.ApproverCredentialValidUntil is { Kind: DateTimeKind.Utc }
+            && package.ApproverCredentialValidUntil > package.ApproverVerifiedAt
+            && RetainedShaMatches(package.ApproverVerificationArtifact, package.ApproverVerificationArtifactSha256);
     }
 
     private static bool IsRecognisedProfessionalBody(string? value) => value?.Trim() switch
@@ -620,30 +650,32 @@ public class FilingReadinessProfileService(AccountsDbContext db)
         IReadOnlyList<FilingReadinessIssue> warnings,
         IReadOnlyList<string> allowedNextActions)
     {
-        var approvedBy = string.IsNullOrWhiteSpace(cro?.ApprovedBy) ? null : cro.ApprovedBy;
-        var approvedAt = cro?.ApprovedAt;
-        var accountantApproved = approvedBy is not null && approvedAt is not null;
-        var readyForAccountantApproval = !accountantApproved
+        // The packet tracks the CRO pack. Revenue-only blockers (the iXBRL prototype, CT scope)
+        // and external ROS warnings do not stop the directors approving or filing with the CRO.
+        var croBlockers = blockers.Where(issue => !IsRevenueOnlyBlocker(issue.Code)).ToList();
+        var directorsApproved = EvidenceSatisfied(evidence, "director-approval");
+        var approvedBy = directorsApproved ? cro!.ApprovedBy : null;
+        var approvedAt = directorsApproved ? cro!.ApprovedAt : null;
+        var readyForApproval = !directorsApproved
             && supportedPath
             && !manualHandoff
-            && blockers.All(issue => issue.Code == "accountant-review-required");
+            && croBlockers.All(issue => issue.Code == "director-approval-required");
         var readyForExternalFiling = supportedPath
             && !manualHandoff
-            && accountantApproved
-            && blockers.Count == 0
-            && warnings.Count == 0;
+            && directorsApproved
+            && croBlockers.Count == 0;
         var (state, stateLabel) = DetermineSignOffState(
             supportedPath,
             manualHandoff,
-            accountantApproved,
-            readyForAccountantApproval,
+            directorsApproved,
+            readyForApproval,
             readyForExternalFiling,
-            blockers);
+            croBlockers);
 
         return new FilingReadinessSignOffPacket(
             state,
             stateLabel,
-            readyForAccountantApproval,
+            readyForApproval,
             readyForExternalFiling,
             approvedBy,
             approvedAt,
@@ -653,12 +685,11 @@ public class FilingReadinessProfileService(AccountsDbContext db)
                 charityReportingRequired,
                 auditReportRequired,
                 regime,
-                accountantApproved,
-                reviewState,
+                directorsApproved,
                 cro,
                 revenue,
                 evidence,
-                readyForAccountantApproval),
+                readyForApproval),
             blockers.Select(issue => issue.Message).Distinct().ToList(),
             warnings.Select(issue => issue.Message).Distinct().ToList(),
             allowedNextActions);
@@ -667,21 +698,21 @@ public class FilingReadinessProfileService(AccountsDbContext db)
     private static (string State, string Label) DetermineSignOffState(
         bool supportedPath,
         bool manualHandoff,
-        bool accountantApproved,
-        bool readyForAccountantApproval,
+        bool directorsApproved,
+        bool readyForApproval,
         bool readyForExternalFiling,
-        IReadOnlyList<FilingReadinessIssue> blockers)
+        IReadOnlyList<FilingReadinessIssue> croBlockers)
     {
         if (!supportedPath || manualHandoff)
-            return ("manual-handoff", "Manual professional handoff");
+            return ("manual-handoff", "Outside supported filing path");
         if (readyForExternalFiling)
             return ("ready-for-external-filing", "Ready for external filing");
-        if (accountantApproved && blockers.Count == 0)
-            return ("approved-external-evidence-open", "Accountant approved, external evidence open");
-        if (readyForAccountantApproval)
-            return ("ready-for-accountant-review", "Ready for accountant review");
+        if (directorsApproved && croBlockers.Count == 0)
+            return ("approved-external-evidence-open", "Directors approved, external evidence open");
+        if (readyForApproval)
+            return ("ready-for-approval", "Ready for directors' approval");
 
-        return ("blocked", "Blocked before accountant review");
+        return ("blocked", "Blocked before directors' approval");
     }
 
     private static IReadOnlyList<FilingReadinessSignOffStep> BuildSignOffSteps(
@@ -759,15 +790,15 @@ public class FilingReadinessProfileService(AccountsDbContext db)
                     : "External ROS validation evidence pending",
                 [IrishStatutoryRuleSources.RevenueIxbrlOverview, IrishStatutoryRuleSources.RevenueAcceptedTaxonomies]),
             new FilingReadinessSignOffStep(
-                "accountant-approval",
-                "Qualified accountant approval",
-                accountantApproved ? "complete" : readyForAccountantApproval ? "blocked" : "pending",
-                accountantApproved
+                "director-approval",
+                "Directors' approval",
+                directorsApproved ? "complete" : readyForApproval ? "pending" : "blocked",
+                directorsApproved
                     ? $"Approved by {cro!.ApprovedBy} on {cro.ApprovedAt!.Value:yyyy-MM-dd HH:mm} UTC."
-                    : readyForAccountantApproval
-                        ? "Ready for named qualified-accountant approval."
-                        : $"Resolve blockers before accountant approval. Current state: {reviewState}.",
-                [IrishStatutoryRuleSources.CroFinancialStatementsRequirements, IrishStatutoryRuleSources.RevenueIxbrlOverview])
+                    : readyForApproval
+                        ? "Ready for the directors to approve the exact generated filing pack. No accountant sign-off is required."
+                        : "Resolve the open blockers before the directors approve the filing pack.",
+                [IrishStatutoryRuleSources.CroFinancialStatementsRequirements])
         };
 
         if (charityReportingRequired)

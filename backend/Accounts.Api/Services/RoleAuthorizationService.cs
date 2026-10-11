@@ -113,6 +113,7 @@ public static class RoleAuthorizationService
 
         if (HttpMethods.IsPut(method)
             && (IsPeriodFilingAction(segments, "cro-status")
+                || IsPeriodFilingAction(segments, "cro-signing-pack")
                 || IsPeriodFilingAction(segments, "revenue-status")
                 || IsPeriodFilingAction(segments, "charity-status")))
             return true;

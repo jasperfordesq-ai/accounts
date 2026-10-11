@@ -36,8 +36,9 @@ public class CroFilingPackage
     public string? ApprovedArtifactManifestSha256 { get; set; }
     public string? ApprovedReleaseCandidate { get; set; }
 
-    // Approval is not satisfied by ApprovedBy alone. These fields retain the exact credential
-    // verification evidence that was current when the artifact manifest was approved.
+    // Approval binds the approver's capacity ("director", or an optional "qualified-accountant")
+    // to the exact artifact manifest. Professional-body fields are populated only for the optional
+    // verified-accountant path; directors approve without them.
     public string? ApproverProfessionalBody { get; set; }
     public string? ApproverMembershipNumber { get; set; }
     public int? ApproverTenantId { get; set; }

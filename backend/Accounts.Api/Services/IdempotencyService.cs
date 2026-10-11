@@ -37,6 +37,7 @@ public static class IdempotencyOperations
     public const string CroSignatureGenerate = "document.cro-signature.generate.v1";
     public const string CroStatus = "filing.cro-status.v1";
     public const string CroPayment = "filing.cro-payment.v1";
+    public const string CroSigningPack = "filing.cro-signing-pack.v1";
     public const string CharityReportGenerated = "filing.charity-report-generated.v1";
     public const string CharityStatus = "filing.charity-status.v1";
     public const string RevenueExternalValidation = "filing.revenue-external-validation.v1";

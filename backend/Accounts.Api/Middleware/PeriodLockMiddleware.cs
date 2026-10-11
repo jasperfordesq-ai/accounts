@@ -61,7 +61,11 @@ public class PeriodLockMiddleware(RequestDelegate next)
         if (HttpMethods.IsPut(method) && IsPeriodAction(segments, "status"))
             return true;
 
-        if (HttpMethods.IsPut(method) && IsPeriodFilingAction(segments, "cro-status"))
+        if (HttpMethods.IsPut(method)
+            && (IsPeriodFilingAction(segments, "cro-status")
+                || IsPeriodFilingAction(segments, "cro-signing-pack")
+                || IsPeriodFilingAction(segments, "charity-status")
+                || IsPeriodFilingAction(segments, "revenue-status")))
             return true;
 
         if (HttpMethods.IsPost(method) && IsPeriodFilingAction(segments, "cro-payment"))

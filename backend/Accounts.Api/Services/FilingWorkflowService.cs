@@ -37,7 +37,12 @@ public class FilingWorkflowService(
         bool PaymentCompleted,
         string? SubmissionReference,
         string? RejectionReason,
-        DateTime? CorrectionDeadline
+        DateTime? CorrectionDeadline,
+        string? SignedByDirector = null,
+        string? SignedBySecretary = null,
+        DateTime? SignedAt = null,
+        string? ApprovedBy = null,
+        DateTime? ApprovedAt = null
     );
 
     public record RevenueFilingStatus(
@@ -86,7 +91,12 @@ public class FilingWorkflowService(
             cro?.PaymentCompleted ?? false,
             cro?.CroSubmissionReference,
             cro?.RejectionReason,
-            cro?.CorrectionDeadline
+            cro?.CorrectionDeadline,
+            cro?.SignedByDirector,
+            cro?.SignedBySecretary,
+            cro?.SignedAt,
+            cro?.ApprovedBy,
+            cro?.ApprovedAt
         );
 
         var revStatus = new RevenueFilingStatus(
@@ -309,6 +319,66 @@ public class FilingWorkflowService(
         }
         return pkg;
     }
+
+    public const int MaxCroSigningPackBytes = 3 * 1024 * 1024;
+
+    /// <summary>
+    /// Retains the CRO signature page as signed by a serving director and the company secretary.
+    /// This is the directors' own certification of the accounts; no accountant is involved.
+    /// </summary>
+    public async Task<CroFilingPackage> RecordCroSigningPackAsync(
+        int companyId,
+        int periodId,
+        string? directorName,
+        string? secretaryName,
+        DateOnly signedOn,
+        byte[]? signedArtifact,
+        string? auditUserId = null)
+    {
+        var period = await db.AccountingPeriods
+            .FirstOrDefaultAsync(p => p.Id == periodId && p.CompanyId == companyId)
+            ?? throw new ResourceNotFoundException($"Period {periodId} not found");
+
+        var director = directorName?.Trim();
+        var secretary = secretaryName?.Trim();
+        if (string.IsNullOrWhiteSpace(director) || string.IsNullOrWhiteSpace(secretary))
+            throw new BusinessRuleException("Name the director and the company secretary who signed the signature page.");
+        if (signedArtifact is not { Length: > 0 })
+            throw new BusinessRuleException("Upload the signed signature page as a PDF.");
+        if (signedArtifact.Length > MaxCroSigningPackBytes)
+            throw new BusinessRuleException("The signed signature page must not exceed 3 MB.");
+        if (signedArtifact.Length < 5 || !signedArtifact.AsSpan(0, 5).SequenceEqual("%PDF-"u8))
+            throw new BusinessRuleException("The signed signature page must be a PDF file.");
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        if (signedOn > today)
+            throw new BusinessRuleException("The signing date cannot be in the future.");
+        if (signedOn < period.PeriodEnd)
+            throw new BusinessRuleException("The accounts cannot be signed before the end of the financial period.");
+
+        var officers = await db.CompanyOfficers
+            .Where(o => o.CompanyId == companyId && o.ResignedDate == null)
+            .Select(o => new { o.Name, o.Role })
+            .ToListAsync();
+        if (!officers.Any(o => o.Role == OfficerRole.Director && NamesMatch(o.Name, director)))
+            throw new BusinessRuleException($"'{director}' is not recorded as a serving director of the company.");
+        if (!officers.Any(o => (o.Role == OfficerRole.Secretary || o.Role == OfficerRole.CompanySecretary) && NamesMatch(o.Name, secretary)))
+            throw new BusinessRuleException($"'{secretary}' is not recorded as the serving company secretary.");
+
+        var evidence = new CroSignatureEvidence(
+            director,
+            secretary,
+            new DateTime(signedOn, TimeOnly.MinValue, DateTimeKind.Utc),
+            signedArtifact,
+            FilingReleaseGate.ComputeSha256(signedArtifact));
+        return await ReleaseGate.RecordVerifiedCroSignatureAsync(companyId, periodId, evidence, auditUserId);
+    }
+
+    private static bool NamesMatch(string? recorded, string supplied) =>
+        string.Equals(
+            string.Join(' ', (recorded ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries)),
+            string.Join(' ', supplied.Split(' ', StringSplitOptions.RemoveEmptyEntries)),
+            StringComparison.OrdinalIgnoreCase);
 
     public Task<CroFilingPackage> MarkDocumentGeneratedAsync(int companyId, int periodId, string documentType, string? auditUserId = null) =>
         throw new BusinessRuleException("CRO document readiness is recorded only after the server generates the document. Download the CRO filing pack or signature page again.");
@@ -797,7 +867,7 @@ public class FilingWorkflowService(
     private static void RequireNamedReviewer(string? by, string action)
     {
         if (string.IsNullOrWhiteSpace(by))
-            throw new BusinessRuleException($"A named qualified reviewer is required before {action}.");
+            throw new BusinessRuleException($"The approving director must be named before {action}.");
     }
 
     private static bool InternalIxbrlChecksPassed(RevenueFilingPackage? pkg) =>
