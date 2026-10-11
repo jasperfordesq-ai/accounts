@@ -15,6 +15,8 @@ interface AccountantDashboardQueueProps {
   productionReleaseBlockers?: ProductionReleaseBlocker[];
 }
 
+const HISTORIC_UNVERIFIED = "Historic filings unverified";
+
 type QueueTone = "default" | "good" | "warn" | "bad" | "info";
 
 interface QueueRow {
@@ -343,6 +345,12 @@ function buildQueueRow(
   const period = latestPeriod(company);
   const manualHandoffDetail = manualHandoffReason(company);
   const deadlineState = deadlineStatus(deadline, today, deadlineUnavailable, authoritativeState);
+  // Unfiled deadlines of earlier periods (often a history back-filled to incorporation) are
+  // reported as unverified: a warning that stays visible, below any live-period risk.
+  const historicNote = historic
+    ? `${historic.count} earlier-period deadline${historic.count === 1 ? " has" : "s have"} no recorded filing (oldest ${historic.oldest.deadlineType} due ${formatDateIE(historic.oldest.dueDate)}). Record the filing dates or investigate before relying on audit exemption.`
+    : null;
+  const showHistoric = historicNote !== null && !deadlineUnavailable && authoritativeState !== "unavailable";
 
   if (!period) {
     return {
@@ -370,7 +378,7 @@ function buildQueueRow(
       deadlineState: deadlineState.label,
       deadlineTone: deadlineState.tone,
       blockerLabel: "Manual handoff",
-      blockerDetail: manualHandoffDetail,
+      blockerDetail: showHistoric ? `${manualHandoffDetail}. ${historicNote}` : manualHandoffDetail,
       blockerTone: "bad",
       readyDetail: "Active period exists; manual-handoff risk is identified.",
       nextActionLabel: "Review handoff",
@@ -379,18 +387,12 @@ function buildQueueRow(
   }
 
   const hasDeadlinePressure = deadlineState.label === "Overdue" || deadlineState.label === "Due soon";
-  // Unfiled deadlines of earlier periods (often a history back-filled to incorporation) are
-  // reported as unverified: a warning that stays visible, below any live-period risk.
-  const historicNote = historic
-    ? `${historic.count} earlier-period deadline${historic.count === 1 ? " has" : "s have"} no recorded filing (oldest ${historic.oldest.deadlineType} due ${formatDateIE(historic.oldest.dueDate)}). Record the filing dates or investigate before relying on audit exemption.`
-    : null;
-  const showHistoric = historicNote !== null && !deadlineUnavailable && authoritativeState !== "unavailable";
   const blockerLabel = deadlineUnavailable || authoritativeState === "unavailable"
     ? "Deadline unavailable"
     : deadlineState.label === "Overdue"
     ? "Deadline overdue"
     : showHistoric
-      ? "Historic filings unverified"
+      ? HISTORIC_UNVERIFIED
     : deadline
       ? "No blockers"
       : "Deadline missing";
@@ -443,9 +445,11 @@ function compareQueueRows(a: QueueRow, b: QueueRow) {
 
 function queuePriority(row: QueueRow) {
   if (row.blockerTone === "bad" || row.deadlineTone === "bad") return 0;
-  if (row.deadlineState === "Due soon" || row.blockerTone === "warn" || row.deadlineTone === "warn") return 1;
-  if (row.blockerTone === "good" && row.deadlineTone === "good") return 2;
-  return 3;
+  // Live-period pressure ranks above a warning that only concerns unverified earlier periods.
+  if (row.deadlineState === "Due soon" || row.deadlineTone === "warn") return 1;
+  if (row.blockerTone === "warn") return row.blockerLabel === HISTORIC_UNVERIFIED ? 2 : 1;
+  if (row.blockerTone === "good" && row.deadlineTone === "good") return 3;
+  return 4;
 }
 
 function queueRowTone(row: QueueRow): QueueTone {
