@@ -67,6 +67,8 @@ current-source check outcome and any platform impact.
 | frc-frs-102 |  |  |  |  |  |  |
 | frc-frs-105 |  |  |  |  |  |  |
 | charities-regulator-annual-report |  |  |  |  |  |  |
+| companies-act-2014-s324 |  |  |  |  |  |  |
+| charities-act-2009-s50-company-exclusion |  |  |  |  |  |  |
 
 ## Explicit Review Assertions
 

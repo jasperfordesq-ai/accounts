@@ -1555,7 +1555,9 @@ $requiredSourceLawSourceIds = @(
     "revenue-accepted-taxonomies",
     "frc-frs-102",
     "frc-frs-105",
-    "charities-regulator-annual-report"
+    "charities-regulator-annual-report",
+    "companies-act-2014-s324",
+    "charities-act-2009-s50-company-exclusion"
 )
 
 function Test-VisualEvidence {
