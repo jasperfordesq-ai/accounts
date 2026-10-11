@@ -9,8 +9,11 @@
     "npm": ">=11 <12"
   },
   "overrides": {
+    "@next/eslint-plugin-next": {
+      "fast-glob": "npm:tinyglobby@0.2.17"
+    },
     "esbuild": "0.28.1",
-    "js-yaml": "4.3.1",
+    "js-yaml": "4.3.2",
     "postcss": "8.5.26"
   },
   "scripts": {
@@ -29,7 +32,7 @@
     "test:visual:verify": "node scripts/verify-visual-smoke-artifacts.mjs",
     "test:visual:workbench": "node scripts/verify-accountant-workbench-evidence.mjs",
     "test:unit": "node --test --experimental-strip-types \"tests/*.test.mjs\"",
-    "test:render": "vitest run --pool=forks --maxWorkers=1 --minWorkers=1",
+    "test:render": "vitest run --pool=forks --maxWorkers=1",
     "test": "npm run test:unit && npm run test:render && npm run test:readiness && npm run test:proxy && npm run test:auth && npm run test:api-client && npm run test:api-contract"
   },
   "dependencies": {
@@ -37,7 +40,7 @@
     "@heroui/styles": "3.2.1",
     "framer-motion": "12.42.2",
     "lucide-react": "1.23.0",
-    "next": "16.3.0",
+    "next": "16.3.8",
     "qrcode.react": "4.2.0",
     "react": "19.2.7",
     "react-dom": "19.2.7",
@@ -56,11 +59,11 @@
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "5.2.0",
     "eslint": "9.39.4",
-    "eslint-config-next": "16.3.0",
+    "eslint-config-next": "16.3.8",
     "jsdom": "27.4.0",
     "openapi-typescript": "7.13.0",
     "tailwindcss": "4.3.2",
     "typescript": "5.9.3",
-    "vitest": "3.2.6"
+    "vitest": "4.1.11"
   }
 }
