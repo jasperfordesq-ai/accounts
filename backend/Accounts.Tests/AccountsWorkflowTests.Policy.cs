@@ -64,7 +64,7 @@ public partial class AccountsWorkflowTests
 
         foreach (var endpoint in new[]
         {
-            ("group.MapPost(\"/classify\"", "service.ClassifyAsync"),
+            ("public static async Task<IResult> ClassifySizeEndpointAsync", "service.ClassifyAsync"),
             ("group.MapPost(\"/filing-regime\"", "service.DetermineAsync"),
             ("group.MapPut(\"/member-audit-notice\"", "var period = await db.AccountingPeriods"),
             ("public static async Task<IResult> SaveSizeClassificationEndpointAsync", "var period = await db.AccountingPeriods")

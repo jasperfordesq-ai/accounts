@@ -103,6 +103,103 @@ public sealed class DashboardDeadlineBatchTests
         Assert.DoesNotContain("not been calculated", item.Message, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task Batch_RanksTheLivePeriodAndReportsUnfiledHistoryAsUnverified()
+    {
+        // Live defect 2026-10-10: periods back-filled to incorporation have deadlines but no
+        // recorded filings, so a 2019 deadline outranked the one live period on the dashboard.
+        await using var db = CreateDb();
+        var company = Assert.Single(await SeedCompaniesAsync(db, 1));
+        company.IncorporationDate = new DateOnly(2017, 7, 20);
+        var historic = Enumerable.Range(2018, 8)
+            .Select(year => AddPeriod(db, company, new DateOnly(year, 8, 1), new DateOnly(year + 1, 7, 31)))
+            .ToList();
+        var live = AddPeriod(db, company, new DateOnly(2025, 8, 1), new DateOnly(2026, 7, 31));
+        await db.SaveChangesAsync();
+        var today = new DateOnly(2026, 10, 10);
+        foreach (var period in historic)
+        {
+            db.FilingDeadlines.AddRange(
+                Deadline(period, period.PeriodEnd.AddMonths(11)),
+                Deadline(period, period.PeriodEnd.AddMonths(9), type: DeadlineType.Revenue));
+        }
+        db.FilingDeadlines.AddRange(
+            Deadline(live, new DateOnly(2027, 3, 18)),
+            Deadline(live, new DateOnly(2027, 4, 23), type: DeadlineType.Revenue));
+        await db.SaveChangesAsync();
+
+        var item = Item(await CreateService(db, today).GetAsync(User("Owner")), company);
+
+        Assert.Equal(DashboardDeadlineStates.Scheduled, item.State);
+        Assert.Equal(live.Id, item.Deadline?.PeriodId);
+        Assert.Equal(new DateOnly(2027, 3, 18), item.Deadline?.DueDate);
+        // Not hidden: every unfiled historic deadline is counted and the oldest is identified.
+        Assert.Equal(16, item.HistoricUnverifiedCount);
+        Assert.Equal(historic[0].Id, item.OldestHistoricUnverified?.PeriodId);
+        Assert.Equal(DeadlineType.Revenue, item.OldestHistoricUnverified?.DeadlineType);
+        Assert.Contains("16 earlier-period deadlines have no recorded filing", item.Message);
+    }
+
+    [Fact]
+    public async Task Batch_KeepsAnOverduePriorYearWithAccountingWorkLiveAfterTheNextPeriodIsCreated()
+    {
+        // Review of #79: the next period can be created before last year's accounts are filed.
+        // A prior period holding accounting work is live, so its overdue deadline stays urgent.
+        await using var db = CreateDb();
+        var company = Assert.Single(await SeedCompaniesAsync(db, 1));
+        var prior = AddPeriod(db, company, new DateOnly(2025, 1, 1), new DateOnly(2025, 12, 31));
+        var next = AddPeriod(db, company, new DateOnly(2026, 1, 1), new DateOnly(2026, 12, 31));
+        var bank = new BankAccount { CompanyId = company.Id, Name = "Current", OpeningBalance = 0m };
+        db.BankAccounts.Add(bank);
+        await db.SaveChangesAsync();
+        db.ImportedTransactions.Add(new ImportedTransaction
+        {
+            BankAccountId = bank.Id,
+            PeriodId = prior.Id,
+            Date = new DateOnly(2025, 6, 1),
+            Description = "Receipt",
+            Amount = 100m
+        });
+        var today = new DateOnly(2026, 10, 11);
+        db.FilingDeadlines.AddRange(
+            Deadline(prior, new DateOnly(2026, 9, 30)),
+            Deadline(prior, new DateOnly(2026, 9, 23), type: DeadlineType.Revenue),
+            Deadline(next, new DateOnly(2027, 9, 30)),
+            Deadline(next, new DateOnly(2027, 9, 23), type: DeadlineType.Revenue));
+        await db.SaveChangesAsync();
+
+        var item = Item(await CreateService(db, today).GetAsync(User("Owner")), company);
+
+        Assert.Equal(DashboardDeadlineStates.Overdue, item.State);
+        Assert.Equal(prior.Id, item.Deadline?.PeriodId);
+        Assert.Equal(new DateOnly(2026, 9, 23), item.Deadline?.DueDate);
+        Assert.Equal(0, item.HistoricUnverifiedCount);
+    }
+
+    [Fact]
+    public async Task Batch_LiveOverdueStillRanksAsOverdueAndRecordedHistoryIsNotCounted()
+    {
+        await using var db = CreateDb();
+        var company = Assert.Single(await SeedCompaniesAsync(db, 1));
+        var prior = AddPeriod(db, company, new DateOnly(2024, 1, 1), new DateOnly(2024, 12, 31));
+        var live = AddPeriod(db, company, new DateOnly(2025, 1, 1), new DateOnly(2025, 12, 31));
+        await db.SaveChangesAsync();
+        var today = new DateOnly(2026, 10, 10);
+        db.FilingDeadlines.AddRange(
+            Deadline(prior, new DateOnly(2025, 9, 30), new DateOnly(2025, 9, 1)),
+            Deadline(prior, new DateOnly(2025, 9, 23), new DateOnly(2025, 9, 2), DeadlineType.Revenue),
+            Deadline(live, new DateOnly(2026, 9, 30)),
+            Deadline(live, new DateOnly(2026, 9, 23), type: DeadlineType.Revenue));
+        await db.SaveChangesAsync();
+
+        var item = Item(await CreateService(db, today).GetAsync(User("Owner")), company);
+
+        Assert.Equal(DashboardDeadlineStates.Overdue, item.State);
+        Assert.Equal(live.Id, item.Deadline?.PeriodId);
+        Assert.Equal(0, item.HistoricUnverifiedCount);
+        Assert.Null(item.OldestHistoricUnverified);
+    }
+
     private static DashboardDeadlineItem Item(DashboardDeadlineBatch batch, Company company) =>
         Assert.Single(batch.Items, item => item.CompanyId == company.Id);
 
@@ -127,13 +224,17 @@ public sealed class DashboardDeadlineBatchTests
         FilingReference = filedDate is null ? null : $"CORE-{period.Id}"
     };
 
-    private static AccountingPeriod AddPeriod(AccountsDbContext db, Company company)
+    private static AccountingPeriod AddPeriod(
+        AccountsDbContext db,
+        Company company,
+        DateOnly? start = null,
+        DateOnly? end = null)
     {
         var period = new AccountingPeriod
         {
             CompanyId = company.Id,
-            PeriodStart = new DateOnly(2025, 1, 1),
-            PeriodEnd = new DateOnly(2025, 12, 31),
+            PeriodStart = start ?? new DateOnly(2025, 1, 1),
+            PeriodEnd = end ?? new DateOnly(2025, 12, 31),
             IsFirstYear = true
         };
         db.AccountingPeriods.Add(period);

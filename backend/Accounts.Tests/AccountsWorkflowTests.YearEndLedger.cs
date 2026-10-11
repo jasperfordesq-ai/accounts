@@ -1170,6 +1170,40 @@ public partial class AccountsWorkflowTests
         Assert.Equal(25.50m, transactions[1].Amount);
     }
 
+    [Fact]
+    public async Task ImportService_ImportsTheAnonymisedFy2026AibExportInFull()
+    {
+        // Live regression (29 Aug 2026 handoff): the real 12-column AIB export imported 0 of 61 rows.
+        // The fixture is that export anonymised (account number and descriptions replaced); dates,
+        // amounts and running balances are unchanged so the reconciliation below is the real one.
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        period.PeriodStart = new DateOnly(2025, 8, 1);
+        period.PeriodEnd = new DateOnly(2026, 7, 31);
+        var bank = new BankAccount { CompanyId = period.CompanyId, Name = "AIB current account", OpeningBalance = -10_131.41m };
+        db.BankAccounts.Add(bank);
+        await db.SaveChangesAsync();
+        var csv = await File.ReadAllBytesAsync(AibFixturePath());
+
+        var result = await new ImportService(db, Options.Create(new ImportLimitConfig())).ImportCsvAsync(
+            period.CompanyId, bank.Id, period.Id, new MemoryStream(csv), "aib-fy2026.csv");
+
+        Assert.Equal(61, result.ImportedRows);
+        var transactions = await db.ImportedTransactions
+            .Where(transaction => transaction.BankAccountId == bank.Id)
+            .OrderBy(transaction => transaction.Date)
+            .ThenBy(transaction => transaction.Id)
+            .ToListAsync();
+        Assert.Equal(61, transactions.Count);
+        Assert.Equal(-33.72m, transactions.Sum(transaction => transaction.Amount));
+        Assert.Equal(-10_165.13m, bank.OpeningBalance + transactions.Sum(transaction => transaction.Amount));
+        Assert.Equal(-10_165.13m, transactions[^1].Balance);
+        Assert.All(transactions, transaction => Assert.Equal("999999 - 00000000", transaction.Reference));
+    }
+
+    private static string AibFixturePath([System.Runtime.CompilerServices.CallerFilePath] string sourceFilePath = "") =>
+        Path.Combine(Path.GetDirectoryName(sourceFilePath)!, "Fixtures", "aib-internet-banking-fy2026-anonymised.csv");
+
     [Theory]
     [InlineData(999, false)]   // strictly below 10% is within section 240
     [InlineData(1000, true)]   // exactly 10% is not "less than" 10%

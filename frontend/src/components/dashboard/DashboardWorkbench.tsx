@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Plus } from "lucide-react";
-import type { Company, DashboardDeadlineState, FilingDeadline, ProductionReadinessReport, QuarantinedCompanySummary } from "@/lib/api";
+import type { Company, DashboardDeadlineState, FilingDeadline, HistoricDeadlineSummary, ProductionReadinessReport, QuarantinedCompanySummary } from "@/lib/api";
 import { AccountantDashboardQueue } from "@/components/dashboard/AccountantDashboardQueue";
 import { DashboardCompanyDirectory } from "@/components/dashboard/DashboardCompanyDirectory";
 import { DashboardPracticeSummary } from "@/components/dashboard/DashboardPracticeSummary";
@@ -27,6 +27,7 @@ interface DashboardWorkbenchProps {
   deadlineState?: ResourceState;
   deadlineUnavailableCompanyIds?: number[];
   deadlineStates?: Record<number, DashboardDeadlineState>;
+  historicDeadlines?: Record<number, HistoricDeadlineSummary>;
   quarantinedCompanies?: QuarantinedCompanySummary[];
   onCompanyRecovered?: () => void | Promise<void>;
   onRetryCompanies?: () => void | Promise<void>;
@@ -59,6 +60,7 @@ export function DashboardWorkbench({
   deadlineState,
   deadlineUnavailableCompanyIds,
   deadlineStates = {},
+  historicDeadlines = {},
   quarantinedCompanies = [],
   onCompanyRecovered,
   onRetryCompanies,
@@ -111,6 +113,7 @@ export function DashboardWorkbench({
               deadlines={deadlines}
               deadlineUnavailableCompanyIds={unavailableDeadlineIds}
               deadlineStates={deadlineStates}
+              historicDeadlines={historicDeadlines}
               productionReleaseBlockers={readinessReport?.releaseBlockerRegister ?? []}
             />
 

@@ -5,6 +5,10 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <OpenApiGenerateDocuments>true</OpenApiGenerateDocuments>
+    <!-- Swashbuckle.AspNetCore's package props default this to false when unset, which silently
+         stops every build from regenerating the committed contract and blinds CI's drift check.
+         Opt in explicitly; this project property is evaluated after package props. -->
+    <OpenApiGenerateDocumentsOnBuild>true</OpenApiGenerateDocumentsOnBuild>
     <OpenApiDocumentsDirectory>$(MSBuildProjectDirectory)\OpenApi</OpenApiDocumentsDirectory>
     <OpenApiGenerateDocumentsOptions>--document-name v1 --file-name accounts-api-v1 --openapi-version OpenApi3_1</OpenApiGenerateDocumentsOptions>
   </PropertyGroup>

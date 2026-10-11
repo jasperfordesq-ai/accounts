@@ -56,19 +56,40 @@ public class SizeClassificationService(
 
     public async Task<ClassificationResult> ClassifyAsync(int companyId, int periodId, string? userId = null)
     {
-        var period = await db.AccountingPeriods
+        var period = await LoadPeriodForClassificationAsync(companyId, periodId);
+        var sc = period.SizeClassification
+            ?? throw new BusinessRuleException("Size classification data not yet entered for this period.");
+        return await ClassifyLoadedAsync(period, ClassificationAuditSnapshot(sc, null, null, null, null, null), userId);
+    }
+
+    /// <summary>
+    /// Loads the tracked period graph that <see cref="ClassifyLoadedAsync"/> requires.
+    /// </summary>
+    public async Task<AccountingPeriod> LoadPeriodForClassificationAsync(int companyId, int periodId) =>
+        await db.AccountingPeriods
             .Include(p => p.Company)
             .Include(p => p.SizeClassification)
             .Include(p => p.FilingRegime)
             .FirstOrDefaultAsync(p => p.Id == periodId && p.CompanyId == companyId)
             ?? throw new ResourceNotFoundException($"Period {periodId} not found");
 
+    /// <summary>
+    /// Classifies a period loaded by <see cref="LoadPeriodForClassificationAsync"/>. Pending input
+    /// changes on the tracked classification are persisted by the same single SaveChanges as the
+    /// decision, so a rejected classification never leaves inputs saved without a decision.
+    /// </summary>
+    public async Task<ClassificationResult> ClassifyLoadedAsync(
+        AccountingPeriod period,
+        object? auditOldValue,
+        string? userId = null)
+    {
+        var periodId = period.Id;
         var sc = period.SizeClassification
             ?? throw new BusinessRuleException("Size classification data not yet entered for this period.");
         ValidateInputs(sc.Turnover, sc.BalanceSheetTotal, sc.AvgEmployees, sc.ThresholdElectionEffectiveFrom);
         EnsureEntityClassificationSupported(period.Company);
 
-        var oldValue = ClassificationAuditSnapshot(sc, null, null, null, null, null);
+        var oldValue = auditOldValue;
         var election = NormalizeElection(sc.ThresholdElectionEffectiveFrom);
         var schedule = SelectSchedule(period.PeriodStart, election);
         var currentRaw = EvaluateRaw(period, sc, schedule);
@@ -312,6 +333,9 @@ public class SizeClassificationService(
         }
         return sc;
     }
+
+    public static object DecisionAuditSnapshot(SizeClassification sc) =>
+        ClassificationAuditSnapshot(sc, null, null, null, null, null);
 
     public static void ValidateInputs(
         decimal turnover,

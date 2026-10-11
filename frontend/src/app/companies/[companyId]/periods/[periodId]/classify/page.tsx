@@ -18,7 +18,6 @@ import { useUnsavedChanges } from "@/lib/useUnsavedChanges";
 import {
   getCompany,
   getPeriod,
-  saveSizeClassification,
   runClassification,
   setFilingRegime,
   saveMemberAuditNotice,
@@ -38,6 +37,15 @@ function formatCurrency(amount: number): string {
 }
 
 type ThresholdElectionDate = "2023-01-01" | "2024-01-01";
+
+// Inputs hold exactly what was typed. A zero is a real answer (a charity with no staff), so it
+// must display as "0", and an empty box must not be sent as a silent zero.
+function parseNonNegative(value: string, integer = false): number | undefined {
+  if (value.trim() === "") return undefined;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0 || (integer && !Number.isInteger(parsed))) return undefined;
+  return parsed;
+}
 
 type RegimeOption = {
   label: string;
@@ -81,9 +89,15 @@ export default function ClassifyPage({
   const [loading, setLoading] = useState(true);
 
   // Form state
-  const [turnover, setTurnover] = useState<number>(0);
-  const [balanceSheetTotal, setBalanceSheetTotal] = useState<number>(0);
-  const [avgEmployees, setAvgEmployees] = useState<number>(0);
+  const [turnover, setTurnover] = useState("");
+  const [balanceSheetTotal, setBalanceSheetTotal] = useState("");
+  const [avgEmployees, setAvgEmployees] = useState("");
+  const parsedTurnover = parseNonNegative(turnover);
+  const parsedBalanceSheetTotal = parseNonNegative(balanceSheetTotal);
+  const parsedAvgEmployees = parseNonNegative(avgEmployees, true);
+  const inputsValid = parsedTurnover !== undefined
+    && parsedBalanceSheetTotal !== undefined
+    && parsedAvgEmployees !== undefined;
   const [thresholdElectionEffectiveFrom, setThresholdElectionEffectiveFrom] = useState<ThresholdElectionDate>("2024-01-01");
 
   // Unsaved-changes guard: the size figures are only persisted when "Run classification" saves them
@@ -117,9 +131,9 @@ export default function ClassifyPage({
       // Pre-fill from existing classification if available
       if (periodData.sizeClassification) {
         const sc = periodData.sizeClassification;
-        setTurnover(sc.turnover);
-        setBalanceSheetTotal(sc.balanceSheetTotal);
-        setAvgEmployees(sc.avgEmployees);
+        setTurnover(String(sc.turnover));
+        setBalanceSheetTotal(String(sc.balanceSheetTotal));
+        setAvgEmployees(String(sc.avgEmployees));
         setThresholdElectionEffectiveFrom(
           sc.thresholdElectionEffectiveFrom === "2023-01-01" ? "2023-01-01" : "2024-01-01",
         );
@@ -144,20 +158,23 @@ export default function ClassifyPage({
   }, [loadData]);
 
   async function handleClassify() {
+    if (parsedTurnover === undefined || parsedBalanceSheetTotal === undefined || parsedAvgEmployees === undefined) {
+      setClassifyError("Enter turnover, balance sheet total and average employees (0 is a valid answer).");
+      return;
+    }
     setClassifying(true);
     setClassifyError(null);
     setResult(null);
     setRegimeConfirmed(false);
     setSelectedRegime("");
     try {
-      await saveSizeClassification(cId, pId, {
-        turnover,
-        balanceSheetTotal,
-        avgEmployees,
+      const classResult = await runClassification(cId, pId, {
+        turnover: parsedTurnover,
+        balanceSheetTotal: parsedBalanceSheetTotal,
+        avgEmployees: parsedAvgEmployees,
         thresholdElectionEffectiveFrom,
       });
       setDirty(false);
-      const classResult = await runClassification(cId, pId);
       setResult(classResult);
       if (classResult.availableRegimes.length > 0) {
         setSelectedRegime(toRegimeOption(classResult.availableRegimes[0]).value);
@@ -253,8 +270,8 @@ export default function ClassifyPage({
                 step="0.01"
                 className={inputClass}
                 placeholder="0.00"
-                value={turnover || ""}
-                onChange={(e) => { setTurnover(Number(e.target.value)); setDirty(true); }}
+                value={turnover}
+                onChange={(e) => { setTurnover(e.target.value); setDirty(true); }}
               />
             </div>
             <div>
@@ -268,8 +285,8 @@ export default function ClassifyPage({
                 step="0.01"
                 className={inputClass}
                 placeholder="0.00"
-                value={balanceSheetTotal || ""}
-                onChange={(e) => { setBalanceSheetTotal(Number(e.target.value)); setDirty(true); }}
+                value={balanceSheetTotal}
+                onChange={(e) => { setBalanceSheetTotal(e.target.value); setDirty(true); }}
               />
             </div>
             <div>
@@ -283,8 +300,8 @@ export default function ClassifyPage({
                 step="1"
                 className={inputClass}
                 placeholder="0"
-                value={avgEmployees || ""}
-                onChange={(e) => { setAvgEmployees(Number(e.target.value)); setDirty(true); }}
+                value={avgEmployees}
+                onChange={(e) => { setAvgEmployees(e.target.value); setDirty(true); }}
               />
             </div>
             <div>
@@ -315,7 +332,7 @@ export default function ClassifyPage({
             <Button
               variant="primary"
               onPress={handleClassify}
-              isDisabled={classifying || turnover < 0 || balanceSheetTotal < 0 || avgEmployees < 0}
+              isDisabled={classifying || !inputsValid}
             >
               {classifying ? (
                 <>
@@ -563,17 +580,21 @@ export default function ClassifyPage({
               {(!period.sizeClassification.decisionInputFingerprintSha256
                 || period.sizeClassification.overrideRequiresRereview) && (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
-                  The retained decision is stale. Re-run classification before selecting a regime or using filing outputs.
+                  {period.sizeClassification.calculatedClass
+                    ? "The retained decision is stale. Re-run classification before selecting a regime or using filing outputs."
+                    : "These figures have been saved but not yet classified. Run classification before selecting a regime or using filing outputs."}
                 </div>
               )}
               <div className="flex items-center justify-center">
                 <Chip
-                  color={classColorMap[period.sizeClassification.calculatedClass] ?? "default"}
+                  color={classColorMap[period.sizeClassification.calculatedClass ?? ""] ?? "default"}
                   variant="primary"
                   size="lg"
                   className="text-lg px-6 py-3 font-bold"
                 >
-                  {period.sizeClassification.calculatedClass} Company
+                  {period.sizeClassification.calculatedClass
+                    ? `${period.sizeClassification.calculatedClass} Company`
+                    : "Not yet classified"}
                 </Chip>
               </div>
               {period.sizeClassification.qualificationNotes && (
