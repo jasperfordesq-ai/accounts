@@ -1,7 +1,6 @@
-# Irish Accounts Contributor Terms
+# FilingBridge Contributor Terms
 
-These Contributor Terms are a separate contributor agreement for Irish
-Accounts. They apply to any Contribution submitted to Irish Accounts after
+These Contributor Terms are a separate contributor agreement for FilingBridge. They apply to any Contribution submitted to FilingBridge after
 these terms are published and referenced in the repository or contribution
 process, including by pull request, issue, patch, commit, email, message,
 uploaded file, documentation change, translation, design asset, configuration
@@ -11,10 +10,10 @@ By submitting a Contribution after that point, you agree to these terms. For
 Contributions submitted before these terms were published, these terms apply
 only if the contributor separately confirms acceptance.
 
-These terms are intended to protect the long-term ability of Irish Accounts to
+These terms are intended to protect the long-term ability of FilingBridge to
 remain open source under AGPL-3.0-or-later while also allowing Jasper Ford, or
 a future entity chosen by Jasper Ford to steward, operate, commercialise, or
-license Irish Accounts, to offer commercial licensing, hosted services,
+license FilingBridge, to offer commercial licensing, hosted services,
 support, and proprietary or commercial arrangements where appropriate.
 
 This document is a project legal policy and should be reviewed by qualified
@@ -22,9 +21,9 @@ legal counsel before relying on it for a material commercial transaction.
 
 ## 1. Definitions
 
-**Project** means Irish Accounts and the software, documentation, data,
+**Project** means FilingBridge and the software, documentation, data,
 designs, assets, tests, configuration, build scripts, and other materials
-maintained in or for the Irish Accounts repositories.
+maintained in or for the FilingBridge repositories.
 
 **Contribution** means any copyrightable or patentable work, change,
 suggestion, patch, code, documentation, translation, media, data, design, test,
@@ -34,7 +33,7 @@ for inclusion, review, discussion, or use.
 **Project Steward** means Jasper Ford and any company, nonprofit, foundation,
 association, successor, assignee, or other legal entity that Jasper Ford
 designates in a signed writing or public project notice to own, steward,
-operate, commercialise, sublicense, or license Irish Accounts.
+operate, commercialise, sublicense, or license FilingBridge.
 
 **You** means the person or legal entity submitting the Contribution.
 
@@ -50,7 +49,7 @@ or medium.
 This licence includes the right for each Project Steward to:
 
 - release your Contribution under AGPL-3.0-or-later;
-- include your Contribution in Irish Accounts and related products, services,
+- include your Contribution in FilingBridge and related products, services,
   forks, distributions, hosted services, and commercial offerings;
 - relicense your Contribution under commercial, proprietary, source-available,
   open-source, dual-licence, or other licence terms;
@@ -86,7 +85,7 @@ hosting, sublicensing, or relicensing your Contribution in accordance with
 these terms.
 
 If you or an entity on whose behalf you submit a Contribution initiates patent
-litigation alleging that Irish Accounts or your Contribution infringes a
+litigation alleging that FilingBridge or your Contribution infringes a
 patent, the patent licence you granted under this section terminates to the
 maximum extent permitted by law.
 

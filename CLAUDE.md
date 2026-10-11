@@ -12,9 +12,11 @@ Multi-company web application that replaces the traditional year-end accountant 
 
 - GitHub: https://github.com/jasperfordesq-ai/accounts
 - Treat this as the canonical repository for the Irish statutory accounts production platform.
-- Contributors: Jasper Ford (creator, main contributor, and primary author) and
-  hOUR Timebank CLG (Ireland) (organisational contributor). Canonical attribution is
-  maintained in `CONTRIBUTORS.md`, `contributors.json`, and `NOTICE`.
+- Product name: **FilingBridge**. Jasper Ford is the creator, copyright holder and
+  intellectual-property holder; hOUR Timebank CLG (Ireland) is the official contributor.
+  Licence: AGPL-3.0-or-later. Canonical attribution is maintained in `CONTRIBUTORS.md`,
+  `contributors.json`, `NOTICE`, and `frontend/src/lib/attribution.ts`; vulnerability
+  reporting is described in `SECURITY.md`.
 
 ## Tech Stack
 

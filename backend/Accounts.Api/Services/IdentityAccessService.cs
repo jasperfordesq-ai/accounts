@@ -106,7 +106,7 @@ public sealed class IdentityAccessService(
                 enrollment,
                 expires,
                 enrollmentSecret,
-                enrollmentSecret is null ? null : MfaSecurityService.BuildOtpAuthUri("Irish Accounts", user.Email, enrollmentSecret)));
+                enrollmentSecret is null ? null : MfaSecurityService.BuildOtpAuthUri("FilingBridge", user.Email, enrollmentSecret)));
     }
 
     public async Task<MfaCompletionResult> CompleteChallengeAsync(

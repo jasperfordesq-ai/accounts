@@ -1,14 +1,13 @@
-Irish Accounts Attribution, Additional Terms, and Notices
+FilingBridge Attribution, Additional Terms, and Notices
 
 This NOTICE file records authorship, attribution, trademark, warranty,
-liability, and AGPL-3.0-or-later Section 7 additional terms for Irish
-Accounts.
+liability, and AGPL-3.0-or-later Section 7 additional terms for FilingBridge.
 
-Irish Accounts is licensed under the GNU Affero General Public License
+FilingBridge is licensed under the GNU Affero General Public License
 version 3 or, at your option, any later version published by the Free
 Software Foundation.
 
-Nothing in this NOTICE transfers ownership of Irish Accounts, grants any
+Nothing in this NOTICE transfers ownership of FilingBridge, grants any
 trademark licence, removes any right granted by AGPL-3.0-or-later, or
 prevents Jasper Ford from offering the same code under separate commercial,
 proprietary, support, hosting, warranty, or service terms to customers who
@@ -18,7 +17,7 @@ receive such separate written terms.
 THIRD-PARTY COMPONENTS
 ================================================================================
 
-Irish Accounts bundles third-party open-source components, including ASP.NET
+FilingBridge bundles third-party open-source components, including ASP.NET
 Core, Entity Framework Core, PostgreSQL client tooling, QuestPDF, CsvHelper,
 Next.js, React, HeroUI, Tailwind CSS, and supporting build/test tooling. Each
 remains under its own licence and copyright and retains its own notices. The
@@ -31,19 +30,20 @@ any separate proprietary distribution.
 AUTHORSHIP AND CREDITS
 ================================================================================
 
-Original creator, main contributor, and copyright holder:
+Original creator and copyright holder:
 - Jasper Ford
+
+Official contributor:
+- hOUR Timebank CLG (Ireland)
+
+Contributor status is an acknowledgement of contribution to the FilingBridge
+platform. It does not transfer or imply ownership of FilingBridge, a
+copyright assignment, trademark rights, endorsement of modified versions, or
+authority to offer separate commercial licences unless separately agreed in
+writing.
 
 Copyright:
 - Copyright (c) 2026 Jasper Ford.
-
-Contributors:
-- Jasper Ford
-- hOUR Timebank CLG (Ireland) - organisational contributor
-
-Contributor acknowledgement identifies project participation; it does not by
-itself transfer copyright, project stewardship, trademark rights, or authority
-to offer separate licensing terms.
 
 ================================================================================
 AGPL SECTION 7 ADDITIONAL TERMS
@@ -64,40 +64,39 @@ has received, the necessary copyright permission to impose them.
 
 Covered works must preserve the copyright notices, licence notices, warranty
 notices, source-code notices, and author attributions contained in this
-repository and in the Irish Accounts user interface.
+repository and in the FilingBridge user interface.
 
-Interactive user interfaces based on Irish Accounts must display appropriate
+Interactive user interfaces based on FilingBridge must display appropriate
 legal notices in a convenient and reasonably prominent location. The canonical
-Irish Accounts interface satisfies this through its footer, source-code link,
+FilingBridge interface satisfies this through its footer, source-code link,
 and About page.
 
 Downstream deployments and modified versions must preserve an equivalent
 notice path that is no less accessible to ordinary users than the original
-Irish Accounts notice path. A modified interface may adapt placement to fit
+FilingBridge notice path. A modified interface may adapt placement to fit
 its layout, but it must not remove, obscure, bury, or make misleading the
 required notices.
 
 Canonical attribution wording:
 
-  Powered by Irish Accounts
+  Powered by FilingBridge
   Created by Jasper Ford
-  Contributors include hOUR Timebank CLG (Ireland)
+  Contributor: hOUR Timebank CLG (Ireland)
   Licensed under AGPL v3-or-later
   Source: https://github.com/jasperfordesq-ai/accounts
 
 Where the application has an About page, legal page, credits page, or
-equivalent screen, it must include the Irish Accounts attribution and the
-Irish Accounts contributor information, either directly or by a clearly
-labelled link to the canonical contributor information included with the
-complete corresponding source.
+equivalent screen, it must include the FilingBridge attribution either
+directly or by a clearly labelled link to the canonical attribution
+information included with the complete corresponding source.
 
 Where the application has a global footer, mobile drawer, persistent app
-navigation, or equivalent legal-notice area, it must include an Irish
-Accounts attribution and source-code link.
+navigation, or equivalent legal-notice area, it must include a
+FilingBridge attribution and source-code link.
 
 Canonical footer wording:
 
-  Built on Irish Accounts by Jasper Ford with hOUR Timebank CLG (Ireland)
+  Built on FilingBridge by Jasper Ford with hOUR Timebank CLG (Ireland)
 
 --------------------------------------------------------------------------------
 2. Modified-Version Notices - AGPL Section 7(c)
@@ -105,20 +104,21 @@ Canonical footer wording:
 
 Modified versions must not misrepresent their origin.
 
-If you modify Irish Accounts and convey or make available the modified
+If you modify FilingBridge and convey or make available the modified
 version, including as a network service, you must clearly mark the work as
 modified in the appropriate legal notices, source-code notices, or equivalent
 location.
 
 A clear notice may use wording such as:
 
-  This software is a modified version of Irish Accounts.
+  This software is a modified version of FilingBridge.
   Original software created by Jasper Ford.
+  Official contributor: hOUR Timebank CLG (Ireland).
   This modified version is not endorsed by the original author unless a
   separate written agreement says otherwise.
 
 You may use different wording if it gives users materially equivalent notice
-that the work is modified, identifies Irish Accounts as the original work, and
+that the work is modified, identifies FilingBridge as the original work, and
 does not imply endorsement by the original author or Project Steward.
 
 --------------------------------------------------------------------------------
@@ -127,9 +127,9 @@ does not imply endorsement by the original author or Project Steward.
 
 The AGPL licence for the software does not grant trademark rights.
 
-Without separate written permission, you may not use the names "Irish
-Accounts", "Jasper Ford", or associated logos, marks, trade names, or branding
-to state or imply endorsement, sponsorship, certification, official
+Without separate written permission, you may not use the names
+"FilingBridge", "Jasper Ford", or associated logos, marks, trade names, or
+branding to state or imply endorsement, sponsorship, certification, official
 partnership, or commercial affiliation.
 
 Required attribution, accurate statements of origin, nominative fair use, and
@@ -140,14 +140,14 @@ section.
 4. Limited Indemnity for Contractual Assumptions of Liability - AGPL Section 7(f)
 --------------------------------------------------------------------------------
 
-If you convey Irish Accounts, or a modified version of Irish Accounts, with
+If you convey FilingBridge, or a modified version of FilingBridge, with
 contractual assumptions of liability to a recipient, you must indemnify the
-Irish Accounts licensors and authors for any liability that those contractual
+FilingBridge licensors and authors for any liability that those contractual
 assumptions directly impose on them.
 
 This indemnity is limited to the scope permitted by AGPL-3.0-or-later Section
 7(f). It is not intended to impose a general indemnity merely because someone
-uses, runs, studies, modifies, hosts, or redistributes Irish Accounts under
+uses, runs, studies, modifies, hosts, or redistributes FilingBridge under
 the AGPL.
 
 Broader indemnities, service commitments, warranties, support obligations, or
@@ -160,8 +160,13 @@ commercial risk allocations may be agreed only in a separate written contract.
 In addition to the warranty disclaimer and liability limitation in
 AGPL-3.0-or-later Sections 15 and 16:
 
-Irish Accounts is provided for statutory accounts production workflow,
-accountant review, evidence preparation, and related accounting operations.
+FilingBridge is provided for the preparation of Irish statutory financial
+statements, directors' approval records, filing-output and evidence
+preparation, and related accounting operations. The software does not file
+directly with the Companies Registration Office or Revenue. The board of
+directors remains responsible for approving the accounts under Companies Act
+2014 s.324, and a statutory audit still applies where the company is not
+audit-exempt.
 The authors and licensors make no representation that the software, as
 provided, is suitable for any particular legal, financial, tax, audit,
 statutory filing, public-sector, healthcare, safeguarding, employment,
@@ -181,12 +186,12 @@ regulatory advice merely by publishing the software under the AGPL.
 SOURCE CODE NOTICE - AGPL SECTION 13
 ================================================================================
 
-If you modify Irish Accounts and users interact with the modified version
+If you modify FilingBridge and users interact with the modified version
 remotely through a computer network, AGPL-3.0-or-later Section 13 requires
 that your modified version prominently offer those users an opportunity to
 receive the complete corresponding source code of your version.
 
-The canonical public source repository for this version of Irish Accounts is:
+The canonical public source repository for this version of FilingBridge is:
 
   https://github.com/jasperfordesq-ai/accounts
 
@@ -213,11 +218,11 @@ those rights are granted in a separate written agreement.
 RELATED PROJECTS
 ================================================================================
 
-Irish Accounts is this repository's ASP.NET Core / Next.js implementation:
+FilingBridge is actively developed in this repository:
 
   https://github.com/jasperfordesq-ai/accounts
 
-Any reference to related Irish Accounts codebases is informational only. The
+Any reference to related codebases is informational only. The
 AGPL Section 7 additional terms in this NOTICE apply to this repository and
 to material from this repository for which the relevant copyright permission
 exists.
@@ -226,7 +231,7 @@ exists.
 TRADEMARKS
 ================================================================================
 
-The names, logos, and branding associated with Irish Accounts are not licensed
+The names, logos, and branding associated with FilingBridge are not licensed
 under AGPL-3.0-or-later. Use of trademarks, trade names, logos, branding, or
 publicity rights requires separate permission except where required for
 copyright attribution, accurate statements of origin, nominative fair use, or

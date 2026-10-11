@@ -266,7 +266,7 @@ builder.Services.AddSwaggerGen(c =>
 {
     // Keep the development Swagger UI on a distinct document name so the build-time Microsoft
     // OpenAPI provider remains the single source for the committed v1 contract.
-    c.SwaggerDoc("swagger-v1", new() { Title = "Irish Accounts API", Version = "v1" });
+    c.SwaggerDoc("swagger-v1", new() { Title = "FilingBridge API", Version = "v1" });
 });
 
 var app = builder.Build();
@@ -346,7 +346,7 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
     app.UseSwagger();
     app.UseSwaggerUI(options =>
-        options.SwaggerEndpoint("/swagger/swagger-v1/swagger.json", "Irish Accounts API v1"));
+        options.SwaggerEndpoint("/swagger/swagger-v1/swagger.json", "FilingBridge API v1"));
 }
 
 // Endpoint groups

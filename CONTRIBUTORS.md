@@ -1,17 +1,21 @@
-# Contributors
+# FilingBridge Contributors
 
-This file lists the contributor information for Irish Accounts. This
-information must be displayed on About pages in accordance with the
-attribution policy in [NOTICE](NOTICE).
+FilingBridge was created by **Jasper Ford**, the copyright and IP holder for
+the FilingBridge software and source code.
 
-## Creator
+## Official contributors
 
-- **Jasper Ford** - Creator, main contributor, and primary author
+- **hOUR Timebank CLG (Ireland)**
 
-## Contributors
+This is the canonical public contributor record for the project. Recognition
+as a contributor acknowledges contribution to the FilingBridge platform; it
+does not by itself transfer copyright or intellectual-property ownership,
+grant trademark rights, imply endorsement of modified versions, or confer
+authority to offer commercial licences.
 
-- **Jasper Ford** - Creator, main contributor, and primary author
-- **hOUR Timebank CLG (Ireland)** - Organisational contributor
+FilingBridge is licensed under AGPL-3.0-or-later. See [LICENSE](LICENSE) for
+the unmodified licence text and [NOTICE](NOTICE) for the project attribution,
+additional terms, and legal notices.
 
 ## Machine-Readable Format
 

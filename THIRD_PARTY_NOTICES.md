@@ -1,6 +1,6 @@
 # Third-Party Notices
 
-Irish Accounts includes and depends on third-party open-source software. Each
+FilingBridge includes and depends on third-party open-source software. Each
 third-party component remains under its own licence and copyright notices.
 
 This file is the human-readable notice landing page for the major components
@@ -42,8 +42,7 @@ Testing Library, jsdom, and Playwright.
 ## Notice Preservation
 
 Redistributions, hosted deployments, and modified versions must preserve
-required third-party notices and licence terms in addition to the Irish
-Accounts notices in [NOTICE](NOTICE) and the AGPL-3.0-or-later licence in
+required third-party notices and licence terms in addition to the FilingBridge notices in [NOTICE](NOTICE) and the AGPL-3.0-or-later licence in
 [LICENSE](LICENSE).
 
 Before a commercial redistribution or hosted offering, regenerate or review a

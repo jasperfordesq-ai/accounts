@@ -107,32 +107,34 @@ are documented in **[CLAUDE.md](CLAUDE.md)** under *Authentication, Authorizatio
 
 ### Creator
 
-- **Jasper Ford** - Creator, main contributor, and primary author
+- **Jasper Ford** - Creator, copyright holder and intellectual-property holder
 
-### Contributors
+### Official contributors
 
-- **Jasper Ford** - Creator, main contributor, and primary author
-- **hOUR Timebank CLG (Ireland)** - Organisational contributor
+- **hOUR Timebank CLG (Ireland)** - Official contributor
 
 ### Third-party open-source components
 
-Irish Accounts builds on open-source projects including ASP.NET Core, Entity
+FilingBridge builds on open-source projects including ASP.NET Core, Entity
 Framework Core, PostgreSQL tooling, QuestPDF, CsvHelper, Next.js, React,
 HeroUI, Tailwind CSS, and related build/test tooling. Each retains its own
 licence and copyright; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## License
 
+License: AGPL v3 or later (`AGPL-3.0-or-later`).
+
 This software is licensed under the **GNU Affero General Public License version
-3** (AGPL-3.0-or-later).
+3 or later** (AGPL-3.0-or-later).
 
-The AGPL requires that if you run a modified version of this software on a
-server and let others interact with it, you must make your source code
-available to those users.
+The AGPL requires that if you modify this software and let users interact with
+it remotely through a computer network, you must offer those users access to the
+complete corresponding source code of your modified version.
 
-See the [LICENSE](LICENSE) file for the full license text.
-See the [NOTICE](NOTICE) file for attribution requirements.
-See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for bundled third-party
+See [LICENSE](LICENSE) for the full AGPL text and [NOTICE](NOTICE) for the
+FilingBridge attribution, additional terms, warranty disclaimers, source-code
+notice, and AGPL Section 7 terms. See
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for bundled third-party
 components and their licences.
 
 ## UI Attribution Requirement
@@ -143,16 +145,17 @@ display visible attribution and a link to the source code repository.
 ### Required Attribution
 
 **Footer (all pages):**
-> "Built on Irish Accounts by Jasper Ford with hOUR Timebank CLG (Ireland)"
+> "Built on FilingBridge by Jasper Ford with hOUR Timebank CLG (Ireland)"
 
 This text must be a clickable hyperlink to:
 <https://github.com/jasperfordesq-ai/accounts>
 
 **About page:**
-> "Powered by Irish Accounts
+> "Powered by FilingBridge
 > Created by Jasper Ford
-> Contributors include hOUR Timebank CLG (Ireland)
-> Licensed under AGPL v3-or-later"
+> Contributor: hOUR Timebank CLG (Ireland)
+> Licensed under AGPL v3-or-later
+> Source: https://github.com/jasperfordesq-ai/accounts"
 
 With a link to: <https://github.com/jasperfordesq-ai/accounts>
 

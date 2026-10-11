@@ -49,7 +49,7 @@ export function AppNavbar() {
           className="flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-gray-100"
         >
           <Building2 className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
-          Irish Accounts
+          FilingBridge
         </Link>
 
         {/* Desktop nav */}

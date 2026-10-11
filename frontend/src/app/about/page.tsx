@@ -27,12 +27,12 @@ export default function AboutPage() {
               ))}
             </div>
             <p>
-              {CREATOR_NAME} is the creator, main contributor, and copyright holder for {PRODUCT_NAME}.
+              {CREATOR_NAME} is the original creator and copyright holder of {PRODUCT_NAME}.
               This software is licensed under {LICENSE_NAME}, with additional attribution terms
               recorded in the NOTICE file.
             </p>
             <p>
-              Recognised organisational contributor: {ORGANISATIONAL_CONTRIBUTORS.join(", ")}.
+              Official contributor: {ORGANISATIONAL_CONTRIBUTORS.join(", ")}.
               Contributor acknowledgement records participation in the project and does not alter
               the creator or copyright-holder designation.
             </p>
