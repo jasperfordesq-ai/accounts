@@ -1682,14 +1682,20 @@ export interface paths {
                 };
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody?: {
+                content: {
+                    "application/json": null | components["schemas"]["SizeClassificationInput"];
+                };
+            };
             responses: {
                 /** @description OK */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["ClassificationResult"];
+                    };
                 };
             };
         };
@@ -7844,6 +7850,32 @@ export interface components {
             evidenceReference?: null | string;
             /** Format: byte */
             evidenceArtifact?: null | string;
+        };
+        ClassificationResult: {
+            calculatedClass: components["schemas"]["CompanySizeClass"];
+            qualificationNotes: string;
+            canUseMicro: boolean;
+            canFileAbridged: boolean;
+            auditExempt: boolean;
+            availableRegimes: string[];
+            /** @default false */
+            isIneligibleEntity: boolean;
+            ineligibleReason?: null | string;
+            rawCurrentClass?: components["schemas"]["CompanySizeClass"];
+            rawPriorClass?: null | components["schemas"]["CompanySizeClass"];
+            /**
+             * Format: double
+             * @default 0
+             */
+            annualisedTurnover: number | string;
+            /**
+             * Format: double
+             * @default 1
+             */
+            periodLengthInYears: number | string;
+            thresholdScheduleCode?: null | string;
+            /** Format: date */
+            thresholdScheduleEffectiveFrom?: null | string;
         };
         ClientMonitoringEventInput: {
             eventCode: string;

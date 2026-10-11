@@ -61,8 +61,8 @@ export function PeriodYearEndWorkspace({ yearEnd, questionnaireHref }: PeriodYea
         />
         <SummaryCard
           title="Payroll"
-          value={yearEnd?.payroll ? formatCurrency(yearEnd.payroll.grossWages) : "--"}
-          subtitle={yearEnd?.payroll ? `${yearEnd.payroll.staffCount} staff` : "Not applicable"}
+          value={yearEnd?.payroll.hasPayroll ? formatCurrency(yearEnd.payroll.grossWages) : "--"}
+          subtitle={yearEnd?.payroll.hasPayroll ? `${yearEnd.payroll.staffCount} staff` : yearEnd ? "No payroll" : "No data"}
         />
         <SummaryCard
           title="Tax Liabilities"

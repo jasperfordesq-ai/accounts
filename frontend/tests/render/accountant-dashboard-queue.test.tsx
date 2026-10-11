@@ -133,6 +133,75 @@ describe("AccountantDashboardQueue", () => {
     expect(within(filteredTable).getByText("Connacht Visual Limited")).toBeInTheDocument();
     expect(within(filteredTable).queryByText("Atlantic Public Limited Company")).not.toBeInTheDocument();
   });
+
+  it("ranks live-period risk above unverified historic deadlines without hiding them", () => {
+    // Live defect 2026-10-10: a back-filled 2019 deadline was shown as the highest-risk client.
+    const charity = { ...sampleCompany(), id: 1, legalName: "Example Timebank CLG", assignedReviewerName: "Reviewer" };
+    const overdueClient = { ...sampleCompany(), id: 2, legalName: "Late Live Filer Limited" };
+    render(
+      <AccountantDashboardQueue
+        companies={[charity, overdueClient]}
+        deadlines={{
+          1: sampleDeadline({ companyId: 1, periodId: 9, deadlineType: "CRO", dueDate: "2027-03-18" }),
+          2: sampleDeadline({ companyId: 2, periodId: 3, deadlineType: "CRO", dueDate: "2026-09-30" }),
+        }}
+        deadlineStates={{ 1: "scheduled", 2: "overdue" }}
+        historicDeadlines={{
+          1: { count: 16, oldest: sampleDeadline({ companyId: 1, periodId: 1, deadlineType: "Revenue", dueDate: "2019-09-23" }) },
+        }}
+        today="2026-10-10"
+      />,
+    );
+
+    const triage = screen.getByRole("region", { name: "Queue triage" });
+    expect(within(triage).getByText("Late Live Filer Limited")).toBeInTheDocument();
+    expect(within(triage).queryByText("Example Timebank CLG")).not.toBeInTheDocument();
+    const table = screen.getByRole("table", { name: "Accountant work queue" });
+    expect(within(table).getByText("Example Timebank CLG")).toBeInTheDocument();
+    expect(within(table).getByText("Historic filings unverified")).toBeInTheDocument();
+    expect(within(table).getByText(/16 earlier-period deadlines have no recorded filing \(oldest Revenue due 23 Sept? 2019\)/)).toBeInTheDocument();
+  });
+
+  it("ranks a live due-soon deadline above a historic-only warning with an older date", () => {
+    const historicOnly = { ...sampleCompany(), id: 1, legalName: "Filed Live Period CLG" };
+    const dueSoon = { ...sampleCompany(), id: 2, legalName: "Due Soon Limited" };
+    render(
+      <AccountantDashboardQueue
+        companies={[historicOnly, dueSoon]}
+        deadlines={{
+          1: { ...sampleDeadline({ companyId: 1, periodId: 9, deadlineType: "CRO", dueDate: "2026-06-30" }), filedDate: "2026-06-01" },
+          2: sampleDeadline({ companyId: 2, periodId: 3, deadlineType: "CRO", dueDate: "2026-10-25" }),
+        }}
+        deadlineStates={{ 1: "filed", 2: "due-soon" }}
+        historicDeadlines={{
+          1: { count: 2, oldest: sampleDeadline({ companyId: 1, periodId: 1, deadlineType: "CRO", dueDate: "2019-11-25" }) },
+        }}
+        today="2026-10-11"
+      />,
+    );
+
+    const triage = screen.getByRole("region", { name: "Queue triage" });
+    expect(within(triage).getByText("Due Soon Limited")).toBeInTheDocument();
+    expect(within(triage).queryByText("Filed Live Period CLG")).not.toBeInTheDocument();
+  });
+
+  it("keeps the historic warning in a manual-handoff row's detail", () => {
+    render(
+      <AccountantDashboardQueue
+        companies={[unsupportedCompany()]}
+        deadlines={{ 8: sampleDeadline({ companyId: 8, periodId: 4, deadlineType: "CRO", dueDate: "2027-06-20" }) }}
+        deadlineStates={{ 8: "scheduled" }}
+        historicDeadlines={{
+          8: { count: 1, oldest: sampleDeadline({ companyId: 8, periodId: 1, deadlineType: "CRO", dueDate: "2020-06-25" }) },
+        }}
+        today="2026-10-11"
+      />,
+    );
+
+    const table = screen.getByRole("table", { name: "Accountant work queue" });
+    expect(within(table).getByText("Manual handoff")).toBeInTheDocument();
+    expect(within(table).getByText(/PLC\/public-company workflow requires manual review\. 1 earlier-period deadline has no recorded filing \(oldest CRO due 25 June? 2020\)/)).toBeInTheDocument();
+  });
 });
 
 function sampleCompany(): Company {
