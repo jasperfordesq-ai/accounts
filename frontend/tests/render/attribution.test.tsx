@@ -8,7 +8,7 @@ describe("public attribution surfaces", () => {
     render(<AppFooter />);
 
     expect(screen.getByRole("contentinfo")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Built on Irish Accounts by Jasper Ford with hOUR Timebank CLG (Ireland)" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Built on FilingBridge by Jasper Ford with hOUR Timebank CLG (Ireland)" })).toHaveAttribute(
       "href",
       "https://github.com/jasperfordesq-ai/accounts",
     );
@@ -23,13 +23,14 @@ describe("public attribution surfaces", () => {
   it("states the creator, AGPL licence and attribution requirement on the about page", () => {
     render(<AboutPage />);
 
-    expect(screen.getByRole("heading", { name: "About Irish Accounts" })).toBeInTheDocument();
-    expect(screen.getByText("Powered by Irish Accounts")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "About FilingBridge" })).toBeInTheDocument();
+    expect(screen.getByText("Powered by FilingBridge")).toBeInTheDocument();
     expect(screen.getByText("Created by Jasper Ford")).toBeInTheDocument();
-    expect(screen.getByText("Contributors include hOUR Timebank CLG (Ireland)")).toBeInTheDocument();
+    expect(screen.getByText("Contributor: hOUR Timebank CLG (Ireland)")).toBeInTheDocument();
     expect(screen.getByText("Licensed under AGPL v3-or-later")).toBeInTheDocument();
-    expect(screen.getByText(/creator, main contributor, and copyright holder/i)).toBeInTheDocument();
-    expect(screen.getByText(/Recognised organisational contributor: hOUR Timebank CLG \(Ireland\)/i)).toBeInTheDocument();
+    expect(screen.getByText("Source: https://github.com/jasperfordesq-ai/accounts")).toBeInTheDocument();
+    expect(screen.getByText(/original creator and copyright holder of FilingBridge/i)).toBeInTheDocument();
+    expect(screen.getByText(/Official contributor: hOUR Timebank CLG \(Ireland\)/i)).toBeInTheDocument();
     expect(screen.getByText(/must keep a visible attribution path/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "accounts repository" })).toHaveAttribute(
       "href",

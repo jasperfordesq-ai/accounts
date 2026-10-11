@@ -665,7 +665,7 @@ test("MFA challenge contract requires explicit non-enrollment nulls and rejects 
       requiresEnrollment: false,
       expiresAtUtc: "2026-07-11T02:30:00Z",
       enrollmentSecret: "JBSWY3DPEHPK3PXP",
-      otpAuthUri: "otpauth://totp/Irish%20Accounts:owner@example.ie?secret=JBSWY3DPEHPK3PXP",
+      otpAuthUri: "otpauth://totp/FilingBridge:owner@example.ie?secret=JBSWY3DPEHPK3PXP",
     }),
     /requiresEnrollment/,
   );

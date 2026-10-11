@@ -7,7 +7,7 @@ import { AppFooter } from "@/components/AppFooter";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Irish Accounts - Statutory Accounts Platform",
+  title: "FilingBridge - Statutory Accounts Platform",
   description: "Multi-company statutory accounts production for Irish private companies",
   icons: { icon: "/favicon.ico" },
 };
