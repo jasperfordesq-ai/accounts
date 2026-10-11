@@ -115,6 +115,11 @@ jobs:
       - name: Restore pinned .NET tools
         run: dotnet tool restore
 
+      # Delete the committed contract so the drift check below cannot pass on a stale file if the
+      # build ever stops regenerating it (a missing file is itself reported as drift).
+      - name: Remove committed OpenAPI contract before regeneration
+        run: rm backend/Accounts.Api/OpenApi/accounts-api-v1.json
+
       - name: Build API
         run: dotnet build backend/Accounts.Api/Accounts.Api.csproj --configuration Release --no-restore
 
