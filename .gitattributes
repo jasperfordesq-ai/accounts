@@ -59,3 +59,4 @@ frontend/src/lib/openapiContract.ts text eol=lf
 frontend/tests/api-runtime-contracts.test.mjs text eol=lf
 Docs/operations/production-runbook.md text eol=lf
 deploy/caddy/Caddyfile.example text eol=lf
+backend/Accounts.Tests/Fixtures/aib-internet-banking-fy2026-anonymised.csv text eol=lf

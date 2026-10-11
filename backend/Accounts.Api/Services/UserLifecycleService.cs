@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using System.Data;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Accounts.Api.Services;
 
@@ -633,12 +634,12 @@ public sealed record UserAdministrationSummary(
     bool IsActive,
     bool MustChangePassword,
     bool IsLocked,
-    DateTime? LockedUntilUtc,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] DateTime? LockedUntilUtc,
     bool MfaEnabled,
     IReadOnlyList<int> CompanyIds,
-    DateTime? InviteAcceptedAtUtc,
-    DateTime? DeactivatedAtUtc,
-    DateTime? OffboardedAtUtc,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] DateTime? InviteAcceptedAtUtc,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] DateTime? DeactivatedAtUtc,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] DateTime? OffboardedAtUtc,
     int SessionVersion)
 {
     public static UserAdministrationSummary From(UserAccount user) => new(

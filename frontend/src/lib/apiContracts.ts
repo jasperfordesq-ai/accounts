@@ -101,9 +101,39 @@ export const sizeClassificationSchema = z.object({
   thresholdScheduleEffectiveFrom: optionalDate,
   thresholdScheduleCode: optionalText,
   decisionInputFingerprintSha256: z.string().regex(/^[a-f0-9]{64}$/i).nullable().optional().transform((value) => value ?? undefined),
-  calculatedClass: companySizeSchema,
+  calculatedClass: companySizeSchema.nullable().optional().transform((value) => value ?? undefined),
   overrideRequiresRereview: z.boolean().nullable().optional().transform((value) => value ?? undefined),
   qualificationNotes: optionalText,
+}).superRefine((classification, context) => {
+  // Saved inputs without a current engine decision are a legitimate state ("not yet classified").
+  // The API reports the decision fields as absent then; a decision must carry all of them.
+  const decisionFields = ["calculatedClass", "rawCurrentClass", "periodLengthInYears", "annualisedTurnover"] as const;
+  if (classification.decisionInputFingerprintSha256) {
+    for (const field of decisionFields) {
+      if (classification[field] === undefined) addIssue(context, [field], "A classification decision must record this field");
+    }
+  } else {
+    for (const field of decisionFields) {
+      if (classification[field] !== undefined) addIssue(context, [field], "Unclassified inputs must not report a decision");
+    }
+  }
+});
+
+export const classificationResultSchema = z.object({
+  calculatedClass: companySizeSchema,
+  qualificationNotes: z.string(),
+  canUseMicro: z.boolean(),
+  canFileAbridged: z.boolean(),
+  auditExempt: z.boolean(),
+  availableRegimes: z.array(z.string()),
+  isIneligibleEntity: z.boolean(),
+  ineligibleReason: optionalText,
+  rawCurrentClass: companySizeSchema,
+  rawPriorClass: companySizeSchema.nullable().optional().transform((value) => value ?? undefined),
+  annualisedTurnover: nonNegativeMoneySchema,
+  periodLengthInYears: z.number().finite().positive().max(2),
+  thresholdScheduleCode: optionalText,
+  thresholdScheduleEffectiveFrom: optionalDate,
 });
 
 export const filingRegimeSchema = z.object({
@@ -314,7 +344,11 @@ export const yearEndSummarySchema = z.object({
   inventory: z.object({ count: nonNegativeIntegerSchema, totalValue: nonNegativeMoneySchema }),
   loans: z.object({ count: nonNegativeIntegerSchema, totalBalance: moneySchema }),
   directorLoans: z.object({ count: nonNegativeIntegerSchema }),
-  payroll: z.object({ grossWages: nonNegativeMoneySchema, staffCount: nonNegativeIntegerSchema }).nullable(),
+  // A company with no employees has no payroll; the API states that explicitly (hasPayroll=false).
+  payroll: z.discriminatedUnion("hasPayroll", [
+    z.object({ hasPayroll: z.literal(true), grossWages: nonNegativeMoneySchema, staffCount: nonNegativeIntegerSchema }),
+    z.object({ hasPayroll: z.literal(false) }),
+  ]),
   taxes: z.object({ count: nonNegativeIntegerSchema, totalLiability: nonNegativeMoneySchema, totalBalance: moneySchema }),
   dividends: z.object({ count: nonNegativeIntegerSchema, total: nonNegativeMoneySchema }),
   reviewConfirmations: z.array(yearEndReviewConfirmationSchema),

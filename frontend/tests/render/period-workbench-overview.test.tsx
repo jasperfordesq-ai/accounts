@@ -208,7 +208,7 @@ function sampleYearEnd(): YearEndSummary {
     inventory: { count: 0, totalValue: 0 },
     loans: { count: 0, totalBalance: 0 },
     directorLoans: { count: 0 },
-    payroll: null,
+    payroll: { hasPayroll: false },
     taxes: { count: 0, totalLiability: 0, totalBalance: 0 },
     dividends: { count: 0, total: 0 },
     reviewConfirmations: [],

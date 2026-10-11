@@ -1363,9 +1363,32 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SizeClassificationInput"
+                  }
+                ]
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClassificationResult"
+                }
+              }
+            }
           }
         }
       }
@@ -9971,6 +9994,94 @@
               "string"
             ],
             "format": "byte"
+          }
+        }
+      },
+      "ClassificationResult": {
+        "required": [
+          "calculatedClass",
+          "qualificationNotes",
+          "canUseMicro",
+          "canFileAbridged",
+          "auditExempt",
+          "availableRegimes"
+        ],
+        "type": "object",
+        "properties": {
+          "calculatedClass": {
+            "$ref": "#/components/schemas/CompanySizeClass"
+          },
+          "qualificationNotes": {
+            "type": "string"
+          },
+          "canUseMicro": {
+            "type": "boolean"
+          },
+          "canFileAbridged": {
+            "type": "boolean"
+          },
+          "auditExempt": {
+            "type": "boolean"
+          },
+          "availableRegimes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "isIneligibleEntity": {
+            "type": "boolean",
+            "default": false
+          },
+          "ineligibleReason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "rawCurrentClass": {
+            "$ref": "#/components/schemas/CompanySizeClass"
+          },
+          "rawPriorClass": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CompanySizeClass"
+              }
+            ]
+          },
+          "annualisedTurnover": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double",
+            "default": 0
+          },
+          "periodLengthInYears": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double",
+            "default": 1
+          },
+          "thresholdScheduleCode": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "thresholdScheduleEffectiveFrom": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date"
           }
         }
       },

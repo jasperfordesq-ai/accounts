@@ -1148,8 +1148,8 @@ public partial class AccountsWorkflowTests
         await db.SaveChangesAsync();
 
         var csv = "Posted Account,Posted Transactions Date,Description1,Description2,Description3,Debit Amount,Credit Amount,Balance,Posted Currency,Transaction Type,Local Currency Amount,Local Currency\n"
-            + "936375 - 16074058,01/03/2025,CARD,COFFEE SHOP,DUBLIN,10.25,,989.75,EUR,Debit,10.25,EUR\n"
-            + "936375 - 16074058,02/03/2025,TRANSFER,CLIENT PAYMENT,,,25.50,1015.25,EUR,Credit,25.50,EUR\n";
+            + "999999 - 00000000,01/03/2025,CARD,COFFEE SHOP,DUBLIN,10.25,,989.75,EUR,Debit,10.25,EUR\n"
+            + "999999 - 00000000,02/03/2025,TRANSFER,CLIENT PAYMENT,,,25.50,1015.25,EUR,Credit,25.50,EUR\n";
         var service = new ImportService(db, Options.Create(new ImportLimitConfig()));
 
         var result = await service.ImportCsvAsync(
@@ -1165,10 +1165,44 @@ public partial class AccountsWorkflowTests
         Assert.Equal(new DateOnly(2025, 3, 1), transactions[0].Date);
         Assert.Equal("CARD COFFEE SHOP DUBLIN", transactions[0].Description);
         Assert.Equal(-10.25m, transactions[0].Amount);
-        Assert.Equal("936375 - 16074058", transactions[0].Reference);
+        Assert.Equal("999999 - 00000000", transactions[0].Reference);
         Assert.Equal("TRANSFER CLIENT PAYMENT", transactions[1].Description);
         Assert.Equal(25.50m, transactions[1].Amount);
     }
+
+    [Fact]
+    public async Task ImportService_ImportsTheAnonymisedFy2026AibExportInFull()
+    {
+        // Live regression (29 Aug 2026 handoff): the real 12-column AIB export imported 0 of 61 rows.
+        // The fixture is that export anonymised (account number and descriptions replaced); dates,
+        // amounts and running balances are unchanged so the reconciliation below is the real one.
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        period.PeriodStart = new DateOnly(2025, 8, 1);
+        period.PeriodEnd = new DateOnly(2026, 7, 31);
+        var bank = new BankAccount { CompanyId = period.CompanyId, Name = "AIB current account", OpeningBalance = -10_131.41m };
+        db.BankAccounts.Add(bank);
+        await db.SaveChangesAsync();
+        var csv = await File.ReadAllBytesAsync(AibFixturePath());
+
+        var result = await new ImportService(db, Options.Create(new ImportLimitConfig())).ImportCsvAsync(
+            period.CompanyId, bank.Id, period.Id, new MemoryStream(csv), "aib-fy2026.csv");
+
+        Assert.Equal(61, result.ImportedRows);
+        var transactions = await db.ImportedTransactions
+            .Where(transaction => transaction.BankAccountId == bank.Id)
+            .OrderBy(transaction => transaction.Date)
+            .ThenBy(transaction => transaction.Id)
+            .ToListAsync();
+        Assert.Equal(61, transactions.Count);
+        Assert.Equal(-33.72m, transactions.Sum(transaction => transaction.Amount));
+        Assert.Equal(-10_165.13m, bank.OpeningBalance + transactions.Sum(transaction => transaction.Amount));
+        Assert.Equal(-10_165.13m, transactions[^1].Balance);
+        Assert.All(transactions, transaction => Assert.Equal("999999 - 00000000", transaction.Reference));
+    }
+
+    private static string AibFixturePath([System.Runtime.CompilerServices.CallerFilePath] string sourceFilePath = "") =>
+        Path.Combine(Path.GetDirectoryName(sourceFilePath)!, "Fixtures", "aib-internet-banking-fy2026-anonymised.csv");
 
     [Theory]
     [InlineData(999, false)]   // strictly below 10% is within section 240

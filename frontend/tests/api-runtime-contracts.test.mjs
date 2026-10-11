@@ -8,6 +8,7 @@ import {
   authUserSchema,
   balanceSheetSchema,
   charityInfoSchema,
+  classificationResultSchema,
   companySchema,
   directorsReportSchema,
   filingReadinessProfileSchema,
@@ -78,6 +79,64 @@ test("company and period contracts reject missing fields, unknown enums, and imp
   );
 });
 
+test("size classification contract distinguishes saved inputs from a recorded decision", () => {
+  // Live defect 2026-10-10: inputs saved without a decision were served with column defaults
+  // (0 years, "Micro") and the period workspace refused to render on every load.
+  const period = periodFixture();
+  const inputs = { id: 1, turnover: 1640, balanceSheetTotal: 22358, avgEmployees: 0, thresholdElectionEffectiveFrom: "2024-01-01" };
+  const unclassified = parse(accountingPeriodSchema, {
+    ...period,
+    sizeClassification: {
+      ...inputs,
+      calculatedClass: null,
+      rawCurrentClass: null,
+      periodLengthInYears: null,
+      annualisedTurnover: null,
+      decisionInputFingerprintSha256: null,
+    },
+  });
+  assert.equal(unclassified.sizeClassification.calculatedClass, undefined);
+  assert.equal(unclassified.sizeClassification.avgEmployees, 0);
+
+  // The shape the defective API produced stays rejected: a default is not a decision.
+  assert.throws(
+    () => parse(accountingPeriodSchema, {
+      ...period,
+      sizeClassification: { ...inputs, calculatedClass: "Micro", rawCurrentClass: "Micro", periodLengthInYears: 0, annualisedTurnover: 0 },
+    }),
+    /periodLengthInYears/,
+  );
+
+  const decision = {
+    ...inputs,
+    calculatedClass: "Micro",
+    rawCurrentClass: "Micro",
+    periodLengthInYears: 1,
+    annualisedTurnover: 1640,
+    decisionInputFingerprintSha256: "a".repeat(64),
+  };
+  assert.equal(parse(accountingPeriodSchema, { ...period, sizeClassification: decision }).sizeClassification.calculatedClass, "Micro");
+  assert.throws(
+    () => parse(accountingPeriodSchema, { ...period, sizeClassification: { ...decision, periodLengthInYears: null } }),
+    /periodLengthInYears/,
+  );
+
+  const result = {
+    calculatedClass: "Micro",
+    qualificationNotes: "First financial year",
+    canUseMicro: true,
+    canFileAbridged: true,
+    auditExempt: true,
+    availableRegimes: ["Micro"],
+    isIneligibleEntity: false,
+    rawCurrentClass: "Micro",
+    annualisedTurnover: 638,
+    periodLengthInYears: 1.4483,
+  };
+  assert.equal(parse(classificationResultSchema, result).periodLengthInYears, 1.4483);
+  assert.throws(() => parse(classificationResultSchema, { ...result, periodLengthInYears: 0 }), /periodLengthInYears/);
+});
+
 test("transaction pagination and aggregate contracts fail closed on drift", () => {
   const page = transactionPageFixture();
   assert.equal(parse(transactionPageSchema, page).items.length, 2);
@@ -127,6 +186,16 @@ test("year-end and adjustment aggregates reject internally inconsistent response
   const wrongScore = structuredClone(yearEnd);
   wrongScore.completeness.score = 75;
   assert.throws(() => parse(yearEndSummarySchema, wrongScore), /completeness\.score/);
+
+  // Live defect 2026-10-10: a charity with no staff has no payroll. The API omitted the key, so
+  // the summary failed its contract. No payroll is now explicit and a missing key stays invalid.
+  assert.equal(parse(yearEndSummarySchema, yearEnd).payroll.hasPayroll, false);
+  const withPayroll = parse(yearEndSummarySchema, { ...yearEnd, payroll: { hasPayroll: true, grossWages: 1200, staffCount: 1 } });
+  assert.equal(withPayroll.payroll.grossWages, 1200);
+  const omitted = structuredClone(yearEnd);
+  delete omitted.payroll;
+  assert.throws(() => parse(yearEndSummarySchema, omitted), /payroll/);
+  assert.throws(() => parse(yearEndSummarySchema, { ...yearEnd, payroll: { hasPayroll: true } }), /payroll/);
 
   const adjustment = adjustmentFixture();
   assert.equal(parse(adjustmentSchema, adjustment).source, "Manual");
@@ -564,7 +633,7 @@ function yearEndFixture() {
     inventory: { count: 0, totalValue: 0 },
     loans: { count: 0, totalBalance: 0 },
     directorLoans: { count: 0 },
-    payroll: null,
+    payroll: { hasPayroll: false },
     taxes: { count: 0, totalLiability: 0, totalBalance: 0 },
     dividends: { count: 0, total: 0 },
     reviewConfirmations: [],

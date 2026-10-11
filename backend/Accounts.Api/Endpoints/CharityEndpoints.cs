@@ -2,6 +2,7 @@ using Accounts.Api.Data;
 using Accounts.Api.Entities;
 using Accounts.Api.Services;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json.Serialization;
 
 namespace Accounts.Api.Endpoints;
 
@@ -195,39 +196,7 @@ public static class CharityEndpoints
             .AsNoTracking()
             .FirstOrDefaultAsync(p => p.PeriodId == periodId);
         var decision = await service.GetSorpDecisionAsync(companyId, periodId);
-        return Results.Ok(new
-        {
-            decision,
-            package = package is null ? null : new
-            {
-                package.FilingStatus,
-                package.SofaGenerated,
-                package.TrusteesReportGenerated,
-                package.SofaSha256,
-                package.TrusteesReportSha256,
-                package.ArtifactReleaseCandidate,
-                package.ArtifactSourceFingerprintSha256,
-                package.SorpFrameworkCode,
-                package.SorpTier,
-                package.SofaBasis,
-                package.CharityNumberSnapshot,
-                package.SofaClosingFunds,
-                package.BalanceSheetNetAssets,
-                package.ReconciliationDifference,
-                package.ReconciledAtUtc,
-                package.TrusteeReviewAccepted,
-                package.TrusteeReviewReference,
-                package.TrusteeReviewedBy,
-                package.TrusteeReviewedAtUtc,
-                package.TrusteeReviewArtifactSha256,
-                package.TrusteePopulationSha256,
-                package.ManualProfessionalHandoffReason,
-                package.ApprovedBy,
-                package.ApprovedAt,
-                package.ApprovedArtifactManifestSha256,
-                package.ApprovedReleaseCandidate
-            }
-        });
+        return Results.Ok(new CharityArtifactStatusResponse(decision, CharityArtifactPackageView.From(package)));
     }
 
     public static Task<IResult> DownloadSofaReviewEndpointAsync(
@@ -549,4 +518,71 @@ public static class CharityEndpoints
         fund.ClosingBalance,
         fund.Notes
     };
+}
+
+// Every member is written even when null: the API's WhenWritingNull default would otherwise drop
+// unset evidence fields (and the whole package before artifacts exist), and the frontend contract
+// requires each key to be present so that missing evidence is visible rather than silently absent.
+public sealed record CharityArtifactStatusResponse(
+    CharitySorpDecision Decision,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] CharityArtifactPackageView? Package);
+
+public sealed record CharityArtifactPackageView(
+    FilingStatus FilingStatus,
+    bool SofaGenerated,
+    bool TrusteesReportGenerated,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? SofaSha256,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? TrusteesReportSha256,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? ArtifactReleaseCandidate,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? ArtifactSourceFingerprintSha256,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? SorpFrameworkCode,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] int? SorpTier,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? SofaBasis,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? CharityNumberSnapshot,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] decimal? SofaClosingFunds,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] decimal? BalanceSheetNetAssets,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] decimal? ReconciliationDifference,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] DateTime? ReconciledAtUtc,
+    bool TrusteeReviewAccepted,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? TrusteeReviewReference,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? TrusteeReviewedBy,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] DateTime? TrusteeReviewedAtUtc,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? TrusteeReviewArtifactSha256,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? TrusteePopulationSha256,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? ManualProfessionalHandoffReason,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? ApprovedBy,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] DateTime? ApprovedAt,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? ApprovedArtifactManifestSha256,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? ApprovedReleaseCandidate)
+{
+    public static CharityArtifactPackageView? From(CharityFilingPackage? package) =>
+        package is null
+            ? null
+            : new(
+                package.FilingStatus,
+                package.SofaGenerated,
+                package.TrusteesReportGenerated,
+                package.SofaSha256,
+                package.TrusteesReportSha256,
+                package.ArtifactReleaseCandidate,
+                package.ArtifactSourceFingerprintSha256,
+                package.SorpFrameworkCode,
+                package.SorpTier,
+                package.SofaBasis,
+                package.CharityNumberSnapshot,
+                package.SofaClosingFunds,
+                package.BalanceSheetNetAssets,
+                package.ReconciliationDifference,
+                package.ReconciledAtUtc,
+                package.TrusteeReviewAccepted,
+                package.TrusteeReviewReference,
+                package.TrusteeReviewedBy,
+                package.TrusteeReviewedAtUtc,
+                package.TrusteeReviewArtifactSha256,
+                package.TrusteePopulationSha256,
+                package.ManualProfessionalHandoffReason,
+                package.ApprovedBy,
+                package.ApprovedAt,
+                package.ApprovedArtifactManifestSha256,
+                package.ApprovedReleaseCandidate);
 }

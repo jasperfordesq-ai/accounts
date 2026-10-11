@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Accounts.Api.Data;
 using Accounts.Api.Entities;
 using Accounts.Api.Rules;
@@ -21,7 +22,7 @@ public class ImportService(AccountsDbContext db, IOptions<ImportLimitConfig>? im
         int DuplicateCandidates,
         int AutoCategorised,
         List<string> Warnings,
-        int? ImportBatchId,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] int? ImportBatchId,
         string SourceFilename,
         string SourceFileSha256,
         long SourceFileBytes);

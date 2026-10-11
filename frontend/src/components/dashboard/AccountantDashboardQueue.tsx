@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { AlertTriangle, ArrowRight, CalendarClock, UserRound } from "lucide-react";
-import type { Company, DashboardDeadlineState, FilingDeadline, ProductionReleaseBlocker } from "@/lib/api";
+import type { Company, DashboardDeadlineState, FilingDeadline, HistoricDeadlineSummary, ProductionReleaseBlocker } from "@/lib/api";
 import { formatCompanyType, formatDateIE } from "@/lib/format";
 import { DataGrid, MetricStrip, ReleaseBlockerSummary, ReviewPanel, StatusBadge } from "@/components/workbench";
 import { AccountantWorkflowRail } from "@/components/workbench/AccountantWorkflowRail";
@@ -10,6 +10,7 @@ interface AccountantDashboardQueueProps {
   deadlines: Record<number, FilingDeadline | null>;
   deadlineUnavailableCompanyIds?: number[];
   deadlineStates?: Record<number, DashboardDeadlineState>;
+  historicDeadlines?: Record<number, HistoricDeadlineSummary>;
   today?: string;
   productionReleaseBlockers?: ProductionReleaseBlocker[];
 }
@@ -36,6 +37,7 @@ export function AccountantDashboardQueue({
   deadlines,
   deadlineUnavailableCompanyIds = [],
   deadlineStates = {},
+  historicDeadlines = {},
   today,
   productionReleaseBlockers = [],
 }: AccountantDashboardQueueProps) {
@@ -48,6 +50,7 @@ export function AccountantDashboardQueue({
       todayDate,
       unavailableDeadlineIds.has(company.id),
       deadlineStates[company.id],
+      historicDeadlines[company.id],
     ))
     .sort(compareQueueRows);
   const urgentCount = rows.filter((row) => row.deadlineTone === "bad" || row.blockerTone === "bad").length;
@@ -335,6 +338,7 @@ function buildQueueRow(
   today: Date,
   deadlineUnavailable = false,
   authoritativeState?: DashboardDeadlineState,
+  historic?: HistoricDeadlineSummary,
 ): QueueRow {
   const period = latestPeriod(company);
   const manualHandoffDetail = manualHandoffReason(company);
@@ -375,10 +379,18 @@ function buildQueueRow(
   }
 
   const hasDeadlinePressure = deadlineState.label === "Overdue" || deadlineState.label === "Due soon";
+  // Unfiled deadlines of earlier periods (often a history back-filled to incorporation) are
+  // reported as unverified: a warning that stays visible, below any live-period risk.
+  const historicNote = historic
+    ? `${historic.count} earlier-period deadline${historic.count === 1 ? " has" : "s have"} no recorded filing (oldest ${historic.oldest.deadlineType} due ${formatDateIE(historic.oldest.dueDate)}). Record the filing dates or investigate before relying on audit exemption.`
+    : null;
+  const showHistoric = historicNote !== null && !deadlineUnavailable && authoritativeState !== "unavailable";
   const blockerLabel = deadlineUnavailable || authoritativeState === "unavailable"
     ? "Deadline unavailable"
     : deadlineState.label === "Overdue"
     ? "Deadline overdue"
+    : showHistoric
+      ? "Historic filings unverified"
     : deadline
       ? "No blockers"
       : "Deadline missing";
@@ -394,11 +406,15 @@ function buildQueueRow(
     blockerDetail: deadlineUnavailable || authoritativeState === "unavailable"
       ? "Deadline evidence failed to load. Retry the failed deadline resource before relying on filing status."
       : deadlineState.label === "Overdue"
-      ? "Late filing exposure and audit exemption impact must be reviewed."
+      ? `Late filing exposure and audit exemption impact must be reviewed.${showHistoric ? ` ${historicNote}` : ""}`
+      : showHistoric
+        ? historicNote!
       : deadline
         ? "No dashboard-level blockers detected from current company and deadline data."
         : "Calculate filing deadlines for the active accounting period.",
-    blockerTone: deadlineState.label === "Overdue" || !deadline || deadlineUnavailable ? "bad" : "good",
+    blockerTone: deadlineState.label === "Overdue" || !deadline || deadlineUnavailable
+      ? "bad"
+      : showHistoric ? "warn" : "good",
     readyDetail: deadlineUnavailable
       ? "Company and period data remain visible; filing deadline evidence is unavailable."
       : deadline
