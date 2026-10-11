@@ -141,6 +141,42 @@ public sealed class DashboardDeadlineBatchTests
     }
 
     [Fact]
+    public async Task Batch_KeepsAnOverduePriorYearWithAccountingWorkLiveAfterTheNextPeriodIsCreated()
+    {
+        // Review of #79: the next period can be created before last year's accounts are filed.
+        // A prior period holding accounting work is live, so its overdue deadline stays urgent.
+        await using var db = CreateDb();
+        var company = Assert.Single(await SeedCompaniesAsync(db, 1));
+        var prior = AddPeriod(db, company, new DateOnly(2025, 1, 1), new DateOnly(2025, 12, 31));
+        var next = AddPeriod(db, company, new DateOnly(2026, 1, 1), new DateOnly(2026, 12, 31));
+        var bank = new BankAccount { CompanyId = company.Id, Name = "Current", OpeningBalance = 0m };
+        db.BankAccounts.Add(bank);
+        await db.SaveChangesAsync();
+        db.ImportedTransactions.Add(new ImportedTransaction
+        {
+            BankAccountId = bank.Id,
+            PeriodId = prior.Id,
+            Date = new DateOnly(2025, 6, 1),
+            Description = "Receipt",
+            Amount = 100m
+        });
+        var today = new DateOnly(2026, 10, 11);
+        db.FilingDeadlines.AddRange(
+            Deadline(prior, new DateOnly(2026, 9, 30)),
+            Deadline(prior, new DateOnly(2026, 9, 23), type: DeadlineType.Revenue),
+            Deadline(next, new DateOnly(2027, 9, 30)),
+            Deadline(next, new DateOnly(2027, 9, 23), type: DeadlineType.Revenue));
+        await db.SaveChangesAsync();
+
+        var item = Item(await CreateService(db, today).GetAsync(User("Owner")), company);
+
+        Assert.Equal(DashboardDeadlineStates.Overdue, item.State);
+        Assert.Equal(prior.Id, item.Deadline?.PeriodId);
+        Assert.Equal(new DateOnly(2026, 9, 23), item.Deadline?.DueDate);
+        Assert.Equal(0, item.HistoricUnverifiedCount);
+    }
+
+    [Fact]
     public async Task Batch_LiveOverdueStillRanksAsOverdueAndRecordedHistoryIsNotCounted()
     {
         await using var db = CreateDb();
