@@ -18,7 +18,8 @@ public static class PeriodStatusEndpoint
         ApiAccessService apiAccess,
         FilingReleaseGate? releaseGate = null,
         AccountingConcurrencyCoordinator? concurrency = null,
-        IdempotencyService? idempotency = null)
+        IdempotencyService? idempotency = null,
+        TimeProvider? clock = null)
     {
         if (!await CompanyEndpointAccess.CanAccessCompanyAsync(context, db, companyId))
             return Results.NotFound();
@@ -60,8 +61,19 @@ public static class PeriodStatusEndpoint
                         // note in the same advisory-locked transaction. If readiness fails, the transaction is not
                         // committed and neither value leaks into the draft period.
                         // The default is today's date in Ireland (Europe/Dublin), not the UTC date.
-                        period.ApprovalDate ??= update.ApprovalDate ?? DateOnly.FromDateTime(
-                            TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, DeadlineService.ResolveIrelandTimeZone()));
+                        var irishToday = DateOnly.FromDateTime(
+                            TimeZoneInfo.ConvertTimeFromUtc(
+                                (clock ?? TimeProvider.System).GetUtcNow().UtcDateTime,
+                                DeadlineService.ResolveIrelandTimeZone()));
+                        if (update.ApprovalDate is { } requestedDate)
+                        {
+                            await AssertBoardApprovalDateCanBeSetAsync(db, period, requestedDate, irishToday, cancellationToken);
+                            period.ApprovalDate = requestedDate;
+                        }
+                        else
+                        {
+                            period.ApprovalDate ??= irishToday;
+                        }
                         await NotesDisclosureService.RefreshApprovalNoteAsync(db, period);
 
                         var outputName = update.Status is PeriodStatus.Filed
@@ -126,6 +138,40 @@ public static class PeriodStatusEndpoint
         : BusinessRuleException("Period status validation failed.")
     {
         public IResult Result { get; } = result;
+    }
+
+    /// <summary>
+    /// Companies Act 2014 s.324: the board approves the accounts on or after the period end and not in
+    /// the future. A recorded date may be corrected only while no current directors' approval binds
+    /// it; regenerating the accounts withdraws that approval first.
+    /// </summary>
+    private static async Task AssertBoardApprovalDateCanBeSetAsync(
+        AccountsDbContext db,
+        AccountingPeriod period,
+        DateOnly requestedDate,
+        DateOnly irishToday,
+        CancellationToken cancellationToken)
+    {
+        if (requestedDate < period.PeriodEnd)
+            throw new BusinessRuleException(
+                $"The board approval date must be on or after the period end ({period.PeriodEnd:yyyy-MM-dd}).");
+        if (requestedDate > irishToday)
+            throw new BusinessRuleException("The board approval date cannot be in the future.");
+        if (period.ApprovalDate is not { } storedDate || storedDate == requestedDate)
+            return;
+
+        var cro = await db.CroFilingPackages.AsNoTracking()
+            .SingleOrDefaultAsync(c => c.PeriodId == period.Id, cancellationToken);
+        var events = await db.DirectorsApprovalEvents.AsNoTracking()
+            .Where(e => e.PeriodId == period.Id)
+            .OrderBy(e => e.Id)
+            .ToListAsync(cancellationToken);
+        var pages = await db.DirectorsApprovalPages.AsNoTracking()
+            .Where(p => p.PeriodId == period.Id)
+            .ToListAsync(cancellationToken);
+        if (DirectorsApprovalService.ResolveCurrent(events, pages, cro) is not null)
+            throw new BusinessRuleException(
+                "A directors' approval is recorded for the current approval date; regenerate the accounts (which withdraws it) before changing the date.");
     }
 
     private static async Task AssertFilingObligationsRecordedAsync(

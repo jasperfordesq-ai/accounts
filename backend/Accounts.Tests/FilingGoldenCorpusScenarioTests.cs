@@ -558,7 +558,7 @@ public class FilingGoldenCorpusScenarioTests
         Assert.Equal(scenario.ParsedSizeClass <= CompanySizeClass.Small, filingRequirements.AuditExempt);
         await new NotesDisclosureService(db).GenerateNotesAsync(company.Id, period.Id);
         if (finalise)
-            await FinaliseThroughEndpointAsync(db, tenant.Id, period, scenario.CurrentYear.PeriodEnd.AddDays(-16));
+            await FinaliseThroughEndpointAsync(db, tenant.Id, period, scenario.CurrentYear.PeriodEnd.AddDays(16));
         _ = bankCategory;
         return period;
     }
@@ -626,13 +626,22 @@ public class FilingGoldenCorpusScenarioTests
             context,
             new ApiAccessService(
                 Options.Create(new ApiAccessConfig { Enabled = false }),
-                new TestEnvironment()));
+                new TestEnvironment()),
+            // s.324: the board approves on or after the period end and not in the future, so the
+            // fixture's clock reads the day after its board date (its periods may end after today).
+            clock: new FixedFinalisationClock(new DateTimeOffset(
+                approvalDate.AddDays(1).ToDateTime(new TimeOnly(12, 0)), TimeSpan.Zero)));
 
         var statusCode = Assert.IsAssignableFrom<IStatusCodeHttpResult>(result).StatusCode
             ?? StatusCodes.Status200OK;
         Assert.Equal(StatusCodes.Status200OK, statusCode);
         Assert.Equal(approvalDate, period.ApprovalDate);
         Assert.Equal(PeriodStatus.Finalised, period.Status);
+    }
+
+    private sealed class FixedFinalisationClock(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
     }
 
     internal static async Task ApproveAdjustmentsThroughEndpointAsync(

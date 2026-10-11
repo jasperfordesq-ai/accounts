@@ -360,6 +360,95 @@ public partial class AccountsWorkflowTests
         Assert.Equal(bs.CapitalAndReserves.RetainedEarnings, reloaded.ClosingRetainedEarnings);
     }
 
+    private static DateOnly IrishTodayForFinalisation() =>
+        DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Europe/Dublin")));
+
+    private static async Task<(AccountingPeriod Period, FinancialStatementsService Statements, HttpContext Context)> SeedFinalisablePeriodAsync(
+        AccountsDbContext db)
+    {
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: true);
+        db.FilingRegimes.Add(new FilingRegime { PeriodId = period.Id, ElectedRegime = ElectedRegime.Micro, CanUseMicro = true, CanFileAbridged = true, AuditExempt = true });
+        db.NotesDisclosures.Add(new NotesDisclosure { PeriodId = period.Id, NoteNumber = 1, Title = "Approval of Financial Statements", Content = "Approved by the directors.", IsRequired = true, IsIncluded = true });
+        await db.SaveChangesAsync();
+        await MakePeriodReadyForCroDocumentsAsync(db, period);
+        var context = AuthenticatedRequest("Reviewer", HttpMethods.Put, $"/api/companies/{period.CompanyId}/periods/{period.Id}/status");
+        return (period, new FinancialStatementsService(db), context);
+    }
+
+    [Fact]
+    public async Task Finalising_RejectsABoardApprovalDateBeforeThePeriodEnd()
+    {
+        await using var db = CreateDbContext();
+        var (period, statements, context) = await SeedFinalisablePeriodAsync(db);
+
+        var error = await Assert.ThrowsAsync<BusinessRuleException>(() => PeriodStatusEndpoint.UpdateAsync(
+            period.CompanyId, period.Id,
+            new PeriodStatusUpdate(PeriodStatus.Finalised, null, null, period.PeriodEnd.AddDays(-1)),
+            db, new AuditService(db), statements, context, DisabledApiAccess()));
+
+        Assert.Contains("on or after the period end (2025-12-31)", error.Message);
+        var reloaded = await db.AccountingPeriods.AsNoTracking().SingleAsync(p => p.Id == period.Id);
+        Assert.NotEqual(PeriodStatus.Finalised, reloaded.Status);
+        Assert.Equal(period.PeriodEnd, reloaded.ApprovalDate);
+    }
+
+    [Fact]
+    public async Task Finalising_RejectsABoardApprovalDateInTheFuture()
+    {
+        await using var db = CreateDbContext();
+        var (period, statements, context) = await SeedFinalisablePeriodAsync(db);
+
+        var error = await Assert.ThrowsAsync<BusinessRuleException>(() => PeriodStatusEndpoint.UpdateAsync(
+            period.CompanyId, period.Id,
+            new PeriodStatusUpdate(PeriodStatus.Finalised, null, null, IrishTodayForFinalisation().AddDays(2)),
+            db, new AuditService(db), statements, context, DisabledApiAccess()));
+
+        Assert.Contains("cannot be in the future", error.Message);
+        var reloaded = await db.AccountingPeriods.AsNoTracking().SingleAsync(p => p.Id == period.Id);
+        Assert.NotEqual(PeriodStatus.Finalised, reloaded.Status);
+        Assert.Equal(period.PeriodEnd, reloaded.ApprovalDate);
+    }
+
+    [Fact]
+    public async Task Finalising_WithAnExplicitDate_ReplacesTheStoredDateWhenNoDirectorsApprovalExists()
+    {
+        await using var db = CreateDbContext();
+        var (period, statements, context) = await SeedFinalisablePeriodAsync(db);
+        Assert.Equal(period.PeriodEnd, period.ApprovalDate);
+        var corrected = new DateOnly(2026, 2, 10);
+
+        var result = await PeriodStatusEndpoint.UpdateAsync(
+            period.CompanyId, period.Id,
+            new PeriodStatusUpdate(PeriodStatus.Finalised, null, null, corrected),
+            db, new AuditService(db), statements, context, DisabledApiAccess());
+
+        Assert.Equal(StatusCodes.Status200OK, ResultStatusCode(result));
+        var reloaded = await db.AccountingPeriods.AsNoTracking().SingleAsync(p => p.Id == period.Id);
+        Assert.Equal(PeriodStatus.Finalised, reloaded.Status);
+        Assert.Equal(corrected, reloaded.ApprovalDate);
+    }
+
+    [Fact]
+    public async Task Finalising_WithoutADate_DefaultsTheBoardApprovalDateToTodayInIreland()
+    {
+        await using var db = CreateDbContext();
+        var (period, statements, context) = await SeedFinalisablePeriodAsync(db);
+        period.ApprovalDate = null;
+        await db.SaveChangesAsync();
+
+        var before = IrishTodayForFinalisation();
+        var result = await PeriodStatusEndpoint.UpdateAsync(
+            period.CompanyId, period.Id,
+            new PeriodStatusUpdate(PeriodStatus.Finalised, null, null),
+            db, new AuditService(db), statements, context, DisabledApiAccess());
+        var after = IrishTodayForFinalisation();
+
+        Assert.Equal(StatusCodes.Status200OK, ResultStatusCode(result));
+        var reloaded = await db.AccountingPeriods.AsNoTracking().SingleAsync(p => p.Id == period.Id);
+        Assert.NotNull(reloaded.ApprovalDate);
+        Assert.InRange(reloaded.ApprovalDate!.Value, before, after);
+    }
+
     [Fact]
     public async Task AdjustmentRegeneration_BlockedWhenALaterPeriodIsFinalisedOrFiled()
     {
