@@ -1092,59 +1092,53 @@ public partial class AccountsWorkflowTests
         }
     }
 
+    /// <summary>
+    /// The /api proxy route together with the upstream and body helpers it shares with the /mcp and
+    /// /.well-known handlers. Guarantees are pinned on the combined source so a refactor that moves
+    /// code between these files cannot silently drop one.
+    /// </summary>
+    private static string ProxyRouteSource(string root)
+    {
+        var lib = Path.Combine(root, "frontend", "src", "lib");
+        return string.Join(
+            "\n",
+            File.ReadAllText(Path.Combine(root, "frontend", "src", "app", "api", "[...path]", "route.ts")),
+            File.ReadAllText(Path.Combine(lib, "apiProxyUpstream.ts")),
+            File.ReadAllText(Path.Combine(lib, "apiProxyBody.ts")));
+    }
+
     [Fact]
     public void FrontendProxy_HasTypedUpstreamFailureEnvelopeAndTimeout()
     {
-        var proxyRoute = File.ReadAllText(Path.Combine(
-            RepositoryRoot(),
-            "frontend",
-            "src",
-            "app",
-            "api",
-            "[...path]",
-            "route.ts"));
+        var proxyRoute = ProxyRouteSource(RepositoryRoot());
 
         Assert.Contains("API_PROXY_TIMEOUT_MS", proxyRoute);
-        Assert.Contains("UPSTREAM_TIMEOUT_MS", proxyRoute);
-        Assert.Contains("process.env.API_PROXY_TIMEOUT_MS ?? \"15000\"", proxyRoute);
-        Assert.Contains("? UPSTREAM_TIMEOUT_MS : 15000", proxyRoute);
+        Assert.Contains("positiveIntegerFromEnv(process.env.API_PROXY_TIMEOUT_MS, 15000)", proxyRoute);
+        Assert.Contains("Number.isFinite(parsed) && parsed > 0 ? parsed : fallback", proxyRoute);
         Assert.Contains("AbortSignal.timeout", proxyRoute);
         Assert.Contains("upstream_unavailable", proxyRoute);
-        Assert.Contains("NextResponse.json", proxyRoute);
+        Assert.Contains("return withStrictTransportSecurity(Response.json", proxyRoute);
         Assert.Contains("status: 502", proxyRoute);
     }
 
     [Fact]
     public void FrontendProxy_FailsFastWhenProductionApiKeyIsMissing()
     {
-        var proxyRoute = File.ReadAllText(Path.Combine(
-            RepositoryRoot(),
-            "frontend",
-            "src",
-            "app",
-            "api",
-            "[...path]",
-            "route.ts"));
+        var proxyRoute = ProxyRouteSource(RepositoryRoot());
 
         Assert.Contains("ACCOUNTS_API_KEY is required for the frontend API proxy outside development.", proxyRoute);
         Assert.Contains("requireApiKey()", proxyRoute);
-        Assert.Contains("const isDevelopmentRuntime = process.env.NODE_ENV === \"development\"", proxyRoute);
-        Assert.Contains("if (!isDevelopmentRuntime && !configuredApiKey)", proxyRoute);
+        Assert.Contains("return env.NODE_ENV === \"development\"", proxyRoute);
+        Assert.Contains("if (!isDevelopment(env) && !configuredApiKey)", proxyRoute);
     }
 
     [Fact]
     public void FrontendProxy_UsesServerOnlyApiUrlAndRejectsInvalidSchemes()
     {
-        var proxyRoute = File.ReadAllText(Path.Combine(
-            RepositoryRoot(),
-            "frontend",
-            "src",
-            "app",
-            "api",
-            "[...path]",
-            "route.ts"));
+        var proxyRoute = ProxyRouteSource(RepositoryRoot());
 
-        Assert.Contains("const apiUrl = process.env.API_URL;", proxyRoute);
+        Assert.Contains("const configuredApiUrl = env.API_URL ||", proxyRoute);
+        Assert.Contains("export function apiBaseUrl(env: ProxyEnv = process.env)", proxyRoute);
         Assert.DoesNotContain("NEXT_PUBLIC_API_URL", proxyRoute);
         Assert.Contains("parsedApiUrl.protocol !== \"http:\" && parsedApiUrl.protocol !== \"https:\"", proxyRoute);
         Assert.Contains("API_URL must use http or https for the frontend API proxy.", proxyRoute);
@@ -1153,19 +1147,11 @@ public partial class AccountsWorkflowTests
     [Fact]
     public void FrontendProxy_UsesLongerTimeoutForDocumentAndIxbrlGeneration()
     {
-        var proxyRoute = File.ReadAllText(Path.Combine(
-            RepositoryRoot(),
-            "frontend",
-            "src",
-            "app",
-            "api",
-            "[...path]",
-            "route.ts"));
+        var proxyRoute = ProxyRouteSource(RepositoryRoot());
 
         Assert.Contains("API_PROXY_DOCUMENT_TIMEOUT_MS", proxyRoute);
         Assert.Contains("DOCUMENT_TIMEOUT_MS", proxyRoute);
-        Assert.Contains("process.env.API_PROXY_DOCUMENT_TIMEOUT_MS ?? \"120000\"", proxyRoute);
-        Assert.Contains("? DOCUMENT_TIMEOUT_MS : 120000", proxyRoute);
+        Assert.Contains("positiveIntegerFromEnv(process.env.API_PROXY_DOCUMENT_TIMEOUT_MS, 120000)", proxyRoute);
         Assert.Contains("documentGenerationTimeoutMs()", proxyRoute);
         Assert.Contains("isDocumentGenerationPath(path)", proxyRoute);
         Assert.Contains("pathMatchesCompanyPeriodPrefix(segments)", proxyRoute);
@@ -1180,14 +1166,7 @@ public partial class AccountsWorkflowTests
     public void FrontendProxy_StreamsUnsafeBodiesAndEnforcesSizeLimit()
     {
         var root = RepositoryRoot();
-        var proxyRoute = File.ReadAllText(Path.Combine(
-            root,
-            "frontend",
-            "src",
-            "app",
-            "api",
-            "[...path]",
-            "route.ts"));
+        var proxyRoute = ProxyRouteSource(root);
         var requestHelper = File.ReadAllText(Path.Combine(
             root,
             "frontend",
@@ -1196,7 +1175,8 @@ public partial class AccountsWorkflowTests
             "apiProxyRequest.ts"));
 
         Assert.Contains("API_PROXY_MAX_BODY_BYTES", proxyRoute);
-        Assert.Contains("MAX_PROXY_BODY_BYTES", proxyRoute);
+        Assert.Contains("maxProxyBodyBytes()", proxyRoute);
+        Assert.Contains("contentLengthExceedsLimit(request.headers, limit)", proxyRoute);
         Assert.Contains("content-length", proxyRoute);
         Assert.Contains("payload_too_large", proxyRoute);
         Assert.Contains("status: 413", proxyRoute);
@@ -1230,17 +1210,10 @@ public partial class AccountsWorkflowTests
     [Fact]
     public void FrontendProxy_HidesProductionConfigurationDetailsFromClients()
     {
-        var proxyRoute = File.ReadAllText(Path.Combine(
-            RepositoryRoot(),
-            "frontend",
-            "src",
-            "app",
-            "api",
-            "[...path]",
-            "route.ts"));
+        var proxyRoute = ProxyRouteSource(RepositoryRoot());
 
-        Assert.Contains("proxyConfigurationMessage(error)", proxyRoute);
-        Assert.Contains("isDevelopmentRuntime", proxyRoute);
+        Assert.Contains("isDevelopment(env) ? error.message : \"The frontend API proxy is unavailable.\"", proxyRoute);
+        Assert.Contains("proxyConfigurationResponse(error)", proxyRoute);
         Assert.Contains("The frontend API proxy is unavailable.", proxyRoute);
         Assert.Contains("console.error(\"Frontend API proxy configuration error\", error)", proxyRoute);
         Assert.DoesNotContain("message: error.message", proxyRoute);
@@ -1440,7 +1413,7 @@ public partial class AccountsWorkflowTests
         var securityHeaders = File.ReadAllText(securityHeadersPath);
         var proxy = File.ReadAllText(proxyPath);
         var proxyHelper = File.ReadAllText(proxyHelperPath);
-        var apiRoute = File.ReadAllText(apiRoutePath);
+        var apiRoute = ProxyRouteSource(root);
         var readyRoute = File.ReadAllText(readyRoutePath);
 
         Assert.Contains("process.env.ENABLE_HSTS === \"true\"", securityHeaders);
@@ -1456,7 +1429,7 @@ public partial class AccountsWorkflowTests
         Assert.Contains("return withStrictTransportSecurity(Response.json", proxyHelper);
 
         Assert.Contains("withStrictTransportSecurity", apiRoute);
-        Assert.Contains("return withStrictTransportSecurity(NextResponse.json", apiRoute);
+        Assert.Contains("return withStrictTransportSecurity(Response.json", apiRoute);
 
         Assert.Contains("withStrictTransportSecurity", readyRoute);
         Assert.Contains("return withStrictTransportSecurity(NextResponse.json", readyRoute);
@@ -1585,7 +1558,7 @@ public partial class AccountsWorkflowTests
         var root = RepositoryRoot();
         var compose = File.ReadAllText(Path.Combine(root, "compose.production.yml"));
         var program = File.ReadAllText(Path.Combine(root, "backend", "Accounts.Api", "Program.cs"));
-        var proxyRoute = File.ReadAllText(Path.Combine(root, "frontend", "src", "app", "api", "[...path]", "route.ts"));
+        var proxyRoute = ProxyRouteSource(root);
         var readyHelper = File.ReadAllText(Path.Combine(root, "frontend", "src", "app", "health", "ready", "readiness.ts"));
 
         Assert.Contains("secrets:", compose);
@@ -1962,9 +1935,10 @@ public partial class AccountsWorkflowTests
         Assert.Contains("$GITHUB_EVENT_NAME\" == \"push\" && \"$GITHUB_REF\" == \"refs/heads/main", productionSmokeJob);
         Assert.Contains("Log in to GHCR for trusted promotion", productionSmokeJob);
         Assert.Contains("if: steps.promotion-mode.outputs.enabled == 'true'", productionSmokeJob);
-        Assert.Equal(2, Regex.Matches(productionSmokeJob, "uses: docker/build-push-action@").Count);
+        Assert.Equal(3, Regex.Matches(productionSmokeJob, "uses: docker/build-push-action@").Count);
         Assert.Contains("Build backend image exactly once", productionSmokeJob);
         Assert.Contains("Build frontend image exactly once", productionSmokeJob);
+        Assert.Contains("Build MCP connector image exactly once", productionSmokeJob);
         Assert.Contains("push: ${{ steps.promotion-mode.outputs.enabled == 'true' }}", productionSmokeJob);
         Assert.Contains("load: ${{ steps.promotion-mode.outputs.enabled != 'true' }}", productionSmokeJob);
         Assert.DoesNotContain("docker build ", productionSmokeJob);
@@ -1972,9 +1946,11 @@ public partial class AccountsWorkflowTests
         Assert.Contains("frontend_ref='${{ steps.promotion-mode.outputs.frontend-name }}'@\"$frontend_digest\"", productionSmokeJob);
         Assert.Contains("docker pull \"$ACCOUNTS_API_IMAGE\"", productionSmokeJob);
         Assert.Contains("docker pull \"$ACCOUNTS_FRONTEND_IMAGE\"", productionSmokeJob);
-        Assert.Equal(2, Regex.Matches(productionSmokeJob, "uses: aquasecurity/trivy-action@").Count);
-        Assert.Equal(2, Regex.Matches(productionSmokeJob, "uses: anchore/sbom-action@").Count);
-        Assert.Equal(2, Regex.Matches(productionSmokeJob, "uses: actions/attest-build-provenance@").Count);
+        Assert.Contains("docker pull \"$ACCOUNTS_MCP_IMAGE\"", productionSmokeJob);
+        Assert.Contains("mcp_ref='${{ steps.promotion-mode.outputs.mcp-name }}'@\"$mcp_digest\"", productionSmokeJob);
+        Assert.Equal(3, Regex.Matches(productionSmokeJob, "uses: aquasecurity/trivy-action@").Count);
+        Assert.Equal(3, Regex.Matches(productionSmokeJob, "uses: anchore/sbom-action@").Count);
+        Assert.Equal(3, Regex.Matches(productionSmokeJob, "uses: actions/attest-build-provenance@").Count);
         Assert.Contains("severity: HIGH,CRITICAL", productionSmokeJob);
         Assert.Contains("format: spdx-json", productionSmokeJob);
         Assert.Contains("write-container-supply-chain-report.ps1", productionSmokeJob);
@@ -2144,7 +2120,7 @@ public partial class AccountsWorkflowTests
             Assert.Contains(reviewedReference.Split('@')[1], actionPolicy);
         }
 
-        Assert.Equal(2, Regex.Matches(workflow, "uses: docker/build-push-action@").Count);
+        Assert.Equal(3, Regex.Matches(workflow, "uses: docker/build-push-action@").Count);
         Assert.Contains("GITHUB_EVENT_NAME\" == \"push\"", workflow);
         Assert.Contains("GITHUB_REF\" == \"refs/heads/main\"", workflow);
         Assert.Contains("if: steps.promotion-mode.outputs.enabled == 'true'", workflow);
@@ -2157,6 +2133,7 @@ public partial class AccountsWorkflowTests
         Assert.Contains("docker pull \"$ACCOUNTS_FRONTEND_IMAGE\"", workflow);
         Assert.DoesNotContain("docker build -f Dockerfile.backend", workflow);
         Assert.DoesNotContain("docker build -f Dockerfile.frontend", workflow);
+        Assert.DoesNotContain("docker build -f Dockerfile.mcp", workflow);
 
         foreach (var requiredEvidence in new[]
         {
