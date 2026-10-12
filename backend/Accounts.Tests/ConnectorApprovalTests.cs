@@ -52,6 +52,10 @@ public sealed class ConnectorApprovalTests
             Assert.True(RecentAuthenticationMiddleware.RequiresRecentMfa(path, method), path);
         }
         Assert.False(PrivilegedRouteCatalog.RequiresHumanConfirmation("/api/companies/1/officers", "POST"));
+        // Regression: the grant route ends in "/approve" but must never need an approval itself.
+        Assert.False(PrivilegedRouteCatalog.RequiresHumanConfirmation("/api/auth/connector/approve", "POST"));
+        Assert.False(PrivilegedRouteCatalog.RequiresHumanConfirmation("/api/auth/connector/sessions/5e1d/revoke", "POST"));
+        Assert.False(PrivilegedRouteCatalog.IsAdminLevel("/api/auth/connector/approve", "POST"));
         Assert.False(PrivilegedRouteCatalog.IsAdminLevel("/api/companies/1/periods/2/debtors", "POST"));
     }
 

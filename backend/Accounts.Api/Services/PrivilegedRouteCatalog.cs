@@ -9,6 +9,9 @@ public static class PrivilegedRouteCatalog
 {
     public static bool RequiresHumanConfirmation(PathString path, string method)
     {
+        // The connector's own routes carry their own credential checks (the approve route verifies
+        // password + TOTP itself). Requiring an approval to grant an approval would deadlock.
+        if (path.StartsWithSegments("/api/auth/connector", StringComparison.OrdinalIgnoreCase)) return false;
         if (HttpMethods.IsDelete(method)) return path.StartsWithSegments("/api");
         if (!(HttpMethods.IsPost(method) || HttpMethods.IsPut(method) || HttpMethods.IsPatch(method))) return false;
 
