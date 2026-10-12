@@ -177,3 +177,81 @@ export function writeDownload(
   }
   throw new FileAccessError('Too many files with that name already exist in the download directory.');
 }
+
+/**
+ * How files reach and leave the connector.
+ *
+ * - `local` (stdio, on the person's own machine): uploads are read from
+ *   --upload-root and downloads written to --download-dir.
+ * - `inline` (serve --http, on a server): the connector cannot read or write
+ *   the caller's disk, so uploads arrive base64-encoded in the arguments and
+ *   downloads go back base64-encoded in the result, both bounded.
+ */
+export type FileMode = 'local' | 'inline';
+
+/** The largest base64 argument accepted over HTTP: the request body is capped at 5 MiB. */
+export const INLINE_UPLOAD_MAX_BASE64_CHARS = 5 * 1024 * 1024;
+
+/** The largest file returned inline over HTTP. */
+export const INLINE_DOWNLOAD_MAX_BYTES = 1024 * 1024;
+
+const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/;
+
+/** Decodes a base64 file argument, refusing anything that is not plainly base64 or is too large. */
+export function decodeInlineBase64(value: string, label: string, maxBytes: number): { bytes: Buffer; sha256: string } {
+  const compact = value.replace(/\s+/g, '');
+  if (compact.length === 0) throw new FileAccessError(`${label} is empty.`);
+  if (compact.length > INLINE_UPLOAD_MAX_BASE64_CHARS) {
+    throw new FileAccessError(
+      `${label} is ${(compact.length / 1024 / 1024).toFixed(1)} MB of base64; over HTTP the limit is `
+        + `${INLINE_UPLOAD_MAX_BASE64_CHARS / 1024 / 1024} MiB. Use the stdio connector with --upload-root for a larger file.`,
+    );
+  }
+  if (compact.length % 4 !== 0 || !BASE64.test(compact)) {
+    throw new FileAccessError(`${label} must be the file's contents, standard base64-encoded.`);
+  }
+  const bytes = Buffer.from(compact, 'base64');
+  if (bytes.length === 0) throw new FileAccessError(`${label} is empty.`);
+  if (bytes.length > maxBytes) {
+    throw new FileAccessError(
+      `${label} is ${(bytes.length / 1024 / 1024).toFixed(1)} MB; the limit is ${maxBytes / 1024 / 1024} MB.`,
+    );
+  }
+  return { bytes, sha256: createHash('sha256').update(bytes).digest('hex') };
+}
+
+/**
+ * A downloaded file to hand back inside the tool result (HTTP mode), rather
+ * than write to disk. results.ts turns it into an embedded resource.
+ */
+export class InlineFile {
+  readonly filename: string;
+  readonly contentType: string;
+  readonly bytes: Buffer;
+  readonly sha256: string;
+
+  constructor(filename: string, contentType: string, bytes: Buffer) {
+    this.filename = filename;
+    this.contentType = contentType;
+    this.bytes = bytes;
+    this.sha256 = createHash('sha256').update(bytes).digest('hex');
+  }
+
+  /** What the text and structured parts of the result say about the file. */
+  summary(): Record<string, unknown> {
+    return {
+      file: {
+        filename: this.filename,
+        contentType: this.contentType,
+        bytes: this.bytes.length,
+        sha256: this.sha256,
+        uri: this.uri(),
+      },
+      note: 'The file is attached to this result as an embedded resource, base64-encoded.',
+    };
+  }
+
+  uri(): string {
+    return `filingbridge://download/${encodeURIComponent(this.filename)}`;
+  }
+}

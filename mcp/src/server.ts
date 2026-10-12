@@ -11,7 +11,7 @@ import {
   ReadResourceRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { TOOLS } from './catalogue.js';
-import { annotationsFor, downloadsOff, runTool, toolInputSchema, uploadsOff, type ToolDefinition } from './tools.js';
+import { annotationsFor, describeTool, downloadsOff, localOnlyRefusal, runTool, toolInputSchema, uploadsOff, type ToolDefinition } from './tools.js';
 import { ApiClient } from './client.js';
 import type { TokenSource } from './token-source.js';
 import { CONNECTOR_VERSION } from './version.js';
@@ -40,10 +40,18 @@ import {
   type SessionPosture,
 } from './session-level.js';
 import { inToolsets, type ToolGroup } from './toolsets.js';
+import type { FileMode } from './files.js';
 
 export interface ServerOptions {
+  /** Where the API is reached: the frontend origin in stdio mode, the API itself in serve --http. */
   baseUrl: string;
+  /** The address people open FilingBridge at, for links. Defaults to baseUrl. */
+  publicUrl?: string | undefined;
   tokens: TokenSource;
+  /** Added to every API request (serve --http: the service key). */
+  serviceHeaders?: Readonly<Record<string, string>> | undefined;
+  /** `inline` in serve --http: files travel base64-encoded rather than through directories. */
+  fileMode?: FileMode | undefined;
   toolsets?: readonly ToolGroup[] | undefined;
   downloadDir?: string | undefined;
   uploadRoot?: string | undefined;
@@ -59,25 +67,29 @@ const CORE_TOOLS = [SESSION_INFO_TOOL, SEARCH_TOOL, FETCH_TOOL] as const;
 const CORE_NAMES = new Set<string>(CORE_TOOLS.map((tool) => tool.name));
 
 /** Whether a tool is offered to this session with this configuration. */
-export function offered(tool: ToolDefinition, posture: SessionPosture, options: Pick<ServerOptions, 'toolsets' | 'downloadDir' | 'uploadRoot'>): boolean {
+type ListingOptions = Pick<ServerOptions, 'toolsets' | 'downloadDir' | 'uploadRoot' | 'fileMode'>;
+
+export function offered(tool: ToolDefinition, posture: SessionPosture, options: ListingOptions): boolean {
   if (!inToolsets(tool.group, options.toolsets)) return false;
   if (!permits(posture.accessLevel, tool)) return false;
   // A tool that refuses every call under this scope is a setting, not a
   // fault; offering it would teach the model the opposite.
   if (tool.requiresFullScope && posture.dataScope !== 'full') return false;
-  if (tool.binary && !options.downloadDir) return false;
-  if (tool.upload && !options.uploadRoot) return false;
+  const inline = options.fileMode === 'inline';
+  if (inline && tool.localOnly) return false;
+  if (tool.binary && !options.downloadDir && !inline) return false;
+  if (tool.upload && !options.uploadRoot && !inline) return false;
   return true;
 }
 
-export function buildToolList(posture: SessionPosture, options: Pick<ServerOptions, 'toolsets' | 'downloadDir' | 'uploadRoot'>) {
+export function buildToolList(posture: SessionPosture, options: ListingOptions) {
   return [
     ...CORE_TOOLS.map((tool) => ({ ...tool })),
     ...TOOLS.filter((tool) => offered(tool, posture, options)).map((tool) => ({
       name: tool.name,
       title: annotationsFor(tool).title,
-      description: tool.description,
-      inputSchema: toolInputSchema(tool),
+      description: describeTool(tool, options.fileMode ?? 'local'),
+      inputSchema: toolInputSchema(tool, options.fileMode ?? 'local'),
       annotations: annotationsFor(tool),
     })),
   ];
@@ -87,15 +99,19 @@ export function buildToolList(posture: SessionPosture, options: Pick<ServerOptio
  * Builds one MCP Server around a token source.
  *
  * stdio mode builds one for the life of the process around the person's
- * refreshing session; phase 2's HTTP mode will build one per request around
- * that request's bearer. Nothing in here knows which.
+ * refreshing session; serve --http builds one per request around that
+ * request's bearer (see http-server.ts). Apart from where files go
+ * (fileMode), nothing in here knows which.
  */
 export function createServer(options: ServerOptions): Server {
   const client = new ApiClient({
     tokens: options.tokens,
     baseUrl: options.baseUrl,
     ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
+    ...(options.serviceHeaders ? { serviceHeaders: options.serviceHeaders } : {}),
   });
+  const publicUrl = options.publicUrl ?? options.baseUrl;
+  const inline = options.fileMode === 'inline';
   const server = new Server(
     { name: 'filingbridge', title: 'FilingBridge', version: CONNECTOR_VERSION },
     { capabilities: { tools: {}, prompts: {}, resources: {} }, instructions: INSTRUCTIONS },
@@ -133,7 +149,7 @@ export function createServer(options: ServerOptions): Server {
       id: String(args['id']),
       title: title.slice(0, 300),
       text: JSON.stringify(record, null, 2),
-      url: webUrlFor(options.baseUrl, target.ref),
+      url: webUrlFor(publicUrl, target.ref),
       metadata: { kind: target.ref.kind, tool: target.tool, companyId: target.ref.companyId ?? null, periodId: target.ref.periodId ?? null },
     };
   }
@@ -149,7 +165,7 @@ export function createServer(options: ServerOptions): Server {
         limit: parsed.limit,
       },
     });
-    return shapeSearchResults(body, options.baseUrl);
+    return shapeSearchResults(body, publicUrl);
   }
 
   /**
@@ -159,7 +175,7 @@ export function createServer(options: ServerOptions): Server {
   async function dispatch(name: string, args: Record<string, unknown>): Promise<unknown> {
     if (name === SESSION_INFO_TOOL.name) {
       if (Object.keys(args).length > 0) throw new Error('session_info takes no arguments.');
-      return runSessionInfo(client, options);
+      return runSessionInfo(client, { ...options, baseUrl: publicUrl });
     }
     if (name === SEARCH_TOOL.name) return runSearch(args);
     if (name === FETCH_TOOL.name) return runFetch(args);
@@ -183,14 +199,16 @@ export function createServer(options: ServerOptions): Server {
     if (tool.requiresFullScope && held.dataScope !== 'full') {
       throw new ConnectorError('DATA_SCOPE_WITHHELD', fullScopeRefusal(tool));
     }
-    if (tool.binary && !options.downloadDir) throw new ConnectorError('TOOL_DISABLED', downloadsOff(tool));
-    if (tool.upload && !options.uploadRoot) throw new ConnectorError('TOOL_DISABLED', uploadsOff(tool));
+    if (inline && tool.localOnly) throw new ConnectorError('TOOL_DISABLED', localOnlyRefusal(tool));
+    if (tool.binary && !options.downloadDir && !inline) throw new ConnectorError('TOOL_DISABLED', downloadsOff(tool));
+    if (tool.upload && !options.uploadRoot && !inline) throw new ConnectorError('TOOL_DISABLED', uploadsOff(tool));
 
     return runTool(tool, {
       client,
       allowPersonalData: held.dataScope === 'full',
       downloadDir: options.downloadDir,
       uploadRoot: options.uploadRoot,
+      fileMode: options.fileMode,
     }, args);
   }
 

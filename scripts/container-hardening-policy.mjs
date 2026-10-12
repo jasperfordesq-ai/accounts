@@ -17,7 +17,15 @@ export function evaluateContainerHardening(config) {
     frontend: ["frontend_api"],
   };
 
-  for (const [name, expectedNetworks] of Object.entries(requiredNetworks)) {
+  // The connector HTTP service is optional in a topology, but when present it
+  // is hardened like the frontend, reaches only the API, and publishes nothing.
+  const optionalNetworks = { mcp: ["frontend_api"] };
+  const checked = {
+    ...requiredNetworks,
+    ...Object.fromEntries(Object.entries(optionalNetworks).filter(([name]) => services[name] !== undefined)),
+  };
+
+  for (const [name, expectedNetworks] of Object.entries(checked)) {
     const service = services[name];
     if (!service) {
       failures.push(`Missing service: ${name}.`);
@@ -48,6 +56,9 @@ export function evaluateContainerHardening(config) {
   if (config?.networks?.api_egress?.internal === true) failures.push("api_egress cannot provide controlled egress.");
   if ((services.db?.ports ?? []).length > 0) failures.push("Database publishes a host port.");
   if ((services.api?.ports ?? []).length > 0) failures.push("API publishes a host port.");
+  if (services.mcp !== undefined && ((services.mcp.ports ?? []).length > 0 || (services.mcp.expose ?? []).length > 0)) {
+    failures.push("The MCP connector service publishes a port.");
+  }
   const frontendPorts = services.frontend?.ports ?? [];
   if (frontendPorts.length !== 1 || frontendPorts[0]?.host_ip !== "127.0.0.1") {
     failures.push("Frontend port is not loopback-only.");

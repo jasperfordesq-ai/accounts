@@ -43,6 +43,9 @@ function ProductionComposeEnv {
         @("ACCOUNTS_API_KEY_FILE", (New-SecretFile "accounts_api_key" $accountsApiKey)),
         @("CONNECTOR_SIGNING_KEY_FILE", (New-SecretFile "connector_signing_key" "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF==")),
         @("ACCOUNTS_API_KEY_HASH", "0000000000000000000000000000000000000000000000000000000000000000"),
+        @("ACCOUNTS_MCP_API_KEY_FILE", (New-SecretFile "accounts_mcp_api_key" "dummy-mcp-service-key")),
+        @("ACCOUNTS_MCP_API_KEY_HASH", "1111111111111111111111111111111111111111111111111111111111111111"),
+        @("ACCOUNTS_MCP_IMAGE", "ghcr.io/example/accounts-mcp@sha256:4444444444444444444444444444444444444444444444444444444444444444"),
         @("ACCOUNTS_API_IMAGE", "ghcr.io/example/accounts-api@sha256:1111111111111111111111111111111111111111111111111111111111111111"),
         @("ACCOUNTS_FRONTEND_IMAGE", "ghcr.io/example/accounts-frontend@sha256:2222222222222222222222222222222222222222222222222222222222222222"),
         @("ACCOUNTS_ALLOWED_HOSTS", "accounts-smoke.local"),
@@ -244,14 +247,15 @@ try {
     $config = Invoke-DockerComposeConfigJson
     $services = $config.services
 
-    foreach ($serviceName in @("migrate", "api", "frontend")) {
+    foreach ($serviceName in @("migrate", "api", "frontend", "mcp")) {
         Assert-NoBuildContext $services $serviceName
     }
 
     Assert-Equal "migrate image" $services.migrate.image "ghcr.io/example/accounts-api@sha256:1111111111111111111111111111111111111111111111111111111111111111"
     Assert-Equal "api image" $services.api.image "ghcr.io/example/accounts-api@sha256:1111111111111111111111111111111111111111111111111111111111111111"
     Assert-Equal "frontend image" $services.frontend.image "ghcr.io/example/accounts-frontend@sha256:2222222222222222222222222222222222222222222222222222222222222222"
-    foreach ($imageReference in @($services.migrate.image, $services.api.image, $services.frontend.image)) {
+    Assert-Equal "mcp image" $services.mcp.image "ghcr.io/example/accounts-mcp@sha256:4444444444444444444444444444444444444444444444444444444444444444"
+    foreach ($imageReference in @($services.migrate.image, $services.api.image, $services.frontend.image, $services.mcp.image)) {
         if ([string]$imageReference -cnotmatch '^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$') {
             throw "Production image reference must be an immutable lowercase GHCR digest: $imageReference"
         }
@@ -259,8 +263,11 @@ try {
     if ($services.api.image -eq $services.frontend.image) {
         throw "API and frontend services must not use the same image reference."
     }
+    if ($services.mcp.image -eq $services.api.image -or $services.mcp.image -eq $services.frontend.image) {
+        throw "The MCP connector service must use its own image reference."
+    }
 
-    foreach ($serviceName in @("db", "database-role-provision", "migrate", "api", "frontend")) {
+    foreach ($serviceName in @("db", "database-role-provision", "migrate", "api", "frontend", "mcp")) {
         Assert-HardenedService $services.$serviceName $serviceName
     }
     Assert-ExactNetworks $services.db "db" @("api_db")
@@ -268,6 +275,38 @@ try {
     Assert-ExactNetworks $services.migrate "migrate" @("api_db", "api_egress")
     Assert-ExactNetworks $services.api "api" @("api_db", "frontend_api", "api_egress")
     Assert-ExactNetworks $services.frontend "frontend" @("frontend_api")
+    Assert-ExactNetworks $services.mcp "mcp" @("frontend_api")
+    if ($null -ne $services.mcp.ports -or $null -ne $services.mcp.expose) {
+        throw "The MCP connector service must not publish or expose a port; the frontend reaches it on frontend_api."
+    }
+    Assert-Equal "mcp restart policy" $services.mcp.restart "unless-stopped"
+    Assert-Equal "mcp depends on a healthy api" $services.mcp.depends_on.api.condition "service_healthy"
+    if ((@($services.mcp.healthcheck.test) -join " ") -notmatch [regex]::Escape("http://127.0.0.1:3100/healthz")) {
+        throw "mcp must keep its /healthz healthcheck."
+    }
+    $mcpSecrets = @(Service-SecretNames $services.mcp)
+    if (($mcpSecrets -join "|") -ne "accounts_mcp_api_key") {
+        throw "mcp must receive exactly the accounts_mcp_api_key secret, but received '$($mcpSecrets -join ", ")'."
+    }
+    foreach ($serviceName in @("db", "database-role-provision", "migrate", "api", "frontend")) {
+        if (@(Service-SecretNames $services.$serviceName) -contains "accounts_mcp_api_key") {
+            throw "$serviceName must not receive the MCP connector service key."
+        }
+    }
+    Assert-ServiceEnvironmentValue $services.mcp "mcp" "FILINGBRIDGE_API_URL" "http://api:8080"
+    Assert-ServiceEnvironmentValue $services.mcp "mcp" "FILINGBRIDGE_API_KEY_FILE" "/run/secrets/accounts_mcp_api_key"
+    Assert-ServiceEnvironmentValue $services.mcp "mcp" "FILINGBRIDGE_PUBLIC_URL" "https://accounts-smoke.local"
+    foreach ($name in @("ACCOUNTS_API_KEY_FILE", "ApiAccess__Keys__1__KeyHash", "Connector__SigningKey_FILE")) {
+        if ($null -ne (Get-ServiceEnvironmentValue $services.mcp $name)) {
+            throw "mcp must not receive $name."
+        }
+    }
+    foreach ($serviceName in @("migrate", "api")) {
+        Assert-ServiceEnvironmentValue $services.$serviceName $serviceName "ApiAccess__Keys__1__Name" "MCP service"
+        Assert-ServiceEnvironmentValue $services.$serviceName $serviceName "ApiAccess__Keys__1__Role" "Admin"
+        Assert-ServiceEnvironmentValue $services.$serviceName $serviceName "ApiAccess__Keys__1__KeyHash" "1111111111111111111111111111111111111111111111111111111111111111"
+    }
+    Assert-ServiceEnvironmentValue $services.frontend "frontend" "MCP_URL" "http://mcp:3100/mcp"
     Assert-Equal "frontend/API network internal isolation" $config.networks.frontend_api.internal $true
     Assert-Equal "API/database network internal isolation" $config.networks.api_db.internal $true
     if ($config.networks.api_egress.internal -eq $true) {
@@ -323,6 +362,10 @@ try {
     }
     if ($frontendDockerfile -notmatch '(?m)^USER nextjs\s*$') {
         throw "Frontend runtime image must declare its non-root nextjs user."
+    }
+    $mcpDockerfile = Get-Content -LiteralPath (Join-Path $RepositoryRoot "Dockerfile.mcp") -Raw
+    if ($mcpDockerfile -notmatch '(?m)^USER 1002:1002\s*$') {
+        throw "MCP connector runtime image must declare its non-root uid 1002 user."
     }
 
     $migrateCommand = @($services.migrate.command)
@@ -389,6 +432,9 @@ try {
             "DEADLINE_PROVIDER_TOKEN_FILE",
             "DEADLINE_DELIVERY_PROVIDER_ENDPOINT",
             "CONNECTOR_SIGNING_KEY_FILE",
+            "ACCOUNTS_MCP_API_KEY_FILE",
+            "ACCOUNTS_MCP_API_KEY_HASH",
+            "ACCOUNTS_MCP_IMAGE",
             "Username=accounts_api",
             "subjectAltName=DNS:db",
             "SSL Mode=VerifyFull",
@@ -420,8 +466,12 @@ try {
         throw "production-smoke must not rebuild application images."
     }
     if ($allSmokeCommands -notmatch 'docker\s+pull\s+"\$ACCOUNTS_API_IMAGE"' -or
-        $allSmokeCommands -notmatch 'docker\s+pull\s+"\$ACCOUNTS_FRONTEND_IMAGE"') {
-        throw "production-smoke must pull both exact promoted image references."
+        $allSmokeCommands -notmatch 'docker\s+pull\s+"\$ACCOUNTS_FRONTEND_IMAGE"' -or
+        $allSmokeCommands -notmatch 'docker\s+pull\s+"\$ACCOUNTS_MCP_IMAGE"') {
+        throw "production-smoke must pull every exact promoted image reference (api, frontend, mcp)."
+    }
+    if ($allSmokeCommands -notmatch 'node\s+scripts/mcp-live-roundtrip\.mjs') {
+        throw "production-smoke must run the live MCP round trip (scripts/mcp-live-roundtrip.mjs)."
     }
 
     if (-not [string]::IsNullOrWhiteSpace($EvidencePath)) {
@@ -438,6 +488,7 @@ try {
                 migrate = $services.migrate.image
                 api = $services.api.image
                 frontend = $services.frontend.image
+                mcp = $services.mcp.image
                 digestPinned = $true
                 backendAndMigrateSameDigest = $services.migrate.image -eq $services.api.image
             }
@@ -474,6 +525,9 @@ try {
                 migrationNetworks = @(Service-NetworkNames $services.migrate)
                 apiNetworks = @(Service-NetworkNames $services.api)
                 frontendNetworks = @(Service-NetworkNames $services.frontend)
+                mcpNetworks = @(Service-NetworkNames $services.mcp)
+                mcpPortsUnpublished = $true
+                mcpRuntimeNonRoot = $true
                 databaseAndApiPortsUnpublished = $true
                 frontendLoopbackOnly = $true
                 backendRuntimeNonRoot = $true

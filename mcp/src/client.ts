@@ -129,6 +129,13 @@ interface ApiClientOptions {
   baseUrl: string;
   fetchImpl?: typeof fetch;
   etags?: ETagCache;
+  /**
+   * Headers added to every request, before the connector's own. serve --http
+   * uses it for the service key (X-Accounts-Api-Key), because it calls the API
+   * directly rather than through the frontend proxy that adds the key in
+   * stdio mode. Never logged.
+   */
+  serviceHeaders?: Readonly<Record<string, string>>;
 }
 
 const CONNECTOR_REFUSALS: Record<string, { text: string; action: ErrorAction }> = {
@@ -216,6 +223,7 @@ export class ApiClient {
   readonly #tokens: TokenSource;
   readonly #baseUrl: string;
   readonly #fetch: typeof fetch;
+  readonly #serviceHeaders: Readonly<Record<string, string>>;
   readonly etags: ETagCache;
 
   constructor(options: ApiClientOptions) {
@@ -223,6 +231,7 @@ export class ApiClient {
     this.#baseUrl = options.baseUrl.replace(/\/+$/, '');
     this.#fetch = options.fetchImpl ?? fetch;
     this.etags = options.etags ?? new ETagCache();
+    this.#serviceHeaders = options.serviceHeaders ?? {};
   }
 
   get<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -288,6 +297,7 @@ export class ApiClient {
       const correlationId = randomUUID();
       const body = makeBody();
       const headers: Record<string, string> = {
+        ...this.#serviceHeaders,
         authorization: `Bearer ${token}`,
         accept,
         [CLIENT_HEADER]: CLIENT_HEADER_VALUE,

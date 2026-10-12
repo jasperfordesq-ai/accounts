@@ -91,6 +91,20 @@ const CANARIES = [
     replace: '  if (allowPersonalData || model) return value;\n  const record = asRecord(value);',
   },
   {
+    name: 'resource-metadata-missing',
+    what: 'serve --http answers 401 without pointing the client at the protected-resource metadata',
+    file: 'src/http-server.ts',
+    find: '  const challenge = `Bearer resource_metadata="${metadataUrl}"`;',
+    replace: "  const challenge = 'Bearer';",
+  },
+  {
+    name: 'service-key-dropped',
+    what: 'serve --http no longer sends its service key to the API',
+    file: 'src/http-server.ts',
+    find: '  const serviceHeaders = { [API_KEY_HEADER]: config.apiKey };',
+    replace: '  const serviceHeaders = {};',
+  },
+  {
     name: 'confirmation-rule-dropped',
     what: 'mark-filed no longer mirrored as a human-confirmation route',
     file: 'src/route-coverage.ts',

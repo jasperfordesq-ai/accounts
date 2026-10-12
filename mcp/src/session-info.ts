@@ -32,6 +32,7 @@ export const SESSION_INFO_TOOL = {
 
 export interface SessionInfoOptions {
   baseUrl: string;
+  fileMode?: 'local' | 'inline' | undefined;
   downloadDir?: string | undefined;
   uploadRoot?: string | undefined;
   toolsets?: readonly ToolGroup[] | undefined;
@@ -66,8 +67,12 @@ export async function runSessionInfo(client: ApiClient, options: SessionInfoOpti
     connector: {
       version: CONNECTOR_VERSION,
       baseUrl: options.baseUrl,
-      downloads: options.downloadDir ? 'enabled (--download-dir)' : 'off: start with --download-dir to enable',
-      uploads: options.uploadRoot ? 'enabled (--upload-root)' : 'off: start with --upload-root to enable',
+      downloads: options.fileMode === 'inline'
+        ? 'inline: returned in the result as a base64 embedded resource, up to 1 MiB'
+        : options.downloadDir ? 'enabled (--download-dir)' : 'off: start with --download-dir to enable',
+      uploads: options.fileMode === 'inline'
+        ? 'inline: send the file base64-encoded (contentBase64), the request capped at 5 MiB'
+        : options.uploadRoot ? 'enabled (--upload-root)' : 'off: start with --upload-root to enable',
       toolsets: options.toolsets ? [...options.toolsets] : 'all',
     },
     filingBoundary: FILING_BOUNDARY_SENTENCE,

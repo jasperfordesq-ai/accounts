@@ -65,8 +65,30 @@ services:
       ACCOUNTS_API_KEY: "${ACCOUNTS_API_KEY:-accounts_dev_frontend_proxy}"
       NEXT_PUBLIC_DEMO_TENANT_SLUG: "main-demo"
       NEXT_PUBLIC_DEMO_LOGIN_EMAIL: "admin@accounts.local"
+      MCP_URL: "http://mcp:3100/mcp"
     depends_on:
       - api
+
+  # MCP connector over Streamable HTTP, reached only through the frontend at http://localhost:3000/mcp.
+  mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile.mcp
+    container_name: accounts-mcp
+    environment:
+      FILINGBRIDGE_API_URL: "http://api:8080"
+      FILINGBRIDGE_API_KEY_FILE: "/run/secrets/accounts_mcp_api_key"
+      FILINGBRIDGE_PUBLIC_URL: "http://localhost:3000"
+      FILINGBRIDGE_ALLOWED_HOSTS: "mcp:3100,localhost:3000"
+    secrets:
+      - accounts_mcp_api_key
+    depends_on:
+      - api
+
+secrets:
+  # Development has API-key checks disabled; this fixed, non-secret value only lets the service start.
+  accounts_mcp_api_key:
+    file: ./config/dev/mcp-service-key.dev
 
 volumes:
   accounts_data:

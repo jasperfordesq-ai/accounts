@@ -106,7 +106,16 @@ export interface ConnectorConfig {
   /** The tool groups to offer. Absent means every group. */
   toolsets?: readonly ToolGroup[] | undefined;
   verbose: boolean;
+  /** serve --http: Streamable HTTP for remote clients, configured from the environment (http-server.ts). */
+  http: boolean;
+  /** serve --http: the address to listen on. */
+  host: string;
+  /** serve --http: the port to listen on. */
+  port: number;
 }
+
+export const DEFAULT_HTTP_HOST = '127.0.0.1';
+export const DEFAULT_HTTP_PORT = 3100;
 
 function nonEmpty(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
@@ -189,6 +198,9 @@ export function parseArgs(argv: string[], env: NodeJS.ProcessEnv = process.env):
   let downloadDir: string | undefined;
   let toolsets: ToolGroup[] | undefined;
   let verbose = false;
+  let http = false;
+  let host: string | undefined;
+  let port: number | undefined;
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i]!;
@@ -200,10 +212,16 @@ export function parseArgs(argv: string[], env: NodeJS.ProcessEnv = process.env):
     } else if (arg === '--version') {
       command = 'version';
     } else if (arg === '--http') {
-      throw new Error(
-        'serve --http (Streamable HTTP with OAuth, for Claude.ai) arrives in phase 2. '
-          + 'This build serves over stdio only.',
-      );
+      http = true;
+    } else if (arg === '--host') {
+      i += 1;
+      host = valueAt(argv, i, arg);
+      if (!/^[A-Za-z0-9.:[\]-]{1,255}$/.test(host)) throw new Error(`--host is not an address: ${host}`);
+    } else if (arg === '--port') {
+      i += 1;
+      const v = valueAt(argv, i, arg);
+      port = Number(v);
+      if (!/^\d{1,5}$/.test(v) || port < 1 || port > 65535) throw new Error(`--port must be 1 to 65535. Got: ${v}`);
     } else if (arg === '--base-url') {
       i += 1;
       baseUrl = valueAt(argv, i, arg).replace(/\/+$/, '');
@@ -277,6 +295,34 @@ export function parseArgs(argv: string[], env: NodeJS.ProcessEnv = process.env):
     }
   }
 
+  if ((host !== undefined || port !== undefined) && !http) {
+    throw new Error('--host and --port apply only to serve --http.');
+  }
+  if (http) {
+    if (command !== 'serve') throw new Error('--http applies only to the serve command.');
+    if (uploadRoot !== undefined || downloadDir !== undefined) {
+      throw new Error(
+        'serve --http never reads or writes the files on this machine: uploads and downloads travel base64-encoded. '
+          + 'Remove --upload-root and --download-dir.',
+      );
+    }
+    // The API address, the public URL, the service key and the allowed
+    // hosts come from the environment; see httpConfigFromEnv.
+    return {
+      command,
+      baseUrl: (nonEmpty(env['FILINGBRIDGE_API_URL']) ?? 'http://api:8080').replace(/\/+$/, ''),
+      profile,
+      accessLevel: accessLevel ?? 'write',
+      dataScope: dataScope ?? 'withheld',
+      passwordStdin: false,
+      toolsets,
+      verbose,
+      http: true,
+      host: host ?? DEFAULT_HTTP_HOST,
+      port: port ?? DEFAULT_HTTP_PORT,
+    };
+  }
+
   if (totpCode && recoveryCode) {
     throw new Error('Give either --totp-code or --recovery-code, not both.');
   }
@@ -322,5 +368,8 @@ export function parseArgs(argv: string[], env: NodeJS.ProcessEnv = process.env):
     downloadDir,
     toolsets,
     verbose,
+    http: false,
+    host: DEFAULT_HTTP_HOST,
+    port: DEFAULT_HTTP_PORT,
   };
 }

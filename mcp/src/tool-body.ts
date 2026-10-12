@@ -1,4 +1,4 @@
-import { readInsideRoot, EVIDENCE_MAX_BYTES, FileAccessError } from './files.js';
+import { readInsideRoot, decodeInlineBase64, EVIDENCE_MAX_BYTES, FileAccessError, INLINE_UPLOAD_MAX_BASE64_CHARS, type FileMode } from './files.js';
 
 /**
  * Validation for request bodies, hand-written for the same reason argument
@@ -59,6 +59,12 @@ export type FieldSpec<N extends string = string> = Common<N> & (
 
 export interface BodyContext {
   uploadRoot?: string | undefined;
+  /**
+   * How files reach the connector. `local` (stdio): a path under
+   * --upload-root. `inline` (serve --http): the file's bytes, base64-encoded,
+   * because the connector runs on a server and cannot read the caller's disk.
+   */
+  fileMode?: FileMode | undefined;
 }
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -87,7 +93,7 @@ function withNull(schema: Record<string, unknown>, nullable: boolean | undefined
   return schema;
 }
 
-export function fieldSchema(field: FieldSpec): Record<string, unknown> {
+export function fieldSchema(field: FieldSpec, mode: FileMode = 'local'): Record<string, unknown> {
   const describe = field.describe ? { description: field.describe } : {};
   let schema: Record<string, unknown>;
   switch (field.kind) {
@@ -161,7 +167,7 @@ export function fieldSchema(field: FieldSpec): Record<string, unknown> {
       schema = { type: 'string', pattern: UUID.source, description: field.describe ?? 'A GUID.' };
       break;
     case 'object': {
-      const inner = bodySchemaFor(field.fields);
+      const inner = bodySchemaFor(field.fields, mode);
       schema = { ...inner, ...describe };
       break;
     }
@@ -169,13 +175,21 @@ export function fieldSchema(field: FieldSpec): Record<string, unknown> {
       schema = {
         type: 'array',
         maxItems: field.maxItems,
-        items: bodySchemaFor(field.fields),
+        items: bodySchemaFor(field.fields, mode),
         ...describe,
       };
       break;
     }
     case 'fileBytes':
-      schema = {
+      schema = mode === 'inline' ? {
+        type: 'string',
+        maxLength: INLINE_UPLOAD_MAX_BASE64_CHARS,
+        contentEncoding: 'base64',
+        description:
+          `${field.describe ?? 'A file to attach.'} Give the file's contents, base64-encoded; the request as a `
+          + `whole may not exceed 5 MiB. Up to ${(field.maxBytes ?? EVIDENCE_MAX_BYTES) / 1024 / 1024} MB decoded.`
+          + (field.sha256Field ? ` If ${field.sha256Field} is left out, the connector fills in the file's SHA-256.` : ''),
+      } : {
         type: 'string',
         maxLength: 1024,
         description:
@@ -189,11 +203,11 @@ export function fieldSchema(field: FieldSpec): Record<string, unknown> {
   return withNull(schema, field.nullable);
 }
 
-export function bodySchemaFor(fields: readonly FieldSpec[]): Record<string, unknown> {
+export function bodySchemaFor(fields: readonly FieldSpec[], mode: FileMode = 'local'): Record<string, unknown> {
   const properties: Record<string, unknown> = {};
   const required: string[] = [];
   for (const field of fields) {
-    properties[field.name] = fieldSchema(field);
+    properties[field.name] = fieldSchema(field, mode);
     if (field.required) required.push(field.name);
   }
   const schema: Record<string, unknown> = { type: 'object', properties, additionalProperties: false };
@@ -334,6 +348,15 @@ export function buildBody(
           continue;
         }
         refuse(path, 'cannot be null.');
+      }
+      if (context.fileMode === 'inline') {
+        if (typeof value !== 'string') refuse(path, "must be the file's contents, base64-encoded.");
+        const file = decodeInlineBase64(value, path, field.maxBytes ?? EVIDENCE_MAX_BYTES);
+        body[field.name] = file.bytes.toString('base64');
+        if (field.sha256Field && args[field.sha256Field] === undefined) {
+          body[field.sha256Field] = file.sha256;
+        }
+        continue;
       }
       if (typeof value !== 'string') refuse(path, 'must be a file path under the upload directory.');
       if (!context.uploadRoot) {

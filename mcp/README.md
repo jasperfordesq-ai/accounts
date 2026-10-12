@@ -98,8 +98,73 @@ args = ["/abs/path/to/accounts/mcp/dist/cli.js", "serve", "--profile", "private"
 }
 ```
 
-Claude.ai (Streamable HTTP with OAuth 2.1, `serve --http` and a `/mcp` endpoint in the stack) arrives in
-phase 2; this build is stdio only. A one-click Claude Desktop bundle arrives in phase 3.
+A one-click Claude Desktop bundle arrives in phase 3. For Claude.ai, or to connect without running
+anything on your machine, use the remote connector below.
+
+## Remote connector (Claude.ai, Claude Code, Codex)
+
+The stack runs this package as the `mcp` service (`filingbridge-mcp serve --http`, image
+`Dockerfile.mcp`), reached only through the frontend at **`https://<your FilingBridge host>/mcp`**. A
+remote client signs in with FilingBridge's own OAuth 2.1 server (dynamic client registration, PKCE S256,
+public clients): it opens `https://<host>/oauth/authorize`, where you type your workspace, email,
+password and authenticator code and choose the access level and data scope, exactly as `connect` asks
+in a terminal. The access token it receives is an ordinary connector session: the same level, data
+scope, per-action approvals, change budget and revocation as the stdio connector.
+
+- **Claude.ai**: Settings → Connectors → Add custom connector, URL `https://<host>/mcp`. Claude.ai
+  discovers the authorization server from the 401 and opens the sign-in page. (The host must be
+  reachable from the internet over HTTPS for Claude.ai; a Private Server on a tailnet is not.)
+- **Claude Code**: `claude mcp add --transport http filingbridge https://<host>/mcp`, then run `/mcp` in
+  Claude Code and choose *Authenticate*; your browser opens the sign-in page and Claude Code receives
+  the token on a loopback redirect. For a Development stack: `http://localhost:3000/mcp`.
+- **Codex**: in `~/.codex/config.toml`
+
+  ```toml
+  [mcp_servers.filingbridge]
+  url = "https://<host>/mcp"
+  ```
+
+  then `codex mcp login filingbridge` to complete the OAuth sign-in in your browser. (Codex releases
+  that predate built-in remote MCP support also need `experimental_use_rmcp_client = true` at the top of
+  `config.toml`.)
+
+Over HTTP the connector cannot read or write your disk, so files travel in the conversation:
+
+- **Downloads** (accounts PDFs, filing packs, iXBRL, CT1 worksheet …) come back inside the tool result
+  as a base64 embedded resource, up to **1 MiB**; anything larger is refused with a pointer to the
+  stdio connector. The GDPR subject access export (`privacy_access_export`) is not offered at all over
+  HTTP, because its contents must never enter the conversation.
+- **The CSV bank import** takes `contentBase64` (and an optional `fileName`); evidence attachments take
+  the file's base64 in place of a path. The request as a whole is capped at **5 MiB**, so the base64
+  string can be at most 5 MiB (a CSV of roughly 3.7 MB).
+- `--upload-root` and `--download-dir` do not exist in HTTP mode, and the tool schemas and descriptions
+  say so.
+
+Running the service yourself (it is normally the compose `mcp` service):
+
+```bash
+FILINGBRIDGE_API_URL=http://api:8080 \
+FILINGBRIDGE_API_KEY_FILE=/run/secrets/accounts_mcp_api_key \
+FILINGBRIDGE_PUBLIC_URL=https://fb.example \
+node dist/cli.js serve --http --host 0.0.0.0 --port 3100
+```
+
+| Variable | Meaning |
+|---|---|
+| `FILINGBRIDGE_API_URL` | The API, called directly (default `http://api:8080`). |
+| `FILINGBRIDGE_API_KEY_FILE` | File holding the service key, sent as `X-Accounts-Api-Key`; read once, never logged. The API holds only its SHA-256 (`ApiAccess:Keys:1`, "MCP service"). |
+| `FILINGBRIDGE_PUBLIC_URL` | The OAuth issuer: the frontend origin people use (`Connector:PublicBaseUrl`). The MCP resource is `<origin>/mcp`. https unless loopback. |
+| `FILINGBRIDGE_ALLOWED_HOSTS` | Comma-separated `Host` values accepted on `/mcp` and the metadata routes (DNS-rebinding protection). Default: the public host, `mcp:<port>`, `localhost`, `localhost:<port>`, `127.0.0.1:<port>`. |
+
+Routes: `GET /healthz` (open), `POST /mcp` (Streamable HTTP, stateless, JSON responses; `GET`/`DELETE`
+answer 405 once authenticated), `GET /.well-known/oauth-protected-resource[/mcp]` (RFC 9728, fetched from
+the API and cached five minutes). Without a bearer `/mcp` answers 401 with
+`WWW-Authenticate: Bearer resource_metadata="<origin>/.well-known/oauth-protected-resource/mcp"`; a bearer
+FilingBridge refuses answers 401 `error="invalid_token"`. Each request gets its own MCP server around its
+own bearer; the session's posture is asked of FilingBridge and cached for at most 60 seconds per token. No
+inbound header but the bearer is forwarded: a browser's `Origin`, `Referer`, `Cookie` and `Sec-Fetch-*`
+never reach the API. Bodies over 5 MiB answer 413. One JSON line per request goes to stderr (method, path,
+status, time, JSON-RPC method and tool name; never a token, argument or result).
 
 Serve options: `--download-dir <dir>` enables downloads (accounts PDFs, CRO filing pack, signature page,
 iXBRL, CT1 worksheet, charity PDFs, evidence, handoff snapshots, subject access exports), which are written
@@ -118,8 +183,8 @@ external validation, filed dates; chart adoption; historic anchors; user adminis
 operations runs; every external-filing-handoff record) need a person's approval for that exact request.
 
 1. The agent calls the tool. FilingBridge refuses with `APPROVAL_REQUIRED`, an `approvalId` and the command
-   `filingbridge-mcp approve <id>`. (A web approvals page, and a link to it in this response, arrive with
-   the remote connector in phase 2.)
+   `filingbridge-mcp approve <id>`, and, where the web application is deployed with the remote
+   connector, a link to the approvals page (`/settings/approvals?id=<id>`) where you can grant it instead.
 2. You run `node mcp/dist/cli.js approve <id> --profile ... --base-url ...` **in your own terminal**. It shows
    the target host and FilingBridge's own description of the action, then asks for your password and your
    authenticator code. It refuses to run without a terminal and never accepts a piped password, so an agent

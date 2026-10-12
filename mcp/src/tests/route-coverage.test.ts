@@ -50,10 +50,13 @@ test('every exclusion and extra route gives a real reason', () => {
   }
 });
 
-test('the excluded set is exactly the browser-auth, health, monitoring and connector-credential routes', () => {
+test('the excluded set is exactly the browser-auth, health, monitoring, connector-credential and OAuth routes', () => {
   const excluded = EXCLUDED_ROUTES.map((entry) => entry.route).sort();
   assert.deepEqual(excluded, [
     'GET /api/auth/me',
+    'GET /api/oauth/authorize/describe',
+    'GET /api/oauth/metadata/authorization-server',
+    'GET /api/oauth/metadata/protected-resource',
     'GET /health',
     'GET /health/live',
     'GET /health/ready',
@@ -69,10 +72,15 @@ test('the excluded set is exactly the browser-auth, health, monitoring and conne
     'POST /api/auth/password',
     'POST /api/auth/reauthenticate',
     'POST /api/auth/recovery/complete',
+    'POST /api/oauth/authorize',
+    'POST /api/oauth/register',
+    'POST /api/oauth/revoke',
+    'POST /api/oauth/token',
     'POST /api/system/monitoring/client-event',
     'POST /api/system/monitoring/error-smoke',
   ]);
   assert.ok(!TOOLS.some((tool) => tool.path === '/api/auth/connector/approve'), 'approve must never be a tool');
+  assert.ok(!TOOLS.some((tool) => tool.path.startsWith('/api/oauth/')), 'the OAuth server is never a tool');
 });
 
 test('every tool calls a route the contract describes, or a declared extra route', () => {

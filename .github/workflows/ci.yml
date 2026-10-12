@@ -327,6 +327,7 @@ jobs:
       POSTGRES_USER: accounts
       ACCOUNTS_API_IMAGE: ghcr.io/example/accounts-api@sha256:1111111111111111111111111111111111111111111111111111111111111111
       ACCOUNTS_FRONTEND_IMAGE: ghcr.io/example/accounts-frontend@sha256:2222222222222222222222222222222222222222222222222222222222222222
+      ACCOUNTS_MCP_IMAGE: ghcr.io/example/accounts-mcp@sha256:4444444444444444444444444444444444444444444444444444444444444444
       ACCOUNTS_ALLOWED_HOSTS: accounts-smoke.local
       ACCOUNTS_ALLOWED_ORIGIN: https://accounts-smoke.local
       TRUST_PROXY_HEADERS: "true"
@@ -431,6 +432,8 @@ jobs:
           postgres_application_password="$(generate_secret)"
           accounts_api_key="$(generate_secret)"
           accounts_api_key_hash="$(printf '%s' "$accounts_api_key" | sha256sum | awk '{print $1}')"
+          accounts_mcp_api_key="$(generate_secret)"
+          accounts_mcp_api_key_hash="$(printf '%s' "$accounts_mcp_api_key" | sha256sum | awk '{print $1}')"
           accounts_migration_connection_string="Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${postgres_password};SSL Mode=VerifyFull;Root Certificate=/run/secrets/postgres_ca_certificate;Trust Server Certificate=false"
           accounts_application_connection_string="Host=db;Port=5432;Database=${POSTGRES_DB};Username=accounts_api;Password=${postgres_application_password};SSL Mode=VerifyFull;Root Certificate=/run/secrets/postgres_ca_certificate;Trust Server Certificate=false"
           bootstrap_owner_password="$(generate_bootstrap_owner_password)"
@@ -447,8 +450,10 @@ jobs:
           write_secret_file MFA_ENCRYPTION_KEY_FILE mfa_encryption_key "$(generate_secret | head -c 44)"
           write_secret_file DEADLINE_PROVIDER_TOKEN_FILE deadline_provider_token "$(generate_secret)"
           write_secret_file ACCOUNTS_API_KEY_FILE accounts_api_key "$accounts_api_key"
+          write_secret_file ACCOUNTS_MCP_API_KEY_FILE accounts_mcp_api_key "$accounts_mcp_api_key"
           write_secret_file BOOTSTRAP_OWNER_PASSWORD_FILE bootstrap_owner_password "$bootstrap_owner_password"
           set_masked_env ACCOUNTS_API_KEY_HASH "$accounts_api_key_hash"
+          set_masked_env ACCOUNTS_MCP_API_KEY_HASH "$accounts_mcp_api_key_hash"
 
           printf 'AUDIT_INTEGRITY_ACTIVE_KEY_ID=ci-audit-%s-%s\n' "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" >> "$GITHUB_ENV"
 
@@ -510,6 +515,9 @@ jobs:
       MONITORING_ALERT_ROUTE: ci-operations-alert-route
       MFA_ENCRYPTION_ACTIVE_KEY_ID: ci-mfa-primary
       DEADLINE_DELIVERY_PROVIDER_ENDPOINT: https://deadline-provider.invalid/reminders
+      # The MCP connector (agent sessions, OAuth for remote clients) is exercised by the live
+      # round trip below, so the smoke stack runs with it enabled.
+      CONNECTOR_ENABLED: "true"
     steps:
       - name: Check out repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
@@ -597,6 +605,8 @@ jobs:
           postgres_application_password="$(generate_secret)"
           accounts_api_key="$(generate_secret)"
           accounts_api_key_hash="$(printf '%s' "$accounts_api_key" | sha256sum | awk '{print $1}')"
+          accounts_mcp_api_key="$(generate_secret)"
+          accounts_mcp_api_key_hash="$(printf '%s' "$accounts_mcp_api_key" | sha256sum | awk '{print $1}')"
           accounts_migration_connection_string="Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${postgres_password};SSL Mode=VerifyFull;Root Certificate=/run/secrets/postgres_ca_certificate;Trust Server Certificate=false"
           accounts_application_connection_string="Host=db;Port=5432;Database=${POSTGRES_DB};Username=accounts_api;Password=${postgres_application_password};SSL Mode=VerifyFull;Root Certificate=/run/secrets/postgres_ca_certificate;Trust Server Certificate=false"
           bootstrap_owner_password="$(generate_bootstrap_owner_password)"
@@ -613,8 +623,10 @@ jobs:
           write_secret_file MFA_ENCRYPTION_KEY_FILE mfa_encryption_key "$(generate_secret | head -c 44)"
           write_secret_file DEADLINE_PROVIDER_TOKEN_FILE deadline_provider_token "$(generate_secret)"
           write_secret_file ACCOUNTS_API_KEY_FILE accounts_api_key "$accounts_api_key"
+          write_secret_file ACCOUNTS_MCP_API_KEY_FILE accounts_mcp_api_key "$accounts_mcp_api_key"
           write_secret_file BOOTSTRAP_OWNER_PASSWORD_FILE bootstrap_owner_password "$bootstrap_owner_password"
           set_masked_env ACCOUNTS_API_KEY_HASH "$accounts_api_key_hash"
+          set_masked_env ACCOUNTS_MCP_API_KEY_HASH "$accounts_mcp_api_key_hash"
 
           printf 'AUDIT_INTEGRITY_ACTIVE_KEY_ID=ci-audit-%s-%s\n' "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" >> "$GITHUB_ENV"
 
@@ -654,6 +666,10 @@ jobs:
           printf 'enabled=%s\n' "$promotion_enabled" >> "$GITHUB_OUTPUT"
           printf 'backend-name=ghcr.io/%s-api\n' "$repository" >> "$GITHUB_OUTPUT"
           printf 'frontend-name=ghcr.io/%s-frontend\n' "$repository" >> "$GITHUB_OUTPUT"
+          printf 'mcp-name=ghcr.io/%s-mcp\n' "$repository" >> "$GITHUB_OUTPUT"
+          mcp_evidence_dir="$RUNNER_TEMP/accounts-mcp-supply-chain"
+          mkdir -p "$mcp_evidence_dir"
+          printf 'mcp-evidence-dir=%s\n' "$mcp_evidence_dir" >> "$GITHUB_OUTPUT"
           printf 'evidence-dir=%s\n' "$evidence_dir" >> "$GITHUB_OUTPUT"
           printf 'CONTAINER_PROMOTION_MODE=%s\n' "$([[ "$promotion_enabled" == "true" ]] && echo promoted || echo verification-only)" >> "$GITHUB_ENV"
 
@@ -691,6 +707,17 @@ jobs:
           provenance: false
           tags: ${{ steps.promotion-mode.outputs.enabled == 'true' && format('{0}:{1}', steps.promotion-mode.outputs.frontend-name, github.sha) || format('accounts-frontend-ci:{0}', github.sha) }}
 
+      - name: Build MCP connector image exactly once
+        id: mcp-build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: Dockerfile.mcp
+          push: ${{ steps.promotion-mode.outputs.enabled == 'true' }}
+          load: ${{ steps.promotion-mode.outputs.enabled != 'true' }}
+          provenance: false
+          tags: ${{ steps.promotion-mode.outputs.enabled == 'true' && format('{0}:{1}', steps.promotion-mode.outputs.mcp-name, github.sha) || format('accounts-mcp-ci:{0}', github.sha) }}
+
       - name: Resolve exact built image references
         id: image-refs
         shell: bash
@@ -699,22 +726,28 @@ jobs:
 
           backend_digest='${{ steps.backend-build.outputs.digest }}'
           frontend_digest='${{ steps.frontend-build.outputs.digest }}'
+          mcp_digest='${{ steps.mcp-build.outputs.digest }}'
           digest_pattern='^sha256:[0-9a-f]{64}$'
           [[ "$backend_digest" =~ $digest_pattern ]] || { echo "Invalid backend digest: $backend_digest" >&2; exit 1; }
           [[ "$frontend_digest" =~ $digest_pattern ]] || { echo "Invalid frontend digest: $frontend_digest" >&2; exit 1; }
+          [[ "$mcp_digest" =~ $digest_pattern ]] || { echo "Invalid MCP connector digest: $mcp_digest" >&2; exit 1; }
 
           if [[ '${{ steps.promotion-mode.outputs.enabled }}' == 'true' ]]; then
             backend_ref='${{ steps.promotion-mode.outputs.backend-name }}'@"$backend_digest"
             frontend_ref='${{ steps.promotion-mode.outputs.frontend-name }}'@"$frontend_digest"
+            mcp_ref='${{ steps.promotion-mode.outputs.mcp-name }}'@"$mcp_digest"
           else
             backend_ref="accounts-api-ci:$GITHUB_SHA"
             frontend_ref="accounts-frontend-ci:$GITHUB_SHA"
+            mcp_ref="accounts-mcp-ci:$GITHUB_SHA"
           fi
 
           printf 'backend-digest=%s\nfrontend-digest=%s\n' "$backend_digest" "$frontend_digest" >> "$GITHUB_OUTPUT"
           printf 'backend-ref=%s\nfrontend-ref=%s\n' "$backend_ref" "$frontend_ref" >> "$GITHUB_OUTPUT"
           printf 'ACCOUNTS_API_IMAGE=%s\nACCOUNTS_FRONTEND_IMAGE=%s\n' "$backend_ref" "$frontend_ref" >> "$GITHUB_ENV"
           printf 'BACKEND_IMAGE_DIGEST=%s\nFRONTEND_IMAGE_DIGEST=%s\n' "$backend_digest" "$frontend_digest" >> "$GITHUB_ENV"
+          printf 'mcp-digest=%s\nmcp-ref=%s\n' "$mcp_digest" "$mcp_ref" >> "$GITHUB_OUTPUT"
+          printf 'ACCOUNTS_MCP_IMAGE=%s\nMCP_IMAGE_DIGEST=%s\n' "$mcp_ref" "$mcp_digest" >> "$GITHUB_ENV"
 
       - name: Scan exact backend image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
@@ -736,6 +769,16 @@ jobs:
           ignore-unfixed: false
           exit-code: "1"
 
+      - name: Scan exact MCP connector image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ steps.image-refs.outputs.mcp-ref }}
+          format: json
+          output: ${{ steps.promotion-mode.outputs.mcp-evidence-dir }}/mcp-trivy.json
+          severity: HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: "1"
+
       - name: Generate backend SPDX SBOM
         uses: anchore/sbom-action@43a17d6e7add2b5535efe4dcae9952337c479a93 # v0
         with:
@@ -750,6 +793,14 @@ jobs:
           image: ${{ steps.image-refs.outputs.frontend-ref }}
           format: spdx-json
           output-file: ${{ steps.promotion-mode.outputs.evidence-dir }}/frontend-sbom.spdx.json
+          upload-artifact: false
+
+      - name: Generate MCP connector SPDX SBOM
+        uses: anchore/sbom-action@43a17d6e7add2b5535efe4dcae9952337c479a93 # v0
+        with:
+          image: ${{ steps.image-refs.outputs.mcp-ref }}
+          format: spdx-json
+          output-file: ${{ steps.promotion-mode.outputs.mcp-evidence-dir }}/mcp-sbom.spdx.json
           upload-artifact: false
 
       - name: Attest backend build provenance
@@ -768,6 +819,15 @@ jobs:
         with:
           subject-name: ${{ steps.promotion-mode.outputs.frontend-name }}
           subject-digest: ${{ steps.image-refs.outputs.frontend-digest }}
+          push-to-registry: true
+
+      - name: Attest MCP connector build provenance
+        id: mcp-attest
+        if: steps.promotion-mode.outputs.enabled == 'true'
+        uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
+        with:
+          subject-name: ${{ steps.promotion-mode.outputs.mcp-name }}
+          subject-digest: ${{ steps.image-refs.outputs.mcp-digest }}
           push-to-registry: true
 
       - name: Retain provenance bundle metadata
@@ -795,6 +855,7 @@ jobs:
         run: |
           docker pull "$ACCOUNTS_API_IMAGE"
           docker pull "$ACCOUNTS_FRONTEND_IMAGE"
+          docker pull "$ACCOUNTS_MCP_IMAGE"
 
       - name: Start production stack
         run: docker compose -f compose.production.yml up -d --wait --wait-timeout 300
@@ -889,6 +950,25 @@ jobs:
             -AllowEphemeralMfaEnrollment `
             -EphemeralMfaHandoffPath (Join-Path $env:RUNNER_TEMP "accounts-visual-auth/totp-handoff.json") `
             -CheckMonitoringErrorRouting
+
+      - name: Run live MCP connector round trip
+        env:
+          NODE_EXTRA_CA_CERTS: ${{ github.workspace }}/.tmp/production-smoke-caddy/caddy-local-root.crt
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/mcp-live-roundtrip.mjs --base-url=https://accounts-smoke.local --report-path="$RUNNER_TEMP/accounts-mcp/mcp-live-roundtrip-report.json"
+
+      - name: Upload MCP connector evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: mcp-connector-evidence
+          path: |
+            ${{ runner.temp }}/accounts-mcp/mcp-live-roundtrip-report.json
+            ${{ steps.promotion-mode.outputs.mcp-evidence-dir }}
+          if-no-files-found: warn
+          retention-days: 90
 
       - name: Run bounded production capacity profile
         env:

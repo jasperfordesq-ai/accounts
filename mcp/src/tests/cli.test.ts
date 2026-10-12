@@ -77,7 +77,8 @@ test('help and version print without touching the network', async () => {
   const cli = io();
   await runCli(['help'], cli);
   assert.match(cli.out(), /approve <id>/);
-  assert.match(cli.out(), /phase 2/);
+  assert.match(cli.out(), /serve --http/);
+  assert.match(cli.out(), /FILINGBRIDGE_PUBLIC_URL/);
   const v = io();
   await runCli(['--version'], v);
   assert.match(v.out(), /^filingbridge-mcp \d+\.\d+\.\d+/);

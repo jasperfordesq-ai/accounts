@@ -3,7 +3,19 @@ import { applyFieldPolicy, type ModelName } from './field-policy.js';
 import { buildRequest, inputSchemaFor, isPathParam, paramName, type ParamSpec } from './tool-input.js';
 import { bodySchemaFor, buildBody, flattenFields, type FieldSpec } from './tool-body.js';
 import { ConnectorError } from './errors.js';
-import { FileAccessError, readInsideRoot, writeDownload, CSV_EXTENSIONS, CSV_MAX_BYTES } from './files.js';
+import {
+  FileAccessError,
+  InlineFile,
+  decodeInlineBase64,
+  readInsideRoot,
+  safeFileName,
+  writeDownload,
+  CSV_EXTENSIONS,
+  CSV_MAX_BYTES,
+  INLINE_DOWNLOAD_MAX_BYTES,
+  INLINE_UPLOAD_MAX_BASE64_CHARS,
+  type FileMode,
+} from './files.js';
 import type { ToolGroup } from './toolsets.js';
 import type { AccessLevel } from './config.js';
 
@@ -52,6 +64,12 @@ export interface ToolDefinition {
   returnsCredential?: boolean;
   /** The request is a multipart CSV upload read from --upload-root. */
   upload?: 'csv';
+  /**
+   * Offered only where files stay on the person's own machine (stdio). Over
+   * HTTP a download comes back inside the conversation; for a file that must
+   * never enter it, the sentence says why the tool is withheld there.
+   */
+  localOnly?: string;
 }
 
 export interface ToolContext {
@@ -59,6 +77,8 @@ export interface ToolContext {
   allowPersonalData: boolean;
   downloadDir?: string | undefined;
   uploadRoot?: string | undefined;
+  /** `inline` in serve --http mode: files travel base64-encoded in arguments and results. */
+  fileMode?: FileMode | undefined;
 }
 
 export interface ToolAnnotations {
@@ -111,6 +131,22 @@ export function annotationsFor(tool: ToolDefinition): ToolAnnotations {
   };
 }
 
+const INLINE_UPLOAD_SCHEMA = {
+  contentBase64: {
+    type: 'string',
+    maxLength: INLINE_UPLOAD_MAX_BASE64_CHARS,
+    contentEncoding: 'base64',
+    description:
+      'The CSV bank statement\'s contents, base64-encoded. At most 5 MiB of base64 (the request as a whole is '
+      + 'capped at 5 MiB), and at most 5 MB decoded.',
+  },
+  fileName: {
+    type: 'string',
+    maxLength: 150,
+    description: 'The statement\'s file name, ending .csv or .txt. Defaults to statement.csv.',
+  },
+};
+
 const UPLOAD_FILE_SCHEMA = {
   type: 'string',
   maxLength: 1024,
@@ -126,16 +162,19 @@ const UPLOAD_FILE_SCHEMA = {
  * no other way to learn that the identifier handed back in the refusal is
  * meant to come back here.
  */
-export function toolInputSchema(tool: ToolDefinition): Record<string, unknown> {
+export function toolInputSchema(tool: ToolDefinition, mode: FileMode = 'local'): Record<string, unknown> {
   const fromParams = inputSchemaFor(allParams(tool));
-  const fromBody = tool.body ? bodySchemaFor(tool.body) : { properties: {} };
+  const fromBody = tool.body ? bodySchemaFor(tool.body, mode) : { properties: {} };
   const properties: Record<string, unknown> = {
     ...fromParams.properties,
     ...(fromBody['properties'] as Record<string, unknown>),
   };
   const required = [...fromParams.required, ...((fromBody['required'] as string[] | undefined) ?? [])];
 
-  if (tool.upload === 'csv') {
+  if (tool.upload === 'csv' && mode === 'inline') {
+    Object.assign(properties, INLINE_UPLOAD_SCHEMA);
+    required.push('contentBase64');
+  } else if (tool.upload === 'csv') {
     properties['file'] = UPLOAD_FILE_SCHEMA;
     required.push('file');
   }
@@ -207,7 +246,7 @@ function partition(tool: ToolDefinition, args: Record<string, unknown>) {
   const bodyArgs: Record<string, unknown> = {};
   let reason: string | undefined;
   let approvalId: string | undefined;
-  let file: unknown;
+  const file: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(args)) {
     if (key === 'reason' && tool.method) {
@@ -224,8 +263,8 @@ function partition(tool: ToolDefinition, args: Record<string, unknown>) {
       approvalId = value;
       continue;
     }
-    if (key === 'file' && tool.upload) {
-      file = value;
+    if (tool.upload && (key === 'file' || key === 'contentBase64' || key === 'fileName')) {
+      file[key] = value;
       continue;
     }
     if (urlNames.has(key)) {
@@ -253,7 +292,8 @@ export async function runTool(
     if (Object.keys(bodyArgs).length > 0) {
       throw new Error(`Unknown argument "${Object.keys(bodyArgs)[0]}". This tool accepts: ${allParams(tool).map(paramName).join(', ') || 'no arguments'}.`);
     }
-    if (!context.downloadDir) {
+    const inline = context.fileMode === 'inline';
+    if (!context.downloadDir && !inline) {
       throw new ConnectorError('TOOL_DISABLED', downloadsOff(tool));
     }
     if (tool.approval && !reason) {
@@ -264,8 +304,24 @@ export async function runTool(
       { query: request.query, reason, approvalId },
       tool.method ?? 'GET',
     );
+    if (inline) {
+      if (downloaded.bytes.length > INLINE_DOWNLOAD_MAX_BYTES) {
+        throw new ConnectorError(
+          'DOWNLOAD_TOO_LARGE',
+          `${tool.name} produced a ${(downloaded.bytes.length / 1024 / 1024).toFixed(1)} MB file. Over HTTP the connector `
+            + `returns files of up to ${INLINE_DOWNLOAD_MAX_BYTES / 1024 / 1024} MiB inline. Use the stdio connector `
+            + '(filingbridge-mcp with --download-dir) on the person\'s own machine, or ask for a smaller artefact.',
+        );
+      }
+      return new InlineFile(
+        safeFileName(downloaded.fileName ?? tool.binary.defaultName, tool.binary.defaultName),
+        downloaded.contentType,
+        downloaded.bytes,
+      );
+    }
+    const downloadDir = context.downloadDir!;
     const written = writeDownload(
-      context.downloadDir,
+      downloadDir,
       downloaded.fileName ?? tool.binary.defaultName,
       downloaded.bytes,
       downloaded.contentType,
@@ -318,11 +374,7 @@ export async function runTool(
   }
 
   if (tool.upload === 'csv') {
-    if (!context.uploadRoot) {
-      throw new ConnectorError('TOOL_DISABLED', uploadsOff(tool));
-    }
-    if (typeof file !== 'string') throw new FileAccessError('file must be a path under the upload directory.');
-    const csv = readInsideRoot(context.uploadRoot, file, { maxBytes: CSV_MAX_BYTES, extensions: CSV_EXTENSIONS });
+    const csv = context.fileMode === 'inline' ? inlineCsv(file) : localCsv(tool, context, file);
     const result = await context.client.upload<unknown>(
       request.path,
       { fieldName: 'file', fileName: csv.name, contentType: 'text/csv', bytes: csv.bytes },
@@ -336,7 +388,7 @@ export async function runTool(
   if (tool.body) {
     body = tool.optionalBody && !hasBodyArgs
       ? undefined
-      : buildBody(tool.body, bodyArgs, { uploadRoot: context.uploadRoot });
+      : buildBody(tool.body, bodyArgs, { uploadRoot: context.uploadRoot, fileMode: context.fileMode });
   } else if (hasBodyArgs) {
     const accepted = allParams(tool).map(paramName);
     throw new Error(
@@ -358,6 +410,71 @@ export async function runTool(
     return { result: gated, credentialHandoff: handoff };
   }
   return gated;
+}
+
+/** The CSV named by path under --upload-root (stdio mode). */
+function localCsv(tool: ToolDefinition, context: ToolContext, file: Record<string, unknown>) {
+  for (const key of ['contentBase64', 'fileName']) {
+    if (file[key] !== undefined) {
+      throw new Error(`Unknown argument "${key}". This connector reads the statement from --upload-root: pass file.`);
+    }
+  }
+  if (!context.uploadRoot) {
+    throw new ConnectorError('TOOL_DISABLED', uploadsOff(tool));
+  }
+  if (typeof file['file'] !== 'string') throw new FileAccessError('file must be a path under the upload directory.');
+  return readInsideRoot(context.uploadRoot, file['file'], { maxBytes: CSV_MAX_BYTES, extensions: CSV_EXTENSIONS });
+}
+
+/** The CSV sent base64-encoded in the arguments (serve --http mode). */
+function inlineCsv(file: Record<string, unknown>) {
+  if (file['file'] !== undefined) {
+    throw new FileAccessError(
+      'Over HTTP the connector cannot read files by path. Send the statement as contentBase64 (and fileName), '
+        + 'or use the stdio connector with --upload-root.',
+    );
+  }
+  if (typeof file['contentBase64'] !== 'string') {
+    throw new FileAccessError('contentBase64 must be the CSV statement, base64-encoded.');
+  }
+  const rawName = file['fileName'] === undefined ? 'statement.csv' : file['fileName'];
+  if (typeof rawName !== 'string' || rawName.length === 0 || rawName.length > 150) {
+    throw new FileAccessError('fileName must be a file name of up to 150 characters.');
+  }
+  const name = safeFileName(rawName, 'statement.csv');
+  const dot = name.lastIndexOf('.');
+  const extension = dot >= 0 ? name.slice(dot).toLowerCase() : '';
+  if (!CSV_EXTENSIONS.has(extension)) {
+    throw new FileAccessError(`FilingBridge does not accept ${name} here. It accepts: ${[...CSV_EXTENSIONS].join(', ')}.`);
+  }
+  const decoded = decodeInlineBase64(file['contentBase64'], 'contentBase64', CSV_MAX_BYTES);
+  return { name, bytes: decoded.bytes, sha256: decoded.sha256 };
+}
+
+/**
+ * Descriptions are written for the stdio connector, which reads and writes
+ * named directories. Over HTTP the same tools take and return base64 instead,
+ * and the description says so rather than naming flags that do not exist.
+ */
+const INLINE_DESCRIPTION_REWRITES: readonly [RegExp, string][] = [
+  [/ into --download-dir/g, ' and return it in the result as a base64 embedded resource (up to 1 MiB)'],
+  [/The file must be under --upload-root, at most 5 MB\./g, 'Send the file base64-encoded as contentBase64; the request is capped at 5 MiB.'],
+  [/Needs the evidence file under --upload-root\./g, 'Send the evidence file base64-encoded.'],
+  [/,? (?:both )?from --upload-root/g, ', sent base64-encoded'],
+  [/--upload-root/g, 'base64-encoded content'],
+  [/--download-dir/g, 'the result'],
+];
+
+export function describeTool(tool: ToolDefinition, mode: FileMode = 'local'): string {
+  if (mode !== 'inline') return tool.description;
+  let text = tool.description;
+  for (const [pattern, replacement] of INLINE_DESCRIPTION_REWRITES) text = text.replace(pattern, replacement);
+  return text;
+}
+
+export function localOnlyRefusal(tool: ToolDefinition): string {
+  return `${tool.name} is offered only by the connector running on the person's own machine (stdio, with `
+    + `--download-dir). ${tool.localOnly ?? ''} Nothing was requested.`;
 }
 
 export function downloadsOff(tool: ToolDefinition): string {
