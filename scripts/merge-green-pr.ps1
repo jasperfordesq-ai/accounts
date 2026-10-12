@@ -1,13 +1,15 @@
 <#
 .SYNOPSIS
 Merges a pull request with administrator privileges only after it is verifiably green.
+Merge commits are never offered because main requires linear history.
 
 .DESCRIPTION
 The sole code owner cannot approve their own pull requests, so the required-review rule on main
 can only be satisfied by an administrator merge. This script narrows that override: it refuses to
-merge unless the pull request is open, not a draft, targets main, is mergeable, has every check
-passed or skipped with none pending, and has no unresolved review threads. The merge is pinned to
-the exact head commit that was verified, so a push after verification makes the merge fail.
+merge unless the pull request is open, not a draft, targets main, is mergeable, already contains
+the current tip of main, has every check passed or skipped with none pending, and has no
+unresolved review threads. The merge is pinned to the exact head commit that was verified, so a
+push after verification makes the merge fail.
 
 .EXAMPLE
 pwsh scripts/merge-green-pr.ps1 -PullRequest 83
@@ -17,7 +19,7 @@ param(
     [Parameter(Mandatory = $true)][int]$PullRequest,
     [string]$Repository = "jasperfordesq-ai/accounts",
     [string]$BaseBranch = "main",
-    [ValidateSet("squash", "merge", "rebase")][string]$Method = "squash",
+    [ValidateSet("squash", "rebase")][string]$Method = "squash",
     [switch]$DryRun
 )
 
@@ -37,6 +39,13 @@ if ($pr.state -ne "OPEN") { $failures.Add("Pull request is $($pr.state), not OPE
 if ($pr.isDraft) { $failures.Add("Pull request is a draft.") }
 if ($pr.baseRefName -ne $BaseBranch) { $failures.Add("Pull request targets '$($pr.baseRefName)', not '$BaseBranch'.") }
 if ($pr.mergeable -ne "MERGEABLE") { $failures.Add("Pull request mergeability is '$($pr.mergeable)'.") }
+
+# MERGEABLE only means no conflicts. Main requires strict status checks, so the verified head must
+# already contain the current base tip; otherwise CI never ran against the latest main.
+$comparison = Invoke-GhJson @("api", "repos/$Repository/compare/$($BaseBranch)...$($pr.headRefOid)")
+if ([int]$comparison.behind_by -ne 0) {
+    $failures.Add("Head is $($comparison.behind_by) commit(s) behind '$BaseBranch'; update the branch and let CI rerun.")
+}
 
 # gh pr checks exits non-zero while checks are pending or failing; read the JSON regardless.
 $checksJson = & gh pr checks "$PullRequest" --repo $Repository --json "name,bucket,state"
