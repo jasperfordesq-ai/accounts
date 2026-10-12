@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { readFileSync, realpathSync, statSync, writeFileSync, mkdirSync, chmodSync } from 'node:fs';
+import { readFileSync, realpathSync, statSync, writeFileSync, mkdirSync, chmodSync, openSync, fstatSync, closeSync } from 'node:fs';
 import { basename, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 /**
@@ -92,7 +92,23 @@ export function readInsideRoot(
   limits: { maxBytes: number; extensions?: ReadonlySet<string> },
 ): ReadFile {
   const path = resolveInsideRoot(root, requested);
-  const stats = statSync(path);
+  // Open once and check and read through the same descriptor, so the file cannot be swapped
+  // between the size/type check and the read.
+  const descriptor = openSync(path, 'r');
+  try {
+    return readOpenedFile(descriptor, path, requested, limits);
+  } finally {
+    closeSync(descriptor);
+  }
+}
+
+function readOpenedFile(
+  descriptor: number,
+  path: string,
+  requested: string,
+  limits: { maxBytes: number; extensions?: ReadonlySet<string> },
+): ReadFile {
+  const stats = fstatSync(descriptor);
   if (!stats.isFile()) throw new FileAccessError(`${requested} is not a file.`);
   if (stats.size === 0) throw new FileAccessError(`${requested} is empty.`);
   if (stats.size > limits.maxBytes) {
@@ -108,7 +124,8 @@ export function readInsideRoot(
       );
     }
   }
-  const bytes = readFileSync(path);
+  const bytes = readFileSync(descriptor);
+  if (bytes.length !== stats.size) throw new FileAccessError(`${requested} changed while it was being read.`);
   return { path, name: basename(path), bytes, sha256: createHash('sha256').update(bytes).digest('hex') };
 }
 
