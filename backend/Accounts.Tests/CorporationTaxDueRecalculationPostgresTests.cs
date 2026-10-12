@@ -66,7 +66,7 @@ public sealed class CorporationTaxDueRecalculationPostgresTests : IAsyncLifetime
             var result = await YearEndEndpoints.ConfirmCorporationTaxDueEndpointAsync(
                 companyId,
                 periodId,
-                new CorporationTaxDueConfirmationInput("Income outside the exemption", 1_200m),
+                new CorporationTaxDueConfirmationInput("Income outside the exemption", 1_200m, 0m),
                 db,
                 new AuditService(db),
                 OwnerRequest(companyId, periodId),

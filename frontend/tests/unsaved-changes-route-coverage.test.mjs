@@ -21,6 +21,8 @@ const editableSurfaces = [
   ["share-capital editor", "src/components/ShareCapitalCard.tsx", /useUnsavedChanges\(shareCapitalFormDirty\)/],
   ["quarantined-company recovery", "src/components/dashboard/QuarantinedCompanyRecoveryPanel.tsx", /useUnsavedChanges\(selected !== null && \(confirmation !== "" \|\| reason !== ""\)\)/],
   ["incomplete money entry", "src/components/workbench.tsx", /useUnsavedChanges\(hasUncommittedMoneyDraft\)/],
+  ["historic size figures from filed accounts", "src/components/period/HistoricSizeFiguresCard.tsx", /useUnsavedChanges\(historicFiguresDirty\)/],
+  ["board approval date and reopening reason", "src/components/period/PeriodFinalisePanel.tsx", /useUnsavedChanges\(hasFinaliseDraft\)/],
 ];
 
 test("every materially editable accounting surface registers a semantic dirty-state blocker", () => {

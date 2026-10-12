@@ -1168,7 +1168,7 @@ public class AccountsDbContext : DbContext
             // confirmed it, why, and the liability it was given for.
             e.ToTable("tax_balances", table => table.HasCheckConstraint(
                 "CK_tax_balances_confirmed_due",
-                "(\"ConfirmedDueAt\" IS NULL AND \"ConfirmedDueBy\" IS NULL AND \"ConfirmedDueReason\" IS NULL AND \"ConfirmedDueLiability\" IS NULL AND \"ConfirmedTaxableProfitOutsideExemption\" IS NULL) OR (\"TaxType\" = 'CorporationTax' AND \"ConfirmedDueAt\" IS NOT NULL AND char_length(btrim(COALESCE(\"ConfirmedDueBy\", ''))) > 0 AND char_length(btrim(COALESCE(\"ConfirmedDueReason\", ''))) > 0 AND \"ConfirmedDueLiability\" > 0 AND (\"ConfirmedTaxableProfitOutsideExemption\" IS NULL OR \"ConfirmedTaxableProfitOutsideExemption\" >= 0))"));
+                "(\"ConfirmedDueAt\" IS NULL AND \"ConfirmedDueBy\" IS NULL AND \"ConfirmedDueReason\" IS NULL AND \"ConfirmedDueLiability\" IS NULL AND \"ConfirmedTaxableProfitOutsideExemption\" IS NULL AND \"ConfirmedNonTradingProfitOutsideExemption\" IS NULL) OR (\"TaxType\" = 'CorporationTax' AND \"ConfirmedDueAt\" IS NOT NULL AND char_length(btrim(COALESCE(\"ConfirmedDueBy\", ''))) > 0 AND char_length(btrim(COALESCE(\"ConfirmedDueReason\", ''))) > 0 AND \"ConfirmedDueLiability\" > 0 AND (\"ConfirmedTaxableProfitOutsideExemption\" IS NULL OR \"ConfirmedTaxableProfitOutsideExemption\" >= 0) AND (\"ConfirmedNonTradingProfitOutsideExemption\" IS NULL OR \"ConfirmedNonTradingProfitOutsideExemption\" >= 0))"));
             e.HasKey(t => t.Id);
             e.HasQueryFilter(t => CurrentTenantId == null || t.Period.Company.TenantId == CurrentTenantId);
             e.Property(t => t.Liability).HasColumnType("decimal(18,2)");
@@ -1178,6 +1178,7 @@ public class AccountsDbContext : DbContext
             e.Property(t => t.ConfirmedDueReason).HasMaxLength(1000);
             e.Property(t => t.ConfirmedDueLiability).HasColumnType("decimal(18,2)");
             e.Property(t => t.ConfirmedTaxableProfitOutsideExemption).HasColumnType("decimal(18,2)");
+            e.Property(t => t.ConfirmedNonTradingProfitOutsideExemption).HasColumnType("decimal(18,2)");
             e.HasOne(t => t.Period).WithMany(p => p.TaxBalances).HasForeignKey(t => t.PeriodId).OnDelete(DeleteBehavior.Cascade);
             e.HasIndex(t => new { t.PeriodId, t.TaxType }).IsUnique();
         });

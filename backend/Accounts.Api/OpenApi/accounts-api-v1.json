@@ -12301,6 +12301,15 @@
               "string"
             ],
             "format": "double"
+          },
+          "nonTradingProfitOutsideExemption": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "format": "double"
           }
         }
       },

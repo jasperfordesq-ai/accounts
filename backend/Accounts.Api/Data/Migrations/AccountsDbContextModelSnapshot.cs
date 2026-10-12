@@ -4559,6 +4559,9 @@ namespace Accounts.Api.Data.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
 
+                    b.Property<decimal?>("ConfirmedNonTradingProfitOutsideExemption")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<decimal?>("ConfirmedTaxableProfitOutsideExemption")
                         .HasColumnType("decimal(18,2)");
 
@@ -4582,7 +4585,7 @@ namespace Accounts.Api.Data.Migrations
 
                     b.ToTable("tax_balances", null, t =>
                         {
-                            t.HasCheckConstraint("CK_tax_balances_confirmed_due", "(\"ConfirmedDueAt\" IS NULL AND \"ConfirmedDueBy\" IS NULL AND \"ConfirmedDueReason\" IS NULL AND \"ConfirmedDueLiability\" IS NULL AND \"ConfirmedTaxableProfitOutsideExemption\" IS NULL) OR (\"TaxType\" = 'CorporationTax' AND \"ConfirmedDueAt\" IS NOT NULL AND char_length(btrim(COALESCE(\"ConfirmedDueBy\", ''))) > 0 AND char_length(btrim(COALESCE(\"ConfirmedDueReason\", ''))) > 0 AND \"ConfirmedDueLiability\" > 0 AND (\"ConfirmedTaxableProfitOutsideExemption\" IS NULL OR \"ConfirmedTaxableProfitOutsideExemption\" >= 0))");
+                            t.HasCheckConstraint("CK_tax_balances_confirmed_due", "(\"ConfirmedDueAt\" IS NULL AND \"ConfirmedDueBy\" IS NULL AND \"ConfirmedDueReason\" IS NULL AND \"ConfirmedDueLiability\" IS NULL AND \"ConfirmedTaxableProfitOutsideExemption\" IS NULL AND \"ConfirmedNonTradingProfitOutsideExemption\" IS NULL) OR (\"TaxType\" = 'CorporationTax' AND \"ConfirmedDueAt\" IS NOT NULL AND char_length(btrim(COALESCE(\"ConfirmedDueBy\", ''))) > 0 AND char_length(btrim(COALESCE(\"ConfirmedDueReason\", ''))) > 0 AND \"ConfirmedDueLiability\" > 0 AND (\"ConfirmedTaxableProfitOutsideExemption\" IS NULL OR \"ConfirmedTaxableProfitOutsideExemption\" >= 0) AND (\"ConfirmedNonTradingProfitOutsideExemption\" IS NULL OR \"ConfirmedNonTradingProfitOutsideExemption\" >= 0))");
                         });
                 });
 

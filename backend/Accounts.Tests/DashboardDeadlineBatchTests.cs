@@ -225,7 +225,8 @@ public sealed class DashboardDeadlineBatchTests
             ConfirmedDueAt = new DateTime(2026, 7, 1, 9, 0, 0, DateTimeKind.Utc),
             ConfirmedDueReason = "Income outside the exemption",
             ConfirmedDueLiability = 150m,
-            ConfirmedTaxableProfitOutsideExemption = 1_200m
+            ConfirmedTaxableProfitOutsideExemption = 1_200m,
+            ConfirmedNonTradingProfitOutsideExemption = 0m
         });
         var today = new DateOnly(2026, 7, 10);
         db.FilingDeadlines.AddRange(

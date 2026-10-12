@@ -1,3 +1,4 @@
+using System.Data;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
@@ -7,6 +8,7 @@ using Accounts.Api.Data;
 using Accounts.Api.Entities;
 using Accounts.Api.Rules;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Options;
 
 namespace Accounts.Api.Services;
@@ -642,6 +644,7 @@ public class SizeClassificationService(
         EnsureHistoricEvidence(request.EvidenceArtifact, request.EvidenceSha256);
         ValidateInputs(request.Turnover, request.BalanceSheetTotal, request.AvgEmployees, request.ThresholdElectionEffectiveFrom);
 
+        await using var transaction = await BeginUnderCompanyLockAsync(companyId);
         var period = await db.AccountingPeriods
             .Include(p => p.Company)
             .Include(p => p.SizeClassification)
@@ -757,6 +760,8 @@ public class SizeClassificationService(
                 HistoricAnchorAuditSnapshot(sc),
                 auditUserId);
         }
+        if (transaction is not null)
+            await transaction.CommitAsync();
         return sc;
     }
 
@@ -783,6 +788,7 @@ public class SizeClassificationService(
         if (string.IsNullOrEmpty(trimmedReason) || trimmedReason.Length > HistoricRetirementReasonMaxLength)
             throw new BusinessRuleException("Give the reason the historic figures are being retired (up to 1000 characters).");
 
+        await using var transaction = await BeginUnderCompanyLockAsync(companyId);
         var period = await db.AccountingPeriods
             .Include(p => p.SizeClassification)
             .Include(p => p.FilingRegime)
@@ -819,7 +825,35 @@ public class SizeClassificationService(
                 HistoricAnchorAuditSnapshot(sc),
                 auditUserId);
         }
+        if (transaction is not null)
+            await transaction.CommitAsync();
         return sc;
+    }
+
+    /// <summary>
+    /// Takes the company advisory lock (the one period finalisation and chart adoption take) before the
+    /// anchor and the later periods relying on it are read, held through the save: a concurrent
+    /// finalisation of a relying period then commits either before (and the change is refused) or
+    /// after (and it sees the change). Returns the transaction to commit when this call opened it.
+    /// </summary>
+    private async Task<IDbContextTransaction?> BeginUnderCompanyLockAsync(int companyId)
+    {
+        if (!db.Database.IsRelational())
+            return null;
+        var transaction = db.Database.CurrentTransaction is null
+            ? await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted)
+            : null;
+        try
+        {
+            await AccountingConcurrencyCoordinator.AcquireCompanyAdvisoryLockAsync(db, companyId, CancellationToken.None);
+        }
+        catch
+        {
+            if (transaction is not null)
+                await transaction.DisposeAsync();
+            throw;
+        }
+        return transaction;
     }
 
     /// <summary>

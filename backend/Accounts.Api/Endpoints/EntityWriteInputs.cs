@@ -475,7 +475,12 @@ public sealed class TaxBalanceInput
     };
 }
 
-public sealed record CorporationTaxDueConfirmationInput(string? Reason, decimal? TaxableProfitOutsideExemption = null);
+// TaxableProfitOutsideExemption is the trading (12.5%) figure; NonTradingProfitOutsideExemption the
+// non-trading/passive (25%) figure. Both are required.
+public sealed record CorporationTaxDueConfirmationInput(
+    string? Reason,
+    decimal? TaxableProfitOutsideExemption = null,
+    decimal? NonTradingProfitOutsideExemption = null);
 
 public sealed class NotesDisclosureInput
 {

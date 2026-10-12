@@ -540,9 +540,10 @@ public class TaxComputationService(AccountsDbContext db, FinancialStatementsServ
             .FirstOrDefaultAsync();
 
         // A company holding a charitable tax exemption whose CT liability is validly confirmed as due is
-        // taxed only on the attested taxable profit outside the exemption. One explicit line removes the
-        // income within the exemption (from the 12.5% trading stream first, then the 25% stream), so
-        // taxable profit equals the attested figure. Without a valid confirmation nothing here changes.
+        // taxed only on the attested taxable profit outside the exemption, attested separately for the
+        // 12.5% trading and the 25% non-trading stream. One explicit line removes the income within the
+        // exemption from each stream, so each stream's taxable profit equals its attested figure.
+        // Without a valid confirmation nothing here changes.
         var tradingTaxable = tradingProfitAfterLoss;
         var nonTradingTaxable = Math.Max(0m, passiveIncome);
         TaxAdjustment? charitableExemption = null;
@@ -552,19 +553,20 @@ public class TaxComputationService(AccountsDbContext db, FinancialStatementsServ
                 .AsNoTracking()
                 .Where(balance => balance.PeriodId == periodId)
                 .Where(CorporationTaxObligation.ConfirmedDue)
-                .Select(balance => new { balance.ConfirmedDueBy, balance.ConfirmedDueAt, balance.ConfirmedTaxableProfitOutsideExemption })
+                .Select(balance => new { balance.ConfirmedDueBy, balance.ConfirmedDueAt, balance.ConfirmedTaxableProfitOutsideExemption, balance.ConfirmedNonTradingProfitOutsideExemption })
                 .FirstOrDefaultAsync();
             if (confirmation is not null)
             {
-                var attested = confirmation.ConfirmedTaxableProfitOutsideExemption!.Value;
-                var withinExemption = Math.Max(0m, tradingTaxable + nonTradingTaxable - attested);
-                var fromTrading = Math.Min(withinExemption, tradingTaxable);
-                tradingTaxable -= fromTrading;
-                nonTradingTaxable -= withinExemption - fromTrading;
+                var attestedTrading = confirmation.ConfirmedTaxableProfitOutsideExemption!.Value;
+                var attestedNonTrading = confirmation.ConfirmedNonTradingProfitOutsideExemption!.Value;
+                var tradingWithinExemption = Math.Max(0m, tradingTaxable - attestedTrading);
+                var nonTradingWithinExemption = Math.Max(0m, nonTradingTaxable - attestedNonTrading);
+                tradingTaxable -= tradingWithinExemption;
+                nonTradingTaxable -= nonTradingWithinExemption;
                 charitableExemption = new TaxAdjustment(
                     $"{CharitableExemptionAdjustmentPrefix} (confirmed by {confirmation.ConfirmedDueBy} on {confirmation.ConfirmedDueAt!.Value.ToString("d MMM yyyy", CultureInfo.InvariantCulture)})",
-                    0m - withinExemption,
-                    $"Taxable profit from activities outside the charitable exemption attested at €{attested.ToString("N2", CultureInfo.InvariantCulture)}, with the corporation tax liability confirmed as due.");
+                    0m - (tradingWithinExemption + nonTradingWithinExemption),
+                    $"Taxable profit from activities outside the charitable exemption attested at €{attestedTrading.ToString("N2", CultureInfo.InvariantCulture)} trading (12.5%) and €{attestedNonTrading.ToString("N2", CultureInfo.InvariantCulture)} non-trading (25%), with the corporation tax liability confirmed as due.");
             }
         }
 

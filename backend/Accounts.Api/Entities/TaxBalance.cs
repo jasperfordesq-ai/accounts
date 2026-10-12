@@ -19,9 +19,12 @@ public class TaxBalance
     public string? ConfirmedDueReason { get; set; }
     // The liability the confirmation was given for; it counts only while this equals Liability.
     public decimal? ConfirmedDueLiability { get; set; }
-    // The attested taxable profit from activities outside the charitable exemption: the basis of the
-    // exemption-aware computation, bound to the confirmation like the liability.
+    // The attested taxable trading profit (12.5%) from activities outside the charitable exemption: the
+    // basis of the exemption-aware computation, bound to the confirmation like the liability.
     public decimal? ConfirmedTaxableProfitOutsideExemption { get; set; }
+    // The attested taxable non-trading (passive, 25%) profit outside the exemption, recorded separately
+    // so each rate's stream is reduced to its own attested figure.
+    public decimal? ConfirmedNonTradingProfitOutsideExemption { get; set; }
 
     // Navigation
     [JsonIgnore]

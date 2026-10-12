@@ -1318,6 +1318,7 @@ test("retired historic figures keep their evidence and retirement record, and th
     confirmedDueReason: "Income outside the exemption",
     confirmedDueLiability: 150,
     confirmedTaxableProfitOutsideExemption: 1200,
+    confirmedNonTradingProfitOutsideExemption: 0,
   };
   const originalFetch = globalThis.fetch;
   const requests = [];
@@ -1334,21 +1335,24 @@ test("retired historic figures keep their evidence and retirement record, and th
     assert.deepEqual(requests[0].body, { reason: "Fictitious reason: wrong year" });
 
     response = confirmed;
-    const due = await confirmCorporationTaxDue(1, 3, "Income outside the exemption", 1200);
+    const due = await confirmCorporationTaxDue(1, 3, "Income outside the exemption", 1200, 0);
     assert.equal(due.confirmedDueReason, "Income outside the exemption");
     assert.equal(requests[1].method, "POST");
     assert.match(requests[1].url, /\/api\/companies\/1\/periods\/3\/tax-balances\/CorporationTax\/confirm-due$/);
-    assert.deepEqual(requests[1].body, { reason: "Income outside the exemption", taxableProfitOutsideExemption: 1200 });
+    assert.deepEqual(requests[1].body, { reason: "Income outside the exemption", taxableProfitOutsideExemption: 1200, nonTradingProfitOutsideExemption: 0 });
 
     // A response that does not carry the confirmation is not accepted as one.
     response = { ...confirmed, confirmedDueAt: null };
-    await assert.rejects(() => confirmCorporationTaxDue(1, 3, "Income outside the exemption", 1200), /confirmedDueAt/);
+    await assert.rejects(() => confirmCorporationTaxDue(1, 3, "Income outside the exemption", 1200, 0), /confirmedDueAt/);
     // Nor one given for a different amount.
     response = { ...confirmed, confirmedDueLiability: 120 };
-    await assert.rejects(() => confirmCorporationTaxDue(1, 3, "Income outside the exemption", 1200), /confirmedDueLiability/);
+    await assert.rejects(() => confirmCorporationTaxDue(1, 3, "Income outside the exemption", 1200, 0), /confirmedDueLiability/);
     // Nor one without the attested taxable profit outside the exemption.
     response = { ...confirmed, confirmedTaxableProfitOutsideExemption: null };
-    await assert.rejects(() => confirmCorporationTaxDue(1, 3, "Income outside the exemption", 1200), /confirmedTaxableProfitOutsideExemption/);
+    await assert.rejects(() => confirmCorporationTaxDue(1, 3, "Income outside the exemption", 1200, 0), /confirmedTaxableProfitOutsideExemption/);
+    // Nor one without the attested non-trading profit outside the exemption.
+    response = { ...confirmed, confirmedNonTradingProfitOutsideExemption: null };
+    await assert.rejects(() => confirmCorporationTaxDue(1, 3, "Income outside the exemption", 1200, 0), /confirmedNonTradingProfitOutsideExemption/);
 
     // The archive of retired or replaced evidence: read with GET, never carrying the PDF bytes.
     const archivedRecord = {

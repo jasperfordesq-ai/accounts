@@ -1436,6 +1436,8 @@ public partial class AccountsWorkflowTests
     [InlineData("POST", "documents/signature-page")]
     [InlineData("POST", "mark-filed")]
     [InlineData("POST", "deadlines/calculate")]
+    [InlineData("POST", "filing/directors-approval-withdrawal")]
+    [InlineData("POST", "filing/cro-not-delivered")]
     public async Task PeriodLockMiddleware_AllowsExactPostLockWorkflowWritesToFinalisedPeriod(string method, string suffix)
     {
         await using var db = CreateDbContext();
@@ -1471,6 +1473,8 @@ public partial class AccountsWorkflowTests
     [InlineData("POST", "documents/cro-filing-pack/extra")]
     [InlineData("POST", "deadlines/calculate/extra")]
     [InlineData("PUT", "filing/mark-generated")]
+    [InlineData("PUT", "filing/directors-approval-withdrawal")]
+    [InlineData("POST", "filing/cro-not-delivered/extra")]
     public async Task PeriodLockMiddleware_BlocksPreparationAndFalsePositiveWorkflowWritesToFinalisedPeriod(string method, string suffix)
     {
         await using var db = CreateDbContext();

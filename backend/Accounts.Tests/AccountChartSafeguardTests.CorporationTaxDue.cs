@@ -53,7 +53,7 @@ public sealed partial class AccountChartSafeguardTests
         var result = await YearEndEndpoints.ConfirmCorporationTaxDueEndpointAsync(
             company.Id,
             period.Id,
-            new CorporationTaxDueConfirmationInput($"  {DueReason} ", AttestedProfit),
+            new CorporationTaxDueConfirmationInput($"  {DueReason} ", AttestedProfit, 0m),
             db,
             new AuditService(db),
             ConfirmDueRequest(company, period, role));
@@ -66,6 +66,7 @@ public sealed partial class AccountChartSafeguardTests
         Assert.Equal(150m, balance.Liability);
         Assert.Equal(150m, balance.ConfirmedDueLiability);
         Assert.Equal(AttestedProfit, balance.ConfirmedTaxableProfitOutsideExemption);
+        Assert.Equal(0m, balance.ConfirmedNonTradingProfitOutsideExemption);
         var audit = Assert.Single(await db.AuditLogs.AsNoTracking()
             .Where(log => log.Action == AuditEventCodes.TaxBalanceCorporationTaxDueConfirmed)
             .ToListAsync());
@@ -189,7 +190,7 @@ public sealed partial class AccountChartSafeguardTests
         var result = await YearEndEndpoints.ConfirmCorporationTaxDueEndpointAsync(
             company.Id,
             period.Id,
-            new CorporationTaxDueConfirmationInput(DueReason, AttestedProfit),
+            new CorporationTaxDueConfirmationInput(DueReason, AttestedProfit, 0m),
             db,
             new AuditService(db),
             ConfirmDueRequest(company, period, role));
@@ -250,7 +251,7 @@ public sealed partial class AccountChartSafeguardTests
         var result = await YearEndEndpoints.ConfirmCorporationTaxDueEndpointAsync(
             company.Id,
             period.Id,
-            new CorporationTaxDueConfirmationInput(DueReason, AttestedProfit),
+            new CorporationTaxDueConfirmationInput(DueReason, AttestedProfit, 0m),
             db,
             new AuditService(db),
             ConfirmDueRequest(company, period, "Owner"));
@@ -268,6 +269,7 @@ public sealed partial class AccountChartSafeguardTests
     [Theory]
     [InlineData("reason")]
     [InlineData("profit")]
+    [InlineData("non-trading-profit")]
     [InlineData("liability")]
     [InlineData("locked")]
     public async Task ConfirmingCorporationTaxDue_WithoutAReasonALiabilityOrAnOpenPeriod_IsRefused(string missing)
@@ -290,7 +292,7 @@ public sealed partial class AccountChartSafeguardTests
         var result = await YearEndEndpoints.ConfirmCorporationTaxDueEndpointAsync(
             company.Id,
             period.Id,
-            new CorporationTaxDueConfirmationInput(missing == "reason" ? "   " : DueReason, missing == "profit" ? null : AttestedProfit),
+            new CorporationTaxDueConfirmationInput(missing == "reason" ? "   " : DueReason, missing == "profit" ? null : AttestedProfit, missing == "non-trading-profit" ? null : 0m),
             db,
             new AuditService(db),
             ConfirmDueRequest(company, period, "Owner"));
@@ -300,6 +302,8 @@ public sealed partial class AccountChartSafeguardTests
             Assert.Equal("Give the reason the corporation tax liability is due (up to 1000 characters).", ErrorOf(result));
         if (missing == "profit")
             Assert.Equal("Give the taxable profit from activities outside the charitable exemption (0 or more).", ErrorOf(result));
+        if (missing == "non-trading-profit")
+            Assert.Equal("Give the non-trading (passive) profit outside the charitable exemption, such as deposit interest or rent (0 or more).", ErrorOf(result));
         if (missing == "liability")
             Assert.Equal("There is no corporation tax liability entered for this period to confirm.", ErrorOf(result));
         Assert.Null((await db.TaxBalances.AsNoTracking().SingleAsync(t => t.PeriodId == period.Id)).ConfirmedDueAt);
@@ -384,8 +388,12 @@ public sealed partial class AccountChartSafeguardTests
         Assert.Contains($"Entered corporation tax ({125m:C}) does not match the supported corporation tax computation ({250m:C}). Reconcile the tax charge before filing.",
             await statements.GetFinalOutputReadinessBlockersAsync(company.Id, period.Id));
 
-        // A confirmation without its attested figure does not count at all.
+        // A confirmation without either attested figure does not count at all.
         var balance = await db.TaxBalances.SingleAsync(t => t.PeriodId == period.Id);
+        balance.ConfirmedNonTradingProfitOutsideExemption = null;
+        await db.SaveChangesAsync();
+        Assert.False(await CorporationTaxObligation.IsConfirmedDueAsync(db, period.Id));
+        balance.ConfirmedNonTradingProfitOutsideExemption = 0m;
         balance.ConfirmedTaxableProfitOutsideExemption = null;
         await db.SaveChangesAsync();
         Assert.False(await CorporationTaxObligation.IsConfirmedDueAsync(db, period.Id));
@@ -421,13 +429,99 @@ public sealed partial class AccountChartSafeguardTests
             balance.ConfirmedDueReason = DueReason;
             balance.ConfirmedDueLiability = confirmation == "valid" ? 125m : 99m;
             balance.ConfirmedTaxableProfitOutsideExemption = 1_000m;
+            balance.ConfirmedNonTradingProfitOutsideExemption = 0m;
             await db.SaveChangesAsync();
         }
 
         Assert.Equal(baseline, JsonSerializer.Serialize(await new TaxComputationService(db, statements).ComputeAsync(company.Id, period.Id)));
     }
 
+    // PR #83 review: income within the exemption at both rates. 40,000 exempt and 1,000 taxable trading
+    // income, 10,000 exempt deposit interest. Each rate's stream is reduced to its own attested figure,
+    // so the 125 liability (12.5% of 1,000) reconciles; a single figure removed the trading stream first
+    // and left 1,000 of exempt interest taxed at 25% (250).
+    [Fact]
+    public async Task ExemptCorporationTax_ExemptIncomeAtBothRates_ReducesEachStreamToItsAttestedFigure()
+    {
+        await using var db = CreateDb();
+        var (company, period) = await SeedDonationsShopSalesAndExemptInterestAsync(db, liability: 125m);
+        await ConfirmDueAsync(db, company, period, attestedProfit: 1_000m, liability: 125m, attestedNonTradingProfit: 0m);
+        await new AdjustmentService(db).GenerateAutoAdjustmentsAsync(company.Id, period.Id);
+        await SaveSimpleTaxScopeAsync(db, company, period, passiveIncomePresent: true);
+        var statements = new FinancialStatementsService(db);
+
+        var tax = await new TaxComputationService(db, statements).ComputeAsync(company.Id, period.Id);
+
+        Assert.Equal(51_000m, tax.AccountingProfit);
+        var exempt = Assert.Single(tax.Adjustments, adjustment => adjustment.Description.StartsWith("Income within the charitable exemption", StringComparison.Ordinal));
+        Assert.Equal(-50_000m, exempt.Amount);
+        Assert.Equal(1_000m, tax.TaxableProfit);
+        Assert.Equal(125m, tax.CorporationTaxAt125);
+        Assert.Equal(0m, tax.CorporationTaxAt25);
+        Assert.Equal(125m, tax.TotalCorporationTax);
+        await AssertCorporationTaxReconcilesAsync(statements, company, period);
+        var worksheet = (await new CorporationTaxFilingSupportService(db, new TaxComputationService(db, statements), new AuditService(db))
+            .GetAsync(company.Id, period.Id)).Worksheet;
+        Assert.True(Assert.Single(worksheet.Reconciliations, reconciliation => reconciliation.Code == "tax-streams").Reconciles);
+    }
+
+    [Fact]
+    public async Task ExemptCorporationTax_ExemptIncomeAtBothRates_AWrongLiabilityIsStillBlocked()
+    {
+        await using var db = CreateDb();
+        var (company, period) = await SeedDonationsShopSalesAndExemptInterestAsync(db, liability: 250m);
+        await ConfirmDueAsync(db, company, period, attestedProfit: 1_000m, liability: 250m, attestedNonTradingProfit: 0m);
+        await new AdjustmentService(db).GenerateAutoAdjustmentsAsync(company.Id, period.Id);
+        await SaveSimpleTaxScopeAsync(db, company, period, passiveIncomePresent: true);
+        var statements = new FinancialStatementsService(db);
+        var mismatch = $"Entered corporation tax ({250m:C}) does not match the supported corporation tax computation ({125m:C}). Reconcile the tax charge before filing.";
+
+        Assert.Contains(mismatch, (await statements.GetReadinessScoreAsync(company.Id, period.Id)).Warnings);
+        Assert.Contains(mismatch, await statements.GetFinalOutputReadinessBlockersAsync(company.Id, period.Id));
+    }
+
+    // The non-trading figure is part of the confirmation: it is audited, moves the 25% stream to the
+    // attested figure, and is cleared with the rest of the confirmation when the liability changes.
+    [Fact]
+    public async Task ExemptCorporationTax_TheNonTradingFigure_IsBoundToTheConfirmationAndTheAudit()
+    {
+        await using var db = CreateDb();
+        var (company, period) = await SeedDonationsShopSalesAndExemptInterestAsync(db, liability: 375m);
+        await ConfirmDueAsync(db, company, period, attestedProfit: 1_000m, liability: 375m, attestedNonTradingProfit: 1_000m);
+        await new AdjustmentService(db).GenerateAutoAdjustmentsAsync(company.Id, period.Id);
+        await SaveSimpleTaxScopeAsync(db, company, period, passiveIncomePresent: true);
+        var statements = new FinancialStatementsService(db);
+
+        var tax = await new TaxComputationService(db, statements).ComputeAsync(company.Id, period.Id);
+        Assert.Equal(125m, tax.CorporationTaxAt125);
+        Assert.Equal(250m, tax.CorporationTaxAt25);
+        Assert.Equal(375m, tax.TotalCorporationTax);
+        await AssertCorporationTaxReconcilesAsync(statements, company, period);
+        var confirmed = Assert.Single(await db.AuditLogs.AsNoTracking()
+            .Where(log => log.Action == AuditEventCodes.TaxBalanceCorporationTaxDueConfirmed).ToListAsync());
+        Assert.Contains("ConfirmedNonTradingProfitOutsideExemption", confirmed.NewValueJson!, StringComparison.Ordinal);
+        Assert.Contains("1000", confirmed.NewValueJson!, StringComparison.Ordinal);
+
+        Assert.Equal(StatusCodes.Status200OK, StatusCode(await UpsertCorporationTaxAsync(db, company, period, 400m, 0m)));
+        var cleared = await db.TaxBalances.AsNoTracking().SingleAsync(t => t.PeriodId == period.Id);
+        Assert.Null(cleared.ConfirmedTaxableProfitOutsideExemption);
+        Assert.Null(cleared.ConfirmedNonTradingProfitOutsideExemption);
+    }
+
     // ---- Helpers --------------------------------------------------------------------------------
+
+    // Donations 40,000 and shop sales 1,000 (trading), and 10,000 of deposit interest on a reviewed
+    // non-trading income account; all but the shop sales are within the exemption.
+    private static async Task<(Company Company, AccountingPeriod Period)> SeedDonationsShopSalesAndExemptInterestAsync(AccountsDbContext db, decimal liability)
+    {
+        var (company, period) = await SeedDonationsAndShopSalesAsync(db, liability);
+        var bank = await db.BankAccounts.SingleAsync(b => b.CompanyId == company.Id);
+        var interest = await db.AccountCategories.SingleAsync(c => c.CompanyId == company.Id && c.Code == "4800");
+        interest.IsNonTradingIncome = true;
+        db.ImportedTransactions.Add(Transaction(bank, period, new DateOnly(2025, 6, 1), "Deposit interest", 10_000m, interest.Id));
+        await db.SaveChangesAsync();
+        return (company, period);
+    }
 
     private static async Task<(Company Company, AccountingPeriod Period)> SeedDonationsAndShopSalesAsync(AccountsDbContext db, decimal liability)
     {
@@ -443,19 +537,19 @@ public sealed partial class AccountChartSafeguardTests
         return (company, period);
     }
 
-    private static async Task ConfirmDueAsync(AccountsDbContext db, Company company, AccountingPeriod period, decimal attestedProfit, decimal liability)
+    private static async Task ConfirmDueAsync(AccountsDbContext db, Company company, AccountingPeriod period, decimal attestedProfit, decimal liability, decimal attestedNonTradingProfit = 0m)
     {
         Assert.Equal(StatusCodes.Status200OK, StatusCode(await YearEndEndpoints.ConfirmCorporationTaxDueEndpointAsync(
             company.Id,
             period.Id,
-            new CorporationTaxDueConfirmationInput(DueReason, attestedProfit),
+            new CorporationTaxDueConfirmationInput(DueReason, attestedProfit, attestedNonTradingProfit),
             db,
             new AuditService(db),
             ConfirmDueRequest(company, period, "Owner"))));
         Assert.Equal(liability, (await db.TaxBalances.AsNoTracking().SingleAsync(t => t.PeriodId == period.Id)).ConfirmedDueLiability);
     }
 
-    private static Task SaveSimpleTaxScopeAsync(AccountsDbContext db, Company company, AccountingPeriod period) =>
+    private static Task SaveSimpleTaxScopeAsync(AccountsDbContext db, Company company, AccountingPeriod period, bool passiveIncomePresent = false) =>
         new TaxComputationService(db, new FinancialStatementsService(db)).SaveScopeReviewAsync(
             company.Id,
             period.Id,
@@ -467,8 +561,8 @@ public sealed partial class AccountChartSafeguardTests
                 HasForeignIncomeOrTaxCredits: false,
                 HasExceptedTrade: false,
                 HasOtherReliefsOrSpecialRegimes: false,
-                DeclaredPassiveIncomePresent: false,
-                PassiveIncomeClassificationReviewed: false,
+                DeclaredPassiveIncomePresent: passiveIncomePresent,
+                PassiveIncomeClassificationReviewed: passiveIncomePresent,
                 LossTreatment: CorporationTaxLossTreatment.NotApplicable,
                 BroughtForwardTradingLoss: 0m,
                 BroughtForwardLossEvidence: null,
@@ -511,7 +605,7 @@ public sealed partial class AccountChartSafeguardTests
         Assert.Equal(StatusCodes.Status200OK, StatusCode(await YearEndEndpoints.ConfirmCorporationTaxDueEndpointAsync(
             company.Id,
             period.Id,
-            new CorporationTaxDueConfirmationInput(DueReason, AttestedProfit),
+            new CorporationTaxDueConfirmationInput(DueReason, AttestedProfit, 0m),
             db,
             new AuditService(db),
             ConfirmDueRequest(company, period, "Owner"))));

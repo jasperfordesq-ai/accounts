@@ -67,6 +67,15 @@ public class PeriodLockMiddleware(RequestDelegate next)
         if (HttpMethods.IsPost(method) && IsPeriodFilingAction(segments, "cro-payment"))
             return true;
 
+        // Withdrawing the s.324 approval and treating a CRO filing as not delivered act on the
+        // finalised period's filing state; their role, recent-MFA and filing-state checks still apply.
+        if (HttpMethods.IsPost(method)
+            && (IsPeriodFilingAction(segments, "directors-approval-withdrawal")
+                || IsPeriodFilingAction(segments, "cro-not-delivered")))
+        {
+            return true;
+        }
+
         if (HttpMethods.IsPost(method)
             && (IsPeriodDocumentAction(segments, "cro-filing-pack")
                 || IsPeriodDocumentAction(segments, "signature-page")))

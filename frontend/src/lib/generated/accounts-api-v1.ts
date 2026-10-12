@@ -8911,6 +8911,8 @@ export interface components {
             reason: null | string;
             /** Format: double */
             taxableProfitOutsideExemption?: null | number | string;
+            /** Format: double */
+            nonTradingProfitOutsideExemption?: null | number | string;
         };
         /** @enum {unknown} */
         CorporationTaxLossTreatment: "Unreviewed" | "NotApplicable" | "CarryForwardSameTrade" | "CurrentPeriodOrCarryBackClaim" | "GroupRelief" | "TerminalLossRelief" | "Other";

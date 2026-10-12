@@ -268,6 +268,85 @@ public sealed class SizeClassificationHistoricAnchorPostgresTests : IAsyncLifeti
         }
     }
 
+    // PR #83 review: retiring or replacing the anchor while another request finalises a later period
+    // that relies on it. Retirement and replacement take the company lock (the one finalisation takes)
+    // before reading the anchor and its dependent periods and hold it through the save, so whichever
+    // commits second sees the other: here finalisation holds the lock first, so the anchor is refused.
+    [PostgresTheory]
+    [InlineData("retired")]
+    [InlineData("replaced")]
+    public async Task AnchorChange_WaitsForAConcurrentFinalisationOfARelyingPeriod_AndIsThenRefused(string action)
+    {
+        AccountingPeriod earlier;
+        AccountingPeriod later;
+        var evidence = "%PDF-1.4\n% fictitious filed accounts\n%%EOF\n"u8.ToArray();
+        HistoricSizeFiguresRequest Request(decimal turnover) => new(
+            turnover, 500_000m, 5, null, "Fictitious members' accounts, filed with the CRO",
+            evidence, Convert.ToHexStringLower(SHA256.HashData(evidence)), CompanySizeClass.Small);
+        await using (var db = CreateDb())
+        {
+            await db.Database.MigrateAsync();
+            (earlier, later) = await SeedPeriodsAsync(db);
+            await Service(db).RecordHistoricAnchorAsync(earlier.CompanyId, earlier.Id, Request(1_000_000m), "Owner", "Example Owner", "user:9");
+        }
+
+        // Finalisation of the later period: the company and period advisory locks and the FOR UPDATE
+        // row lock, held in its transaction until it commits.
+        await using var finaliser = CreateDb(protectWrites: true);
+        var lease = await new AccountingConcurrencyCoordinator(finaliser).AcquirePeriodAsync(later.CompanyId, later.Id);
+        var finalising = await finaliser.AccountingPeriods.SingleAsync(p => p.Id == later.Id);
+        finalising.Status = PeriodStatus.Finalised;
+        finalising.LockedAt = DateTime.UtcNow;
+        await finaliser.SaveChangesAsync();
+
+        var anchorApplication = $"historic-anchor-{action}-{Guid.NewGuid():N}";
+        var change = Task.Run(async () =>
+        {
+            await using var db = CreateDb(protectWrites: true, applicationName: anchorApplication);
+            if (action == "retired")
+                await Service(db).RetireHistoricAnchorAsync(earlier.CompanyId, earlier.Id, "Fictitious reason: wrong year", "Owner", "Example Owner", "user:9");
+            else
+                await Service(db).RecordHistoricAnchorAsync(earlier.CompanyId, earlier.Id, Request(1_100_000m), "Owner", "Example Owner", "user:9");
+        });
+
+        Assert.True(await WaitForAdvisoryLockWaitAsync(anchorApplication), "the anchor change should wait for the finalisation's lock");
+        await lease.CommitIfOwnedAsync();
+        await lease.DisposeAsync();
+
+        var refused = await Assert.ThrowsAsync<BusinessRuleException>(() => change.WaitAsync(TimeSpan.FromSeconds(30)));
+        Assert.StartsWith($"These historic figures cannot be {action}:", refused.Message, StringComparison.Ordinal);
+        await using (var db = CreateDb())
+        {
+            var anchor = await db.SizeClassifications.AsNoTracking().SingleAsync(s => s.PeriodId == earlier.Id);
+            Assert.Equal(SizeInputBasis.HistoricAnchor, anchor.InputBasis);
+            Assert.Equal(1_000_000m, anchor.Turnover);
+            Assert.Empty(await db.HistoricAnchorEvidenceRecords.AsNoTracking().ToListAsync());
+            Assert.Equal(PeriodStatus.Finalised, (await db.AccountingPeriods.AsNoTracking().SingleAsync(p => p.Id == later.Id)).Status);
+        }
+    }
+
+    private async Task<bool> WaitForAdvisoryLockWaitAsync(string applicationName)
+    {
+        await using var observer = new NpgsqlConnection(scopedConnectionString);
+        await observer.OpenAsync();
+        for (var attempt = 0; attempt < 400; attempt++)
+        {
+            await using var command = new NpgsqlCommand("""
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM pg_locks AS lock
+                    INNER JOIN pg_stat_activity AS activity ON activity.pid = lock.pid
+                    WHERE activity.application_name = @applicationName
+                      AND lock.locktype = 'advisory'
+                      AND NOT lock.granted)
+                """, observer);
+            command.Parameters.AddWithValue("applicationName", applicationName);
+            if (await command.ExecuteScalarAsync() is true) return true;
+            await Task.Delay(25);
+        }
+        return false;
+    }
+
     private const string MigrationBeforeEvidenceArchive = "20261012055305_AddCorporationTaxDueConfirmedLiability";
 
     private async Task<(AccountingPeriod Earlier, AccountingPeriod Later)> SeedPeriodsAsync(AccountsDbContext db)
@@ -302,8 +381,17 @@ public sealed class SizeClassificationHistoricAnchorPostgresTests : IAsyncLifeti
     private static SizeClassificationService Service(AccountsDbContext db) =>
         new(db, Options.Create(new SizeThresholdConfig()), new AuditService(db));
 
-    private AccountsDbContext CreateDb() =>
-        new(new DbContextOptionsBuilder<AccountsDbContext>().UseNpgsql(scopedConnectionString).Options);
+    private AccountsDbContext CreateDb(bool protectWrites = false, string? applicationName = null)
+    {
+        var connectionString = applicationName is null
+            ? scopedConnectionString
+            : new NpgsqlConnectionStringBuilder(scopedConnectionString) { ApplicationName = applicationName }.ConnectionString;
+        var options = new DbContextOptionsBuilder<AccountsDbContext>().UseNpgsql(connectionString);
+        // The production save interceptor: company and period advisory locks at save time.
+        if (protectWrites)
+            options.AddInterceptors(new AccountingConcurrencyInterceptor());
+        return new AccountsDbContext(options.Options);
+    }
 
     private async Task ExecuteAsync(string sql)
     {
@@ -316,6 +404,15 @@ public sealed class SizeClassificationHistoricAnchorPostgresTests : IAsyncLifeti
     private sealed class PostgresFactAttribute : FactAttribute
     {
         public PostgresFactAttribute()
+        {
+            if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(ConnectionEnvVar)))
+                Skip = $"{ConnectionEnvVar} is not set.";
+        }
+    }
+
+    private sealed class PostgresTheoryAttribute : TheoryAttribute
+    {
+        public PostgresTheoryAttribute()
         {
             if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(ConnectionEnvVar)))
                 Skip = $"{ConnectionEnvVar} is not set.";

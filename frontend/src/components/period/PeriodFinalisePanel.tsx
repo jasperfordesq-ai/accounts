@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { updatePeriodStatus, type AccountingPeriod } from "@/lib/api";
 import { formatDateIE } from "@/lib/format";
 import { isRecentMfaRequired } from "@/lib/filingEvidence";
+import { useUnsavedChanges } from "@/lib/useUnsavedChanges";
 import { ReviewPanel, StatusBadge } from "@/components/workbench";
 import { Field, RecentVerificationPrompt, errorMessage, inputClass } from "@/components/period/FilingEvidenceShared";
 
@@ -46,6 +47,12 @@ export function PeriodFinalisePanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [needsVerification, setNeedsVerification] = useState(false);
+  // A changed board approval date or a reopening reason not yet submitted is unsaved work; a
+  // successful submit clears both.
+  const hasFinaliseDraft = period !== null
+    && ((approvalDate !== null && approvalDate !== (period.approvalDate ?? irishTodayIsoDate()))
+      || (reopening && reopenReason.trim() !== ""));
+  useUnsavedChanges(hasFinaliseDraft);
 
   if (!period) return null;
   const locked = period.status === "Finalised" || period.status === "Filed";

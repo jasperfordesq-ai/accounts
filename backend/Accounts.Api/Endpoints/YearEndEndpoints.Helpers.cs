@@ -318,7 +318,8 @@ public static partial class YearEndEndpoints
         item.ConfirmedDueAt,
         item.ConfirmedDueReason,
         item.ConfirmedDueLiability,
-        item.ConfirmedTaxableProfitOutsideExemption
+        item.ConfirmedTaxableProfitOutsideExemption,
+        item.ConfirmedNonTradingProfitOutsideExemption
     };
 
     private static object YearEndReviewSnapshot(YearEndReviewConfirmation confirmation) => new

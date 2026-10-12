@@ -149,7 +149,7 @@ public partial class AccountsWorkflowTests
         var confirmed = await YearEndEndpoints.ConfirmCorporationTaxDueEndpointAsync(
             period.CompanyId,
             period.Id,
-            new CorporationTaxDueConfirmationInput("Income outside the exemption", 1_200m),
+            new CorporationTaxDueConfirmationInput("Income outside the exemption", 1_200m, 0m),
             db,
             new AuditService(db),
             AuthenticatedRequest("Owner", HttpMethods.Post, $"{basePath}/CorporationTax/confirm-due"));
@@ -201,7 +201,7 @@ public partial class AccountsWorkflowTests
         var result = await YearEndEndpoints.ConfirmCorporationTaxDueEndpointAsync(
             period.CompanyId,
             period.Id,
-            new CorporationTaxDueConfirmationInput("Income outside the exemption", 1_200m),
+            new CorporationTaxDueConfirmationInput("Income outside the exemption", 1_200m, 0m),
             db,
             new AuditService(db),
             AuthenticatedRequest("Owner", HttpMethods.Post, $"/api/companies/{period.CompanyId}/periods/{period.Id}/tax-balances/CorporationTax/confirm-due"),
@@ -238,7 +238,8 @@ public partial class AccountsWorkflowTests
             ConfirmedDueAt = confirmed ? DateTime.UtcNow : null,
             ConfirmedDueReason = confirmed ? "Income outside the exemption" : null,
             ConfirmedDueLiability = confirmed ? 150m : null,
-            ConfirmedTaxableProfitOutsideExemption = confirmed ? 1_200m : null
+            ConfirmedTaxableProfitOutsideExemption = confirmed ? 1_200m : null,
+            ConfirmedNonTradingProfitOutsideExemption = confirmed ? 0m : null
         });
         await db.SaveChangesAsync();
         return period;

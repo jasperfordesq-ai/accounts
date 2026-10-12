@@ -450,7 +450,11 @@ public class AccountantWorkingPaperService(
             .AsNoTracking()
             .Where(item => item.CompanyId == companyId || (item.IsSystem && item.CompanyId == null))
             .ToListAsync(cancellationToken);
-        var accountSources = BuildAccountSources(period, transactions, adjustments, openings, banks, yearEndFacts, statementSources, categories);
+        var fixedAssetClasses = await db.FixedAssets
+            .AsNoTracking()
+            .Where(item => item.CompanyId == companyId)
+            .ToDictionaryAsync(item => item.Id, item => item.Category, cancellationToken);
+        var accountSources = BuildAccountSources(period, transactions, adjustments, openings, banks, yearEndFacts, statementSources, categories, fixedAssetClasses);
         var sourceHash = Hash(new
         {
             period.Id,
@@ -904,7 +908,8 @@ public class AccountantWorkingPaperService(
         IReadOnlyList<BankAccount> banks,
         IReadOnlyList<SourceReference> yearEndFacts,
         IReadOnlyList<FinancialStatementsService.StatementSourceSummary> statementSources,
-        IReadOnlyList<AccountCategory> categories)
+        IReadOnlyList<AccountCategory> categories,
+        IReadOnlyDictionary<int, string> fixedAssetClasses)
     {
         // Sources are keyed by account code, so two active accounts sharing a code cannot be told
         // apart: refuse clearly instead of attaching evidence to the wrong account.
@@ -953,7 +958,14 @@ public class AccountantWorkingPaperService(
         }
         foreach (var fact in yearEndFacts)
         {
-            Add(FactAccountCode(fact.SourceType, fact.Label, RoleCode, loansAfterYearCode), fact);
+            // A non-generic chart posts each register class to its own asset account (as automatic
+            // adjustments and the statements do); the generic chart keeps its existing mapping.
+            var code = fact.SourceType == "fixed-asset"
+                && period.Company.ChartOfAccountsVariant != ChartOfAccountsVariant.GenericTrading
+                && fixedAssetClasses.TryGetValue(fact.EntityId, out var assetClass)
+                    ? ChartAccountDefaults.FixedAssetAccount(period.Company.ChartOfAccountsVariant, assetClass).Code
+                    : FactAccountCode(fact.SourceType, fact.Label, RoleCode, loansAfterYearCode);
+            Add(code, fact);
         }
         foreach (var source in statementSources)
         {
@@ -1002,7 +1014,7 @@ public class AccountantWorkingPaperService(
         "tax-balance" => roleCode(AccountSystemRole.CorporationTaxPayable),
         "dividend" => roleCode(AccountSystemRole.DividendsPaid),
         // Fixed-asset register classes map to the generic chart's asset codes (as the statements'
-        // register matching does); a chart variant extends this table.
+        // register matching does); other chart variants use ChartAccountDefaults.FixedAssetAccount.
         "fixed-asset" when label.Contains("Land & Buildings", StringComparison.OrdinalIgnoreCase)
             || label.Contains("Property", StringComparison.OrdinalIgnoreCase) => "0010",
         "fixed-asset" when label.Contains("Plant & Machinery", StringComparison.OrdinalIgnoreCase) => "0020",

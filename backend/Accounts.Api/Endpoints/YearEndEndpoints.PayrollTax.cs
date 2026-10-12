@@ -127,6 +127,7 @@ public static partial class YearEndEndpoints
                 item.ConfirmedDueReason = null;
                 item.ConfirmedDueLiability = null;
                 item.ConfirmedTaxableProfitOutsideExemption = null;
+                item.ConfirmedNonTradingProfitOutsideExemption = null;
             }
             item.Liability = input.Liability;
             item.Paid = input.Paid;
@@ -152,6 +153,7 @@ public static partial class YearEndEndpoints
                 item.ConfirmedDueReason,
                 item.ConfirmedDueLiability,
                 item.ConfirmedTaxableProfitOutsideExemption,
+                item.ConfirmedNonTradingProfitOutsideExemption,
                 WasCreated = wasCreated
             },
             AuditUserId(context));
@@ -243,6 +245,8 @@ public static partial class YearEndEndpoints
             return Results.BadRequest(new { error = "Give the reason the corporation tax liability is due (up to 1000 characters)." });
         if (input.TaxableProfitOutsideExemption is not { } attestedProfit || attestedProfit < 0 || attestedProfit > 999_999_999_999m)
             return Results.BadRequest(new { error = "Give the taxable profit from activities outside the charitable exemption (0 or more)." });
+        if (input.NonTradingProfitOutsideExemption is not { } attestedNonTradingProfit || attestedNonTradingProfit < 0 || attestedNonTradingProfit > 999_999_999_999m)
+            return Results.BadRequest(new { error = "Give the non-trading (passive) profit outside the charitable exemption, such as deposit interest or rent (0 or more)." });
         var exempt = await db.Companies
             .Where(company => company.Id == companyId)
             .Select(company => company.HoldsCharitableTaxExemption)
@@ -259,6 +263,7 @@ public static partial class YearEndEndpoints
         item.ConfirmedDueReason = reason;
         item.ConfirmedDueLiability = item.Liability;
         item.ConfirmedTaxableProfitOutsideExemption = decimal.Round(attestedProfit, 2, MidpointRounding.AwayFromZero);
+        item.ConfirmedNonTradingProfitOutsideExemption = decimal.Round(attestedNonTradingProfit, 2, MidpointRounding.AwayFromZero);
         await db.SaveChangesAsync();
         await audit.LogAsync(
             companyId,

@@ -42,25 +42,30 @@ export function CorporationTaxDueConfirmation({
   const [error, setError] = useState<string | null>(null);
   const [needsVerification, setNeedsVerification] = useState(false);
   const [taxableProfit, setTaxableProfit] = useState("");
+  const [nonTradingProfit, setNonTradingProfit] = useState("");
   const trimmedReason = reason.trim();
   // A typed 0 is a real answer; an empty box is not a silent zero.
   const parsedTaxableProfit = taxableProfit.trim() === "" ? undefined : Number(taxableProfit);
   const validTaxableProfit = parsedTaxableProfit !== undefined && Number.isFinite(parsedTaxableProfit) && parsedTaxableProfit >= 0;
-  const valid = trimmedReason.length > 0 && trimmedReason.length <= REASON_MAX_LENGTH && validTaxableProfit;
+  const parsedNonTradingProfit = nonTradingProfit.trim() === "" ? undefined : Number(nonTradingProfit);
+  const validNonTradingProfit = parsedNonTradingProfit !== undefined && Number.isFinite(parsedNonTradingProfit) && parsedNonTradingProfit >= 0;
+  const valid = trimmedReason.length > 0 && trimmedReason.length <= REASON_MAX_LENGTH && validTaxableProfit && validNonTradingProfit;
 
   if (!holdsCharitableTaxExemption || !balance || balance.liability <= 0) return null;
 
-  // A confirmation counts only for the liability and attested profit it was given for.
+  // A confirmation counts only for the liability and attested profits it was given for.
   if (balance.confirmedDueAt
     && balance.confirmedDueLiability === balance.liability
-    && balance.confirmedTaxableProfitOutsideExemption != null) {
+    && balance.confirmedTaxableProfitOutsideExemption != null
+    && balance.confirmedNonTradingProfitOutsideExemption != null) {
     const reasonText = (balance.confirmedDueReason ?? "").trim();
     return (
       <p className="mt-4 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 dark:border-neutral-700 dark:bg-neutral-800 dark:text-gray-300">
         The {formatEuro(balance.liability)} corporation tax liability was confirmed as due by {balance.confirmedDueBy ?? "a reviewer"} on{" "}
         {new Date(balance.confirmedDueAt).toLocaleDateString("en-IE")}: {reasonText}{/[.!?]$/.test(reasonText) ? "" : "."} Saving a
         different liability clears this confirmation. Taxable profit outside the charitable exemption, as attested:{" "}
-        {formatEuro(balance.confirmedTaxableProfitOutsideExemption)}.
+        {formatEuro(balance.confirmedTaxableProfitOutsideExemption)} trading and{" "}
+        {formatEuro(balance.confirmedNonTradingProfitOutsideExemption)} non-trading.
       </p>
     );
   }
@@ -70,11 +75,12 @@ export function CorporationTaxDueConfirmation({
     setSaving(true);
     setError(null);
     try {
-      if (parsedTaxableProfit === undefined) return;
-      const saved = await confirmCorporationTaxDue(companyId, periodId, trimmedReason, parsedTaxableProfit);
+      if (parsedTaxableProfit === undefined || parsedNonTradingProfit === undefined) return;
+      const saved = await confirmCorporationTaxDue(companyId, periodId, trimmedReason, parsedTaxableProfit, parsedNonTradingProfit);
       setNeedsVerification(false);
       setReason("");
       setTaxableProfit("");
+      setNonTradingProfit("");
       toast.success("Corporation tax liability confirmed as due");
       onConfirmed(saved);
     } catch (failure) {
@@ -112,7 +118,7 @@ export function CorporationTaxDueConfirmation({
           </div>
           <div>
             <label htmlFor="corporation-tax-due-taxable-profit" className="block text-sm font-medium mb-1.5">
-              Taxable profit outside the charitable exemption
+              Taxable trading profit outside the charitable exemption
             </label>
             <input
               id="corporation-tax-due-taxable-profit"
@@ -125,9 +131,28 @@ export function CorporationTaxDueConfirmation({
               onChange={(event) => setTaxableProfit(event.target.value)}
             />
             <p id="corporation-tax-due-taxable-profit-hint" className="mt-1 text-xs leading-5">
-              Taxable profit from activities outside your charitable exemption (for example trading outside your main
-              charitable purpose). The tax computation removes the income within the exemption, so this liability must be
-              the corporation tax on this profit.
+              Taxable profit from trading outside your charitable exemption (for example trading outside your main
+              charitable purpose), taxed at 12.5%.
+            </p>
+          </div>
+          <div>
+            <label htmlFor="corporation-tax-due-non-trading-profit" className="block text-sm font-medium mb-1.5">
+              Taxable non-trading profit outside the charitable exemption
+            </label>
+            <input
+              id="corporation-tax-due-non-trading-profit"
+              type="number"
+              min={0}
+              step="0.01"
+              className={inputClass}
+              aria-describedby="corporation-tax-due-non-trading-profit-hint"
+              value={nonTradingProfit}
+              onChange={(event) => setNonTradingProfit(event.target.value)}
+            />
+            <p id="corporation-tax-due-non-trading-profit-hint" className="mt-1 text-xs leading-5">
+              Income that is not from a trade, such as deposit interest or rent, and is outside your exemption; it is taxed
+              at 25%. Enter 0 if there is none. The tax computation removes the income within the exemption from each
+              figure, so this liability must be the corporation tax on these two figures.
             </p>
           </div>
           <Button

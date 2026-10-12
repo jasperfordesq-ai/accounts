@@ -5,6 +5,7 @@ import { Button, Card, Chip, Spinner } from "@heroui/react";
 import { toast } from "sonner";
 import { RecentVerificationPrompt } from "@/components/period/FilingEvidenceShared";
 import { isRecentMfaRequired } from "@/lib/filingEvidence";
+import { useUnsavedChanges } from "@/lib/useUnsavedChanges";
 import {
   HISTORIC_FIGURES_BADGE,
   HISTORIC_FIGURES_PROVENANCE,
@@ -55,6 +56,16 @@ export function HistoricSizeFiguresCard({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [needsVerification, setNeedsVerification] = useState(false);
+  const initialElectionValue = initialElection ?? "2024-01-01";
+  // Any figure, source, PDF or attestation entered (or a changed election) is an unsaved draft.
+  const historicFiguresDirty = turnover !== ""
+    || balanceSheetTotal !== ""
+    || avgEmployees !== ""
+    || sourceReference !== ""
+    || evidence !== null
+    || attestedClass !== ""
+    || election !== initialElectionValue;
+  useUnsavedChanges(historicFiguresDirty);
 
   const parsedTurnover = parseNonNegative(turnover);
   const parsedBalanceSheetTotal = parseNonNegative(balanceSheetTotal);
@@ -82,6 +93,14 @@ export function HistoricSizeFiguresCard({
         attestedEffectiveClass: attestedClass === "" ? null : attestedClass,
       });
       setNeedsVerification(false);
+      // Saved: the draft is no longer unsaved work.
+      setTurnover("");
+      setBalanceSheetTotal("");
+      setAvgEmployees("");
+      setElection(initialElectionValue);
+      setSourceReference("");
+      setEvidence(null);
+      setAttestedClass("");
       toast.success("Historic figures recorded from the filed accounts");
       await onRecorded();
     } catch (failure) {

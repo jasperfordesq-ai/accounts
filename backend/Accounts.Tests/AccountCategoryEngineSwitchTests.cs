@@ -500,6 +500,55 @@ public sealed class AccountCategoryEngineSwitchTests
         Assert.DoesNotContain(loans.Sources, source => source.SourceType == "debtor");
     }
 
+    // PR #83 review: fixed-asset register evidence lands on the account the company's chart posts the
+    // asset's class to (charity: every class but leased equipment and fittings on 0020). The generic
+    // chart keeps its existing mapping, under which an IT asset belongs on 0050, not 0020.
+    [Theory]
+    [InlineData(ChartOfAccountsVariant.CharityClg, "IT", true)]
+    [InlineData(ChartOfAccountsVariant.CharityClg, "Office Equipment", true)]
+    [InlineData(ChartOfAccountsVariant.GenericTrading, "Plant & Machinery", true)]
+    [InlineData(ChartOfAccountsVariant.GenericTrading, "IT", false)]
+    public async Task WorkingPapers_AttachFixedAssetEvidenceToTheChartsAssetAccount(ChartOfAccountsVariant variant, string assetClass, bool onEquipmentAccount)
+    {
+        await using var db = CreateDb();
+        var fixture = await SeedAttributeChartAsync(db, variant);
+        var asset = new FixedAsset
+        {
+            CompanyId = fixture.Company.Id,
+            Name = "Example laptop",
+            Category = assetClass,
+            Cost = 2_000m,
+            AcquisitionDate = fixture.Period.PeriodStart,
+            UsefulLifeYears = 5,
+            DepreciationMethod = DepreciationMethod.StraightLine
+        };
+        db.FixedAssets.Add(asset);
+        await db.SaveChangesAsync();
+        var statements = new FinancialStatementsService(db);
+        var service = new AccountantWorkingPaperService(
+            db,
+            statements,
+            new TaxComputationService(db, statements),
+            new FilingReleaseIdentityProvider(
+                new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["FilingRelease:Candidate"] = "c2-test-candidate" }).Build(),
+                new TestEnvironment()),
+            new AuditService(db),
+            new FixedTimeProvider(new DateTimeOffset(2026, 2, 1, 12, 0, 0, TimeSpan.Zero)));
+        var actor = new AuthenticatedUser(
+            901,
+            fixture.Company.TenantId!.Value,
+            "Chart Firm",
+            "chart.accountant@example.invalid",
+            "Chart Accountant",
+            "Accountant",
+            new HashSet<int> { fixture.Company.Id });
+
+        var pack = await service.GenerateAndRetainAsync(fixture.Company.Id, fixture.Period.Id, actor, "c2-fixed-asset-sources");
+
+        var equipment = Assert.Single(pack.LeadSchedules.Rows, row => row.Code == "0020");
+        Assert.Equal(onEquipmentAccount, equipment.Sources.Any(source => source.SourceType == "fixed-asset" && source.EntityId == asset.Id));
+    }
+
     [Fact]
     public void ClassifyNew_DerivesNoRoleWhenTheGivenLineDiffersFromTheCodesLine()
     {

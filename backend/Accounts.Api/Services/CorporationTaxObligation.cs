@@ -21,7 +21,9 @@ public static class CorporationTaxObligation
         && balance.Liability > 0
         && balance.ConfirmedDueLiability == balance.Liability
         && balance.ConfirmedTaxableProfitOutsideExemption != null
-        && balance.ConfirmedTaxableProfitOutsideExemption >= 0;
+        && balance.ConfirmedTaxableProfitOutsideExemption >= 0
+        && balance.ConfirmedNonTradingProfitOutsideExemption != null
+        && balance.ConfirmedNonTradingProfitOutsideExemption >= 0;
 
     /// <summary>Whether Revenue (CT1) obligations apply to the period.</summary>
     public static readonly Expression<Func<AccountingPeriod, bool>> RevenueAppliesToPeriod = period =>
