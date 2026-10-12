@@ -227,7 +227,7 @@ public class AuditTrailMiddleware(RequestDelegate next)
             "ApiRequest",
             periodId ?? companyId,
             action,
-            newValue: payload,
+            newValue: WithConnectorAttribution(context, payload),
             userId: user is null ? null : AuthenticatedIdentity.AuditUserId(user),
             tenantId: user?.TenantId,
             requestId: GetRequestId(context),
@@ -236,6 +236,18 @@ public class AuditTrailMiddleware(RequestDelegate next)
             durableAudit: true,
             cancellationToken: CancellationToken.None);
     }
+
+    private static object WithConnectorAttribution(HttpContext context, object payload)
+    {
+        var client = ConnectorAudit.ClientAttribution(context);
+        if (client is null) return payload;
+        var node = System.Text.Json.JsonSerializer.SerializeToNode(payload, ConnectorAuditJson) as System.Text.Json.Nodes.JsonObject
+            ?? new System.Text.Json.Nodes.JsonObject();
+        node["client"] = System.Text.Json.JsonSerializer.SerializeToNode(client, ConnectorAuditJson);
+        return node;
+    }
+
+    private static readonly System.Text.Json.JsonSerializerOptions ConnectorAuditJson = new(System.Text.Json.JsonSerializerDefaults.Web);
 
     private static string? GetRequestId(HttpContext context)
     {

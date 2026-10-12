@@ -16,8 +16,12 @@ public class ProductionSafetyService(
     IOptions<DeadlineDeliveryConfig>? deadlineDelivery = null,
     IOptions<PlatformMetricsConfig>? platformMetrics = null,
     IOptions<DatabaseTenantIsolationConfig>? databaseTenantIsolation = null,
-    IOptions<IdentitySecurityConfig>? identitySecurity = null)
+    IOptions<IdentitySecurityConfig>? identitySecurity = null,
+    IOptions<ConnectorConfig>? connector = null)
 {
+    private const string DevelopmentConnectorSigningKey =
+        "TN9SjQlUVIC8wwhb/lnfBCbiy04cPZpyMTT3pbKu6RHxQgOV0+G41zUJ9Q31uJSO5tz10FRIvfkqEGQCGQSGkw==";
+
     public IReadOnlyList<string> Validate()
     {
         var failures = new List<string>();
@@ -120,6 +124,8 @@ public class ProductionSafetyService(
         if (AuthSessionKey.IsKnownDevelopmentKey(session.SigningKey))
             failures.Add("AuthSession:SigningKey uses the committed development session signing key outside development. Generate a fresh deployment secret.");
 
+        ValidateConnector(failures, session.SigningKey);
+
         if (session.ExpiryMinutes is < 15 or > 1440)
             failures.Add("AuthSession:ExpiryMinutes must be between 15 and 1440 minutes outside development.");
 
@@ -170,6 +176,34 @@ public class ProductionSafetyService(
             allowOptionalRemoteBreachCheck: privateServer));
 
         return failures;
+    }
+
+    private void ValidateConnector(List<string> failures, string sessionSigningKey)
+    {
+        var config = connector?.Value;
+        if (config is null || !config.Enabled) return;
+        if (!AuthSessionKey.HasStrongKey(config.SigningKey))
+        {
+            failures.Add("Connector:SigningKey must be a generated Base64 or Base64Url-encoded secret of at least 32 bytes when the MCP connector is enabled.");
+            return;
+        }
+        if (AuthSessionKey.IsKnownDevelopmentKey(config.SigningKey)
+            || string.Equals(config.SigningKey.Trim(), DevelopmentConnectorSigningKey, StringComparison.Ordinal))
+            failures.Add("Connector:SigningKey uses a committed development key outside development. Generate a fresh deployment secret.");
+        var connectorKey = AuthSessionKey.DecodeRequired(config.SigningKey);
+        if (AuthSessionKey.HasStrongKey(sessionSigningKey)
+            && System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(connectorKey, AuthSessionKey.DecodeRequired(sessionSigningKey)))
+            failures.Add("Connector:SigningKey must differ from AuthSession:SigningKey so a leaked browser session key cannot mint agent credentials.");
+        var identityKey = identitySecurity?.Value.IdentityHmacKey;
+        if (AuthSessionKey.HasStrongKey(identityKey)
+            && System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(connectorKey, AuthSessionKey.DecodeRequired(identityKey)))
+            failures.Add("Connector:SigningKey must differ from IdentitySecurity:IdentityHmacKey.");
+        if (!ConnectorConfig.IsValid(config))
+            failures.Add("Connector lifetimes are out of range: AccessTokenMinutes 5-30, RefreshIdleDays 1-90, FamilyAbsoluteDays 1-365 and at least RefreshIdleDays, ApprovalMinutes 2-10, WriteBudgetPerMinute 5-120, ActivityRetentionDays 30-3650.");
+        if (!string.IsNullOrWhiteSpace(config.PublicBaseUrl)
+            && (!Uri.TryCreate(config.PublicBaseUrl, UriKind.Absolute, out var publicBase)
+                || !(publicBase.Scheme == Uri.UriSchemeHttps || publicBase.IsLoopback)))
+            failures.Add("Connector:PublicBaseUrl must be an absolute HTTPS origin (or a loopback HTTP origin) outside development.");
     }
 
     public void ThrowIfUnsafe()

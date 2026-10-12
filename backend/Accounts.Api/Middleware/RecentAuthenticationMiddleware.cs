@@ -15,6 +15,28 @@ public sealed class RecentAuthenticationMiddleware(RequestDelegate next)
     public async Task InvokeAsync(HttpContext context, IOptions<AuthSessionConfig> options, TimeProvider timeProvider)
     {
         var user = AuthContext.GetUser(context);
+        if (user is not null
+            && ConnectorSessionContext.Get(context) is not null
+            && RequiresRecentMfa(context.Request.Path, context.Request.Method))
+        {
+            // Connector sessions never use the browser's recent-TOTP window: only an approval spent
+            // for this exact request by ConnectorActionApprovalMiddleware satisfies the gate.
+            if (context.Items[ConnectorActionApprovalMiddleware.SpentItemKey] is Guid)
+            {
+                await next(context);
+                return;
+            }
+
+            context.Response.StatusCode = StatusCodes.Status428PreconditionRequired;
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsJsonAsync(new
+            {
+                error = "This action needs a person to approve it.",
+                code = ConnectorErrorCodes.ApprovalRequired
+            });
+            return;
+        }
+
         if (options.Value.RequirePrivilegedMfa
             && user is not null
             && AuthService.RequiresPrivilegedMfa(user.Role)
@@ -43,36 +65,6 @@ public sealed class RecentAuthenticationMiddleware(RequestDelegate next)
         return now - verifiedAt <= TimeSpan.FromMinutes(Math.Clamp(recentMinutes, 1, 60));
     }
 
-    public static bool RequiresRecentMfa(PathString path, string method)
-    {
-        if (HttpMethods.IsDelete(method)) return path.StartsWithSegments("/api");
-        if (!(HttpMethods.IsPost(method) || HttpMethods.IsPut(method) || HttpMethods.IsPatch(method))) return false;
-
-        if (path.StartsWithSegments("/api/privacy", StringComparison.OrdinalIgnoreCase)) return true;
-        if (path.StartsWithSegments("/api/admin/users", StringComparison.OrdinalIgnoreCase)) return true;
-        if (path.StartsWithSegments("/api/operations/deadline-reminders", StringComparison.OrdinalIgnoreCase)) return true;
-        if (path.Equals("/api/auth/mfa/recovery-codes", StringComparison.OrdinalIgnoreCase)) return true;
-
-        // Routing ignores a trailing slash, so the suffix rules must too.
-        var value = (path.Value ?? "").TrimEnd('/');
-        return value.Contains("/quarantine", StringComparison.OrdinalIgnoreCase)
-            || value.EndsWith("/recover", StringComparison.OrdinalIgnoreCase)
-            || value.EndsWith("/categories/chart-adoption", StringComparison.OrdinalIgnoreCase)
-            || value.EndsWith("/classification/historic-anchor", StringComparison.OrdinalIgnoreCase)
-            || value.EndsWith("/classification/historic-anchor/retire", StringComparison.OrdinalIgnoreCase)
-            || value.EndsWith("/tax-balances/CorporationTax/confirm-due", StringComparison.OrdinalIgnoreCase)
-            || value.EndsWith("/status", StringComparison.OrdinalIgnoreCase)
-            || value.EndsWith("/approve", StringComparison.OrdinalIgnoreCase)
-            || value.Contains("/year-end-reviews/", StringComparison.OrdinalIgnoreCase)
-            || value.EndsWith("/mark-filed", StringComparison.OrdinalIgnoreCase)
-            || value.EndsWith("/revenue-external-validation", StringComparison.OrdinalIgnoreCase)
-            || value.EndsWith("/filing/directors-approval", StringComparison.OrdinalIgnoreCase)
-            || value.EndsWith("/filing/directors-approval-withdrawal", StringComparison.OrdinalIgnoreCase)
-            || value.EndsWith("/filing/cro-not-delivered", StringComparison.OrdinalIgnoreCase)
-            || value.EndsWith("/filing/cro-signing-pack", StringComparison.OrdinalIgnoreCase)
-            || value.EndsWith("/filing/auditor-report", StringComparison.OrdinalIgnoreCase)
-            || value.Contains("/external-filing-handoff/", StringComparison.OrdinalIgnoreCase)
-            || value.Contains("/release-evidence", StringComparison.OrdinalIgnoreCase)
-            || value.Contains("/accept", StringComparison.OrdinalIgnoreCase);
-    }
+    public static bool RequiresRecentMfa(PathString path, string method) =>
+        PrivilegedRouteCatalog.RequiresHumanConfirmation(path, method);
 }

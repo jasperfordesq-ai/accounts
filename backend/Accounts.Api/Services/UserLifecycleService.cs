@@ -483,6 +483,13 @@ public sealed class UserLifecycleService(
         user.UpdatedAt = now;
         if (db.Database.IsRelational())
         {
+            // Connector agents survive a browser logout, but not a security-state change.
+            await db.ConnectorSessions
+                .Where(session => session.UserId == user.Id && session.RevokedAtUtc == null)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(session => session.RevokedAtUtc, now)
+                    .SetProperty(session => session.RevocationReason, ConnectorRevocationReasons.SecurityStateRevoked),
+                    cancellationToken);
             await db.UserMfaChallenges
                 .Where(challenge => challenge.UserId == user.Id
                     && challenge.ConsumedAtUtc == null
@@ -491,6 +498,14 @@ public sealed class UserLifecycleService(
                     setters => setters.SetProperty(challenge => challenge.RevokedAtUtc, now),
                     cancellationToken);
             return;
+        }
+
+        foreach (var session in await db.ConnectorSessions
+                     .Where(session => session.UserId == user.Id && session.RevokedAtUtc == null)
+                     .ToListAsync(cancellationToken))
+        {
+            session.RevokedAtUtc = now;
+            session.RevocationReason = ConnectorRevocationReasons.SecurityStateRevoked;
         }
 
         var challenges = await db.UserMfaChallenges

@@ -41,6 +41,9 @@ public static class TenantIsolationPolicyCatalog
         new("privacy_incident_exercises", TenantOwnershipPath.DirectTenantId),
         new("deadline_reminder_outbox", TenantOwnershipPath.DirectTenantId),
         new("platform_job_runs", TenantOwnershipPath.DirectTenantId),
+        new("connector_sessions", TenantOwnershipPath.DirectTenantId),
+        new("connector_action_approvals", TenantOwnershipPath.DirectTenantId),
+        new("connector_activity_events", TenantOwnershipPath.DirectTenantId),
 
         // Anonymous rejected-login telemetry may be inserted without a resolved tenant, but it is
         // never readable through that anonymous context. Known-user events remain tenant-scoped.

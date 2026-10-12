@@ -666,7 +666,12 @@ public sealed class AccountingConcurrencyCoverageTests
             typeof(UserLifecycleEvent),
             typeof(UserMfaChallenge),
             typeof(UserMfaCredential),
-            typeof(UserMfaRecoveryCode)
+            typeof(UserMfaRecoveryCode),
+            // Agent credentials: rotation, revocation and approval spending use conditional
+            // single-row updates of their own and are never tied to an accounting period.
+            typeof(ConnectorSession),
+            typeof(ConnectorActionApproval),
+            typeof(ConnectorActivityEvent)
         };
         var mutableDomainTypes = db.Model.GetEntityTypes()
             .Select(entity => entity.ClrType)

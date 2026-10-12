@@ -10,6 +10,13 @@ public static class AuditEventCodes
     public const string AuthLogoutSucceeded = "AuthLogoutSucceeded";
     public const string AuthMfaChallengeFailed = "AuthMfaChallengeFailed";
     public const string AuthFirstFactorSucceeded = "AuthFirstFactorSucceeded";
+    public const string ConnectorSessionIssued = "ConnectorSessionIssued";
+    public const string ConnectorSessionRevoked = "ConnectorSessionRevoked";
+    public const string ConnectorRefreshReuseDetected = "ConnectorRefreshReuseDetected";
+    public const string ConnectorApprovalRequested = "ConnectorApprovalRequested";
+    public const string ConnectorApprovalGranted = "ConnectorApprovalGranted";
+    public const string ConnectorApprovalRefused = "ConnectorApprovalRefused";
+    public const string ConnectorApprovalConsumed = "ConnectorApprovalConsumed";
     public const string CompanyQuarantined = "CompanyQuarantined";
     public const string CompanyRecovered = "CompanyRecovered";
     public const string CompanyOnboarded = "CompanyOnboarded";

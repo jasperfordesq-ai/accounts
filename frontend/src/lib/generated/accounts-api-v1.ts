@@ -206,6 +206,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    q?: string;
+                    types?: string;
+                    companyId?: number | string;
+                    periodId?: number | string;
+                    limit?: number | string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SearchResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/companies/{companyId}/periods/{periodId}/year-end-summary": {
         parameters: {
             query?: never;
@@ -1226,6 +1267,450 @@ export interface paths {
                     content: {
                         "application/json": components["schemas"]["AuthResponse"];
                     };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/connector/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ConnectorLoginInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectorLoginResponse"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/connector/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ConnectorRefreshInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectorLoginResponse"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/connector/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": null | components["schemas"]["ConnectorLogoutInput"];
+                };
+            };
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/connector/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectorSessionPosture"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/connector/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ConnectorApproveInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectorApprovalGrantResponse"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/connector/approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectorApprovalView"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/connector/approvals/{approvalId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    approvalId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectorApprovalView"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/connector/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    userId?: number | string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectorSessionSummary"][];
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/connector/sessions/{familyId}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: {
+                    userId?: number | string;
+                };
+                header?: never;
+                path: {
+                    familyId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/connector/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    userId?: number | string;
+                    page?: number | string;
+                    pageSize?: number | string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectorActivityPage"];
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
                 };
             };
         };
@@ -8900,6 +9385,124 @@ export interface components {
         CompanySizeClass: "Micro" | "Small" | "Medium" | "Large" | null;
         /** @enum {unknown} */
         CompanyType: "Private" | "PrivateUnlimited" | "DesignatedActivityCompany" | "CompanyLimitedByGuarantee" | "PublicLimitedCompany";
+        ConnectorActivityPage: {
+            data: components["schemas"]["ConnectorActivityRow"][];
+            /** Format: int32 */
+            page: number | string;
+            /** Format: int32 */
+            pageSize: number | string;
+            hasMore: boolean;
+        };
+        ConnectorActivityRow: {
+            /** Format: int64 */
+            id: number | string;
+            /** Format: uuid */
+            sessionFamilyId: string;
+            accessLevel: string;
+            dataScope: string;
+            method: string;
+            routePattern: string;
+            resourceId: null | string;
+            /** Format: int32 */
+            companyId: null | number | string;
+            /** Format: int32 */
+            statusCode: number | string;
+            reason: null | string;
+            /** Format: date-time */
+            occurredAtUtc: string;
+        };
+        ConnectorApprovalGrantResponse: {
+            ok: boolean;
+            /** Format: uuid */
+            approvalId: string;
+            summary: string;
+            /** Format: date-time */
+            expiresAtUtc: string;
+        };
+        ConnectorApprovalView: {
+            /** Format: uuid */
+            approvalId: string;
+            summary: string;
+            method: string;
+            routePattern: string;
+            resourceId: null | string;
+            /** Format: date-time */
+            createdAtUtc: string;
+            /** Format: date-time */
+            expiresAtUtc: string;
+            /** Format: date-time */
+            approvedAtUtc: null | string;
+            /** Format: date-time */
+            consumedAtUtc: null | string;
+        };
+        ConnectorApproveInput: {
+            /** Format: uuid */
+            approvalId: string;
+            password: null | string;
+            totpCode: null | string;
+        };
+        ConnectorLoginInput: {
+            tenantSlug: null | string;
+            email: null | string;
+            password: null | string;
+            accessLevel: null | string;
+            dataScope: null | string;
+            totpCode: null | string;
+            recoveryCode: null | string;
+            deviceLabel: null | string;
+        };
+        ConnectorLoginResponse: {
+            user: components["schemas"]["AuthResponse"];
+            accessToken: string;
+            /** Format: date-time */
+            accessTokenExpiresAtUtc: string;
+            refreshToken: string;
+            /** Format: date-time */
+            refreshTokenExpiresAtUtc: string;
+            session: components["schemas"]["ConnectorSessionPosture"];
+        };
+        ConnectorLogoutInput: {
+            refreshToken: null | string;
+        };
+        ConnectorRefreshInput: {
+            refreshToken: null | string;
+        };
+        ConnectorSessionPosture: {
+            /** Format: uuid */
+            sessionId: string;
+            /** Format: uuid */
+            familyId: string;
+            clientKind: string;
+            accessLevel: string;
+            dataScope: string;
+            role: string;
+            tenantSlug: string;
+            /** Format: int32 */
+            userId: number | string;
+            mfaVerified: boolean;
+            /** Format: date-time */
+            accessTokenExpiresAtUtc: string;
+            /** Format: int32 */
+            writeBudgetPerMinute: number | string;
+            /** Format: int32 */
+            approvalMinutes: number | string;
+        };
+        ConnectorSessionSummary: {
+            /** Format: uuid */
+            familyId: string;
+            /** Format: int32 */
+            userId: number | string;
+            accessLevel: string;
+            dataScope: string;
+            deviceLabel: null | string;
+            clientVersion: null | string;
+            /** Format: date-time */
+            connectedAtUtc: string;
+            /** Format: date-time */
+            lastUsedAtUtc: null | string;
+            /** Format: date-time */
+            expiresAtUtc: string;
+        };
         ContingentLiabilityInput: {
             description?: string;
             nature?: string;
@@ -10360,6 +10963,21 @@ export interface components {
             /** Format: double */
             amount: number | string;
             available: boolean;
+        };
+        SearchHit: {
+            type: string;
+            /** Format: int64 */
+            id: number | string;
+            title: string;
+            ref: string;
+            /** Format: int32 */
+            companyId: null | number | string;
+            /** Format: int32 */
+            periodId: null | number | string;
+        };
+        SearchResponse: {
+            results: components["schemas"]["SearchHit"][];
+            searchedTypes: string[];
         };
         SetUserActiveInput: {
             active: boolean;

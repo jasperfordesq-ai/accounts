@@ -387,7 +387,7 @@ try {
     Assert-True ($state.reviewedRelease -eq $false) "a source build or self-asserted manifest must never be recorded as reviewed"
     Assert-True ($state.releaseIntegrityStatus -eq "source-build-unreviewed") "source build integrity status must be explicit"
     $secretDirectory = Join-Path $stateDirectory "secrets"
-    foreach ($cryptoName in @("identity_hmac_key", "mfa_encryption_key", "database_tenant_context_key", "auth_session_signing_key", "audit_integrity_signing_key", "backup_authentication_key")) {
+    foreach ($cryptoName in @("identity_hmac_key", "mfa_encryption_key", "database_tenant_context_key", "auth_session_signing_key", "audit_integrity_signing_key", "backup_authentication_key", "connector_signing_key")) {
         $value = [IO.File]::ReadAllText((Join-Path $secretDirectory $cryptoName))
         Assert-True ([Convert]::FromBase64String($value).Length -ge 32) "$cryptoName must contain backend-compatible standard Base64"
     }

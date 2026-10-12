@@ -19,7 +19,10 @@ public class CsrfProtectionMiddleware(RequestDelegate next)
         }
 
         var user = AuthContext.GetUser(context);
-        if (user is null)
+        // Connector bearer sessions carry no ambient browser credential: the bearer is attached
+        // deliberately by code holding it, and the connector guard has already refused any request
+        // that also carries the session or CSRF cookie or browser navigation headers.
+        if (user is null || ConnectorSessionContext.Get(context) is not null)
         {
             await next(context);
             return;

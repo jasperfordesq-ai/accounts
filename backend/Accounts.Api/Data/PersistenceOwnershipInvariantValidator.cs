@@ -51,6 +51,12 @@ internal static class PersistenceOwnershipInvariantValidator
             await ValidateUserOwnedAsync(code.UserId, code.User, code.TenantId, nameof(UserMfaRecoveryCode), resolver, currentTenantId);
         foreach (var challenge in Changed<UserMfaChallenge>(db))
             await ValidateUserOwnedAsync(challenge.UserId, challenge.User, challenge.TenantId, nameof(UserMfaChallenge), resolver, currentTenantId);
+        foreach (var session in Changed<ConnectorSession>(db))
+            await ValidateUserOwnedAsync(session.UserId, session.User, session.TenantId, nameof(ConnectorSession), resolver, currentTenantId);
+        foreach (var approval in Changed<ConnectorActionApproval>(db))
+            await ValidateUserOwnedAsync(approval.UserId, approval.User, approval.TenantId, nameof(ConnectorActionApproval), resolver, currentTenantId);
+        foreach (var activity in Changed<ConnectorActivityEvent>(db))
+            await ValidateUserOwnedAsync(activity.UserId, activity.User, activity.TenantId, nameof(ConnectorActivityEvent), resolver, currentTenantId);
         foreach (var evidence in Changed<UserLifecycleEvent>(db))
         {
             var target = await resolver.UserAsync(evidence.TargetUserId);
