@@ -91,6 +91,85 @@ public sealed class ConnectorPostgresTests
         Assert.All(rows, row => Assert.True(row.Enabled && row.Forced, row.Name));
     }
 
+    [ConnectorPostgresFact]
+    public async Task ConcurrentExchanges_OfOneAuthorizationCode_IssueExactlyOneSession()
+    {
+        await using var database = await MigratedSchema.CreateAsync();
+        var (user, _, _, _) = await SeedGrantedApprovalAsync(database);
+        var keys = Keys.Create();
+        var verifier = Convert.ToBase64String(RandomNumberGenerator.GetBytes(48)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        var challenge = Convert.ToBase64String(SHA256.HashData(System.Text.Encoding.ASCII.GetBytes(verifier))).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        const string redirect = "http://127.0.0.1:53682/callback";
+        string clientId;
+        string rawCode;
+        await using (var db = database.NewContext())
+        {
+            var oauth = NewOAuth(db, keys);
+            clientId = (string)((IReadOnlyDictionary<string, object>)oauth.Register(new OAuthRegisterInput([redirect], "Race", null, null, null)).Value!)["client_id"];
+            var passwordTicks = (await db.UserAccounts.AsNoTracking().SingleAsync(account => account.Id == user.UserId)).PasswordLastChangedAt.Ticks;
+            rawCode = "fbac1." + Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes(user.TenantId.ToString())).TrimEnd('=') + "." + Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+            db.OAuthAuthorizationCodes.Add(new OAuthAuthorizationCode
+            {
+                Id = Guid.NewGuid(),
+                TenantId = user.TenantId,
+                UserId = user.UserId,
+                CodeHash = new MfaSecurityService(keys.Auth).HashOpaqueToken("oauth-code:" + rawCode),
+                ClientIdHash = OAuthClientCodec.Hash(clientId),
+                ClientName = "Race",
+                RedirectUri = redirect,
+                CodeChallenge = challenge,
+                Resource = "https://filingbridge.example/mcp",
+                AccessLevel = ConnectorAccessLevels.Write,
+                DataScope = ConnectorDataScopes.Withheld,
+                PasswordLastChangedAtTicks = passwordTicks,
+                CreatedAtUtc = DateTime.UtcNow,
+                ExpiresAtUtc = DateTime.UtcNow.AddSeconds(60)
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var attempts = Enumerable.Range(0, 8).Select(async _ =>
+        {
+            await using var db = database.NewContext();
+            var form = new Microsoft.AspNetCore.Http.FormCollection(new Dictionary<string, Microsoft.Extensions.Primitives.StringValues>
+            {
+                ["grant_type"] = "authorization_code",
+                ["code"] = rawCode,
+                ["redirect_uri"] = redirect,
+                ["client_id"] = clientId,
+                ["code_verifier"] = verifier
+            });
+            return (await NewOAuth(db, keys).ExchangeAsync(form)).Error is null;
+        }).ToArray();
+        var outcomes = await Task.WhenAll(attempts);
+
+        Assert.Equal(1, outcomes.Count(outcome => outcome));
+        await using var verify = database.NewContext();
+        Assert.Single(await verify.ConnectorSessions.ToListAsync());
+    }
+
+    private sealed record Keys(IOptions<AuthSessionConfig> Auth, IOptions<ConnectorConfig> Connector)
+    {
+        public static Keys Create() => new(
+            Options.Create(new AuthSessionConfig { SigningKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64)) }),
+            Options.Create(new ConnectorConfig
+            {
+                Enabled = true,
+                SigningKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64)),
+                PublicBaseUrl = "https://filingbridge.example"
+            }));
+    }
+
+    private static OAuthService NewOAuth(AccountsDbContext db, Keys keys)
+    {
+        var auth = new AuthService(db, keys.Auth, new HostEnvironment(), new Pbkdf2PasswordVerifier());
+        var mfa = new MfaSecurityService(keys.Auth);
+        var audit = new AuditService(db);
+        var connectors = new ConnectorSessionService(
+            db, auth, new IdentityAccessService(db, auth, mfa, audit, keys.Auth, TimeProvider.System), mfa, audit, keys.Connector, TimeProvider.System);
+        return new OAuthService(db, connectors, mfa, keys.Connector, TimeProvider.System);
+    }
+
     private static async Task<(AuthenticatedUser User, Guid FamilyId, Guid ApprovalId, string Digest)> SeedGrantedApprovalAsync(MigratedSchema database)
     {
         await using var db = database.NewContext();
