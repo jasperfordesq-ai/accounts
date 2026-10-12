@@ -52,13 +52,15 @@
       }
     },
     "images": {
+      "description": "Every image the release's compose.private.yml runs, digest-pinned. images.mcp is required because compose.private.yml runs the MCP connector service (ACCOUNTS_MCP_IMAGE). Releases up to 0.1.0-preview.9 predate it; the operator refuses any release whose Compose file references ACCOUNTS_MCP_IMAGE without images.mcp.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["backend", "frontend", "postgres"],
+      "required": ["backend", "frontend", "postgres", "mcp"],
       "properties": {
         "backend": { "$ref": "#/$defs/backendImage" },
         "frontend": { "$ref": "#/$defs/frontendImage" },
-        "postgres": { "$ref": "#/$defs/postgresImage" }
+        "postgres": { "$ref": "#/$defs/postgresImage" },
+        "mcp": { "$ref": "#/$defs/mcpImage" }
       }
     },
     "files": {
@@ -108,6 +110,17 @@
         "exactDigestReference": {
           "type": "string",
           "pattern": "^postgres@sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "mcpImage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["exactDigestReference"],
+      "properties": {
+        "exactDigestReference": {
+          "type": "string",
+          "pattern": "^ghcr\\.io/jasperfordesq-ai/accounts-mcp@sha256:[0-9a-f]{64}$"
         }
       }
     },

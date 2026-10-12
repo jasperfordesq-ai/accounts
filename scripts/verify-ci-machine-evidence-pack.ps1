@@ -1298,8 +1298,8 @@ function Assert-ContainerSupplyChainEvidence {
     }
 
     $images = @((Get-JsonProperty $SupplyChain @("images")))
-    if ($images.Count -ne 2 -or (@($images | ForEach-Object { [string](Get-JsonProperty $_ @("component")) } | Sort-Object) -join ",") -ne "backend,frontend") {
-        Add-Failure $Failures "container-supply-chain-report.json images must contain exactly backend and frontend."
+    if ($images.Count -ne 3 -or (@($images | ForEach-Object { [string](Get-JsonProperty $_ @("component")) } | Sort-Object) -join ",") -ne "backend,frontend,mcp") {
+        Add-Failure $Failures "container-supply-chain-report.json images must contain exactly backend, frontend and mcp."
     }
     $exactReferences = [System.Collections.Generic.List[string]]::new()
     $digests = [System.Collections.Generic.List[string]]::new()
@@ -1328,6 +1328,7 @@ function Assert-ContainerSupplyChainEvidence {
             $expectedSmokeReference = switch ($component) {
                 "backend" { "accounts-api-ci:$candidateCommit" }
                 "frontend" { "accounts-frontend-ci:$candidateCommit" }
+                "mcp" { "accounts-mcp-ci:$candidateCommit" }
                 default { "" }
             }
             foreach ($property in @("pushedToRegistry", "pulledForSmoke")) {
@@ -1384,10 +1385,10 @@ function Assert-ContainerSupplyChainEvidence {
             $retainedFileNames.Add([string](Get-JsonProperty $fileEvidence @("fileName"))) | Out-Null
         }
     }
-    if (@($digests | Select-Object -Unique).Count -ne 2) {
-        Add-Failure $Failures "container-supply-chain-report.json backend and frontend digests must be distinct."
+    if (@($digests | Select-Object -Unique).Count -ne 3) {
+        Add-Failure $Failures "container-supply-chain-report.json backend, frontend and mcp digests must be distinct."
     }
-    $expectedRetainedFileCount = if ($verificationOnly) { 4 } else { 6 }
+    $expectedRetainedFileCount = if ($verificationOnly) { 6 } else { 9 }
     if ($retainedFileNames.Count -ne $expectedRetainedFileCount -or
         @($retainedFileNames | Select-Object -Unique).Count -ne $expectedRetainedFileCount) {
         Add-Failure $Failures "container-supply-chain-report.json must retain $expectedRetainedFileCount distinct scan, SBOM and mode-appropriate provenance files."
@@ -1418,7 +1419,7 @@ function Assert-ContainerSupplyChainEvidence {
     }
     $verifiedReferences = @((Get-JsonProperty $Verification @("verifiedImageDigests")) | ForEach-Object { [string]$_ } | Sort-Object)
     if (($verifiedReferences -join ",") -cne (@($exactReferences | Sort-Object) -join ",")) {
-        Add-Failure $Failures "container-supply-chain-verification-report.json verifiedImageDigests must match both exact image digests."
+        Add-Failure $Failures "container-supply-chain-verification-report.json verifiedImageDigests must match all three exact image digests."
     }
     $verificationRetainedEvidence = @((Get-JsonProperty $Verification @("retainedEvidenceFiles")))
     $verifiedFiles = @($verificationRetainedEvidence | ForEach-Object { [string](Get-JsonProperty $_ @("fileName")) } | Sort-Object)

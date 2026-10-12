@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { parseArgs } from '../config.js';
+import { configuredDirectory, parseArgs } from '../config.js';
 import { accountForOrigin, bindCredentialToOrigin, chooseCredentialStore, createFileStore, createMemoryStore, KEYCHAIN_SERVICE } from '../credentials.js';
 
 const env = {};
@@ -68,6 +68,35 @@ test('toolsets, directories and the HTTP flags', () => {
   assert.throws(() => parseArgs(['--profile', 'local', '--port', '3100'], env), /only to serve --http/);
   assert.throws(() => parseArgs(['serve', '--http', '--port', '99999'], {}), /1 to 65535/);
   assert.equal(parseArgs(['--profile', 'local'], { FILINGBRIDGE_DOWNLOAD_DIR: ' d ' }).downloadDir, 'd');
+});
+
+test('a blank or unexpanded bundle directory means the feature is off, not a directory', () => {
+  // Claude Desktop passes --download-dir ${user_config.download_dir} on every
+  // start; a folder left blank arrives as an empty string or as the literal
+  // placeholder, depending on the host.
+  const bundle = (download: string, upload: string) => parseArgs([
+    'serve', '--profile', 'private', '--base-url', 'http://127.0.0.1:3500',
+    '--download-dir', download, '--upload-root', upload,
+  ], {});
+  for (const blank of ['', '   ', '${user_config.download_dir}', ' ${user_config.upload_root} ']) {
+    const config = bundle(blank, blank);
+    assert.equal(config.downloadDir, undefined, `download dir from ${JSON.stringify(blank)}`);
+    assert.equal(config.uploadRoot, undefined, `upload root from ${JSON.stringify(blank)}`);
+  }
+  const set = bundle('C:\\Users\\me\\FilingBridge downloads', '/home/me/in');
+  assert.equal(set.downloadDir, 'C:\\Users\\me\\FilingBridge downloads');
+  assert.equal(set.uploadRoot, '/home/me/in');
+  // A blank flag leaves the environment to decide, as an absent flag does.
+  assert.equal(parseArgs(['--profile', 'local', '--download-dir', ''], { FILINGBRIDGE_DOWNLOAD_DIR: 'd' }).downloadDir, 'd');
+  assert.equal(parseArgs(['--profile', 'local'], { FILINGBRIDGE_UPLOAD_ROOT: '${user_config.upload_root}' }).uploadRoot, undefined);
+  // A flag with nothing after it is still a mistake.
+  assert.throws(() => parseArgs(['--profile', 'local', '--download-dir'], {}), /--download-dir requires a value/);
+  // A blank directory is not a reason to refuse serve --http.
+  assert.equal(parseArgs(['serve', '--http', '--download-dir', ''], {}).http, true);
+  assert.equal(configuredDirectory('${user_config.x}'), undefined);
+  assert.equal(configuredDirectory('$HOME/out'), '$HOME/out');
+  // Other flags keep refusing an empty value.
+  assert.throws(() => parseArgs(['--profile', 'local', '--base-url', ''], {}), /--base-url requires a value/);
 });
 
 test('credentials live in the keychain per origin; a file store only on the local profile', () => {

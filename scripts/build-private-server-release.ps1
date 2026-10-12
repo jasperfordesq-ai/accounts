@@ -92,24 +92,28 @@ if ([string]$verification.evidenceReport.fileName -cne "container-supply-chain-r
 
 $backend = @($report.images | Where-Object component -eq "backend")
 $frontend = @($report.images | Where-Object component -eq "frontend")
-if ($backend.Count -ne 1 -or $frontend.Count -ne 1) {
-    throw "Container supply-chain evidence must contain exactly one backend and one frontend image."
+$mcp = @($report.images | Where-Object component -eq "mcp")
+if ($backend.Count -ne 1 -or $frontend.Count -ne 1 -or $mcp.Count -ne 1 -or @($report.images).Count -ne 3) {
+    throw "Container supply-chain evidence must contain exactly one backend, one frontend, and one MCP connector image."
 }
 $backendReference = [string]$backend[0].exactDigestReference
 $frontendReference = [string]$frontend[0].exactDigestReference
+$mcpReference = [string]$mcp[0].exactDigestReference
 Assert-ExactImageReference $backendReference "Backend image" "ghcr\.io/jasperfordesq-ai/accounts-api"
 Assert-ExactImageReference $frontendReference "Frontend image" "ghcr\.io/jasperfordesq-ai/accounts-frontend"
+Assert-ExactImageReference $mcpReference "MCP connector image" "ghcr\.io/jasperfordesq-ai/accounts-mcp"
 
 $verifiedDigests = @($verification.verifiedImageDigests)
-if ($verifiedDigests.Count -ne 2 -or
+if ($verifiedDigests.Count -ne 3 -or
     $verifiedDigests -cnotcontains $backendReference -or
-    $verifiedDigests -cnotcontains $frontendReference) {
-    throw "The verification report does not bind exactly the selected backend and frontend image digests."
+    $verifiedDigests -cnotcontains $frontendReference -or
+    $verifiedDigests -cnotcontains $mcpReference) {
+    throw "The verification report does not bind exactly the selected backend, frontend, and MCP connector image digests."
 }
 
 $retainedEvidence = @($verification.retainedEvidenceFiles)
-if ($retainedEvidence.Count -lt 6) {
-    throw "The verification report does not retain the required scan, SBOM, and provenance evidence."
+if ($retainedEvidence.Count -lt 9) {
+    throw "The verification report does not retain the required scan, SBOM, and provenance evidence for all three images."
 }
 $retainedNames = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
 foreach ($entry in $retainedEvidence) {
@@ -130,7 +134,7 @@ foreach ($entry in $retainedEvidence) {
     }
 }
 
-foreach ($image in @($backend[0], $frontend[0])) {
+foreach ($image in @($backend[0], $frontend[0], $mcp[0])) {
     foreach ($evidence in @($image.scan.file, $image.sbom.file, $image.provenance.file)) {
         $fileName = [string]$evidence.fileName
         if (-not $retainedNames.Contains($fileName)) {
@@ -208,6 +212,7 @@ try {
             backend = [ordered]@{ exactDigestReference = $backendReference }
             frontend = [ordered]@{ exactDigestReference = $frontendReference }
             postgres = [ordered]@{ exactDigestReference = $PostgresImage }
+            mcp = [ordered]@{ exactDigestReference = $mcpReference }
         }
         files = $files
         statutoryAssurance = [ordered]@{
@@ -240,6 +245,7 @@ try {
         byteSize = (Get-Item -LiteralPath $archivePath).Length
         backendImage = $backendReference
         frontendImage = $frontendReference
+        mcpImage = $mcpReference
         postgresImage = $PostgresImage
     } | ConvertTo-Json -Depth 4
 }

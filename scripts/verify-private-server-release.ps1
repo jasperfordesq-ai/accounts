@@ -123,11 +123,22 @@ try {
             @($manifest.supportedHosts) -notcontains "ubuntu-x64") {
             Add-Failure $failures "release.json must honestly support exactly windows-x64 and ubuntu-x64."
         }
-        foreach ($component in @("backend", "frontend", "postgres")) {
-            $reference = [string]$manifest.images.$component.exactDigestReference
+        # A release whose Compose file runs the MCP connector service must pin its image too.
+        $releaseComposePath = Join-Path $temporaryRoot "compose.private.yml"
+        $requiredComponents = @("backend", "frontend", "postgres")
+        if ((Test-Path -LiteralPath $releaseComposePath -PathType Leaf) -and
+            (Get-Content -LiteralPath $releaseComposePath -Raw).Contains('ACCOUNTS_MCP_IMAGE')) {
+            $requiredComponents += "mcp"
+        } elseif ($null -ne $manifest.images.PSObject.Properties["mcp"]) {
+            $requiredComponents += "mcp"
+        }
+        foreach ($component in $requiredComponents) {
+            $componentProperty = $manifest.images.PSObject.Properties[$component]
+            $reference = if ($null -eq $componentProperty) { "" } else { [string]$componentProperty.Value.exactDigestReference }
             $pattern = switch ($component) {
                 "backend" { '^ghcr\.io/jasperfordesq-ai/accounts-api@sha256:[0-9a-f]{64}$' }
                 "frontend" { '^ghcr\.io/jasperfordesq-ai/accounts-frontend@sha256:[0-9a-f]{64}$' }
+                "mcp" { '^ghcr\.io/jasperfordesq-ai/accounts-mcp@sha256:[0-9a-f]{64}$' }
                 default { '^postgres@sha256:[0-9a-f]{64}$' }
             }
             if ($reference -cnotmatch $pattern) {

@@ -24,6 +24,7 @@
   "files": [
     "dist",
     "!dist/tests",
+    "manifest.json",
     "README.md"
   ],
   "type": "module",
@@ -39,7 +40,9 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "generate:openapi-types": "openapi-typescript ../backend/Accounts.Api/OpenApi/accounts-api-v1.json -o src/generated/openapi-types.ts",
     "test": "tsc -p tsconfig.json && node --test dist/tests/*.test.js",
-    "canary": "node scripts/canary.mjs"
+    "canary": "node scripts/canary.mjs",
+    "manifest:tools": "tsc -p tsconfig.json && node scripts/manifest-tools.mjs",
+    "pack:mcpb": "node scripts/pack-mcpb.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.1",

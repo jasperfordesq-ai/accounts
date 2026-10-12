@@ -154,6 +154,38 @@ parses the C# to keep them in step.
 - A full OAuth round trip (register → authorize with password + TOTP → token → `/mcp`) is not in CI; see
   the comment in `scripts/mcp-live-roundtrip.mjs`.
 
+## Phase 3: Claude Desktop bundle (workstream D1)
+
+- `manifest.json` (MCPB `manifest_version` 0.2, validated by `@anthropic-ai/mcpb` 2.1.2): name
+  `filingbridge`, display `FilingBridge`, author Jasper Ford, AGPL-3.0-or-later, no icon (the frontend has
+  no PNG; add `icon.png` and the `icon` field when one exists). `server.mcp_config` runs
+  `node ${__dirname}/dist/cli.js serve --profile ${user_config.profile} --base-url ${user_config.base_url}
+  --download-dir ${user_config.download_dir} --upload-root ${user_config.upload_root}`. `user_config`:
+  `base_url` (string, required), `profile` (string, default `private`; MCPB 0.2 has no select type, so the
+  CLI's own profile check is the validation), `download_dir` / `upload_root` (directory, optional).
+- **Optional folders.** MCPB's substitution leaves an unset (or empty) `${user_config.x}` exactly as
+  written in `args` (`replaceVariables` in `@anthropic-ai/mcpb/dist/shared/config.js`), so the CLI now
+  treats an empty value or an unexpanded `${…}` placeholder for `--download-dir` / `--upload-root` (and
+  `FILINGBRIDGE_DOWNLOAD_DIR` / `FILINGBRIDGE_UPLOAD_ROOT`) as not set (`configuredDirectory` in
+  `config.ts`). Every other flag still refuses an empty value.
+- `tools`: the three core tools plus every catalogue tool, name and first sentence of the description,
+  written by `npm run manifest:tools` (`src/manifest-tools.ts`, `scripts/manifest-tools.mjs`);
+  `manifest.test.ts` fails when it drifts, and `pack:mcpb` refuses a stale manifest.
+- `npm run pack:mcpb` (`scripts/pack-mcpb.mjs`): fresh `tsc` into a temp stage, `dist/tests` removed,
+  `npm ci --omit=dev --ignore-scripts`, `manifest.json`, `README.md`, repository `LICENSE`, then
+  `npx --yes @anthropic-ai/mcpb@2.1.2 pack`. Output `mcp/filingbridge.mcpb` (git-ignored). The packer is
+  **not** a devDependency: 2.1.2 pulls `node-forge` (GHSA-86w9-cpqp-85rv, no fix) and an old `tmp`, which
+  would break the clean `npm audit` gate. The version lives in `MCPB_VERSION` in the script and in the CI
+  step; a test keeps them equal.
+- Native module: `@napi-rs/keyring` resolves one platform package (`keyring-win32-x64-msvc` here), so a
+  bundle is built on and for one OS/arch. CI validates the manifest only (`mcp` job), never packs.
+- Evidence (2026-10-12, Windows 11 x64, Node 22.23.2): `validate` passes; `pack:mcpb` wrote a 4.52 MiB
+  bundle (14.2 MB unpacked, 2,424 files, no `dist/tests`, no `src`, no dev dependencies); unpacked with
+  `mcpb unpack` into a temp directory, `node dist/cli.js version` and `help` exit 0, `serve` with the
+  manifest's args and unexpanded folder placeholders initializes and lists tools with no download tools
+  offered, and `status` loads the keyring binding ("Not connected"). Not verified: installation inside
+  Claude Desktop itself, macOS/Linux bundles, and a run on Node 24.
+
 ## Known gaps
 
 - **Actor names outside the owner's list are not gated**: period `lockedBy`/`reopenedBy`, ARD history
@@ -169,7 +201,7 @@ parses the C# to keep them in step.
   optional on others) need `--upload-root`; they are listed regardless and say so when called without it.
 - **Bodies with nullable C# value types** are sent as given; omitting a non-nullable field lets the server
   default it (false/0). Update tools say "replaces the whole record".
-- The MCPB bundle and Private Server VM acceptance are phase 3.
+- Private Server VM acceptance is phase 3 (V1); the Desktop bundle is above.
 - CI wiring, `verify-no-direct-filing-submission.ps1` scanning `mcp/`, and the non-`mcp/` docs are Task 11
   items outside this package and were not touched.
 

@@ -150,6 +150,48 @@ try {
     }
     Assert-Fails "runtime Owner password" $ownerPasswordLeak "api must not receive the one-time initial Owner password"
 
+    $publicMcp = Write-MutatedCompose "public-mcp.yml" {
+        param($source)
+        $source -replace '(?m)^  mcp:\r?\n', "  mcp:`n    ports:`n      - `"127.0.0.1:3100:3100`"`n"
+    }
+    Assert-Fails "published MCP connector port" $publicMcp "mcp must not publish a host port"
+
+    $mcpOnIngress = Write-MutatedCompose "mcp-on-ingress.yml" {
+        param($source)
+        $source -replace '(?m)^      - frontend_api\r?\n    secrets:\r?\n      - accounts_mcp_api_key\r?$', "      - frontend_api`n      - frontend_ingress`n    secrets:`n      - accounts_mcp_api_key"
+    }
+    Assert-Fails "MCP connector on loopback ingress" $mcpOnIngress "mcp networks expected"
+
+    $mcpFrontendKey = Write-MutatedCompose "mcp-frontend-key.yml" {
+        param($source)
+        $source -replace '(?m)^      - accounts_mcp_api_key\r?$', "      - accounts_mcp_api_key`n      - accounts_api_key"
+    }
+    Assert-Fails "MCP connector holding the frontend key" $mcpFrontendKey "mcp must mount only its own service key"
+
+    $mcpMutableImage = Write-MutatedCompose "mcp-mutable-image.yml" {
+        param($source)
+        $source.Replace('"${ACCOUNTS_MCP_IMAGE:?set ACCOUNTS_MCP_IMAGE to an immutable digest reference}"', '"ghcr.io/example/accounts-mcp:latest"')
+    }
+    Assert-Fails "mutable MCP connector image" $mcpMutableImage "mcp image must be an immutable lowercase digest reference"
+
+    $missingMcpRoute = Write-MutatedCompose "missing-mcp-route.yml" {
+        param($source)
+        $source -replace '(?m)^      MCP_URL: http://mcp:3100/mcp\r?\n', ''
+    }
+    Assert-Fails "frontend without the /mcp upstream" $missingMcpRoute "frontend environment MCP_URL"
+
+    $loopbackIssuer = Write-MutatedCompose "loopback-issuer.yml" {
+        param($source)
+        $source.Replace('Connector__PublicBaseUrl: "${PRIVATE_CONNECTOR_PUBLIC_ORIGIN:?set PRIVATE_CONNECTOR_PUBLIC_ORIGIN to the exact connector origin}"', 'Connector__PublicBaseUrl: "${PRIVATE_LOCAL_ORIGIN:?set PRIVATE_LOCAL_ORIGIN to the exact loopback HTTP origin}"')
+    }
+    Assert-Fails "connector issuer pinned to the loopback origin" $loopbackIssuer "api environment Connector__PublicBaseUrl"
+
+    $plaintextMcpHash = Write-MutatedCompose "plaintext-mcp-hash.yml" {
+        param($source)
+        $source.Replace('ApiAccess__Keys__1__KeyHash_FILE: /run/secrets/accounts_mcp_api_key_hash', 'ApiAccess__Keys__1__KeyHash: "0000000000000000000000000000000000000000000000000000000000000000"')
+    }
+    Assert-Fails "MCP service key hash outside a secret file" $plaintextMcpHash "ApiAccess__Keys__1__KeyHash_FILE"
+
     Test-LoopbackIngressNetwork
 
     Write-Host "Private Server compose verifier mutation and live loopback tests OK"

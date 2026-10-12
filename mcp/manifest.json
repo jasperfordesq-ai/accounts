@@ -1,0 +1,1028 @@
+{
+  "manifest_version": "0.2",
+  "name": "filingbridge",
+  "display_name": "FilingBridge",
+  "version": "0.1.0",
+  "description": "Prepare Irish statutory accounts, CRO filing outputs and Revenue CT1 support in FilingBridge, as the person who connected it.",
+  "long_description": "The FilingBridge connector calls FilingBridge's own API as you, within your role and company assignments, at the access level and data scope you chose when you signed in. Every limit is enforced by FilingBridge, not by this extension. Removals and irreversible or privileged steps stop and wait for you to approve them in your own terminal or on the web approvals page. CRO and ROS final submission remain external actions recorded in workflow state.\n\nThis extension never asks for your password. Before first use, sign in once in a terminal with the same profile and address you enter here, for example: node dist/cli.js connect --profile private --base-url http://127.0.0.1:3500 --tenant-slug <workspace> --email you@example.ie (run from the extension's folder or a checkout of the connector). The session is kept in your operating system's credential store.\n\nCreated by Jasper Ford; contributor hOUR Timebank CLG (Ireland). Licensed AGPL-3.0-or-later.",
+  "author": {
+    "name": "Jasper Ford"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jasperfordesq-ai/accounts.git"
+  },
+  "homepage": "https://github.com/jasperfordesq-ai/accounts/tree/main/mcp#readme",
+  "documentation": "https://github.com/jasperfordesq-ai/accounts/blob/main/mcp/README.md",
+  "support": "https://github.com/jasperfordesq-ai/accounts/issues",
+  "server": {
+    "type": "node",
+    "entry_point": "dist/cli.js",
+    "mcp_config": {
+      "command": "node",
+      "args": [
+        "${__dirname}/dist/cli.js",
+        "serve",
+        "--profile",
+        "${user_config.profile}",
+        "--base-url",
+        "${user_config.base_url}",
+        "--download-dir",
+        "${user_config.download_dir}",
+        "--upload-root",
+        "${user_config.upload_root}"
+      ]
+    }
+  },
+  "user_config": {
+    "base_url": {
+      "type": "string",
+      "title": "FilingBridge address",
+      "description": "The address you open FilingBridge at, with no path: http://127.0.0.1:3500 for a Private Server on this computer, https://<host>.<tailnet>.ts.net through Tailscale Serve, or your https address for a public installation. Use exactly the address you gave connect.",
+      "required": true
+    },
+    "profile": {
+      "type": "string",
+      "title": "Profile",
+      "description": "Which kind of FilingBridge the address may be: private (a Private Server on this computer or a Tailscale *.ts.net name), default (any https address) or local (a Development stack on this computer). The connector refuses an address its profile does not allow.",
+      "required": true,
+      "default": "private"
+    },
+    "download_dir": {
+      "type": "directory",
+      "title": "Folder downloads are written into",
+      "description": "Leave this empty and downloads (accounts PDFs, filing packs, iXBRL, CT1 worksheet) are not offered at all. Files are written here and never returned to the assistant; only the path and checksum are.",
+      "required": false
+    },
+    "upload_root": {
+      "type": "directory",
+      "title": "Folder files may be uploaded from",
+      "description": "Leave this empty and the bank CSV import and evidence attachments are not offered at all. Nothing outside this folder can be read, however a path is spelled.",
+      "required": false
+    }
+  },
+  "compatibility": {
+    "platforms": [
+      "win32",
+      "darwin",
+      "linux"
+    ],
+    "runtimes": {
+      "node": ">=24 <25"
+    }
+  },
+  "keywords": [
+    "accounts",
+    "ireland",
+    "cro",
+    "revenue",
+    "filingbridge"
+  ],
+  "license": "AGPL-3.0-or-later",
+  "tools": [
+    {
+      "name": "session_info",
+      "description": "Which FilingBridge workspace this connector is signed in to, the person's role, the access level (read, write or admin), the data scope (withheld or full), the change budget and approval window, and which file directories are configured."
+    },
+    {
+      "name": "search",
+      "description": "Find companies, accounting periods, officers, account categories, notes and bank transactions by text, within the companies this account may access."
+    },
+    {
+      "name": "fetch",
+      "description": "Read the record behind a reference returned by search, such as filingbridge://period/34?companyId=12."
+    },
+    {
+      "name": "company_list",
+      "description": "Every company this account may access, with its type, size flags, period count and latest period."
+    },
+    {
+      "name": "company_get",
+      "description": "One company in full: legal details, flags that drive size classification and filing obligations, its officers and its accounting periods."
+    },
+    {
+      "name": "company_create",
+      "description": "Create a company record in this workspace."
+    },
+    {
+      "name": "company_onboard",
+      "description": "Create a company together with its officers, its first accounting period, its opening bank account and its default chart of accounts, atomically."
+    },
+    {
+      "name": "company_update",
+      "description": "Change a company's legal details and flags."
+    },
+    {
+      "name": "company_delete",
+      "description": "Quarantine a company: it disappears from every list and becomes read-only, with immutable evidence of who did it and why, and can be recovered with company_recover."
+    },
+    {
+      "name": "company_recover",
+      "description": "Recover a quarantined company, restoring it to the lists."
+    },
+    {
+      "name": "company_quarantined_list",
+      "description": "Companies in quarantine, with when and the evidence digest."
+    },
+    {
+      "name": "company_annual_return_date_history",
+      "description": "The company's Annual Return Date history: each ARD, its legal source, evidence and when it took effect."
+    },
+    {
+      "name": "company_annual_return_date_change",
+      "description": "Record an evidence-backed change of the Annual Return Date (for example a CRO-acknowledged B73 extension)."
+    },
+    {
+      "name": "officer_list",
+      "description": "The company's directors and secretaries with their appointment and resignation dates."
+    },
+    {
+      "name": "officer_create",
+      "description": "Add a director or secretary."
+    },
+    {
+      "name": "officer_update",
+      "description": "Change an officer, for example to record a resignation date."
+    },
+    {
+      "name": "officer_delete",
+      "description": "Remove an officer recorded in error."
+    },
+    {
+      "name": "period_list",
+      "description": "The company's accounting periods, newest first, with status, size classification and filing regime."
+    },
+    {
+      "name": "period_get",
+      "description": "One accounting period with its status, lock, size classification and filing regime."
+    },
+    {
+      "name": "period_create",
+      "description": "Open a new accounting period (at most 18 months)."
+    },
+    {
+      "name": "period_status_set",
+      "description": "Move a period between Draft, Review, Finalised and Filed."
+    },
+    {
+      "name": "size_figures_save",
+      "description": "Save the period's turnover, balance sheet total and average employees for the Companies Act 2014 size test, without running it."
+    },
+    {
+      "name": "size_classify",
+      "description": "Run the size classification: the two-of-three threshold test (micro, small, medium) with the consecutive-year rule and the micro exclusions."
+    },
+    {
+      "name": "classification_prerequisites",
+      "description": "What the size classification still needs: prior-period figures, a historic anchor, or saved figures."
+    },
+    {
+      "name": "historic_anchor_record",
+      "description": "Record evidence-backed prior-year figures (a historic anchor) where FilingBridge holds no prior period, so the consecutive-year rule can be applied."
+    },
+    {
+      "name": "historic_anchor_retire",
+      "description": "Retire the current historic anchor; its evidence stays in the archive."
+    },
+    {
+      "name": "historic_anchor_archive_list",
+      "description": "Every historic anchor recorded for the period, current and retired, with evidence digests."
+    },
+    {
+      "name": "historic_anchor_evidence_download",
+      "description": "Save one historic anchor's evidence PDF into --download-dir and report the path and SHA-256."
+    },
+    {
+      "name": "size_class_override",
+      "description": "Override the computed size class with an evidenced one."
+    },
+    {
+      "name": "filing_regime_determine",
+      "description": "Determine the filing regime (Micro FRS 105, Small, Small Abridged, Medium or Full) from the size class, optionally electing one the class allows."
+    },
+    {
+      "name": "filing_regime_get",
+      "description": "The period's filing regime and what it requires: statements, notes, audit exemption (s.360) and abridgement."
+    },
+    {
+      "name": "member_audit_notice_set",
+      "description": "Record whether members served a section 334 notice requiring an audit, which removes the audit exemption."
+    },
+    {
+      "name": "bank_account_list",
+      "description": "The company's bank accounts with their currency and opening balance."
+    },
+    {
+      "name": "bank_account_create",
+      "description": "Add a bank account statements will be imported into."
+    },
+    {
+      "name": "bank_account_update",
+      "description": "Change a bank account."
+    },
+    {
+      "name": "bank_account_delete",
+      "description": "Remove a bank account that has no retained import evidence."
+    },
+    {
+      "name": "bank_statement_import",
+      "description": "Import a CSV bank statement (AIB, Bank of Ireland, Revolut, Stripe or a generic layout is detected automatically) into a bank account for one accounting period."
+    },
+    {
+      "name": "transaction_list",
+      "description": "Imported transactions for a period, paged, with filters, and counts of categorised and uncategorised rows."
+    },
+    {
+      "name": "transaction_categorise",
+      "description": "Assign one transaction to an account category."
+    },
+    {
+      "name": "transaction_bulk_categorise",
+      "description": "Assign many transactions to one account category in a single change."
+    },
+    {
+      "name": "transaction_duplicate_review_list",
+      "description": "Imported rows held as possible duplicates of earlier imports, and exact re-import batches, each with the status and version a decision must quote."
+    },
+    {
+      "name": "transaction_duplicate_decide",
+      "description": "Decide one duplicate candidate: keep it (Retained) or exclude it (Discarded)."
+    },
+    {
+      "name": "transaction_duplicate_batch_decide",
+      "description": "Decide every candidate in one exact re-import batch at once."
+    },
+    {
+      "name": "category_list",
+      "description": "The company's chart of accounts (Irish default: 51 categories), active ones by default."
+    },
+    {
+      "name": "category_create",
+      "description": "Add an account category with its tax treatment and statement presentation."
+    },
+    {
+      "name": "category_seed",
+      "description": "Seed the default chart of accounts for the company's chart variant."
+    },
+    {
+      "name": "transaction_rule_list",
+      "description": "Automatic categorisation rules: description patterns and the categories they assign, by priority."
+    },
+    {
+      "name": "transaction_rule_create",
+      "description": "Add a rule that categorises transactions whose description matches a pattern."
+    },
+    {
+      "name": "transaction_rule_delete",
+      "description": "Remove a categorisation rule."
+    },
+    {
+      "name": "chart_adoption_plan",
+      "description": "Plan a move to another chart of accounts (for example the charity CLG chart): which categories map where and what would be refused."
+    },
+    {
+      "name": "chart_adoption_apply",
+      "description": "Adopt the planned chart of accounts, exactly as the quoted plan describes."
+    },
+    {
+      "name": "debtor_list",
+      "description": "Amounts owed to the company at the period end: trade debtors, other debtors and prepayments."
+    },
+    {
+      "name": "debtor_create",
+      "description": "Record an amount owed to the company at the period end."
+    },
+    {
+      "name": "debtor_update",
+      "description": "Change a debtor."
+    },
+    {
+      "name": "debtor_delete",
+      "description": "Remove a debtor recorded in error."
+    },
+    {
+      "name": "creditor_list",
+      "description": "Amounts the company owes at the period end: trade creditors, accruals, tax and others, split by when due."
+    },
+    {
+      "name": "creditor_create",
+      "description": "Record an amount the company owes at the period end."
+    },
+    {
+      "name": "creditor_update",
+      "description": "Change a creditor."
+    },
+    {
+      "name": "creditor_delete",
+      "description": "Remove a creditor recorded in error."
+    },
+    {
+      "name": "fixed_asset_list",
+      "description": "The company's fixed asset register: cost, depreciation method, useful life, disposals and capital-allowance treatment."
+    },
+    {
+      "name": "fixed_asset_create",
+      "description": "Add a fixed asset."
+    },
+    {
+      "name": "fixed_asset_update",
+      "description": "Change a fixed asset."
+    },
+    {
+      "name": "fixed_asset_delete",
+      "description": "Remove a fixed asset recorded in error."
+    },
+    {
+      "name": "inventory_list",
+      "description": "Stock held at the period end and its valuation basis."
+    },
+    {
+      "name": "inventory_create",
+      "description": "Record stock held at the period end."
+    },
+    {
+      "name": "inventory_update",
+      "description": "Change a stock line."
+    },
+    {
+      "name": "inventory_delete",
+      "description": "Remove a stock line recorded in error."
+    },
+    {
+      "name": "loan_list",
+      "description": "Loans and borrowings of the company: lender, balance, rate and the within/after one year split."
+    },
+    {
+      "name": "loan_create",
+      "description": "Record a loan to the company."
+    },
+    {
+      "name": "loan_update",
+      "description": "Change a loan."
+    },
+    {
+      "name": "loan_delete",
+      "description": "Remove a loan recorded in error."
+    },
+    {
+      "name": "loan_snapshot_list",
+      "description": "Each loan's movement for the period: opening, drawdowns, repayments, closing and the due split."
+    },
+    {
+      "name": "loan_snapshot_create",
+      "description": "Record a loan's movement for the period; it must reconcile."
+    },
+    {
+      "name": "loan_snapshot_update",
+      "description": "Change a loan balance snapshot."
+    },
+    {
+      "name": "loan_snapshot_delete",
+      "description": "Remove a loan balance snapshot recorded in error."
+    },
+    {
+      "name": "director_loan_list",
+      "description": "Loans, quasi-loans, credit transactions and guarantees between the company and its directors or connected persons (sections 236 to 245, disclosure under section 307)."
+    },
+    {
+      "name": "director_loan_create",
+      "description": "Record a director-loan arrangement with its balances, legal basis and evidence."
+    },
+    {
+      "name": "director_loan_update",
+      "description": "Change a director-loan arrangement, for example to record its compliance review."
+    },
+    {
+      "name": "director_loan_delete",
+      "description": "Remove a director-loan arrangement recorded in error."
+    },
+    {
+      "name": "payroll_get",
+      "description": "The period's payroll summary: wages, directors' fees, employer PRSI, pensions and staff numbers."
+    },
+    {
+      "name": "payroll_set",
+      "description": "Record or replace the period's payroll summary (aggregate figures only)."
+    },
+    {
+      "name": "tax_balance_list",
+      "description": "Tax balances at the period end by type: corporation tax, VAT, PAYE and RCT."
+    },
+    {
+      "name": "tax_balance_set",
+      "description": "Record or replace one tax balance (liability, paid, balance)."
+    },
+    {
+      "name": "corporation_tax_due_confirm",
+      "description": "Confirm that corporation tax is due despite a charitable tax exemption, giving the profits outside the exemption."
+    },
+    {
+      "name": "dividend_list",
+      "description": "Dividends declared and paid in the period."
+    },
+    {
+      "name": "dividend_create",
+      "description": "Record a dividend."
+    },
+    {
+      "name": "dividend_update",
+      "description": "Change a dividend."
+    },
+    {
+      "name": "dividend_delete",
+      "description": "Remove a dividend recorded in error."
+    },
+    {
+      "name": "share_capital_list",
+      "description": "The company's share capital by class: nominal value, number issued, paid status, issue and cancellation dates."
+    },
+    {
+      "name": "share_capital_create",
+      "description": "Record a class of issued share capital."
+    },
+    {
+      "name": "share_capital_update",
+      "description": "Change a share class."
+    },
+    {
+      "name": "share_capital_delete",
+      "description": "Remove a share class recorded in error."
+    },
+    {
+      "name": "opening_balance_list",
+      "description": "Opening balances by account category for the period, with their source and review state."
+    },
+    {
+      "name": "opening_balance_set",
+      "description": "Record or replace the opening balance of one account category."
+    },
+    {
+      "name": "opening_balance_delete",
+      "description": "Remove one category's opening balance."
+    },
+    {
+      "name": "year_end_summary",
+      "description": "A summary of the year-end questionnaire: what has been recorded in each section and what is still outstanding."
+    },
+    {
+      "name": "note_list",
+      "description": "The notes to the financial statements for the period, in order, with whether each is included and required."
+    },
+    {
+      "name": "note_generate",
+      "description": "Generate the regime-aware notes (accounting policies, fixed assets, debtors, creditors, share capital, staff, directors and the rest) from the period's records."
+    },
+    {
+      "name": "note_create",
+      "description": "Add a custom note."
+    },
+    {
+      "name": "note_update",
+      "description": "Edit a note's title, text or inclusion."
+    },
+    {
+      "name": "note_delete",
+      "description": "Remove a custom note."
+    },
+    {
+      "name": "post_balance_sheet_event_list",
+      "description": "Events after the balance sheet date, adjusting and non-adjusting (FRS 102 section 32)."
+    },
+    {
+      "name": "post_balance_sheet_event_create",
+      "description": "Record an event after the balance sheet date."
+    },
+    {
+      "name": "post_balance_sheet_event_delete",
+      "description": "Remove a post balance sheet event recorded in error."
+    },
+    {
+      "name": "related_party_transaction_list",
+      "description": "Transactions with related parties for disclosure (FRS 102 section 33)."
+    },
+    {
+      "name": "related_party_transaction_create",
+      "description": "Record a related party transaction. partyName is required by FilingBridge and is personal data, so this needs a session with full data scope."
+    },
+    {
+      "name": "related_party_transaction_delete",
+      "description": "Remove a related party transaction recorded in error."
+    },
+    {
+      "name": "contingent_liability_list",
+      "description": "Contingent liabilities (guarantees, litigation, warranties) and their likelihood."
+    },
+    {
+      "name": "contingent_liability_create",
+      "description": "Record a contingent liability."
+    },
+    {
+      "name": "contingent_liability_delete",
+      "description": "Remove a contingent liability recorded in error."
+    },
+    {
+      "name": "going_concern_get",
+      "description": "The directors' going-concern confirmation and note for the period."
+    },
+    {
+      "name": "going_concern_set",
+      "description": "Record the directors' going-concern confirmation and note."
+    },
+    {
+      "name": "director_loan_compliance",
+      "description": "The director-loan compliance review: each arrangement against sections 236 to 245 and 307, the 10% relevant-assets test, blockers and the sign-off packet."
+    },
+    {
+      "name": "director_loan_section_307_note",
+      "description": "The generated section 307 director-loan disclosure note, as it will appear in the financial statements."
+    },
+    {
+      "name": "year_end_review_list",
+      "description": "Which year-end sections have been reviewed and confirmed, by whom and when."
+    },
+    {
+      "name": "year_end_review_confirm",
+      "description": "Confirm (or unconfirm) the review of one year-end section, such as debtors or the directors' report principal activities."
+    },
+    {
+      "name": "adjustment_list",
+      "description": "Year-end adjusting journals for the period: depreciation, accruals, prepayments, stock, tax and manual ones."
+    },
+    {
+      "name": "adjustment_generate",
+      "description": "Generate the automatic adjustments (depreciation, accruals, prepayments, stock, corporation tax, director-loan reclassification) from the year-end records."
+    },
+    {
+      "name": "adjustment_create",
+      "description": "Add a manual adjusting journal between two categories, with its reason and basis."
+    },
+    {
+      "name": "adjustment_update",
+      "description": "Change an unapproved adjustment."
+    },
+    {
+      "name": "adjustment_delete",
+      "description": "Remove an adjustment."
+    },
+    {
+      "name": "adjustment_approve",
+      "description": "Approve an adjustment so it posts to the adjusted trial balance."
+    },
+    {
+      "name": "adjustment_summary",
+      "description": "Totals of the period's adjustments by type and approval state, and their effect on profit and net assets."
+    },
+    {
+      "name": "audit_log_list",
+      "description": "The company's tamper-evident audit trail, newest first: what changed, on which record, when, with the integrity hash chain."
+    },
+    {
+      "name": "audit_integrity_verify",
+      "description": "Verify the company's audit log hash chain end to end and report any break."
+    },
+    {
+      "name": "audit_checkpoint_create",
+      "description": "Sign a new integrity checkpoint over the company's audit log as it stands now."
+    },
+    {
+      "name": "audit_checkpoint_latest",
+      "description": "Verify the audit log against the latest signed checkpoint."
+    },
+    {
+      "name": "statement_trial_balance",
+      "description": "The adjusted trial balance: every category's debit and credit after approved adjustments."
+    },
+    {
+      "name": "statement_profit_and_loss",
+      "description": "The profit and loss account for the period, with comparatives where a prior period exists."
+    },
+    {
+      "name": "statement_balance_sheet",
+      "description": "The balance sheet at the period end, in the format the filing regime requires."
+    },
+    {
+      "name": "statement_readiness",
+      "description": "Completeness and filing-readiness score for the period, with each check that is blocking final output."
+    },
+    {
+      "name": "statement_sources",
+      "description": "Where each statement line comes from: transactions, year-end records and adjustments."
+    },
+    {
+      "name": "statement_cash_flow",
+      "description": "The cash flow statement (FRS 102 section 7), where the regime requires one."
+    },
+    {
+      "name": "statement_equity_changes",
+      "description": "The statement of changes in equity."
+    },
+    {
+      "name": "working_papers_generate",
+      "description": "Generate a new, versioned set of accountant working papers from the period as it stands."
+    },
+    {
+      "name": "working_papers_index",
+      "description": "The latest working-paper set: its version, when and from what it was generated, and its sections."
+    },
+    {
+      "name": "working_paper_lead_schedules",
+      "description": "Lead schedules: each statement line with its supporting balances and sources."
+    },
+    {
+      "name": "working_paper_categorised_transactions",
+      "description": "Every categorised transaction grouped by category, as tested in the working papers."
+    },
+    {
+      "name": "working_paper_review_exceptions",
+      "description": "Exceptions for the accountant to review: uncategorised rows, unreviewed balances, unusual items."
+    },
+    {
+      "name": "working_paper_adjusted_trial_balance",
+      "description": "The adjusted trial balance as captured in the working papers."
+    },
+    {
+      "name": "working_paper_corporation_tax_bridge",
+      "description": "The bridge from accounting profit to taxable profit (add-backs, capital allowances, losses)."
+    },
+    {
+      "name": "accounts_package_download",
+      "description": "Save the draft statutory accounts PDF (cover, directors' report, statements, notes) into --download-dir."
+    },
+    {
+      "name": "agm_pack_download",
+      "description": "Save the draft AGM pack PDF into --download-dir."
+    },
+    {
+      "name": "cro_filing_pack_preview_download",
+      "description": "Save a preview of the CRO filing pack PDF into --download-dir without recording it."
+    },
+    {
+      "name": "cro_filing_pack_generate",
+      "description": "Generate the CRO filing pack, record that it was generated (with its source fingerprint) and save the PDF into --download-dir."
+    },
+    {
+      "name": "cro_filing_pack_final_download",
+      "description": "Save the released, final CRO filing pack into --download-dir."
+    },
+    {
+      "name": "signature_page_preview_download",
+      "description": "Save a preview of the CRO signature page into --download-dir without recording it."
+    },
+    {
+      "name": "signature_page_generate",
+      "description": "Generate the CRO signature page, record that it was generated and save the PDF into --download-dir."
+    },
+    {
+      "name": "signature_page_final_download",
+      "description": "Save the released, final signature page into --download-dir."
+    },
+    {
+      "name": "directors_report_data",
+      "description": "The directors' report content: principal activities, directors, registered office, audit information and statements."
+    },
+    {
+      "name": "tax_computation",
+      "description": "The corporation tax computation: accounting profit to taxable profit at 12.5% trading and 25% non-trading, capital allowances (s.284 TCA 1997), losses and the liability."
+    },
+    {
+      "name": "ct1_support",
+      "description": "CT1 support data: the figures for each CT1 panel FilingBridge prepares, for the person to enter in ROS."
+    },
+    {
+      "name": "ct_scope_review_get",
+      "description": "The corporation tax scope review (close company, groups, gains, foreign income, losses) and the computation it allows."
+    },
+    {
+      "name": "ct_scope_review_set",
+      "description": "Record the corporation tax scope review."
+    },
+    {
+      "name": "ct_filing_support_get",
+      "description": "Corporation tax filing support: preliminary tax, payment dates and amounts, payments recorded, and what remains."
+    },
+    {
+      "name": "ct_filing_support_set",
+      "description": "Record the facts filing support needs: the prior period's liability, section 239 tax and special situations."
+    },
+    {
+      "name": "ct_payment_record",
+      "description": "Record a corporation tax payment made to Revenue, with its evidence reference."
+    },
+    {
+      "name": "ct_payment_delete",
+      "description": "Remove a recorded corporation tax payment entered in error."
+    },
+    {
+      "name": "ct1_worksheet",
+      "description": "The CT1 support worksheet: each ROS field FilingBridge can prepare, its value and its source."
+    },
+    {
+      "name": "ct1_worksheet_csv_download",
+      "description": "Save the CT1 support worksheet as CSV into --download-dir."
+    },
+    {
+      "name": "ixbrl_preview_download",
+      "description": "Save a draft iXBRL (FRC Irish FRS taxonomy) financial statements file into --download-dir."
+    },
+    {
+      "name": "ixbrl_final_download",
+      "description": "Save the released, final iXBRL file into --download-dir, for the person to attach in ROS themselves."
+    },
+    {
+      "name": "deadline_dashboard",
+      "description": "Upcoming and overdue CRO, Revenue and charity deadlines across every company this account may access."
+    },
+    {
+      "name": "deadline_list",
+      "description": "Every filing deadline of one company, with its due date, basis (Irish public holidays applied) and filed state."
+    },
+    {
+      "name": "deadline_upcoming",
+      "description": "The company's deadlines that are not yet filed, soonest first."
+    },
+    {
+      "name": "deadline_jeopardy",
+      "description": "Deadlines at risk: late filing consequences such as loss of audit exemption, CRO late fees and Revenue surcharge."
+    },
+    {
+      "name": "deadline_calculate",
+      "description": "Calculate (or recalculate) the period's CRO, Revenue and charity deadlines from the ARD and period end."
+    },
+    {
+      "name": "deadline_override",
+      "description": "Override a computed due date with an evidenced one."
+    },
+    {
+      "name": "deadline_mark_filed",
+      "description": "Record that a return was filed externally, with the filing date and the external reference."
+    },
+    {
+      "name": "charity_info_get",
+      "description": "The company's charity details: RCN, objectives, activities, governance code compliance and trustee remuneration."
+    },
+    {
+      "name": "charity_info_set",
+      "description": "Record or replace the company's charity details."
+    },
+    {
+      "name": "charity_sorp_decision",
+      "description": "Whether the Charities SORP applies to the period, and on what basis (income thresholds, voluntary adoption)."
+    },
+    {
+      "name": "charity_trustee_review_set",
+      "description": "Record the review of the trustee population for the period, needed before charity artifacts can be generated."
+    },
+    {
+      "name": "charity_sofa",
+      "description": "The Statement of Financial Activities by fund."
+    },
+    {
+      "name": "charity_sofa_reconciliation",
+      "description": "Reconciliation of the SoFA to the profit and loss account and balance sheet."
+    },
+    {
+      "name": "charity_trustees_report",
+      "description": "The Trustees' Annual Report content: objectives, activities, governance, trustees (names) and remuneration."
+    },
+    {
+      "name": "charity_artifact_status",
+      "description": "Whether the SoFA and Trustees' Annual Report are generated, current or stale, and why."
+    },
+    {
+      "name": "charity_sofa_review_pdf_download",
+      "description": "Save a review copy of the SoFA PDF into --download-dir."
+    },
+    {
+      "name": "charity_trustees_report_review_pdf_download",
+      "description": "Save a review copy of the Trustees' Annual Report PDF into --download-dir."
+    },
+    {
+      "name": "charity_sofa_final_download",
+      "description": "Save the released, final SoFA PDF into --download-dir."
+    },
+    {
+      "name": "charity_trustees_report_final_download",
+      "description": "Save the released, final Trustees' Annual Report PDF into --download-dir."
+    },
+    {
+      "name": "charity_fund_list",
+      "description": "The charity's funds for the period (unrestricted, restricted, endowment) and their movements."
+    },
+    {
+      "name": "charity_fund_create",
+      "description": "Record a fund and its movements for the period."
+    },
+    {
+      "name": "charity_fund_update",
+      "description": "Change a fund balance."
+    },
+    {
+      "name": "charity_fund_delete",
+      "description": "Remove a fund recorded in error."
+    },
+    {
+      "name": "filing_status",
+      "description": "The filing workflow for the period: CRO, Revenue and charity status, what is generated and approved, and every blocker."
+    },
+    {
+      "name": "filing_readiness_profile",
+      "description": "What this period must produce and file under its regime and company type, and how ready each item is."
+    },
+    {
+      "name": "cro_filing_status_set",
+      "description": "Move the CRO filing through its workflow (in progress, ready for review, approved, recorded as filed in CORE with its reference, accepted, rejected, correction required)."
+    },
+    {
+      "name": "cro_payment_confirm",
+      "description": "Record that the CORE filing fee was paid, after the filing is recorded as filed."
+    },
+    {
+      "name": "cro_not_delivered_record",
+      "description": "Treat a CRO filing that was sent back or rejected as not delivered, so the late-filing position is assessed from the original date."
+    },
+    {
+      "name": "charity_report_generated_record",
+      "description": "Record that the charity SoFA or Trustees' Annual Report was generated for the annual return pack."
+    },
+    {
+      "name": "charity_filing_status_set",
+      "description": "Move the Charities Regulator annual return through its workflow, with its reference."
+    },
+    {
+      "name": "revenue_external_validation_record",
+      "description": "Record that the final iXBRL file was validated outside FilingBridge (for example with Revenue's test facility), binding the record to the file's SHA-256."
+    },
+    {
+      "name": "revenue_filing_status_set",
+      "description": "Move the Revenue CT1 return through its workflow, with the ROS notice number."
+    },
+    {
+      "name": "cro_document_generated_mark",
+      "description": "Retired: FilingBridge now records CRO document generation itself when cro_filing_pack_generate or signature_page_generate runs, and refuses this."
+    },
+    {
+      "name": "ixbrl_validate",
+      "description": "Run FilingBridge's own validation of the generated iXBRL and record the result."
+    },
+    {
+      "name": "directors_approval_get",
+      "description": "The directors' approval of the financial statements (s.324): current state, approval pages and history."
+    },
+    {
+      "name": "directors_approval_page_generate",
+      "description": "Generate the directors' approval page for signature, naming the signing directors and the approval date."
+    },
+    {
+      "name": "directors_approval_page_download",
+      "description": "Save a generated directors' approval page PDF into --download-dir, for the directors to sign."
+    },
+    {
+      "name": "directors_approval_record",
+      "description": "Record the directors' signed approval (s.324) with the signed page and the board resolution, both from --upload-root."
+    },
+    {
+      "name": "directors_approval_withdraw",
+      "description": "Withdraw the recorded directors' approval, for example before changing the approval date."
+    },
+    {
+      "name": "cro_signing_pack_record",
+      "description": "Record the signed CRO signature pack (director and secretary), from --upload-root."
+    },
+    {
+      "name": "auditor_report_record",
+      "description": "Record the statutory auditor's signed report for an audited company, from --upload-root."
+    },
+    {
+      "name": "accountant_review_record",
+      "description": "Record the qualified accountant's review attestation, optionally with the review letter from --upload-root."
+    },
+    {
+      "name": "handoff_workspace",
+      "description": "The external filing handoff workspace: the prepared CRO B1 and CT1 support facts, recorded filing authorities, snapshots and outcomes, and gaps."
+    },
+    {
+      "name": "handoff_authority_record",
+      "description": "Record the evidence of a presenter's or agent's authority to act for the company at the CRO or in ROS."
+    },
+    {
+      "name": "handoff_authority_revoke",
+      "description": "Revoke a recorded filing authority."
+    },
+    {
+      "name": "handoff_cro_snapshot_create",
+      "description": "Freeze a hash-bound CRO B1 handoff snapshot: the facts the person will key into CORE, with officer and shareholder particulars."
+    },
+    {
+      "name": "handoff_revenue_snapshot_create",
+      "description": "Freeze a hash-bound CT1 support handoff snapshot for the person to complete in ROS."
+    },
+    {
+      "name": "handoff_snapshot_download",
+      "description": "Save a handoff snapshot's artifact (JSON) into --download-dir and report its SHA-256."
+    },
+    {
+      "name": "handoff_outcome_record",
+      "description": "Record what happened to a handoff snapshot outside FilingBridge: ready for manual handoff, filed externally, correction required, rejected, accepted, or superseded."
+    },
+    {
+      "name": "user_list",
+      "description": "Every user in this workspace with their role, company assignments, lock, MFA and lifecycle state."
+    },
+    {
+      "name": "user_create",
+      "description": "Create a user with a temporary password they must change at first sign-in."
+    },
+    {
+      "name": "user_invite",
+      "description": "Invite a user: returns a single-use invitation token (with its expiry) for the person to send them."
+    },
+    {
+      "name": "user_active_set",
+      "description": "Deactivate a user (revoking their sessions and connectors) or reactivate them."
+    },
+    {
+      "name": "user_unlock",
+      "description": "Clear a user's sign-in lockout."
+    },
+    {
+      "name": "user_password_reset",
+      "description": "Begin a password reset: returns a single-use reset token (with its expiry) and revokes the user's sessions."
+    },
+    {
+      "name": "user_role_set",
+      "description": "Change a user's role (Owner, Accountant, Reviewer or Client)."
+    },
+    {
+      "name": "user_companies_set",
+      "description": "Replace the list of companies a user may access."
+    },
+    {
+      "name": "user_sessions_revoke",
+      "description": "Sign a user out everywhere: browser sessions and connector sessions alike."
+    },
+    {
+      "name": "user_offboard",
+      "description": "Offboard a user permanently: deactivated, sessions and connectors revoked, assignments removed."
+    },
+    {
+      "name": "privacy_policy",
+      "description": "The workspace's privacy governance policy: retention periods, legal holds and the subject-rights process."
+    },
+    {
+      "name": "privacy_access_export",
+      "description": "Build a GDPR subject access export for one user and save it into --download-dir; the export itself never enters this conversation."
+    },
+    {
+      "name": "privacy_erasure_execute",
+      "description": "Carry out an approved erasure of one user's personal data, subject to legal holds and statutory retention."
+    },
+    {
+      "name": "privacy_retention_run",
+      "description": "Run the retention policy now, minimising records past their retention period."
+    },
+    {
+      "name": "privacy_incident_exercise_record",
+      "description": "Record the evidence of a completed security or privacy incident exercise."
+    },
+    {
+      "name": "deadline_risk_queue",
+      "description": "Every company's deadlines ranked by risk, for the people who run this workspace."
+    },
+    {
+      "name": "deadline_reminders_run",
+      "description": "Run the scheduled deadline reminder delivery now."
+    },
+    {
+      "name": "deadline_reminder_retry",
+      "description": "Retry one failed deadline reminder from the operator queue."
+    },
+    {
+      "name": "production_readiness",
+      "description": "The production-readiness evidence report for this deployment: release gates and their evidence."
+    },
+    {
+      "name": "platform_metrics",
+      "description": "PII-free operational signals: request rates, error rates and queue depths."
+    },
+    {
+      "name": "connector_approvals_pending",
+      "description": "Approvals waiting for the person you act for: what each one would do and when it expires."
+    },
+    {
+      "name": "connector_approval_get",
+      "description": "One approval: what it covers, when it expires, and whether it has been granted or used."
+    },
+    {
+      "name": "connector_sessions_list",
+      "description": "The connected agents of the person you act for: access level, data scope, device label and when last used."
+    },
+    {
+      "name": "connector_session_revoke",
+      "description": "Disconnect one connected agent (a whole session family) at once."
+    },
+    {
+      "name": "connector_activity_list",
+      "description": "What connected agents did, newest first: every change and every refusal, with the route, status and recorded reason."
+    }
+  ]
+}

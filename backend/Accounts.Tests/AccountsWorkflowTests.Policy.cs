@@ -2144,7 +2144,8 @@ public partial class AccountsWorkflowTests
             Assert.Contains(reviewedReference.Split('@')[1], actionPolicy);
         }
 
-        Assert.Equal(2, Regex.Matches(workflow, "uses: docker/build-push-action@").Count);
+        // Backend, frontend and the MCP connector (which the Private Server release runs) are built exactly once each.
+        Assert.Equal(3, Regex.Matches(workflow, "uses: docker/build-push-action@").Count);
         Assert.Contains("GITHUB_EVENT_NAME\" == \"push\"", workflow);
         Assert.Contains("GITHUB_REF\" == \"refs/heads/main\"", workflow);
         Assert.Contains("if: steps.promotion-mode.outputs.enabled == 'true'", workflow);
@@ -2167,7 +2168,10 @@ public partial class AccountsWorkflowTests
             "backend-sbom.spdx.json",
             "frontend-sbom.spdx.json",
             "backend-provenance.jsonl",
-            "frontend-provenance.jsonl"
+            "frontend-provenance.jsonl",
+            "mcp-trivy.json",
+            "mcp-sbom.spdx.json",
+            "mcp-provenance.jsonl"
         })
         {
             Assert.Contains(requiredEvidence, workflow + writer + verifier + machinePack + releasePack);

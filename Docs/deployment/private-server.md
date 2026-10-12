@@ -190,6 +190,64 @@ To stop sharing while retaining local use:
 .\FilingBridge.cmd tailscale disable
 ```
 
+## Connect an AI agent
+
+FilingBridge's MCP connector lets an AI agent (Claude Code, Codex, Claude Desktop) act as the
+FilingBridge user who connected it, inside that person's tenant, role, company assignments and
+chosen access level, with every irreversible step still approved by that person. See
+`Docs/architecture/mcp-connector.md` for the full model and `mcp/README.md` in the source
+repository for the connector package itself.
+
+The connector is **off by default**. `connector enable` is the only supported way to turn it on:
+
+```powershell
+.\FilingBridge.cmd connector enable                    # loopback origin, this computer only
+.\FilingBridge.cmd connector enable --origin tailscale # the Tailscale Serve HTTPS origin
+.\FilingBridge.cmd connector status
+.\FilingBridge.cmd connector disable
+```
+
+`enable` records the choice in the installation state, rewrites the environment (the origin
+becomes the OAuth issuer and MCP resource), recreates only the API and the `mcp` connector
+service, waits for health and prints the MCP URL with the Claude Code and Codex commands.
+`--origin tailscale` is refused until `tailscale enable` has configured Serve; if Tailscale is
+later disabled, the connector origin returns to loopback and agents connected through the
+Tailscale URL must reconnect. `disable` recreates only the API: agents are refused immediately,
+and their sessions stay listed and revocable at `/settings/agents`. If `enable` fails health, the
+previous connector configuration is re-applied.
+
+There are two ways for an agent to reach the server:
+
+| Connection | Where the connector runs | URL | Use it for |
+|---|---|---|---|
+| Remote (Streamable HTTP + OAuth) | the in-stack `mcp` service, reached only through the frontend | `http://localhost:3500/mcp` (loopback) or `https://<machine>.<tailnet>.ts.net/mcp` (Tailscale) | Claude Code and Codex, with no local install |
+| stdio | `filingbridge-mcp` on the agent's own computer (`mcp/README.md`), or the Claude Desktop bundle | `--base-url http://127.0.0.1:3500` or the Tailscale HTTPS origin | Claude Desktop; local file downloads/uploads |
+
+Remote clients:
+
+- **Claude Code**: `claude mcp add --transport http filingbridge http://localhost:3500/mcp`, then run
+  `/mcp`, choose *Authenticate* and sign in with workspace, email, password and authenticator code.
+- **Codex**: add `[mcp_servers.filingbridge]` with `url = "http://localhost:3500/mcp"` to
+  `~/.codex/config.toml`, then run `codex mcp login filingbridge`.
+
+Use the URL `connector enable` printed. The OAuth issuer is exactly one origin: when the connector
+uses loopback, only clients on this computer can sign in; for agents on other tailnet devices run
+`connector enable --origin tailscale` and give them the `https://…ts.net/mcp` URL.
+
+**Claude.ai custom connectors are not supported on a Private Server.** Claude.ai connects from
+Anthropic's cloud, so it needs a FilingBridge origin reachable from the public internet, and a
+Private Server never has public ingress (Tailscale Funnel stays unsupported). Use Public
+Production for Claude.ai.
+
+Boundaries that do not change: the `mcp` service has no host port and joins only the internal
+frontend/API network; it authenticates to the API with its own service key (the API holds only its
+hash). Agents approve nothing themselves: people approve actions at `/settings/approvals` and
+disconnect agents at `/settings/agents`. No tool submits anything to CRO or ROS.
+
+The connector's own keys are not recovery-critical. `restore` rotates the connector signing key
+(signing every agent out) and regenerates the MCP service key; `recover-host` creates fresh keys
+and leaves the connector disabled until you run `connector enable` again.
+
 ## Accounts and roles
 
 The existing roles remain authoritative:
@@ -354,6 +412,13 @@ explicit restore decision. `status` reports the retained pre-update set; run the
 command from the previous installed release directory after reviewing logs. End-user update never
 runs `git pull` against a working tree.
 
+Releases after `0.1.0-preview.9` add the MCP connector service (`images.mcp` in `release.json`).
+Updating an existing installation needs no manual secret work: the update's environment write
+generates the connector signing key and the MCP service key/hash pair, records the connector as
+disabled at the loopback origin, pulls the digest-pinned connector image with the others, and
+starts it with the API and frontend. A release whose `compose.private.yml` runs the connector but
+whose `release.json` lacks `images.mcp` is refused before any backup or downtime.
+
 ## Diagnostics and support bundles
 
 ```powershell
@@ -366,7 +431,9 @@ Diagnostics check state/config shape, required secret-file presence (including b
 authentication), the state drive's free-space floor, Docker/Compose availability, exact configured
 container image identities, the applied EF migration identity when PostgreSQL is running, the
 resolved Compose configuration, the recorded Tailscale route when enabled, and loopback-port state.
-The Docker Desktop VHDX can live on another disk and must also be monitored separately. `status`
+Releases that run the MCP connector service add checks for its service-key and hash files, that
+the key matches the hash the API holds, the `mcp` container image, and the recorded connector
+origin. The Docker Desktop VHDX can live on another disk and must also be monitored separately. `status`
 supplies container health, and `tailscale status` supplies Serve state. Container JSON logs are
 size/rotation bounded.
 
@@ -376,9 +443,11 @@ application log sample receives best-effort credential/email/IP/path redaction, 
 exception messages can still contain client or accounting metadata. Treat the bundle as sensitive,
 review every file manually, and share it only through an approved private channel.
 
-`local-check` writes an ACL-restricted JSON acceptance report proving all three owned services are
-running, loopback readiness passes, the frontend is published exactly on IPv4 loopback, API and
-PostgreSQL have no host ports, and the five authenticated business-data fingerprints are readable.
+`local-check` writes an ACL-restricted JSON acceptance report proving every owned runtime service
+(PostgreSQL, API, frontend and, from the release that adds it, the MCP connector service) is
+running, loopback readiness passes, the frontend is published exactly on IPv4 loopback, API,
+PostgreSQL and MCP connector have no host ports, and the five authenticated business-data
+fingerprints are readable.
 It does not log in as a human user.
 
 For an authenticated Owner journey, the compiled release includes `scripts\smoke-production.ps1`.

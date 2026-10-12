@@ -98,8 +98,65 @@ args = ["/abs/path/to/accounts/mcp/dist/cli.js", "serve", "--profile", "private"
 }
 ```
 
-A one-click Claude Desktop bundle arrives in phase 3. For Claude.ai, or to connect without running
-anything on your machine, use the remote connector below.
+For a one-click install use the Claude Desktop bundle below. For Claude.ai, or to connect without
+running anything on your machine, use the remote connector.
+
+## Claude Desktop
+
+The package carries an MCP bundle manifest (`manifest.json`, MCPB 0.2), so it can be built into one
+`filingbridge.mcpb` file that Claude Desktop installs and configures in its own dialog.
+
+**1. Build the bundle** (Node 24, from the repository root):
+
+```bash
+npm ci --prefix mcp
+npm run pack:mcpb --prefix mcp
+```
+
+This compiles a fresh `dist` (without the tests) into a temporary staging directory, installs only the
+production dependencies from `package-lock.json`, adds `manifest.json`, this README and the repository
+`LICENSE`, and packs it with the pinned `@anthropic-ai/mcpb` (version in `scripts/pack-mcpb.mjs`, run
+through `npx`; it is not a dependency, because its own dependency tree fails `npm audit`). The result is
+`mcp/filingbridge.mcpb` (about 4.5 MB; ignored by git).
+
+**Build it on the operating system it is for.** The OS credential store binding (`@napi-rs/keyring`) is
+a native module installed per platform and CPU, so a bundle built on Windows x64 runs on Windows x64
+only. Build a macOS or Linux bundle on that platform.
+
+**2. Install it.** Double-click `filingbridge.mcpb`, or in Claude Desktop open Settings → Extensions →
+Advanced settings → Install Extension… and choose the file. Claude Desktop asks for:
+
+| Setting | Meaning |
+| --- | --- |
+| FilingBridge address | The frontend origin, no path: `http://127.0.0.1:3500` for a Private Server on this computer, `https://<host>.<tailnet>.ts.net` through Tailscale Serve, or your public `https` address. |
+| Profile | `private` (the default), `default` (any https address) or `local` (a Development stack). The profile pins which addresses are accepted, exactly as `--profile` does. |
+| Folder downloads are written into | Optional. Leave it empty and the download tools are not offered. |
+| Folder files may be uploaded from | Optional. Leave it empty and the CSV import and evidence attachments are not offered. |
+
+The bundle starts `node dist/cli.js serve --profile … --base-url … --download-dir … --upload-root …`.
+A folder left empty reaches the connector as an empty value or as the unexpanded `${user_config.…}`
+placeholder; both mean "not set", so the feature is off rather than pointed at a stray directory.
+
+**3. Sign in once, in a terminal.** The bundle never asks for a password and has no field for one.
+With the same profile and address you entered in Claude Desktop:
+
+```bash
+node mcp/dist/cli.js connect --profile private --base-url http://127.0.0.1:3500 \
+  --tenant-slug <workspace> --email you@example.ie --access-level write
+```
+
+(from a checkout of this repository; `filingbridge-mcp connect …` works the same). The credential goes into the OS credential store, which the
+bundle reads; `status` and `disconnect` work the same way. Then enable the extension and ask Claude to
+run `session_info`.
+
+**Publicly reachable installations** can skip the bundle: Claude Desktop also accepts the remote
+connector URL `https://<host>/mcp` (Settings → Connectors → Add custom connector), which signs in
+through FilingBridge's OAuth page instead of a terminal. A Private Server on a tailnet is not reachable
+that way; use the bundle.
+
+To refresh the tool list the manifest shows after changing the catalogue: `npm run manifest:tools
+--prefix mcp` (a test fails until you do). CI validates the manifest with the pinned packer but does not
+pack, because of the native module.
 
 ## Remote connector (Claude.ai, Claude Code, Codex)
 

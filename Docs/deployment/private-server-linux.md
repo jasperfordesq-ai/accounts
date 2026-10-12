@@ -110,13 +110,44 @@ After loopback login works:
 ./filingbridge tailscale status
 ```
 
-The operator discovers the exact MagicDNS name, updates the allowed origin, recreates only API and
-frontend, installs an owned HTTPS Serve route to `http://127.0.0.1:<port>`, and verifies the remote
-HTTPS readiness endpoint. It refuses to overwrite an unrelated Serve configuration. Disable it
+The operator discovers the exact MagicDNS name, updates the allowed origin, recreates only the
+application services (API, frontend and MCP connector service), installs an owned HTTPS Serve route
+to `http://127.0.0.1:<port>`, and verifies the remote HTTPS readiness endpoint. It refuses to overwrite an unrelated Serve configuration. Disable it
 with `./filingbridge tailscale disable`.
 
 Tailscale network access never replaces FilingBridge login, MFA, roles, company access, RLS, CSRF,
 or audit controls. Use tailnet grants/ACLs to restrict which people or devices can reach the VM.
+
+## Connect an AI agent
+
+The MCP connector is off by default and `connector enable` is the only supported way to turn it on
+(the full behaviour is in [the Windows guide](private-server.md#connect-an-ai-agent)):
+
+```bash
+./filingbridge connector enable --origin tailscale   # agents on tailnet devices
+./filingbridge connector enable                      # or: loopback only (an SSH-forwarded port)
+./filingbridge connector status
+./filingbridge connector disable
+```
+
+On a cloud VM the useful origin is normally Tailscale: run `tailscale enable` first, then
+`connector enable --origin tailscale`, and give agents the printed
+`https://<vm>.<tailnet>.ts.net/mcp` URL:
+
+- **Remote** (no install on the agent's computer): Claude Code
+  `claude mcp add --transport http filingbridge https://<vm>.<tailnet>.ts.net/mcp` then `/mcp` →
+  *Authenticate*; Codex `[mcp_servers.filingbridge] url = "…/mcp"` then
+  `codex mcp login filingbridge`.
+- **stdio**: `filingbridge-mcp` (see `mcp/README.md`) or the Claude Desktop bundle on the agent's
+  computer with `--base-url https://<vm>.<tailnet>.ts.net`.
+
+With the loopback origin, the OAuth issuer is `http://localhost:<port>`, so only a client on the VM
+itself, or one using an SSH tunnel that forwards the same local port, can sign in.
+**Claude.ai custom connectors are not supported on a Private Server**: Claude.ai needs a public HTTPS
+origin, and this VM never has public ingress or Tailscale Funnel. The `mcp` service publishes no
+port and reaches only the API; approvals happen at `/settings/approvals` and agents are
+disconnected at `/settings/agents`. Restore rotates the connector keys; `recover-host` leaves the
+connector disabled with fresh keys.
 
 ## Backup, update, recovery, and reboot
 
@@ -130,6 +161,9 @@ The Windows and Ubuntu launchers use the same authenticated, age-encrypted recov
   -BackupRecipient '<age-recipient>' -AgeIdentityFile '<age-key>' \
   -OutputDirectory "$HOME/filingbridge-backups"
 ```
+
+Updating from `0.1.0-preview.9` or earlier adds the MCP connector service automatically: the update
+generates its keys, pulls its digest-pinned image and starts it, with the connector still disabled.
 
 Move the encrypted backup off the VM. Store its age identity and exported recovery-authentication
 key separately from each other and from the backup. A VM disk snapshot is useful infrastructure
@@ -164,7 +198,7 @@ artifacts have been inspected.
 ## Security boundary
 
 - Do not create GCP firewall rules for ports 3500, 3000, 8080, 5432, 80, or 443.
-- Do not enable Tailscale Funnel.
+- Do not enable Tailscale Funnel, including to reach the MCP connector from Claude.ai.
 - Do not use `compose.yml` on the VM.
 - Do not run FilingBridge commands with `sudo`; configure the dedicated operator account instead.
 - Do not expose the Docker daemon or copy secrets into the release directory.

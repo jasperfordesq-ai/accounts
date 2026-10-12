@@ -218,6 +218,13 @@ jobs:
       - name: Prove the suite notices broken guarantees (canary)
         run: node scripts/canary.mjs
 
+      # The bundle itself is not packed here: @napi-rs/keyring is a native
+      # module, so a .mcpb is built on the platform it is for (see mcp/README.md).
+      # The packer is pinned in scripts/pack-mcpb.mjs; manifest.test.ts checks
+      # this line uses the same version.
+      - name: Validate the Claude Desktop bundle manifest
+        run: npx --yes @anthropic-ai/mcpb@2.1.2 validate manifest.json
+
   frontend:
     name: Frontend
     runs-on: ubuntu-latest
@@ -835,20 +842,32 @@ jobs:
         run: |
           set -euo pipefail
           evidence_dir='${{ steps.promotion-mode.outputs.evidence-dir }}'
+          mcp_evidence_dir='${{ steps.promotion-mode.outputs.mcp-evidence-dir }}'
           backend_bundle='${{ steps.backend-attest.outputs.bundle-path }}'
           frontend_bundle='${{ steps.frontend-attest.outputs.bundle-path }}'
+          mcp_bundle='${{ steps.mcp-attest.outputs.bundle-path }}'
 
           if [[ '${{ steps.promotion-mode.outputs.enabled }}' == 'true' ]]; then
             test -s "$backend_bundle"
             test -s "$frontend_bundle"
+            test -s "$mcp_bundle"
             cp "$backend_bundle" "$evidence_dir/backend-provenance.jsonl"
             cp "$frontend_bundle" "$evidence_dir/frontend-provenance.jsonl"
+            cp "$mcp_bundle" "$evidence_dir/mcp-provenance.jsonl"
           fi
+          # The Private Server release runs the MCP connector image, so its scan and SBOM join the
+          # container supply-chain evidence (the mcp-connector-evidence artifact keeps its copies).
+          test -s "$mcp_evidence_dir/mcp-trivy.json"
+          test -s "$mcp_evidence_dir/mcp-sbom.spdx.json"
+          cp "$mcp_evidence_dir/mcp-trivy.json" "$evidence_dir/mcp-trivy.json"
+          cp "$mcp_evidence_dir/mcp-sbom.spdx.json" "$evidence_dir/mcp-sbom.spdx.json"
 
           printf 'BACKEND_ATTESTATION_URL=%s\n' '${{ steps.backend-attest.outputs.attestation-url }}' >> "$GITHUB_ENV"
           printf 'FRONTEND_ATTESTATION_URL=%s\n' '${{ steps.frontend-attest.outputs.attestation-url }}' >> "$GITHUB_ENV"
+          printf 'MCP_ATTESTATION_URL=%s\n' '${{ steps.mcp-attest.outputs.attestation-url }}' >> "$GITHUB_ENV"
           printf 'BACKEND_PROVENANCE_PATH=%s\n' "$([[ -f "$evidence_dir/backend-provenance.jsonl" ]] && echo "$evidence_dir/backend-provenance.jsonl" || true)" >> "$GITHUB_ENV"
           printf 'FRONTEND_PROVENANCE_PATH=%s\n' "$([[ -f "$evidence_dir/frontend-provenance.jsonl" ]] && echo "$evidence_dir/frontend-provenance.jsonl" || true)" >> "$GITHUB_ENV"
+          printf 'MCP_PROVENANCE_PATH=%s\n' "$([[ -f "$evidence_dir/mcp-provenance.jsonl" ]] && echo "$evidence_dir/mcp-provenance.jsonl" || true)" >> "$GITHUB_ENV"
 
       - name: Pull exact promoted image digests
         if: steps.promotion-mode.outputs.enabled == 'true'
@@ -1051,14 +1070,21 @@ jobs:
             -FrontendImageName '${{ steps.promotion-mode.outputs.frontend-name }}' `
             -FrontendImageReference $env:ACCOUNTS_FRONTEND_IMAGE `
             -FrontendDigest $env:FRONTEND_IMAGE_DIGEST `
+            -McpImageName '${{ steps.promotion-mode.outputs.mcp-name }}' `
+            -McpImageReference $env:ACCOUNTS_MCP_IMAGE `
+            -McpDigest $env:MCP_IMAGE_DIGEST `
             -BackendScanPath (Join-Path $evidenceDirectory "backend-trivy.json") `
             -FrontendScanPath (Join-Path $evidenceDirectory "frontend-trivy.json") `
+            -McpScanPath (Join-Path $evidenceDirectory "mcp-trivy.json") `
             -BackendSbomPath (Join-Path $evidenceDirectory "backend-sbom.spdx.json") `
             -FrontendSbomPath (Join-Path $evidenceDirectory "frontend-sbom.spdx.json") `
+            -McpSbomPath (Join-Path $evidenceDirectory "mcp-sbom.spdx.json") `
             -BackendProvenancePath $env:BACKEND_PROVENANCE_PATH `
             -FrontendProvenancePath $env:FRONTEND_PROVENANCE_PATH `
+            -McpProvenancePath $env:MCP_PROVENANCE_PATH `
             -BackendAttestationUrl $env:BACKEND_ATTESTATION_URL `
             -FrontendAttestationUrl $env:FRONTEND_ATTESTATION_URL `
+            -McpAttestationUrl $env:MCP_ATTESTATION_URL `
             -SmokeVerified `
             -EvidencePath $evidencePath
 
