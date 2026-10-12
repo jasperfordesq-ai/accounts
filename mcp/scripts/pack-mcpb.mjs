@@ -12,7 +12,8 @@
 // bundle runs only on the operating system and architecture it was built on.
 // Build it on (and for) the machine family that will install it.
 import { execFileSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { buildThirdPartyNotices } from './third-party-notices.mjs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -41,6 +42,7 @@ try {
     copyFileSync(resolve(root, file), join(stage, file));
   }
   copyFileSync(resolve(repoRoot, 'LICENSE'), join(stage, 'LICENSE'));
+  copyFileSync(resolve(repoRoot, 'NOTICE'), join(stage, 'NOTICE'));
 
   const manifest = JSON.parse(readFileSync(join(stage, 'manifest.json'), 'utf8'));
   const pkg = JSON.parse(readFileSync(join(stage, 'package.json'), 'utf8'));
@@ -53,6 +55,7 @@ try {
   }
 
   run('npm', ['ci', '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund'], stage);
+  writeFileSync(join(stage, 'THIRD_PARTY_NOTICES.txt'), buildThirdPartyNotices(stage));
   if (existsSync(output)) rmSync(output);
   run('npx', ['--yes', `@anthropic-ai/mcpb@${MCPB_VERSION}`, 'pack', stage, output], root);
 

@@ -144,13 +144,8 @@ parses the C# to keep them in step.
 
 ### Phase 2 open items
 
-- **Private Server is deliberately not wired in this phase.** The first draft added the `mcp` service to
-  `compose.private.yml`, but the Private Server release chain (release builder, container supply-chain
-  report and verifier, `verify-private-server-release.ps1`, the evidence pack and the release workflow)
-  only knows the backend and frontend images, so a release built from it would be refused at setup, and
-  the launcher's lifecycle commands only start `db`, `api` and `frontend`. Those edits were reverted;
-  phase 3 adds the third image to the release evidence, the launcher lifecycle, the MCP service key and
-  a connector enable command together. Until then a Private Server uses the stdio connector.
+- **Private Server** was deliberately left out of phase 2 (its release chain and launcher only knew two
+  images) and is wired in phase 3: see "Phase 3: Private Server" below.
 - A full OAuth round trip (register → authorize with password + TOTP → token → `/mcp`) is not in CI; see
   the comment in `scripts/mcp-live-roundtrip.mjs`.
 
@@ -216,3 +211,18 @@ parses the C# to keep them in step.
   deleting it.
 - `live-e2e.mjs` needs an Owner without an authenticator (it enrols one); recreate the throwaway API
   between runs.
+
+## Phase 3: Private Server
+
+- `compose.private.yml` runs the `mcp` service (frontend_api only, no ports) behind the frontend's `/mcp`;
+  the API trusts it through `ApiAccess:Keys:1` ("MCP service").
+- `release.json` must carry `images.mcp`; the container supply-chain report, release builder, verifiers,
+  CI evidence pack and `private-server-release.yml` cover all three images.
+- The launcher includes `mcp` in every lifecycle command, generates the MCP service key at setup and on
+  the first update of an older install, and rotates it on restore and host recovery.
+- `filingbridge connector enable [--origin local|tailscale] | disable | status` is the only switch.
+  Claude.ai cannot reach a Private Server; Claude Code and Codex connect over loopback or Tailscale Serve.
+- The Claude Desktop bundle (`npm run pack:mcpb`) ships `LICENSE`, `NOTICE` and a generated
+  `THIRD_PARTY_NOTICES.txt` covering every bundled package.
+- Live acceptance on the Hyper-V Private Server follows `Docs/operations/mcp-connector-acceptance.md`
+  and needs a reviewed pre-release built from `main`.
