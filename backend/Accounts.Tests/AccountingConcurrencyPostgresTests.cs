@@ -671,7 +671,8 @@ public sealed class AccountingConcurrencyCoverageTests
             // single-row updates of their own and are never tied to an accounting period.
             typeof(ConnectorSession),
             typeof(ConnectorActionApproval),
-            typeof(ConnectorActivityEvent)
+            typeof(ConnectorActivityEvent),
+            typeof(OAuthAuthorizationCode)
         };
         var mutableDomainTypes = db.Model.GetEntityTypes()
             .Select(entity => entity.ClrType)

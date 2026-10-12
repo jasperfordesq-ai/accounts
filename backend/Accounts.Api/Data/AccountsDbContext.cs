@@ -87,6 +87,7 @@ public class AccountsDbContext : DbContext
     public DbSet<ConnectorSession> ConnectorSessions => Set<ConnectorSession>();
     public DbSet<ConnectorActionApproval> ConnectorActionApprovals => Set<ConnectorActionApproval>();
     public DbSet<ConnectorActivityEvent> ConnectorActivityEvents => Set<ConnectorActivityEvent>();
+    public DbSet<OAuthAuthorizationCode> OAuthAuthorizationCodes => Set<OAuthAuthorizationCode>();
 
     // Company & Officers
     public DbSet<Company> Companies => Set<Company>();
@@ -342,6 +343,29 @@ public class AccountsDbContext : DbContext
             e.HasOne(activity => activity.User).WithMany().HasForeignKey(activity => activity.UserId).OnDelete(DeleteBehavior.Cascade);
             e.HasIndex(activity => new { activity.TenantId, activity.UserId, activity.OccurredAtUtc });
             e.HasIndex(activity => new { activity.TenantId, activity.SessionFamilyId, activity.OccurredAtUtc });
+        });
+
+        modelBuilder.Entity<OAuthAuthorizationCode>(e =>
+        {
+            e.ToTable("oauth_authorization_codes", table =>
+            {
+                table.HasCheckConstraint("CK_oauth_authorization_codes_access_level", "\"AccessLevel\" IN ('Read', 'Write', 'Admin')");
+                table.HasCheckConstraint("CK_oauth_authorization_codes_data_scope", "\"DataScope\" IN ('Withheld', 'Full')");
+            });
+            e.HasKey(code => code.Id);
+            e.HasQueryFilter(code => CurrentTenantId == null || code.TenantId == CurrentTenantId);
+            e.Property(code => code.CodeHash).HasMaxLength(64).IsRequired();
+            e.Property(code => code.ClientIdHash).HasMaxLength(64).IsRequired();
+            e.Property(code => code.ClientName).HasMaxLength(80).IsRequired();
+            e.Property(code => code.RedirectUri).HasMaxLength(2000).IsRequired();
+            e.Property(code => code.CodeChallenge).HasMaxLength(43).IsRequired();
+            e.Property(code => code.Resource).HasMaxLength(300).IsRequired();
+            e.Property(code => code.AccessLevel).HasMaxLength(10).IsRequired();
+            e.Property(code => code.DataScope).HasMaxLength(10).IsRequired();
+            e.Property(code => code.MfaMethod).HasMaxLength(20);
+            e.HasOne(code => code.User).WithMany().HasForeignKey(code => code.UserId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(code => code.CodeHash).IsUnique();
+            e.HasIndex(code => new { code.TenantId, code.ExpiresAtUtc });
         });
 
         modelBuilder.Entity<UserLifecycleEvent>(e =>

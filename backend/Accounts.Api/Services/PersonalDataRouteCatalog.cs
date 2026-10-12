@@ -15,6 +15,10 @@ public static partial class PersonalDataRouteCatalog
         new HashSet<string>(["address"], StringComparer.OrdinalIgnoreCase);
     private static readonly IReadOnlySet<string> DirectorLoanFields =
         new HashSet<string>(["counterpartyName", "loanTerms", "reviewNote", "reviewedBy", "reviewerRole"], StringComparer.OrdinalIgnoreCase);
+    private static readonly IReadOnlySet<string> CompanyFields =
+        new HashSet<string>(
+            ["registeredOfficeAddress1", "registeredOfficeAddress2", "registeredOfficeCity", "registeredOfficeCounty", "registeredOfficeEircode", "address"],
+            StringComparer.OrdinalIgnoreCase);
     private static readonly IReadOnlySet<string> RelatedPartyFields =
         new HashSet<string>(["partyName", "terms"], StringComparer.OrdinalIgnoreCase);
 
@@ -44,8 +48,11 @@ public static partial class PersonalDataRouteCatalog
         if (!(HttpMethods.IsPost(method) || HttpMethods.IsPut(method) || HttpMethods.IsPatch(method)))
             return NoFields;
         var value = Normalize(path);
-        if (OfficersRoute().IsMatch(value) || value.Equals("/api/companies/onboard", StringComparison.OrdinalIgnoreCase))
-            return OfficerFields;
+        if (OfficersRoute().IsMatch(value)) return OfficerFields;
+        if (value.Equals("/api/companies/onboard", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("/api/companies", StringComparison.OrdinalIgnoreCase)
+            || CompanyRoute().IsMatch(value))
+            return CompanyFields;
         if (DirectorLoansRoute().IsMatch(value)) return DirectorLoanFields;
         if (RelatedPartyRoute().IsMatch(value)) return RelatedPartyFields;
         return NoFields;
@@ -69,6 +76,9 @@ public static partial class PersonalDataRouteCatalog
     }
 
     private static string Normalize(PathString path) => (path.Value ?? "").TrimEnd('/');
+
+    [GeneratedRegex(@"^/api/companies/\d+$", RegexOptions.IgnoreCase)]
+    private static partial Regex CompanyRoute();
 
     [GeneratedRegex(@"^/api/companies/\d+/officers(/\d+)?$", RegexOptions.IgnoreCase)]
     private static partial Regex OfficersRoute();

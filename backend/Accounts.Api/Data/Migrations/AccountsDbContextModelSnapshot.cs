@@ -3955,6 +3955,94 @@ namespace Accounts.Api.Data.Migrations
                     b.ToTable("notes_disclosures", (string)null);
                 });
 
+            modelBuilder.Entity("Accounts.Api.Entities.OAuthAuthorizationCode", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AccessLevel")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<string>("ClientIdHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ClientName")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<string>("CodeChallenge")
+                        .IsRequired()
+                        .HasMaxLength(43)
+                        .HasColumnType("character varying(43)");
+
+                    b.Property<string>("CodeHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime?>("ConsumedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DataScope")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("MfaMethod")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime?>("MfaVerifiedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("PasswordLastChangedAtTicks")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("RedirectUri")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("Resource")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<int>("TenantId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CodeHash")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("TenantId", "ExpiresAtUtc");
+
+                    b.ToTable("oauth_authorization_codes", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_oauth_authorization_codes_access_level", "\"AccessLevel\" IN ('Read', 'Write', 'Admin')");
+
+                            t.HasCheckConstraint("CK_oauth_authorization_codes_data_scope", "\"DataScope\" IN ('Withheld', 'Full')");
+                        });
+                });
+
             modelBuilder.Entity("Accounts.Api.Entities.OpeningBalance", b =>
                 {
                     b.Property<int>("Id")
@@ -6030,6 +6118,17 @@ namespace Accounts.Api.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Period");
+                });
+
+            modelBuilder.Entity("Accounts.Api.Entities.OAuthAuthorizationCode", b =>
+                {
+                    b.HasOne("Accounts.Api.Entities.UserAccount", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Accounts.Api.Entities.OpeningBalance", b =>

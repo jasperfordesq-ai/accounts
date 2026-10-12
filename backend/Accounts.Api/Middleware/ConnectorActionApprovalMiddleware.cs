@@ -99,9 +99,10 @@ public sealed class ConnectorActionApprovalMiddleware(RequestDelegate next)
             });
         }
 
-        // The web approvals page ships in phase 2; until then no link is advertised so neither the
-        // agent nor the person is sent to a page that does not exist.
-        string? approvalsUrl = null;
+        var publicBase = config?.PublicBaseUrl?.Trim().TrimEnd('/');
+        var approvalsUrl = Uri.TryCreate(publicBase, UriKind.Absolute, out var origin)
+            ? $"{origin.GetLeftPart(UriPartial.Authority)}/settings/approvals?id={approval.Id}"
+            : null;
         return context.Response.WriteAsJsonAsync(new
         {
             error = "This action needs a person to approve it. Ask them to run the command below in their own terminal, then repeat the identical call with approvalId.",

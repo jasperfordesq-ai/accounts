@@ -105,6 +105,12 @@ public static class TenantIsolationMigrationSql
         new("connector_activity_events", TenantOwnershipPath.DirectTenantId)
     ];
 
+    // Installed by migration AddOAuthAuthorizationCodes.
+    public static IReadOnlyList<TenantIsolationPolicyDefinition> OAuthPolicyInventory { get; } =
+    [
+        new("oauth_authorization_codes", TenantOwnershipPath.DirectTenantId)
+    ];
+
     /// <summary>
     /// Installs forced row-level security for tables added after the Version 1 install. Unlike
     /// <see cref="BuildInstallSql"/> it does not recreate roles, the context-key table or functions.

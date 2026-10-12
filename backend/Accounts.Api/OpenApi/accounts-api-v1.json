@@ -1362,6 +1362,247 @@
         }
       }
     },
+    "/api/oauth/metadata/authorization-server": {
+      "get": {
+        "tags": [
+          "OAuth"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/oauth/metadata/protected-resource": {
+      "get": {
+        "tags": [
+          "OAuth"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/oauth/register": {
+      "post": {
+        "tags": [
+          "OAuth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OAuthRegisterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          }
+        }
+      }
+    },
+    "/api/oauth/authorize/describe": {
+      "get": {
+        "tags": [
+          "OAuth"
+        ],
+        "parameters": [
+          {
+            "name": "client_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "redirect_uri",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "response_type",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "code_challenge",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "code_challenge_method",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "resource",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthAuthorizeDescription"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          }
+        }
+      }
+    },
+    "/api/oauth/authorize": {
+      "post": {
+        "tags": [
+          "OAuth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OAuthAuthorizeInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthAuthorizeResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/oauth/token": {
+      "post": {
+        "tags": [
+          "OAuth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/OAuthTokenForm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          }
+        }
+      }
+    },
+    "/api/oauth/revoke": {
+      "post": {
+        "tags": [
+          "OAuth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/OAuthRevokeForm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
     "/api/admin/users": {
       "get": {
         "tags": [
@@ -17426,6 +17667,261 @@
           }
         }
       },
+      "OAuthAuthorizeDescription": {
+        "required": [
+          "clientName",
+          "redirectUri",
+          "redirectHost",
+          "requestedAccessLevel",
+          "requestedDataScope",
+          "resource"
+        ],
+        "type": "object",
+        "properties": {
+          "clientName": {
+            "type": "string"
+          },
+          "redirectUri": {
+            "type": "string"
+          },
+          "redirectHost": {
+            "type": "string"
+          },
+          "requestedAccessLevel": {
+            "type": "string"
+          },
+          "requestedDataScope": {
+            "type": "string"
+          },
+          "resource": {
+            "type": "string"
+          }
+        }
+      },
+      "OAuthAuthorizeInput": {
+        "required": [
+          "clientId",
+          "redirectUri",
+          "state",
+          "codeChallenge",
+          "codeChallengeMethod",
+          "resource",
+          "tenantSlug",
+          "email",
+          "password",
+          "totpCode",
+          "recoveryCode",
+          "accessLevel",
+          "dataScope"
+        ],
+        "type": "object",
+        "properties": {
+          "clientId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "redirectUri": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "state": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "codeChallenge": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "codeChallengeMethod": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "resource": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "tenantSlug": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "email": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "password": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "totpCode": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "recoveryCode": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "accessLevel": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "dataScope": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "OAuthAuthorizeResponse": {
+        "required": [
+          "redirectTo"
+        ],
+        "type": "object",
+        "properties": {
+          "redirectTo": {
+            "type": "string"
+          }
+        }
+      },
+      "OAuthRegisterRequest": {
+        "required": [
+          "redirect_uris",
+          "client_name",
+          "grant_types",
+          "response_types",
+          "token_endpoint_auth_method"
+        ],
+        "type": "object",
+        "properties": {
+          "redirect_uris": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "client_name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "grant_types": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "response_types": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "token_endpoint_auth_method": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "OAuthRevokeForm": {
+        "required": [
+          "token"
+        ],
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string"
+          }
+        }
+      },
+      "OAuthTokenForm": {
+        "required": [
+          "grant_type",
+          "code",
+          "redirect_uri",
+          "client_id",
+          "code_verifier",
+          "refresh_token",
+          "resource"
+        ],
+        "type": "object",
+        "properties": {
+          "grant_type": {
+            "type": "string"
+          },
+          "code": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "redirect_uri": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "client_id": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "code_verifier": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "refresh_token": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "resource": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "OfficerRole": {
         "enum": [
           "Director",
@@ -20732,6 +21228,9 @@
     },
     {
       "name": "Connector"
+    },
+    {
+      "name": "OAuth"
     },
     {
       "name": "User administration"

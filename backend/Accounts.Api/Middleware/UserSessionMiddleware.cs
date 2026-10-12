@@ -134,6 +134,9 @@ public class UserSessionMiddleware(RequestDelegate next)
 
     private static bool IsAnonymousAuthEndpoint(HttpContext context)
     {
+        // OAuth endpoints carry their own credentials (consent form, code, refresh token).
+        if (context.Request.Path.StartsWithSegments("/api/oauth", StringComparison.OrdinalIgnoreCase))
+            return true;
         if (!HttpMethods.IsPost(context.Request.Method)) return false;
         return context.Request.Path.Equals("/api/auth/login", StringComparison.OrdinalIgnoreCase)
             || context.Request.Path.Equals("/api/auth/mfa/challenge", StringComparison.OrdinalIgnoreCase)

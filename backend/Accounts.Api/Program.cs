@@ -161,7 +161,10 @@ builder.Services.AddRateLimiter(options =>
              {
                  (ConnectorAuthEndpoints.LoginRateLimitPolicy, 5),
                  (ConnectorAuthEndpoints.RefreshRateLimitPolicy, 20),
-                 (ConnectorAuthEndpoints.ApproveRateLimitPolicy, 5)
+                 (ConnectorAuthEndpoints.ApproveRateLimitPolicy, 5),
+                 (OAuthEndpoints.RegisterRateLimitPolicy, 10),
+                 (OAuthEndpoints.AuthorizeRateLimitPolicy, 5),
+                 (OAuthEndpoints.TokenRateLimitPolicy, 30)
              })
     {
         options.AddPolicy(policy, context =>
@@ -248,6 +251,7 @@ builder.Services.AddScoped<UserLifecycleService>();
 builder.Services.AddScoped<ConnectorSessionService>();
 builder.Services.AddScoped<ConnectorActionSummaryService>();
 builder.Services.AddScoped<SearchService>();
+builder.Services.AddScoped<OAuthService>();
 builder.Services.AddSingleton<ConnectorWriteBudget>();
 builder.Services.AddScoped<BootstrapOwnerService>();
 builder.Services.AddScoped<PrivateInitializationService>();

@@ -26,6 +26,7 @@ public sealed class DatabaseTenantIsolationSqlTests
                 .Concat(TenantIsolationMigrationSql.DirectorsApprovalPolicyInventory)
                 .Concat(TenantIsolationMigrationSql.HistoricAnchorEvidencePolicyInventory)
                 .Concat(TenantIsolationMigrationSql.ConnectorPolicyInventory)
+                .Concat(TenantIsolationMigrationSql.OAuthPolicyInventory)
                 .OrderBy(item => item.TableName));
         Assert.Empty(mappedTables.Except(TenantIsolationPolicyCatalog.TableNames, StringComparer.Ordinal));
         Assert.Empty(TenantIsolationPolicyCatalog.TableNames.Except(mappedTables, StringComparer.Ordinal));
